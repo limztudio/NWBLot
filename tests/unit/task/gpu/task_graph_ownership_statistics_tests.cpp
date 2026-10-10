@@ -1,10 +1,10 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +35,7 @@ using TaskGraphTestUtils::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void CheckOwnershipStatistics(const usize resourceCount, const bool benchmark){
+static void CheckOwnershipStatistics(const usize resourceCount){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
@@ -73,30 +73,9 @@ static void CheckOwnershipStatistics(const usize resourceCount, const bool bench
         ASSERT_TRUE(graph.addTask(desc, commands).valid());
     }
     ThreeQueueCompile compilation(testArena);
-    if(benchmark){
-        u64 minimumAnalysisNanoseconds = Limit<u64>::s_Max;
-        for(usize iteration = 0u; iteration < 4u; ++iteration){
-            const Timer begin = TimerNow();
-            ASSERT_TRUE(Analyze(graph, compilation.analysis));
-            if(iteration != 0u)
-                minimumAnalysisNanoseconds = Min(minimumAnalysisNanoseconds, DurationInNS<u64>(TimerNow(), begin));
-        }
-        RecordUnsignedTestProperty("ownership_analysis_ns", minimumAnalysisNanoseconds);
-        Core::Alloc::ScratchArena analysisScratch(s_TaskGraphScratchArena);
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        const Graphics::GpuTaskGraphCompiler compiler;
-        ASSERT_TRUE(compiler.analyze(declarations, compilation.analysis, analysisScratch));
-        RecordUnsignedTestProperty(
-            "ownership_analysis_scratch_bytes", analysisScratch.memoryStats().peakUsedBytes
-        );
-    }
-    u64 minimumCompileNanoseconds = Limit<u64>::s_Max;
-    u64 minimumQueryNanoseconds = Limit<u64>::s_Max;
-    for(usize iteration = 0u; iteration < (benchmark ? 4u : 1u); ++iteration){
-        const Timer compileBegin = benchmark ? TimerNow() : Timer{};
+
+    {
         ASSERT_TRUE(compilation.compile(graph));
-        if(benchmark && iteration != 0u)
-            minimumCompileNanoseconds = Min(minimumCompileNanoseconds, DurationInNS<u64>(TimerNow(), compileBegin));
         ASSERT_EQ(compilation.analysis.inferredEdges().size(), resourceCount * 2u);
         for(usize edgeIndex = 0u; edgeIndex < compilation.analysis.inferredEdges().size(); ++edgeIndex){
             const auto& edge = compilation.analysis.inferredEdges()[edgeIndex];
@@ -112,12 +91,9 @@ static void CheckOwnershipStatistics(const usize resourceCount, const bool bench
         EXPECT_EQ(statistics.repeatedOwnershipTransferSignatureCount, resourceCount);
         EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, resourceCount * 4u);
         EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, resourceCount);
-        const Timer queryBegin = benchmark ? TimerNow() : Timer{};
         const auto graphics = plan.physicalQueueCompileStatistics(compilation.graphicsQueue.id);
         const auto compute = plan.physicalQueueCompileStatistics(compilation.computeQueue.id);
         const auto idle = plan.physicalQueueCompileStatistics(compilation.transferQueue.id);
-        if(benchmark && iteration != 0u)
-            minimumQueryNanoseconds = Min(minimumQueryNanoseconds, DurationInNS<u64>(TimerNow(), queryBegin));
         EXPECT_EQ(graphics.taskCount, 2u);
         EXPECT_EQ(compute.taskCount, 1u);
         EXPECT_TRUE(idle.valid());
@@ -141,11 +117,7 @@ static void CheckOwnershipStatistics(const usize resourceCount, const bool bench
         EXPECT_EQ(compute.incomingRepeatedOwnershipTransferSignatureCount, 0u);
         EXPECT_EQ(compute.outgoingRepeatedOwnershipTransferSignatureCount, resourceCount);
     }
-    if(benchmark){
-        RecordUnsignedTestProperty("ownership_resource_count", resourceCount);
-        RecordUnsignedTestProperty("ownership_compile_ns", minimumCompileNanoseconds);
-        RecordUnsignedTestProperty("ownership_queue_queries_ns", minimumQueryNanoseconds);
-    }
+
     compilation.compiledGraph.reset();
     {
         const Graphics::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
@@ -169,20 +141,8 @@ static void CheckOwnershipStatistics(const usize resourceCount, const bool bench
 
 
 TEST(GpuTaskGraph, CountsRepeatedOwnershipSignaturesAcrossResourcesAndSubranges){
-    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(3u, false);
-    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(17u, false);
-}
-
-TEST(GpuTaskGraphOwnershipStatistics, DISABLED_Benchmark8Resources){
-    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(8u, true);
-}
-
-TEST(GpuTaskGraphOwnershipStatistics, DISABLED_Benchmark256Resources){
-    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(256u, true);
-}
-
-TEST(GpuTaskGraphOwnershipStatistics, DISABLED_Benchmark1024Resources){
-    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(1024u, true);
+    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(3u);
+    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(17u);
 }
 
 

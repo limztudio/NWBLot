@@ -1,11 +1,10 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
-
-#include <global/math/vector_double.h>
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,8 +46,7 @@ namespace TerminalDependencyScenario{
 static void CheckTerminalDependencies(
     const usize readerCount,
     const TerminalDependencyScenario::Enum scenario,
-    const bool lateFallback,
-    const bool benchmark
+    const bool lateFallback
 ){
     ASSERT_GT(readerCount, 0u);
     if(lateFallback){
@@ -158,30 +156,8 @@ static void CheckTerminalDependencies(
     options.allowMetadataOnlyTasks = true;
     options.queueAssignmentOptions.diagnosticQueueOverrides = overrides.data();
     options.queueAssignmentOptions.diagnosticQueueOverrideCount = overrides.size();
-    u64 minimumCompileNanoseconds = Limit<u64>::s_Max;
-    u64 minimumResourcePlanningNanoseconds = Limit<u64>::s_Max;
-    u64 minimumDependencyPlanningNanoseconds = Limit<u64>::s_Max;
-    for(usize iteration = 0u; iteration < (benchmark ? 4u : 1u); ++iteration){
-        const Timer begin = benchmark ? TimerNow() : Timer{};
-        ASSERT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options));
-        if(benchmark && iteration != 0u){
-            minimumCompileNanoseconds = Min(minimumCompileNanoseconds, DurationInNS<u64>(TimerNow(), begin));
-            const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
-            const auto& statistics = plan.compileStatistics();
-            constexpr f64 s_NanosecondsPerSecond = 1'000'000'000.0;
-            const SIMDVectorDouble planningNanoseconds = SIMDVectorDouble{
-                statistics.resourceStatePlanningSeconds, statistics.packetDependencyPlanningSeconds
-            } * s_NanosecondsPerSecond;
-            minimumResourcePlanningNanoseconds = Min(
-                minimumResourcePlanningNanoseconds,
-                static_cast<u64>(planningNanoseconds.x)
-            );
-            minimumDependencyPlanningNanoseconds = Min(
-                minimumDependencyPlanningNanoseconds,
-                static_cast<u64>(planningNanoseconds.y)
-            );
-        }
-    }
+    ASSERT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options));
+
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     ASSERT_EQ(plan.taskCount(), readers.size() + finalizers.size());
     ASSERT_EQ(plan.packetCount(), readers.size() + finalizers.size());
@@ -235,13 +211,7 @@ static void CheckTerminalDependencies(
             EXPECT_EQ(task.epilogueBarriers[barrierIndex].resource, resources[pairIndex * 2u + barrierIndex]);
         }
     }
-    if(benchmark){
-        RecordUnsignedTestProperty("reader_count", readerCount);
-        RecordUnsignedTestProperty("compile_ns", minimumCompileNanoseconds);
-        RecordUnsignedTestProperty("resource_state_planning_ns", minimumResourcePlanningNanoseconds);
-        RecordUnsignedTestProperty("packet_dependency_planning_ns", minimumDependencyPlanningNanoseconds);
-        RecordUnsignedTestProperty("scratch_peak_bytes", scratchArena.memoryStats().peakUsedBytes);
-    }
+
 }
 
 
@@ -257,55 +227,10 @@ static void CheckTerminalDependencies(
 TEST(GpuTaskGraphTerminalDependencies, PreservesDuplicatePairOrderAndLateIndirectReachability){
     using namespace __hidden_task_graph_terminal_dependency_tests;
     for(const usize readerCount : { 3u, 17u }){
-        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::ReadPairs, true, false);
-        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::RootedStar, false, false);
-        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::Chain, false, false);
+        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::ReadPairs, true);
+        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::RootedStar, false);
+        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::Chain, false);
     }
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_ReadPairsBenchmark8Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(8u, TerminalDependencyScenario::ReadPairs, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_ReadPairsBenchmark1024Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(1024u, TerminalDependencyScenario::ReadPairs, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_ReadPairsBenchmark4096Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(4096u, TerminalDependencyScenario::ReadPairs, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_RootedStarBenchmark8Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(8u, TerminalDependencyScenario::RootedStar, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_RootedStarBenchmark1024Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(1024u, TerminalDependencyScenario::RootedStar, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_RootedStarBenchmark4096Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(4096u, TerminalDependencyScenario::RootedStar, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_ChainBenchmark8Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(8u, TerminalDependencyScenario::Chain, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_ChainBenchmark1024Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(1024u, TerminalDependencyScenario::Chain, false, true);
-}
-
-TEST(GpuTaskGraphTerminalDependencies, DISABLED_ChainBenchmark4096Readers){
-    using namespace __hidden_task_graph_terminal_dependency_tests;
-    CheckTerminalDependencies(4096u, TerminalDependencyScenario::Chain, false, true);
 }
 
 

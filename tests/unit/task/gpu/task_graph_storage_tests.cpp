@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -6,7 +8,6 @@
 
 #include <core/task/gpu/task_graph.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -71,7 +72,6 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         Core::GpuTaskId previousTask;
         bool accepted = true;
         const ArenaMemoryStats memoryBefore = testArena.arena.memoryStats();
-        const Timer begin = TimerNow();
         for(usize index = 0u; index < s_TaskCount; ++index){
             Core::GpuTaskDesc desc;
             desc
@@ -84,11 +84,8 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
             previousTask = graph.addTask(desc);
             accepted = accepted && previousTask.valid();
         }
-        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
         const ArenaMemoryStats memoryAfter = testArena.arena.memoryStats();
-        const u64 allocations = memoryAfter.allocationCount - memoryBefore.allocationCount;
-        Tests::RecordUnsignedTestProperty(pass == 0u ? "declaration_ns" : "reused_declaration_ns", nanoseconds);
-        Tests::RecordUnsignedTestProperty(pass == 0u ? "declaration_allocations" : "reused_declaration_allocations", allocations);
+
         ASSERT_TRUE(accepted);
         if(pass != 0u){
             EXPECT_EQ(memoryAfter.allocationCount, memoryBefore.allocationCount);
@@ -133,7 +130,6 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
     Vector<Core::GpuUploadBlobId, Core::Alloc::ScratchArena> uploads(scratchArena);
     uploads.reserve(s_RecordCount);
     bool accepted = true;
-    const Timer begin = TimerNow();
     for(usize index = 0u; index < s_RecordCount; ++index){
         const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}
             .setIdentity(identities[index])
@@ -159,8 +155,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
         uploads.push_back(upload);
         accepted = accepted && resource.valid() && resourceSet.valid() && pipeline.valid() && completion.valid() && upload.valid();
     }
-    const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    NWB::Tests::RecordUnsignedTestProperty("mixed_declaration_ns", nanoseconds);
+
     ASSERT_TRUE(accepted);
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);

@@ -8,7 +8,6 @@
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -45,10 +44,6 @@ struct PathFixture{
     AString<AssetArena> expectedDerived{ arena };
 };
 
-struct PathSample{
-    u64 elapsed = 0u;
-    ArenaMemoryStats memory;
-};
 
 struct RelativeCase{
     AStringView input;
@@ -86,60 +81,6 @@ static void PrepareWorkload(
 [[nodiscard]] static bool BuildAndVerifyDerivedPath(const PathFixture& fixture, Alloc::ScratchArena& scratchArena){
     const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("project"), fixture.sourcePath);
     return output && AStringView(*output) == AStringView(fixture.expectedDerived);
-}
-
-static void BenchmarkDerivedPath(
-    const usize directoryCount,
-    const AStringView directoryToken,
-    const usize tokenRepeats
-){
-    PathFixture fixture;
-    PrepareWorkload(fixture, directoryCount, directoryToken, tokenRepeats);
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/benchmark_scratch"), 65536u);
-    auto* const sentinel = static_cast<u8*>(scratchArena.allocate(1u, 64u));
-    ASSERT_NE(sentinel, nullptr);
-    for(usize index = 0u; index < 64u; ++index)
-        sentinel[index] = static_cast<u8>(index + 37u);
-
-    constexpr Array<usize, 5u> s_CallCounts{ 1u, 2u, 4u, 8u, 16u };
-    constexpr Array<AStringView, 5u> s_UsedKeys{
-        "scratch_used_after_1", "scratch_used_after_2", "scratch_used_after_4",
-        "scratch_used_after_8", "scratch_used_after_16",
-    };
-    constexpr Array<AStringView, 5u> s_ReservedKeys{
-        "scratch_reserved_after_1", "scratch_reserved_after_2", "scratch_reserved_after_4",
-        "scratch_reserved_after_8", "scratch_reserved_after_16",
-    };
-    constexpr Array<AStringView, 5u> s_ElapsedKeys{
-        "path_ns_after_1", "path_ns_after_2", "path_ns_after_4",
-        "path_ns_after_8", "path_ns_after_16",
-    };
-    Array<PathSample, 5u> samples{};
-    usize sampleIndex = 0u;
-    u64 elapsed = 0u;
-    bool valid = true;
-    for(usize call = 1u; call <= s_CallCounts.back(); ++call){
-        const Timer begin = TimerNow();
-        valid &= BuildAndVerifyDerivedPath(fixture, scratchArena);
-        elapsed += DurationInNS<u64>(TimerNow(), begin);
-        if(call == s_CallCounts[sampleIndex]){
-            samples[sampleIndex] = PathSample{ elapsed, scratchArena.memoryStats() };
-            ++sampleIndex;
-        }
-    }
-    EXPECT_TRUE(valid);
-    for(usize index = 0u; index < 64u; ++index)
-        EXPECT_EQ(sentinel[index], static_cast<u8>(index + 37u));
-    for(usize index = 0u; index < samples.size(); ++index){
-        Tests::RecordUnsignedTestProperty(s_UsedKeys[index], samples[index].memory.usedBytes);
-        Tests::RecordUnsignedTestProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
-        Tests::RecordUnsignedTestProperty(s_ElapsedKeys[index], samples[index].elapsed);
-    }
-    Tests::RecordUnsignedTestProperty("path_build_ns", elapsed);
-    Tests::RecordUnsignedTestProperty("path_build_calls", s_CallCounts.back());
-    Tests::RecordUnsignedTestProperty("path_output_bytes", fixture.expectedDerived.size());
-    Tests::RecordUnsignedTestProperty("scratch_peak_bytes", samples.back().memory.peakUsedBytes);
-    scratchArena.deallocate(sentinel, 1u, 64u);
 }
 
 
@@ -283,26 +224,6 @@ TEST(AssetPaths, ConvertedPathByteCountingRejectsOverflowWithoutWrapping){
     AssetPathsDetail::ConvertedPathByteCounter counter{ Limit<usize>::s_Max };
     EXPECT_ANY_THROW(BasicStringDetail::WriteConvertedText<char>(counter, AStringView("x")));
     EXPECT_EQ(counter.byteCount, Limit<usize>::s_Max);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetPathBenchmark, DISABLED_ShortDerivedPath){
-    BenchmarkDerivedPath(0u, AStringView(""), 0u);
-}
-
-TEST(AssetPathBenchmark, DISABLED_DeepAsciiDerivedPath){
-    BenchmarkDerivedPath(64u, AStringView("Directory_"), 1u);
-}
-
-TEST(AssetPathBenchmark, DISABLED_LongComponentDerivedPath){
-    BenchmarkDerivedPath(8u, AStringView("Long_COMPONENT_"), 16u);
-}
-
-TEST(AssetPathBenchmark, DISABLED_UnicodeDerivedPath){
-    BenchmarkDerivedPath(12u, AStringView("ÉTAGE_한글_東京_😀_"), 8u);
 }
 
 

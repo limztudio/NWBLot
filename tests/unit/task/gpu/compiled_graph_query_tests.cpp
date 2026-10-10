@@ -1,10 +1,10 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,29 +103,7 @@ static void CheckPacketQueries(const usize taskCount){
     EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(&stale, 1u));
     EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(nullptr, 1u));
     EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(tasks.data(), 0u));
-    u64 minimumOrderNanoseconds = Limit<u64>::s_Max;
-    u64 minimumSequenceNanoseconds = Limit<u64>::s_Max;
-    for(usize iteration = 0u; iteration < 4u; ++iteration){
-        bool orderValid = true;
-        Timer begin = TimerNow();
-        for(usize taskIndex = 1u; taskIndex < taskCount; ++taskIndex)
-            orderValid &= views.compiled.taskPrecedesInSamePacket(tasks[taskIndex - 1u], tasks[taskIndex]);
-        const u64 orderNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-        EXPECT_TRUE(orderValid);
-        bool sequenceValid = true;
-        begin = TimerNow();
-        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-            sequenceValid &= views.compiled.tasksFormContiguousPacketSequence(tasks.data() + taskIndex, 1u);
-        const u64 sequenceNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-        EXPECT_TRUE(sequenceValid);
-        if(iteration != 0u && orderNanoseconds < minimumOrderNanoseconds)
-            minimumOrderNanoseconds = orderNanoseconds;
-        if(iteration != 0u && sequenceNanoseconds < minimumSequenceNanoseconds)
-            minimumSequenceNanoseconds = sequenceNanoseconds;
-    }
-    RecordUnsignedTestProperty("packet_query_task_count", taskCount);
-    RecordUnsignedTestProperty("packet_order_query_ns", minimumOrderNanoseconds);
-    RecordUnsignedTestProperty("packet_sequence_query_ns", minimumSequenceNanoseconds);
+
 }
 
 
@@ -140,10 +118,6 @@ static void CheckPacketQueries(const usize taskCount){
 
 TEST(GpuCompiledGraph, PacketQueriesFollowExecutionOrderAcrossReverseDeclarations){
     __hidden_compiled_graph_query_tests::CheckPacketQueries(32u);
-}
-
-TEST(GpuCompiledGraph, DISABLED_PacketQueryBenchmark4096Tasks){
-    __hidden_compiled_graph_query_tests::CheckPacketQueries(4096u);
 }
 
 

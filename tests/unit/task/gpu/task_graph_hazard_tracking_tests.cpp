@@ -1,10 +1,10 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,19 +31,6 @@ namespace __hidden_task_graph_hazard_tracking_tests{
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
-inline constexpr Name s_HazardScratchOwner("tests/hazard_tracking/analysis_scratch");
-
-
-[[nodiscard]] static ArenaMemoryStats HazardScratchOwnerStats(){
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerSnapshot snapshot;
-        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-        if(snapshot.source == ArenaMemorySource::Arena && snapshot.ownerName == s_HazardScratchOwner)
-            return snapshot.stats;
-    }
-    return {};
-}
 
 [[nodiscard]] static Name IndexedName(const Name& prefix, const usize index){
     char text[32u];
@@ -64,83 +51,6 @@ inline constexpr Name s_HazardScratchOwner("tests/hazard_tracking/analysis_scrat
             : Graphics::ResourceStates::UnorderedAccess,
         .access = access,
     };
-}
-
-void BenchmarkHazards(
-    const usize resourceCount,
-    const usize taskCount,
-    const usize repetitions,
-    const usize importedResourceCount = 0u
-){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Core::Alloc::ScratchArena inputArena(s_TaskGraphScratchArena);
-    Vector<Graphics::GpuGraphResourceId, Core::Alloc::ScratchArena> resources(inputArena);
-    const usize declaredResourceCount = importedResourceCount > resourceCount ? importedResourceCount : resourceCount;
-    resources.reserve(declaredResourceCount);
-    for(usize index = 0u; index < declaredResourceCount; ++index){
-        const auto resource = AddHazardDomain(
-            graph,
-            IndexedName(Name("tests/hazard_tracking/resource"), index),
-            "Hazard Resource"
-        );
-        ASSERT_TRUE(resource.valid());
-        resources.push_back(resource);
-    }
-    for(usize index = 0u; index < taskCount; ++index){
-        const Graphics::GpuTaskResourceUse use{
-            .resource = resources[index % resourceCount],
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        };
-        ASSERT_TRUE(AddTask(
-            graph,
-            IndexedName(Name("tests/hazard_tracking/task"), index),
-            "Hazard Task",
-            nullptr,
-            0u,
-            &use,
-            1u
-        ).valid());
-    }
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < repetitions; ++iteration)
-        ASSERT_TRUE(Analyze(graph, analysis));
-    const u64 elapsedNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    ASSERT_EQ(analysis.inferredEdges().size(), taskCount - resourceCount);
-    for(usize index = 0u; index < analysis.inferredEdges().size(); ++index){
-        const auto& edge = analysis.inferredEdges()[index];
-        EXPECT_EQ(edge.producer.index, index);
-        EXPECT_EQ(edge.consumer.index, index + resourceCount);
-        EXPECT_EQ(edge.resource, resources[index % resourceCount]);
-        EXPECT_EQ(edge.hazard, Graphics::GpuTaskHazardType::WriteAfterWrite);
-    }
-    char text[32u];
-    const AStringView elapsed = FormatDecimal(elapsedNanoseconds, text);
-    text[elapsed.size()] = '\0';
-    testing::Test::RecordProperty("elapsed_ns", text);
-    testing::Test::RecordProperty("resource_count", static_cast<int>(resourceCount));
-    testing::Test::RecordProperty("declared_resource_count", static_cast<int>(declaredResourceCount));
-    testing::Test::RecordProperty("task_count", static_cast<int>(taskCount));
-    testing::Test::RecordProperty("repetitions", static_cast<int>(repetitions));
-
-    const ArenaMemoryStats beforeScratch = HazardScratchOwnerStats();
-    {
-        Core::Alloc::ScratchArena analysisArena(s_HazardScratchOwner);
-        const Graphics::GpuTaskGraphCompiler compiler;
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        ASSERT_TRUE(compiler.analyze(declarations, analysis, analysisArena));
-        const ArenaMemoryStats scratchStats = analysisArena.memoryStats();
-        testing::Test::RecordProperty("scratch_peak_bytes", static_cast<int>(scratchStats.peakUsedBytes));
-        testing::Test::RecordProperty("scratch_reserved_bytes", static_cast<int>(scratchStats.reservedBytes));
-        testing::Test::RecordProperty("scratch_retained_bytes", static_cast<int>(scratchStats.usedBytes));
-    }
-    const ArenaMemoryStats afterScratch = HazardScratchOwnerStats();
-    EXPECT_EQ(afterScratch.usedBytes, beforeScratch.usedBytes);
-    EXPECT_EQ(afterScratch.reservedBytes, beforeScratch.reservedBytes);
 }
 
 
@@ -305,26 +215,6 @@ TEST(GpuTaskGraph, HazardTrackingPreservesSameTaskAccessAndResetSemantics){
         EXPECT_TRUE(HasInferredHazard(analysis, second, third, buffer, Graphics::GpuTaskHazardType::WriteAfterWrite));
         graph.reset();
     }
-}
-
-TEST(GpuTaskGraph, DISABLED_HazardTrackingBenchmarkIndependentResources){
-    BenchmarkHazards(4096u, 8192u, 4u);
-}
-
-TEST(GpuTaskGraph, DISABLED_HazardTrackingBenchmarkRepeatedOverwrites){
-    BenchmarkHazards(1u, 4096u, 4u);
-}
-
-TEST(GpuTaskGraph, DISABLED_HazardTrackingBenchmarkMediumGraph){
-    BenchmarkHazards(64u, 128u, 64u);
-}
-
-TEST(GpuTaskGraph, DISABLED_HazardTrackingBenchmarkSparseResourceUse){
-    BenchmarkHazards(4u, 16u, 256u, 4096u);
-}
-
-TEST(GpuTaskGraph, DISABLED_HazardTrackingBenchmarkSmallGraph){
-    BenchmarkHazards(4u, 16u, 256u);
 }
 
 

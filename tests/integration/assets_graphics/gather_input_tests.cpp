@@ -7,7 +7,6 @@
 #include <core/filesystem/factory.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -125,20 +124,6 @@ TEST_F(GatherInputs, MergedPayloadIdentitySurvivesLaterIdenticalDuplicate){
     ASSERT_TRUE(Gatherer::GatherAssets(m_options));
     EXPECT_EQ(s_MergeCalls, 1u);
     verifyPayloads(1u, 6u, 5u);
-}
-
-TEST_F(GatherInputs, DISABLED_BenchmarkDuplicatePayloads){
-    constexpr usize s_AssetCount = 128u;
-    constexpr usize s_PayloadBytes = 65536u;
-    writeInputs("a", s_AssetCount, s_PayloadBytes, 1u);
-    writeInputs("b", s_AssetCount, s_PayloadBytes, 1u);
-    writeInputs("c", s_AssetCount, s_PayloadBytes, 1u);
-    const Timer begin = TimerNow();
-    const bool gathered = Gatherer::GatherAssets(m_options);
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    ASSERT_TRUE(gathered);
-    verifyPayloads(s_AssetCount, s_PayloadBytes, 1u);
-    NWB::Tests::RecordUnsignedTestProperty("gather_ns", elapsed);
 }
 
 

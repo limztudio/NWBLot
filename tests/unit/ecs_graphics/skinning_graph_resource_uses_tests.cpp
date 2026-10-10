@@ -5,8 +5,6 @@
 #include <impl/ecs_mesh/skinning/graph_resource_uses.h>
 
 #include <tests/common/capturing_logger.h>
-#include <global/text_utils.h>
-#include <global/timer.h>
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
@@ -220,58 +218,6 @@ TEST(SkinningGraphResourceUses, RepeatedPlansUseTheSameScratchCapacityAsOnePlan)
     EXPECT_EQ(repeated.allocationCount, single.allocationCount);
     EXPECT_EQ(repeated.peakUsedBytes, single.peakUsedBytes);
     EXPECT_EQ(repeated.reservedBytes, single.reservedBytes);
-}
-
-void BenchmarkGather(const u32 planCount, const u32 iterations, const bool shared){
-    Core::Alloc::GlobalArena inputArena(Name("tests/skinning_graph_uses/input"));
-    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans(inputArena);
-    plans.reserve(planCount);
-    for(u32 index = 0u; index < planCount; ++index)
-        plans.push_back(Plan(shared ? 0u : index * 32u));
-    u64 elapsed = 0u;
-    u64 outputCount = 0u;
-    u64 peakBytes = 0u;
-    u64 reservedBytes = 0u;
-    u64 allocationCount = 0u;
-    bool succeeded = true;
-    for(u32 iteration = 0u; iteration < iterations; ++iteration){
-        const Timer begin = TimerNow();
-        {
-            Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/benchmark"));
-            {
-                const auto uses = BuildMeshSkinningGraphResourceUses(plans.data(), plans.size(), scratch);
-                succeeded = uses.has_value() && succeeded;
-                if(uses)
-                    outputCount += uses->deformation.size() + uses->postDispatch.size() + uses->localBounds.size() + uses->finalizer.size();
-            }
-            const ArenaMemoryStats stats = scratch.memoryStats();
-            peakBytes = Max(peakBytes, stats.peakUsedBytes);
-            reservedBytes = Max(reservedBytes, stats.reservedBytes);
-            allocationCount += stats.allocationCount;
-        }
-        elapsed += DurationInNS<u64>(TimerNow(), begin);
-    }
-    EXPECT_TRUE(succeeded);
-    EXPECT_EQ(outputCount, static_cast<u64>(iterations) * (shared ? 1u : planCount) * 28u);
-    Tests::RecordUnsignedTestProperty("skinning_uses_ns", elapsed);
-    Tests::RecordUnsignedTestProperty("skinning_uses_iterations", iterations);
-    Tests::RecordUnsignedTestProperty("skinning_uses_plan_count", planCount);
-    Tests::RecordUnsignedTestProperty("skinning_uses_output_count", outputCount);
-    Tests::RecordUnsignedTestProperty("skinning_uses_peak_bytes", peakBytes);
-    Tests::RecordUnsignedTestProperty("skinning_uses_reserved_bytes", reservedBytes);
-    Tests::RecordUnsignedTestProperty("skinning_uses_allocations", allocationCount);
-}
-
-TEST(SkinningGraphResourceUsesBenchmark, DISABLED_SingleDispatchPlan){
-    BenchmarkGather(1u, 4096u, false);
-}
-
-TEST(SkinningGraphResourceUsesBenchmark, DISABLED_UniqueDispatchPlans){
-    BenchmarkGather(1024u, 1u, false);
-}
-
-TEST(SkinningGraphResourceUsesBenchmark, DISABLED_SharedDispatchPlans){
-    BenchmarkGather(1024u, 8u, true);
 }
 
 

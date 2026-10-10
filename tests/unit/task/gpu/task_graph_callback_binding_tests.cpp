@@ -1,12 +1,12 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
 
 #include <core/task/gpu/scheduler_callback_bindings.h>
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,22 +39,11 @@ inline constexpr usize s_IndexedCount = 9u;
 inline constexpr usize s_MergeGroupSize = 2u;
 inline constexpr usize s_ExtraRangeTasks = 4u;
 inline constexpr usize s_ExcludedPacketCount = 1u;
-inline constexpr usize s_DesignCount = 2u;
+
 inline constexpr usize s_NumberBufferBytes = 32u;
-inline constexpr usize s_MediumCallbackCount = 64u;
-inline constexpr usize s_LargeCallbackCount = 1024u;
-inline constexpr usize s_HugeCallbackCount = 4096u;
-inline constexpr usize s_Warmups = 2u;
-inline constexpr usize s_SampleCount = 8u;
+
+
 inline constexpr u64 s_AcceptedTokenValue = 7u;
-inline constexpr AStringView s_ScalarSampleKeys[] = {
-    "scalar_sample_0_ns", "scalar_sample_1_ns", "scalar_sample_2_ns", "scalar_sample_3_ns",
-    "scalar_sample_4_ns", "scalar_sample_5_ns", "scalar_sample_6_ns", "scalar_sample_7_ns"
-};
-inline constexpr AStringView s_IndexedSampleKeys[] = {
-    "indexed_sample_0_ns", "indexed_sample_1_ns", "indexed_sample_2_ns", "indexed_sample_3_ns",
-    "indexed_sample_4_ns", "indexed_sample_5_ns", "indexed_sample_6_ns", "indexed_sample_7_ns"
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -260,89 +249,6 @@ void CheckInvalidBindings(TestArena& testArena, Graphics::Alloc::ScratchArena& s
     EXPECT_EQ(bindings.find(saved.task), nullptr);
 }
 
-// Preserve the original validation and full-array dispatch work as the benchmark reference.
-template<typename Callback>
-[[nodiscard]] bool ScalarResolve(
-    const Graphics::GpuTaskGraph::DeclarationReadView& declarations,
-    const Graphics::GpuCompiledGraph::ReadView& plan,
-    const Graphics::GpuSubmissionPacketRange& range,
-    const Vector<Callback, Graphics::Alloc::ScratchArena>& callbacks
-){
-    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-    for(usize index = 0u; index < callbacks.size(); ++index){
-        const Callback& callback = callbacks[index];
-        if(!callback.invoke || !declarations.validTask(callback.task) || !plan.findTask(callback.task).valid())
-            return false;
-        const Graphics::GpuSubmissionPacketId packet = plan.packetForTask(callback.task);
-        if(!packet.valid() || packet.index < range.first.index || packet.index >= rangeEnd)
-            return false;
-        for(usize previous = 0u; previous < index; ++previous){
-            if(callbacks[previous].task == callback.task)
-                return false;
-        }
-    }
-    return true;
-}
-
-template<typename Callback>
-void BenchmarkCallbacks(TestArena& testArena, Graphics::Alloc::ScratchArena& scratch, const usize callbackCount){
-    CallbackGraph fixture(testArena, scratch);
-    ASSERT_TRUE(fixture.prepare(callbackCount));
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(fixture.m_graph);
-    const Graphics::GpuCompiledGraph::ReadView plan(fixture.m_compilation.compiledGraph);
-    const Graphics::GpuSubmissionPacketRange range = plan.allPacketRange();
-    InvocationState state;
-    Vector<CallbackContext, Graphics::Alloc::ScratchArena> contexts(scratch);
-    Vector<Callback, Graphics::Alloc::ScratchArena> callbacks(scratch);
-    contexts.reserve(callbackCount);
-    callbacks.reserve(callbackCount);
-    u64 expectedChecksum = 0u;
-    for(usize index = 0u; index < callbackCount; ++index){
-        const Graphics::GpuTaskId task = fixture.m_tasks[callbackCount - 1u - index];
-        contexts.push_back({ state, task.index });
-        callbacks.push_back(MakeCallback<Callback>(task, contexts.back()));
-        expectedChecksum += task.index + 1u;
-    }
-    for(usize sample = 0u; sample < s_Warmups + s_SampleCount; ++sample){
-        for(usize step = 0u; step < s_DesignCount; ++step){
-            const bool indexed = (sample + step) % s_DesignCount != 0u;
-            state.m_count = 0u;
-            state.m_checksum = 0u;
-            TaskCallbackBindings<Callback> bindings(scratch);
-            const Timer begin = TimerNow();
-            bool succeeded = indexed
-                ? bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size())
-                : ScalarResolve(declarations, plan, range, callbacks)
-            ;
-            for(const Graphics::GpuTaskId task : fixture.m_tasks){
-                if(indexed){
-                    const Callback* const callback = bindings.find(task);
-                    succeeded = callback && InvokeBoundCallback(*callback) && succeeded;
-                }
-                else{
-                    for(const Callback& callback : callbacks){
-                        if(callback.task == task)
-                            succeeded = InvokeBoundCallback(callback) && succeeded;
-                    }
-                }
-            }
-            const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-            ASSERT_TRUE(succeeded);
-            ASSERT_EQ(state.m_count, callbackCount);
-            ASSERT_EQ(state.m_checksum, expectedChecksum);
-            if(sample >= s_Warmups){
-                const AStringView key = indexed
-                    ? s_IndexedSampleKeys[sample - s_Warmups]
-                    : s_ScalarSampleKeys[sample - s_Warmups]
-                ;
-                RecordUnsignedTestProperty(key, elapsed);
-            }
-        }
-    }
-    RecordUnsignedTestProperty("callback_count", callbackCount);
-    RecordUnsignedTestProperty("checksum", expectedChecksum);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -365,54 +271,6 @@ TEST(GpuTaskCallbackBindings, FailedAdmissionClearsPriorBindingsForBothLookupPat
         CheckInvalidBindings<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, count);
         CheckInvalidBindings<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, count);
     }
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_RecordedBenchmark8Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, s_InlineCount);
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_RecordedBenchmark64Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, s_MediumCallbackCount);
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_RecordedBenchmark1024Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, s_LargeCallbackCount);
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_RecordedBenchmark4096Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, s_HugeCallbackCount);
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_AcceptedBenchmark8Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, s_InlineCount);
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_AcceptedBenchmark64Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, s_MediumCallbackCount);
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_AcceptedBenchmark1024Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, s_LargeCallbackCount);
-}
-
-TEST(GpuTaskCallbackBindings, DISABLED_AcceptedBenchmark4096Callbacks){
-    TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    BenchmarkCallbacks<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, s_HugeCallbackCount);
 }
 
 

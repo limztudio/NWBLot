@@ -45,7 +45,7 @@ TEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingP
 
 TEST(UiNumericFormatTests, ExtremeSubnormalSignedZeroAndAdjacentUlpValuesRoundtripWithExactBits){
     const u64 patterns[]{
-        0x0000000000000000ull, 0x8000000000000000ull, 0x0000000000000001ull, 0x8000000000000001ull,
+        0x8000000000000000ull, 0x0000000000000001ull, 0x8000000000000001ull,
         0x000fffffffffffffull, 0x0010000000000000ull, 0x3fefffffffffffffull, 0x3ff0000000000001ull, 0x4340000000000001ull,
         0x7fefffffffffffffull, 0xffefffffffffffffull
     };

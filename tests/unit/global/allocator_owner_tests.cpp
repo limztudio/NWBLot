@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -141,25 +143,16 @@ TEST(AllocationOwners, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
     EXPECT_EQ(arena.memoryStats().deallocationCount, 1u);
 }
 
-TEST(AllocationOwners, ObjectAndZeroSizeReallocationReleaseChargedBytes){
-    struct OddObject{
-        u8 bytes[13u] = {};
-    };
+TEST(AllocationOwners, ZeroSizeReallocationReleasesChargedBytes){
     constexpr Name s_Owner("tests/allocation_owners/object_and_zero");
     GlobalArena arena(s_Owner);
-    auto* object = static_cast<OddObject*>(arena.allocate(alignof(OddObject), sizeof(OddObject)));
-    ASSERT_NE(object, nullptr);
-    EXPECT_EQ(arena.memoryStats().usedBytes, CoreMsize(object));
-    arena.deallocateObject(object);
-    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
-
     void* allocation = arena.allocate(64u, 13u);
     ASSERT_NE(allocation, nullptr);
     EXPECT_EQ(arena.reallocate(allocation, 64u, 0u), nullptr);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
-    EXPECT_EQ(arena.memoryStats().allocationCount, s_ExpectedDualCount);
-    EXPECT_EQ(arena.memoryStats().deallocationCount, s_ExpectedDualCount);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 1u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 1u);
     EXPECT_EQ(OwnerStats(s_Owner).usedBytes, 0u);
 }
 

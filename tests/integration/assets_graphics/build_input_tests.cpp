@@ -7,7 +7,6 @@
 #include <core/task/cpu/scheduler.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -233,27 +232,6 @@ TEST_F(BuildInputSelection, RootResolutionFailureRetainsSourceIndexWithoutPublis
     ASSERT_TRUE(recovered);
     ASSERT_EQ(recovered->size(), 1u);
     EXPECT_EQ((*recovered)[0].path, (m_root / s_ASSETS).lexicallyNormal());
-}
-
-TEST_F(BuildInputSelection, DISABLED_BenchmarkExplicitAndDirectoryInputs){
-    constexpr usize s_FileCount = 2048u;
-    for(usize i = 0u; i < s_FileCount; ++i){
-        const Assets::AssetString relativePath = StringFormat(m_testArena.arena, "assets/bulk/{:04}.nwb", i);
-        addFile(relativePath);
-        addInput(relativePath);
-    }
-    const Timer explicitBegin = TimerNow();
-    ASSERT_TRUE(select());
-    const u64 explicitNanoseconds = DurationInNS<u64>(TimerNow(), explicitBegin);
-    ASSERT_EQ(m_files.size(), s_FileCount);
-    m_options.inputs.clear();
-    addInput("assets/bulk");
-    const Timer directoryBegin = TimerNow();
-    ASSERT_TRUE(select());
-    const u64 directoryNanoseconds = DurationInNS<u64>(TimerNow(), directoryBegin);
-    ASSERT_EQ(m_files.size(), s_FileCount);
-    NWB::Tests::RecordUnsignedTestProperty("explicit_inputs_ns", explicitNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("directory_inputs_ns", directoryNanoseconds);
 }
 
 

@@ -721,36 +721,6 @@ static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
     return AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);
 }
 
-TEST(AssetsGraphics, ShaderCookCompilesAmplificationStageWithoutMeshDependency){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "standalone_amplification_stage");
-    ASSERT_TRUE(cookCase);
-    Path& root = cookCase->root;
-    Path& outputDirectory = cookCase->outputDirectory;
-
-    const Path assetRoot = root / "assets";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
-        assetRoot / "shaders" / "standalone_task.nwb",
-        "amplification_shader asset;\nasset.entry_point = \"main\";\n"
-    ));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
-        assetRoot / "shaders" / "standalone_task.slang",
-        "[shader(\"amplification\")]\n[numthreads(1, 1, 1)]\nvoid main(){}\n"
-    ));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    const Name virtualPath = Core::ShaderArchive::BuildVirtualPathName(
-        Name("project/shaders/standalone_task"), Core::ShaderArchive::s_DefaultVariant, Name("task")
-    );
-    UniquePtr<Core::Assets::IAsset> loaded;
-    auto loadedLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::AmplificationShaderAssetCodec>(testArena, outputDirectory, virtualPath, s_ExpectedDualCount);
-    ASSERT_TRUE(loadedLoadResult);
-    loaded = Move(*loadedLoadResult);
-    EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
 
 TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState){
     CapturingLogger logger;

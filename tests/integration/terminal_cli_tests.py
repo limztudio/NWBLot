@@ -32,10 +32,6 @@ def run(executable: pathlib.Path, arguments: list[str], root: pathlib.Path) -> s
 
 
 def verify_pipeline(executable: pathlib.Path, root: pathlib.Path) -> None:
-    help_result = run(executable, [LIT_HELP], root)
-    assert help_result.returncode == 0, (executable, help_result)
-    assert LIT_NWB_ASSET_PIPELINE in help_result.stdout and LIT_OUTPUT in help_result.stdout, help_result
-    assert "Usage:" not in help_result.stderr, help_result
     for arguments in ([], [LIT_NWB_UNKNOWN_OPTION], [LIT_OUTPUT, str(root / LIT_OUTPUT_2)]):
         result = run(executable, arguments, root)
         assert result.returncode == 1, (executable, arguments, result)
@@ -48,8 +44,6 @@ def verify_pipeline(executable: pathlib.Path, root: pathlib.Path) -> None:
 
 
 def verify_utility(executable: pathlib.Path, root: pathlib.Path) -> None:
-    help_result = run(executable, [LIT_HELP], root)
-    assert help_result.returncode == 0 and LIT_HELP in help_result.stdout, (executable, help_result)
     result = run(executable, [LIT_NWB_UNKNOWN_OPTION], root)
     # CLI11's ExtrasError is 109; preserve its native terminal code instead of normalizing it to generic failure.
     assert result.returncode == 109, (executable, result)

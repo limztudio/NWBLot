@@ -84,9 +84,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
             &reductionValue,
             sizeof(reductionValue)
         );
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
-        EXPECT_EQ(loadedAsset.get(), nullptr);
 
         description.reductionType = reduction;
         sampler.setDescription(description);
@@ -102,9 +100,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
         binary = validBinary;
         const f32 nonblack = 1.0f;
         NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
-        EXPECT_EQ(loadedAsset.get(), nullptr);
     }
 
     description.reductionType = NWB::Core::SamplerReductionType::Standard;

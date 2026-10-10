@@ -1,11 +1,12 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
 
 #include <core/task/gpu/packet_runtime_internal.h>
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,38 +61,6 @@ void ExpectWaitStatistics(
     EXPECT_EQ(actual.mergedTimelineWaitCount, count - sameQueueCount - uniqueQueueCount);
 }
 
-void BenchmarkClusteredWaits(const usize count){
-    TestArena testArena;
-    const Graphics::GpuPhysicalQueueId queue{ .index = 41u, .deviceGeneration = 9u };
-    Graphics::GraphicsVector<Graphics::QueueSubmissionToken> tokens(testArena.arena);
-    tokens.reserve(count);
-    for(usize index = 0u; index < count; ++index){
-        tokens.push_back({
-            .value = index + 1u,
-            .physicalQueueIndex = static_cast<u16>(index < count / 2u ? 3u : 60001u),
-            .deviceGeneration = queue.deviceGeneration,
-            .queue = Graphics::CommandQueue::Compute,
-        });
-    }
-    u64 minimumNanoseconds = Limit<u64>::s_Max;
-    for(usize iteration = 0u; iteration < 4u; ++iteration){
-        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-        const Timer begin = TimerNow();
-        const Graphics::GpuPacketRuntimeDetail::PacketWaitStatistics statistics = Graphics::GpuPacketRuntimeDetail::CountPacketWaitStatistics(
-            queue, tokens.data(), tokens.size(), scratch
-        );
-        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
-        EXPECT_EQ(statistics.plannedWaitTokenCount, count);
-        EXPECT_EQ(statistics.sameQueueWaitElisionCount, 0u);
-        EXPECT_EQ(statistics.timelineWaitCount, 2u);
-        EXPECT_EQ(statistics.mergedTimelineWaitCount, count - 2u);
-        EXPECT_EQ(scratch.memoryStats().allocationCount, 0u);
-        if(iteration != 0u)
-            minimumNanoseconds = Min(minimumNanoseconds, nanoseconds);
-    }
-    RecordUnsignedTestProperty("wait_statistics_ns", minimumNanoseconds);
-}
-
 
 TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWithoutChangingWaitTokens){
     TestArena testArena;
@@ -113,15 +82,6 @@ TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWit
     Sort(tokens.begin(), tokens.end(), [](const auto& first, const auto& second){ return first.value < second.value; });
     ASSERT_EQ(tokens.size(), original.size());
     EXPECT_EQ(NWB_MEMCMP(tokens.data(), original.data(), tokens.size() * sizeof(tokens[0u])), 0);
-}
-
-
-TEST(GpuTaskGraphSubmissionValidation, DISABLED_ClusteredWaitBenchmark1024Tokens){
-    BenchmarkClusteredWaits(1024u);
-}
-
-TEST(GpuTaskGraphSubmissionValidation, DISABLED_ClusteredWaitBenchmark4096Tokens){
-    BenchmarkClusteredWaits(4096u);
 }
 
 

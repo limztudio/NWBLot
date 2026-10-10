@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -6,7 +8,6 @@
 
 #include <core/telemetry/frame_graph_contributor.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -149,46 +150,6 @@ void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32
             return false;
     }
     return true;
-}
-
-void RunScalingScenario(const u32 packetCount, const u32 ownerCount){
-    TestArena testArena;
-    StatisticsFixture fixture(testArena.arena);
-    PrepareFixture(fixture, packetCount, ownerCount);
-    const Timer appendBegin = TimerNow();
-    const bool appended = AppendFixtureStatistics(fixture, packetCount, ownerCount);
-    const u64 appendNanoseconds = DurationInNS<u64>(TimerNow(), appendBegin);
-    ASSERT_TRUE(appended);
-    ASSERT_EQ(fixture.packets.size(), packetCount);
-    ASSERT_EQ(fixture.queues.size(), ownerCount * s_ExpectedDualCount);
-
-    Telemetry::TelemetryBytes payload(testArena.arena);
-    const Timer encodeBegin = TimerNow();
-    const bool encoded = Telemetry::BuildFrameGraphPayload(
-        testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, payload
-    );
-    const u64 encodeNanoseconds = DurationInNS<u64>(TimerNow(), encodeBegin);
-    ASSERT_TRUE(encoded);
-    Expected<Telemetry::FrameGraphPayload> decoded = MakeUnexpected(Failure{});
-    const Timer decodeBegin = TimerNow();
-    const bool parsed = (decoded = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())).has_value();
-    const u64 decodeNanoseconds = DurationInNS<u64>(TimerNow(), decodeBegin);
-    ASSERT_TRUE(parsed);
-    ASSERT_EQ(decoded->nodes.size(), ownerCount);
-    ASSERT_EQ(decoded->physicalQueueRuntimeStatistics.size(), ownerCount * s_ExpectedDualCount);
-    ASSERT_EQ(decoded->packetSubmissionStatistics.size(), packetCount);
-    const u32 packetsPerOwner = packetCount / ownerCount;
-    for(u32 index = 0u; index < packetCount; ++index){
-        const auto& packet = decoded->packetSubmissionStatistics[index];
-        EXPECT_EQ(packet.ownerNodeIndex, index / packetsPerOwner);
-        EXPECT_EQ(packet.packetIndex, index % packetsPerOwner);
-        EXPECT_EQ(packet.queue.index, (packet.packetIndex & 1u) == 0u ? 1u : 3u);
-    }
-    testing::Test::RecordProperty("packet_count", packetCount);
-    testing::Test::RecordProperty("owner_count", ownerCount);
-    NWB::Tests::RecordUnsignedTestProperty("builder_ns", appendNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("encode_ns", encodeNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("decode_ns", decodeNanoseconds);
 }
 
 
@@ -334,23 +295,6 @@ TEST(Telemetry, PacketStatisticsSeededDuplicatesRemainInvalidPayloads){
         testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, payload
     ));
     EXPECT_TRUE(payload.empty());
-}
-
-// Opt in with --gtest_also_run_disabled_tests and a PacketStatisticsBenchmark filter.
-TEST(Telemetry, DISABLED_PacketStatisticsBenchmarkSingleOwner512){
-    RunScalingScenario(512u, 1u);
-}
-
-TEST(Telemetry, DISABLED_PacketStatisticsBenchmarkSingleOwner1024){
-    RunScalingScenario(1024u, 1u);
-}
-
-TEST(Telemetry, DISABLED_PacketStatisticsBenchmarkSingleOwner4096){
-    RunScalingScenario(4096u, 1u);
-}
-
-TEST(Telemetry, DISABLED_PacketStatisticsBenchmarkManyOwners4096){
-    RunScalingScenario(4096u, 64u);
 }
 
 

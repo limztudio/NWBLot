@@ -1,13 +1,13 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include <core/alloc/general.h>
 #include <core/alloc/persistent.h>
 
-#include <global/text_utils.h>
 #include <global/thread.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -81,13 +81,10 @@ TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
         });
     }
 
-    // Every arena and thread exists before timing begins. The timed interval contains simultaneous churn and join.
     workersReady.wait();
-    const Timer begin = TimerNow();
     start.count_down();
     for(Thread& worker : workers)
         worker.join();
-    const u64 elapsedNanoseconds = DurationInNS<u64>(TimerNow(), begin);
 
     for(const WorkerResult& result : results){
         EXPECT_FALSE(result.allocationFailed);
@@ -99,7 +96,6 @@ TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
         EXPECT_EQ(result.stats.reservedBytes, 0u);
         EXPECT_GE(result.stats.peakUsedBytes, s_AllocationBytes);
     }
-    NWB::Tests::RecordUnsignedTestProperty("shared_owner_churn_ns", elapsedNanoseconds);
 }
 
 

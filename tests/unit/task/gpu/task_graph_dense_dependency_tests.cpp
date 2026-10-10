@@ -1,10 +1,11 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
 
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 
@@ -93,7 +94,7 @@ static void DeclareDenseDependencies(
     }
 }
 
-static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum scenario, const bool benchmark){
+static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum scenario){
     SCOPED_TRACE(scenario);
     TestArena arena;
     Graphics::GpuTaskGraph graph(arena.arena);
@@ -103,17 +104,9 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
     Graphics::GpuTaskGraphAnalysis analysis(arena.arena);
     const Graphics::GpuTaskGraphCompiler compiler;
     const usize pairCount = taskCount * (taskCount - 1u) / 2u;
-    constexpr usize s_Samples = 5u;
-    Array<u64, s_Samples> samples = {};
-    usize peakScratch = 0u;
-    for(usize iteration = 0u; iteration < (benchmark ? s_Samples + 1u : 1u); ++iteration){
-        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-        const Timer begin = benchmark ? TimerNow() : Timer{};
-        ASSERT_TRUE(compiler.analyze(view, analysis, scratch));
-        if(benchmark && iteration != 0u)
-            samples[iteration - 1u] = DurationInNS<u64>(TimerNow(), begin);
-        peakScratch = Max(peakScratch, scratch.memoryStats().peakUsedBytes);
-    }
+    Graphics::Alloc::ScratchArena analysisScratch(s_TaskGraphScratchArena);
+    ASSERT_TRUE(compiler.analyze(view, analysis, analysisScratch));
+    const usize peakScratch = analysisScratch.memoryStats().peakUsedBytes;
     ASSERT_EQ(analysis.edges().size(), pairCount);
     ASSERT_EQ(analysis.schedulingEdges().size(), taskCount - 1u);
     ASSERT_EQ(analysis.inferredEdges().size(), scenario == Scenario::Explicit ? 0u : pairCount);
@@ -123,7 +116,7 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
     }
     for(const auto& edge : analysis.schedulingEdges())
         EXPECT_EQ(edge.consumer.index, edge.producer.index + 1u);
-    if(!benchmark){
+    {
         constexpr usize s_MaxScratchBytes = 32u * 1024u * 1024u;
         EXPECT_LT(peakScratch, s_MaxScratchBytes);
         Telemetry::FrameGraphNodeDescs nodes(arena.arena);
@@ -153,20 +146,14 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
         }
         EXPECT_EQ(dependencyIndex, pairCount);
     }
-    else{
-        Sort(samples.begin(), samples.end());
-        RecordUnsignedTestProperty("median_analysis_ns", samples[s_Samples / 2u]);
-        RecordUnsignedTestProperty("scratch_bytes", peakScratch);
-        RecordUnsignedTestProperty("task_count", taskCount);
-        RecordUnsignedTestProperty("raw_edge_count", pairCount);
-    }
+
 }
 
 
 TEST(GpuTaskGraphAnalysis, DenseSequentialDependencyPairsBoundStorageAndPreserveTelemetryFlags){
     constexpr Scenario::Enum s_Scenarios[] = { Scenario::Explicit, Scenario::Inferred, Scenario::Mixed };
     for(const auto scenario : s_Scenarios)
-        CheckDenseDependencies(256u, scenario, false);
+        CheckDenseDependencies(256u, scenario);
 }
 
 TEST(GpuTaskGraphAnalysis, ReductionRetainsAnUnreachedMiddleTargetAfterReachingTheLastTarget){
@@ -192,22 +179,6 @@ TEST(GpuTaskGraphAnalysis, ReductionRetainsAnUnreachedMiddleTargetAfterReachingT
     }
     EXPECT_TRUE(retainsMiddle);
     EXPECT_FALSE(retainsRedundantLast);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_DenseAllPriorBenchmark128Tasks){
-    CheckDenseDependencies(128u, Scenario::Explicit, true);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_DenseAllPriorBenchmark256Tasks){
-    CheckDenseDependencies(256u, Scenario::Explicit, true);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_DenseAllPriorBenchmark512Tasks){
-    CheckDenseDependencies(512u, Scenario::Explicit, true);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_DenseAllPriorBenchmark1024Tasks){
-    CheckDenseDependencies(1024u, Scenario::Explicit, true);
 }
 
 

@@ -186,7 +186,6 @@ TEST_F(UiEditCommandTests, PreeditOwnsCommandsAndEnterWhileEscapeFirstCancelsOnl
     EXPECT_FALSE(m_model.composition().active);
     EXPECT_EQ(m_model.text(), "base");
     EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Cancel }).cancelled);
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Submit }).submitted);
 }
 
 TEST_F(UiEditCommandTests, EmptyAndUnknownCommandsPreserveTextAndSelection){

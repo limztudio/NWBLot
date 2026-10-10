@@ -8,7 +8,6 @@
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -60,10 +59,6 @@ struct SkeletonInputs{
     }
 };
 
-[[nodiscard]] static Name IndexedJointName(const usize index){
-    char indexText[32u] = {};
-    return DeriveName(Name("tests/skeleton_payload/joint/"), FormatDecimal(index, indexText));
-}
 
 TEST(SkeletonPayload, MissingJointLookupReturnsInvalidIndex){
     SkeletonInputs inputs;
@@ -136,57 +131,6 @@ TEST(SkeletonPayload, ReplacesParentLinksWithoutRetainingPreviousRelationships){
     EXPECT_EQ(inputs.skeleton.joints()[0u].parentIndex, s_SkeletonInvalidJointIndex);
     EXPECT_EQ(inputs.skeleton.joints()[s_ThirdElementIndex].parentIndex, s_SkeletonInvalidJointIndex);
     EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, s_ExpectedDualCount);
-}
-
-static void BenchmarkSkeletonBuild(const usize jointCount, const usize iterations){
-    SkeletonInputs inputs;
-    inputs.entry.joints.clear();
-    inputs.entry.joints.reserve(jointCount);
-    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        inputs.entry.joints.push_back(SkeletonCookJoint{
-            .name = IndexedJointName(jointIndex),
-            .parent = jointIndex == 0u ? s_NameNone : inputs.entry.joints.back().name,
-        });
-    }
-    auto skeletonBuildResult7 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
-    ASSERT_TRUE(skeletonBuildResult7);
-    inputs.skeleton = Move(*skeletonBuildResult7);
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    usize succeeded = 0u;
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        auto built = BuildSkeletonAsset(inputs.entry, inputs.arena);
-        if(built){
-            inputs.skeleton = Move(*built);
-            ++succeeded;
-        }
-    }
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    const ArenaMemoryStats after = HeapBackingMemoryStats();
-    EXPECT_EQ(succeeded, iterations);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    ASSERT_EQ(inputs.skeleton.jointCount(), jointCount);
-    EXPECT_EQ(inputs.skeleton.joints()[0u].parentIndex, s_SkeletonInvalidJointIndex);
-    EXPECT_EQ(inputs.skeleton.findJointIndex(inputs.entry.joints.back().name), jointCount - 1u);
-    for(usize jointIndex = 1u; jointIndex < jointCount; ++jointIndex)
-        EXPECT_EQ(inputs.skeleton.joints()[jointIndex].parentIndex, jointIndex - 1u);
-
-    char allocationsText[32u] = {};
-    Tests::RecordUnsignedTestProperty("skeleton_build_ns", elapsed);
-    Tests::RecordUnsignedTestProperty("skeleton_build_iterations", iterations);
-    Tests::RecordUnsignedTestProperty("skeleton_joint_count", jointCount);
-    testing::Test::RecordProperty(
-        "skeleton_build_backing_allocations", FormatDecimal(after.allocationCount - before.allocationCount, allocationsText).data()
-    );
-}
-
-// Opt in with --gtest_also_run_disabled_tests and a SkeletonPayloadBenchmark.* filter.
-TEST(SkeletonPayloadBenchmark, DISABLED_BuildsLongJointChain){
-    BenchmarkSkeletonBuild(4096u, 4u);
-}
-
-TEST(SkeletonPayloadBenchmark, DISABLED_BuildsSingleJoint){
-    BenchmarkSkeletonBuild(1u, 4096u);
 }
 
 

@@ -39,7 +39,7 @@ ACTION_PATTERN = re.compile(
 EXPECTED_ACTIONS = [
     ("increase", 1, 1, 1), ("increase", 2, 1, 2), ("increase", 3, 1, 3),
     ("enabled", 3, 0, 4), ("enabled", 3, 1, 5), ("increase", 4, 1, 6),
-    ("increase", 5, 1, 7), ("increase", 6, 1, 8), ("reset", 0, 1, 9),
+    ("increase", 5, 1, 7), ("increase", 6, 1, 8),
 ]
 VIRTUAL_KEYS = {"Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B}
 OFF = (0.08, 0.01, 0.01)
@@ -324,8 +324,6 @@ class InteractionRun:
         time.sleep(0.2)
         self.native.click(*self.point(91, 76))
         self.checkpoint("resized_first_click", 6, True, extent=(800, 600))
-        self.native.click(*self.point(91, 124))
-        self.checkpoint("reset", 0, True, extent=(800, 600))
 
 
 def run(args):

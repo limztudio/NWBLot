@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -6,7 +8,6 @@
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -151,58 +152,6 @@ struct ReportFixture{
         return {};
     const usize end = text.find('\n', begin);
     return text.substr(begin, end == AStringView::npos ? text.size() - begin : end - begin);
-}
-
-void BenchmarkReport(const u32 packetCount, const u32 ownerCount, const u32 taskCount, const usize iterations = 3u){
-    TestArena testArena;
-    ReportFixture fixture(testArena.arena);
-    fixture.nodes.reserve(ownerCount + taskCount);
-    fixture.queues.reserve(ownerCount * s_ExpectedDualCount);
-    fixture.packets.reserve(packetCount);
-    for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
-        fixture.addOwner(packetCount / ownerCount, 1u);
-        for(u32 taskIndex = 0u; taskIndex < taskCount / ownerCount; ++taskIndex)
-            fixture.addUnmeasuredNode();
-    }
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(
-        recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u
-    ));
-    Log::TelemetryReport report(testArena.arena);
-    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
-    ASSERT_TRUE(reportResult1);
-    report = Move(*reportResult1);
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    usize accepted = 0u;
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        auto generated = Log::BuildTelemetryReport(testArena.arena, recorder.view());
-        if(generated){
-            report = Move(*generated);
-            ++accepted;
-        }
-    }
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    const ArenaMemoryStats after = HeapBackingMemoryStats();
-    ASSERT_EQ(accepted, iterations);
-    ASSERT_EQ(report.summary.parseFailureCount, 0u);
-    ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
-    ASSERT_EQ(report.summary.frameGraphNodeCount, ownerCount + taskCount);
-    const AStringView json(report.json.data(), report.json.size());
-    const AStringView dot(report.graph.data(), report.graph.size());
-    EXPECT_EQ(CountText(json, s_PACKET_INDEX), packetCount);
-    EXPECT_EQ(CountText(json, "\"runtimeStatistics\": null"), taskCount);
-    EXPECT_EQ(CountText(dot, "runtime_packet_submission_count="), ownerCount);
-    NWB::Tests::RecordUnsignedTestProperty("report_build_ns", elapsed);
-    NWB::Tests::RecordUnsignedTestProperty("report_iterations", iterations);
-    NWB::Tests::RecordUnsignedTestProperty("report_node_count", fixture.nodes.size());
-    NWB::Tests::RecordUnsignedTestProperty("report_owner_count", ownerCount);
-    NWB::Tests::RecordUnsignedTestProperty("report_packet_count", packetCount);
-    NWB::Tests::RecordUnsignedTestProperty("report_physical_queue_count", fixture.queues.size());
-    NWB::Tests::RecordUnsignedTestProperty("report_heap_allocations", after.allocationCount - before.allocationCount);
-    NWB::Tests::RecordUnsignedTestProperty("report_json_bytes", report.json.size());
-    NWB::Tests::RecordUnsignedTestProperty("report_dot_bytes", report.graph.size());
 }
 
 
@@ -359,27 +308,6 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PACKET_INDEX), 3u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RUNTIME_PACKET_SUBMISSION_COUNT_3), 1u);
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "Frame 918 stream 4"));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Opt in with --gtest_also_run_disabled_tests and the FrameGraphReportBenchmark.* filter.
-TEST(FrameGraphReportBenchmark, DISABLED_SingleOwnerSinglePacket){
-    BenchmarkReport(1u, 1u, 1u, 128u);
-}
-
-TEST(FrameGraphReportBenchmark, DISABLED_SingleOwner1024PacketsAndTasks){
-    BenchmarkReport(1024u, 1u, 1024u);
-}
-
-TEST(FrameGraphReportBenchmark, DISABLED_SingleOwner4096PacketsAndTasks){
-    BenchmarkReport(4096u, 1u, 4096u);
-}
-
-TEST(FrameGraphReportBenchmark, DISABLED_SixtyFourOwners4096PacketsAndTasks){
-    BenchmarkReport(4096u, 64u, 4096u);
 }
 
 

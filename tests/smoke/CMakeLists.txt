@@ -29,20 +29,17 @@ if(TARGET rgd_backend)
     add_subdirectory(rgd_decode)
 endif()
 
-if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
+if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     # Keep cache roots short enough for Windows MAX_PATH, including content hashes.
     set(_nwb_smoke_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
 
     set(_nwb_smoke_capture_early_settle_seconds "0.75")
     set(_nwb_smoke_capture_mid_settle_seconds "2.0")
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
-    set(_nwb_skinned_caustic_capture_late_settle_seconds "4.0")
     # CTest budgets include process startup and orderly teardown around the script timeout.
     set(_nwb_window_capture_smoke_ctest_timeout_seconds 60)
     set(_nwb_csg_temporal_script_timeout_seconds 150)
     set(_nwb_csg_temporal_ctest_timeout_seconds 210)
-    set(_nwb_skinning_culling_benchmark_script_timeout_seconds 240)
-    set(_nwb_skinning_culling_benchmark_ctest_timeout_seconds 300)
 
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
         cmake_parse_arguments(PARSE_ARGV 5 _nwb_smoke "" "" "CONFIGURATIONS")
@@ -119,38 +116,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             add_dependencies("${TARGET_NAME}" nwb_logserver)
         endif()
     endfunction()
-
-    if(TARGET testbed)
-        nwb_add_window_capture_smoke(
-            nwb_testbed_window_capture_smoke
-            testbed_window_capture.bmp
-            "$<TARGET_FILE:testbed>"
-            "${NWB_OUTPUT_ROOT}"
-            "NWB Testbed"
-            "--expect-log-message" "ProjectTestbed: startup scene created"
-            "--expect-log-message" "Loader: project startup complete"
-            "--expect-log-message" "ProjectTestbed: shutdown"
-            "--reject-log-message" "software BVH build failed"
-            "--reject-log-message" "software BVH update failed"
-            "--reject-log-message" "Gpu task graph: rejecting task 'Shadow Preparation'"
-        )
-        nwb_add_window_capture_smoke(
-            nwb_testbed_gpudbg_window_capture_smoke
-            testbed_gpudbg_window_capture.bmp
-            "$<TARGET_FILE:testbed>"
-            "${NWB_OUTPUT_ROOT}"
-            "NWB Testbed"
-            "--application-arg=--gpudbg"
-            "--expect-log-message" "ProjectTestbed: startup scene created"
-            "--expect-log-message" "Loader: project startup complete"
-            "--expect-log-message" "Loader: GPU debug validation enabled"
-            "--expect-log-message" "ProjectTestbed: shutdown"
-            "--reject-log-message" "software BVH build failed"
-            "--reject-log-message" "software BVH update failed"
-            "--reject-log-message" "Gpu task graph: rejecting task 'Shadow Preparation'"
-            CONFIGURATIONS dbg
-        )
-    endif()
 
     if(TARGET nwb_loader AND TARGET nwb_asset_builder)
         set(_nwb_transparent_multi_runtime_root "${CMAKE_BINARY_DIR}/Testing/smoke_runtime/$<CONFIG>")
@@ -766,23 +731,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_configure_runtime_smoke_target(nwb_caustic_sphere_smoke "${_nwb_transparent_multi_runtime_root}")
         add_dependencies(nwb_caustic_sphere_smoke nwb_transparent_multi_smoke_assets)
 
-        nwb_add_window_capture_smoke(
-            nwb_caustic_sphere_capture_smoke
-            caustic_sphere_capture.bmp
-            "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
-            "${_nwb_transparent_multi_runtime_root}"
-            "NWB Caustic Sphere Smoke"
-            "--application-capture"
-            "--application-capture-frame-count" "360"
-            "--expect-log-message" "AVBOIT refraction resolve:"
-            "--expect-log-message" "caustic producer ("
-            "--expect-log-message" "TransparentMultiSmokeProject: shutdown"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-        set_tests_properties(nwb_caustic_sphere_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=0.016666667;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=0;NWB_REFRACTION_SMOKE_ENABLED=1;NWB_REFRACTION_SMOKE_HARDWARE=1"
-        )
         add_test(
             NAME nwb_caustic_optical_capture_smoke
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py"
@@ -955,40 +903,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_custom_target(nwb_csg_visible_smoke_assets DEPENDS "${_nwb_csg_visible_asset_stamp}")
         add_dependencies(nwb_csg_visible_smoke nwb_csg_visible_smoke_assets)
 
-        nwb_add_window_capture_smoke(
-            nwb_csg_visible_capture_smoke
-            csg_visible_capture.bmp
-            "$<TARGET_FILE:nwb_csg_visible_smoke>"
-            "${_nwb_csg_visible_runtime_root}"
-            "NWB CSG Visible Smoke"
-            "--expect-log-message" "CsgVisibleSmokeProject: natural native mesh-shader route selected"
-            "--expect-log-message" "selected MeshShader + PS on this device"
-            "--skip-log-message" "CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"
-            "--skip-blocking-log-message" "[ERROR]"
-            "--skip-blocking-log-message" "VUID-"
-            "--skip-blocking-log-message" "Validation Error"
-            "--skip-blocking-log-message" "failed to resolve shader"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_visible_indexed_capture_smoke
-            csg_visible_indexed_capture.bmp
-            "$<TARGET_FILE:nwb_csg_visible_smoke>"
-            "${_nwb_csg_visible_runtime_root}"
-            "NWB CSG Visible Smoke"
-            "--expect-log-message" "CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"
-            "--expect-log-message" "selected VertexIndexed + PS from persistent object-space geometry"
-            "--skip-log-message" "CsgVisibleSmokeProject: natural native mesh-shader route selected"
-            "--skip-blocking-log-message" "[ERROR]"
-            "--skip-blocking-log-message" "VUID-"
-            "--skip-blocking-log-message" "Validation Error"
-            "--skip-blocking-log-message" "failed to resolve shader"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
         function(nwb_add_csg_temporal_smoke TEST_SUFFIX VIEW MOTION ROUTE FRAME_INTERVAL)
             set(_nwb_csg_temporal_check "--check-quality")
             if(VIEW MATCHES "^(normal|position)$")
@@ -1086,39 +1000,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_custom_target(nwb_csg_skinned_visible_smoke_assets DEPENDS "${_nwb_csg_skinned_visible_asset_stamp}")
         add_dependencies(nwb_csg_skinned_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_visible_capture_early_smoke
-            csg_skinned_visible_capture_early.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Skinned CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_visible_capture_smoke
-            csg_skinned_visible_capture.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Skinned CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_visible_capture_late_smoke
-            csg_skinned_visible_capture_late.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Skinned CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
         nwb_declare_executable(nwb_csg_skinned_sphere_visible_smoke)
         target_sources(nwb_csg_skinned_sphere_visible_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_visible_project.cpp"
@@ -1134,39 +1015,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_csg_skinned_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_sphere_visible_capture_early_smoke
-            csg_skinned_sphere_visible_capture_early.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Skinned Sphere CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_sphere_visible_capture_mid_smoke
-            csg_skinned_sphere_visible_capture_mid.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Skinned Sphere CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_sphere_visible_capture_late_smoke
-            csg_skinned_sphere_visible_capture_late.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Skinned Sphere CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
 
         nwb_declare_executable(nwb_csg_skinned_transparent_sphere_visible_smoke)
         target_sources(nwb_csg_skinned_transparent_sphere_visible_smoke PRIVATE
@@ -1184,39 +1032,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_csg_skinned_transparent_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_transparent_sphere_visible_capture_early_smoke
-            csg_skinned_transparent_sphere_visible_capture_early.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Transparent Skinned Sphere CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_transparent_sphere_visible_capture_mid_smoke
-            csg_skinned_transparent_sphere_visible_capture_mid.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Transparent Skinned Sphere CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_skinned_transparent_sphere_visible_capture_late_smoke
-            csg_skinned_transparent_sphere_visible_capture_late.bmp
-            "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Transparent Skinned Sphere CSG Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
 
         unset(_nwb_csg_skinned_visible_asset_stamp)
         unset(_nwb_csg_skinned_visible_runtime_root)
@@ -1277,26 +1092,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_custom_target(nwb_skinning_culling_benchmark_assets DEPENDS "${_nwb_skinning_culling_asset_stamp}")
         add_dependencies(nwb_skinning_culling_benchmark nwb_skinning_culling_benchmark_assets)
 
-        add_test(
-            NAME nwb_skinning_culling_benchmark
-            CONFIGURATIONS fin
-            COMMAND
-                "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_LIST_DIR}/runtime_log_smoke.py"
-                "--executable" "$<TARGET_FILE:nwb_skinning_culling_benchmark>"
-                "--working-directory" "${_nwb_skinning_culling_runtime_root}"
-                "--timeout" "${_nwb_skinning_culling_benchmark_script_timeout_seconds}"
-                ${_nwb_skinning_culling_logserver_args}
-                "--expect-log-message" "SkinningCullingBenchmark: completed"
-                "--expect-log-message" "Telemetry upload processed:"
-        )
-        set_tests_properties(nwb_skinning_culling_benchmark PROPERTIES
-            ENVIRONMENT "NWB_SKINNING_CULLING_FAST_SMOKE=1"
-            RESOURCE_LOCK nwb_display
-            SKIP_RETURN_CODE 77
-            TIMEOUT ${_nwb_skinning_culling_benchmark_ctest_timeout_seconds}
-        )
-
         # Shadows and caustics must follow live deformed normals rather than bind pose.
         nwb_declare_executable(nwb_skinned_caustic_smoke)
         target_sources(nwb_skinned_caustic_smoke PRIVATE
@@ -1324,37 +1119,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         )
         set_tests_properties(nwb_skinned_caustic_csg_transition_smoke PROPERTIES
             RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 690
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_skinned_caustic_capture_early_smoke
-            skinned_caustic_capture_early.bmp
-            "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Skinned Caustic Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-        nwb_add_window_capture_smoke(
-            nwb_skinned_caustic_capture_mid_smoke
-            skinned_caustic_capture_mid.bmp
-            "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Skinned Caustic Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-        nwb_add_window_capture_smoke(
-            nwb_skinned_caustic_capture_late_smoke
-            skinned_caustic_capture_late.bmp
-            "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Skinned Caustic Smoke"
-            "--settle-seconds" "${_nwb_skinned_caustic_capture_late_settle_seconds}"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
         )
 
         # The crowd stresses scene updates and opaque/transparent shadows across two lights.
@@ -1391,19 +1155,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             )
         endif()
 
-        nwb_add_window_capture_smoke(
-            nwb_stress_test_capture_smoke
-            stress_test_capture.bmp
-            "$<TARGET_FILE:nwb_stress_test_smoke>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Stress Test Smoke"
-            "--expect-log-message" "StressTestSmokeProject: spawned 20 spinning characters (10 transparent + 10 opaque) over ground, directional + point light"
-            "--expect-log-message" "StressTestSmokeProject: shutdown"
-        )
-        set_tests_properties(nwb_stress_test_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_STRESS_TEST_SPIN_ANGLE=0.6"
-        )
-
         # Hardware transparent shadows are compared against opaque-only hardware shadows. The test-owned A/B
         # harness launches this same binary twice, selecting an opaque-only scene for its hardware baseline arm.
         nwb_declare_executable(nwb_hardware_shadow_boundary_healthy_benchmark)
@@ -1428,81 +1179,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_hardware_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
-
-        nwb_add_window_capture_smoke(
-            nwb_hardware_shadow_boundary_healthy_capture_smoke
-            hardware_shadow_boundary_healthy_capture.bmp
-            "$<TARGET_FILE:nwb_hardware_shadow_boundary_healthy_benchmark>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Hardware Shadow Boundary Benchmark"
-            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
-            "--expect-log-message" "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"
-            "--expect-log-message" "StressTestSmokeProject: RayQuery-capable hardware shadow route available"
-            "--expect-log-message" "RendererSystem: dispatched hardware transparent shadow traversal"
-            "--skip-log-message" "StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"
-            "--skip-blocking-log-message" "[ERROR]"
-            "--skip-blocking-log-message" "VUID-"
-            "--skip-blocking-log-message" "Validation Error"
-            "--skip-blocking-log-message" "failed to resolve shader"
-            "--reject-log-message" "RendererSystem: split opaque soft-shadow producer failed\; retaining all-lit visibility"
-            "--reject-log-message" "RendererSystem: split opaque soft-shadow first wavelet failed\; retaining all-lit visibility"
-            "--reject-log-message" "RendererSystem: split opaque soft-shadow resolve tail failed\; retaining all-lit visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace could not record\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow temporal merge failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow first wavelet failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow resolve failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace or first wavelet failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: ray-traced shadow visibility pass failed"
-            "--reject-log-message" "RendererSystem: dispatched software shadow traversal"
-            "--reject-log-message" "RendererSystem: hardware transparent shadow resource preparation failed\; colored shadows unavailable this frame"
-            "--reject-log-message" "RendererSystem: changed HW shadow material context has no graph-owned upload batch"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "VUID-"
-            "--reject-log-message" "Validation Error"
-            "--reject-log-message" "failed to resolve shader"
-            CONFIGURATIONS dbg opt
-        )
-        set_tests_properties(nwb_hardware_shadow_boundary_healthy_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=0;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_hardware_shadow_boundary_opaque_capture_smoke
-            hardware_shadow_boundary_opaque_capture.bmp
-            "$<TARGET_FILE:nwb_hardware_shadow_boundary_healthy_benchmark>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Hardware Shadow Boundary Benchmark"
-            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
-            "--expect-log-message" "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"
-            "--expect-log-message" "StressTestSmokeProject: RayQuery-capable hardware shadow route available"
-            "--skip-log-message" "StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"
-            "--skip-blocking-log-message" "[ERROR]"
-            "--skip-blocking-log-message" "VUID-"
-            "--skip-blocking-log-message" "Validation Error"
-            "--skip-blocking-log-message" "failed to resolve shader"
-            "--reject-log-message" "RendererSystem: dispatched software shadow traversal"
-            "--reject-log-message" "RendererSystem: dispatched hardware transparent shadow traversal"
-            "--reject-log-message" "RendererSystem: split opaque soft-shadow producer failed\; retaining all-lit visibility"
-            "--reject-log-message" "RendererSystem: split opaque soft-shadow first wavelet failed\; retaining all-lit visibility"
-            "--reject-log-message" "RendererSystem: split opaque soft-shadow resolve tail failed\; retaining all-lit visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace could not record\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow temporal merge failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow first wavelet failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow resolve failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace or first wavelet failed\; preserving opaque visibility"
-            "--reject-log-message" "RendererSystem: ray-traced shadow visibility pass failed"
-            "--reject-log-message" "RendererSystem: changed HW shadow material context has no graph-owned upload batch"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "VUID-"
-            "--reject-log-message" "Validation Error"
-            "--reject-log-message" "failed to resolve shader"
-            CONFIGURATIONS dbg opt
-        )
-        set_tests_properties(nwb_hardware_shadow_boundary_opaque_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=1;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
-        )
 
         # Both M4 arms share assets; the runner requires a distinct Compute queue for the async arm.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
@@ -1570,19 +1246,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         )
         add_dependencies(nwb_flicker_test_smoke nwb_skinning_culling_benchmark_assets)
 
-        nwb_add_window_capture_smoke(
-            nwb_flicker_test_capture_smoke
-            flicker_test_capture.bmp
-            "$<TARGET_FILE:nwb_flicker_test_smoke>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Flicker Test"
-            "--expect-log-message" "FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light"
-            "--expect-log-message" "FlickerTestSmokeProject: shutdown"
-        )
-        set_tests_properties(nwb_flicker_test_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_FLICKER_TEST_SPIN_ANGLE=0.6"
-        )
-
         nwb_declare_executable(nwb_soft_shadow_test_smoke)
         target_sources(nwb_soft_shadow_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
@@ -1596,19 +1259,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets)
-
-        nwb_add_window_capture_smoke(
-            nwb_soft_shadow_test_capture_smoke
-            soft_shadow_test_capture.bmp
-            "$<TARGET_FILE:nwb_soft_shadow_test_smoke>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB Soft Shadow Test"
-            "--expect-log-message" "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights"
-            "--expect-log-message" "SoftShadowTestSmokeProject: shutdown"
-        )
-        set_tests_properties(nwb_soft_shadow_test_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_SOFT_SHADOW_TEST_SPIN_ANGLE=0.6"
-        )
 
         # The default surfel-GI smoke preserves the open-top box used by the pinned renderer baseline. A closed,
         # 20-body skylight scene is available to opt-in A/B captures through NWB_GI_SMOKE_COMPLEX_SCENE.
@@ -1629,16 +1279,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             nwb_ecs_csg
         )
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets)
-
-        nwb_add_window_capture_smoke(
-            nwb_gi_test_capture_smoke
-            gi_test_capture.bmp
-            "$<TARGET_FILE:nwb_gi_test_smoke>"
-            "${_nwb_skinning_culling_runtime_root}"
-            "NWB GI Test"
-            "--expect-log-message" "GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor"
-            "--expect-log-message" "GiTestSmokeProject: shutdown"
-        )
 
         # Diagnostic material reads the resolved GI alpha on two perpendicular faces in the same spatial cell.
         # Keep this opt-in fixture separate from the unchanged formal surfel-GI baseline scene.

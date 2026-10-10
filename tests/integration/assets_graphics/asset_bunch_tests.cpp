@@ -10,7 +10,6 @@
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -107,76 +106,6 @@ static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const M
         source += StringFormat(fixture.scratchArena, "metadata unused_{};\n", index);
     source.append(metadata.data(), metadata.size());
     return fixture.document.parse(AStringView(source));
-}
-
-static void BenchmarkDeclarationExpansion(const usize assetCount, const usize iterations){
-    BunchFixture fixture;
-    AString<Metascript::MetaArena> source(fixture.metadataArena);
-    source.reserve(assetCount * 180u + 64u);
-    for(usize index = 0u; index < assetCount; ++index){
-        source += StringFormat(fixture.metadataArena, "metadata local_{} = {{ \"ordinal\": {}, \"items\": [1, 2, 3] }};\n", index, index);
-    }
-    for(usize index = 0u; index < assetCount; ++index)
-        source += StringFormat(fixture.metadataArena, "probe asset_{};\n", index);
-    for(usize index = 0u; index < assetCount; ++index){
-        source += StringFormat(fixture.metadataArena, "asset_{}.local = local_{};\nasset_{}.target = asset_{};\n",
-            index, (index * 73u) % assetCount, index, (index + 1u) % assetCount
-        );
-    }
-    source += "asset_bunch bunch = [";
-    for(usize index = 0u; index < assetCount; ++index){
-        if(index)
-            source += ',';
-        source += StringFormat(fixture.metadataArena, "asset_{}", assetCount - index - 1u);
-    }
-    source += "];\n";
-    ASSERT_TRUE(fixture.document.parse(source));
-    const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-    {
-        auto output = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena);
-        ASSERT_TRUE(output);
-        ASSERT_EQ(output->size(), assetCount);
-    }
-    ASSERT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    const ArenaMemoryStats beforeHeap = HeapBackingMemoryStats();
-    usize accepted = 0u;
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if(AssetsBunchCook::ExpandAssetBunch(
-            fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena
-        ))
-            ++accepted;
-    }
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    const ArenaMemoryStats afterHeap = HeapBackingMemoryStats();
-    ASSERT_EQ(accepted, iterations);
-    EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    auto output = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena);
-    ASSERT_TRUE(output);
-    ASSERT_EQ(output->size(), assetCount);
-    for(usize outputIndex = 0u; outputIndex < assetCount; ++outputIndex){
-        const usize assetIndex = assetCount - outputIndex - 1u;
-        const auto expectedPath = StringFormat(fixture.metadataArena, "project/fixtures/bundle/asset_{}", assetIndex);
-        const auto targetPath = StringFormat(fixture.metadataArena, "project/fixtures/bundle/asset_{}", (assetIndex + 1u) % assetCount);
-        EXPECT_EQ((*output)[outputIndex].virtualPath, Name(AStringView(expectedPath)));
-        const Value* const local = (*output)[outputIndex].value.findField(s_LOCAL);
-        ASSERT_NE(local, nullptr);
-        const Value* const ordinal = local->findField("ordinal");
-        ASSERT_NE(ordinal, nullptr);
-        EXPECT_EQ(ordinal->asInteger(), static_cast<i64>((assetIndex * 73u) % assetCount));
-        const Value* const target = (*output)[outputIndex].value.findField(s_TARGET);
-        ASSERT_NE(target, nullptr);
-        EXPECT_EQ(target->asString(), AStringView(targetPath));
-    }
-    output = MakeUnexpected(Failure{});
-    EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    Tests::RecordUnsignedTestProperty("bunch_expand_ns", elapsed);
-    Tests::RecordUnsignedTestProperty("bunch_expand_iterations", iterations);
-    Tests::RecordUnsignedTestProperty("bunch_declaration_count", fixture.document.declarations().size());
-    Tests::RecordUnsignedTestProperty("bunch_export_count", assetCount);
-    Tests::RecordUnsignedTestProperty("bunch_reference_count", assetCount * s_ExpectedDualCount);
-    Tests::RecordUnsignedTestProperty("bunch_heap_allocations", afterHeap.allocationCount - beforeHeap.allocationCount);
-    Tests::RecordUnsignedTestProperty("bunch_scratch_reserved_bytes", fixture.scratchArena.memoryStats().reservedBytes);
 }
 
 
@@ -622,18 +551,6 @@ TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
             EXPECT_EQ(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference")), caseIndex == 1u);
         }
     }
-}
-
-TEST(AssetBunchBenchmark, DISABLED_FourAssetsAndFourLocalDeclarations){
-    BenchmarkDeclarationExpansion(4u, 256u);
-}
-
-TEST(AssetBunchBenchmark, DISABLED_256AssetsAnd256LocalDeclarations){
-    BenchmarkDeclarationExpansion(256u, 3u);
-}
-
-TEST(AssetBunchBenchmark, DISABLED_1024AssetsAnd1024LocalDeclarations){
-    BenchmarkDeclarationExpansion(1024u, 3u);
 }
 
 

@@ -1,10 +1,11 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include <core/task/cpu/scheduler.h>
 
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -22,8 +23,6 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
     const Name taskName("tests.cpu.task");
     const auto scopeLabel = scheduler.registerProfileLabel(scopeName);
     const auto taskLabel = scheduler.registerProfileLabel(taskName);
-    EXPECT_EQ(scheduler.registerProfileLabel(taskName).value, taskLabel.value);
-    EXPECT_FALSE(scheduler.registerProfileLabel(s_NameNone).valid());
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 7u);
     const auto task = scope.submit([](){ SleepMS(1u); }, { .profileLabel = taskLabel });

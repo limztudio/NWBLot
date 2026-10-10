@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -107,63 +109,6 @@ void ExpectBufferFragments(
             EXPECT_EQ(fragments[index].state, &states[expected[index].stateIndex]);
         }
     }
-}
-
-static void BenchmarkLatestWholeState(const Graphics::GpuGraphResourceType::Enum type){
-    constexpr usize s_Iterations = 131072u;
-    constexpr usize s_Repetitions = 8u;
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-    TrackedStates states(scratchArena);
-    states.reserve(1u);
-    TrackedResourceStateHistory history(states, s_ExpectedDualCount, 1u, scratchArena);
-    ASSERT_TRUE(history.append(TrackedCompiledResourceState{
-        .resource = s_Buffer,
-        .range = {},
-        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
-        .state = Graphics::ResourceStates::CopyDest,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-        .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-    }));
-    RequestedRanges requested(scratchArena);
-    requested.reserve(1u);
-    requested.push_back(Graphics::GpuTaskResourceRange{});
-    StateFragments fragments(scratchArena);
-    fragments.reserve(1u);
-    const Graphics::GpuTaskGraphResourceView resource = ResourceView(s_Buffer, type);
-    ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::CollectLatestResourceStateFragments(
-        states,
-        history,
-        resource,
-        requested,
-        scratchArena,
-        fragments
-    ));
-    bool successful = true;
-    const Timer begin = TimerNow();
-    for(usize repetition = 0u; repetition < s_Repetitions; ++repetition){
-        for(usize iteration = 0u; iteration < s_Iterations; ++iteration){
-            successful = Graphics::GpuTaskGraphCompilerDetail::CollectLatestResourceStateFragments(
-                states,
-                history,
-                resource,
-                requested,
-                scratchArena,
-                fragments
-            ) && successful;
-        }
-    }
-    const u64 elapsedNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    ASSERT_TRUE(successful);
-    ASSERT_EQ(fragments.size(), 1u);
-    EXPECT_EQ(fragments.front().state, &states.front());
-    EXPECT_EQ(fragments.front().stateIndex, 0u);
-    char text[32u];
-    const AStringView elapsed = FormatDecimal(elapsedNanoseconds, text);
-    text[elapsed.size()] = '\0';
-    testing::Test::RecordProperty("elapsed_ns", text);
-    testing::Test::RecordProperty("repetitions", static_cast<i32>(s_Repetitions));
-    testing::Test::RecordProperty("call_count", static_cast<i32>(s_Iterations * s_Repetitions));
-    testing::Test::RecordProperty("scratch_peak_bytes", static_cast<i32>(scratchArena.memoryStats().peakUsedBytes));
 }
 
 
@@ -565,14 +510,6 @@ TEST(GpuTaskGraphResourceFragments, LatestCoveredRangeNormalizesInactiveDimensio
         EXPECT_EQ(fragments.front().range.textureSubresources, expected.textureSubresources);
         EXPECT_EQ(fragments.front().range.bufferRange, expected.bufferRange);
     }
-}
-
-TEST(GpuTaskGraphResourceFragments, DISABLED_LatestWholeBufferStateBenchmark){
-    BenchmarkLatestWholeState(Graphics::GpuGraphResourceType::Buffer);
-}
-
-TEST(GpuTaskGraphResourceFragments, DISABLED_LatestWholeTextureStateBenchmark){
-    BenchmarkLatestWholeState(Graphics::GpuGraphResourceType::Texture);
 }
 
 TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportSourceOrderAcrossPartialWrites){

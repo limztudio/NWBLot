@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -7,7 +9,6 @@
 #include <global/containers.h>
 #include <global/exception.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -35,11 +36,6 @@ struct AllocationRequest{
     usize bytes;
 };
 
-struct RepeatedSample{
-    u64 elapsed = 0u;
-    ArenaMemoryStats memory;
-    ArenaMemoryStats heap;
-};
 
 template<usize Count>
 [[nodiscard]] static bool RunAllocationBatch(ScratchArena& arena, const AllocationRequest (&requests)[Count]){
@@ -97,27 +93,6 @@ template<usize Count>
         }
     }
     return true;
-}
-
-static void RecordSeries(const Array<RepeatedSample, 5u>& samples){
-    constexpr Array<usize, 5u> s_CallCounts{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
-    constexpr Array<AStringView, 5u> s_UsedKeys{
-        "scratch_used_after_1", "scratch_used_after_2", "scratch_used_after_4",
-        "scratch_used_after_8", "scratch_used_after_16",
-    };
-    constexpr Array<AStringView, 5u> s_ReservedKeys{
-        "scratch_reserved_after_1", "scratch_reserved_after_2", "scratch_reserved_after_4",
-        "scratch_reserved_after_8", "scratch_reserved_after_16",
-    };
-    for(usize index = 0u; index < samples.size(); ++index){
-        NWB::Tests::RecordUnsignedTestProperty(s_UsedKeys[index], samples[index].memory.usedBytes);
-        NWB::Tests::RecordUnsignedTestProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
-    }
-    NWB::Tests::RecordUnsignedTestProperty("scratch_reuse_ns", samples.back().elapsed);
-    NWB::Tests::RecordUnsignedTestProperty("scratch_reuse_calls", s_CallCounts.back());
-    NWB::Tests::RecordUnsignedTestProperty("scratch_reuse_peak_bytes", samples.back().memory.peakUsedBytes);
-    NWB::Tests::RecordUnsignedTestProperty("scratch_heap_allocations_after_first",
-        samples.back().heap.allocationCount - samples.front().heap.allocationCount);
 }
 
 
@@ -539,58 +514,6 @@ TEST(ScratchArenaReuse, OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingF
         break;
     }
     EXPECT_TRUE(found);
-}
-
-TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedScopedCollection4096){
-    ScratchArena arena(Name{"tests/scratch_reuse/collection_series"}, 256u);
-    Vector<u64, ScratchArena> caller(arena);
-    caller.assign(32u, 0x76543210u);
-    Array<RepeatedSample, 5u> samples{};
-    constexpr Array<usize, 5u> s_SampleCalls{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
-    usize sampleIndex = 0u;
-    u64 elapsed = 0u;
-    bool valid = true;
-    for(usize call = 1u; call <= s_SampleCalls.back(); ++call){
-        const Timer begin = TimerNow();
-        valid &= RunScopedCollection(arena, 4096u);
-        elapsed += DurationInNS<u64>(TimerNow(), begin);
-        if(call == s_SampleCalls[sampleIndex]){
-            samples[sampleIndex] = RepeatedSample{ elapsed, arena.memoryStats(), HeapBackingMemoryStats() };
-            ++sampleIndex;
-        }
-    }
-    EXPECT_TRUE(valid);
-    for(const u64 value : caller)
-        EXPECT_EQ(value, 0x76543210u);
-    RecordSeries(samples);
-    NWB::Tests::RecordUnsignedTestProperty("scratch_collection_count", 4096u);
-}
-
-TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedMixedAlignmentBatches){
-    ScratchArena arena(Name{"tests/scratch_reuse/alignment_series"}, 256u);
-    constexpr AllocationRequest s_Requests[]{
-        { 1u, 192u }, { 8u, 192u }, { 64u, 192u }, { 256u, 256u },
-        { 1u, 512u }, { 8u, 512u }, { 64u, 512u }, { 256u, 512u },
-        { 1u, 4096u }, { 8u, 4096u }, { 64u, 4096u }, { 256u, 4096u },
-    };
-    Array<RepeatedSample, 5u> samples{};
-    constexpr Array<usize, 5u> s_SampleCalls{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
-    usize sampleIndex = 0u;
-    u64 elapsed = 0u;
-    bool valid = true;
-    for(usize call = 1u; call <= s_SampleCalls.back(); ++call){
-        const Timer begin = TimerNow();
-        for(usize batch = 0u; batch < 128u; ++batch)
-            valid &= RunAllocationBatch(arena, s_Requests);
-        elapsed += DurationInNS<u64>(TimerNow(), begin);
-        if(call == s_SampleCalls[sampleIndex]){
-            samples[sampleIndex] = RepeatedSample{ elapsed, arena.memoryStats(), HeapBackingMemoryStats() };
-            ++sampleIndex;
-        }
-    }
-    EXPECT_TRUE(valid);
-    RecordSeries(samples);
-    NWB::Tests::RecordUnsignedTestProperty("scratch_batch_allocations", LengthOf(s_Requests) * 128u);
 }
 
 

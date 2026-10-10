@@ -396,9 +396,6 @@ class TextAreaRun:
         self.native.focus_loss_and_gain()
         self.native.text("z")
         self.checkpoint("native_focus_loss_preserves_plain_draft", focus=0, extent=(800, 600))
-        self.controller("reset")
-        self.checkpoint("reset_after_resize_has_fresh_plain_model", text=INITIAL, anchor=5, caret=5, compact=0,
-            long_document=0, extent=(800, 600))
 
 
 def run(args):

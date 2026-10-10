@@ -1,10 +1,10 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -244,48 +244,6 @@ void CheckIndexedScores(const Shape::Enum shape){
     EXPECT_EQ(scoringData.m_totalAssignedCost, 0u);
     scoringData.rebuildAssignmentLoads(assignments, topology);
     expectScores();
-}
-
-
-void BenchmarkPartialDag(const usize taskCount, const Shape::Enum shape){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
-    DeclareGraph(graph, taskCount, shape, declarationScratch);
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-    ASSERT_EQ(view.taskCount(), taskCount);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    const Graphics::GpuTaskGraphCompiler compiler;
-    u64 samples[5u] = {};
-    usize scratchBytes = 0u;
-    for(usize sample = 0u; sample < LengthOf(samples) + 1u; ++sample){
-        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-        const Timer begin = TimerNow();
-        const bool assigned = compiler.assignQueues(view, analysis, topology, assignments, scratch);
-        const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-        ASSERT_TRUE(assigned);
-        ASSERT_TRUE(assignments.validFor(view));
-        if(sample != 0u)
-            samples[sample - 1u] = elapsed;
-        scratchBytes = scratch.memoryStats().peakUsedBytes;
-    }
-    Sort(samples, samples + LengthOf(samples));
-    RecordUnsignedTestProperty("median_assignment_ns", samples[LengthOf(samples) / 2u]);
-    RecordUnsignedTestProperty("minimum_assignment_ns", samples[0u]);
-    RecordUnsignedTestProperty("scratch_bytes", scratchBytes);
-    RecordUnsignedTestProperty("task_count", taskCount);
-    RecordUnsignedTestProperty("edge_count", analysis.schedulingEdges().size());
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        const auto* assignment = assignments.find(view.taskAt(taskIndex).id);
-        ASSERT_NE(assignment, nullptr);
-        const auto* queue = FindPhysicalQueueInfo(topology, assignment->queue);
-        ASSERT_NE(queue, nullptr);
-        EXPECT_TRUE(IsLegalQueueAssignmentCandidate(view, topology, view.taskAt(taskIndex), *queue));
-    }
 }
 
 
@@ -551,84 +509,6 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
         scoringData.rebuildAssignmentLoads(assignments, topology);
         expectScoresWithoutMasks();
     }
-}
-
-
-TEST(GpuTaskQueueScoring, DISABLED_OneEdgeBenchmark1024Tasks){
-    BenchmarkPartialDag(1024u, Shape::OneEdge);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_OneEdgeBenchmark4096Tasks){
-    BenchmarkPartialDag(4096u, Shape::OneEdge);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_DisjointPairsBenchmark1024Tasks){
-    BenchmarkPartialDag(1024u, Shape::DisjointPairs);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_DisjointPairsBenchmark4096Tasks){
-    BenchmarkPartialDag(4096u, Shape::DisjointPairs);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_ConnectedBranchesBenchmark1024Tasks){
-    BenchmarkPartialDag(1024u, Shape::ConnectedBranches);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_ConnectedBranchesBenchmark4096Tasks){
-    BenchmarkPartialDag(4096u, Shape::ConnectedBranches);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_DenseLayersBenchmark1024Tasks){
-    BenchmarkPartialDag(1024u, Shape::DenseLayers);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_DenseLayersBenchmark4096Tasks){
-    BenchmarkPartialDag(4096u, Shape::DenseLayers);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_MergedPairsBenchmark1024Tasks){
-    BenchmarkPartialDag(1024u, Shape::MergedPairs);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_MergedPairsBenchmark4096Tasks){
-    BenchmarkPartialDag(4096u, Shape::MergedPairs);
-}
-
-
-TEST(GpuTaskQueueScoring, DISABLED_DisjointPairsBenchmark16384Tasks){
-    BenchmarkPartialDag(16384u, Shape::DisjointPairs);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_ReversedPairsBenchmark16384Tasks){
-    BenchmarkPartialDag(16384u, Shape::ReversedPairs);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_Chains32Benchmark16384Tasks){
-    BenchmarkPartialDag(16384u, Shape::Chains32);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_InterleavedChains32Benchmark16384Tasks){
-    BenchmarkPartialDag(16384u, Shape::InterleavedChains32);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_TwoDenseComponentsBenchmark4096Tasks){
-    BenchmarkPartialDag(4096u, Shape::TwoDenseComponents);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_FanOutBenchmark1024Tasks){
-    BenchmarkPartialDag(1024u, Shape::FanOut);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_FanOutBenchmark16384Tasks){
-    BenchmarkPartialDag(16384u, Shape::FanOut);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_FanInBenchmark1024Tasks){
-    BenchmarkPartialDag(1024u, Shape::FanIn);
-}
-
-TEST(GpuTaskQueueScoring, DISABLED_FanInBenchmark16384Tasks){
-    BenchmarkPartialDag(16384u, Shape::FanIn);
 }
 
 

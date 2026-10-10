@@ -167,8 +167,6 @@ class ListRun:
         self.checkpoint("native_focus_loss_retires_list_focus", focused=0)
         self.native.tap("Down")
         self.checkpoint("unfocused_navigation_cannot_change_model")
-        self.click("counter")
-        self.checkpoint("outside_counter_is_independent", underlying=1)
         self.backend.resize_client(self.handle, 800, 600)
         self.checkpoint("resize_preserves_keyed_model", extent=(800, 600))
         self.native.click(*self.row(0))

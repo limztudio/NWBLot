@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -102,7 +104,6 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
         { .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, .internalIdleScopeName = Name("tests/timing/large_idle_1") },
     };
     const Core::GpuPacketEnvelopeMetricScope* const scopeData = scopes.data();
-    const Timer prepareBegin = TimerNow();
     const bool prepared = correlator.preparePacketEnvelopeMetrics(
         s_FrameIndex,
         MakeNotNull(scopeData),
@@ -111,13 +112,12 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
         MakeNotNull(&outputs[0u]),
         LengthOf(outputs)
     );
-    const u64 prepareNanoseconds = DurationInNS<u64>(TimerNow(), prepareBegin);
+
     ASSERT_TRUE(prepared);
 
     Core::GpuTimingSinkSampleVector samples{ scratchArena };
     samples.reserve(1u + LengthOf(outputs));
     bool completedEarly = false;
-    const Timer recordBegin = TimerNow();
     for(usize arrivalIndex = 0u; arrivalIndex < s_ScopeCount; ++arrivalIndex){
         // An odd stride permutes this power-of-two input count and separates arrival order from queue order.
         const usize scopeIndex = (arrivalIndex * 773u) % s_ScopeCount;
@@ -138,9 +138,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
         if(arrivalIndex + 1u < s_ScopeCount)
             completedEarly = completedEarly || !samples.empty();
     }
-    const u64 recordNanoseconds = DurationInNS<u64>(TimerNow(), recordBegin);
-    NWB::Tests::RecordUnsignedTestProperty("correlator_prepare_ns", prepareNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("correlator_record_ns", recordNanoseconds);
+
 
     EXPECT_FALSE(completedEarly);
     ASSERT_EQ(samples.size(), 1u + LengthOf(outputs));

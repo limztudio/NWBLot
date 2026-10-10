@@ -1,10 +1,10 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_test_utils.h"
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,132 +30,6 @@ namespace __hidden_task_graph_queue_scaling_tests{
 
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
-
-namespace Scenario{
-    enum Enum : u8{
-        SingleQueue,
-        Conservative,
-        Independent,
-        MergeChain,
-        SerialChain,
-        SameClassBalance,
-    };
-};
-
-
-void CheckAutomaticPlacement(
-    const usize taskCount,
-    const Scenario::Enum scenario,
-    const AStringView durationProperty,
-    const AStringView scratchProperty
-){
-    SCOPED_TRACE(scenario);
-    SCOPED_TRACE(taskCount);
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskId preceding;
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        char identityText[32u] = {};
-        const Name identity = DeriveName(Name("tests/queue_scaling/task/"), FormatDecimal(taskIndex, identityText));
-        const bool graphicsTask = scenario == Scenario::SingleQueue
-            || (scenario == Scenario::Independent && taskIndex % 2u == 0u)
-        ;
-        Graphics::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = Graphics::GpuTaskCostHint::Large;
-        scheduling.overlapPreferred = scenario != Scenario::Conservative;
-        scheduling.mergeWithPrevious = scenario == Scenario::MergeChain && preceding.valid();
-        scheduling.allowSameClassQueueRouting = scenario == Scenario::SameClassBalance;
-        const bool dependsOnPrevious = preceding.valid()
-            && (scenario == Scenario::Conservative || scenario == Scenario::MergeChain || scenario == Scenario::SerialChain)
-        ;
-        preceding = AddTaskWithCommands(
-            graph,
-            identity,
-            "Queue Scaling Task",
-            graphicsTask ? GraphicsCommands() : ComputeCommands(),
-            scheduling,
-            {},
-            dependsOnPrevious ? &preceding : nullptr,
-            dependsOnPrevious ? 1u : 0u
-        );
-        ASSERT_TRUE(preceding.valid());
-    }
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    Graphics::GpuPhysicalQueueInfo auxiliaryCompute = DedicatedComputeQueue(2u);
-    auxiliaryCompute.queueIndex = 1u;
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), auxiliaryCompute };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = scenario == Scenario::SingleQueue ? 1u : scenario == Scenario::SameClassBalance ? LengthOf(queues) : 2u,
-    };
-    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-    const Graphics::GpuTaskGraphCompiler compiler;
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    u64 minimumNanoseconds = Limit<u64>::s_Max;
-    usize scratchBytes = 0u;
-    for(usize iteration = 0u; iteration < 4u; ++iteration){
-        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-        const Timer begin = TimerNow();
-        const bool assigned = compiler.assignQueues(view, analysis, topology, assignments, scratch);
-        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
-        ASSERT_TRUE(assigned);
-        if(iteration != 0u)
-            minimumNanoseconds = Min(minimumNanoseconds, nanoseconds);
-        scratchBytes = scratch.memoryStats().peakUsedBytes;
-    }
-    RecordUnsignedTestProperty(durationProperty, minimumNanoseconds);
-    RecordUnsignedTestProperty(scratchProperty, scratchBytes);
-
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        const Graphics::GpuTaskId task = view.taskAt(taskIndex).id;
-        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        const bool computeTask = scenario == Scenario::SameClassBalance
-            || (scenario == Scenario::Independent && taskIndex % 2u != 0u)
-        ;
-        const bool auxiliaryTask = scenario == Scenario::SameClassBalance && taskIndex % 2u != 0u;
-        EXPECT_EQ(assignment->queue, queues[auxiliaryTask ? 2u : computeTask ? 1u : 0u].id);
-        EXPECT_EQ(assignment->initialQueue, assignment->queue);
-        EXPECT_EQ(assignment->modifiers, auxiliaryTask
-            ? Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance
-            : Graphics::GpuTaskQueueAssignmentModifier::None
-        );
-        const bool balanced = scenario == Scenario::Independent || scenario == Scenario::SameClassBalance;
-        const usize sameQueueTasks = balanced ? (taskIndex % 2u != 0u ? taskCount / 2u : (taskCount + 1u) / 2u) : taskCount;
-        EXPECT_EQ(assignment->score.queueLoad, static_cast<i32>((sameQueueTasks - 1u) * 8u));
-        EXPECT_EQ(assignment->score.overlap, static_cast<i32>(
-            balanced ? (taskCount - sameQueueTasks) * 8u : 0u
-        ));
-        EXPECT_EQ(assignment->score.incomingCrossings, 0);
-        EXPECT_EQ(assignment->score.outgoingCrossings, 0);
-        EXPECT_EQ(assignment->score.ownershipTransfers, 0);
-    }
-}
-
-void CheckScenarios(const usize taskCount){
-    CheckAutomaticPlacement(
-        taskCount, Scenario::SingleQueue, "single_queue_ns", "single_queue_scratch_bytes"
-    );
-    CheckAutomaticPlacement(
-        taskCount, Scenario::Conservative, "conservative_ns", "conservative_scratch_bytes"
-    );
-    CheckAutomaticPlacement(
-        taskCount, Scenario::Independent, "independent_ns", "independent_scratch_bytes"
-    );
-    CheckAutomaticPlacement(
-        taskCount, Scenario::MergeChain, "merge_chain_ns", "merge_chain_scratch_bytes"
-    );
-    CheckAutomaticPlacement(
-        taskCount, Scenario::SerialChain, "serial_chain_ns", "serial_chain_scratch_bytes"
-    );
-    CheckAutomaticPlacement(
-        taskCount,
-        Scenario::SameClassBalance,
-        "same_class_balance_ns",
-        "same_class_balance_scratch_bytes"
-    );
-}
 
 
 TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse){
@@ -296,14 +170,6 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
         EXPECT_EQ(assignment->score.queueLoad, expectedQueueLoads[taskIndex]);
     }
     EXPECT_TRUE(assignments.find(tasks[6u])->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
-}
-
-TEST(GpuTaskGraph, DISABLED_AutomaticPlacementBenchmark1024Tasks){
-    CheckScenarios(1024u);
-}
-
-TEST(GpuTaskGraph, DISABLED_AutomaticPlacementBenchmark4096Tasks){
-    CheckScenarios(4096u);
 }
 
 

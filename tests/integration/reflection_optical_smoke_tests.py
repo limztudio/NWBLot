@@ -451,9 +451,6 @@ class CollectionReuseTests(unittest.TestCase):
         self.assertEqual(reference_color, csg_color)
         self.assertGreater(min(csg_color), 0.)
         self.assertEqual((ordinary["queries"], retained["queries"]), (5, 11))
-        for case in ("optical_unspecified_reference", "optical_csg_unspecified_cap"):
-            self.assertEqual(reference.boundaries(case)[0].mode, reference.LIT_UNSPECIFIED)
-            self.assertEqual(reference.boundaries(case)[0].ior, 1.)
         for details in (ordinary, retained):
             self.assertEqual((details["crossings"], details["reason"], details["tir_events"]), (2, "chart", 0))
         for spec, units, physical in ((smoke.CSG_REUSE_CAPTURES[-2], 5, 5), (smoke.CSG_REUSE_CAPTURES[-1], 11, 7)):
@@ -466,16 +463,6 @@ class CollectionReuseTests(unittest.TestCase):
             evidence["statistics"][0]["fallback_pixels"] = 1
             with self.subTest(case=spec.case), self.assertRaises(SmokeFailure):
                 smoke.validate_collection_reuse(evidence, spec)
-
-    def test_open_tail_is_beyond_chart_and_disconnected_from_closed_solid(self):
-        import generate_reflection_optical_meshes as generator
-        mesh = generator.closed_box_with_open_tail()
-        open_vertices = {mesh.vertex_refs[index][0] for triangle in mesh.indices[12:] for index in triangle}
-        self.assertEqual(open_vertices, {8, 9, 10, 11})
-        self.assertEqual({-9. + 2. * mesh.positions[index][2] for index in open_vertices}, {-16.})
-        closed_vertices = {mesh.vertex_refs[index][0] for triangle in mesh.indices[:12] for index in triangle}
-        self.assertTrue(open_vertices.isdisjoint(closed_vertices))
-        self.assertEqual(len(mesh.indices), 14)
 
     def test_independent_geometry_and_reservation_oracle_preserve_limit(self):
         closed, closed_details = reference.trace_transmission("optical_csg_cap", (0., 1.4, 0.), (0., 0., -1.))

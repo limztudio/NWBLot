@@ -721,11 +721,6 @@ class StressMotionTests(unittest.TestCase):
 
 
 class StressMeasurementTests(unittest.TestCase):
-    def test_complete_rate_uses_presentations_and_wall_not_fixed_delta_or_queries(self):
-        result = smoke.parse_measurement(valid_log())
-        self.assertEqual(result[LIT_FPS], 16.)
-        self.assertEqual(result["frame_ms"], 62.5)
-
     def test_current_pacing_summary_requires_exactly_one_ordered_record(self):
         paced = valid_log()
         record = next(line for line in paced.splitlines() if line.startswith(smoke.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA))

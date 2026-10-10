@@ -155,9 +155,7 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     ASSERT_TRUE(codec.serialize(texture, binary));
     for(const u32 version : { 0u, 1u, 2u, NWB::Impl::TextureBinaryPayload::s_TextureVersion + 1u }){
         NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), binary)) << version;
-        EXPECT_EQ(loadedAsset.get(), nullptr);
     }
     EXPECT_EQ(logger.errorCount(), 4u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));

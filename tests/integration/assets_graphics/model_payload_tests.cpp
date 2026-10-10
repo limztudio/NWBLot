@@ -9,8 +9,6 @@
 
 #include <global/arena_memory.h>
 #include <global/binary.h>
-#include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -83,47 +81,6 @@ struct ModelInputs{
         );
     }
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Name IndexedName(const Name prefix, const usize index){
-    char indexText[32u] = {};
-    return DeriveName(prefix, FormatDecimal(index, indexText));
-}
-
-static void MeasureValidation(ModelInputs& inputs, const usize iterations){
-    ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-    const ArenaMemoryStats beforeScratch = inputs.scratchArena.memoryStats();
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    usize accepted = 0u;
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if(inputs.model.validatePayload(inputs.scratchArena))
-            ++accepted;
-    }
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    const ArenaMemoryStats after = HeapBackingMemoryStats();
-    EXPECT_EQ(accepted, iterations);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    const ArenaMemoryStats afterScratch = inputs.scratchArena.memoryStats();
-    EXPECT_EQ(afterScratch.usedBytes, beforeScratch.usedBytes);
-    EXPECT_EQ(afterScratch.reservedBytes, beforeScratch.reservedBytes);
-
-    const usize objectCount = inputs.model.skeletonObjects().size()
-        + inputs.model.staticMeshObjects().size() + inputs.model.skinnedMeshObjects().size();
-    char allocationsText[32u] = {};
-    testing::Test::RecordProperty("model_validation_scope", "validation_with_reused_caller_scratch");
-    Tests::RecordUnsignedTestProperty("model_validation_scratch_reserved_bytes", afterScratch.reservedBytes);
-    Tests::RecordUnsignedTestProperty("model_validation_scratch_peak_bytes", afterScratch.peakUsedBytes);
-    Tests::RecordUnsignedTestProperty("model_validation_ns", elapsed);
-    Tests::RecordUnsignedTestProperty("model_validation_iterations", iterations);
-    Tests::RecordUnsignedTestProperty("model_object_count", objectCount);
-    testing::Test::RecordProperty(
-        "model_validation_backing_allocations", FormatDecimal(after.allocationCount - before.allocationCount, allocationsText).data()
-    );
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -317,54 +274,6 @@ TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloads
     EXPECT_EQ(loaded.skinnedMeshObjects().front().skin.name(), inputs.skinnedMeshObjects.front().skin.name());
     EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_RIG));
     EXPECT_EQ(logger.errorCount(), 2u);
-}
-
-
-// These workloads are opt-in via --gtest_also_run_disabled_tests and a ModelPayloadBenchmark.* filter.
-TEST(ModelPayloadBenchmark, DISABLED_ValidatesSingleObject){
-    ModelInputs inputs;
-    inputs.skeletonObjects.clear();
-    inputs.skinnedMeshObjects.clear();
-    inputs.staticMeshObjects.front().parentObject = s_NameNone;
-    inputs.staticMeshObjects.front().parentJoint = s_NameNone;
-    inputs.publish();
-    MeasureValidation(inputs, 4096u);
-}
-
-TEST(ModelPayloadBenchmark, DISABLED_ValidatesLargeMixedModel){
-    ModelInputs inputs;
-    inputs.skeletonObjects.clear();
-    inputs.staticMeshObjects.clear();
-    inputs.skinnedMeshObjects.clear();
-    constexpr usize s_SkeletonCount = 256u;
-    constexpr usize s_MeshCount = 1920u;
-    inputs.skeletonObjects.reserve(s_SkeletonCount);
-    inputs.staticMeshObjects.reserve(s_MeshCount);
-    inputs.skinnedMeshObjects.reserve(s_MeshCount);
-    for(usize index = 0u; index < s_SkeletonCount; ++index){
-        inputs.skeletonObjects.push_back(ModelSkeletonObject{
-            .name = IndexedName(Name("rig/"), index),
-            .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton"),
-        });
-    }
-    for(usize index = 0u; index < s_MeshCount; ++index){
-        const Name parent = inputs.skeletonObjects[index % s_SkeletonCount].name;
-        inputs.staticMeshObjects.push_back(ModelStaticMeshObject{
-            .name = IndexedName(Name("prop/"), index),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
-            .material = {},
-            .parentObject = parent,
-            .parentJoint = Name("hand"),
-        });
-        inputs.skinnedMeshObjects.push_back(ModelSkinnedMeshObject{
-            .name = IndexedName(Name("body/"), index),
-            .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
-            .material = {},
-            .skeletonObject = parent,
-        });
-    }
-    inputs.publish();
-    MeasureValidation(inputs, 4u);
 }
 
 

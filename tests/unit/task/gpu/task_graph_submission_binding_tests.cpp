@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -7,8 +9,6 @@
 #include <core/task/gpu/scheduler_submission_bindings.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/perf/timing.h>
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,91 +104,6 @@ SubmissionBindingFixture::SubmissionBindingFixture()
         return MakeUnexpected(Failure{});
     };
     return result;
-}
-
-void BenchmarkSubmissionBindings(const usize packetCount, const usize bindingCount){
-    constexpr usize s_Repetitions = 8u;
-    SubmissionBindingFixture fixture;
-    ASSERT_TRUE(fixture.prepare(packetCount));
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(fixture.graph);
-    const Graphics::GpuCompiledGraph::ReadView plan(fixture.compileState.compiledGraph);
-    ASSERT_EQ(plan.packetCount(), packetCount);
-    const Graphics::GpuSubmissionPacketRange range = plan.allPacketRange();
-    Graphics::GraphicsVector<Graphics::GpuTaskGraphTaskTimingTicket> timingBindings(fixture.testArena.arena);
-    Graphics::GraphicsVector<Graphics::GpuTaskGraphTaskSubmissionHook> hookBindings(fixture.testArena.arena);
-    timingBindings.reserve(bindingCount);
-    hookBindings.reserve(bindingCount);
-    u64 expectedHookSum = 0u;
-    for(usize index = 0u; index < bindingCount; ++index){
-        const usize taskIndex = packetCount - 1u - index * packetCount / bindingCount;
-        timingBindings.push_back({ .task = fixture.tasks[taskIndex], .timingTicket = fixture.tickets[taskIndex].get() });
-        hookBindings.push_back({ .task = fixture.tasks[taskIndex], .hook = fixture.hook(taskIndex + 1u) });
-        expectedHookSum += taskIndex + 1u;
-    }
-    u64 resolveNanoseconds = 0u;
-    u64 ownershipNanoseconds = 0u;
-    u64 lookupNanoseconds = 0u;
-    usize scratchPeakBytes = 0u;
-    usize scratchAllocationCount = 0u;
-    for(usize repetition = 0u; repetition < s_Repetitions; ++repetition){
-        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-        {
-            Graphics::GpuTaskSubmissionDetail::TaskSubmissionBindings resolved(scratch);
-            Timer begin = TimerNow();
-            ASSERT_TRUE(resolved.resolve(
-                declarations, plan, range, timingBindings.data(), timingBindings.size(), hookBindings.data(), hookBindings.size()
-            ));
-            resolveNanoseconds += DurationInNS<u64>(TimerNow(), begin);
-            bool ownershipValid = true;
-            begin = TimerNow();
-            if(!resolved.timingTickets.empty()){
-                for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
-                    ownershipValid = ownershipValid && resolved.validateOwnedTimingTicket(
-                        plan.packetIdAt(packetIndex), fixture.tickets[packetIndex].get()
-                    );
-                }
-            }
-            ownershipNanoseconds += DurationInNS<u64>(TimerNow(), begin);
-            ASSERT_TRUE(ownershipValid);
-            Vector<Graphics::GpuTimingSubmissionTicket*, Graphics::Alloc::ScratchArena> packetTickets(scratch);
-            packetTickets.reserve(resolved.timingTickets.size());
-            usize resolvedTicketCount = 0u;
-            u64 hookSum = 0u;
-            begin = TimerNow();
-            for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
-                const Graphics::QueueSubmissionPreSubmitHook* hook = nullptr;
-                hook = resolved.collectPacket(plan.packetIdAt(packetIndex), packetTickets);
-                resolvedTicketCount += packetTickets.size();
-                if(hook)
-                    hookSum += hook->identity;
-            }
-            lookupNanoseconds += DurationInNS<u64>(TimerNow(), begin);
-            EXPECT_EQ(resolvedTicketCount, bindingCount);
-            EXPECT_EQ(hookSum, expectedHookSum);
-        }
-        EXPECT_EQ(scratch.memoryStats().usedBytes, 0u);
-        scratchPeakBytes = Max(scratchPeakBytes, scratch.memoryStats().peakUsedBytes);
-        scratchAllocationCount = Max(scratchAllocationCount, scratch.memoryStats().allocationCount);
-    }
-    EXPECT_EQ(fixture.hookInvocationCount, 0u);
-    char text[32u] = {};
-    const AStringView resolveElapsed = FormatDecimal(resolveNanoseconds, text);
-    text[resolveElapsed.size()] = '\0';
-    testing::Test::RecordProperty("resolve_ns", text);
-    const AStringView ownershipElapsed = FormatDecimal(ownershipNanoseconds, text);
-    text[ownershipElapsed.size()] = '\0';
-    testing::Test::RecordProperty("ownership_comparison_ns", text);
-    const AStringView lookupElapsed = FormatDecimal(lookupNanoseconds, text);
-    text[lookupElapsed.size()] = '\0';
-    testing::Test::RecordProperty("lookup_ns", text);
-    const AStringView elapsed = FormatDecimal(resolveNanoseconds + ownershipNanoseconds + lookupNanoseconds, text);
-    text[elapsed.size()] = '\0';
-    testing::Test::RecordProperty("elapsed_ns", text);
-    testing::Test::RecordProperty("repetitions", static_cast<i32>(s_Repetitions));
-    testing::Test::RecordProperty("packet_count", static_cast<i32>(packetCount));
-    testing::Test::RecordProperty("binding_count", static_cast<i32>(bindingCount));
-    testing::Test::RecordProperty("scratch_peak_bytes", static_cast<i32>(scratchPeakBytes));
-    testing::Test::RecordProperty("scratch_allocation_count", static_cast<i32>(scratchAllocationCount));
 }
 
 
@@ -338,30 +253,6 @@ TEST(GpuTaskSubmissionBindings, RejectsStaleMissingAndOutOfRangeAnchorsAndMalfor
     EXPECT_FALSE(resolved.resolve(declarations, plan, range, nullptr, 1u, nullptr, 0u));
     EXPECT_FALSE(resolved.resolve(declarations, plan, range, nullptr, 0u, nullptr, 1u));
     EXPECT_EQ(fixture.hookInvocationCount, 0u);
-}
-
-TEST(GpuTaskSubmissionBindings, DISABLED_TinyBindingBenchmark8Packets){
-    BenchmarkSubmissionBindings(8u, 8u);
-}
-
-TEST(GpuTaskSubmissionBindings, DISABLED_CrossoverBindingBenchmark64Packets16Bindings){
-    BenchmarkSubmissionBindings(64u, 16u);
-}
-
-TEST(GpuTaskSubmissionBindings, DISABLED_DenseBindingBenchmark1024Packets){
-    BenchmarkSubmissionBindings(1024u, 1024u);
-}
-
-TEST(GpuTaskSubmissionBindings, DISABLED_DenseBindingBenchmark4096Packets){
-    BenchmarkSubmissionBindings(4096u, 4096u);
-}
-
-TEST(GpuTaskSubmissionBindings, DISABLED_SparseBindingBenchmark4096Packets){
-    BenchmarkSubmissionBindings(4096u, 16u);
-}
-
-TEST(GpuTaskSubmissionBindings, DISABLED_EmptyBindingBenchmark4096Packets){
-    BenchmarkSubmissionBindings(4096u, 0u);
 }
 
 

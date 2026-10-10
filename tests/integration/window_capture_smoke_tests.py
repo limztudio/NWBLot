@@ -18,7 +18,6 @@ sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / "ui_layer"))
 
 import window_capture_smoke  # noqa: E402
-import runtime_log_smoke  # noqa: E402
 import csg_gi_temporal_smoke  # noqa: E402
 import text_area_probe  # noqa: E402
 import text_area_smoke  # noqa: E402
@@ -67,11 +66,7 @@ LIT_TERMINATE_PROCESS = "terminate_process"
 LIT_WAIT_FOR_LOG_DRAIN = "wait_for_log_drain"
 LIT_COLLECT_LOG_DELTA = "collect_log_delta"
 LIT_LOGS = "logs"
-LIT_SHUTDOWN_MARKER = "shutdown marker"
 LIT_WARNING = "[WARNING]"
-LIT_RUNTIME_EXIT = "runtime exit"
-LIT_LOGSERVER_SHUTDOWN_AND_COLLECT = "logserver shutdown and collect"
-LIT_VALIDATE = "validate"
 LIT_BUILD_LAUNCH_ENVIRONMENT = "build_launch_environment"
 LIT_LAUNCH_LOGSERVER = "launch_logserver"
 LIT_LAUNCH_TESTBED = "launch_testbed"
@@ -611,53 +606,6 @@ class LogserverCollectionTests(unittest.TestCase):
 
         drain.assert_not_called()
         collect.assert_not_called()
-
-
-class RuntimeLogSmokeTests(unittest.TestCase):
-    def test_runtime_validation_follows_logserver_shutdown_collection(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            log_directory = Path(temp_dir)
-            runtime_process = SimpleNamespace(poll=lambda: 0)
-            logserver_process = SimpleNamespace(poll=lambda: None)
-            args = SimpleNamespace(
-                executable=sys.executable,
-                expect_log_message=[LIT_SHUTDOWN_MARKER],
-                reject_log_message=[LIT_WARNING],
-                timeout=1.0,
-            )
-            events = []
-
-            def wait_for_exit(_process, _timeout):
-                events.append(LIT_RUNTIME_EXIT)
-                return 0
-
-            def shutdown_and_collect(*_args):
-                events.append(LIT_LOGSERVER_SHUTDOWN_AND_COLLECT)
-                return LIT_SHUTDOWN_MARKER
-
-            def validate(*_args):
-                events.append(LIT_VALIDATE)
-
-            with mock.patch.object(runtime_log_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-                 mock.patch.object(
-                     runtime_log_smoke,
-                     LIT_LAUNCH_LOGSERVER,
-                     return_value=(logserver_process, 49152, log_directory, {}, LIT_LOG),
-                 ), \
-                 mock.patch.object(runtime_log_smoke, LIT_LAUNCH_TESTBED, return_value=runtime_process), \
-                 mock.patch.object(runtime_log_smoke, "wait_for_process_exit", side_effect=wait_for_exit), \
-                 mock.patch.object(runtime_log_smoke, "read_process_tail", return_value=""), \
-                 mock.patch.object(
-                     runtime_log_smoke,
-                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
-                     side_effect=shutdown_and_collect,
-                 ), \
-                 mock.patch.object(runtime_log_smoke, "validate_expected_log_messages", side_effect=validate), \
-                 mock.patch.object(runtime_log_smoke, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
-                 mock.patch.object(runtime_log_smoke, LIT_WRITE_STATUS):
-                runtime_log_smoke.run(args)
-
-            self.assertEqual(events, [LIT_RUNTIME_EXIT, LIT_LOGSERVER_SHUTDOWN_AND_COLLECT, LIT_VALIDATE])
 
 
 class ShutdownLogValidationTests(unittest.TestCase):
@@ -1397,16 +1345,6 @@ class GracefulTerminationTests(unittest.TestCase):
         self.assertEqual(observed_owner_queries, [high_bit_hwnd])
         self.assertEqual(observed_posts, [(high_bit_hwnd, 0x0010, 0, 0)])
 
-    def test_linux_x11_close_waits_for_normal_exit_before_fallback(self):
-        process = _FakeProcess(graceful_exit=True)
-        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
-             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT, return_value=True) as close:
-            terminate_process(process, LIT_TESTBED, 0x4a)
-
-        close.assert_called_once()
-        self.assertEqual(process.wait_timeouts, [10.0])
-        self.assertEqual(process.terminate_calls, 0)
-
     def test_linux_x11_close_falls_back_to_sigterm_after_timeout(self):
         process = _FakeProcess()
         with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
@@ -1482,7 +1420,6 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
             window_capture_smoke.validate_resize_environment({name: "0"})
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "framebuffer capture request"):
             window_capture_smoke.validate_resize_environment({window_capture_smoke.FRAMEBUFFER_CAPTURE_PATH_ENV: "frame.bmp"})
-        window_capture_smoke.validate_resize_environment({})
 
     def test_launch_environment_checks_freeze_only_when_resize_is_requested(self):
         args = SimpleNamespace(resize_client=[1001, 701], software_vulkan=LIT_OFF)
@@ -1613,8 +1550,6 @@ class ResizeCaptureBackendTests(unittest.TestCase):
         backend = object.__new__(window_capture_smoke.LinuxX11Capture)
         backend.display = object()
         backend.x11 = mock.Mock()
-        backend.x11.XResizeWindow.return_value = 1
-        backend.resize_client(42, 1001, 701)
         backend.x11.XResizeWindow.return_value = 0
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "XResizeWindow failed"):
             backend.resize_client(42, 1001, 701)

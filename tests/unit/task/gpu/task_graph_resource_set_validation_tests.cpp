@@ -1,11 +1,12 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include <core/task/gpu/task_graph.h>
 
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -240,77 +241,6 @@ TEST(ResourceSetValidation, LiveReadViewsRejectBothNewAndIdempotentResourceSetMu
         EXPECT_EQ(stored.members[0u], context.members[0u]);
     }
     EXPECT_TRUE(context.graph.importResourceSet(second).valid());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void BenchmarkResourceSets(const usize memberCount, const usize contextCount){
-    Core::Alloc::GlobalArena ownerArena(Name("tests/resource_set_validation/benchmark_owners"));
-    List<ResourceSetContext, Core::Alloc::GlobalArena> contexts(ownerArena);
-    for(usize index = 0u; index < contextCount; ++index){
-        contexts.emplace_back(memberCount);
-        ASSERT_TRUE(contexts.back().ready);
-    }
-    constexpr Name s_Identity("tests/resource_set_validation/benchmark_set");
-    const ArenaMemoryStats beforeFirst = HeapBackingMemoryStats();
-    const Timer firstBegin = TimerNow();
-    for(auto& context : contexts)
-        context.result = context.graph.importResourceSet(context.description(s_Identity));
-    const u64 firstElapsed = DurationInNS<u64>(TimerNow(), firstBegin);
-    const ArenaMemoryStats afterFirst = HeapBackingMemoryStats();
-    for(auto& context : contexts){
-        ASSERT_TRUE(context.result.valid());
-        const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
-        ASSERT_TRUE(declarations.valid());
-        ASSERT_EQ(declarations.resourceSetCount(), 1u);
-        const Core::GpuTaskGraphResourceSetView set = declarations.resourceSetAt(context.result.index);
-        ASSERT_EQ(set.memberCount, memberCount);
-        for(usize index = 0u; index < memberCount; ++index)
-            EXPECT_EQ(set.members[index], context.members[index]);
-    }
-    constexpr usize s_ReuseCount = 64u;
-    const ArenaMemoryStats beforeReuse = HeapBackingMemoryStats();
-    bool reused = true;
-    const Timer reuseBegin = TimerNow();
-    for(usize iteration = 0u; iteration < s_ReuseCount; ++iteration){
-        for(auto& context : contexts)
-            reused &= context.graph.importResourceSet(context.description(s_Identity)) == context.result;
-    }
-    const u64 reuseElapsed = DurationInNS<u64>(TimerNow(), reuseBegin);
-    const ArenaMemoryStats afterReuse = HeapBackingMemoryStats();
-    EXPECT_TRUE(reused);
-    EXPECT_EQ(afterReuse.allocationCount, beforeReuse.allocationCount);
-    RecordUnsignedTestProperty("resource_set_member_count", memberCount);
-    RecordUnsignedTestProperty("resource_set_first_import_count", contextCount);
-    RecordUnsignedTestProperty("resource_set_first_import_ns", firstElapsed);
-    RecordUnsignedTestProperty("resource_set_first_heap_allocations", afterFirst.allocationCount - beforeFirst.allocationCount);
-    RecordUnsignedTestProperty("resource_set_first_heap_used_bytes", afterFirst.usedBytes - beforeFirst.usedBytes);
-    RecordUnsignedTestProperty("resource_set_first_heap_reserved_bytes", afterFirst.reservedBytes - beforeFirst.reservedBytes);
-    RecordUnsignedTestProperty("resource_set_reuse_count", contextCount * s_ReuseCount);
-    RecordUnsignedTestProperty("resource_set_reuse_ns", reuseElapsed);
-    RecordUnsignedTestProperty("resource_set_reuse_heap_allocations", afterReuse.allocationCount - beforeReuse.allocationCount);
-}
-
-TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused1){
-    BenchmarkResourceSets(1u, 64u);
-}
-
-TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused8){
-    BenchmarkResourceSets(8u, 64u);
-}
-
-TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused32){
-    BenchmarkResourceSets(32u, 32u);
-}
-
-TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused1024){
-    BenchmarkResourceSets(1024u, 4u);
-}
-
-TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused4096){
-    BenchmarkResourceSets(4096u, s_ExpectedDualCount);
 }
 
 

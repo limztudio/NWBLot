@@ -7,8 +7,6 @@
 #include <impl/ecs_skeleton/components.h>
 
 #include <global/arena_memory.h>
-#include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -242,56 +240,6 @@ TEST(ModelAttachment, InterleavedParentsKeepIndependentQueriesAndEntityGeneratio
     EXPECT_FLOAT_EQ(world.entity(second).getComponent<Scene::TransformComponent>().position.x, 3.0f);
     EXPECT_FLOAT_EQ(world.entity(third).getComponent<Scene::TransformComponent>().position.x, 5.0f);
     EXPECT_FLOAT_EQ(world.entity(fourth).getComponent<Scene::TransformComponent>().position.x, 6.0f);
-}
-
-static void BenchmarkAttachments(const usize parentCount, const usize attachmentCount, const usize jointCount, const usize iterations){
-    RuntimeContext context;
-    auto& world = context.testWorld.world;
-    const auto owner = context.makeOwner();
-    Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> parents(context.testWorld.arena);
-    Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> attachedObjects(context.testWorld.arena);
-    parents.reserve(parentCount);
-    attachedObjects.reserve(attachmentCount);
-    for(usize parentIndex = 0u; parentIndex < parentCount; ++parentIndex)
-        parents.push_back(MakeSkeleton(context, owner, jointCount));
-    for(usize attachmentIndex = 0u; attachmentIndex < attachmentCount; ++attachmentIndex){
-        attachedObjects.push_back(MakeAttachment(
-            context, owner, parents[attachmentIndex % parentCount], static_cast<u32>(jointCount - 1u)
-        ));
-    }
-    context.system.update(world, 0.0f);
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < iterations; ++iteration)
-        context.system.update(world, 0.0f);
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    const ArenaMemoryStats after = HeapBackingMemoryStats();
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    for(const auto attached : attachedObjects)
-        EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, static_cast<f32>(jointCount));
-
-    char allocationsText[32u] = {};
-    Tests::RecordUnsignedTestProperty("model_attachment_ns", elapsed);
-    Tests::RecordUnsignedTestProperty("model_attachment_iterations", iterations);
-    Tests::RecordUnsignedTestProperty("model_attachment_parent_count", parentCount);
-    Tests::RecordUnsignedTestProperty("model_attachment_count", attachmentCount);
-    Tests::RecordUnsignedTestProperty("model_attachment_joint_count", jointCount);
-    testing::Test::RecordProperty(
-        "model_attachment_backing_allocations", FormatDecimal(after.allocationCount - before.allocationCount, allocationsText).data()
-    );
-}
-
-// Opt in with --gtest_also_run_disabled_tests and a ModelAttachmentBenchmark.* filter.
-TEST(ModelAttachmentBenchmark, DISABLED_SharedSkeletonAttachments){
-    BenchmarkAttachments(1u, 1024u, 128u, 4u);
-}
-
-TEST(ModelAttachmentBenchmark, DISABLED_DistinctSkeletonAttachments){
-    BenchmarkAttachments(256u, 256u, 32u, 4u);
-}
-
-TEST(ModelAttachmentBenchmark, DISABLED_SingleSkeletonAttachment){
-    BenchmarkAttachments(1u, 1u, 16u, 256u);
 }
 
 

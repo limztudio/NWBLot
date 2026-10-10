@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -7,7 +9,6 @@
 
 #include <core/task/gpu/compiler_internal.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -213,37 +214,6 @@ static void ExpectReducedShortcutChain(
     }
 }
 
-static void MeasureAnalysis(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
-    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-    const Graphics::GpuTaskGraphCompiler compiler;
-    u64 samples[5u] = {};
-    usize scratchBytes = 0u;
-    for(usize sample = 0u; sample <= LengthOf(samples); ++sample){
-        Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
-        const Timer begin = TimerNow();
-        const bool analyzed = compiler.analyze(view, analysis, scratch);
-        const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-        ASSERT_TRUE(analyzed);
-        if(sample != 0u)
-            samples[sample - 1u] = elapsed;
-        scratchBytes = scratch.memoryStats().peakUsedBytes;
-    }
-    Sort(samples, samples + LengthOf(samples));
-    Tests::RecordUnsignedTestProperty("median_analysis_ns", samples[LengthOf(samples) / 2u]);
-    Tests::RecordUnsignedTestProperty("minimum_analysis_ns", samples[0u]);
-    Tests::RecordUnsignedTestProperty("scratch_bytes", scratchBytes);
-    Tests::RecordUnsignedTestProperty("task_count", view.taskCount());
-}
-
-static void BenchmarkShortcutChain(const usize taskCount){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    ASSERT_NO_FATAL_FAILURE(DeclareShortcutChain(graph, taskCount, false));
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_NO_FATAL_FAILURE(MeasureAnalysis(graph, analysis));
-    ASSERT_NO_FATAL_FAILURE(ExpectReducedShortcutChain(analysis, taskCount, false));
-}
-
 
 namespace ReadyOrderShape{
     enum Enum : u8{
@@ -285,15 +255,6 @@ static void ExpectReadyOrder(
             : shape == ReadyOrderShape::ConsumerFirstPairs ? (index % 2u == 0u ? taskCount / 2u + index / 2u : index / 2u) : index;
         EXPECT_EQ(analysis.topologicalOrder()[index].index, expected);
     }
-}
-
-static void BenchmarkReadyOrder(const usize taskCount, const ReadyOrderShape::Enum shape){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    ASSERT_NO_FATAL_FAILURE(DeclareReadyOrderGraph(graph, taskCount, shape));
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_NO_FATAL_FAILURE(MeasureAnalysis(graph, analysis));
-    ASSERT_NO_FATAL_FAILURE(ExpectReadyOrder(analysis, taskCount, shape));
 }
 
 
@@ -344,32 +305,6 @@ TEST(GpuTaskGraphAnalysis, RetainsCycleDiagnosticsAfterBackwardReleasePrefixExha
     EXPECT_EQ(analysis.cyclePath()[2u], first);
 }
 
-TEST(GpuTaskGraphAnalysis, DISABLED_ConsumerFirstPairsBenchmark1024Tasks){
-    BenchmarkReadyOrder(1024u, ReadyOrderShape::ConsumerFirstPairs);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ConsumerFirstPairsBenchmark4096Tasks){
-    BenchmarkReadyOrder(4096u, ReadyOrderShape::ConsumerFirstPairs);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ProducerFirstPairsBenchmark1024Tasks){
-    BenchmarkReadyOrder(1024u, ReadyOrderShape::ProducerFirstPairs);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ProducerFirstPairsBenchmark4096Tasks){
-    BenchmarkReadyOrder(4096u, ReadyOrderShape::ProducerFirstPairs);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ReverseChainBenchmark1024Tasks){
-    BenchmarkReadyOrder(1024u, ReadyOrderShape::ReverseChain);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ReverseChainBenchmark4096Tasks){
-    BenchmarkReadyOrder(4096u, ReadyOrderShape::ReverseChain);
-}
-
-
-
 TEST(GpuTaskGraphAnalysis, ReducesShortcutEdgesAtTheLastDirectConsumerBeforeLongTails){
     constexpr usize s_TaskCount = 257u;
     constexpr bool s_ReversedDeclarations[] = { false, true };
@@ -386,15 +321,6 @@ TEST(GpuTaskGraphAnalysis, ReducesShortcutEdgesAtTheLastDirectConsumerBeforeLong
         ASSERT_NO_FATAL_FAILURE(ExpectReducedShortcutChain(analysis, s_TaskCount, reversed));
     }
 }
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ShortcutChainBenchmark1024Tasks){
-    BenchmarkShortcutChain(1024u);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ShortcutChainBenchmark4096Tasks){
-    BenchmarkShortcutChain(4096u);
-}
-
 
 TEST(GpuTaskGraphAnalysis, MatchesIndependentReferenceForPermutedDagsAndDuplicateDependencies){
     constexpr usize s_TaskCounts[] = { 0u, 1u, 9u, 63u, 64u, 65u, 127u, 128u, 129u, 191u, 192u, 193u };

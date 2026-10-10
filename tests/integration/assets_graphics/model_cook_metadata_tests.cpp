@@ -8,7 +8,6 @@
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -102,36 +101,6 @@ static void AddIndexedObjects(ModelMetadata& metadata, const usize skeletonCount
         const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", skeletonIndex);
         metadata.addSkinnedMesh(meshName, objectName, objectName);
     }
-}
-
-static void BenchmarkObjectReferences(const usize count, const usize iterations = 3u){
-    ModelMetadata metadata;
-    AddIndexedObjects(metadata, count, count);
-    ASSERT_TRUE(metadata.parse());
-    metadata.verifyObjectReferences();
-    const ArenaMemoryStats warmScratch = metadata.scratchArena.memoryStats();
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    usize accepted = 0u;
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if(metadata.parse())
-            ++accepted;
-    }
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    const ArenaMemoryStats after = HeapBackingMemoryStats();
-    ASSERT_EQ(accepted, iterations);
-    metadata.verifyObjectReferences();
-    const ArenaMemoryStats currentScratch = metadata.scratchArena.memoryStats();
-    EXPECT_EQ(currentScratch.usedBytes, warmScratch.usedBytes);
-    EXPECT_EQ(currentScratch.reservedBytes, warmScratch.reservedBytes);
-    Tests::RecordUnsignedTestProperty("model_parse_ns", elapsed);
-    Tests::RecordUnsignedTestProperty("model_parse_iterations", iterations);
-    Tests::RecordUnsignedTestProperty("model_skeleton_count", count);
-    Tests::RecordUnsignedTestProperty("model_skinned_mesh_count", count);
-    Tests::RecordUnsignedTestProperty("model_parse_heap_allocations", after.allocationCount - before.allocationCount);
-    Tests::RecordUnsignedTestProperty("model_parse_scratch_reserved_bytes", currentScratch.reservedBytes);
-    Tests::RecordUnsignedTestProperty("model_parse_scratch_used_bytes", currentScratch.usedBytes);
-    testing::Test::RecordProperty("model_skeleton_reference_mode", "object_name");
 }
 
 
@@ -275,13 +244,6 @@ TEST(ModelCookMetadata, FourRowTransformFailsWithoutReplacingPreviousValueAndThr
 }
 
 // Metadata construction and result checks stay outside the timed public cook-metadata parsing operation.
-TEST(ModelCookMetadata, DISABLED_DirectBenchmarkSingleObject){
-    BenchmarkObjectReferences(1u, 1024u);
-}
-
-TEST(ModelCookMetadata, DISABLED_DirectBenchmark4096Objects){
-    BenchmarkObjectReferences(4096u);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

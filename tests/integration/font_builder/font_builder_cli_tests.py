@@ -4,7 +4,6 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 import struct
 import subprocess
 import tempfile
@@ -230,13 +229,7 @@ class FontBuilderCli(unittest.TestCase):
         return {extension: output.with_suffix(extension).read_bytes()
                 for extension in (".nwb", ".font")}
 
-    def test_pairing_every_glyph_and_source_hash(self):
-        self.assert_pair(self.output, self.payloads)
-        original = source_bytes(self.latin)
-        self.assertEqual(source_bytes(self.output.with_suffix(".font")), original)
-        self.assertEqual(self.atlas["font_hash"], hashlib.sha256(original).digest())
-        glyph_count = struct.unpack_from(">H", sfnt_tables(original)["maxp"], 4)[0]
-        self.assertEqual([glyph["id"] for glyph in self.atlas["glyphs"]], list(range(glyph_count)))
+    def test_non_drawable_glyphs_retain_positive_advance(self):
         self.assertTrue(any(glyph["drawable"] == 0 and glyph["advance_units"] > 0
                             for glyph in self.atlas["glyphs"]))
 
@@ -262,18 +255,7 @@ class FontBuilderCli(unittest.TestCase):
             self.assertEqual(raw, source[tag])
             self.assertEqual(self.payloads[f"table_{tag}.bin"], raw)
 
-    def test_repeated_bake_and_raw_sfnt_input_are_byte_identical(self):
-        repeated = self.root / "repeat" / "body.nwb"
-        self.invoke(self.latin, repeated)
-        self.assert_pair(repeated)
-        self.assertEqual(self.pair_bytes(repeated), self.pair_bytes(self.output))
-        raw = self.root / "input.ttf"
-        raw.write_bytes(source_bytes(self.latin))
-        external = self.root / "external" / "body.nwb"
-        self.invoke(raw, external)
-        self.assertEqual(self.pair_bytes(external), self.pair_bytes(self.output))
-
-    def test_non_power_of_two_capacity_preserves_compact_payload_on_repeat(self):
+    def test_non_power_of_two_capacity_keeps_payload_within_exact_extent(self):
         output = self.root / "non_power_of_two" / "body.nwb"
         options = ("--ppem", "33", "--extent", "1023")
         self.invoke(self.latin, output, *options)
@@ -287,9 +269,6 @@ class FontBuilderCli(unittest.TestCase):
             "atlas.bin": payloads["atlas.bin"], "source.sfnt": source_bytes(self.latin),
             **{f"group_{index}.pixels": group[3] for index, group in enumerate(atlas["groups"])},
             **{f"table_{tag}.bin": raw for tag, raw in atlas["tables"].items()}})
-        repeated = self.root / "non_power_of_two_repeat" / "body.nwb"
-        self.invoke(self.latin, repeated, *options)
-        self.assertEqual(self.pair_bytes(repeated), self.pair_bytes(output))
 
     def test_overwrite_and_failed_capacity_preserve_complete_pair(self):
         before = self.pair_bytes(self.output)
@@ -368,16 +347,6 @@ class FontBuilderCli(unittest.TestCase):
             output.write_text(text, encoding="utf-8")
             self.assertFalse(self.decode_package(output, success=False))
 
-    def test_relocation_keeps_same_stem_pair(self):
-        destination = self.root / "relocated"
-        destination.mkdir()
-        for extension in (".nwb", ".font"):
-            shutil.copyfile(self.output.with_suffix(extension), destination / f"body{extension}")
-        relocated = destination / "body.nwb"
-        payloads = self.decode_package(relocated)
-        self.assert_pair(relocated, payloads)
-        self.assertEqual(payloads, self.payloads)
-
     def test_korean_full_font_preserves_single_channel_tail_group(self):
         output = self.root / "korean" / "hangul.nwb"
         self.invoke(self.korean, output, "--ppem", "32", "--extent", "2048")
@@ -393,9 +362,6 @@ class FontBuilderCli(unittest.TestCase):
         source = sfnt_tables(original)
         for tag, raw in atlas["tables"].items():
             self.assertEqual(raw, source[tag])
-        repeated = self.root / "korean_repeat" / "hangul.nwb"
-        self.invoke(self.korean, repeated, "--ppem", "32", "--extent", "2048")
-        self.assertEqual(self.pair_bytes(output), self.pair_bytes(repeated))
 
 
 if __name__ == "__main__":

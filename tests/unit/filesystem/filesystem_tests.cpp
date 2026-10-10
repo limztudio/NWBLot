@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -24,7 +26,6 @@ namespace __hidden_filesystem_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_ThirdElementIndex = 2u;
 
 
@@ -59,38 +60,6 @@ protected:
     }
     virtual void TearDown()override{
         EXPECT_TRUE(RemoveAllIfExists(m_directory));
-    }
-
-
-protected:
-    void benchmarkMetadataFlush(const usize fileCount, const usize iterations){
-        m_desc.metadataSize = fileCount == 1u ? 512u : 512u * 1024u;
-        m_desc.segmentSize = m_desc.metadataSize * s_ExpectedDualCount;
-        auto filesystem = CreateFilesystem(m_arena, m_desc);
-        ASSERT_TRUE(filesystem);
-        filesystem->reserveFileCapacity(fileCount);
-        for(usize index = 0u; index < fileCount; ++index){
-            char number[TextDetail::s_DecimalTextBufferBytes] = {};
-            const Name path(FormatDecimal(index, number));
-            ASSERT_TRUE(filesystem->writeFileDeferred(path, nullptr, 0u));
-        }
-        ASSERT_TRUE(filesystem->flush());
-        const Timer begin = TimerNow();
-        for(usize iteration = 0u; iteration < iterations; ++iteration)
-            ASSERT_TRUE(filesystem->flush());
-        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
-        char durationText[TextDetail::s_DecimalTextBufferBytes] = {};
-        const AStringView formattedDuration = FormatDecimal(nanoseconds, durationText);
-        durationText[formattedDuration.size()] = '\0';
-        RecordProperty("flush_ns", durationText);
-        RecordProperty("file_count", static_cast<int>(fileCount));
-        RecordProperty("iterations", static_cast<int>(iterations));
-        ASSERT_TRUE(filesystem->unmount());
-        m_desc.createIfMissing = false;
-        m_desc.usage = VolumeUsage::RuntimeReadOnly;
-        ASSERT_TRUE(filesystem->mount(m_desc));
-        EXPECT_EQ(filesystem->fileCount(), fileCount);
-        ASSERT_TRUE(filesystem->unmount());
     }
 
 
@@ -271,14 +240,6 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
         verifyImage(index + 1u);
     }
     ASSERT_TRUE(filesystem->unmount());
-}
-
-TEST_F(FilesystemVolumeTest, DISABLED_MetadataFlushBenchmarkSingleFile){
-    benchmarkMetadataFlush(1u, 1024u);
-}
-
-TEST_F(FilesystemVolumeTest, DISABLED_MetadataFlushBenchmark4096Files){
-    benchmarkMetadataFlush(4096u, 128u);
 }
 
 TEST(FilesystemFactory, PropagatesFactoryAndMountFailures){

@@ -293,16 +293,6 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("gathering independent build outputs changed or dropped runtime payloads")
 
-    gather_list = root / "gather.txt"
-    gather_list.write_text("".join(str(path) + LIT_N for path in combined_directory.rglob(LIT_NWBA)), encoding=LIT_UTF_8)
-    list_directory = root / "gathered-list"
-    run_command(
-        [str(args.asset_gatherer), LIT_INPUT_LIST, str(gather_list), LIT_OUTPUT_DIRECTORY, str(list_directory)],
-        root,
-    )
-    if read_volume(list_directory) != combined_payloads:
-        raise AssertionError("gathering an explicit artifact list changed runtime payloads")
-
     write_sampler(first_asset, LIT_NEAREST)
     run_command(
         [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset),

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -8,7 +10,6 @@
 
 #include <tests/common/ecs_test_world.h>
 
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -93,68 +94,6 @@ TEST(SceneCameraSelection, FallbackPreservesSparseViewOrderAfterRemoval){
     EXPECT_FALSE(ResolveSceneCameraView(testWorld.world).valid());
     thirdCamera.setNearPlane(0.25f);
     EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, third);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void MeasureCameraSelection(const usize cameraCount, const bool useActiveCamera){
-    TestWorld testWorld;
-    EntityID firstCamera;
-    EntityID lastCamera;
-    for(usize index = 0u; index < cameraCount; ++index){
-        lastCamera = CreateSceneCameraEntity(testWorld.world, Float4(static_cast<f32>(index), 0.0f, 0.0f));
-        if(index == 0u)
-            firstCamera = lastCamera;
-    }
-    if(useActiveCamera){
-        auto selector = testWorld.world.createEntity();
-        selector.addComponent<ActiveCameraComponent>().camera = lastCamera;
-    }
-    const EntityID expectedCamera = useActiveCamera ? lastCamera : firstCamera;
-    const usize iterations = cameraCount == 1u ? 16384u : 1024u;
-    constexpr usize s_SampleCount = 7u;
-    Array<u64, s_SampleCount> samples{};
-    const ArenaMemoryStats beforeHeap = HeapBackingMemoryStats();
-    for(usize sampleIndex = 0u; sampleIndex <= s_SampleCount; ++sampleIndex){
-        u64 checksum = 0u;
-        bool valid = true;
-        const Timer begin = TimerNow();
-        for(usize iteration = 0u; iteration < iterations; ++iteration){
-            const SceneCameraView resolved = ResolveSceneCameraView(testWorld.world, 1.5f);
-            checksum += resolved.entity.index();
-            valid &= resolved.entity == expectedCamera && resolved.projection.aspectRatio == 1.5f;
-        }
-        const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-        ASSERT_TRUE(valid);
-        ASSERT_EQ(checksum, static_cast<u64>(expectedCamera.index()) * iterations);
-        if(sampleIndex != 0u)
-            samples[sampleIndex - 1u] = elapsed;
-    }
-    const ArenaMemoryStats afterHeap = HeapBackingMemoryStats();
-    EXPECT_EQ(afterHeap.allocationCount, beforeHeap.allocationCount);
-    Sort(samples.begin(), samples.end());
-    NWB::Tests::RecordUnsignedTestProperty("median_ns", samples[s_SampleCount / 2u]);
-    testing::Test::RecordProperty("camera_count", static_cast<int>(cameraCount));
-    testing::Test::RecordProperty("iterations_per_sample", static_cast<int>(iterations));
-    testing::Test::RecordProperty("measured_samples", static_cast<int>(s_SampleCount));
-}
-
-TEST(SceneCameraSelectionBenchmark, DISABLED_SingleActiveCamera){
-    MeasureCameraSelection(1u, true);
-}
-
-TEST(SceneCameraSelectionBenchmark, DISABLED_64CamerasActiveLast){
-    MeasureCameraSelection(64u, true);
-}
-
-TEST(SceneCameraSelectionBenchmark, DISABLED_1024CamerasActiveLast){
-    MeasureCameraSelection(1024u, true);
-}
-
-TEST(SceneCameraSelectionBenchmark, DISABLED_1024CamerasNoActive){
-    MeasureCameraSelection(1024u, false);
 }
 
 

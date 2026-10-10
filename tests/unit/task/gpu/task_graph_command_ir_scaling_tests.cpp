@@ -1,10 +1,10 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "task_graph_command_ir_test_utils.h"
-
-#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,55 +78,6 @@ void VerifyMixedRecords(const Graphics::GpuCommandIrCapture& capture, const usiz
     ASSERT_FALSE(terminal1);
     EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(reader.validation().valid());
-}
-
-void BenchmarkCapture(const usize count){
-    TestArena testArena;
-    Graphics::GpuCommandIrCapture capture(testArena.arena);
-    ASSERT_TRUE(capture.beginRecordingAttempt(31u));
-    const ArenaMemoryStats initial = testArena.arena.memoryStats();
-    Timer begin = TimerNow();
-    const bool captured = AppendMixedRecords(capture, 0u, count);
-    const u64 captureNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    ASSERT_TRUE(captured);
-    const ArenaMemoryStats firstCapture = testArena.arena.memoryStats();
-    const usize encodedBytes = capture.commandBytes().size();
-    VerifyMixedRecords(capture, count);
-
-    begin = TimerNow();
-    capture.rollback(count / 2u);
-    const u64 rollbackNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    VerifyMixedRecords(capture, count / 2u);
-    begin = TimerNow();
-    const bool refilled = AppendMixedRecords(capture, count / 2u, count);
-    const u64 refillNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    ASSERT_TRUE(refilled);
-    VerifyMixedRecords(capture, count);
-
-    begin = TimerNow();
-    capture.reset();
-    const u64 resetNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    VerifyMixedRecords(capture, 0u);
-    ASSERT_TRUE(capture.beginRecordingAttempt(32u));
-    begin = TimerNow();
-    const bool reused = AppendMixedRecords(capture, 0u, count);
-    const u64 reuseNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    ASSERT_TRUE(reused);
-    const ArenaMemoryStats after = testArena.arena.memoryStats();
-    VerifyMixedRecords(capture, count);
-    EXPECT_EQ(capture.recordingAttemptGeneration(), 32u);
-    EXPECT_EQ(after.allocationCount, firstCapture.allocationCount);
-    EXPECT_EQ(after.usedBytes, firstCapture.usedBytes);
-
-    RecordUnsignedTestProperty("record_count", count);
-    RecordUnsignedTestProperty("encoded_bytes", encodedBytes);
-    RecordUnsignedTestProperty("capture_ns", captureNanoseconds);
-    RecordUnsignedTestProperty("rollback_ns", rollbackNanoseconds);
-    RecordUnsignedTestProperty("refill_ns", refillNanoseconds);
-    RecordUnsignedTestProperty("reset_ns", resetNanoseconds);
-    RecordUnsignedTestProperty("reused_capture_ns", reuseNanoseconds);
-    RecordUnsignedTestProperty("capture_allocations", firstCapture.allocationCount - initial.allocationCount);
-    RecordUnsignedTestProperty("reuse_allocations", after.allocationCount - firstCapture.allocationCount);
 }
 
 
@@ -221,17 +172,6 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
 }
 
 // CPU-only capture/rollback/reset workloads; opt in explicitly after correctness tests pass.
-TEST(GpuCommandIrCapture, DISABLED_ScalingBenchmark1024Records){
-    BenchmarkCapture(1024u);
-}
-
-TEST(GpuCommandIrCapture, DISABLED_ScalingBenchmark4096Records){
-    BenchmarkCapture(4096u);
-}
-
-TEST(GpuCommandIrCapture, DISABLED_ScalingBenchmark16384Records){
-    BenchmarkCapture(16384u);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

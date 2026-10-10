@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -28,9 +30,6 @@ namespace __hidden_task_graph_analysis_optimization_tests{
 
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
-
-constexpr usize s_BenchmarkTaskCount = 4096u;
-constexpr usize s_BenchmarkRepetitions = 8u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,159 +98,6 @@ static void BuildVersionChain(
         previous = graph.addTask(desc, commands);
         ASSERT_TRUE(previous.valid());
     }
-}
-
-static void BuildDistinctVersions(Graphics::GpuTaskGraph& graph, const usize versionCount){
-    Graphics::GpuTaskId previous;
-    for(usize index = 0u; index < versionCount; ++index){
-        const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
-            graph,
-            IndexedName(Name("tests/analysis_optimization/distinct_buffer"), index),
-            "Distinct Version Buffer"
-        );
-        ASSERT_TRUE(buffer.valid());
-        const Graphics::GpuTaskResourceRange range{ .bufferRange = Graphics::BufferRange(0u, 64u) };
-        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(
-            Graphics::GpuGraphResourceVersionDesc{}
-                .setResource(buffer)
-                .setRange(range)
-                .setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced)
-        );
-        ASSERT_TRUE(version.valid());
-        for(usize roleIndex = 0u; roleIndex < 2u; ++roleIndex){
-            const bool producer = roleIndex == 0u;
-            const Graphics::GpuTaskResourceUse physicalUse{
-                .resource = buffer,
-                .range = range,
-                .requiredState = producer ? Graphics::ResourceStates::UnorderedAccess : Graphics::ResourceStates::ShaderResource,
-                .access = producer ? Graphics::GpuTaskResourceAccess::Write : Graphics::GpuTaskResourceAccess::Read,
-            };
-            const Graphics::GpuTaskResourceVersionUse versionUse{
-                .version = version,
-                .role = producer ? Graphics::GpuTaskResourceVersionRole::Produce : Graphics::GpuTaskResourceVersionRole::Consume,
-            };
-            Graphics::GpuTaskDesc desc;
-            desc
-                .setIdentity(IndexedName(Name("tests/analysis_optimization/distinct_task"), index * 2u + roleIndex))
-                .setMarkerLabel("Distinct Version Task")
-                .setResourceUses(&physicalUse, 1u)
-                .setResourceVersionUses(&versionUse, 1u)
-            ;
-            if(previous.valid())
-                desc.setDependencies(&previous, 1u);
-            const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
-            previous = graph.addTask(desc, commands);
-            ASSERT_TRUE(previous.valid());
-        }
-    }
-}
-
-
-static void MeasureAnalysis(
-    const Graphics::GpuTaskGraph& graph,
-    Graphics::GpuTaskGraphAnalysis& analysis,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    ASSERT_TRUE(Analyze(graph, analysis));
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < s_BenchmarkRepetitions; ++iteration)
-        ASSERT_TRUE(Analyze(graph, analysis));
-    const u64 elapsedNanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    char text[32u];
-    const AStringView elapsed = FormatDecimal(elapsedNanoseconds, text);
-    text[elapsed.size()] = '\0';
-    testing::Test::RecordProperty("elapsed_ns", text);
-    testing::Test::RecordProperty("repetitions", static_cast<i32>(s_BenchmarkRepetitions));
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    const Graphics::GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.analyze(declarations, analysis, scratchArena));
-    testing::Test::RecordProperty("task_count", static_cast<i32>(declarations.taskCount()));
-    testing::Test::RecordProperty("scratch_peak_bytes", static_cast<i32>(scratchArena.memoryStats().peakUsedBytes));
-    testing::Test::RecordProperty("scratch_reserved_bytes", static_cast<i32>(scratchArena.memoryStats().reservedBytes));
-}
-
-static void BenchmarkVersionChain(
-    const Graphics::GpuGraphResourceVersionOrigin::Enum origin,
-    const bool overlappingClobber = false
-){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    BuildVersionChain(graph, origin, s_BenchmarkTaskCount, false, overlappingClobber);
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/version_scratch"));
-    MeasureAnalysis(graph, analysis, scratchArena);
-    ASSERT_EQ(analysis.topologicalOrder().size(), s_BenchmarkTaskCount);
-    if(!overlappingClobber)
-        EXPECT_EQ(analysis.edges().size(), s_BenchmarkTaskCount - 1u);
-    EXPECT_EQ(analysis.schedulingEdges().size(), s_BenchmarkTaskCount - 1u);
-    const usize expectedVersionEdges = origin == Graphics::GpuGraphResourceVersionOrigin::TaskProduced ? 1u : 0u;
-    EXPECT_EQ(analysis.resourceVersionEdgeCount(), expectedVersionEdges + (overlappingClobber ? 1u : 0u));
-    for(usize index = 0u; index < s_BenchmarkTaskCount; ++index)
-        EXPECT_EQ(analysis.topologicalOrder()[index].index, index);
-}
-
-static void BenchmarkDistinctVersions(const usize versionCount){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    BuildDistinctVersions(graph, versionCount);
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/distinct_version_scratch"));
-    MeasureAnalysis(graph, analysis, scratchArena);
-    ASSERT_EQ(analysis.topologicalOrder().size(), versionCount * 2u);
-    EXPECT_EQ(analysis.edges().size(), versionCount * 2u - 1u);
-    EXPECT_EQ(analysis.resourceVersionEdgeCount(), versionCount);
-    testing::Test::RecordProperty("version_count", static_cast<i32>(versionCount));
-}
-
-static void BenchmarkResourceVersionBindings(const usize versionCount){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
-        graph,
-        Name("tests/analysis_optimization/binding_buffer"),
-        "Version Binding Buffer"
-    );
-    ASSERT_TRUE(buffer.valid());
-    const Graphics::GpuTaskResourceRange range{ .bufferRange = Graphics::BufferRange(0u, 64u) };
-    Core::Alloc::ScratchArena declarationScratch(Name("tests/analysis_optimization/binding_declarations"));
-    Vector<Graphics::GpuTaskResourceVersionUse, Core::Alloc::ScratchArena> versionUses(declarationScratch);
-    versionUses.reserve(versionCount);
-    for(usize index = 0u; index < versionCount; ++index){
-        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(
-            Graphics::GpuGraphResourceVersionDesc{}
-                .setResource(buffer)
-                .setRange(range)
-                .setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot)
-        );
-        ASSERT_TRUE(version.valid());
-        versionUses.push_back(Graphics::GpuTaskResourceVersionUse{
-            .version = version,
-            .role = Graphics::GpuTaskResourceVersionRole::Consume,
-        });
-    }
-    const Graphics::GpuTaskResourceUse physicalUse{
-        .resource = buffer,
-        .range = range,
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
-    const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
-    const Graphics::GpuTaskId task = graph.addTask(
-        Graphics::GpuTaskDesc{}
-            .setIdentity(Name("tests/analysis_optimization/binding_task"))
-            .setMarkerLabel("Version Binding Task")
-            .setResourceUses(&physicalUse, 1u)
-            .setResourceVersionUses(versionUses.data(), versionUses.size()),
-        commands
-    );
-    ASSERT_TRUE(task.valid());
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/binding_scratch"));
-    MeasureAnalysis(graph, analysis, scratchArena);
-    ASSERT_EQ(analysis.topologicalOrder().size(), 1u);
-    EXPECT_EQ(analysis.topologicalOrder()[0u], task);
-    EXPECT_TRUE(analysis.edges().empty());
-    testing::Test::RecordProperty("binding_count", static_cast<i32>(versionCount));
 }
 
 
@@ -575,42 +421,6 @@ TEST(GpuTaskGraphAnalysis, ReportsEarlierUncoveredVersionUseBeforeLaterDuplicate
     EXPECT_FALSE(analysis.diagnostic().relatedTask.valid());
     EXPECT_EQ(analysis.diagnostic().resource, buffer);
     EXPECT_EQ(analysis.diagnostic().resourceVersion, versionUses[0u].version);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark1Use){
-    BenchmarkResourceVersionBindings(1u);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark8Uses){
-    BenchmarkResourceVersionBindings(8u);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark1024Uses){
-    BenchmarkResourceVersionBindings(1024u);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark4096Uses){
-    BenchmarkResourceVersionBindings(4096u);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionImportedRootBenchmark4096Tasks){
-    BenchmarkVersionChain(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionProducedNoClobberBenchmark4096Tasks){
-    BenchmarkVersionChain(Graphics::GpuGraphResourceVersionOrigin::TaskProduced);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionProducedOneClobberBenchmark4096Tasks){
-    BenchmarkVersionChain(Graphics::GpuGraphResourceVersionOrigin::TaskProduced, true);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_DistinctProducedVersionBenchmark1024Versions){
-    BenchmarkDistinctVersions(1024u);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_DistinctProducedVersionBenchmark2048Versions){
-    BenchmarkDistinctVersions(2048u);
 }
 
 

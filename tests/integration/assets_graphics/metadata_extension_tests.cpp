@@ -12,7 +12,6 @@
 #include <tests/common/capturing_logger.h>
 
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -147,92 +146,6 @@ static_assert(IsNothrowDestructible_V<ParsedMetadataExtension>);
     file.write(text.data(), static_cast<GlobalFilesystemDetail::StreamSize>(text.size()));
     file.close();
     return !file.fail();
-}
-
-static void BenchmarkMetadataParsing(const usize pairCount, const usize iterations){
-    AssetArena fixtureArena(Name("tests/metadata_extension/parse_fixture"));
-    AssetArena parseArena(Name("tests/metadata_extension/parse_output"));
-    CpuTaskScheduler cpuScheduler(0u);
-    Tests::CapturingLogger logger;
-    Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    const AssetString caseName = StringFormat(fixtureArena, "pairs_{}", pairCount);
-    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__)
-        / "__build_obj" / "metadata_extension_tests" / caseName;
-    DiscoveredNwbFileVector files(fixtureArena);
-    files.reserve(pairCount * s_ExpectedDualCount);
-    for(usize index = 0u; index < pairCount; ++index){
-        const AssetString directoryName = StringFormat(fixtureArena, "pair_{:04}", index);
-        const NWB::Path directory = root / directoryName;
-        ASSERT_TRUE(EnsureDirectories(directory));
-        ASSERT_TRUE(WriteFixtureFile(directory / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\r\n"));
-        ASSERT_TRUE(WriteFixtureFile(directory / "include.slangi", "static const uint fixtureValue = 1;\r\n"));
-        ASSERT_TRUE(WriteFixtureFile(directory / "shader.nwb", "compute_shader asset;\r\nasset.entry_point = \"main\";\r\n"));
-        ASSERT_TRUE(WriteFixtureFile(directory / "include.nwb", "include asset;\r\nasset.defines = { \"FIXTURE_OPTION\": [\"0\", \"1\"] };\r\n"));
-        for(const AStringView fileName : { AStringView("shader.nwb"), AStringView("include.nwb") }){
-            const NWB::Path path = directory / fileName;
-            AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
-            CanonicalizeTextInPlace(normalized);
-            files.emplace_back(fixtureArena, root, path, normalized, ACompactString("project"));
-        }
-    }
-
-    usize registeredBucketCount = 0u;
-    {
-        Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/parse_scratch"));
-        ParsedAssetMetadata metadata(parseArena);
-        ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry));
-        registeredBucketCount = metadata.entryRegistry.bucketCount();
-        ASSERT_GE(registeredBucketCount, 7u);
-        ASSERT_TRUE(ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena));
-        ASSERT_EQ(metadata.entryRegistry.entryCount(), 0u);
-        ASSERT_EQ(metadata.extensions.size(), 1u);
-    }
-    ASSERT_EQ(parseArena.memoryStats().usedBytes, 0u);
-
-    u64 elapsedNanoseconds = 0u;
-    u64 liveBytes = 0u;
-    const ArenaMemoryStats before = parseArena.memoryStats();
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        bool registered = false;
-        bool parsed = false;
-        u64 entryCount = 0u;
-        usize extensionCount = 0u;
-        usize bucketCount = 0u;
-        u64 iterationLiveBytes = 0u;
-        const Timer begin = TimerNow();
-        {
-            Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/parse_scratch"));
-            ParsedAssetMetadata metadata(parseArena);
-            registered = RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry);
-            parsed = registered && ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena);
-            entryCount = metadata.entryRegistry.entryCount();
-            extensionCount = metadata.extensions.size();
-            bucketCount = metadata.entryRegistry.bucketCount();
-            iterationLiveBytes = parseArena.memoryStats().usedBytes;
-        }
-        const Timer end = TimerNow();
-        elapsedNanoseconds += DurationInNS<u64>(end, begin);
-        ASSERT_TRUE(registered);
-        ASSERT_TRUE(parsed);
-        ASSERT_EQ(entryCount, 0u);
-        ASSERT_EQ(extensionCount, 1u);
-        ASSERT_EQ(bucketCount, registeredBucketCount);
-        ASSERT_EQ(parseArena.memoryStats().usedBytes, before.usedBytes);
-        liveBytes = Max(liveBytes, iterationLiveBytes);
-    }
-    const ArenaMemoryStats after = parseArena.memoryStats();
-    EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_GT(liveBytes, 0u);
-    Tests::RecordUnsignedTestProperty("metadata_parse_ns", elapsedNanoseconds);
-    Tests::RecordUnsignedTestProperty("metadata_file_count", files.size());
-    Tests::RecordUnsignedTestProperty("metadata_registered_buckets", registeredBucketCount);
-    Tests::RecordUnsignedTestProperty("metadata_parse_iterations", iterations);
-    Tests::RecordUnsignedTestProperty("metadata_parse_allocations", after.allocationCount - before.allocationCount);
-    Tests::RecordUnsignedTestProperty("metadata_parse_reallocations", after.reallocationCount - before.reallocationCount);
-    Tests::RecordUnsignedTestProperty("metadata_parse_deallocations", after.deallocationCount - before.deallocationCount);
-    Tests::RecordUnsignedTestProperty("metadata_retained_live_bytes", liveBytes);
-    Tests::RecordUnsignedTestProperty("metadata_peak_used_bytes", after.peakUsedBytes);
-    Tests::RecordUnsignedTestProperty("metadata_final_used_bytes", after.usedBytes);
 }
 
 
@@ -534,14 +447,6 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         else
             EXPECT_EQ(logger.errorCount(), 0u);
     }
-}
-
-TEST(MetadataExtensionBenchmark, DISABLED_ParseShaderAndIncludePair){
-    BenchmarkMetadataParsing(1u, 32u);
-}
-
-TEST(MetadataExtensionBenchmark, DISABLED_ParseShaderAndIncludeRegistry512Files){
-    BenchmarkMetadataParsing(256u, 3u);
 }
 
 

@@ -1,9 +1,12 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include <core/task/cpu/scheduler.h>
 
+#include <global/sync.h>
 #include <global/termination.h>
 #include <global/timer.h>
 
@@ -275,7 +278,8 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
             break;
         }
         scheduler.pumpMainThread();
-        SleepMS(1u);
+        // Yield lets dependent producers publish the next batch without pacing every handoff to a timer tick.
+        YieldThread();
     }
     for(auto& producer : producers)
         producer.join();

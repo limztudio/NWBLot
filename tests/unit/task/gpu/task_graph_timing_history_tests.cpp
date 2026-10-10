@@ -1,11 +1,12 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include <core/task/gpu/timing_feedback.h>
 
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -277,91 +278,6 @@ TEST(GpuTaskTimingHistory, SmallRepeatedUpdatesAndSnapshotsReuseTheirAllocations
     EXPECT_EQ(after.deallocationCount, before.deallocationCount);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-}
-
-static void BenchmarkHistory(const u32 keyCount, const u32 repeatCount){
-    GraphicsArena inputArena(Name("tests/timing_history/benchmark_inputs"));
-    GraphicsArena storeArena(Name("tests/timing_history/benchmark_store"));
-    GraphicsArena snapshotArena(Name("tests/timing_history/benchmark_snapshot"));
-    GraphicsVector<TimingInput> inputs(inputArena);
-    inputs.reserve(keyCount);
-    for(u32 index = 0u; index < keyCount; ++index)
-        inputs.push_back(Input((index * 73u) % keyCount));
-    GpuTaskTimingHistoryStore store(storeArena, 4u);
-    GpuTaskTimingHistorySnapshot snapshot(snapshotArena);
-    bool accepted = true;
-    const Timer recordBegin = TimerNow();
-    for(const TimingInput& input : inputs)
-        accepted = store.recordSample(input.key, input.queue, 1.0, 1u) && accepted;
-    const u64 recordNanoseconds = DurationInNS<u64>(TimerNow(), recordBegin);
-    const Timer updateBegin = TimerNow();
-    for(u32 repeat = 0u; repeat < repeatCount; ++repeat){
-        for(const TimingInput& input : inputs)
-            accepted = store.recordSample(input.key, input.queue, 2.0, repeat + s_ExpectedDualCount) && accepted;
-    }
-    const u64 updateNanoseconds = DurationInNS<u64>(TimerNow(), updateBegin);
-    const Timer snapshotBegin = TimerNow();
-    store.snapshot(snapshot);
-    const u64 snapshotNanoseconds = DurationInNS<u64>(TimerNow(), snapshotBegin);
-    const Timer snapshotRepeatBegin = TimerNow();
-    for(u32 repeat = 0u; repeat < repeatCount; ++repeat)
-        store.snapshot(snapshot);
-    const u64 snapshotRepeatNanoseconds = DurationInNS<u64>(TimerNow(), snapshotRepeatBegin);
-    u64 storeSamples = 0u;
-    u64 storeFrames = 0u;
-    const Timer storeLookupBegin = TimerNow();
-    for(u32 repeat = 0u; repeat < repeatCount; ++repeat){
-        for(const TimingInput& input : inputs){
-            const GpuTaskTimingHistory* const history = store.find(input.key, input.queue);
-            const GpuTaskTimingAssignmentState* const state = store.findAssignment(GpuTaskTimingAssignmentKeyFromHistoryKey(input.key));
-            if(history)
-                storeSamples += history->sampleCount;
-            if(state)
-                storeFrames += state->lastAcceptedFrameIndex;
-        }
-    }
-    const u64 storeLookupNanoseconds = DurationInNS<u64>(TimerNow(), storeLookupBegin);
-    u64 snapshotSamples = 0u;
-    u64 snapshotFrames = 0u;
-    const Timer snapshotLookupBegin = TimerNow();
-    for(u32 repeat = 0u; repeat < repeatCount; ++repeat){
-        for(const TimingInput& input : inputs){
-            const GpuTaskTimingHistory* const history = snapshot.find(input.key, input.queue);
-            const GpuTaskTimingAssignmentState* const state = snapshot.findAssignment(GpuTaskTimingAssignmentKeyFromHistoryKey(input.key));
-            if(history)
-                snapshotSamples += history->sampleCount;
-            if(state)
-                snapshotFrames += state->lastAcceptedFrameIndex;
-        }
-    }
-    const u64 snapshotLookupNanoseconds = DurationInNS<u64>(TimerNow(), snapshotLookupBegin);
-    EXPECT_TRUE(accepted);
-    EXPECT_EQ(store.historyCount(), keyCount);
-    EXPECT_EQ(storeSamples, static_cast<u64>(keyCount) * repeatCount * Min(4u, repeatCount + 1u));
-    EXPECT_EQ(storeFrames, static_cast<u64>(keyCount) * repeatCount * (repeatCount + 1u));
-    EXPECT_EQ(snapshotSamples, storeSamples);
-    EXPECT_EQ(snapshotFrames, storeFrames);
-    NWB::Tests::RecordUnsignedTestProperty("history_record_ns", recordNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("history_update_ns", updateNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_ns", snapshotNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_repeat_ns", snapshotRepeatNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("history_store_lookup_ns", storeLookupNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_lookup_ns", snapshotLookupNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("history_repeat_count", repeatCount);
-    NWB::Tests::RecordUnsignedTestProperty("history_store_used_bytes", storeArena.memoryStats().usedBytes);
-    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_used_bytes", snapshotArena.memoryStats().usedBytes);
-}
-
-TEST(GpuTaskTimingHistory, DISABLED_BenchmarkSmallHistory){
-    BenchmarkHistory(8u, 256u);
-}
-
-TEST(GpuTaskTimingHistory, DISABLED_BenchmarkMediumHistory){
-    BenchmarkHistory(512u, 4u);
-}
-
-TEST(GpuTaskTimingHistory, DISABLED_BenchmarkLargeHistory){
-    BenchmarkHistory(4096u, 4u);
 }
 
 

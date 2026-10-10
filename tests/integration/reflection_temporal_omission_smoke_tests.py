@@ -66,15 +66,13 @@ class TemporalOmissionEvidenceTests(unittest.TestCase):
 
 
 class TemporalOmissionCapabilityTests(unittest.TestCase):
-    def test_one_explicit_clean_unavailable_marker_can_skip(self):
-        self.assertTrue(proof.hardware_unavailable_without_errors(
-            "ReflectionSmokeProject: hardware unavailable\nReflectionSmokeProject: shutdown\n"))
-
     def test_available_and_unavailable_are_contradictory(self):
         self.assertFalse(proof.hardware_unavailable_without_errors(
             "ReflectionSmokeProject: hardware unavailable\nReflectionSmokeProject: hardware available\n"))
 
     def test_repeated_unavailable_marker_is_not_a_capability_proof(self):
+        self.assertTrue(proof.hardware_unavailable_without_errors(
+            LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + "ReflectionSmokeProject: shutdown\n"))
         self.assertFalse(proof.hardware_unavailable_without_errors(
             LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI * 2))
 

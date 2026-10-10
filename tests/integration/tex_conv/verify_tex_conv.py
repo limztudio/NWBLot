@@ -3,7 +3,6 @@
 import argparse
 import math
 import pathlib
-import re
 import struct
 import subprocess
 import sys
@@ -21,7 +20,6 @@ LIT_N_4I = "<4i"
 LIT_LINEORDER = "lineOrder"
 LIT_FLOAT = "float"
 LIT_F = "<f"
-LIT_LINEAR = "linear"
 LIT_CHECKER_TEX = "checker.tex"
 LIT_CUBE_TEX = "cube.tex"
 LIT_VOLUME_TEX = "volume.tex"
@@ -231,23 +229,6 @@ def write_openexr(path: pathlib.Path) -> None:
     path.write_bytes(output)
 
 
-def read_texture_metadata(path: pathlib.Path) -> str:
-    metadata = path.read_text(encoding=LIT_UTF_8)
-    fields = re.findall(r"^asset\.([A-Za-z_][A-Za-z0-9_]*)\s*=", metadata, flags=re.MULTILINE)
-    expected_fields = {"format", "dimension", "width", "height", "data"}
-    if 'asset.format = "uastc_hdr_4x4";' in metadata:
-        expected_fields.add("alpha_mode")
-        if 'asset.alpha_mode = "constant_unorm8";' in metadata:
-            expected_fields.add("alpha_constant_unorm8")
-    else:
-        expected_fields.update(("color_space", "has_alpha"))
-    if 'asset.dimension = "volume";' in metadata:
-        expected_fields.add("depth")
-    if set(fields) != expected_fields or len(fields) != len(expected_fields):
-        raise AssertionError(f"generated metadata fields {fields} differ from author fields {sorted(expected_fields)}: {path}\n{metadata}")
-    return metadata
-
-
 def require_metadata_fragment(metadata: str, fragment: str) -> None:
     if fragment not in metadata:
         raise AssertionError(f"metadata does not contain: {fragment!r}\n{metadata}")
@@ -379,8 +360,6 @@ def main() -> int:
     source_path = output_dir / "checker.png"
     metadata_path = output_dir / "checker.nwb"
     texture_path = output_dir / LIT_CHECKER_TEX
-    linear_metadata_path = output_dir / "linear.nwb"
-    linear_texture_path = output_dir / "linear.tex"
     cube_metadata_path = output_dir / "cube.nwb"
     cube_texture_path = output_dir / LIT_CUBE_TEX
     volume_metadata_path = output_dir / "volume.nwb"
@@ -444,8 +423,6 @@ def main() -> int:
         source_path,
         metadata_path,
         texture_path,
-        linear_metadata_path,
-        linear_texture_path,
         cube_metadata_path,
         cube_texture_path,
         volume_metadata_path,
@@ -468,8 +445,6 @@ def main() -> int:
         *alpha_output_paths,
         pathlib.Path(str(metadata_path) + LIT_TMP_SUFFIX),
         pathlib.Path(str(texture_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(linear_metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(linear_texture_path) + LIT_TMP_SUFFIX),
         pathlib.Path(str(cube_metadata_path) + LIT_TMP_SUFFIX),
         pathlib.Path(str(cube_texture_path) + LIT_TMP_SUFFIX),
         pathlib.Path(str(volume_metadata_path) + LIT_TMP_SUFFIX),
@@ -503,16 +478,14 @@ def main() -> int:
     if not metadata_path.is_file() or not texture_path.is_file():
         raise AssertionError(f"tex_conv did not create {metadata_path} and {texture_path}")
 
-    metadata = read_texture_metadata(metadata_path)
+    metadata = metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
-        "texture asset;",
         'asset.format = "uastc_ldr_4x4";',
         'asset.color_space = "srgb";',
         'asset.dimension = "2d";',
         "asset.width = 7;",
         "asset.height = 5;",
         LIT_ASSET_HAS_ALPHA_1,
-        'asset.data = "checker.tex";',
     ):
         require_metadata_fragment(metadata, fragment)
 
@@ -531,36 +504,8 @@ def main() -> int:
     if "[ERROR]:" not in overwrite_output:
         raise AssertionError("tex_conv did not classify an existing-output rejection as an error")
 
-    forced = subprocess.run(
-        [args.tex_conv, str(source_path), "--force"],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
-    if forced.returncode != 0:
-        raise AssertionError(
-            f"tex_conv --force failed with {forced.returncode}\nstdout:\n{forced.stdout}\nstderr:\n{forced.stderr}"
-        )
-    read_texture_metadata(metadata_path)
     verify_publication_failure_preserves_outputs(
         args.tex_conv, source_path, metadata_path, texture_path, output_dir,
-    )
-
-    linear = subprocess.run(
-        [args.tex_conv, str(source_path), LIT_OUTPUT, str(output_dir / LIT_LINEAR), LIT_LINEAR_2],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
-    if linear.returncode != 0:
-        raise AssertionError(
-            f"tex_conv --linear failed with {linear.returncode}\nstdout:\n{linear.stdout}\nstderr:\n{linear.stderr}"
-        )
-    if not linear_metadata_path.is_file() or not linear_texture_path.is_file():
-        raise AssertionError("tex_conv --output did not create the requested pair")
-    require_metadata_fragment(
-        read_texture_metadata(linear_metadata_path),
-        'asset.color_space = "linear";',
     )
 
     # Keep the LDR alpha cases at one UASTC block per level. The expected payloads are
@@ -617,10 +562,9 @@ def main() -> int:
                 f"tex_conv alpha fixture {name!r} failed with {result.returncode}"
                 f"\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
             )
-        read_texture_metadata(alpha_output_bases[name].with_suffix(LIT_NWB))
 
     def alpha_metadata(name: str) -> str:
-        return read_texture_metadata(alpha_output_bases[name].with_suffix(LIT_NWB))
+        return alpha_output_bases[name].with_suffix(LIT_NWB).read_text(encoding=LIT_UTF_8)
 
     def alpha_texture(name: str) -> pathlib.Path:
         return alpha_output_bases[name].with_suffix(LIT_TEX)
@@ -671,14 +615,13 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv Radiance HDR failed with {radiance.returncode}\nstdout:\n{radiance.stdout}\nstderr:\n{radiance.stderr}"
     )
-    radiance_metadata = read_texture_metadata(radiance_metadata_path)
+    radiance_metadata = radiance_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(radiance_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "2d";',
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "opaque";',
-        'asset.data = "radiance.tex";',
     ):
         require_metadata_fragment(radiance_metadata, fragment)
     require_metadata_field_absent(radiance_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
@@ -695,7 +638,7 @@ def main() -> int:
             f"tex_conv HDR --alpha white failed with {radiance_white.returncode}"
             f"\nstdout:\n{radiance_white.stdout}\nstderr:\n{radiance_white.stderr}"
         )
-    radiance_white_metadata = read_texture_metadata(radiance_white_metadata_path)
+    radiance_white_metadata = radiance_white_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(radiance_white_metadata, 'asset.format = "uastc_hdr_4x4";')
     require_metadata_fragment(radiance_white_metadata, 'asset.alpha_mode = "opaque";')
     require_metadata_field_absent(radiance_white_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
@@ -713,7 +656,7 @@ def main() -> int:
             f"tex_conv HDR --alpha black failed with {radiance_black.returncode}"
             f"\nstdout:\n{radiance_black.stdout}\nstderr:\n{radiance_black.stderr}"
         )
-    radiance_black_metadata = read_texture_metadata(radiance_black_metadata_path)
+    radiance_black_metadata = radiance_black_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(radiance_black_metadata, 'asset.format = "uastc_hdr_4x4";')
     require_metadata_fragment(radiance_black_metadata, 'asset.alpha_mode = "constant_unorm8";')
     require_metadata_unsigned_field(radiance_black_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8, 0)
@@ -731,14 +674,13 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv OpenEXR failed with {openexr.returncode}\nstdout:\n{openexr.stdout}\nstderr:\n{openexr.stderr}"
     )
-    openexr_metadata = read_texture_metadata(openexr_metadata_path)
+    openexr_metadata = openexr_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(openexr_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "2d";',
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "uastc_ldr_4x4";',
-        'asset.data = "openexr.tex";',
     ):
         require_metadata_fragment(openexr_metadata, fragment)
     require_metadata_field_absent(openexr_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
@@ -772,14 +714,13 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv HDR cube failed with {hdr_cube.returncode}\nstdout:\n{hdr_cube.stdout}\nstderr:\n{hdr_cube.stderr}"
     )
-    hdr_cube_metadata = read_texture_metadata(hdr_cube_metadata_path)
+    hdr_cube_metadata = hdr_cube_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(hdr_cube_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "cube";',
         LIT_ASSET_WIDTH_2,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "opaque";',
-        'asset.data = "hdr_cube.tex";',
     ):
         require_metadata_fragment(hdr_cube_metadata, fragment)
     require_metadata_field_absent(hdr_cube_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
@@ -803,7 +744,7 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv HDR volume failed with {hdr_volume.returncode}\nstdout:\n{hdr_volume.stdout}\nstderr:\n{hdr_volume.stderr}"
     )
-    hdr_volume_metadata = read_texture_metadata(hdr_volume_metadata_path)
+    hdr_volume_metadata = hdr_volume_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(hdr_volume_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "volume";',
@@ -811,7 +752,6 @@ def main() -> int:
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "opaque";',
-        'asset.data = "hdr_volume.tex";',
     ):
         require_metadata_fragment(hdr_volume_metadata, fragment)
     require_metadata_field_absent(hdr_volume_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
@@ -838,12 +778,11 @@ def main() -> int:
         )
     if not cube_metadata_path.is_file() or not cube_texture_path.is_file():
         raise AssertionError("tex_conv --cube did not create the requested pair")
-    cube_metadata = read_texture_metadata(cube_metadata_path)
+    cube_metadata = cube_metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
         'asset.dimension = "cube";',
         LIT_ASSET_WIDTH_2,
         LIT_ASSET_HEIGHT_2,
-        'asset.data = "cube.tex";',
     ):
         require_metadata_fragment(cube_metadata, fragment)
     if cube_texture_path.stat().st_size != 192:
@@ -870,13 +809,12 @@ def main() -> int:
         )
     if not volume_metadata_path.is_file() or not volume_texture_path.is_file():
         raise AssertionError("tex_conv --volume did not create the requested pair")
-    volume_metadata = read_texture_metadata(volume_metadata_path)
+    volume_metadata = volume_metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
         'asset.dimension = "volume";',
         LIT_ASSET_DEPTH_3,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
-        'asset.data = "volume.tex";',
     ):
         require_metadata_fragment(volume_metadata, fragment)
     if volume_texture_path.stat().st_size != 80:

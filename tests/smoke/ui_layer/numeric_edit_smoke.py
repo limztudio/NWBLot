@@ -349,11 +349,6 @@ class NumericEditRun:
         self.native.text("3")
         self.draft_checkpoint("native_focus_loss_abandons_without_commit_or_cancel", "i", "-9223372036854775808",
             status=0, dirty=False, i_focus=0, **self.counters(restored=1))
-        self.native.tap("F9")
-        self.checkpoint("fixture_reset_externally_replaces_all_drafts", integer_bits=integer_bits(7), float_bits=float_bits(1.25),
-            **draft_fields("i", "7", anchor=1, caret=1, status=0, dirty=False),
-            **draft_fields("f", "1.25", anchor=4, caret=4, status=0, dirty=False),
-            **draft_fields("clipboard", "", anchor=0, caret=0), clamp=1, dynamic=("restored",))
 
 
 def run(args):

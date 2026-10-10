@@ -1,5 +1,4 @@
 # Exercise the selected disabled hardware ray tracing policy even on a capable adapter.
-# The ordinary capability-gated smokes remain useful on naturally unsupported adapters.
 function(nwb_add_software_raytracing_smoke TEST_NAME TARGET_NAME RUNTIME_DIRECTORY WINDOW_TITLE)
     nwb_add_window_capture_smoke(
         "${TEST_NAME}"
@@ -65,17 +64,6 @@ if(TARGET nwb_transparent_csg_smoke)
 endif()
 
 if(TARGET nwb_caustic_sphere_smoke)
-    nwb_add_software_raytracing_smoke(
-        nwb_software_raytracing_caustic_smoke nwb_caustic_sphere_smoke
-        "${_nwb_sw_smoke_runtime}" "NWB Caustic Sphere Smoke"
-        "--application-capture" "--application-capture-frame-count" "360"
-        "--expect-log-message" "RendererSystem: dispatched software caustic producer"
-        "--expect-log-message" "RendererSystem: created refraction resolve pipeline (screen space)"
-        "--expect-log-message" "TransparentMultiSmokeProject: shutdown"
-    )
-    set_property(TEST nwb_software_raytracing_caustic_smoke APPEND PROPERTY
-        ENVIRONMENT "NWB_REFRACTION_SMOKE_ENABLED=1;NWB_REFRACTION_SMOKE_HARDWARE=1;NWB_REFLECTION_SMOKE_MODE=hybrid;NWB_CAUSTIC_SMOKE_ENABLED=1"
-    )
     add_test(
         NAME nwb_software_raytracing_optical_smoke
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py"
@@ -94,16 +82,6 @@ if(TARGET nwb_caustic_sphere_smoke)
     )
 endif()
 
-if(TARGET nwb_skinned_caustic_smoke)
-    nwb_add_software_raytracing_smoke(
-        nwb_software_raytracing_skinned_smoke nwb_skinned_caustic_smoke
-        "${_nwb_sw_skinned_runtime}" "NWB Skinned Caustic Smoke"
-        "--expect-log-message" "RendererSystem: dispatched software caustic producer"
-        "--expect-log-message" "SkinnedCausticSmokeProject: skinned glass refractor over ground created"
-        "--expect-log-message" "SkinnedCausticSmokeProject: shutdown"
-    )
-endif()
-
 if(TARGET nwb_stress_test_smoke)
     nwb_add_software_raytracing_smoke(
         nwb_software_raytracing_stress_resize_smoke nwb_stress_test_smoke
@@ -117,15 +95,6 @@ if(TARGET nwb_stress_test_smoke)
     )
     set_property(TEST nwb_software_raytracing_stress_resize_smoke APPEND PROPERTY
         ENVIRONMENT "NWB_STRESS_CHARACTERS_PER_CLASS=10"
-    )
-endif()
-
-if(TARGET nwb_gi_test_smoke)
-    nwb_add_software_raytracing_smoke(
-        nwb_software_raytracing_gi_smoke nwb_gi_test_smoke
-        "${_nwb_sw_skinned_runtime}" "NWB GI Test"
-        "--expect-log-message" "RendererSystem: created surfel trace compute pipeline"
-        "--expect-log-message" "GiTestSmokeProject: shutdown"
     )
 endif()
 

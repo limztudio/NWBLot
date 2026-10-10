@@ -152,12 +152,10 @@ LIT_MINIMUM_FPS_2 = "minimum_fps"
 LIT_MAIN = "__main__"
 
 
-def shadow_defaults():
-    return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, surfel_gi_resolve_resolution=LIT_QUARTER,
-        shadow_transparent_sampling=LIT_REFERENCE_THREE, shadow_receiver_resolution=LIT_QUARTER,
-        software_shadow_backend=LIT_AUTOMATIC, software_shadow_coverage=LIT_REFERENCE, software_shadow_blocker_search=LIT_REFERENCE_GRID9,
-        software_shadow_capture_cadence=LIT_EVERY_FRAME, software_shadow_budget_mib=256,
-        software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
+def stress_arguments(runtime, extra=()):
+    executable = runtime / LIT_RENDERER_EXE
+    executable.write_bytes(LIT_FIXTURE.encode(LIT_UTF_8))
+    return smoke.parse_args([LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(runtime), LIT_NO_LOGSERVER, *extra])
 
 
 def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0, capture_cadence=0):
@@ -199,6 +197,8 @@ def valid_log(characters_per_class=10):
     lines.append(smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_96)
     for index in range(60):
         lines.append(smoke.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
+    lines.append(smoke.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA
+        + "samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3")
     lines.append(smoke.DONE + LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI)
     lines.append(smoke.SHUTDOWN)
     return "\n\n".join(lines) + "\n"
@@ -697,8 +697,8 @@ class StressWorkloadTests(unittest.TestCase):
 
 class StressMotionTests(unittest.TestCase):
     def test_rotating_launch_removes_inherited_freezes_and_fixed_simulation_time(self):
-        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=None, reflection_diagnostics=False,
-            characters_per_class=10, animate=True, **shadow_defaults())
+        runtime = Path(self.enterContext(TemporaryDirectory()))
+        args = stress_arguments(runtime, [LIT_ANIMATE])
         inherited = {LIT_NWB_STRESS_TEST_SPIN_ANGLE: "1.25", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO: ".25",
             LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "120", LIT_NWB_STRESS_CHARACTERS_PER_CLASS: "5"}
         env = smoke.launch_environment(inherited, args, Path("moving"))
@@ -726,14 +726,16 @@ class StressMeasurementTests(unittest.TestCase):
         self.assertEqual(result[LIT_FPS], 16.)
         self.assertEqual(result["frame_ms"], 62.5)
 
-    def test_optional_pacing_summary_parses_and_rejects_disorder(self):
-        paced = valid_log() + "StressTestSmokeProject: presentation pacing samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3\n"
-        self.assertIsNotNone(smoke.parse_runtime_log(paced, 0)[LIT_PACING])
-        self.assertIsNone(smoke.parse_runtime_log(valid_log(), 0)[LIT_PACING])
-        with self.assertRaises(smoke.SmokeFailure):
-            smoke.parse_measurement(paced.replace("p50ms=62.5 p95ms=70.0", "p50ms=80.0 p95ms=70.0"))
-        with self.assertRaises(smoke.SmokeFailure):
-            smoke.parse_measurement(paced + "StressTestSmokeProject: presentation pacing samples=1 p50ms=1 p95ms=1 maxms=1 stalls50ms=0")
+    def test_current_pacing_summary_requires_exactly_one_ordered_record(self):
+        paced = valid_log()
+        record = next(line for line in paced.splitlines() if line.startswith(smoke.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA))
+        self.assertEqual(smoke.parse_runtime_log(paced, 0)[LIT_PACING]["samples"], 480)
+        missing = paced.replace(record, "")
+        for invalid in (missing, paced + record, missing + record,
+            missing.replace(smoke.START, record + "\n" + smoke.START),
+            paced.replace("p50ms=62.5 p95ms=70.0", "p50ms=80.0 p95ms=70.0")):
+            with self.subTest(log=invalid), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_measurement(invalid)
 
     def test_bad_exit_rejected_even_with_complete_log(self):
         with self.assertRaises(smoke.SmokeFailure):
@@ -781,7 +783,8 @@ class StressMeasurementTests(unittest.TestCase):
                 smoke.parse_measurement(valid_log() + marker)
 
     def test_environment_replaces_inherited_capture_controls(self):
-        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False, **shadow_defaults())
+        runtime = Path(self.enterContext(TemporaryDirectory()))
+        args = stress_arguments(runtime)
         env = smoke.launch_environment({LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: LIT_N_96,
             LIT_NWB_STRESS_TEST_SPIN_ANGLE: "2", LIT_NWB_OTHER: LIT_BAD,
             LIT_NWB_STRESS_REFLECTION_DIAGNOSTICS: "1", LIT_NWB_STRESS_CHARACTERS_PER_CLASS: "5", LIT_PATH: LIT_KEPT}, args, Path("trial"))
@@ -810,9 +813,7 @@ class StressMeasurementTests(unittest.TestCase):
     def test_timeout_preserves_raw_failure_log_and_original_failure(self):
         with TemporaryDirectory() as temporary:
             output = Path(temporary)
-            args = SimpleNamespace(executable=output / "app.exe", working_directory=output,
-                no_logserver=True, logserver_executable=None, application_arg=[], timeout=90,
-                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False, **shadow_defaults())
+            args = stress_arguments(output, ["--timeout", "90"])
             process = Mock()
             process.wait.side_effect = subprocess.TimeoutExpired("app", 90)
             with patch.object(smoke, LIT_IDENTITIES, return_value={}), \

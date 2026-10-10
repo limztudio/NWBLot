@@ -88,7 +88,6 @@ LIT_CI95_MEAN_MS = "ci95_mean_ms"
 LIT_GPU_CONTROLS = "gpu_controls"
 LIT_NWB = "NWB_"
 LIT_NWB_LINUX_BACKEND = "NWB_LINUX_BACKEND"
-LIT_COMPILER_STATISTICS = "compiler_statistics"
 LIT_EXECUTABLE = "executable"
 LIT_VK = "VK_"
 LIT_RENDERER_GATHER_BENCHMARK = "renderer gather benchmark"
@@ -343,7 +342,7 @@ def acquire(args, arm, block, position):
     directory.mkdir(parents=True, exist_ok=False)
     result_path = directory / "samples.jsonl"
     launch = SimpleNamespace(**vars(args), working_directory=arm.runtime, executable=arm.executable)
-    compiler_output = directory / "compiler_statistics.jsonl" if getattr(args, LIT_COMPILER_STATISTICS, False) else None
+    compiler_output = directory / "compiler_statistics.jsonl" if args.compiler_statistics else None
     env = environment(args.frozen_environment, args.workload, args.mode, result_path, compiler_output)
     ab.write_json(directory / "launch.json", {LIT_ARM: asdict(arm) | {LIT_EXECUTABLE: str(arm.executable),
         LIT_RUNTIME: str(arm.runtime), "source_manifest": str(arm.source_manifest)},
@@ -480,7 +479,7 @@ def run(args):
         "gpu_normalization": "sum milliseconds / completed range count inside CPU source window, independently per scope",
         "correctness": "qualify both frozen builds separately; benchmark does not replace visual/native tests",
         "source_policy": "instrumentation and fixture must be present in both builds before freezing them"}
-    if getattr(args, LIT_COMPILER_STATISTICS, False):
+    if args.compiler_statistics:
         plan["compiler_statistics_diagnostic"] = {
             "enabled": True, "file": "<per-trial-directory>/compiler_statistics.jsonl",
             LIT_SCOPE: "existing compiler wall durations; observer cost is included in graphics.render",

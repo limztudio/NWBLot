@@ -359,22 +359,22 @@ def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnosti
     if not math.isclose(sum(row[LIT_SECONDS] for row in intervals), total[LIT_SECONDS], rel_tol=1e-9, abs_tol=1e-9):
         raise SmokeFailure("interval wall times do not match completion")
     pacing = [line for line in lines if line.startswith(LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA)]
-    pacing_summary = None
-    if len(pacing) == 1:
-        pace = re.fullmatch(re.escape(LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA) + r"samples=(\d+) p50ms=(\S+) p95ms=(\S+) maxms=(\S+) stalls50ms=(\d+)", pacing[0])
-        if not pace:
-            raise SmokeFailure("malformed presentation pacing summary")
-        try:
-            samples, p50, p95, maxms, stalls = (int(pace[1]), float(pace[2]), float(pace[3]), float(pace[4]), int(pace[5]))
-        except ValueError as error:
-            raise SmokeFailure("invalid presentation pacing number") from error
-        if samples < 0 or not all(math.isfinite(v) for v in (p50, p95, maxms)) or stalls < 0 or p50 < 0 or p95 < 0 or maxms < 0:
-            raise SmokeFailure("presentation pacing values must be finite and nonnegative")
-        if not p50 <= p95 <= maxms:
-            raise SmokeFailure("presentation pacing percentiles must be ordered p50 <= p95 <= max")
-        pacing_summary = {"samples": samples, "p50ms": p50, "p95ms": p95, "maxms": maxms, "stalls50ms": stalls}
-    elif len(pacing) > 1:
-        raise SmokeFailure("exactly one presentation pacing summary is allowed")
+    if len(pacing) != 1:
+        raise SmokeFailure("exactly one current presentation pacing summary is required")
+    if not max(interval_lines) < lines.index(pacing[0]) < lines.index(completions[0]):
+        raise SmokeFailure("presentation pacing must follow the measured intervals before completion")
+    pace = re.fullmatch(re.escape(LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA) + r"samples=(\d+) p50ms=(\S+) p95ms=(\S+) maxms=(\S+) stalls50ms=(\d+)", pacing[0])
+    if not pace:
+        raise SmokeFailure("malformed presentation pacing summary")
+    try:
+        samples, p50, p95, maxms, stalls = (int(pace[1]), float(pace[2]), float(pace[3]), float(pace[4]), int(pace[5]))
+    except ValueError as error:
+        raise SmokeFailure("invalid presentation pacing number") from error
+    if samples < 0 or not all(math.isfinite(v) for v in (p50, p95, maxms)) or stalls < 0 or p50 < 0 or p95 < 0 or maxms < 0:
+        raise SmokeFailure("presentation pacing values must be finite and nonnegative")
+    if not p50 <= p95 <= maxms:
+        raise SmokeFailure("presentation pacing percentiles must be ordered p50 <= p95 <= max")
+    pacing_summary = {"samples": samples, "p50ms": p50, "p95ms": p95, "maxms": maxms, "stalls50ms": stalls}
     capability = [line for line in lines if line.startswith(LIT_STRESSTESTSMOKEPROJECT_DEVICE_CAPABILI)]
     if len(capability) > 1:
         raise SmokeFailure("exactly one device capability report is allowed")
@@ -424,7 +424,7 @@ def verify_software_shadow_settings(text, args):
 
 
 def verify_csg_profile(text, args):
-    requested = getattr(args, LIT_CSG_PROFILE, LIT_NONE)
+    requested = args.csg_profile
     lines = [line.strip() for line in text.splitlines()]
     records = [line for line in lines if line.startswith(CSG_PROFILE)]
     dispatches = [line for line in lines if line.startswith(CSG_DISPATCH)]
@@ -540,7 +540,7 @@ def launch_environment(base, args, output):
         result["NWB_LINUX_BACKEND"] = "x11"
     result.update(NWB_STRESS_SMOKE_TIMING="1",
         NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
-        NWB_STRESS_CSG_PROFILE=getattr(args, LIT_CSG_PROFILE, LIT_NONE),
+        NWB_STRESS_CSG_PROFILE=args.csg_profile,
         NWB_REFLECTION_SCREEN_STEPS=str(args.reflection_screen_steps),
         NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
         NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage,
@@ -554,7 +554,7 @@ def launch_environment(base, args, output):
         NWB_CAUSTIC_PHOTON_GRID_DIVISOR=str(args.caustic_photon_grid_divisor),
         NWB_SURFEL_GI_RESOLVE_RESOLUTION=args.surfel_gi_resolve_resolution,
         NWB_GPU_TIMING_FILE=str(output / LIT_GPU_TIMING_TXT))
-    if getattr(args, LIT_CPU_DIAGNOSTICS, False):
+    if args.cpu_diagnostics:
         result.update(NWB_STRESS_CPU_DIAGNOSTICS="1", NWB_STRESS_CPU_TIMING_FILE=str(output / LIT_CPU_GPU_TIMING_TXT))
     if not args.animate:
         result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
@@ -590,12 +590,12 @@ def identities(args, helpers):
 
 
 def validate_performance_target_request(args):
-    minimum = getattr(args, LIT_MINIMUM_FPS, None)
+    minimum = args.minimum_fps
     if minimum is None:
         return
     if not math.isfinite(minimum) or minimum <= 0:
         raise SmokeFailure("minimum FPS must be finite and positive")
-    if getattr(args, LIT_CPU_DIAGNOSTICS, False) or getattr(args, "reflection_diagnostics", False):
+    if args.cpu_diagnostics or args.reflection_diagnostics:
         raise SmokeFailure("minimum FPS cannot qualify CPU or reflection diagnostic runs")
 
 
@@ -617,7 +617,7 @@ def acquire(args, output):
     write_json(output / "launch.json", {LIT_EXECUTABLE: str(args.executable), LIT_WORKING_DIRECTORY: str(args.working_directory),
         "application_args": args.application_arg, "timeout_seconds": args.timeout,
         "environment": {key: value for key, value in env.items() if key.startswith((LIT_NWB, "VK_"))},
-        "identity_before": before, LIT_MINIMUM_FPS: getattr(args, LIT_MINIMUM_FPS, None)})
+        "identity_before": before, LIT_MINIMUM_FPS: args.minimum_fps})
     process = logserver = log_directory = None
     baseline, pattern = {}, ""
     collected = False
@@ -639,10 +639,10 @@ def acquire(args, output):
         (output / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
         result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
         result[LIT_CPU_DIAGNOSTICS] = smoke_cpu_gpu_timing.verify_capture(
-            text, output / LIT_CPU_GPU_TIMING_TXT, result[LIT_MEASUREMENT], getattr(args, LIT_CPU_DIAGNOSTICS, False), "stress")
-        result[LIT_DIAGNOSTIC_ONLY] = getattr(args, LIT_CPU_DIAGNOSTICS, False) or args.reflection_diagnostics
+            text, output / LIT_CPU_GPU_TIMING_TXT, result[LIT_MEASUREMENT], args.cpu_diagnostics, "stress")
+        result[LIT_DIAGNOSTIC_ONLY] = args.cpu_diagnostics or args.reflection_diagnostics
         result["performance_qualification"] = not result[LIT_DIAGNOSTIC_ONLY]
-        if getattr(args, LIT_CPU_DIAGNOSTICS, False):
+        if args.cpu_diagnostics:
             write_json(output / LIT_CPU_GPU_SUMMARY_JSON, result[LIT_CPU_DIAGNOSTICS])
         result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
         result[LIT_CSG_PROFILE] = verify_csg_profile(text, args)
@@ -659,7 +659,7 @@ def acquire(args, output):
         after = identities(args, helpers)
         if before != after:
             raise SmokeFailure("renderer, resources, logger, interpreter or helper identity changed during acquisition")
-        result[LIT_PERFORMANCE_TARGET] = performance_target(result[LIT_MEASUREMENT], getattr(args, LIT_MINIMUM_FPS, None))
+        result[LIT_PERFORMANCE_TARGET] = performance_target(result[LIT_MEASUREMENT], args.minimum_fps)
         result.update(schema=1, passed=result[LIT_PERFORMANCE_TARGET][LIT_PASSED] is not False, capture_validated=True,
             exit_code=code, identity_before=before, identity_after=after,
             raw_files={name: file_identity(output / name) for name in (LIT_RUNTIME_LOG, LIT_PROCESS_TAIL_TXT, LIT_GPU_TIMING_TXT, LIT_CPU_GPU_TIMING_TXT, LIT_CPU_GPU_SUMMARY_JSON)

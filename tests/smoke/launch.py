@@ -42,7 +42,6 @@ MSG_SCENE_LINE = "  smoke {name} --backend {{{backends}}}"
 MSG_RAY_BUDGET = "reflection ray budget must be a nonnegative u32"
 TESTING_DIR = "Testing"
 MAIN_ENTRY = "__main__"
-ATTR_REFRACTION_GEOMETRY = "refraction_geometry"
 ATTR_REFLECTION_PREFIX = "reflection_"
 REFLECTION_OPT_TEMPORAL = "temporal"
 REFLECTION_OPT_SPATIAL = "spatial"
@@ -180,29 +179,29 @@ SMOKE_SCENES = {
 
 def build_smoke_environment(args) -> Dict[str, str]:
     env = os.environ.copy()
-    if getattr(args, "refraction_case", None):
+    if args.refraction_case:
         env[ENV_REFRACTION_CASE] = args.refraction_case
-        env[ENV_REFRACTION_GEOMETRY] = ENABLED_VALUE if getattr(args, ATTR_REFRACTION_GEOMETRY, False) else DISABLED_VALUE
-        if getattr(args, ATTR_REFRACTION_GEOMETRY, False):
+        env[ENV_REFRACTION_GEOMETRY] = ENABLED_VALUE if args.refraction_geometry else DISABLED_VALUE
+        if args.refraction_geometry:
             env[ENV_REFRACTION_ENABLED] = "0"
-    elif getattr(args, ATTR_REFRACTION_GEOMETRY, False):
+    elif args.refraction_geometry:
         raise SystemExit("--refraction-geometry requires --refraction-case")
-    if getattr(args, "reflection_case", None):
+    if args.reflection_case:
         env[ENV_REFLECTION_PREFIX + "CASE"] = args.reflection_case
-    if getattr(args, "reflection_mode", None):
+    if args.reflection_mode:
         env[ENV_REFLECTION_PREFIX + "MODE"] = args.reflection_mode
-    if getattr(args, "reflection_debug", None):
+    if args.reflection_debug:
         env[ENV_REFLECTION_PREFIX + "DEBUG"] = args.reflection_debug
-    if getattr(args, "reflection_ray_budget", None) is not None:
+    if args.reflection_ray_budget is not None:
         env[ENV_REFLECTION_PREFIX + "RAY_BUDGET"] = str(args.reflection_ray_budget)
     for option, name in (("roughness", "ROUGHNESS"), ("history_samples", "HISTORY_SAMPLES"),
         ("post_reset_samples", "POST_RESET_SAMPLES"), ("seed", "SEED"), ("optical_queries", "OPTICAL_QUERIES"),
         ("screen_steps", "SCREEN_STEPS"), ("extent", "EXTENT")):
-        value = getattr(args, ATTR_REFLECTION_PREFIX + option, None)
+        value = getattr(args, ATTR_REFLECTION_PREFIX + option)
         if value is not None:
             env[ENV_REFLECTION_PREFIX + name] = str(value)
     for option in (REFLECTION_OPT_TEMPORAL, REFLECTION_OPT_SPATIAL, REFLECTION_OPT_DIAGNOSTICS, "final_state", REFLECTION_OPT_FEEDBACK):
-        value = getattr(args, ATTR_REFLECTION_PREFIX + option, None)
+        value = getattr(args, ATTR_REFLECTION_PREFIX + option)
         if value is not None:
             env[ENV_REFLECTION_PREFIX + option.upper()] = ENABLED_VALUE if value == FLAG_VALUE_ON else DISABLED_VALUE
     if args.spin_angle is not None:

@@ -123,7 +123,7 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
 }
 
-TEST(SkeletonPayload, RebuildChangedHierarchyClearsPreviousChildren){
+TEST(SkeletonPayload, ReplacesParentLinksWithoutRetainingPreviousRelationships){
     SkeletonInputs inputs;
     auto skeletonBuildResult5 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
     ASSERT_TRUE(skeletonBuildResult5);
@@ -133,10 +133,9 @@ TEST(SkeletonPayload, RebuildChangedHierarchyClearsPreviousChildren){
     auto skeletonBuildResult6 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
     ASSERT_TRUE(skeletonBuildResult6);
     inputs.skeleton = Move(*skeletonBuildResult6);
-    EXPECT_EQ(inputs.skeleton.rootJointCount(), s_ExpectedDualCount);
+    EXPECT_EQ(inputs.skeleton.joints()[0u].parentIndex, s_SkeletonInvalidJointIndex);
+    EXPECT_EQ(inputs.skeleton.joints()[s_ThirdElementIndex].parentIndex, s_SkeletonInvalidJointIndex);
     EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, s_ExpectedDualCount);
-    EXPECT_EQ(inputs.skeleton.jointChildRanges()[1u].childCount, 0u);
-    EXPECT_EQ(inputs.skeleton.jointChildRanges()[s_ThirdElementIndex].childCount, 1u);
 }
 
 static void BenchmarkSkeletonBuild(const usize jointCount, const usize iterations){
@@ -167,7 +166,7 @@ static void BenchmarkSkeletonBuild(const usize jointCount, const usize iteration
     EXPECT_EQ(succeeded, iterations);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     ASSERT_EQ(inputs.skeleton.jointCount(), jointCount);
-    EXPECT_EQ(inputs.skeleton.rootJointCount(), 1u);
+    EXPECT_EQ(inputs.skeleton.joints()[0u].parentIndex, s_SkeletonInvalidJointIndex);
     EXPECT_EQ(inputs.skeleton.findJointIndex(inputs.entry.joints.back().name), jointCount - 1u);
     for(usize jointIndex = 1u; jointIndex < jointCount; ++jointIndex)
         EXPECT_EQ(inputs.skeleton.joints()[jointIndex].parentIndex, jointIndex - 1u);

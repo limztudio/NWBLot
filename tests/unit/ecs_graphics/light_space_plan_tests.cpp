@@ -62,7 +62,7 @@ TEST(LightSpacePlan, ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces){
     plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(plan);
     ASSERT_EQ(plan->lightCount, 1u);
-    EXPECT_EQ(plan->lights[0].lightIndex, 0u);
+    EXPECT_EQ(plan->views[0].light[0], 0u);
     EXPECT_EQ(plan->viewCount, 6u);
     EXPECT_EQ(plan->textureResolution, 256u);
     EXPECT_EQ(plan->totalByteSize, pointOnly->totalByteSize);
@@ -100,7 +100,7 @@ TEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEli
     plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(plan);
     ASSERT_EQ(plan->lightCount, 1u);
-    EXPECT_EQ(plan->lights[0].lightIndex, s_ExpectedDualCount);
+    EXPECT_EQ(plan->views[0].light[0], s_ExpectedDualCount);
     EXPECT_EQ(plan->viewCount, 6u);
 }
 
@@ -141,7 +141,7 @@ TEST(LightSpacePlan, RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights){
     plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), directionalEventBytes, 20u);
     ASSERT_TRUE(plan);
     ASSERT_EQ(plan->lightCount, 1u);
-    EXPECT_EQ(plan->lights[0].lightIndex, 1u);
+    EXPECT_EQ(plan->views[0].light[0], 1u);
     EXPECT_EQ(plan->eventByteSize, directionalEventBytes);
     EXPECT_LE(plan->countByteSize, directionalEventBytes);
     EXPECT_LE(plan->viewByteSize, directionalEventBytes);

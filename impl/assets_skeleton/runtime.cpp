@@ -40,54 +40,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAsse
 void Skeleton::setJoints(JointVector&& joints, JointIndexMap&& jointIndices){
     m_joints = Move(joints);
     m_jointIndices = Move(jointIndices);
-    rebuildHierarchy();
-}
-
-void Skeleton::rebuildHierarchy(){
-    m_childRanges.clear();
-    m_childIndices.clear();
-
-    m_childRanges.resize(m_joints.size());
-    if(m_joints.empty())
-        return;
-
-    u32 childCount = 0u;
-    for(const SkeletonJoint& joint : m_joints){
-        if(joint.parentIndex == s_SkeletonInvalidJointIndex || joint.parentIndex >= m_childRanges.size())
-            continue;
-
-        ++m_childRanges[joint.parentIndex].childCount;
-        ++childCount;
-    }
-
-    m_childIndices.resize(childCount);
-
-    u32 firstChild = 0u;
-    for(SkeletonJointChildRange& range : m_childRanges){
-        const u32 rangeChildCount = range.childCount;
-        range.firstChild = firstChild;
-        range.childCount = 0u;
-        firstChild += rangeChildCount;
-    }
-
-    for(u32 jointIndex = 0u; jointIndex < m_joints.size(); ++jointIndex){
-        const u32 parentIndex = m_joints[jointIndex].parentIndex;
-        if(parentIndex == s_SkeletonInvalidJointIndex || parentIndex >= m_childRanges.size())
-            continue;
-
-        SkeletonJointChildRange& parentRange = m_childRanges[parentIndex];
-        m_childIndices[parentRange.firstChild + parentRange.childCount] = jointIndex;
-        ++parentRange.childCount;
-    }
-}
-
-u32 Skeleton::rootJointCount()const noexcept{
-    u32 rootCount = 0u;
-    for(const SkeletonJoint& joint : m_joints){
-        if(joint.parentIndex == s_SkeletonInvalidJointIndex)
-            ++rootCount;
-    }
-    return rootCount;
 }
 
 u32 Skeleton::findJointIndex(const Name jointName)const{
@@ -151,54 +103,11 @@ bool Skeleton::validatePayload()const{
         }
     }
 
-    if(m_childRanges.size() != m_joints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: hierarchy range count does not match joint count"));
-        return false;
-    }
-
-    u32 expectedChildCount = 0u;
-    for(const SkeletonJoint& joint : m_joints){
-        if(joint.parentIndex != s_SkeletonInvalidJointIndex)
-            ++expectedChildCount;
-    }
-    if(m_childIndices.size() != expectedChildCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: hierarchy child index count does not match parent links"));
-        return false;
-    }
-
-    u32 referencedChildCount = 0u;
-    for(u32 jointIndex = 0u; jointIndex < m_childRanges.size(); ++jointIndex){
-        const SkeletonJointChildRange& range = m_childRanges[jointIndex];
-        const u64 rangeEnd = static_cast<u64>(range.firstChild) + static_cast<u64>(range.childCount);
-        if(rangeEnd > m_childIndices.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid child range"), jointIndex);
-            return false;
-        }
-
-        referencedChildCount += range.childCount;
-        for(u32 childOffset = 0u; childOffset < range.childCount; ++childOffset){
-            const u32 childIndex = m_childIndices[range.firstChild + childOffset];
-            if(childIndex >= m_joints.size() || m_joints[childIndex].parentIndex != jointIndex){
-                NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid child {}")
-                    , jointIndex
-                    , childIndex
-                );
-                return false;
-            }
-        }
-    }
-    if(referencedChildCount != expectedChildCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: hierarchy child ranges do not cover parent links"));
-        return false;
-    }
-
     return true;
 }
 
 bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     m_joints.clear();
-    m_childRanges.clear();
-    m_childIndices.clear();
     m_jointIndices.clear();
 
     usize cursor = 0u;
@@ -237,7 +146,6 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         joint.localBindPose = jointBinary.localBindPose;
         m_joints.push_back(joint);
     }
-    rebuildHierarchy();
 
     return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary"))
         && validatePayload()

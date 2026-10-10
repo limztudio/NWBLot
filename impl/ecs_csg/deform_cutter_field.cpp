@@ -62,22 +62,6 @@ SIMDVector CsgDeformCutterField::CapsuleSignedDistanceVec(SIMDVector shapePositi
     return VectorSubtract(Vector3Length(delta), VectorSplatX(parameter0));
 }
 
-f32 CsgDeformCutterField::PlaneSignedDistance(SIMDVector shapePosition, SIMDVector parameter0)noexcept{
-    return VectorGetX(CsgDeformCutterField::PlaneSignedDistanceVec(shapePosition, parameter0));
-}
-
-f32 CsgDeformCutterField::BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0)noexcept{
-    return VectorGetX(CsgDeformCutterField::BoxSignedDistanceVec(shapePosition, parameter0));
-}
-
-f32 CsgDeformCutterField::SphereSignedDistance(SIMDVector shapePosition, SIMDVector parameter0)noexcept{
-    return VectorGetX(CsgDeformCutterField::SphereSignedDistanceVec(shapePosition, parameter0));
-}
-
-f32 CsgDeformCutterField::CapsuleSignedDistance(SIMDVector shapePosition, SIMDVector parameter0)noexcept{
-    return VectorGetX(CsgDeformCutterField::CapsuleSignedDistanceVec(shapePosition, parameter0));
-}
-
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(
     const CsgDeformShape& shape,
     const CsgDeformVertexVector<ScratchArena>& vertices,

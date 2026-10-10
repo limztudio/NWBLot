@@ -522,8 +522,8 @@ def write_report(args, completed, evidence, metrics=None):
 def run_suite(args):
     completed, evidence = [], {}
     try:
-        universe = DIAGNOSTICS_OFF_CAPTURES if getattr(args, "suite", LIT_FEEDBACK_2) == "feedback-diagnostics-off" else CAPTURES
-        selected = getattr(args, "feedback_cases", None)
+        universe = DIAGNOSTICS_OFF_CAPTURES if args.suite == "feedback-diagnostics-off" else CAPTURES
+        selected = args.feedback_cases
         names = set(selected.split(",")) if selected else {spec.name for spec in universe}
         if not names <= {spec.name for spec in universe}:
             raise SmokeFailure("unknown feedback capture name")

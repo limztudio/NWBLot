@@ -576,9 +576,8 @@ def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical
         block[LIT_CANDIDATE][LIT_SCOPES][workload.secondary_scope][LIT_TOTAL_MS] / block[LIT_CANDIDATE][LIT_SCOPES][FRAME][LIT_GPU_SAMPLES]
         - block[LIT_BASELINE][LIT_SCOPES][workload.secondary_scope][LIT_TOTAL_MS] / block[LIT_BASELINE][LIT_SCOPES][FRAME][LIT_GPU_SAMPLES]
         for block in blocks.values()], seed)
-    wall_frame = {"eligible": False, "reason": SYNTHETIC_FRAME_REASON if workload.reflection_policy is None
-        else "omitted: trials contain no qualified callback wall-frame reports"}
-    if workload.reflection_policy is not None and any(trial.get("wall_frame", {}).get("eligible") for trial in trials):
+    wall_frame = {"eligible": False, "reason": SYNTHETIC_FRAME_REASON}
+    if workload.reflection_policy is not None:
         if any(not trial.get("wall_frame", {}).get("eligible") for trial in trials):
             raise SmokeFailure("wall-frame inference requires every planned trial to have qualified reports")
         for trial in trials:

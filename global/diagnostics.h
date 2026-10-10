@@ -465,7 +465,7 @@ NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& rec
     }
 
     DiagnosticEventRecord normalizedRecord = record;
-#if __has_builtin(__builtin_return_address) || defined(__GNUC__)
+#if __has_builtin(__builtin_return_address)
     if(normalizedRecord.instructionPointer == 0u)
         normalizedRecord.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
 #endif

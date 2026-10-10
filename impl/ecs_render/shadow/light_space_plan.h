@@ -48,18 +48,8 @@ struct LightSpaceLightRequest{
     bool eligible = true;
 };
 
-struct LightSpaceLightPlan{
-    u32 lightIndex = 0u;
-    u32 shadowSlot = 0u;
-    u32 firstView = 0u;
-    u32 viewCount = 0u;
-    u32 resolution = 0u;
-    u32 pixelOffset = 0u;
-};
-
 struct LightSpacePlan{
     Array<LightSpaceViewGpu, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> views = {};
-    Array<LightSpaceLightPlan, NWB_SCENE_SHADOW_SLOT_COUNT> lights = {};
     u32 lightCount = 0u;
     u32 viewCount = 0u;
     u32 textureResolution = 0u;

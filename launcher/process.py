@@ -35,7 +35,6 @@ from launcher.constants import (
     MSG_RUN_REQUEST,
     MSG_STOPPED_APP,
     MSG_STOPPING,
-    OPTION_RUN_SECONDS,
     PKILL_COMMAND,
     PKILL_FOLLOW_FLAG,
     PKILL_STDERR_MAX_BYTES,
@@ -151,7 +150,7 @@ class ProcessLauncher:
             if args.detach:
                 return 0
 
-            run_seconds = getattr(args, OPTION_RUN_SECONDS, None)
+            run_seconds = args.run_seconds
             if run_seconds is not None and run_seconds > 0.0:
                 if _facade.host_platform_name() == PLATFORM_WINDOWS:
                     run_result = repository_windows_process.run_bounded_process(

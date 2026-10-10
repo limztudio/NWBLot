@@ -18,7 +18,6 @@ from launcher.constants import (
     MSG_EXECUTABLE_ARTIFACT_REQUIRED,
     MSG_EXECUTABLE_METADATA_REQUIRED,
     MSG_NO_TARGETS,
-    OPTION_WITH_PROFILE,
 )
 
 
@@ -53,7 +52,7 @@ class BuildController:
     @staticmethod
     def build_profile_targets(args, settings: LaunchSettings, env: Dict[str, str]) -> None:
         import launcher as _facade
-        if not getattr(args, OPTION_WITH_PROFILE, False):
+        if not args.with_profile:
             return
         if args.profile_logserver_executable is not None:
             return

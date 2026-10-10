@@ -547,6 +547,29 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertNotIn(LIT_ASYNC_SHADOW_M4_2, tests_launchers)
         self.assertIn(LIT_ASYNC_SHADOW_M4_2, ab_launchers)
 
+    def test_generated_source_copies_do_not_hide_current_authored_launchers(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            category = root / LIT_TESTS
+            authored = (category / LIT_LAUNCH_PY, category / LIT_SMOKE / LIT_LAUNCH_PY,
+                category / "group" / LIT_LAUNCH_PY, category / "group" / "source" / LIT_LAUNCH_PY)
+            generated = tuple(path for artifact in launcher.LAUNCHER_ARTIFACT_DIRECTORIES for path in (
+                category / artifact / LIT_LAUNCH_PY,
+                category / artifact / "frozen" / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,
+                category / LIT_SMOKE / artifact / "old" / LIT_LAUNCH_PY))
+            for path in (*authored, *generated):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("", encoding=LIT_UTF_8)
+            generated_bytes = {path: path.read_bytes() for path in generated}
+
+            direct = launcher.discover_directory_launchers(Path(LIT_TESTS), root)
+            leaves = launcher.discover_repo_launchers(root)
+
+            self.assertEqual({LIT_SMOKE, "group"}, set(direct))
+            self.assertEqual({LIT_SMOKE, "source"}, set(leaves))
+            self.assertEqual(Path(LIT_TESTS) / "group" / "source" / LIT_LAUNCH_PY, leaves["source"].script)
+            self.assertEqual(generated_bytes, {path: path.read_bytes() for path in generated})
+
     def test_duplicate_launch_commands_are_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

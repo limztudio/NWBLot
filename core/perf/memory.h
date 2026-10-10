@@ -167,17 +167,6 @@ public:
         MemorySource::Enum source = MemorySource::ExplicitScope
     )noexcept;
 
-    template<typename Arena>
-    void recordArenaSnapshot(const MemoryScopeId scope, const Arena& arena, const u64 frameIndex)noexcept(noexcept(recordSnapshot(scope, arena.memoryStats(), frameIndex))){
-        recordSnapshot(scope, arena.memoryStats(), frameIndex);
-    }
-
-    // Setup-time helper: registers the scope, then records. Per-frame update/render paths must pre-register scopes and use the MemoryScopeId overload.
-    template<typename Arena>
-    void recordArenaSnapshot(const Name& scopeName, const Arena& arena, const u64 frameIndex){
-        recordSnapshot(registerScope(scopeName), arena.memoryStats(), frameIndex);
-    }
-
     [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const noexcept;
     [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;

@@ -33,10 +33,6 @@ public:
     void beginFrame(u64 frameIndex)noexcept;
     void publishFrame();
 
-    [[nodiscard]] bool enabled()const noexcept{ return m_enabled; }
-    [[nodiscard]] bool cpuTimingEnabled()const noexcept{ return m_cpuTimingEnabled; }
-    [[nodiscard]] bool gpuTimingEnabled()const noexcept{ return m_gpuTimingEnabled; }
-    [[nodiscard]] bool memoryEnabled()const noexcept{ return m_memoryEnabled; }
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
     [[nodiscard]] CaptureOptions captureOptions()const noexcept;
     [[nodiscard]] SessionReport report()const noexcept;
@@ -46,17 +42,7 @@ public:
     [[nodiscard]] TimingView cpuTimingView()const noexcept{ return TimingView(m_cpuTiming); }
     [[nodiscard]] TimingView gpuTimingView()const noexcept{ return TimingView(m_gpuTiming); }
     [[nodiscard]] MemoryView memoryView()const noexcept{ return MemoryView(m_memory); }
-    [[nodiscard]] MemoryScopeId registerMemoryScope(const Name& scopeName);
 
-    template<typename Arena>
-    void recordMemorySnapshot(const MemoryScopeId scope, const Arena& arena)noexcept(noexcept(m_memory.recordArenaSnapshot(scope, arena, m_frameIndex))){
-        if(!captureOptions().memoryActive())
-            return;
-
-        m_memory.recordArenaSnapshot(scope, arena, m_frameIndex);
-    }
-
-    // Registers before recording; per-frame callers must use a scope ID registered during setup.
     template<typename Arena>
     void recordMemorySnapshot(const Name& scopeName, const Arena& arena){
         if(!captureOptions().memoryActive())

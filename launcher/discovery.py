@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ from launcher.constants import (
     COMMAND_PROFILES,
     KIND_CATEGORY,
     KIND_DIRECTORY,
+    LAUNCHER_ARTIFACT_DIRECTORIES,
     LAUNCHER_GLOB_SUFFIX,
     LAUNCHER_SCRIPT_NAME,
     LAUNCHER_SEARCH_ROOTS,
@@ -67,6 +69,16 @@ class LauncherDiscovery:
         return command
 
     @staticmethod
+    def _launcher_scripts(search_path: Path) -> List[Path]:
+        scripts: List[Path] = []
+        for directory, children, files in os.walk(search_path):
+            # Frozen source copies in generated artifacts are not repository launchers.
+            children[:] = sorted(child for child in children if child not in LAUNCHER_ARTIFACT_DIRECTORIES)
+            if LAUNCHER_SCRIPT_NAME in files:
+                scripts.append(Path(directory) / LAUNCHER_SCRIPT_NAME)
+        return sorted(scripts, key=lambda path: path.as_posix())
+
+    @staticmethod
     def discover_directory_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
         """Discover the launchers directly below one router directory."""
         import launcher as _facade
@@ -74,12 +86,13 @@ class LauncherDiscovery:
         search_path = directory if directory.is_absolute() else root / directory
         search_path = search_path.resolve()
 
-        if not search_path.is_dir():
+        if not search_path.is_dir() or search_path.name in LAUNCHER_ARTIFACT_DIRECTORIES:
             return {}
 
         launchers: Dict[str, RepoLauncher] = {}
         for script in sorted(search_path.glob(LAUNCHER_GLOB_SUFFIX), key=lambda path: path.as_posix()):
-
+            if script.parent.name in LAUNCHER_ARTIFACT_DIRECTORIES:
+                continue
             command = _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)
             launcher = _facade.RepoLauncher(command, script.relative_to(root))
             LauncherDiscovery._register_launcher(launchers, launcher)
@@ -115,13 +128,13 @@ class LauncherDiscovery:
         search_path = directory if directory.is_absolute() else root / directory
         search_path = search_path.resolve()
 
-        if not search_path.is_dir():
+        if not search_path.is_dir() or search_path.name in LAUNCHER_ARTIFACT_DIRECTORIES:
             return {}
 
-        scripts = sorted(search_path.rglob(LAUNCHER_SCRIPT_NAME), key=lambda path: path.as_posix())
+        scripts = LauncherDiscovery._launcher_scripts(search_path)
         launchers: Dict[str, RepoLauncher] = {}
         for script in scripts:
-            if any(nested_script != script for nested_script in script.parent.rglob(LAUNCHER_SCRIPT_NAME)):
+            if any(nested_script != script and nested_script.is_relative_to(script.parent) for nested_script in scripts):
                 continue
 
             command = _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)

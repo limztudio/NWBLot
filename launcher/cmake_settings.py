@@ -66,7 +66,6 @@ from launcher.constants import (
     MSG_CMAKE_DEFINE_EMPTY,
     MSG_CMAKE_DEFINE_USAGE,
     MSG_CONFIGURE_REQUIRED,
-    OPTION_WITH_PROFILE,
     OS_WINDOWS,
     PLATFORM_WINDOWS,
     PRESET_ARCH_SEPARATOR,
@@ -202,7 +201,7 @@ class CmakeSettings:
 
     @staticmethod
     def profile_required_defines(args) -> Dict[str, str]:
-        if not getattr(args, OPTION_WITH_PROFILE, False):
+        if not args.with_profile:
             return {}
         return dict(PROFILE_REQUIRED_DEFINES)
 

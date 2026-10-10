@@ -26,31 +26,17 @@
 #if defined(NWB_DEBUG)
 #define NWB_INLINE inline
 #elif defined(NWB_OPTIMIZE) || defined(NWB_FINAL)
-#if __has_attribute(always_inline) || defined(__GNUC__)
+#if __has_attribute(always_inline)
 #define NWB_INLINE inline __attribute__((always_inline))
 #else
 #define NWB_INLINE inline
 #endif
 #endif
 
-#if __has_attribute(noinline) || defined(__GNUC__)
+#if __has_attribute(noinline)
 #define NWB_NOINLINE __attribute__((noinline))
 #else
 #define NWB_NOINLINE
-#endif
-
-#if __has_attribute(vectorcall)
-#define NWB_VECTORCALL __attribute__((vectorcall))
-#else
-#define NWB_VECTORCALL
-#endif
-
-#if __has_attribute(malloc) || defined(__GNUC__)
-#define NWB_ALLOCATOR_PREFIX
-#define NWB_ALLOCATOR_SUFFIX __attribute__((malloc))
-#else
-#define NWB_ALLOCATOR_PREFIX
-#define NWB_ALLOCATOR_SUFFIX
 #endif
 
 

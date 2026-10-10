@@ -21,7 +21,6 @@ from launcher.constants import (
     MSG_PORT_BUSY,
     MSG_PORT_RANGE,
     MSG_POSITIVE_TIMEOUT,
-    OPTION_WITH_PROFILE,
     PROFILE_CLIENT_ADDRESS_FLAG,
     PROFILE_CLIENT_PORT_FLAG,
     PROFILE_LOG_CONNECT_TIMEOUT_SECONDS,
@@ -97,7 +96,7 @@ class ProfileSessionController:
         env: Dict[str, str],
     ) -> Optional[ProfileSession]:
         import launcher as _facade
-        if not getattr(args, OPTION_WITH_PROFILE, False):
+        if not args.with_profile:
             return None
 
         if args.profile_logserver_timeout <= 0.0:

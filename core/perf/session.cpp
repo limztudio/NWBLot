@@ -92,10 +92,6 @@ SessionReport Session::report()const noexcept{
     return report;
 }
 
-MemoryScopeId Session::registerMemoryScope(const Name& scopeName){
-    return m_memory.registerScope(scopeName);
-}
-
 void Session::applyEnabledState()noexcept{
     const CaptureOptions capture = captureOptions();
     m_cpuTiming.setEnabled(capture.cpuTimingActive());

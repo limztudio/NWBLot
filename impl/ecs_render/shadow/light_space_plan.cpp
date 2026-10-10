@@ -67,7 +67,6 @@ Expected<LightSpacePlan> BuildLightSpacePlan(
             || drawArgumentBytes > maxStorageBufferRange || drawArgumentBytes > Limit<u32>::s_Max
         )
             continue;
-        plan.lights[plan.lightCount] = { request.lightIndex, request.shadowSlot, plan.viewCount, viewCount, resolution, plan.totalPixels };
         ++plan.lightCount;
         for(u32 face = 0u; face < viewCount; ++face){
             const u32 viewIndex = plan.viewCount + face;

@@ -350,9 +350,12 @@ class WallFrameEvidenceTests(unittest.TestCase):
         self.assertEqual(value["means"][LIT_CANDIDATE], {"frame_ms": 4, "fps": 250})
         with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_EVERY_PLANNED_TRIAL):
             benchmark.compare_trials(trials[:-1], orders, workload)
-        del trials[0]["wall_frame"]
-        with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial.*qualified reports"):
-            benchmark.compare_trials(trials, orders, workload)
+        for omitted in (1, len(trials)):
+            invalid = copy.deepcopy(trials)
+            for trial in invalid[:omitted]:
+                del trial["wall_frame"]
+            with self.subTest(omitted=omitted), self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial.*qualified reports"):
+                benchmark.compare_trials(invalid, orders, workload)
 
 
 class WorkloadPolicyTests(unittest.TestCase):
@@ -824,7 +827,9 @@ class ReflectionWorkloadTests(unittest.TestCase):
         for trial in trials:
             candidate = trial[LIT_ARM] == LIT_CANDIDATE
             trial["native_hardware_dispatches_per_range"] = 169 if candidate else 1
-            trial[LIT_SCOPES] = scopes(workload, frame_ms=2400 if candidate else 100)
+            frame_ms = 2400 if candidate else 100
+            trial[LIT_SCOPES] = scopes(workload, frame_ms=frame_ms)
+            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": frame_ms, "mean_fps": 1000 / frame_ms}
             hardware = trial[LIT_SCOPES][benchmark.reflection.HARDWARE]
             hardware[LIT_MEAN_MS] = 2351 if candidate else 50
             hardware[LIT_TOTAL_MS] = hardware[LIT_MEAN_MS] * hardware[LIT_GPU_SAMPLES]
@@ -839,7 +844,9 @@ class ReflectionWorkloadTests(unittest.TestCase):
         workload = benchmark.workloads()[LIT_REFLECTION_SCREEN_DEPTH]
         _, orders, trials = trial_matrix()
         for trial in trials:
-            trial[LIT_SCOPES] = scopes(workload, frame_ms=5 if trial[LIT_ARM] == LIT_BASELINE else 4.5)
+            frame_ms = 5 if trial[LIT_ARM] == LIT_BASELINE else 4.5
+            trial[LIT_SCOPES] = scopes(workload, frame_ms=frame_ms)
+            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": frame_ms, "mean_fps": 1000 / frame_ms}
             if trial[LIT_ARM] == LIT_CANDIDATE:
                 trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_MEAN_MS] = .4
                 trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_TOTAL_MS] = .4 * 200 * 10

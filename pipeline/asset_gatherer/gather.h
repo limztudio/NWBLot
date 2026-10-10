@@ -20,13 +20,11 @@ NWB_ASSET_GATHERER_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AssetGatherMergeFunction = Core::Assets::AssetGatherMergeFunction;
-
 struct AssetGatherOptions{
     Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
     Core::Assets::AssetString outputDirectory;
     ACompactString configuration;
-    AssetGatherMergeFunction mergePayloads = nullptr;
+    Core::Assets::AssetGatherMergeFunction mergePayloads = nullptr;
 
     explicit AssetGatherOptions(Core::Assets::AssetArena& arena)
         : inputs(arena)

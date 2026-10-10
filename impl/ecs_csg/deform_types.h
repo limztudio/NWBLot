@@ -131,7 +131,6 @@ inline constexpr f32 s_OneWeight = 1.0f;
 inline constexpr f32 s_AffineW = 1.0f;
 inline constexpr f32 s_ShapeWMask = 0.0f;
 inline constexpr f32 s_NegativeOne = -1.0f;
-inline constexpr Float4 s_UpAxis = Float4(0.0f, 1.0f, 0.0f, 0.0f);
 inline constexpr Float4 s_FallbackTangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
 inline constexpr u32 s_DeformCapacityShift = 20u;
 inline constexpr usize s_MaxDeformVertices = 1u << s_DeformCapacityShift;

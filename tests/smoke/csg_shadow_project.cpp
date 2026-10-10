@@ -43,8 +43,13 @@ using EntityID = NWB::Core::ECS::EntityID;
 
 static constexpr SmokeMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
 static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_caustic/materials/receiver"};
+static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_caustic/materials/glass"};
+#else
 static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_shadow/materials/opaque"};
 static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_shadow/materials/glass"};
+#endif
 static constexpr AStringView s_MaterialInterface = "project/shaders/csg_shadow";
 static constexpr Name s_Groups[] = {
     Name("csg_shadow/opaque_hole"), Name("csg_shadow/opaque_cap"), Name("csg_shadow/glass_depth"),
@@ -123,7 +128,7 @@ private:
         return !m_analyticAtlas || (!m_pointLight && (m_arm == Arm::Cut || m_arm == Arm::Uncut));
     }
 
-    EntityID createBox(const Box& box, const bool transparent){
+    EntityID createBox(const Box& box, const bool transparent, const SmokeMeshRef& mesh = s_CubeMesh){
         const SIMDVector minimum = LoadFloat(box.minimum);
         const SIMDVector maximum = LoadFloat(box.maximum);
         Float4 center;
@@ -131,7 +136,7 @@ private:
         StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
         StoreFloat(VectorSubtract(maximum, minimum), extent);
         const auto entity = CreateTintedStaticMeshEntity(
-            *m_world, m_context.objectArena, s_CubeMesh, transparent ? s_GlassMaterial : s_OpaqueMaterial,
+            *m_world, m_context.objectArena, mesh, transparent ? s_GlassMaterial : s_OpaqueMaterial,
             s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f),
             center, extent
         );
@@ -195,6 +200,17 @@ private:
     }
 
     void createAtlas(){
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        const Box split{ Float3U(-2.0f, -0.7f, -7.0f), Float3U(-0.6f, 0.7f, -5.0f) };
+        const Box cavity{ Float3U(-2.2f, -0.9f, -6.5f), Float3U(-0.4f, 0.9f, -5.5f) };
+        if(m_arm == Arm::Reference)
+            createBox(split, true, SmokeMeshRef{"project/meshes/csg_caustic_split"});
+        else
+            addCaster(split, cavity, 2u, true, false);
+        const Box control{ Float3U(0.6f, -0.7f, -7.0f), Float3U(2.0f, 0.7f, -5.0f) };
+        createBox(control, true);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two"));
+#else
         const f32 xyScale = m_pointLight ? 0.5f : 1.0f;
         for(u32 slot = 0u; slot < 6u; ++slot){
             const f32 x = (static_cast<f32>(slot % 3u) - 1.0f) * 2.0f * xyScale;
@@ -222,6 +238,7 @@ private:
                 addCaster(second, cutter, 5u, true, false);
             }
         }
+#endif
     }
 
     template<typename ParameterT>
@@ -322,7 +339,12 @@ public:
         NWB_FATAL_ASSERT_MSG(lightComponent, NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
         lightComponent->angularRadius = m_finiteLightSource && !m_pointLight ? 0.005f : 0.0f;
         lightComponent->sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        lightComponent->enableCaustics = !ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED");
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent->enableCaustics ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+#else
         lightComponent->enableCaustics = false;
+#endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
             , StringConvert(m_finiteLightSource ? s_FINITE : s_HARD)
             , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)

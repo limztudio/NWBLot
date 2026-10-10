@@ -125,6 +125,32 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
 
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuExternalCompletionId, Core::Alloc::ScratchArena> csgReadCompletions{ scratchArena };
+    if(rayTracingResources.csgTraceContextReadSubmissionTokenCount != 0u){
+        if(!rayTracingResources.csgTraceContextReadSubmissionTokens)
+            return false;
+        csgReadCompletions.reserve(rayTracingResources.csgTraceContextReadSubmissionTokenCount);
+        for(usize index = 0u; index < rayTracingResources.csgTraceContextReadSubmissionTokenCount; ++index){
+            const auto& token = rayTracingResources.csgTraceContextReadSubmissionTokens[index];
+            if(!token.valid())
+                continue;
+            const AString<Core::Alloc::ScratchArena> completionName = StringFormat(
+                scratchArena, "render.raytrace.csg_queue_{}.read_complete", token.physicalQueueIndex
+            );
+            Core::GpuExternalCompletionDesc readCompleteDesc;
+            readCompleteDesc
+                .setIdentity(ToName(completionName))
+                .setMarkerLabel("Prior CSG Ray Read Complete")
+                .setToken(token)
+            ;
+            const Core::GpuExternalCompletionId readComplete = m_deferredLightingTaskGraph.importExternalCompletion(readCompleteDesc);
+            if(!readComplete.valid())
+                return false;
+            csgReadCompletions.push_back(readComplete);
+        }
+    }
+
     const Core::GpuTaskId* const materialContextUploadDependencies = currentBindlessSlotsGraphOwned
         ? &m_deferredBindlessSlotsUploadTask
         : nullptr
@@ -141,6 +167,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         .setMarkerLabel("Ray-Trace Material Context Slots Upload")
         .setScheduling(materialContextUploadScheduling)
         .setDependencies(materialContextUploadDependencies, materialContextUploadDependencyCount)
+        // Old CSG rays read this persistent selector as well as their retained context buffer.
+        .setExternalDependencies(csgReadCompletions.data(), csgReadCompletions.size())
     ;
     m_rayTraceMaterialContextSlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
         materialContextUploadDesc,
@@ -189,18 +217,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     Core::GpuGraphResourceId csgTraceContext;
     if(rayTracingResources.csgTraceContextBuffer){
         Core::GpuGraphResourceDesc contextDesc = BufferResourceDesc(Name("render.raytrace.csg_context"), "Current CSG Ray Context");
-        if(rayTracingResources.csgTraceContextReadSubmissionToken.valid()){
-            Core::GpuExternalCompletionDesc readCompleteDesc;
-            readCompleteDesc
-                .setIdentity(Name("render.raytrace.csg_context_read_complete"))
-                .setMarkerLabel("Prior CSG GI Read Complete")
-                .setToken(rayTracingResources.csgTraceContextReadSubmissionToken)
-            ;
-            const Core::GpuExternalCompletionId readComplete = m_deferredLightingTaskGraph.importExternalCompletion(readCompleteDesc);
-            if(!readComplete.valid())
-                return false;
-            contextDesc.setInitialAvailabilityCompletion(readComplete);
-        }
         csgTraceContext = m_deferredLightingTaskGraph.importBuffer(rayTracingResources.csgTraceContextBuffer, contextDesc);
     }
     const auto csgTraceContextBlob = m_raytracingSystem.retainPreparedCsgTraceContextUpload(m_deferredLightingTaskGraph);
@@ -220,6 +236,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setMarkerLabel("Current CSG Ray Context Upload")
             .setScheduling(csgUploadScheduling)
             .setDependencies(&shadowPrepareDependency, 1u)
+            .setExternalDependencies(csgReadCompletions.data(), csgReadCompletions.size())
         ;
         m_csgTraceContextUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             csgUploadDesc,
@@ -574,7 +591,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         && !m_raytracingSystem.shadowVisibilityHardwareSupported()
     ;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };

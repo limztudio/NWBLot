@@ -23,10 +23,12 @@ void RendererCsgState::invalidateResources(){
     m_receiverSpanBuildComputeShader.reset();
     m_intervalCombineComputeShader.reset();
     m_intervalCapFillPixelShader.reset();
+    m_refractionCapFillPixelShader.reset();
     m_intervalPeelPipeline.reset();
     m_receiverSpanBuildPipeline.reset();
     m_intervalCombinePipeline.reset();
     m_intervalCapFillPipeline.reset();
+    m_refractionCapFillPipeline.reset();
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_clipContextSlotsBuffer.reset();

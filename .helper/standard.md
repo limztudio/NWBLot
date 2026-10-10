@@ -380,7 +380,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 
 ## 9. Performance-oriented conventions
 - Use `constexpr` for static mappings and constants.
-- Keep feature-specific CPU preparation, retained snapshots, resource bindings, diagnostics, and GPU locals conditional on admitted feature work. CSG cap view/sample-state binding belongs only to current opaque CSG work; ordinary scenes must not pay for CSG-only lookup, retention, or dispatch. Compile CSG-only arrays and constants out of ordinary shader variants. Qualify CSG changes with a matched no-CSG scene using CPU/frame time and GPU pass timings, preserving scene, binary/assets, route, capture mode, and settled measurement conditions; unchanged shader output alone does not establish unchanged FPS.
+- Keep feature-specific CPU preparation, retained snapshots, resource bindings, diagnostics, and GPU locals conditional on admitted feature work. CSG cap view/sample-state binding belongs only to admitted current opaque-cap or transparent-refraction-cap consumers; ordinary scenes must not pay for CSG-only lookup, retention, or dispatch. Compile CSG-only arrays and constants out of ordinary shader variants. Qualify CSG changes with a matched no-CSG scene using CPU/frame time and GPU pass timings, preserving scene, binary/assets, route, capture mode, and settled measurement conditions; unchanged shader output alone does not establish unchanged FPS.
 - For compile-time string literals, use `constexpr StringView` rather than `constexpr const char*`:
   - Correct: `constexpr StringView s_Str = "foobar";`
   - Wrong: `constexpr const char* s_Str = "foobar";`

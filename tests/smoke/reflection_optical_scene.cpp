@@ -8,6 +8,9 @@
 #include <global/math/constant.h>
 #include <global/math/convert.h>
 #include <global/math/frame.h>
+#include <impl/ecs_csg/shape_registry.h>
+
+#include "csg_smoke_helpers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +33,10 @@ static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMeshRef s_Box("project/meshes/cube_hard_edges");
 static constexpr SmokeMeshRef s_Disconnected("project/meshes/reflection_disconnected_boxes");
 static constexpr SmokeMeshRef s_Overlapping("project/meshes/reflection_overlapping_boxes");
+static constexpr SmokeMeshRef s_GroupGap("project/meshes/reflection_group_gap");
+static constexpr SmokeMeshRef s_GroupGapSubUlp("project/meshes/reflection_group_gap_sub_ulp");
+static constexpr SmokeMeshRef s_GroupEntry("project/meshes/reflection_group_entry");
+static constexpr SmokeMeshRef s_CsgGroupEntry("project/meshes/reflection_csg_group_entry");
 static constexpr SmokeMeshRef s_Torus("project/meshes/refraction_torus");
 static constexpr SmokeMeshRef s_Prism("project/meshes/reflection_tir_prism");
 static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
@@ -106,6 +113,92 @@ static Core::ECS::EntityID CreateBox(ProjectRuntimeContext& context, Core::ECS::
 static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName){
     if(caseName == "optical_reference")
         return true;
+    if(caseName == "optical_csg_reference")
+        return CreateBox(context, world, -9.5f, 1.f, 1.5f, s_Tinted).valid();
+    if(caseName == "optical_group_entry" || caseName == "optical_csg_group_entry"){
+        // The cutter replaces the final grouped entry with a cap while the preceding positive thin solid remains retained.
+        const bool ordinary = caseName == "optical_group_entry";
+        const auto receiver = CreateBoundary(
+            context, world, ordinary ? s_GroupEntry : s_CsgGroupEntry,
+            Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted
+        );
+        if(!receiver.valid())
+            return false;
+        if(ordinary)
+            return true;
+        const Name group("smoke/reflection/csg_group_entry");
+        AddStaticCsgMeshReceiver(world, receiver, group, false, true);
+        auto cutterEntity = world.createEntity();
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+        cutter.receiverGroup = group;
+        cutter.shapeType = Name("engine/csg/box");
+        Impl::CsgBoxShapeParameters parameters;
+        parameters.halfExtents = Float4(13.f, 10.f, 3.5e-6f, 0.f);
+        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterTransform(cutter, VectorSet(0.f, 1.4f, -9.0000085f, 0.f), QuaternionIdentity());
+        return true;
+    }
+    const bool groupGapSubUlp = caseName == "optical_group_gap_sub_ulp" || caseName == "optical_csg_group_gap_sub_ulp";
+    if(groupGapSubUlp || caseName == "optical_group_gap" || caseName == "optical_csg_group_gap"){
+        // Three closed components hide a positive gap inside a grouped 1 -> 0 -> 1 -> 2 winding sequence.
+        const auto receiver = CreateBoundary(
+            context, world, groupGapSubUlp ? s_GroupGapSubUlp : s_GroupGap,
+            Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted
+        );
+        if(!receiver.valid())
+            return false;
+        if(caseName == "optical_group_gap" || caseName == "optical_group_gap_sub_ulp")
+            return true;
+        const Name group(groupGapSubUlp ? "smoke/reflection/csg_group_gap_sub_ulp" : "smoke/reflection/csg_group_gap");
+        AddStaticCsgMeshReceiver(world, receiver, group, false, true);
+        auto cutterEntity = world.createEntity();
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+        cutter.receiverGroup = group;
+        cutter.shapeType = Name("engine/csg/plane");
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
+        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        return true;
+    }
+    const bool subUlp = caseName == "optical_sub_ulp" || caseName == "optical_csg_sub_ulp";
+    if(subUlp || caseName == "optical_sliver" || caseName == "optical_csg_sliver"){
+        // Positive sub-ULP thickness can round nonincident interfaces to identical ray parameters; Fresnel loss must not disappear.
+        const auto receiver = CreateBox(context, world, -9.f, subUlp ? 4e-7f : 8e-6f, 1.5f, s_Tinted);
+        if(!receiver.valid())
+            return false;
+        if(caseName == "optical_sliver" || caseName == "optical_sub_ulp")
+            return true;
+        const Name group(subUlp ? "smoke/reflection/csg_sub_ulp" : "smoke/reflection/csg_sliver");
+        AddStaticCsgMeshReceiver(world, receiver, group, false, true);
+        auto cutterEntity = world.createEntity();
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+        cutter.receiverGroup = group;
+        cutter.shapeType = Name("engine/csg/plane");
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
+        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        return true;
+    }
+    if(caseName == "optical_csg_cap" || caseName == "optical_csg_cavity"){
+        // Both retain [-10,-9]; the cavity case starts the reflected ray inside the removed receiver volume.
+        const bool cavity = caseName == "optical_csg_cavity";
+        const auto receiver = CreateBox(context, world, cavity ? -3.f : -9.f, cavity ? 14.f : 2.f, 1.5f, s_Tinted);
+        if(!receiver.valid())
+            return false;
+        const Name group("smoke/reflection/csg_optics");
+        AddStaticCsgMeshReceiver(world, receiver, group, false, true);
+        auto cutterEntity = world.createEntity();
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+        cutter.receiverGroup = group;
+        cutter.shapeType = Name("engine/csg/plane");
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(0.f, 0.f, -1.f, -9.f);
+        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        return true;
+    }
     if(caseName == "optical_tir")
         return CreateBoundary(context, world, s_Prism, Float4(0.f, 1.4f, 0.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Clear).valid();
     if(caseName == "optical_inside" || caseName == "optical_inside_nested"){

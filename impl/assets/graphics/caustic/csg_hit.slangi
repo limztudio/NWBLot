@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_CSG_HIT_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_CSG_HIT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_CSG_RAY_STRICT_NORMALS 1
+#include "../raytrace/surface_reconstruct.slangi"
+#include "../csg/ray_collect.slangi"
+#include "../raytrace/csg_surface_hit.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbCausticHit nwbCausticCsgInstanceClosest(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instance,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    const float maximum
+){
+    NwbCausticHit hit = (NwbCausticHit)0;
+    hit.t = maximum;
+    const NwbSwBvhInstance receiver = nwbCsgRayLoadInstance(contextSlot, instance);
+    const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instance, receiver);
+    if(!nwbCsgRayBoundsIntersect(receiver, root, origin, direction, minimum, maximum))
+        return hit;
+    const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(contextSlot, materialSlot, instance, origin, direction, minimum, maximum);
+    hit.failure = geometry.failure;
+    if(hit.failure != 0u || !geometry.hit)
+        return hit;
+    const NwbRayTraceSurfaceHit surface = nwbRayTraceReconstructSurfaceHit(materialSlot, origin, direction, geometry);
+    hit.hit = surface.hit;
+    hit.failure = surface.failure;
+    hit.t = surface.distance;
+    hit.worldPos = surface.position;
+    hit.isRefractive = (surface.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
+    hit.shadingNormal = surface.shadingNormal;
+    hit.ior = surface.surface.refractionIor;
+    hit.transmission = surface.surface.shadowAbsorptionTint;
+    return hit;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

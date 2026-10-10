@@ -77,6 +77,11 @@ RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResour
     resources.instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
     resources.materialTypedBuffer = state.m_shadowMaterialTypedBuffer;
     resources.instanceBuffer = state.m_shadowInstanceBuffer;
+    if(m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+        resources.csgTraceContextBuffer = state.m_csgTraceContextBuffer;
+        resources.csgTraceBoundsBuffers = m_lightSpaceShadow.m_csg.dynamicBounds.data();
+        resources.csgTraceBoundsBufferCount = m_lightSpaceShadow.m_csg.dynamicBounds.size();
+    }
     resources.materialContextSlotsHeapSlot = state.m_rayTraceMaterialContextSlotsHeapHandle.slot();
     resources.hardwareAvailable = true;
     return resources;

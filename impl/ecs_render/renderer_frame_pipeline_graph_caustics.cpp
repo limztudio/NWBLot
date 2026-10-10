@@ -138,7 +138,8 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveUpsampleResourceUses{ scratchArena };
     const bool softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
     constexpr usize s_PhotonResourceUseCapacity = 20u;
-    photonResourceUses.reserve(s_PhotonResourceUseCapacity + (
+    photonResourceUses.reserve(s_PhotonResourceUseCapacity + (rayTracingResources.csgTraceContextBuffer ? 1u : 0u)
+        + rayTracingResources.csgTraceBoundsBufferCount + (
         softwareTraceGeometryStatesGraphOwned
             ? 0u
             : softwareTraceGeometryResourceCount
@@ -395,6 +396,11 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){
                 photonResourceUses.push_back(ReadUse(resource, state));
             }
+        )
+        && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
+            m_deferredLightingTaskGraph, rayTracingResources.csgTraceContextBuffer,
+            rayTracingResources.csgTraceBoundsBuffers, rayTracingResources.csgTraceBoundsBufferCount,
+            [&](const Core::GpuGraphResourceId resource){ photonResourceUses.push_back(ReadUse(resource)); }
         )
     ;
     if(!optionalResourcesImported){

@@ -86,6 +86,9 @@ uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
         crossing.primitive = primitive;
         crossing.barycentrics = query.CandidateTriangleBarycentrics();
         crossing.windingDelta = facing < 0.0 ? 1 : -1;
+#if NWB_CSG_RAY_STRICT_NORMALS
+        crossing.normalAmbiguous = false;
+#endif
         const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, crossing, crossings, crossingCount);
         if(failure != 0u)
             return failure;

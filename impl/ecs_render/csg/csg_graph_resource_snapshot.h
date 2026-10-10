@@ -28,6 +28,7 @@ namespace ECSRenderDetail{
         Core::BufferHandle cutters;
         Core::BufferHandle clipContextSlots;
         Core::BufferHandle intervalSampleState;
+        Core::GraphicsPipelineHandle refractionCapFillPipeline;
         usize receiverRangeCapacity = 0u;
         usize cutterCapacity = 0u;
         Core::GpuDescriptorHandle receiverRangeHeapHandle = Core::GpuDescriptorHandle::Invalid();

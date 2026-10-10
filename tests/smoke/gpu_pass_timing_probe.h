@@ -32,7 +32,6 @@ class GpuPassTimingProbe final{
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
     static constexpr f64 s_ReportIntervalSeconds = 0.5;
-    static constexpr f64 s_MaxMeasuredFrameSeconds = 0.25;
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
     static constexpr int s_TimingFilePrecision = 4;
     static constexpr Name s_Arena{ "tests/smoke/gpu_pass_timing_probe" };
@@ -76,8 +75,6 @@ public:
     void recordFrame(const f32 delta, const Core::Perf::TimingView& gpuTiming){
         const f64 safeDelta = IsFinite(delta) && delta > 0.0f ? static_cast<f64>(delta) : 0.0;
         if(safeDelta <= 0.0)
-            return;
-        if(safeDelta > s_MaxMeasuredFrameSeconds)
             return;
 
         m_elapsedSeconds += safeDelta;

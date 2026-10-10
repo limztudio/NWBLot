@@ -6,15 +6,19 @@
 
 #include <core/common/log.h>
 #include <core/ecs/entity.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/runtime/runtime.h>
+#include <core/telemetry/frame_graph_contributor.h>
 #include <global/math/constant.h>
 #include <global/math/convert.h>
 #include <global/math/frame.h>
 #include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/reflection/timing_names.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_scene/module.h>
 
 #include "framebuffer_capture.h"
@@ -150,6 +154,7 @@ public:
         const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView("offscreen");
         m_feedbackCase = caseName.starts_with("feedback_");
         m_opticalCase = caseName.starts_with("optical_");
+        m_csgOpticalCase = caseName.starts_with("optical_csg_") && caseName != "optical_csg_reference";
         m_extendedCase = m_feedbackCase || m_opticalCase || caseName.starts_with("rough") || caseName.starts_with("temporal_");
         m_opticalTir = caseName == "optical_tir";
         m_furnace = caseName == "rough_furnace";
@@ -182,6 +187,7 @@ public:
         camera.setVerticalFovRadians(s_PI / 3.0f);
         const auto extent = NWB::QueryProjectFrameClientSize();
         camera.setAspectRatio(static_cast<f32>(extent.width) / static_cast<f32>(extent.height));
+        m_csgSliceRayCapacity = Min(m_reflectionSettings.maxHardwareRaysPerFrame, 2u * extent.width * extent.height);
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f
         );
@@ -249,6 +255,7 @@ public:
             && !m_spatialOwnerProbe->update(m_latestStatistics, m_context.gpuTimingView(), m_reflectionSettings)
         )
             return false;
+        reportCsgSlicePackets();
         updateRoughnessScene();
         updateFeedbackScene();
         m_fpsProbe.recordFrame(delta);
@@ -445,6 +452,102 @@ private:
         if(m_opticalCase)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: optical query limit {}"), settings.maxOpticalQueries);
         return true;
+    }
+
+    void reportCsgSlicePackets(){
+        if(!m_csgOpticalCase || !m_reflectionSettings.diagnosticsEnabled)
+            return;
+        const u64 frame = m_context.graphics.getFrameIndex();
+        if(frame < 3u || frame - 1u == m_slicePacketSourceFrame)
+            return;
+        const u64 sourceFrame = frame - 1u;
+        m_slicePacketSourceFrame = sourceFrame;
+        NWB::Core::Telemetry::FrameGraphNodeDescs nodes(m_context.objectArena);
+        NWB::Core::Telemetry::FrameGraphEdgeDescs edges(m_context.objectArena);
+        NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(m_context.objectArena);
+        NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(m_context.objectArena);
+        NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(m_context.objectArena);
+        NWB::Core::Telemetry::FrameGraphBuilder builder(
+            nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame
+        );
+        const bool graphAvailable = m_renderer.appendFrameGraph(builder);
+        const auto primaryGraphics = m_context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
+        u64 planGeneration = 0u;
+        bool runtimePresent = false;
+        for(const auto& node : nodes){
+            if(node.name == Name("ecs_render/frame") && node.runtimeStatistics.present){
+                // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
+                runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
+                planGeneration = node.runtimeStatistics.planGeneration;
+                break;
+            }
+        }
+        const u32 expectedSlices = (m_csgSliceRayCapacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u)
+            / NWB_REFLECTION_TRACE_SLICE_RAYS;
+        Vector<u32, NWB::Core::Telemetry::TelemetryArena> uniquePackets(m_context.objectArena);
+        uniquePackets.reserve(expectedSlices);
+        Vector<Name, NWB::Core::Telemetry::TelemetryArena> sliceIdentities(m_context.objectArena);
+        sliceIdentities.reserve(expectedSlices);
+        for(u32 slice = 0u; slice < expectedSlices; ++slice)
+            sliceIdentities.push_back(NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice));
+        Vector<u8, NWB::Core::Telemetry::TelemetryArena> observedSlices(m_context.objectArena);
+        observedSlices.resize(expectedSlices, 0u);
+        u32 hardwareNodes = 0u;
+        u32 indexedSlices = 0u;
+        u32 compiledNodes = 0u;
+        u32 acceptedPackets = 0u;
+        u32 singleTaskPackets = 0u;
+        u32 graphicsPackets = 0u;
+        for(const auto& node : nodes){
+            if(node.label != "Reflection Hardware Resolve")
+                continue;
+            ++hardwareNodes;
+            u32 sliceIndex = expectedSlices;
+            for(u32 index = 0u; index < expectedSlices; ++index){
+                if(node.name == sliceIdentities[index]){
+                    sliceIndex = index;
+                    break;
+                }
+            }
+            if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
+                continue;
+            observedSlices[sliceIndex] = 1u;
+            ++indexedSlices;
+            if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
+                continue;
+            ++compiledNodes;
+            bool unique = true;
+            for(const u32 packetIndex : uniquePackets){
+                if(packetIndex == node.compiledTask.packetIndex){
+                    unique = false;
+                    break;
+                }
+            }
+            if(unique)
+                uniquePackets.push_back(node.compiledTask.packetIndex);
+            if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid()
+                || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
+                continue;
+            for(const auto& packet : packetStatistics){
+                if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration
+                    || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u
+                    || packet.recoverySubmission)
+                    continue;
+                ++acceptedPackets;
+                if(packet.taskCount == 1u)
+                    ++singleTaskPackets;
+                if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
+                    ++graphicsPackets;
+                break;
+            }
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={}")
+            NWB_TEXT(" graphics_queue={} runtime_present={} ray_capacity={} expected_slices={}")
+            NWB_TEXT(" hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}")
+            , sourceFrame, planGeneration, primaryGraphics.deviceGeneration, primaryGraphics.index, runtimePresent ? 1u : 0u
+            , m_csgSliceRayCapacity, expectedSlices, hardwareNodes, indexedSlices, compiledNodes, uniquePackets.size()
+            , acceptedPackets, singleTaskPackets, graphicsPackets
+        );
     }
 
     void reportReflectionStatistics(){
@@ -650,6 +753,8 @@ private:
     UniquePtr<FramebufferCapture> m_framebufferCapture;
     FpsProbe m_fpsProbe{ NWB_TEXT("ReflectionSmokeProject") };
     GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("ReflectionSmokeProject") };
+    u64 m_slicePacketSourceFrame = Limit<u64>::s_Max;
+    u32 m_csgSliceRayCapacity = 0u;
     u64 m_statisticsSequence = 0u;
     u64 m_statisticsGeneration = 0u;
     NWB::Impl::ReflectionSettings m_reflectionSettings;
@@ -667,6 +772,7 @@ private:
     bool m_feedbackCapture = false;
     bool m_feedbackObservedBypass = false;
     bool m_opticalCase = false;
+    bool m_csgOpticalCase = false;
     bool m_opticalTir = false;
     bool m_furnace = false;
     bool m_glassRoughnessCase = false;

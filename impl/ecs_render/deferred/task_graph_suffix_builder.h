@@ -50,6 +50,7 @@ struct DeferredGraphSuffixInputs{
     Core::GpuTaskId avboitFinalTask;
     Core::GpuTaskId refractionResolveTask;
     Core::GpuTaskId surfelGiTask;
+    Core::GpuTaskId hardwareCausticsTask;
     const Core::AcquiredPresentationFrame* presentationFrame = nullptr;
     const Core::FramebufferDesc* presentationFramebufferDesc = nullptr;
     bool useLaggedLightingHistory = false;

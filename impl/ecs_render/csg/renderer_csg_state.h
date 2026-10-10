@@ -63,10 +63,12 @@ private:
     Core::ShaderHandle m_receiverSpanBuildComputeShader;
     Core::ShaderHandle m_intervalCombineComputeShader;
     Core::ShaderHandle m_intervalCapFillPixelShader;
+    Core::ShaderHandle m_refractionCapFillPixelShader;
     Core::ComputePipelineHandle m_intervalPeelPipeline;
     Core::ComputePipelineHandle m_receiverSpanBuildPipeline;
     Core::ComputePipelineHandle m_intervalCombinePipeline;
     Core::GraphicsPipelineHandle m_intervalCapFillPipeline;
+    Core::GraphicsPipelineHandle m_refractionCapFillPipeline;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_clipContextSlotsBuffer;
@@ -81,7 +83,7 @@ private:
     Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
     bool m_frameStateCacheValid = false;
 };
-static constexpr usize s_RendererCsgStateByteSize = 328u;
+static constexpr usize s_RendererCsgStateByteSize = 360u;
 static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");
 
 

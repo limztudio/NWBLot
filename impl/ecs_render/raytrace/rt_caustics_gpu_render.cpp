@@ -32,8 +32,9 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     NWB_ASSERT(meshView.bindingValid());
     NWB_ASSERT(targets.bindless.valid());
     const f32 temporalDecay = causticTemporalDecay();
+    const auto& pipeline = m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline;
     if(
-        !m_rayTracingState.m_swCausticPipeline
+        !pipeline
         || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         || !causticResolveResourcesReady(targets, temporalDecay)
     )
@@ -65,11 +66,11 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         pushConstants.temporalPhaseCount = temporalPhaseCount;
 
         Core::ComputeState computeState;
-        computeState.setPipeline(m_rayTracingState.m_swCausticPipeline.get());
+        computeState.setPipeline(pipeline.get());
         commandList.setComputeState(computeState);
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         NWB_ASSERT(heap.isInitialized());
-        heap.bindCompute(commandList, *m_rayTracingState.m_swCausticPipeline.get());
+        heap.bindCompute(commandList, *pipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(DivideUp(photonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
         // Advance temporal phase only after recording a producer dispatch.

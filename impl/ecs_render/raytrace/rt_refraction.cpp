@@ -57,13 +57,17 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             return false;
     }
 
+    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto ensurePipeline = [&](const bool hardware) -> bool{
         Core::ComputePipelineHandle& pipeline = hardware
-            ? m_rayTracingState.m_refractionHwPipeline : m_rayTracingState.m_refractionScreenPipeline;
+            ? (csg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline)
+            : m_rayTracingState.m_refractionScreenPipeline;
         Core::ShaderHandle& shader = hardware
-            ? m_rayTracingState.m_refractionHwShader : m_rayTracingState.m_refractionScreenShader;
+            ? (csg ? m_rayTracingState.m_refractionCsgHwShader : m_rayTracingState.m_refractionHwShader)
+            : m_rayTracingState.m_refractionScreenShader;
         bool& failed = hardware
-            ? m_rayTracingState.m_refractionHwPipelineFailed : m_rayTracingState.m_refractionScreenPipelineFailed;
+            ? (csg ? m_rayTracingState.m_refractionCsgHwPipelineFailed : m_rayTracingState.m_refractionHwPipelineFailed)
+            : m_rayTracingState.m_refractionScreenPipelineFailed;
         if(pipeline)
             return true;
         if(failed)
@@ -71,7 +75,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         if(!m_shaderSystem.loadShader<ComputeShader>(
             shader,
             hardware ? AssetsGraphicsRefraction::s_HwResolveShaderName : AssetsGraphicsRefraction::s_ScreenResolveShaderName,
-            Core::ShaderArchive::s_DefaultVariant,
+            hardware ? (csg ? AStringView("NWB_RT_CSG_ENABLED=1") : AStringView("NWB_RT_CSG_ENABLED=0")) : Core::ShaderArchive::s_DefaultVariant,
             hardware ? "ECSRender_RefractionHw" : "ECSRender_RefractionScreen"
         )){
             failed = true;
@@ -122,7 +126,8 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
     resources.viewHeapSlot = view.heapHandle.slot();
     resources.usesHardwareTrace = m_rayTracingState.m_refractionUseHardwareTrace;
     resources.pipeline = resources.usesHardwareTrace
-        ? m_rayTracingState.m_refractionHwPipeline : m_rayTracingState.m_refractionScreenPipeline;
+        ? (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline)
+        : m_rayTracingState.m_refractionScreenPipeline;
     if(resources.usesHardwareTrace){
         resources.sceneTlas = m_rayTracingState.m_tlas;
         resources.tlasHeapHandle = m_rayTracingState.m_tlasHeapHandle;

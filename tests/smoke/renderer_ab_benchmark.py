@@ -117,6 +117,13 @@ SHADOW_PHASES = (LIT_RENDER_SHADOW_VISIBILITY, "render.shadow_opaque_trace",
 SHADOW_INACTIVE = ("render.caustic_photons", "render.caustic_resolve")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 DIMENSIONS = re.compile(r"deferred rendering targets ready \((\d+)x(\d+),")
+FPS_NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?|[-+]?(?:inf|nan)"
+FPS_REPORT = re.compile(r"^ReflectionSmokeProject: fps avg=(?P<fps>" + FPS_NUMBER
+    + r") frame_ms avg=(?P<average>" + FPS_NUMBER + r") min=(?P<minimum>" + FPS_NUMBER
+    + r") max=(?P<maximum>" + FPS_NUMBER + r") frames=(?P<frames>\d+) seconds=(?P<seconds>"
+    + FPS_NUMBER + r")$", re.IGNORECASE)
+WALL_FRAME_POLICY = "finite positive callback deltas, including long frames; excludes invalid or nonpositive deltas; not CPU-only time or presentation cadence"
+SYNTHETIC_FRAME_REASON = "omitted: this workload supplies fixed simulation delta to both FPS and GPU interval probes"
 
 
 @dataclass(frozen=True)
@@ -328,6 +335,7 @@ def workloads():
         ("reflection-rough-filtered", LIT_ROUGH, LIT_HARDWARE, .4, True, True, reflection.SPATIAL),
         ("reflection-screen-depth", "floor", "screen", 0.0, False, False, reflection.DEPTH),
         ("reflection-optical-clear", "optical_clear", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
+        ("reflection-optical-csg-cap", "optical_csg_cap", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
         ("reflection-optical-inside", LIT_OPTICAL_INSIDE, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
     )
     for definition in definitions:
@@ -485,6 +493,46 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding=LIT_UTF_8)
 
 
+def summarize_wall_frames(text, timing_text, workload, report_range):
+    if workload.reflection_policy is None:
+        return {"eligible": False, "reason": SYNTHETIC_FRAME_REASON}
+    start, stop = report_range
+    if start < 0 or stop <= start:
+        raise SmokeFailure("invalid retained wall-frame report range")
+    reports = []
+    for line in text.replace("\r\n", "\n").splitlines():
+        if not line.startswith("ReflectionSmokeProject: fps "):
+            continue
+        match = FPS_REPORT.fullmatch(line)
+        if match is None:
+            raise SmokeFailure("malformed reflection FPS report")
+        values = {field: float(match[field]) for field in ("fps", "average", "minimum", "maximum", "seconds")}
+        frames = int(match["frames"])
+        if frames <= 0 or any(not math.isfinite(value) or value <= 0 for value in values.values()):
+            raise SmokeFailure("invalid reflection FPS report")
+        average = values["seconds"] * 1000 / frames
+        if not (values["minimum"] <= values["average"] <= values["maximum"]) \
+            or not math.isclose(values["average"], average, rel_tol=1e-5, abs_tol=1e-6) \
+            or not math.isclose(values["fps"], frames / values["seconds"], rel_tol=1e-5, abs_tol=1e-6):
+            raise SmokeFailure("inconsistent reflection FPS report")
+        reports.append({**values, "frames": frames})
+    headers = list(reflection.HEADER.finditer(timing_text.replace("\r\n", "\n")))
+    if stop > len(reports) or stop > len(headers):
+        raise SmokeFailure("retained GPU intervals lack matching reflection FPS reports")
+    selected = reports[start:stop]
+    for report, header in zip(selected, headers[start:stop]):
+        if report["frames"] != int(header[1]) \
+            or not math.isclose(report["seconds"], float(header[2]), rel_tol=0, abs_tol=.000051):
+            raise SmokeFailure("reflection FPS and GPU report windows do not match")
+    frames = sum(report["frames"] for report in selected)
+    seconds = sum(report["seconds"] for report in selected)
+    return {"eligible": True, "source": "ReflectionSmokeProject FpsProbe callback delta", "policy": WALL_FRAME_POLICY,
+        "retained_report_range": [start, stop], "reports": len(selected), "frames": frames, "seconds": seconds,
+        "mean_frame_ms": seconds * 1000 / frames, "mean_fps": frames / seconds,
+        "min_frame_ms": min(report["minimum"] for report in selected),
+        "max_frame_ms": max(report["maximum"] for report in selected)}
+
+
 def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical_fraction=.03, control_floor_ms=.015):
     expected = {(block, position, name) for block, row in enumerate(orders) for position, name in enumerate(row)}
     seen = [(trial[LIT_BLOCK], trial[LIT_POSITION], trial[LIT_ARM]) for trial in trials]
@@ -528,7 +576,27 @@ def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical
         block[LIT_CANDIDATE][LIT_SCOPES][workload.secondary_scope][LIT_TOTAL_MS] / block[LIT_CANDIDATE][LIT_SCOPES][FRAME][LIT_GPU_SAMPLES]
         - block[LIT_BASELINE][LIT_SCOPES][workload.secondary_scope][LIT_TOTAL_MS] / block[LIT_BASELINE][LIT_SCOPES][FRAME][LIT_GPU_SAMPLES]
         for block in blocks.values()], seed)
+    wall_frame = {"eligible": False, "reason": SYNTHETIC_FRAME_REASON if workload.reflection_policy is None
+        else "omitted: trials contain no qualified callback wall-frame reports"}
+    if workload.reflection_policy is not None and any(trial.get("wall_frame", {}).get("eligible") for trial in trials):
+        if any(not trial.get("wall_frame", {}).get("eligible") for trial in trials):
+            raise SmokeFailure("wall-frame inference requires every planned trial to have qualified reports")
+        for trial in trials:
+            if any(not math.isfinite(trial["wall_frame"][field]) or trial["wall_frame"][field] <= 0
+                for field in ("mean_frame_ms", "mean_fps")):
+                raise SmokeFailure("invalid trial wall-frame metrics")
+        wall_frame = {"eligible": True, "policy": WALL_FRAME_POLICY,
+            "means": {arm: {"frame_ms": statistics.fmean(block[arm]["wall_frame"]["mean_frame_ms"]
+                for block in blocks.values()), "fps": statistics.fmean(block[arm]["wall_frame"]["mean_fps"]
+                for block in blocks.values())} for arm in (LIT_BASELINE, LIT_CANDIDATE)},
+            "frame_ms_delta": paired_statistics([block[LIT_CANDIDATE]["wall_frame"]["mean_frame_ms"]
+                - block[LIT_BASELINE]["wall_frame"]["mean_frame_ms"] for block in blocks.values()], seed),
+            "fps_delta": {key.replace("_ms", "_fps"): value for key, value in paired_statistics([
+                block[LIT_CANDIDATE]["wall_frame"]["mean_fps"] - block[LIT_BASELINE]["wall_frame"]["mean_fps"]
+                for block in blocks.values()], seed).items()},
+            "comparison": "candidate minus baseline; equal-weight independent blocks with paired bootstrap 95% intervals"}
     return {"status": status, "practical_threshold_ms": threshold, LIT_MEANS_MS: means,
+        "wall_frame": wall_frame,
         "frame": paired[FRAME], LIT_SECONDARY_SCOPE: workload.secondary_scope,
         "secondary": paired[workload.secondary_scope], LIT_CONTROLS: controls, "scope_deltas": paired,
         "secondary_scope_units": "milliseconds per completed mip-reduction range" if workload.secondary_scope == reflection.DEPTH
@@ -599,10 +667,15 @@ def acquire_trial(args, arm, workload, block, position, symbols):
         logs_collected = True
         (directory / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
         signature = workload.validate_log(text, workload, args.require_hardware)
-        finalized = parse_intervals(timing_file.read_text(encoding=LIT_UTF_8), symbols, finalized=True)
+        timing_text = timing_file.read_text(encoding=LIT_UTF_8)
+        finalized = parse_intervals(timing_text, symbols, finalized=True)
         validate_inactive_scopes(summarize_intervals(finalized), workload)
+        report_range = [args.warmup_intervals, args.warmup_intervals + len(selected)]
         return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_REPORTS: len(selected),
-            "retained_report_range": [args.warmup_intervals, args.warmup_intervals + len(selected)],
+            "retained_report_range": report_range,
+            "native_hardware_dispatches_per_range": getattr(args, arm.name + "_hardware_dispatches_per_range")
+                if reflection.HARDWARE in workload.scopes else None,
+            "wall_frame": summarize_wall_frames(text, timing_text, workload, report_range),
             "caustic_warmup_scopes": summarize_intervals(finalized[:args.warmup_intervals]) if workload.validate_log is caustic_log else None,
             LIT_SCOPES: summarize_intervals(selected), LIT_RUNTIME_SIGNATURE: signature,
             LIT_ARTIFACTS: str(directory), "cache_after": cache_identity(arm.runtime)}
@@ -653,8 +726,8 @@ def parse_args(argv=None):
     parser.add_argument("--practical-ms", type=float, default=.02)
     parser.add_argument("--practical-fraction", type=float, default=.03)
     parser.add_argument("--control-floor-ms", type=float, default=.015)
-    parser.add_argument("--baseline-hardware-dispatches-per-range", type=int, choices=(1, 2), default=1)
-    parser.add_argument("--candidate-hardware-dispatches-per-range", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--baseline-hardware-dispatches-per-range", type=int, default=1, help="Submitted native calls per complete hardware timing range; does not change range coverage")
+    parser.add_argument("--candidate-hardware-dispatches-per-range", type=int, default=1, help="Submitted native calls per complete hardware timing range; does not change range coverage")
     parser.add_argument("--namesym", type=Path)
     parser.add_argument("--require-hardware", action=LIT_STORE_TRUE)
     parser.add_argument("--plan-only", action=LIT_STORE_TRUE)
@@ -663,6 +736,11 @@ def parse_args(argv=None):
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     args = parser.parse_args(argv)
     workload = workloads()[args.workload]
+    native_counts = (args.baseline_hardware_dispatches_per_range, args.candidate_hardware_dispatches_per_range)
+    maximum_calls = max(1, min(workload.reflection_policy.ray_budget, 2 * workload.width * workload.height)) \
+        if workload.reflection_policy is not None else 1
+    if any(count <= 0 or count > maximum_calls for count in native_counts):
+        parser.error("native hardware dispatch counts must be positive and cannot exceed the frozen ray population")
     optical = workload.reflection_policy is not None and workload.reflection_policy.family.startswith("optical_")
     if not optical and (args.baseline_hardware_dispatches_per_range != 1 or args.candidate_hardware_dispatches_per_range != 1):
         parser.error("multiple native hardware dispatches per timing range are supported only for optical workloads")
@@ -729,13 +807,14 @@ def run(args):
         "minimum_frame_samples": args.minimum_frame_samples, "timeout_seconds": args.timeout,
         LIT_TIMING_IN_FLIGHT_RANGES: 32, "scope_multipliers": dict(workload.scope_multipliers),
         "inactive_scopes": list(workload.inactive_scopes),
+        "wall_frame_policy": WALL_FRAME_POLICY if workload.reflection_policy is not None else SYNTHETIC_FRAME_REASON,
         LIT_REFLECTION_POLICY: asdict(workload.reflection_policy) if workload.reflection_policy is not None else None,
         "caustic_qualification": qualification,
         "native_hardware_dispatches_per_range": {
             LIT_BASELINE: args.baseline_hardware_dispatches_per_range,
             LIT_CANDIDATE: args.candidate_hardware_dispatches_per_range,
         } if reflection.HARDWARE in workload.scopes else None,
-        "hardware_range_policy": "one completed range per frame; optical variants may record two complementary native dispatches over the same admitted queue; declared counts require separate build qualification and never divide measured time",
+        "hardware_range_policy": "one completed range per frame containing every submitted native call; sliced optical work may include zero-work indirect records beyond the admitted queue; declared submitted counts require separate build qualification and never divide measured time",
         "depth_range_policy": "native mip count ranges per frame; per-range means describe one mip, with total measured mip work per frame reported separately",
         "inactive_scope_policy": "no completed inactive scope in warm-up, retained acquisition, or final shutdown reports",
         "scope_coverage": "completed timing ranges; publication skew bounded by max(2 ranges, 2% of expected), scaled by multiplicity",

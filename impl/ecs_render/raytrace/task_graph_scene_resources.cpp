@@ -78,6 +78,15 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
         result.uses[index + 1u] = RendererTaskGraphDetail::ReadUse(importedBuffers[index], state);
     }
     result.uses[LengthOf(result.uses) - 1u] = RendererTaskGraphDetail::ReadUse(optical.resource);
+    if(resources.csgTraceContextBuffer){
+        result.csgUses = Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>(scratchArena);
+        result.csgUses.reserve(1u + resources.csgTraceBoundsBufferCount);
+        if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
+            graph, resources.csgTraceContextBuffer, resources.csgTraceBoundsBuffers, resources.csgTraceBoundsBufferCount,
+            [&](const Core::GpuGraphResourceId resource){ result.csgUses.push_back(RendererTaskGraphDetail::ReadUse(resource)); }
+        ))
+            return {};
+    }
     return result;
 }
 

@@ -139,7 +139,9 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
         }
         constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
-        hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity + (
+        hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity
+            + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u)
+            + inputs.rayTracingResources->csgTraceBoundsBufferCount + (
             hardwareTraceAttributeStatesGraphOwned ? 0u : inputs.hardwareTraceAttributeResourceCount
         ));
         hardwareGeometryResourceUses.reserve(3u);
@@ -445,6 +447,11 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
                 hardwarePhotonResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
             }
         }
+        optionalResourcesImported = optionalResourcesImported && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
+            m_graph, inputs.rayTracingResources->csgTraceContextBuffer,
+            inputs.rayTracingResources->csgTraceBoundsBuffers, inputs.rayTracingResources->csgTraceBoundsBufferCount,
+            [&](const Core::GpuGraphResourceId resource){ hardwarePhotonResourceUses.push_back(ReadUse(resource)); }
+        );
         if(!optionalResourcesImported){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a hardware-caustics dynamic resource"));
             return MakeUnexpected(Failure{});

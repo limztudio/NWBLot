@@ -390,9 +390,9 @@ def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_ze
         if mode in (LIT_SCREEN, LIT_HYBRID) and not sample[LIT_SCREEN_ATTEMPTS]:
             raise SmokeFailure("stable screen route did not attempt screen tracing")
         if mode in (LIT_HARDWARE, LIT_HYBRID):
-            if not sample[LIT_HARDWARE_AVAILABLE] or not sample[LIT_HARDWARE_READY]:
-                raise SmokeFailure("stable hardware capture has no ready hardware route")
             bounded_queue = min(sample[LIT_CANDIDATES], sample[LIT_EFFECTIVE_BUDGET])
+            if sample[LIT_EFFECTIVE_BUDGET] > 0 and (not sample[LIT_HARDWARE_AVAILABLE] or not sample[LIT_HARDWARE_READY]):
+                raise SmokeFailure("stable hardware capture has no ready hardware route")
             if sample[LIT_HARDWARE_RAYS] > bounded_queue:
                 raise SmokeFailure("ready hardware route exceeded its bounded candidate queue")
             if bounded_queue > 0 and sample[LIT_HARDWARE_RAYS] == 0:
@@ -403,7 +403,7 @@ def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_ze
             raise SmokeFailure("offscreen reflection has no completed hardware hits")
         if case == LIT_FLOOR and mode in (LIT_SCREEN, LIT_HYBRID) and not sample[LIT_SCREEN_HITS]:
             raise SmokeFailure("floor reflection has no accepted screen hits")
-        if budget < DEFAULT_RAY_BUDGET and (sample[LIT_CANDIDATES] <= sample[LIT_EFFECTIVE_BUDGET] or not sample[LIT_FALLBACK_PIXELS]):
+        if budget < DEFAULT_RAY_BUDGET and ((budget > 0 and sample[LIT_CANDIDATES] <= sample[LIT_EFFECTIVE_BUDGET]) or not sample[LIT_FALLBACK_PIXELS]):
             raise SmokeFailure("limited-budget reflection did not exercise excess candidates and fallback")
         stable.append(sample)
     if not stable:

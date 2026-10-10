@@ -101,9 +101,11 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
     };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> reflectionHardwareReads{traceGeometryScratchArena};
-    reflectionHardwareReads.reserve(LengthOf(sceneReads.uses) + 2u);
+    reflectionHardwareReads.reserve(LengthOf(sceneReads.uses) + sceneReads.csgUses.size() + 2u);
     if(sceneReads.valid()){
         for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
+            reflectionHardwareReads.push_back(read);
+        for(const Core::GpuTaskResourceUse& read : sceneReads.csgUses)
             reflectionHardwareReads.push_back(read);
         reflectionHardwareReads.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         reflectionHardwareReads.push_back(ReadUse(lights));
@@ -119,6 +121,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         }
     }
     const ReflectionGraphInputs reflectionInputs{
+        .raytracingSystem = m_raytracingSystem,
         .opaqueDepth = depth,
         .opaqueColor = opaqueColor,
         .surfaceReads = reflectionSurfaceReads, .surfaceReadCount = LengthOf(reflectionSurfaceReads),
@@ -129,7 +132,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         .fallbackDispatchLogged = inputs.fallbackDispatchLogged,
     };
     const ReflectionGraphResult reflectionGraph = DeclareReflectionTasks(
-        m_graph, m_graphics, traceGeometryScratchArena,
+        m_graph, m_graphics, m_reflectionSystem, traceGeometryScratchArena,
         reflectionResources, reflectionInputs, inputs.lightingTask
     );
     if(!reflectionGraph.valid())
@@ -150,7 +153,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
             opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
             avboitForegroundColor, avboitForegroundExtinction
         };
-        refractionUses.reserve(LengthOf(refractionInputs) + 5u + LengthOf(sceneReads.uses));
+        refractionUses.reserve(LengthOf(refractionInputs) + 5u + LengthOf(sceneReads.uses) + sceneReads.csgUses.size());
         for(const auto input : refractionInputs)
             refractionUses.push_back(ReadUse(input));
         refractionUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
@@ -162,6 +165,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         usize refractionSetCount = 0;
         if(refractionResources.usesHardwareTrace){
             for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
+                refractionUses.push_back(read);
+            for(const Core::GpuTaskResourceUse& read : sceneReads.csgUses)
                 refractionUses.push_back(read);
             const Core::GpuGraphResourceSetId sets[] = {
                 hardwareTraceGeometrySet, traceMaterialSampledTextureSet

@@ -81,6 +81,7 @@ public:
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
+    [[nodiscard]] bool prepareRefractionIntervalCapResources(const DeferredFrameTargets& targets);
     void dispatchCsgIntervalPeels(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -106,12 +107,20 @@ public:
         const CsgFrameGpuData& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
     );
+    void renderRefractionIntervalCaps(
+        Core::CommandList& commandList,
+        const DeferredFrameTargets& targets,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const Core::Rect& workRect,
+        const u32* receiverIndices,
+        usize receiverCount
+    );
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
     // Preparation owns CSG buffer growth; draw paths consume after prepass.
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
-    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot()const noexcept;
+    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot(bool retainRefractionCapPipeline)const noexcept;
     // Capture frozen CSG uniform bytes as immutable blobs before native recording.
     [[nodiscard]] Expected<CsgClipContextSlots> prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,

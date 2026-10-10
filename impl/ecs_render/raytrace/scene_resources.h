@@ -39,6 +39,9 @@ struct RayTracingSceneGraphResources{
     Core::BufferHandle instanceMaterialBuffer;
     Core::BufferHandle materialTypedBuffer;
     Core::BufferHandle instanceBuffer;
+    Core::BufferHandle csgTraceContextBuffer;
+    const Core::BufferHandle* csgTraceBoundsBuffers = nullptr;
+    usize csgTraceBoundsBufferCount = 0u;
     RayTracingOpticalSceneSnapshot opticalScene;
     u32 materialContextSlotsHeapSlot = 0u;
     bool hardwareAvailable = false;

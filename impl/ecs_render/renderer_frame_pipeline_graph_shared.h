@@ -88,6 +88,47 @@ struct TraceResourceSetUses{
     usize useCount = 0u;
 };
 
+template<typename AppendBufferFn>
+[[nodiscard]] inline bool AppendCurrentCsgRayGeometry(
+    Core::GpuTaskGraph& graph,
+    const Core::BufferHandle& context,
+    const Core::BufferHandle* bounds,
+    const usize boundsCount,
+    AppendBufferFn&& appendBuffer
+){
+    if(!context)
+        return true;
+    if(boundsCount != 0u && !bounds)
+        return false;
+    const auto appendRead = [&](const Core::BufferHandle& buffer){
+        if(!buffer)
+            return false;
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return false;
+            resource = declarations.findImportedBuffer(buffer);
+        }
+        if(!resource.valid()){
+            resource = graph.importBuffer(
+                buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, "Current CSG Ray Geometry")
+            );
+        }
+        if(!resource.valid())
+            return false;
+        appendBuffer(resource);
+        return true;
+    };
+    if(!appendRead(context))
+        return false;
+    for(usize index = 0u; index < boundsCount; ++index){
+        if(!appendRead(bounds[index]))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline TraceResourceSetUses MakeTraceResourceSetUses(
     const Core::GpuGraphResourceSetId traceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet

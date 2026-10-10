@@ -54,6 +54,7 @@ LIT_EQUIVALENT_WITHIN_TOLERANCE = "equivalent_within_tolerance"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
 LIT_CASE = "case"
 LIT_OPTICAL_CLEAR = "optical_clear"
+LIT_OPTICAL_CSG_CAP = "optical_csg_cap"
 LIT_REFLECTION_RESOLVE = "Reflection resolve: "
 LIT_UTF_8 = "utf-8"
 LIT_EXECUTABLE = "executable"
@@ -372,7 +373,7 @@ def validate_trial_log(text, args, variant):
         "hardware ray budget": str(args.ray_budget), "screen feedback": str(int(variant.feedback)),
         "screen steps": str(args.screen_steps), "timing render unfocused": "1",
         "timing in-flight ranges": str(TIMING_IN_FLIGHT_RANGES), "timing depth mip count": str(args.mip_count)}
-    if args.family == LIT_OPTICAL_CLEAR:
+    if args.family in (LIT_OPTICAL_CLEAR, LIT_OPTICAL_CSG_CAP):
         expected_fields["optical query limit"] = str(args.optical_queries)
     for field, expected in expected_fields.items():
         prefix = "ReflectionSmokeProject: " + field + " "
@@ -600,7 +601,7 @@ def parse_args(argv):
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--working-directory", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
-    parser.add_argument("--family", choices=(LIT_FLOOR, LIT_OFFSCREEN, LIT_ROUGH, LIT_FEEDBACK_LONG_MISS, LIT_OPTICAL_CLEAR), default=LIT_FLOOR)
+    parser.add_argument("--family", choices=(LIT_FLOOR, LIT_OFFSCREEN, LIT_ROUGH, LIT_FEEDBACK_LONG_MISS, LIT_OPTICAL_CLEAR, LIT_OPTICAL_CSG_CAP), default=LIT_FLOOR)
     parser.add_argument("--include-screen", action=LIT_STORE_TRUE)
     parser.add_argument("--include-feedback", action=LIT_STORE_TRUE,
         help="Add a matched Hybrid feedback-on trial; every ordinary route explicitly keeps feedback off.")
@@ -686,7 +687,8 @@ def run(args):
     plan = {"family": args.family, "dimensions": [args.width, args.height], LIT_BLOCKS: args.blocks,
         "workload_role": {LIT_FLOOR: "productive screen reflection", LIT_OFFSCREEN: "offscreen screen-miss control",
             LIT_FEEDBACK_LONG_MISS: "separately qualified costly screen misses", LIT_ROUGH: "rough estimator and filter route costs",
-            LIT_OPTICAL_CLEAR: "bounded secondary transmission through an authored closed clear volume"}[args.family],
+            LIT_OPTICAL_CLEAR: "bounded secondary transmission through an authored closed clear volume",
+            LIT_OPTICAL_CSG_CAP: "retained CSG transmission through an analytic glass wall"}[args.family],
         "qualification": qualification,
         "orders": [[variant.name for variant in row] for row in orders], LIT_EXECUTABLE_IDENTITY: identity,
         LIT_RUNTIME_ASSET_IDENTITY: runtime_identity, "namesym_identity": namesym_identity,

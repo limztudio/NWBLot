@@ -17,6 +17,7 @@
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/pipeline.h>
+#include <core/graphics/gpu_timing.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,9 +50,14 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 struct DeferredFrameTargets;
 
-inline constexpr StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1";
-inline constexpr StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0";
-inline constexpr StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2";
+inline constexpr StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";
+inline constexpr StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=0";
+inline constexpr StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=0";
+inline constexpr StringView s_ReflectionBuildArgsVariant = "NWB_RT_CSG_ENABLED=0";
+inline constexpr StringView s_ReflectionCsgBuildArgsVariant = "NWB_RT_CSG_ENABLED=1";
+inline constexpr StringView s_ReflectionHwCsgOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=1";
+inline constexpr StringView s_ReflectionHwCsgPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=1";
+inline constexpr StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=1";
 
 struct ReflectionFrameParameters{
 #define NWB_REFLECTION_CPU_UINT_FIELD(name, value) u32 name = value;
@@ -122,6 +128,20 @@ struct ReflectionFrameSnapshot{
     }
 };
 
+struct ReflectionCsgDispatchState{
+    ReflectionFrameSnapshot resources;
+    Core::GpuTimingFrameTransaction timing;
+
+    ReflectionCsgDispatchState(const ReflectionFrameSnapshot& frame, Core::GpuTimingRecorder& recorder)
+        : resources(frame)
+        , timing(recorder)
+    {}
+};
+using ReflectionCsgDispatchControl = RefCounter<ReflectionCsgDispatchState>;
+using ReflectionCsgDispatchHandle = RefCountPtr<
+    ReflectionCsgDispatchControl, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>
+>;
+
 class RendererReflectionSystem final : NoCopy{
 public:
     RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);
@@ -130,7 +150,8 @@ public:
 public:
     // Caller joins submitted work and discards snapshots before teardown.
     void invalidateResources();
-    [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, const ReflectionSettings& settings);
+    [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, bool prepareCsgHardware, const ReflectionSettings& settings);
+    [[nodiscard]] ReflectionCsgDispatchHandle createCsgDispatchState(const ReflectionFrameSnapshot& resources)const;
     void pollStatistics();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
@@ -145,7 +166,8 @@ public:
 private:
     void releaseTargets();
     [[nodiscard]] bool prepareQueue(u32 capacity);
-    [[nodiscard]] bool preparePipelines(bool prepareHardware);
+    [[nodiscard]] bool prepareArguments(u32 capacity, bool sliced);
+    [[nodiscard]] bool preparePipelines(bool prepareHardware, bool prepareCsgHardware);
 
 private:
     Core::Alloc::GlobalArena& m_arena;
@@ -157,6 +179,7 @@ private:
     ReflectionFrameSnapshot m_resources;
     Core::BindingLayoutHandle m_bindingLayout;
     Core::BindingLayoutHandle m_depthBindingLayout;
+    Core::BindingLayoutHandle m_csgBindingLayout;
     Core::ShaderHandle m_classifyShader;
     Core::ShaderHandle m_buildArgsShader;
     Core::ShaderHandle m_hardwareShader;
@@ -164,6 +187,14 @@ private:
     Core::ShaderHandle m_unspecifiedHardwareShader;
     Core::ComputePipelineHandle m_plainHardwarePipeline;
     Core::ComputePipelineHandle m_unspecifiedHardwarePipeline;
+    Core::ShaderHandle m_csgBuildArgsShader;
+    Core::ComputePipelineHandle m_csgBuildArgsPipeline;
+    Core::ShaderHandle m_csgHardwareShader;
+    Core::ShaderHandle m_csgPlainHardwareShader;
+    Core::ShaderHandle m_csgUnspecifiedHardwareShader;
+    Core::ComputePipelineHandle m_csgHardwarePipeline;
+    Core::ComputePipelineHandle m_csgPlainHardwarePipeline;
+    Core::ComputePipelineHandle m_csgUnspecifiedHardwarePipeline;
     Core::ShaderHandle m_depthShader;
     static constexpr usize s_ReflectionDescriptorCount = 8u;
     Core::GpuDescriptorHandle m_descriptors[s_ReflectionDescriptorCount];

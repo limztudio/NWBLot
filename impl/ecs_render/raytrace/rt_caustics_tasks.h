@@ -155,8 +155,9 @@ struct SoftwareCausticsGraphTask{
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        static_cast<void>(token);
         ConfirmCausticAccumulatorClears(payload);
+        if(payload.causticProducerDispatched)
+            payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
     }
 
     static void Discarded(Payload& payload){
@@ -212,8 +213,9 @@ struct HardwareCausticsGraphTask{
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        static_cast<void>(token);
         ConfirmCausticAccumulatorClears(payload);
+        if(payload.causticProducerDispatched)
+            payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
     }
 
     static void Discarded(Payload& payload){

@@ -212,7 +212,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
     const ECSRenderDetail::MeshFrameBindingSnapshot frameBindings = m_meshSystem.meshFrameBindingSnapshot();
-    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = m_csgSystem.csgGraphResourceSnapshot();
+    const bool retainRefractionCapPipeline = m_preparedRefractionActive && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
+    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = m_csgSystem.csgGraphResourceSnapshot(retainRefractionCapPipeline);
     const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = frameBindings.meshView;
     if(
         !deferredTargets.valid()
@@ -1485,6 +1486,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .avboitFinalTask = avboitFinalTask,
             .refractionResolveTask = refractionResolveTask,
             .surfelGiTask = m_deferredSurfelGiTask,
+            .hardwareCausticsTask = declaresHardwareCaustics ? m_deferredHardwareCausticsTask : Core::GpuTaskId{},
             .presentationFrame = &presentationFrame,
             .presentationFramebufferDesc = &presentationFramebufferDesc,
             .useLaggedLightingHistory = useLaggedLightingHistory,

@@ -318,6 +318,34 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     return true;
 }
 
+bool RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFrameTargets& targets){
+    if(!targets.avboit.refractionFramebuffer || !m_csgState.m_clipBindingLayout)
+        return false;
+    if(!m_shaderSystem.loadDeferredCompositeVertexShader())
+        return false;
+    if(!m_csgState.m_refractionCapFillPixelShader){
+        if(!m_shaderSystem.loadShader<PixelShader>(
+            m_csgState.m_refractionCapFillPixelShader,
+            AssetsGraphicsCsg::s_RefractionCapFillPixelShaderName,
+            Core::ShaderArchive::s_DefaultVariant,
+            "ECSRender_CsgRefractionCapFillPS"
+        ))
+            return false;
+    }
+    if(!CsgIntervalDetail::CreateIntervalCapFillPipeline(
+        m_graphics.getDevice(),
+        m_csgState.m_refractionCapFillPipeline,
+        m_shaderSystem.deferredCompositeVertexShader(),
+        m_csgState.m_refractionCapFillPixelShader,
+        m_csgState.m_clipBindingLayout,
+        targets.avboit.refractionFramebuffer->getFramebufferInfo()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG refraction cap fill pipeline"));
+        return false;
+    }
+    return true;
+}
+
 bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
     if(!m_meshSystem.meshViewBufferSnapshot().valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));

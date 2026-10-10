@@ -7,6 +7,8 @@
 #include "task_graph_postprocess.h"
 #include "sampling_sequence.h"
 
+#include <impl/ecs_render/raytrace/raytracing_system.h>
+
 #include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
@@ -14,6 +16,8 @@
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/capture/command_ir.h>
+
+#include <global/text_numeric_format.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,11 +167,19 @@ namespace DispatchStage{
     };
 };
 
+struct CsgDispatchParameters{
+#define NWB_REFLECTION_PUSH_CPU_FIELD(name) u32 name = 0u;
+    NWB_REFLECTION_CSG_PUSH_UINT_FIELDS(NWB_REFLECTION_PUSH_CPU_FIELD)
+#undef NWB_REFLECTION_PUSH_CPU_FIELD
+};
+static_assert(sizeof(CsgDispatchParameters) == NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES);
+
 struct DispatchTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     struct Payload{
         Core::GraphicsRuntime& graphics;
+        RendererRayTracingSystem& raytracingSystem;
         ReflectionFrameSnapshot resources;
         DispatchStage::Enum stage;
         ReflectionFeedbackReservation feedbackReservation;
@@ -198,7 +210,13 @@ struct DispatchTask{
             commandList, *pipeline,
             hardware ? resources.scene.tlasHeapHandle : Core::GpuDescriptorHandle::Invalid()
         );
-        commandList.setPushConstants(&resources.frameParametersSlot, sizeof(resources.frameParametersSlot));
+        const bool sliced = resources.scene.csgTraceContextBuffer && (hardware || payload.stage == DispatchStage::BuildArgs);
+        CsgDispatchParameters csgParameters;
+        csgParameters.frameParametersSlot = resources.frameParametersSlot;
+        if(sliced)
+            commandList.setPushConstants(&csgParameters, sizeof(csgParameters));
+        else
+            commandList.setPushConstants(&resources.frameParametersSlot, sizeof(resources.frameParametersSlot));
 
         const Core::GpuTimingScopeDefinition* scope = &ReflectionGpuTimingScope::s_BuildArgs;
         if(hardware)
@@ -227,6 +245,8 @@ struct DispatchTask{
         const bool sceneReady = payload.resources.parameters.hardwareEnabled != 0u
             && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         payload.feedbackReservation.accept(token, sceneReady);
+        if(payload.stage == DispatchStage::Hardware && hardware && payload.resources.scene.csgTraceContextBuffer)
+            payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
         if(payload.stage == DispatchStage::Hardware && hardware){
             if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: hardware"));
@@ -248,6 +268,76 @@ struct DispatchTask{
 
     static void Discarded(Payload& payload){
         payload.feedbackReservation.discard();
+    }
+};
+
+struct CsgHardwareSliceTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
+        .requiredCapabilities = Core::GpuQueueCapability::Compute, .requiresPrimaryGraphicsQueue = true,
+    };
+
+    struct Payload{
+        Core::GraphicsRuntime& graphics;
+        RendererRayTracingSystem& raytracingSystem;
+        ReflectionCsgDispatchHandle dispatch;
+        u32 slice = 0u;
+        u32 sliceCount = 0u;
+        const bool* hardwarePreparationReady = nullptr;
+        bool* hardwareDispatchLogged = nullptr;
+    };
+
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+        if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
+            return true;
+        if(!payload.dispatch || payload.slice >= payload.sliceCount)
+            return false;
+        const ReflectionFrameSnapshot& resources = payload.dispatch->resources;
+        Core::ComputePipeline* const pipeline = resources.hardwarePipeline.get();
+        if(!pipeline || !resources.scene.valid())
+            return false;
+        commandList.endRenderPass();
+        Core::ComputeState state;
+        state.setPipeline(pipeline).setIndirectParams(resources.indirectArgs.get());
+        commandList.setComputeState(state);
+        payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, resources.scene.tlasHeapHandle);
+        CsgDispatchParameters parameters;
+        parameters.frameParametersSlot = resources.frameParametersSlot;
+        parameters.rayOffset = payload.slice * NWB_REFLECTION_TRACE_SLICE_RAYS;
+        commandList.setPushConstants(&parameters, sizeof(parameters));
+        if(
+            payload.slice == 0u
+            && !payload.dispatch->timing.begin(ReflectionGpuTimingScope::s_Hardware, payload.graphics.getDevice(), commandList)
+        )
+            return false;
+
+        commandList.dispatchIndirect(payload.slice * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES);
+        if(payload.slice + 1u == payload.sliceCount)
+            return payload.dispatch->timing.recordEnd(commandList);
+        return true;
+    }
+
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
+            return;
+        // An accepted prefix already reads the frozen context even when a later packet fails.
+        payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
+        if(payload.slice == 0u && !payload.dispatch->timing.confirmBeginSubmission(token)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing begin"));
+            payload.dispatch->timing.discard();
+        }
+        if(payload.slice + 1u == payload.sliceCount && !payload.dispatch->timing.confirmEndSubmission(token, true)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing end"));
+            payload.dispatch->timing.discard();
+        }
+        if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: hardware"));
+            *payload.hardwareDispatchLogged = true;
+        }
+    }
+
+    static void Discarded(Payload& payload){
+        if(payload.dispatch)
+            payload.dispatch->timing.discard();
     }
 };
 
@@ -323,9 +413,18 @@ struct FinalizeTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Name ReflectionCsgHardwareSliceIdentity(const u32 slice){
+    char suffix[11];
+    const AStringView index = FormatI64(static_cast<i64>(slice), suffix);
+    if(index.empty())
+        return {};
+    return DeriveName(s_ReflectionCsgHardwareSliceFamily, index);
+}
+
 ReflectionGraphResult DeclareReflectionTasks(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
+    RendererReflectionSystem& reflectionSystem,
     Core::Alloc::ScratchArena& scratchArena,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
@@ -443,7 +542,7 @@ ReflectionGraphResult DeclareReflectionTasks(
         dependency = graph.addTask<DispatchTask>(
             dispatchDesc,
             DispatchTask::Payload{
-                graphics, resources, stage, Move(dispatchFeedback), inputs.hardwarePreparationReady,
+                graphics, inputs.raytracingSystem, resources, stage, Move(dispatchFeedback), inputs.hardwarePreparationReady,
                 inputs.hardwareDispatchLogged, inputs.fallbackDispatchLogged,
             }
         );
@@ -492,7 +591,32 @@ ReflectionGraphResult DeclareReflectionTasks(
         uses.push_back(ReadWriteUse(result.counters, Core::ResourceStates::UnorderedAccess));
         uses.push_back(ReadWriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess));
         uses.push_back(ReadWriteUse(result.glassRadiance, Core::ResourceStates::UnorderedAccess));
-        if(!appendDispatch(Name("render.reflection.hardware"), "Reflection Hardware Resolve", DispatchStage::Hardware))
+        if(resources.scene.csgTraceContextBuffer){
+            const ReflectionCsgDispatchHandle dispatch = reflectionSystem.createCsgDispatchState(resources);
+            if(!dispatch)
+                return {};
+            const u32 rayCapacity = Min(resources.parameters.maxHardwareRays, resources.parameters.queueCapacity);
+            const u32 sliceCount = (rayCapacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS;
+            // Separate native packets let the driver retire bounded work; shared UAV state also orders CPU recording.
+            for(u32 slice = 0u; slice < sliceCount; ++slice){
+                Core::GpuTaskDesc sliceDesc = TaskDesc(ReflectionCsgHardwareSliceIdentity(slice), "Reflection Hardware Resolve", dependency);
+                Core::GpuTaskSchedulingHint scheduling;
+                scheduling.forceSubmissionBoundary = true;
+                scheduling.allowPacketMerge = false;
+                sliceDesc.setScheduling(scheduling).setResourceUses(uses.data(), uses.size());
+                sliceDesc.setResourceSetUses(inputs.hardwareSetReads, inputs.hardwareSetReadCount);
+                sliceDesc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
+                dependency = graph.addTask<CsgHardwareSliceTask>(sliceDesc,
+                    CsgHardwareSliceTask::Payload{
+                        graphics, inputs.raytracingSystem, dispatch, slice, sliceCount,
+                        inputs.hardwarePreparationReady, inputs.hardwareDispatchLogged,
+                    }
+                );
+                if(!dependency.valid())
+                    return {};
+            }
+        }
+        else if(!appendDispatch(Name("render.reflection.hardware"), "Reflection Hardware Resolve", DispatchStage::Hardware))
             return {};
     }
 

@@ -1,0 +1,164 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_CSG_SURFACE_HIT_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_CSG_SURFACE_HIT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "surface_reconstruct.slangi"
+#include "../csg/ray_collect.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if NWB_CSG_RAY_STRICT_NORMALS
+bool nwbRayTraceCsgCutterNormalUnique(const NwbCsgRayCutter cutter, const float3 worldPosition){
+    if(cutter.shapeType != NWB_CSG_RAY_SHAPE_BOX)
+        return true;
+    const float4 point = float4(worldPosition, 1.0);
+    const float3 local = float3(dot(cutter.worldToShapeRow0, point), dot(cutter.worldToShapeRow1, point), dot(cutter.worldToShapeRow2, point));
+    const float3 q = abs(local) - cutter.parameter0.xyz;
+    const float3 error = 8.0 * 1.1920928955078125e-7 * (abs(cutter.parameter0.xyz) + float3(
+        dot(abs(cutter.worldToShapeRow0), abs(point)),
+        dot(abs(cutter.worldToShapeRow1), abs(point)),
+        dot(abs(cutter.worldToShapeRow2), abs(point))
+    ));
+    const float maximum = max(q.x, max(q.y, q.z));
+    const float tolerance = 2.0 * max(error.x, max(error.y, error.z));
+    // Box edges/corners have valid removed-solid membership but no unique transmitted cap normal.
+    const uint faceCount = uint(q.x >= maximum - tolerance) + uint(q.y >= maximum - tolerance) + uint(q.z >= maximum - tolerance);
+    return faceCount == 1u;
+}
+#endif
+
+// Optical bootstrap, tie checks and continuations share one collection body instead of duplicating its bounded crossing arrays at every call site.
+[noinline]
+NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    const float maximum
+){
+    const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum);
+    NwbRayTraceGeometryHit geometry = (NwbRayTraceGeometryHit)0;
+    geometry.queryCount = 1u;
+    geometry.distance = maximum;
+    geometry.instance = instanceIndex;
+    geometry.cutter = NWB_CSG_RAY_INVALID_INDEX;
+    geometry.failure = boundary.failure;
+#if NWB_CSG_RAY_STRICT_NORMALS
+    if(boundary.hit && boundary.normalAmbiguous)
+        geometry.failure |= NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
+#endif
+    if(geometry.failure != 0u){
+        geometry.hit = true;
+        geometry.distance = minimum;
+        return geometry;
+    }
+    if(!boundary.hit)
+        return geometry;
+    geometry.hit = true;
+    geometry.primitive = boundary.primitive;
+    geometry.cutter = boundary.cutter;
+    geometry.distance = boundary.distance;
+    geometry.barycentrics = boundary.barycentrics;
+    const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+    geometry.worldToObject = nwbCsgRayWorldToObject(instance);
+    if(boundary.cutter != NWB_CSG_RAY_INVALID_INDEX){
+#if NWB_CSG_RAY_STRICT_NORMALS
+        const NwbCsgRayCutter cutter = nwbCsgRayLoadCutter(contextSlot, boundary.cutter);
+        const float3 worldPosition = origin + direction * boundary.distance;
+        if(!nwbRayTraceCsgCutterNormalUnique(cutter, worldPosition)){
+            geometry.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
+            geometry.distance = minimum;
+            return geometry;
+        }
+#endif
+        if(!nwbCsgRayBoundaryNormal(contextSlot, boundary, origin + direction * boundary.distance, geometry.geometricNormal)){
+            geometry.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+            geometry.distance = minimum;
+            return geometry;
+        }
+#if NWB_CSG_RAY_STRICT_NORMALS
+        const uint4 range = nwbCsgRayReceiverRange(contextSlot, instanceIndex);
+        for(uint index = 0u; index < range.y; ++index){
+            const uint cutterIndex = range.x + index;
+            if(cutterIndex == boundary.cutter)
+                continue;
+            const NwbCsgRayCutter other = nwbCsgRayLoadCutter(contextSlot, cutterIndex);
+            float2 interval;
+            if(!nwbCsgAnalyticCutterInterval(other.shapeType, other.worldToShapeRow0, other.worldToShapeRow1, other.worldToShapeRow2,
+                other.parameter0, origin, direction, interval
+            )){
+                geometry.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+                geometry.distance = minimum;
+                return geometry;
+            }
+            if(interval.y <= interval.x || interval.y <= 0.0
+                || (!nwbCsgRaySameDistance(interval.x, boundary.distance) && !nwbCsgRaySameDistance(interval.y, boundary.distance)))
+                continue;
+            float3 normal;
+            if(!nwbRayTraceCsgCutterNormalUnique(other, worldPosition)
+                || !nwbCsgAnalyticCutterNormal(other.shapeType, other.worldToShapeRow0, other.worldToShapeRow1, other.worldToShapeRow2,
+                    other.parameter0, worldPosition, normal
+                )
+                || dot(normal, geometry.geometricNormal) < 1.0 - 8.0 * 1.1920928955078125e-7){
+                // Coincident cutter endpoints may share a normal; distinct normals form an unresolved union crease.
+                geometry.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
+                geometry.distance = minimum;
+                return geometry;
+            }
+        }
+#endif
+    }
+    else{
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
+        geometry.geometricNormal = nwbRayTraceTriangleGeometricNormal(material, boundary.primitive, geometry.worldToObject);
+    }
+    geometry.frontFace = dot(geometry.geometricNormal, direction) < 0.0;
+    return geometry;
+}
+
+void nwbRayTraceCsgClosestGeometryHit(
+    const uint contextSlot,
+    const uint materialSlot,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    inout NwbRayTraceGeometryHit closest
+){
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    for(uint index = 0u; index < activeCount; ++index){
+        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+        const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
+        if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, closest.distance))
+            continue;
+        const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, closest.distance);
+        const uint queries = closest.queryCount + geometry.queryCount;
+        if(geometry.hit)
+            closest = geometry;
+        closest.queryCount = queries;
+        if(closest.failure != 0u)
+            return;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

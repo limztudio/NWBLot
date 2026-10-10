@@ -9,6 +9,75 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if NWB_CSG_RAY_STRICT_NORMALS
+// A crossing group can hide an exit/entry while preserving solid membership. Optical transport must reject lost interfaces rather than admit radiance without their Fresnel loss.
+float nwbCsgRayCollapsedOpticalBoundary(
+    __constref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
+    const uint crossingCount,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const int initialWinding,
+    const float minimum,
+    const float maximum,
+    __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
+    const uint cutCount
+){
+    uint first = 0u;
+    int winding = initialWinding;
+    while(first < crossingCount){
+        const uint groupBegin = first;
+        const float distance = crossings[first].distance;
+        const int initialGroupWinding = winding;
+        int negativeDelta = 0;
+        int positiveDelta = 0;
+        do{
+            negativeDelta += min(crossings[first].windingDelta, 0);
+            positiveDelta += max(crossings[first].windingDelta, 0);
+            ++first;
+        }while(first < crossingCount && nwbCsgRaySameDistance(distance, crossings[first].distance));
+        winding += negativeDelta + positiveDelta;
+        if(first - groupBegin <= 1u)
+            continue;
+        // Distinct FP32 parameters inside one uncertainty group do not prove the order of its solid transitions.
+        if(
+            initialGroupWinding + negativeDelta > 0 || initialGroupWinding + positiveDelta < 0
+            || ((initialGroupWinding == 0 || winding == 0) && (negativeDelta == 0 || positiveDelta == 0))
+        )
+            continue;
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
+        bool tangent = true;
+        for(uint index = groupBegin + 1u; index < first; ++index){
+            if(!nwbRayTraceIncidentBoundary(material, crossings[groupBegin].primitive, crossings[groupBegin].barycentrics,
+                crossings[index].primitive, crossings[index].barycentrics
+            )){
+                tangent = false;
+                break;
+            }
+        }
+        if(tangent)
+            continue;
+        const float2 segment = float2(max(distance, minimum), min(crossings[first - 1u].distance, maximum));
+        if(
+            segment.y <= segment.x
+            && (crossings[first - 1u].distance != distance || distance <= minimum || distance >= maximum)
+        )
+            continue;
+        // A nonzero unresolved span must be certified completely removed, including cutter gaps and cropped ray intervals.
+        const float margin = 8.0 * 1.1920928955078125e-7 * max(max(abs(segment.x), abs(segment.y)), 1e-4);
+        bool removed = false;
+        for(uint index = 0u; index < cutCount; ++index){
+            if(nwbCsgRayCutCoversSegment(cuts[index].distance, segment, margin)){
+                removed = true;
+                break;
+            }
+        }
+        if(!removed)
+            return segment.x;
+    }
+    return maximum;
+}
+#endif
+
 // Closed crossings extend to the receiver's far exit; open surfaces compete only inside the caller's hit range.
 NwbCsgRayBoundary nwbCsgRayResolveBoundary(
     const uint contextSlot,
@@ -54,6 +123,10 @@ NwbCsgRayBoundary nwbCsgRayResolveBoundary(
     openVisitor.boundary.distance = maximum;
     openVisitor.boundary.primitive = NWB_CSG_RAY_INVALID_INDEX;
     openVisitor.boundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
+#if NWB_CSG_RAY_STRICT_NORMALS
+    openVisitor.materialSlot = materialSlot;
+    openVisitor.instanceIndex = instanceIndex;
+#endif
     result.failure = nwbCsgRayCollectCrossings(
         contextSlot, materialSlot, instanceIndex, range.w, origin, direction, minimum, maximum,
         cuts, cutCount, crossings, crossingCount, openVisitor
@@ -64,13 +137,27 @@ NwbCsgRayBoundary nwbCsgRayResolveBoundary(
     result.failure = nwbCsgRayBeginSolidWalk(crossings, crossingCount, localOrigin, root, iterator);
     if(result.failure != 0u)
         return result;
+#if NWB_CSG_RAY_STRICT_NORMALS
+    const float collapsedBoundary = nwbCsgRayCollapsedOpticalBoundary(crossings, crossingCount, materialSlot, instanceIndex, iterator.winding, minimum, maximum, cuts, cutCount);
+#endif
     const float boundaryMaximum = openVisitor.boundary.hit ? openVisitor.boundary.distance : maximum;
     NwbCsgRayBoundary nearBoundary;
     NwbCsgRayBoundary farBoundary;
     while(nwbCsgRayNextSolidSpan(crossings, crossingCount, iterator, nearBoundary, farBoundary)){
-        if(nwbCsgRaySubtractSpan(nearBoundary, farBoundary, cuts, cutCount, minimum, boundaryMaximum, result))
+        if(nwbCsgRaySubtractSpan(nearBoundary, farBoundary, cuts, cutCount, minimum, boundaryMaximum, result)){
+#if NWB_CSG_RAY_STRICT_NORMALS
+            if(collapsedBoundary <= result.distance)
+                result.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
+#endif
             return result;
+        }
     }
+#if NWB_CSG_RAY_STRICT_NORMALS
+    if(collapsedBoundary < maximum && collapsedBoundary <= openVisitor.boundary.distance){
+        result.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
+        return result;
+    }
+#endif
     return openVisitor.boundary;
 }
 

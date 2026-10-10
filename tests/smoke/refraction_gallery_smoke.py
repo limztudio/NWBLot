@@ -48,6 +48,14 @@ LIT_APPEND = "append"
 
 
 CASES = {
+    "csg_reference": ("Retained slab reference", "An ordinary glass slab occupies z=0 through z=1.",
+        "Its entry, exit and material match the retained solid in the CSG cap case."),
+    "csg_cap": ("Generated glass entry", "A plane removes the front half of a glass box, leaving z=0 through z=1.",
+        "The generated wall must retain the reference slab's refraction direction and physical absorption path."),
+    "csg_middle": ("Generated entry and exit", "Two planes retain only the middle z=0 through z=1 of a larger glass box.",
+        "Both visible-ray receiver triangles are removed; generated walls must still admit the retained glass primary."),
+    "csg_uncut": ("Uncut thickness control", "The original glass box retains its full z=-1 through z=1 thickness.",
+        "This control must differ from the carved slab so an original-triangle trace cannot pass the comparison."),
     LIT_SINGLE: ("Single solid", "A single closed glass volume in front of the stripe wall.",
         "The baseline supported case: one primary entry and exit. Compare the bent background with the straight red foreground panel."),
     "separate": ("Separate objects", "Distinct glass objects with separate visible silhouettes.",

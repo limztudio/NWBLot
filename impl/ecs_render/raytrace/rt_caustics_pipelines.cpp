@@ -20,16 +20,20 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::ensureSwCausticPipeline(){
-    if(m_rayTracingState.m_swCausticPipeline)
+    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    auto& shader = csg ? m_rayTracingState.m_swCausticCsgShader : m_rayTracingState.m_swCausticShader;
+    auto& pipeline = csg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline;
+    auto& failed = csg ? m_rayTracingState.m_swCausticCsgPipelineFailed : m_rayTracingState.m_swCausticPipelineFailed;
+    if(pipeline)
         return true;
-    if(m_rayTracingState.m_swCausticPipelineFailed)
+    if(failed)
         return false;
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software caustics require the initialized global descriptor heap"));
-        m_rayTracingState.m_swCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
 
@@ -42,24 +46,24 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         m_rayTracingState.m_swCausticBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_swCausticBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic binding layout"));
-            m_rayTracingState.m_swCausticPipelineFailed = true;
+            failed = true;
             return false;
         }
     }
 
     if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_swCausticShader,
+        shader,
         AssetsGraphicsCaustic::s_SwPhotonShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
+        csg ? "NWB_RT_CSG_ENABLED=1" : "NWB_RT_CSG_ENABLED=0",
         "ECSRender_SwCausticPhotons"
     )){
-        m_rayTracingState.m_swCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(m_rayTracingState.m_swCausticShader)
+        .setComputeShader(shader)
         .addBindingLayout(m_rayTracingState.m_swCausticBindingLayout)
     ;
     // Global heap layouts occupy their fixed sets.
@@ -67,10 +71,10 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    m_rayTracingState.m_swCausticPipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_swCausticPipeline){
+    pipeline = device.createComputePipeline(pipelineDesc);
+    if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic compute pipeline"));
-        m_rayTracingState.m_swCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
     return true;
@@ -291,19 +295,23 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureCausticRtPipeline(){
-    if(m_rayTracingState.m_hwCausticPipeline && m_rayTracingState.m_hwCausticShaderTable)
+    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    auto& cachedPipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
+    auto& cachedTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
+    auto& failed = csg ? m_rayTracingState.m_hwCausticCsgPipelineFailed : m_rayTracingState.m_hwCausticPipelineFailed;
+    if(cachedPipeline && cachedTable)
         return true;
-    if(m_rayTracingState.m_hwCausticPipeline || m_rayTracingState.m_hwCausticShaderTable){
+    if(cachedPipeline || cachedTable){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RT caustic pipeline and shader table cache is inconsistent"));
-        m_rayTracingState.m_hwCausticPipeline.reset();
-        m_rayTracingState.m_hwCausticShaderTable.reset();
-        m_rayTracingState.m_hwCausticPipelineFailed = true;
+        cachedPipeline.reset();
+        cachedTable.reset();
+        failed = true;
         return false;
     }
-    if(m_rayTracingState.m_hwCausticPipelineFailed)
+    if(failed)
         return false;
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline)){
-        m_rayTracingState.m_hwCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
 
@@ -311,7 +319,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware caustics require the descriptor-buffer TLAS heap layout"));
-        m_rayTracingState.m_hwCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
 
@@ -323,7 +331,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         m_rayTracingState.m_hwCausticBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_hwCausticBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware caustic binding layout"));
-            m_rayTracingState.m_hwCausticPipelineFailed = true;
+            failed = true;
             return false;
         }
     }
@@ -332,11 +340,11 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::ShaderHandle missShader;
     Core::ShaderHandle closestHitShader;
     if(
-        !m_shaderSystem.loadShader<RayGenerationShader>(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwRaygen")
+        !m_shaderSystem.loadShader<RayGenerationShader>(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, csg ? "NWB_RT_CSG_ENABLED=1" : "NWB_RT_CSG_ENABLED=0", "ECSRender_CausticHwRaygen")
         || !m_shaderSystem.loadShader<MissShader>(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwMiss")
         || !m_shaderSystem.loadShader<ClosestHitShader>(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwClosestHit")
     ){
-        m_rayTracingState.m_hwCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
 
@@ -365,14 +373,14 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::RayTracingPipelineHandle pipeline = device.createRayTracingPipeline(pipelineDesc);
     if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT caustic pipeline"));
-        m_rayTracingState.m_hwCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
 
     Core::RayTracingShaderTableHandle shaderTable = pipeline->createShaderTable();
     if(!shaderTable){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT caustic shader table"));
-        m_rayTracingState.m_hwCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
     if(
@@ -381,12 +389,12 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         || shaderTable->addHitGroup(RayTracingCausticsTaskDetail::s_HwHitGroupExportName) != 0u
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to populate RT caustic shader table"));
-        m_rayTracingState.m_hwCausticPipelineFailed = true;
+        failed = true;
         return false;
     }
 
-    m_rayTracingState.m_hwCausticPipeline = Move(pipeline);
-    m_rayTracingState.m_hwCausticShaderTable = Move(shaderTable);
+    cachedPipeline = Move(pipeline);
+    cachedTable = Move(shaderTable);
 
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RT caustic pipeline + shader table"));
     return true;
@@ -477,9 +485,12 @@ bool RendererRayTracingSystem::renderHwCaustics(
         }
     }
     const f32 temporalDecay = causticTemporalDecay();
+    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
+    const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
     if(
-        !m_rayTracingState.m_hwCausticPipeline
-        || !m_rayTracingState.m_hwCausticShaderTable
+        !pipeline
+        || !shaderTable
         || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         || !causticResolveResourcesReady(targets, temporalDecay)
     )
@@ -510,11 +521,11 @@ bool RendererRayTracingSystem::renderHwCaustics(
         pushConstants.temporalPhaseCount = temporalPhaseCount;
 
         Core::RayTracingState rayTracingPassState;
-        rayTracingPassState.setShaderTable(m_rayTracingState.m_hwCausticShaderTable.get());
+        rayTracingPassState.setShaderTable(shaderTable.get());
         commandList.setRayTracingState(rayTracingPassState);
         // Bind heap blocks after RayTracingState; set 2 selects the TLAS generation.
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        heap.bindRayTracing(commandList, *m_rayTracingState.m_hwCausticPipeline.get(), m_rayTracingState.m_tlasHeapHandle);
+        heap.bindRayTracing(commandList, *pipeline.get(), m_rayTracingState.m_tlasHeapHandle);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
         Core::RayTracingDispatchRaysArguments dispatchArgs;

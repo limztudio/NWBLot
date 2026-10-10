@@ -108,7 +108,6 @@ half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const ha
 
 struct NwbRefractionEntry{
     uint primaryRasterInstance;
-    bool csgPrimary;
     float depth;
     float3 position;
     float3 incident;
@@ -128,7 +127,6 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry.primaryRasterInstance = uint(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
     const float4 normalIor = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(int3(pixel, 0));
     const float4 tintCoverage = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(int3(pixel, 0));
-    entry.csgPrimary = tintCoverage.w < 0.0;
     entry.position = nwbRefractionReconstruct(pixel, entry.depth);
     const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
     entry.incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));

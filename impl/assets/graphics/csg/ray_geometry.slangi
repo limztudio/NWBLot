@@ -22,6 +22,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_CSG_RAY_STRICT_NORMALS
+#define NWB_CSG_RAY_STRICT_NORMALS 0
+#endif
+
 struct NwbCsgRayCutter{
     uint shapeType;
     float4 worldToShapeRow0;
@@ -35,6 +39,9 @@ struct NwbCsgRayCrossing{
     uint primitive;
     float2 barycentrics;
     int windingDelta;
+#if NWB_CSG_RAY_STRICT_NORMALS
+    bool normalAmbiguous;
+#endif
 };
 
 struct NwbCsgRayTriangleHit{
@@ -56,6 +63,9 @@ struct NwbCsgRayBoundary{
     uint cutter;
     float distance;
     float2 barycentrics;
+#if NWB_CSG_RAY_STRICT_NORMALS
+    bool normalAmbiguous;
+#endif
 };
 
 
@@ -331,8 +341,13 @@ uint nwbCsgRayInsertCrossing(
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
         if(nwbRayTraceIncidentBoundary(
             material, crossings[index].primitive, crossings[index].barycentrics, crossing.primitive, crossing.barycentrics
-        ))
+        )){
+#if NWB_CSG_RAY_STRICT_NORMALS
+            // A solid crease has one membership crossing but no unique optical interface normal.
+            crossings[index].normalAmbiguous = true;
+#endif
             return 0u;
+        }
     }
     if(crossingCount == NWB_CSG_RAY_CROSSING_CAPACITY)
         return NWB_CSG_RAY_FAILURE_CAPACITY;
@@ -411,6 +426,10 @@ bool nwbCsgRayOpenBoundaryVisible(
 
 struct NwbCsgRayNearestOpenVisitor : NwbCsgRayOpenVisitor{
     NwbCsgRayBoundary boundary;
+#if NWB_CSG_RAY_STRICT_NORMALS
+    uint materialSlot;
+    uint instanceIndex;
+#endif
 
     [mutating] uint visit(
         const uint primitive,
@@ -421,9 +440,20 @@ struct NwbCsgRayNearestOpenVisitor : NwbCsgRayOpenVisitor{
         __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
         const uint cutCount
     ){
+#if NWB_CSG_RAY_STRICT_NORMALS
+        if(boundary.hit && nwbCsgRaySameDistance(distance, boundary.distance)
+            && nwbCsgRayOpenBoundaryVisible(distance, minimum, maximum, cuts, cutCount)){
+            if(primitive != boundary.primitive && !nwbRayTraceCoplanarSeam(materialSlot, instanceIndex, primitive, boundary.primitive))
+                boundary.normalAmbiguous = true;
+            return 0u;
+        }
+#endif
         if(!nwbCsgRayOpenBoundaryVisible(distance, minimum, boundary.distance, cuts, cutCount))
             return 0u;
         boundary.hit = true;
+#if NWB_CSG_RAY_STRICT_NORMALS
+        boundary.normalAmbiguous = false;
+#endif
         boundary.primitive = primitive;
         boundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
         boundary.distance = distance;
@@ -480,6 +510,9 @@ bool nwbCsgRayNextSolidSpan(
         triangle.cutter = NWB_CSG_RAY_INVALID_INDEX;
         triangle.distance = boundary.distance;
         triangle.barycentrics = boundary.barycentrics;
+#if NWB_CSG_RAY_STRICT_NORMALS
+        triangle.normalAmbiguous = boundary.normalAmbiguous || iterator.first - groupBegin > 1u;
+#endif
         if(!inside)
             iterator.nearBoundary = triangle;
         else{

@@ -20,16 +20,22 @@ NWB_IMPL_BEGIN
 
 
 struct RayTracingSceneGraphReads{
-    // TLAS, selector CB, material/typed/mesh-instance tables, and the optical policy/bounds sidecar.
-    Core::GpuTaskResourceUse uses[6] = {};
-
     [[nodiscard]] bool valid()const noexcept{
         for(const auto& use : uses){
             if(!use.resource.valid())
                 return false;
         }
+        for(const auto& use : csgUses){
+            if(!use.resource.valid())
+                return false;
+        }
         return true;
     }
+
+
+    // Ordinary scene reads remain inline; only admitted CSG work allocates the variable posed-bounds list.
+    Core::GpuTaskResourceUse uses[6] = {};
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses;
 };
 
 // Import common scene reads once per physical resource. Geometry buffers and material sampled textures belong to

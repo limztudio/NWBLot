@@ -18,11 +18,35 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::ensureCsgTraceContextResources(){
-    if(!m_lightSpaceShadow.m_csg.snapshot.hasCsg)
+    auto& readTokens = m_rayTracingState.m_csgTraceContextReadSubmissionTokens;
+    if(!m_lightSpaceShadow.m_csg.snapshot.hasCsg && readTokens.empty())
         return true;
 
     auto& device = m_graphics.getDevice();
+    // Completed CSG readers need no drain when a later ordinary frame clears the shared selector slot.
+    bool readersPending = false;
+    for(auto& token : readTokens){
+        if(!token.valid())
+            continue;
+        const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
+        if(!device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)
+            || device.queueGetCompletedInstance(queue) >= token.value)
+            token = {};
+        else
+            readersPending = true;
+    }
+    if(!m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+        if(!readersPending)
+            readTokens.clear();
+        return true;
+    }
+
     auto& heap = device.getDescriptorHeap();
+    const Core::GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    if(!topology.queues || topology.queueCount == 0u)
+        return false;
+    // Allocate the physical-reader frontier only for admitted CSG work, before acceptance callbacks need it.
+    readTokens.resize(topology.queueCount);
     const usize byteCount = m_lightSpaceShadow.m_csg.bytes.size();
     const u64 maximumCapacity = Min<u64>(device.getMaxStorageBufferRange(), Limit<u32>::s_Max);
     if(!heap.isInitialized() || byteCount == 0u || byteCount > maximumCapacity){
@@ -58,14 +82,14 @@ bool RendererRayTracingSystem::ensureCsgTraceContextResources(){
     RayTracingDetail::RetireHeapHandle(heap, handle);
     buffer = Move(replacement);
     handle = *replacementHandle;
-    m_rayTracingState.m_csgTraceContextReadSubmissionToken = {};
+    // Prior readers retain the old buffer, but also read the persistent selector; its next upload must drain them.
     retireReplacement.release();
     return true;
 }
 
 Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const{
     Core::GpuUploadBlobId blob;
-    if(!hasSurfelWork() || !m_lightSpaceShadow.m_csg.snapshot.hasCsg)
+    if(!m_shadowVisibilityTraceResourcesPreflighted || !m_lightSpaceShadow.m_csg.snapshot.hasCsg)
         return blob;
     const auto& bytes = m_lightSpaceShadow.m_csg.bytes;
     if(bytes.empty() || !m_rayTracingState.m_csgTraceContextBuffer || !m_rayTracingState.m_csgTraceContextHeapHandle.valid())
@@ -78,8 +102,16 @@ Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCsgTrace
 }
 
 void RendererRayTracingSystem::confirmCsgTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept{
-    if(hasSurfelWork() && m_rayTracingState.m_surfelUseCsgTrace)
-        m_rayTracingState.m_csgTraceContextReadSubmissionToken = token;
+    if(!token.valid() || !m_lightSpaceShadow.m_csg.snapshot.hasCsg)
+        return;
+    // Every physical reader protects the next upload, including accepted prefixes of partially rejected graphs.
+    auto& readTokens = m_rayTracingState.m_csgTraceContextReadSubmissionTokens;
+    NWB_ASSERT(token.hasPhysicalQueueIdentity() && token.physicalQueueIndex < readTokens.size());
+    if(!token.hasPhysicalQueueIdentity() || token.physicalQueueIndex >= readTokens.size())
+        return;
+    auto& previous = readTokens[token.physicalQueueIndex];
+    if(!previous.valid() || !previous.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration) || token.value > previous.value)
+        previous = token;
 }
 
 

@@ -68,10 +68,13 @@ void RendererRayTracingState::invalidateResources(){
     m_refractionBindingLayout.reset();
     m_refractionScreenShader.reset();
     m_refractionHwShader.reset();
+    m_refractionCsgHwShader.reset();
     m_refractionScreenPipeline.reset();
     m_refractionHwPipeline.reset();
+    m_refractionCsgHwPipeline.reset();
     m_refractionScreenPipelineFailed = false;
     m_refractionHwPipelineFailed = false;
+    m_refractionCsgHwPipelineFailed = false;
     m_refractionUseHardwareTrace = false;
     // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
     m_tlas.reset();
@@ -135,7 +138,8 @@ void RendererRayTracingState::invalidateResources(){
     m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_csgTraceContextBuffer.reset();
     m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_csgTraceContextReadSubmissionToken = {};
+    for(auto& token : m_csgTraceContextReadSubmissionTokens)
+        token = {};
     m_sceneBvhNodeCapacity = 0u;
     m_sceneInstanceCapacity = 0u;
     m_sceneBvhInstanceCount = 0u;
@@ -207,9 +211,13 @@ void RendererRayTracingState::invalidateResources(){
     m_swCausticBindingLayout.reset();
     m_swCausticShader.reset();
     m_swCausticPipeline.reset();
+    m_swCausticCsgShader.reset();
+    m_swCausticCsgPipeline.reset();
     m_hwCausticBindingLayout.reset();
     m_hwCausticPipeline.reset();
     m_hwCausticShaderTable.reset();
+    m_hwCausticCsgPipeline.reset();
+    m_hwCausticCsgShaderTable.reset();
     m_causticResolve = CausticResolveState{};
     m_causticGeometryDownsampleBindingLayout.reset();
     m_causticGeometryDownsampleShader.reset();
@@ -303,8 +311,10 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowPipelineFailed = false;
     m_swShadowDispatchLogged = false;
     m_swCausticPipelineFailed = false;
+    m_swCausticCsgPipelineFailed = false;
     m_swCausticDispatchLogged = false;
     m_hwCausticPipelineFailed = false;
+    m_hwCausticCsgPipelineFailed = false;
     m_hwCausticDispatchLogged = false;
 }
 

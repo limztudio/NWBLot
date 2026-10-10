@@ -116,8 +116,6 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
         return true;
 
     m_rayTracingState.m_surfelUseCsgTrace = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
-    if(!ensureCsgTraceContextResources())
-        return false;
     if(!ensureSurfelResources())
         return false;
 

@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Refraction admits the same nearest geometric boundary as before. Rejected faces/instances do not need a material.
+// Refraction admits the nearest retained boundary. Rejected faces/instances do not need a material.
 NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(
     const uint instanceMaterialHeapSlot,
     const float3 origin,
@@ -24,7 +24,11 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(
     const float maxDistance
 ){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
-    if(!geometry.hit || !geometry.frontFace)
+    if(!geometry.hit || !geometry.frontFace
+#if NWB_RT_CSG_ENABLED
+        || geometry.failure != 0u
+#endif
+    )
         return (NwbRayTraceSurfaceHit)0;
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }
@@ -38,7 +42,11 @@ NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(
     const uint primaryInstance
 ){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
-    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace)
+    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace
+#if NWB_RT_CSG_ENABLED
+        || geometry.failure != 0u
+#endif
+    )
         return (NwbRayTraceSurfaceHit)0;
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }

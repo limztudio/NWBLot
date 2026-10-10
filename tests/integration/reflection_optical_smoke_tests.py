@@ -15,7 +15,8 @@ import reflection_optical_reference as reference
 import reflection_optical_smoke as smoke
 import caustic_optical_smoke as caustic
 import caustic_optical_reference as caustic_reference
-from reflection_smoke import SmokeFailure
+from reflection_roughness_smoke import HISTORY_FIELDS
+from reflection_smoke import STATISTICS_FIELDS, SmokeFailure
 
 LIT_OPTICAL_CLEAR = "optical_clear"
 LIT_CROSSINGS = "crossings"
@@ -160,6 +161,12 @@ class ImageOracleTests(unittest.TestCase):
         with self.assertRaises(SmokeFailure):
             self.analyze(self.synthetic_frame(LIT_OPTICAL_CLEAR), smoke.OpticalCapture("optical_query_limit", LIT_OPTICAL_CLEAR, 1))
 
+    def test_grouped_gap_cannot_pass_with_lost_interfaces_and_environment_radiance(self):
+        for case in ("optical_group_gap", "optical_csg_group_gap",
+            "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
+            with self.subTest(case=case), self.assertRaises(SmokeFailure):
+                self.analyze(self.synthetic_frame(LIT_OPTICAL_CLEAR), smoke.OpticalCapture(case, case))
+
     def test_half_energy_cannot_pass_using_relative_normalization(self):
         with self.assertRaises(SmokeFailure):
             self.analyze(self.synthetic_frame(LIT_OPTICAL_TINTED, channel_scale=0.5), smoke.OpticalCapture(LIT_OPTICAL_TINTED, LIT_OPTICAL_TINTED))
@@ -179,8 +186,9 @@ class StatisticsTests(unittest.TestCase):
         return "ReflectionSmokeOptics: " + " ".join(f"{name}={values[name]}" for name in smoke.OPTICS_FIELDS)
 
     def validate(self, text, spec=smoke.OpticalCapture(LIT_OPTICAL_CLEAR, LIT_OPTICAL_CLEAR)):
-        statistics = [{LIT_SEQUENCE: 9, "generation": 2, "hardware_rays": 100, "frame": 9}]
-        with patch.object(smoke, "parse_statistics", return_value=statistics), patch.object(smoke, "validate_statistics"):
+        statistics = [{LIT_SEQUENCE: 9, "generation": 2, "hardware_rays": 100, "frame": 9, "hardware_ready": 1}]
+        with patch.object(smoke, "parse_statistics", return_value=statistics), patch.object(smoke, "validate_statistics"), \
+            patch.object(smoke, "validate_slice_packets", return_value=None):
             return smoke.validate_optics(text, spec)
 
     def test_query_cap_violation_fails(self):
@@ -203,10 +211,177 @@ class StatisticsTests(unittest.TestCase):
         with self.assertRaises(SmokeFailure):
             self.validate(self.log(), smoke.OpticalCapture(LIT_OPTICAL_UNSPECIFIED, LIT_OPTICAL_UNSPECIFIED))
 
+    def test_grouped_gap_requires_completed_ambiguity_even_without_transparent_paths(self):
+        for case in ("optical_group_gap", "optical_csg_group_gap",
+            "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
+            spec = smoke.OpticalCapture(case, case)
+            with self.subTest(case=case), self.assertRaisesRegex(SmokeFailure, "negative optical fixture"):
+                self.validate(self.log({"transparent_paths": 0}), spec)
+            self.validate(self.log({"transparent_paths": 0, "ambiguous_paths": 100}), spec)
+
+    def test_negative_volume_cannot_pass_with_partial_ambiguity(self):
+        for case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp",
+            "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
+            "optical_group_entry", "optical_csg_group_entry"):
+            spec = smoke.OpticalCapture(case, case)
+            for ambiguous in (1, 99):
+                with self.subTest(case=case, ambiguous=ambiguous), self.assertRaisesRegex(SmokeFailure, "every admitted hardware ray"):
+                    self.validate(self.log({"ambiguous_paths": ambiguous}), spec)
+            self.validate(self.log({"ambiguous_paths": 100}), spec)
+
+    def test_last_negative_frame_cannot_hide_an_earlier_partial_rejection(self):
+        statistics = [{LIT_SEQUENCE: sequence, "generation": 2, "hardware_rays": 100, "frame": sequence, "hardware_ready": 1} for sequence in (9, 10)]
+        text = self.log({"ambiguous_paths": 99}) + "\n" + self.log({LIT_SEQUENCE: 10, "ambiguous_paths": 100})
+        spec = smoke.OpticalCapture("optical_csg_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp")
+        with patch.object(smoke, "parse_statistics", return_value=statistics), patch.object(smoke, "validate_statistics"), \
+            patch.object(smoke, "validate_slice_packets", return_value=None):
+            with self.assertRaisesRegex(SmokeFailure, "every admitted hardware ray"):
+                smoke.validate_optics(text, spec)
+
     def test_malformed_or_duplicate_fields_fail(self):
         for text in ("", self.log() + " sequence=9", self.log().replace("limited_paths=0", "other=0")):
             with self.assertRaises(SmokeFailure):
                 smoke.parse_optics(text)
+
+
+class QueueCoverageTests(unittest.TestCase):
+    def log(self, budget, ray_delta=0, sequence=9, queries=None, transparent=None):
+        admitted = min(217668, budget)
+        rays = admitted + ray_delta
+        ready = int(budget > 0)
+        sample = dict(sequence=sequence, generation=2, frame=sequence, mode=2, width=960, height=720,
+            requested_budget=budget, effective_budget=budget, queue_capacity=max(1, budget),
+            hardware_requested=1, hardware_available=ready, hardware_ready=ready,
+            token_queue=0, token_value=sequence + 100, physical_queue=0, device_generation=1,
+            candidates=217668 if budget else 0, hardware_rays=rays, hardware_hits=0, opaque_pixels=217668, glass_pixels=0,
+            fallback_pixels=217668, screen_attempts=0, screen_hits=0)
+        values = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, 16, rays if queries is None else queries,
+            0, min(rays, 100) if transparent is None else transparent, 0, 0, 0, 0, 0, ready)))
+        history = dict(zip(HISTORY_FIELDS, (sequence, 2, sequence - 1, 1, 0, 0, sequence - 1, 0, 0, 0, 0, 0)))
+        expected = (budget + smoke.CSG_TRACE_SLICE_RAYS - 1) // smoke.CSG_TRACE_SLICE_RAYS
+        packets = dict(zip(smoke.SLICE_PACKET_FIELDS, (sequence - 1, 23, 1, 0, 1, budget, expected,
+            expected, expected, expected, expected, expected, expected, expected)))
+        return "ReflectionSmokeStatistics: " + " ".join(f"{name}={sample[name]}" for name in STATISTICS_FIELDS) + "\n" \
+            + "ReflectionSmokeOptics: " + " ".join(f"{name}={values[name]}" for name in smoke.OPTICS_FIELDS) + "\n" \
+            + "ReflectionSmokeHistory: " + " ".join(f"{name}={history[name]}" for name in HISTORY_FIELDS) + "\n" \
+            + "ReflectionSmokeSlicePackets: " + " ".join(f"{name}={packets[name]}" for name in smoke.SLICE_PACKET_FIELDS)
+
+    def validate(self, budget, **changes):
+        spec = smoke.OpticalCapture(f"budget_{budget}", "optical_csg_cap", ray_budget=budget)
+        return smoke.validate_optics(self.log(budget, **changes), spec)
+
+    def test_missing_group_or_slice_tail_cannot_pass_per_frame_coverage(self):
+        for budget in (1, 63, 64, 65, 8191, 8192, 8193):
+            with self.subTest(budget=budget):
+                self.validate(budget)
+                with self.assertRaises(SmokeFailure):
+                    self.validate(budget, ray_delta=-1)
+                with self.assertRaises(SmokeFailure):
+                    self.validate(budget, ray_delta=1)
+        with self.assertRaisesRegex(SmokeFailure, "every admitted queue entry"):
+            self.validate(8193, ray_delta=-8192)
+
+    def test_complete_final_frame_cannot_hide_an_earlier_missing_slice_tail(self):
+        spec = smoke.OpticalCapture("tail", "optical_csg_cap", ray_budget=8193)
+        log = self.log(8193, ray_delta=-1) + "\n" + self.log(8193, sequence=10)
+        with self.assertRaisesRegex(SmokeFailure, "each stable frame"):
+            smoke.validate_optics(log, spec)
+
+    def test_full_budget_stops_at_candidates_and_still_requires_transparent_transport(self):
+        self.validate(smoke.DEFAULT_RAY_BUDGET)
+        with self.assertRaises(SmokeFailure):
+            self.validate(smoke.DEFAULT_RAY_BUDGET, ray_delta=1)
+        with self.assertRaisesRegex(SmokeFailure, "transparent reflected paths"):
+            self.validate(smoke.DEFAULT_RAY_BUDGET, transparent=0)
+
+    def test_zero_budget_cannot_admit_queries_or_paths_without_primary_rays(self):
+        self.validate(0)
+        with self.assertRaisesRegex(SmokeFailure, "per-path query bound"):
+            self.validate(0, queries=1)
+        with self.assertRaisesRegex(SmokeFailure, "admitted primary paths"):
+            self.validate(0, transparent=1)
+        with self.assertRaises(SmokeFailure):
+            self.validate(0, ray_delta=1)
+
+    def test_limited_compacted_queue_can_miss_glass_without_weakening_full_oracle(self):
+        for budget in (1, 8193):
+            with self.subTest(budget=budget):
+                self.validate(budget, transparent=0)
+
+
+class SlicePacketTests(unittest.TestCase):
+    def log(self, budget=8193, sequence=9):
+        return QueueCoverageTests().log(budget, sequence=sequence)
+
+    def validate(self, text, budget=8193):
+        return smoke.validate_optics(text, smoke.OpticalCapture("packet_test", "optical_csg_cap", ray_budget=budget))
+
+    def test_each_boundary_budget_has_exact_accepted_single_task_packets(self):
+        for budget in smoke.QUEUE_BOUNDARY_BUDGETS:
+            with self.subTest(budget=budget):
+                record = self.validate(self.log(budget), budget)["slice_packets"]["completed_frames"][0]
+                self.assertEqual(record["accepted_packets"], (budget + 8191) // 8192)
+        self.assertEqual(self.validate(self.log(smoke.DEFAULT_RAY_BUDGET), smoke.DEFAULT_RAY_BUDGET)
+            ["slice_packets"]["completed_frames"][0]["accepted_packets"], 169)
+
+    def test_cavity_requires_the_same_accepted_packet_proof(self):
+        spec = smoke.OpticalCapture("optical_csg_cavity", "optical_csg_cavity", ray_budget=8193)
+        result = smoke.validate_optics(self.log(), spec)
+        self.assertEqual(result["slice_packets"]["completed_frames"][0]["accepted_packets"], 2)
+        text = "\n".join(line for line in self.log().splitlines() if "ReflectionSmokeSlicePackets:" not in line)
+        with self.assertRaisesRegex(SmokeFailure, "exact source frame"):
+            smoke.validate_optics(text, spec)
+
+    def test_all_indirect_calls_in_one_packet_cannot_pass(self):
+        with self.assertRaisesRegex(SmokeFailure, "distinct single-task"):
+            self.validate(self.log().replace("unique_packets=2", "unique_packets=1")
+                .replace("single_task_packets=2", "single_task_packets=0"))
+
+    def test_unaccepted_recovery_merged_or_wrong_queue_packet_fails(self):
+        for name in ("hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets", "single_task_packets", "graphics_packets"):
+            with self.subTest(name=name), self.assertRaisesRegex(SmokeFailure, "distinct single-task"):
+                self.validate(self.log().replace(name + "=2", name + "=1"))
+
+    def test_stale_frame_plan_or_physical_generation_cannot_pass(self):
+        for old, new in (("source_frame=8", "source_frame=7"), ("runtime_present=1", "runtime_present=0"),
+            ("plan_generation=23", "plan_generation=0"), ("graphics_queue=0", "graphics_queue=65535")):
+            with self.subTest(old=old), self.assertRaises(SmokeFailure):
+                self.validate(self.log().replace(old, new))
+        text = self.log().replace("ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=1",
+            "ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=2")
+        with self.assertRaisesRegex(SmokeFailure, "queue identity"):
+            self.validate(text)
+
+    def test_readback_may_use_a_different_queue_from_primary_hardware_packets(self):
+        text = self.log().replace("physical_queue=0", "physical_queue=1")
+        self.validate(text)
+
+    def test_budget_or_slice_count_cannot_be_relabelled(self):
+        for old, new in (("ray_capacity=8193", "ray_capacity=8192"), ("expected_slices=2", "expected_slices=1")):
+            with self.subTest(old=old), self.assertRaisesRegex(SmokeFailure, "frozen queue capacity"):
+                self.validate(self.log().replace(old, new))
+
+    def test_zero_budget_cannot_submit_a_slice(self):
+        with self.assertRaisesRegex(SmokeFailure, "distinct single-task"):
+            self.validate(self.log(0).replace("hardware_nodes=0", "hardware_nodes=1"), 0)
+
+    def test_complete_final_frame_cannot_hide_an_earlier_merged_packet(self):
+        text = self.log().replace("unique_packets=2", "unique_packets=1") + "\n" + self.log(sequence=10)
+        with self.assertRaisesRegex(SmokeFailure, "distinct single-task"):
+            self.validate(text)
+
+    def test_packet_evidence_requires_exact_completed_source_metadata(self):
+        for marker in ("ReflectionSmokeSlicePackets:", "ReflectionSmokeHistory:"):
+            text = "\n".join(line for line in self.log().splitlines() if marker not in line)
+            with self.subTest(marker=marker), self.assertRaises(SmokeFailure):
+                self.validate(text)
+
+    def test_duplicate_or_malformed_packet_identity_fails(self):
+        line = self.log().splitlines()[-1]
+        for text in (self.log() + "\n" + line, self.log() + " hardware_nodes=2",
+            self.log().replace("compiled_nodes=2", "compiled_nodes=-1"), self.log() + " junk"):
+            with self.subTest(text=text), self.assertRaises(SmokeFailure):
+                self.validate(text)
 
 
 class CombinedCausticTests(unittest.TestCase):

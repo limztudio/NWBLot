@@ -247,9 +247,6 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         bool opticalBoundsValid = false;
         if(
             transparent && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()
-            && !m_world.tryGetComponent<StaticCsgMeshComponent>(entity)
-            && !m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
-            && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
         ){
             const auto bounds = ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax);
             if(bounds){
@@ -261,9 +258,6 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         const bool runtimeOpticalBounds =
             transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer
             && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
-            && !m_world.tryGetComponent<StaticCsgMeshComponent>(entity)
-            && !m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
-            && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
         ;
         if(runtimeOpticalBounds)
             opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
@@ -444,6 +438,8 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     if(!m_hardwareOpticalScene.prepare(opticalScene) || !m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
         return false;
     Fnv64AppendValue(gatheredMaterialContentHash, opticalScene.contentHash());
+    if(csg.hasCsg)
+        Fnv64AppendValue(gatheredMaterialContentHash, csg.identity);
     m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };
     if(csg.hasCsg){
         u64 captureIdentity = gatheredMaterialContentHash;

@@ -29,6 +29,7 @@ inline constexpr Name s_IntervalPeelComputeShaderName("engine/graphics/csg/inter
 inline constexpr Name s_ReceiverSpanBuildComputeShaderName("engine/graphics/csg/receiver_span_build_cs");
 inline constexpr Name s_IntervalCombineComputeShaderName("engine/graphics/csg/interval_combine_cs");
 inline constexpr Name s_IntervalCapFillPixelShaderName("engine/graphics/csg/interval_cap_fill_ps");
+inline constexpr Name s_RefractionCapFillPixelShaderName("engine/graphics/csg/refraction_cap_fill_ps");
 inline constexpr Name s_ReceiverSurfacePixelShaderName("engine/graphics/csg/receiver_surface_ps");
 
 

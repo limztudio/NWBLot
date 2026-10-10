@@ -35,7 +35,7 @@ bool nwbLightSpaceReceiverPosition(const uint2 pixel, const float depth, out flo
     if((g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS) != 0u){
         const uint4 workRect = nwbHeapCsgIntervalSampleState(g_NwbLightSpacePush.receiverCsgSampleStateSlot).workRect;
         const uint3 slots = uint3(NWB_LIGHT_SPACE_DEFERRED.csgSpanSlots.w, NWB_LIGHT_SPACE_DEFERRED.csgRemovedSlots.yz);
-        const NwbCsgRemovedCapSample cap = nwbCsgSampleNearestRemovedCap(pixel, workRect, slots);
+        const NwbCsgRemovedCapSample cap = nwbCsgSampleNearestRemovedCap(pixel, workRect, slots, NWB_CSG_INVALID_RECEIVER_INDEX);
         // Cap fill draws last with LessOrEqual. Exact stored-depth equality excludes ordinary foreground occlusion.
         if(cap.visible && cap.depth == depth){
             if(!isfinite(cap.linearDepth) || cap.linearDepth <= 0.0)

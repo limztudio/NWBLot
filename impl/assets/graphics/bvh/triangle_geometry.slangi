@@ -105,11 +105,16 @@ bool nwbRayTraceIncidentBoundary(
     const uint secondPrimitive,
     const float2 secondBarycentrics
 ){
-    const uint3 first = nwbHeapRawBuffer(material.indexSlot).Load3(firstPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    const uint3 second = nwbHeapRawBuffer(material.indexSlot).Load3(secondPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const float3 firstWeights = float3(1.0 - firstBarycentrics.x - firstBarycentrics.y, firstBarycentrics);
     const float3 secondWeights = float3(1.0 - secondBarycentrics.x - secondBarycentrics.y, secondBarycentrics);
     const float supportEpsilon = 8.0 * 1.1920928955078125e-7;
+    // Interior triangle hits cannot share an incident edge/vertex, so reject them before loading either triangle's geometry.
+    if(all(abs(firstWeights) > supportEpsilon) && !any(firstWeights >= 1.0 - supportEpsilon))
+        return false;
+    if(all(abs(secondWeights) > supportEpsilon) && !any(secondWeights >= 1.0 - supportEpsilon))
+        return false;
+    const uint3 first = nwbHeapRawBuffer(material.indexSlot).Load3(firstPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint3 second = nwbHeapRawBuffer(material.indexSlot).Load3(secondPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     [unroll]
     for(uint firstCorner = 0u; firstCorner < 3u; ++firstCorner){
         const float3 firstPosition = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first[firstCorner] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));

@@ -30,8 +30,6 @@ public:
         const f64 safeDelta = IsFinite(delta) && delta > 0.0f ? static_cast<f64>(delta) : 0.0;
         if(safeDelta <= 0.0)
             return;
-        if(safeDelta > s_MaxMeasuredFrameSeconds)
-            return;
 
         m_elapsedSeconds += safeDelta;
         if(m_elapsedSeconds < s_WarmupSeconds)
@@ -41,13 +39,13 @@ public:
             m_samplingStarted = true;
             m_intervalSeconds = 0.0;
             m_intervalFrames = 0u;
-            m_minFrameSeconds = s_LargeFrameSeconds;
+            m_minFrameSeconds = 0.0;
             m_maxFrameSeconds = 0.0;
         }
 
         m_intervalSeconds += safeDelta;
         ++m_intervalFrames;
-        m_minFrameSeconds = Min(m_minFrameSeconds, safeDelta);
+        m_minFrameSeconds = m_intervalFrames == 1u ? safeDelta : Min(m_minFrameSeconds, safeDelta);
         m_maxFrameSeconds = Max(m_maxFrameSeconds, safeDelta);
 
         if(m_intervalSeconds < s_ReportIntervalSeconds || m_intervalFrames == 0u)
@@ -69,7 +67,7 @@ public:
 
         m_intervalSeconds = 0.0;
         m_intervalFrames = 0u;
-        m_minFrameSeconds = s_LargeFrameSeconds;
+        m_minFrameSeconds = 0.0;
         m_maxFrameSeconds = 0.0;
     }
 
@@ -77,14 +75,12 @@ public:
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
     static constexpr f64 s_ReportIntervalSeconds = 0.5;
-    static constexpr f64 s_MaxMeasuredFrameSeconds = 0.25;
-    static constexpr f64 s_LargeFrameSeconds = 3600.0;
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
     TStringView m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;
-    f64 m_minFrameSeconds = s_LargeFrameSeconds;
+    f64 m_minFrameSeconds = 0.0;
     f64 m_maxFrameSeconds = 0.0;
     u32 m_intervalFrames = 0u;
     bool m_samplingStarted = false;

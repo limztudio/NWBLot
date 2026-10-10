@@ -324,6 +324,10 @@ struct SurfelGiTraceGraphTask{
         return true;
     }
 
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
+    }
+
     static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(&payload.asyncTiming);
     }

@@ -130,7 +130,7 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
         slots.opticalInstanceCount = opticalScene.upload->instanceCount;
     }
 
-    if(hasSurfelWork() && m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+    if(m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg){
         const auto csgContext = resolveStorageSlot(m_rayTracingState.m_csgTraceContextBuffer.get(), m_rayTracingState.m_csgTraceContextHeapHandle);
         if(!csgContext || !m_rayTracingState.m_csgTraceContextBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: current CSG ray context is unavailable"));

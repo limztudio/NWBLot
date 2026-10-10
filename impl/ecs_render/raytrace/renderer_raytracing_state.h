@@ -84,15 +84,18 @@ struct RtSceneBvhState{
     // Current CSG ray geometry is independent of retained light-space capture generations.
     Core::BufferHandle m_csgTraceContextBuffer;
     Core::GpuDescriptorHandle m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::QueueSubmissionToken m_csgTraceContextReadSubmissionToken;
     // Software caustics are push-only and reuse the SW trace geometry.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
     Core::ShaderHandle m_swCausticShader;
     Core::ComputePipelineHandle m_swCausticPipeline;
+    Core::ShaderHandle m_swCausticCsgShader;
+    Core::ComputePipelineHandle m_swCausticCsgPipeline;
     // Hardware caustics are push-only and use the TLAS plus global heap views.
     Core::BindingLayoutHandle m_hwCausticBindingLayout;
     Core::RayTracingPipelineHandle m_hwCausticPipeline;
     Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
+    Core::RayTracingPipelineHandle m_hwCausticCsgPipeline;
+    Core::RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
 
     // Replacement TLASs get fresh handles so recorded work retains the old generation.
     Core::GpuDescriptorHandle m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
@@ -121,7 +124,9 @@ struct RtSceneBvhState{
     bool m_prevWorldToClipValid = false;
     bool m_swCausticDispatchLogged = false;
     bool m_swCausticPipelineFailed = false;
+    bool m_swCausticCsgPipelineFailed = false;
     bool m_hwCausticPipelineFailed = false;
+    bool m_hwCausticCsgPipelineFailed = false;
     bool m_hwCausticDispatchLogged = false;
     bool m_capabilityLogged = false;
     bool m_bvhSortPipelineFailed = false;
@@ -169,6 +174,8 @@ struct RtShadowState{
     Core::BufferHandle m_swShadowEdgeListBuffer;
     Core::BufferHandle m_swShadowIndirectArgsBuffer;
 
+    // CSG ray readers may occupy several physical transports in one queue class.
+    Vector<Core::QueueSubmissionToken, Core::Alloc::GlobalArena> m_csgTraceContextReadSubmissionTokens;
     // HW distinct meshes and heap views shared with caustic/GI.
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
@@ -210,7 +217,8 @@ struct RtShadowState{
 
     // Arena-backed tables and caches must be constructed with the renderer arena.
     explicit RtShadowState(Core::Alloc::GlobalArena& arena)
-        : m_shadowMeshIndexBuffers(arena)
+        : m_csgTraceContextReadSubmissionTokens(arena)
+        , m_shadowMeshIndexBuffers(arena)
         , m_shadowMeshAttributeBuffers(arena)
         , m_shadowMeshPositionBuffers(arena)
         , m_shadowMeshIndexHandles(arena)
@@ -410,10 +418,13 @@ struct RtRefractionState{
     Core::BindingLayoutHandle m_refractionBindingLayout;
     Core::ShaderHandle m_refractionScreenShader;
     Core::ShaderHandle m_refractionHwShader;
+    Core::ShaderHandle m_refractionCsgHwShader;
     Core::ComputePipelineHandle m_refractionScreenPipeline;
     Core::ComputePipelineHandle m_refractionHwPipeline;
+    Core::ComputePipelineHandle m_refractionCsgHwPipeline;
     bool m_refractionScreenPipelineFailed = false;
     bool m_refractionHwPipelineFailed = false;
+    bool m_refractionCsgHwPipelineFailed = false;
     bool m_refractionUseHardwareTrace = false;
     bool m_refractionHardwareTracingEnabled = true;
 };

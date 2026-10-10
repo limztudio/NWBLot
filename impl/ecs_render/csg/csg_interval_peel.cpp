@@ -253,6 +253,43 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     commandList.draw(drawArgs);
 }
 
+void RendererCsgSystem::renderRefractionIntervalCaps(
+    Core::CommandList& commandList,
+    const DeferredFrameTargets& targets,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const Core::Rect& workRect,
+    const u32* receiverIndices,
+    const usize receiverCount
+){
+    NWB_ASSERT(csgResources.refractionCapFillPipeline);
+    NWB_ASSERT(csgResources.bindingValid());
+    NWB_ASSERT(targets.avboit.refractionFramebuffer);
+    NWB_ASSERT(targets.bindless.slotsBufferDescriptor.valid());
+    NWB_ASSERT(receiverIndices && receiverCount != 0u);
+
+    Core::ViewportState viewportState;
+    viewportState
+        .addViewport(targets.avboit.refractionFramebuffer->getFramebufferInfo().getViewport())
+        .addScissorRect(workRect)
+    ;
+    Core::GraphicsState graphicsState;
+    graphicsState.setPipeline(csgResources.refractionCapFillPipeline.get());
+    graphicsState.setFramebuffer(targets.avboit.refractionFramebuffer.get());
+    graphicsState.setViewport(viewportState);
+    commandList.setGraphicsState(graphicsState);
+    m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, *csgResources.refractionCapFillPipeline);
+
+    ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
+    frameHeapSlots.view = targets.bindless.slotsBufferDescriptor.slot();
+    frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
+    Core::DrawArguments drawArgs;
+    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
+    for(usize index = 0u; index < receiverCount; ++index){
+        ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, receiverIndices[index], 0u, viewportState, frameHeapSlots, 0u);
+        commandList.draw(drawArgs);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

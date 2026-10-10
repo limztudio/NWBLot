@@ -229,10 +229,14 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     presentScheduling.avoidQueueCrossing = inputs.useLaggedLightingHistory;
     presentScheduling.forceSubmissionBoundary = true;
     presentScheduling.allowPacketMerge = false;
-    Core::GpuTaskId presentDependencies[3u] = { result.compositeTask };
+    Core::GpuTaskId presentDependencies[4u] = { result.compositeTask };
     usize presentDependencyCount = 1u;
-    if(inputs.useLaggedLightingHistory)
+    if(inputs.useLaggedLightingHistory){
         presentDependencies[presentDependencyCount++] = inputs.surfelGiTask;
+        // Lagged lighting omits the current HW caustic join; drain photon geometry reads before next-frame Graphics skinning.
+        if(inputs.hardwareCausticsTask.valid())
+            presentDependencies[presentDependencyCount++] = inputs.hardwareCausticsTask;
+    }
     if(outputLayer.readyTask.valid())
         presentDependencies[presentDependencyCount++] = outputLayer.readyTask;
     Core::GpuTaskDesc presentDesc;

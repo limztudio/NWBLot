@@ -286,12 +286,13 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     return true;
 }
 
-ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot()const noexcept{
+ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot(const bool retainRefractionCapPipeline)const noexcept{
     return {
         .receiverRanges = m_csgState.m_receiverRangeBuffer,
         .cutters = m_csgState.m_cutterBuffer,
         .clipContextSlots = m_csgState.m_clipContextSlotsBuffer,
         .intervalSampleState = m_csgState.m_intervalSampleStateBuffer,
+        .refractionCapFillPipeline = retainRefractionCapPipeline ? m_csgState.m_refractionCapFillPipeline : nullptr,
         .receiverRangeCapacity = m_csgState.m_receiverRangeBufferCapacity,
         .cutterCapacity = m_csgState.m_cutterBufferCapacity,
         .receiverRangeHeapHandle = m_csgState.m_receiverRangeBufferHeapHandle,

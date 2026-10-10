@@ -63,7 +63,11 @@ bool nwbOpticalBootstrap(
     if(!nwbOpticalConsumeQuery(config, result))
         return false;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+#if NWB_RT_CSG_ENABLED
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK, ray);
+#else
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+#endif
 #if NWB_OPTICAL_CLOSED_MEDIA
     NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
     uint eventCount = 0u;
@@ -136,6 +140,82 @@ bool nwbOpticalBootstrap(
         return false;
     }
 
+#if NWB_RT_CSG_ENABLED
+    // Raw receiver triangles do not describe retained containment. Replay each retained boundary, including analytic walls, with the same bounded event and query budgets.
+    const uint contextSlot = NWB_RT_CSG_CONTEXT_SLOT;
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    for(uint activeIndex = 0u; activeIndex < activeCount; ++activeIndex){
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + activeIndex * 4u);
+        NwbOpticalInstance optical;
+        if(!nwbOpticalReadInstance(config, instance, optical, result))
+            return false;
+        if((optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) == 0u)
+            continue;
+        const NwbSwBvhInstance receiver = nwbCsgRayLoadInstance(contextSlot, instance);
+        const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instance, receiver);
+        if(!nwbCsgRayBoundsIntersect(receiver, root, ray.Origin, ray.Direction, 0.0, bootstrapDistance))
+            continue;
+        float minimum = 0.0;
+        bool receiverComplete = false;
+        for(uint crossing = 0u; crossing < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++crossing){
+            if(!nwbOpticalConsumeQuery(config, result))
+                return false;
+            const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(
+                contextSlot, config.instanceMaterialHeapSlot, instance, ray.Origin, ray.Direction, minimum, bootstrapDistance
+            );
+            if(geometry.failure != 0u){
+                result.transparentPath = true;
+                result.termination = (geometry.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u
+                    ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED
+                ;
+                return false;
+            }
+            if(!geometry.hit){
+                receiverComplete = true;
+                break;
+            }
+            if(++result.bootstrapEventCount >= NWB_OPTICAL_MAX_CANDIDATE_EVENTS){
+                result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+                return false;
+            }
+            if(bootstrapDistance - geometry.distance <= tolerance){
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return false;
+            }
+            minimum = geometry.distance;
+            if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED){
+                const NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(config.instanceMaterialHeapSlot, ray.Origin, ray.Direction, geometry);
+                if(!isfinite(float(hit.surface.refractionIor)) || hit.surface.refractionIor != half(1.0)){
+                    result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+                    return false;
+                }
+                continue;
+            }
+#if NWB_OPTICAL_CLOSED_MEDIA
+            if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
+                result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+                return false;
+            }
+            NwbOpticalBootstrapEvent event;
+            event.distance = geometry.distance;
+            event.instance = instance;
+            event.primitive = geometry.primitive;
+            event.entering = geometry.frontFace ? 1u : 0u;
+            events[eventCount] = event;
+            ++eventCount;
+#else
+            result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+            return false;
+#endif
+        }
+        if(!receiverComplete){
+            result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+            return false;
+        }
+    }
+#endif
+
 #if NWB_OPTICAL_CLOSED_MEDIA
     // Candidate records stay immutable. Sort scalar indices instead of retaining an array-backed struct while shifting that same array; every crossing keeps its original distance, primitive and orientation together.
     uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = {
@@ -161,7 +241,11 @@ bool nwbOpticalBootstrap(
         const NwbOpticalBootstrapEvent previous = events[eventOrder[index - 1u]];
         if(event.distance - previous.distance <= tolerance){
             // Only a coplanar indexed seam may collapse duplicate edge candidates. A same-facing sharp edge still has multiple refraction normals, and an unshared triangle belongs to another shell.
-            if(event.instance != previous.instance || event.entering != previous.entering || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, event.instance, event.primitive, previous.primitive)){
+            if(event.instance != previous.instance || event.entering != previous.entering
+#if NWB_RT_CSG_ENABLED
+                || event.primitive == NWB_CSG_RAY_INVALID_INDEX || previous.primitive == NWB_CSG_RAY_INVALID_INDEX
+#endif
+                || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, event.instance, event.primitive, previous.primitive)){
                 result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
                 return false;
             }

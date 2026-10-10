@@ -1,0 +1,4 @@
+pixel_shader asset;
+
+asset.entry_point = "main";
+asset.include_roots = ["engine/graphics"];

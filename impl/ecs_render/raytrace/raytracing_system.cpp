@@ -786,6 +786,9 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             m_shadowVisibilityResourcesPreflighted = true;
             return true;
         }
+        if(!ensureCsgTraceContextResources())
+            return false;
+
         // Hardware shadows and optical effects share one immutable TLAS/material context.
         if(!capturePreparedMeshBlasBuilds(scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
@@ -869,6 +872,9 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
+    if(!ensureCsgTraceContextResources())
+        return false;
+
     // Enable surfel GI on the SW path and create its resources in the prepare phase right after the scene BVH is resident.
     // The prepared GI stages can then spawn, hash, and trace on the same frame surfels become active.
     // The pool/hash/pipeline resources live on RendererRayTracingState so a resize does not reset convergence.

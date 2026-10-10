@@ -168,6 +168,37 @@ struct CaptureDrawTask{
     }
 };
 
+struct CaptureCapTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {Core::GpuQueueCapability::Graphics};
+
+    struct Payload{
+        RendererCsgSystem& csgSystem;
+        const DeferredFrameTargets& targets;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+        Core::Rect workRect;
+        Vector<u32, Core::Alloc::GlobalArena> receiverIndices;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererCsgSystem& csgSystemIn, const DeferredFrameTargets& targetsIn)
+            : csgSystem(csgSystemIn)
+            , targets(targetsIn)
+            , receiverIndices(arena)
+        {}
+    };
+
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+        if(!payload.csgResources.refractionCapFillPipeline || !payload.csgResources.bindingValid()
+            || !payload.targets.avboit.refractionFramebuffer || !payload.targets.bindless.slotsBufferDescriptor.valid()
+            || payload.receiverIndices.empty())
+            return false;
+        commandList.endRenderPass();
+        payload.csgSystem.renderRefractionIntervalCaps(commandList, payload.targets, payload.csgResources,
+            payload.workRect, payload.receiverIndices.data(), payload.receiverIndices.size()
+        );
+        commandList.endRenderPass();
+        return true;
+    }
+};
+
 struct FinalizeTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
@@ -430,6 +461,37 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
                 || !appendDraw(&item, 1u, csg, RenderPath::ComputeEmulation, false, output))
                 return {};
         }
+    }
+    if(hasCsg){
+        if(!csgResources.refractionCapFillPipeline)
+            return {};
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratch};
+        uses.reserve(commonUses.size() + csgUses.size() + 6u);
+        uses.assign(commonUses.begin(), commonUses.end());
+        uses.insert(uses.end(), csgUses.begin(), csgUses.end());
+        uses.push_back(ReadUse(opaqueDepth));
+        uses.push_back(ReadWriteUse(depth, Core::ResourceStates::DepthWrite));
+        uses.push_back(ReadWriteUse(normalIor, Core::ResourceStates::RenderTarget));
+        uses.push_back(ReadWriteUse(tintCoverage, Core::ResourceStates::RenderTarget));
+        uses.push_back(ReadWriteUse(instance, Core::ResourceStates::RenderTarget));
+        uses.push_back(ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
+        Core::GpuTaskDesc desc = TaskDesc(Name("render.refraction.capture.caps"), "Refraction Capture Caps", dependency);
+        desc.setResourceUses(uses.data(), uses.size());
+        if(sampledTextureSet->valid())
+            desc.setResourceSetUses(&setUses[1], 1u);
+        CaptureCapTask::Payload payload{arena, csgSystem, targets};
+        payload.csgResources = csgResources;
+        payload.workRect = csgFrameData.workRegion.resolveRect(targets.width, targets.height);
+        payload.receiverIndices.reserve(csgFrameData.receiverRanges.size());
+        for(usize receiverIndex = 0u; receiverIndex < csgFrameData.receiverRanges.size(); ++receiverIndex){
+            if(csgFrameData.receiverRanges[receiverIndex].cutterCount != 0u)
+                payload.receiverIndices.push_back(static_cast<u32>(receiverIndex));
+        }
+        if(payload.receiverIndices.empty())
+            return {};
+        dependency = graph.addTask<CaptureCapTask>(desc, Move(payload));
+        if(!dependency.valid())
+            return {};
     }
     const Core::GpuTaskId completion = finalize();
     if(producesReusableGeometry && !generatedGeometry.publishProducer(completion))

@@ -2,55 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../deferred/binding_slots.h"
-#include "../mesh/runtime_constants.h"
+#include "cap_surface.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// The cap-fill fullscreen draw reuses the ordinary 64-byte mesh push ABI.  Its fourth frame-slot word is unused by this path, so it selects the global CSG context UniformBuffer without growing any push range.
-struct NwbCsgCapFillPushConstants{
-    uint4 dispatch;
-    float4 viewportRect;
-    float4 scissorRect;
-    uint4 frameHeapSlots;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbCsgCapFillPushConstants> g_NwbCsgCapFillPushConstants;
-
-#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgCapFillPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX])
-#define NWB_CSG_MESH_INSTANCE_INDEX 0u
-#include "runtime.slangi"
-#undef NWB_CSG_MESH_INSTANCE_INDEX
-
-#define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
-#include "interval_sample.slangi"
-#undef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
-#undef NWB_CSG_CONTEXT_HEAP_SLOT
-
-// CSG caps have no source triangle, but they still evaluate the receiver's COMPLETE cook-generated surface hook.
-// The heap-selected clip context provides typed material words and mutable mesh-instance storage.
-uint nwbMeshFrameMaterialTypedHeapSlot(){
-    return g_NwbCsgClipContextSlots.materialTyped;
-}
-uint nwbMeshFrameInstanceHeapSlot(){
-    return g_NwbCsgClipContextSlots.meshInstances;
-}
-// interval_sample.slangi already included bindless_heap_mesh.slangi with its b18-selected mesh-view alias. Its include guard keeps this include focused on the cap-fill material/instance accessors above.
-#include "../bindless/bindless_heap_mesh.slangi"
-#include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/surface_dispatch.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct NwbCsgIntervalCapFillPixelInput{
-    float4 position : SV_Position;
-    [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
-};
 
 struct NwbCsgIntervalCapFillPixelOutput{
     [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;
@@ -77,22 +33,13 @@ half3 nwbCsgCapFillEncodeNormal(const float3 normal){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput input){
-    const NwbCsgIntervalCapPixel cap = nwbCsgSampleNearestIntervalCap(input.position);
+NwbCsgIntervalCapFillPixelOutput main(const NwbCsgCapFillPixelInput input){
+    const NwbCsgIntervalCapPixel cap = nwbCsgSampleNearestIntervalCap(input.position, NWB_CSG_INVALID_RECEIVER_INDEX);
     if(!cap.visible)
         discard;
 
     const NwbCsgReceiverRange receiver = g_NwbCsgReceiverRanges[cap.receiverIndex];
-    NwbShadowHit hit;
-    hit.meshInstanceIndex = receiver.materialContext.z;
-    hit.surfaceDispatchId = receiver.materialContext.x;
-    hit.materialConstantByteOffset = receiver.materialContext.y;
-    // A cap has no receiver-triangle UV/color/tangent. Match the documented non-rasterized surface inputs used by the generated dispatcher, while preserving every declared typed material field and both BXDF parameters.
-    hit.uv0 = float2(0.0);
-    hit.worldNormal = cap.normal;
-    hit.worldPosition = cap.worldPosition;
-    hit.rayDirection = -cap.normal;
-    const NwbMeshSurface surface = nwbShadowDispatchSurface(hit.surfaceDispatchId, hit);
+    const NwbMeshSurface surface = nwbCsgCapSurface(cap, receiver, -cap.normal);
 
     NwbCsgIntervalCapFillPixelOutput output;
     // baseColor.a carries the deferred BXDF id, while the other packed fields exactly match the mesh G-buffer.

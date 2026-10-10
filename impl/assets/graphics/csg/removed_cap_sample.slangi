@@ -27,7 +27,7 @@ struct NwbCsgRemovedCapSample{
     bool visible;
 };
 
-NwbCsgRemovedCapSample nwbCsgSampleRemovedCapAtPixel(const uint2 pixel, const uint4 workRect, const uint3 slots){
+NwbCsgRemovedCapSample nwbCsgSampleRemovedCapAtPixel(const uint2 pixel, const uint4 workRect, const uint3 slots, const uint receiverIndex){
     NwbCsgRemovedCapSample result = (NwbCsgRemovedCapSample)0;
     result.depth = NWB_CSG_INVALID_DISTANCE;
     if(any(pixel < workRect.xy) || any(pixel >= workRect.zw))
@@ -46,7 +46,8 @@ NwbCsgRemovedCapSample nwbCsgSampleRemovedCapAtPixel(const uint2 pixel, const ui
             break;
         const int3 texel = int3(pixel, index);
         const uint4 data = nwbHeapStorageImage2DArrayUint4(slots.y).Load(texel);
-        if((data.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
+        if((receiverIndex != NWB_CSG_INVALID_RECEIVER_INDEX && data.x != receiverIndex)
+            || (data.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
             continue;
         const float4 depth = nwbHeapStorageImage2DArrayFloat4(slots.x).Load(texel);
         if(!isfinite(depth.y) || depth.y >= result.depth)
@@ -61,7 +62,7 @@ NwbCsgRemovedCapSample nwbCsgSampleRemovedCapAtPixel(const uint2 pixel, const ui
     return result;
 }
 
-NwbCsgRemovedCapSample nwbCsgSampleNearestRemovedCap(const uint2 pixel, const uint4 workRect, const uint3 slots){
+NwbCsgRemovedCapSample nwbCsgSampleNearestRemovedCap(const uint2 pixel, const uint4 workRect, const uint3 slots, const uint receiverIndex){
     NwbCsgRemovedCapSample unavailable = (NwbCsgRemovedCapSample)0;
     unavailable.depth = NWB_CSG_INVALID_DISTANCE;
     if(any(workRect.xy >= workRect.zw))
@@ -71,7 +72,7 @@ NwbCsgRemovedCapSample nwbCsgSampleNearestRemovedCap(const uint2 pixel, const ui
     const uint2 distance = max(pixel, nearest) - min(pixel, nearest);
     if(any(distance > uint2(NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS)))
         return unavailable;
-    NwbCsgRemovedCapSample result = nwbCsgSampleRemovedCapAtPixel(pixel, workRect, slots);
+    NwbCsgRemovedCapSample result = nwbCsgSampleRemovedCapAtPixel(pixel, workRect, slots, receiverIndex);
     if(result.visible)
         return result;
     [unroll]
@@ -83,7 +84,7 @@ NwbCsgRemovedCapSample nwbCsgSampleNearestRemovedCap(const uint2 pixel, const ui
             const int2 neighbor = int2(pixel) + int2(x, y);
             if(any(neighbor < 0))
                 continue;
-            const NwbCsgRemovedCapSample candidate = nwbCsgSampleRemovedCapAtPixel(uint2(neighbor), workRect, slots);
+            const NwbCsgRemovedCapSample candidate = nwbCsgSampleRemovedCapAtPixel(uint2(neighbor), workRect, slots, receiverIndex);
             if(candidate.visible && candidate.depth < result.depth)
                 result = candidate;
         }

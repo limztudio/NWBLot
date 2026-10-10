@@ -290,7 +290,10 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reflection-case", choices=("offscreen", "moved", "opaque_glass", "onscreen", "onscreen_moved", "boundary", "floor",
         "feedback_boundary", "feedback_mutation", "feedback_long_miss",
         "rough", "rough_furnace", "rough_glass", "rough_deform", "temporal_camera", "temporal_transform", "temporal_material", "temporal_light", "temporal_deform",
-        "optical_reference", "optical_clear", "optical_tinted", "optical_tilted", "optical_nested2", "optical_nested3",
+        "optical_reference", "optical_csg_reference", "optical_csg_cap", "optical_csg_cavity", "optical_sliver", "optical_csg_sliver",
+        "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap",
+        "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry",
+        "optical_clear", "optical_tinted", "optical_tilted", "optical_nested2", "optical_nested3",
         "optical_priority_a", "optical_priority_b", "optical_alpha_before", "optical_alpha_after", "optical_duplicate_identical",
         "optical_duplicate_group", "optical_duplicate_reverse", "optical_mirrored", "optical_disconnected", "optical_same_mesh",
         "optical_torus", "optical_inside", "optical_inside_nested", "optical_unspecified", "optical_mixed", "optical_overflow", "optical_tir",
@@ -323,6 +326,7 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
         "duplicate_single_cool", "duplicate_single_warm", "duplicate_single_cool_tinted", "duplicate_single_warm_tinted",
         "coincident_reversed", "coincident_tinted_reversed", "coincident_priority_swap", "coincident_tinted_priority_swap",
         "coincident_identical", "coincident_tinted_identical", "near_coincident", "coincident_preserved",
+        "csg_reference", "csg_cap", "csg_middle", "csg_uncut",
     ), help="Select a visual refraction case; omit to run the original regression scene.")
     parser.add_argument("--refraction-geometry", action=ACTION_STORE_TRUE,
         help="Show the selected case with colored, nonrefractive translucent surfaces.")

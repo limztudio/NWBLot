@@ -19,13 +19,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RendererRayTracingSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace RendererTaskGraphDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_ReflectionCsgHardwareSliceFamily("render.reflection.hardware.csg_slice");
+
+[[nodiscard]] Name ReflectionCsgHardwareSliceIdentity(u32 slice);
+
 struct ReflectionGraphInputs{
+    RendererRayTracingSystem& raytracingSystem;
     Core::GpuGraphResourceId opaqueDepth;
     Core::GpuGraphResourceId opaqueColor;
     // Surface reads cover view/deferred selectors, F0/roughness, depth/normal, glass captures.
@@ -54,6 +65,7 @@ struct ReflectionGraphResult{
 [[nodiscard]] ReflectionGraphResult DeclareReflectionTasks(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
+    RendererReflectionSystem& reflectionSystem,
     Core::Alloc::ScratchArena& scratchArena,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,

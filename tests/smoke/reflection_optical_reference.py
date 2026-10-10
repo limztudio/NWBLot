@@ -160,6 +160,8 @@ def authored_torus_triangles():
 def boundaries(case):
     if case == "optical_reference":
         return ()
+    if case in ("optical_csg_reference", "optical_csg_cap", "optical_csg_cavity"):
+        return (box("retained", -9.5, 1),)
     if case == LIT_OPTICAL_TIR:
         inverse_root_two = math.sqrt(0.5)
         planes = (((1.0, 0.0, 0.0), 20.0), ((0.0, 0.0, 1.0), 2.0),
@@ -214,6 +216,11 @@ def chart_color(x):
 
 
 def trace_transmission(case, origin, direction, max_queries=16):
+    if case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp",
+        "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
+        "optical_group_entry", "optical_csg_group_entry"):
+        # Unresolved thin spans or gaps retain conservative rejection even when grouped endpoints leave the same nonzero membership.
+        return (0.0, 0.0, 0.0), {"queries": 0, "reason": LIT_AMBIGUOUS, "crossings": 0, "tir_events": 0}
     objects = boundaries(case)
     active = [item for item in objects if item.contains(origin)]
     # At an interior start, ascending entry distance along the opposite direction reconstructs outer->inner membership.

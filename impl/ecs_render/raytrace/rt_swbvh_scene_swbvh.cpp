@@ -274,9 +274,6 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         bool opticalBoundsValid = false;
         if(
             bvhPrimitive.transparentOccluder && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh
-            && !m_world.tryGetComponent<StaticCsgMeshComponent>(entity)
-            && !m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
-            && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
         ){
             const auto bounds = ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax);
             if(bounds){
@@ -285,7 +282,14 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
                 opticalBoundsValid = true;
             }
         }
-        opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
+        const bool runtimeOpticalBounds =
+            bvhPrimitive.transparentOccluder && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
+            && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
+        ;
+        if(runtimeOpticalBounds)
+            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
+        else
+            opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 
         // Preserve the exact emitted instance/boundary ordering, while allowing only world transforms to lag one frame.
         Fnv64AppendValue(captureSceneIdentity, entity.id);
@@ -555,11 +559,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         return false;
     u64 opticalMaterialContentHash = swMaterialContextHash;
     Fnv64AppendValue(opticalMaterialContentHash, opticalScene.contentHash());
+    if(csg.hasCsg)
+        Fnv64AppendValue(opticalMaterialContentHash, csg.identity);
     m_preparedSceneContentStamp = { sceneStaticHash, opticalMaterialContentHash, staticScene && contentComplete };
     RayTracingSceneContentStamp samplingStamp = m_preparedSceneContentStamp;
     // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
-    if(csg.hasCsg)
-        Fnv64AppendValue(samplingStamp.material, csg.identity);
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(samplingStamp);
     Fnv64AppendValue(captureSceneIdentity, instanceCount);
     Fnv64AppendBuffer(captureSceneIdentity, shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size());

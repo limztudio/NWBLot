@@ -257,6 +257,104 @@ class CoverageTests(unittest.TestCase):
                 benchmark.validate_coverage(scopes(workload, 99), workload, 6, 100)
 
 
+class WallFrameEvidenceTests(unittest.TestCase):
+    @staticmethod
+    def reports(intervals):
+        fps = []
+        gpu = []
+        for frames, seconds in intervals:
+            average = seconds * 1000 / frames
+            fps.append(f"ReflectionSmokeProject: fps avg={frames / seconds:.17g} frame_ms avg={average:.17g} "
+                f"min={average / 2:.17g} max={average * 2:.17g} frames={frames} seconds={seconds:.17g}")
+            gpu.append(f"=== interval: {frames} frames / {seconds:.4f}s ===")
+        return "\n".join(fps), "\n".join(gpu)
+
+    def test_retained_intervals_weight_frames_and_ignore_shutdown_tail(self):
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
+        text, timing = self.reports(((30, .5), (30, .5), (100, .5), (30, .6), (900, .6)))
+        value = benchmark.summarize_wall_frames(text.replace("\n", "\r\n"), timing, workload, [2, 4])
+        self.assertTrue(value["eligible"])
+        self.assertEqual(value["retained_report_range"], [2, 4])
+        self.assertEqual(value["frames"], 130)
+        self.assertEqual(value["reports"], 2)
+        self.assertAlmostEqual(value["seconds"], 1.1)
+        self.assertAlmostEqual(value["mean_frame_ms"], 1100 / 130)
+        self.assertAlmostEqual(value["mean_fps"], 130 / 1.1)
+        self.assertEqual(value["min_frame_ms"], 2.5)
+        self.assertEqual(value["max_frame_ms"], 40)
+
+    def test_long_positive_frames_are_retained_and_weighted_without_a_duration_cutoff(self):
+        workload = benchmark.workloads()["reflection-optical-csg-cap"]
+        text, timing = self.reports(((30, .5), (30, .5), (2, .6), (1, .9), (900, .6)))
+        value = benchmark.summarize_wall_frames(text, timing, workload, [2, 4])
+        self.assertEqual(value["retained_report_range"], [2, 4])
+        self.assertEqual(value["frames"], 3)
+        self.assertEqual(value["reports"], 2)
+        self.assertAlmostEqual(value["seconds"], 1.5)
+        self.assertAlmostEqual(value["mean_frame_ms"], 500)
+        self.assertAlmostEqual(value["mean_fps"], 2)
+        self.assertAlmostEqual(value["min_frame_ms"], 150)
+        self.assertAlmostEqual(value["max_frame_ms"], 1800)
+
+    def test_long_positive_maximum_does_not_discard_an_otherwise_consistent_interval(self):
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
+        text, timing = self.reports(((30, .5), (30, .5), (100, .5), (100, .5)))
+        value = benchmark.summarize_wall_frames(text.replace("max=10", "max=251", 1), timing, workload, [2, 4])
+        self.assertEqual(value["frames"], 200)
+        self.assertAlmostEqual(value["mean_frame_ms"], 5)
+        self.assertEqual(value["max_frame_ms"], 251)
+
+    def test_missing_malformed_nonfinite_and_inconsistent_reports_are_refused(self):
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
+        text, timing = self.reports(((30, .5), (30, .5), (100, .5), (100, .5)))
+        for changed in ("\n".join(text.splitlines()[:-1]), text.replace("fps avg=200", "fps avg=nan", 1),
+            text.replace("frame_ms avg=5", "frame_ms avg=inf", 1), text.replace("frames=100", "frames=0", 1),
+            text.replace("fps avg=200", "fps avg=100", 1), text.replace(" min=2.5", "", 1),
+            text.replace("max=10", "max=4", 1), text.replace("max=10", "max=0", 1),
+            text.replace("min=2.5", "min=-2.5", 1), text.replace("seconds=0.5", "seconds=0", 1)):
+            with self.subTest(text=changed), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.summarize_wall_frames(changed, timing, workload, [2, 4])
+
+    def test_gpu_header_rounding_is_accepted_but_shifted_windows_are_refused(self):
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
+        text, timing = self.reports(((30, .5), (30, .5), (100, .500049), (100, .5)))
+        benchmark.summarize_wall_frames(text, timing, workload, [2, 4])
+        for changed in (timing.replace("100 frames", "101 frames", 1),
+            timing.replace("100 frames / 0.5000", "100 frames / 0.5002", 1)):
+            with self.subTest(timing=changed), self.assertRaisesRegex(benchmark.SmokeFailure, "windows do not match"):
+                benchmark.summarize_wall_frames(text, changed, workload, [2, 4])
+
+    def test_fixed_simulation_delta_workloads_explicitly_omit_wall_frame_evidence(self):
+        for name in (LIT_TRANSPARENT_MULTI, LIT_SHADOW_ZERO_EXTENT, LIT_CAUSTIC_POPULATED):
+            value = benchmark.summarize_wall_frames("", "", benchmark.workloads()[name], [2, 8])
+            with self.subTest(workload=name):
+                self.assertFalse(value["eligible"])
+                self.assertIn("fixed simulation delta", value["reason"])
+        workload, orders, trials = trial_matrix()
+        for trial in trials:
+            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": 1, "mean_fps": 1000}
+        self.assertFalse(benchmark.compare_trials(trials, orders, workload)["wall_frame"]["eligible"])
+
+    def test_wall_frame_comparison_uses_complete_paired_blocks_and_correct_units(self):
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
+        _, orders, trials = trial_matrix()
+        for trial in trials:
+            trial[LIT_SCOPES] = scopes(workload)
+            frame_ms = 5 if trial[LIT_ARM] == LIT_BASELINE else 4
+            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": frame_ms, "mean_fps": 1000 / frame_ms}
+        value = benchmark.compare_trials(trials, orders, workload)["wall_frame"]
+        self.assertTrue(value["eligible"])
+        self.assertEqual(value["frame_ms_delta"]["blocks"], 8)
+        self.assertEqual(value["frame_ms_delta"]["ci95_mean_ms"], [-1, -1])
+        self.assertEqual(value["fps_delta"]["ci95_mean_fps"], [50, 50])
+        self.assertEqual(value["means"][LIT_CANDIDATE], {"frame_ms": 4, "fps": 250})
+        with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_EVERY_PLANNED_TRIAL):
+            benchmark.compare_trials(trials[:-1], orders, workload)
+        del trials[0]["wall_frame"]
+        with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial.*qualified reports"):
+            benchmark.compare_trials(trials, orders, workload)
+
+
 class WorkloadPolicyTests(unittest.TestCase):
     def test_inherited_smoke_capture_diagnostics_and_pose_are_cleared(self):
         workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
@@ -703,16 +801,39 @@ class ReflectionWorkloadTests(unittest.TestCase):
         common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
             LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        args = benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CLEAR,
-            LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, "2"])
-        workload = benchmark.workloads()[args.workload]
-        value = scopes(workload)
-        value[benchmark.reflection.HARDWARE][LIT_GPU_SAMPLES] *= 2
-        with self.assertRaises(benchmark.SmokeFailure):
+        for count in (2, 169):
+            args = benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap",
+                LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, str(count)])
+            workload = benchmark.workloads()[args.workload]
+            value = scopes(workload)
             benchmark.validate_coverage(value, workload, 6, 100)
+            value[benchmark.reflection.HARDWARE][LIT_GPU_SAMPLES] *= count
+            with self.subTest(native_calls=count), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.validate_coverage(value, workload, 6, 100)
+        for invalid in ("0", "-1", "1382401"):
+            with self.subTest(native_calls=invalid), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap",
+                    LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, invalid])
         for name in (LIT_TRANSPARENT_MULTI, LIT_REFLECTION_SCREEN_DEPTH, LIT_REFLECTION_ROUGH_FILTERED):
             with self.subTest(workload=name), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(common + [LIT_WORKLOAD, name, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, "2"])
+
+    def test_sliced_long_hardware_range_retains_all_work_in_per_frame_and_paired_times(self):
+        workload = benchmark.workloads()["reflection-optical-csg-cap"]
+        _, orders, trials = trial_matrix()
+        for trial in trials:
+            candidate = trial[LIT_ARM] == LIT_CANDIDATE
+            trial["native_hardware_dispatches_per_range"] = 169 if candidate else 1
+            trial[LIT_SCOPES] = scopes(workload, frame_ms=2400 if candidate else 100)
+            hardware = trial[LIT_SCOPES][benchmark.reflection.HARDWARE]
+            hardware[LIT_MEAN_MS] = 2351 if candidate else 50
+            hardware[LIT_TOTAL_MS] = hardware[LIT_MEAN_MS] * hardware[LIT_GPU_SAMPLES]
+            benchmark.validate_coverage(trial[LIT_SCOPES], workload, 6, 100)
+        result = benchmark.compare_trials(trials, orders, workload)
+        self.assertEqual(result[benchmark.LIT_MEANS_MS][LIT_CANDIDATE][benchmark.reflection.HARDWARE], 2351)
+        self.assertEqual(result["secondary_per_frame_work"][benchmark.LIT_MEANS_MS][LIT_CANDIDATE], 2351)
+        self.assertEqual(result["secondary"][LIT_MEAN_MS], 2301)
+        self.assertEqual(result["frame"][LIT_MEAN_MS], 2300)
 
     def test_depth_secondary_rejects_an_incomplete_trial_matrix(self):
         workload = benchmark.workloads()[LIT_REFLECTION_SCREEN_DEPTH]

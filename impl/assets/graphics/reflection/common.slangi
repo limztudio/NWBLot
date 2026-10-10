@@ -14,6 +14,10 @@
 #include "../common/math.slangi"
 #include "sampling.slangi"
 
+#ifndef NWB_RT_CSG_ENABLED
+#define NWB_RT_CSG_ENABLED 0
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,7 +34,13 @@ struct NwbReflectionParameters{
 };
 
 struct NwbReflectionPushConstants{
+#if NWB_RT_CSG_ENABLED
+#define NWB_REFLECTION_PUSH_UINT_FIELD(name) uint name;
+    NWB_REFLECTION_CSG_PUSH_UINT_FIELDS(NWB_REFLECTION_PUSH_UINT_FIELD)
+#undef NWB_REFLECTION_PUSH_UINT_FIELD
+#else
     uint frameParametersSlot;
+#endif
 };
 [[vk::push_constant]] ConstantBuffer<NwbReflectionPushConstants> g_NwbReflectionPush;
 

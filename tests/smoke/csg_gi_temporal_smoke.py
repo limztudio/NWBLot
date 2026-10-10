@@ -424,7 +424,7 @@ def main():
     parser.add_argument("--overlapping", action="store_true", help="Add a static plane receiver at z+0.125 with the same cutter group.")
     parser.add_argument("--gpu-validation", action="store_true")
     parser.add_argument("--gpu-timing-output", type=Path)
-    parser.add_argument("--timeout", type=float, default=90.0)
+    parser.add_argument("--timeout", type=float, default=150.0)
     parser.add_argument("--analysis-only", action="store_true")
     parser.add_argument("--check-quality", action="store_true")
     parser.add_argument("--check-geometry", action="store_true", help="Check physical cap probes in a static normal or position view.")

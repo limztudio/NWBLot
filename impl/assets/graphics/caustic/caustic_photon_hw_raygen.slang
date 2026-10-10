@@ -11,6 +11,10 @@
 #include "../raytrace/constants.h"
 // Only raygen includes the bounce loop and backend hook, keeping TraceRay recursion at one.
 #include "caustic_trace.slangi"
+#if NWB_RT_CSG_ENABLED
+#define NWB_CSG_RAY_HARDWARE 1
+#include "csg_hit.slangi"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,9 +34,13 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     p.hit = 0u;
     p.isRefractive = 0u;
 
+#if NWB_RT_CSG_ENABLED
+    TraceRay(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RT_SHADOW_BASE_INSTANCE_MASK, 0u, 0u, 0u, ray, p);
+#else
     TraceRay(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, 0u, 0u, 0u, ray, p);
+#endif
 
-    NwbCausticHit hit;
+    NwbCausticHit hit = (NwbCausticHit)0;
     hit.hit = (p.hit != 0u);
     hit.isRefractive = (p.isRefractive != 0u);
     hit.t = p.normalAndDistance.w;
@@ -40,6 +48,20 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     hit.worldPos = hit.hit ? ray.Origin + p.normalAndDistance.w * ray.Direction : float3(0.0);
     hit.shadingNormal = p.normalAndDistance.xyz;
     hit.transmission = half3(p.transmissionAndIor.xyz);
+#if NWB_RT_CSG_ENABLED
+    const uint contextSlot = g_NwbCausticHwMaterialContextSlots.materialSlots.w;
+    const uint materialSlot = g_NwbCausticHwMaterialContextSlots.sceneSlots.z;
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    for(uint index = 0u; index < activeCount; ++index){
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(contextSlot, materialSlot, instance, origin, direction, tMin, hit.t);
+        if(candidate.failure != 0u)
+            return candidate;
+        if(candidate.hit)
+            hit = candidate;
+    }
+#endif
     return hit;
 }
 

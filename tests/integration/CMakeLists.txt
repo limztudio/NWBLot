@@ -22,6 +22,12 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
     add_test(NAME nwb_csg_shadow_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke_tests.py"
     )
+    add_test(NAME nwb_csg_caustic_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_smoke_tests.py"
+    )
+    add_test(NAME nwb_skinned_caustic_csg_transition_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke_tests.py"
+    )
     add_test(
         NAME nwb_testbed_window_capture_unit
         COMMAND
@@ -82,6 +88,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
     add_test(
         NAME nwb_reflection_optical_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke_tests.py"
+    )
+    add_test(
+        NAME nwb_csg_optics_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_optics_smoke_tests.py"
     )
     add_test(
         NAME nwb_refraction_capture_analysis_unit

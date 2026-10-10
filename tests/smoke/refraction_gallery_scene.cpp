@@ -5,9 +5,11 @@
 #include "refraction_gallery_scene.h"
 
 #include "smoke_project_helpers.h"
+#include "csg_smoke_helpers.h"
 
 #include <global/math/constant.h>
 #include <global/math/frame.h>
+#include <impl/ecs_csg/shape_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,6 +103,32 @@ public:
         );
     }
 
+    void csgSlab(const AStringView caseName){
+        const bool reference = caseName == "csg_reference";
+        const bool middle = caseName == "csg_middle";
+        const auto entity = CreateTintedStaticMeshEntity(
+            m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
+            m_preview ? s_Preview : s_Glass, s_Interface, Float4(0.9f, 0.98f, 1.f, m_preview ? 0.48f : 0.f),
+            Float4(0.f, 1.4f, reference || middle ? 0.5f : 0.f, 0.f), Float4(2.6f, 2.6f, reference ? 1.f : (middle ? 3.f : 2.f), 0.f)
+        );
+        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: CSG slab creation failed"));
+        if(caseName != "csg_cap" && !middle)
+            return;
+        const Name group("smoke/refraction/csg_optics");
+        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
+        // The middle slab has no camera-facing receiver triangle: both its entry and exit are generated walls.
+        for(u32 index = 0u; index < (middle ? 2u : 1u); ++index){
+            auto cutterEntity = m_world.createEntity();
+            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
+            cutter.receiverGroup = group;
+            cutter.shapeType = Name("engine/csg/plane");
+            Impl::CsgPlaneShapeParameters parameters;
+            parameters.normalDistance = index == 0u ? Float4(0.f, 0.f, 1.f, 0.f) : Float4(0.f, 0.f, -1.f, 1.f);
+            AssignCsgCutterParameters(cutter, parameters);
+            AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        }
+    }
+
     void panel(
         const SmokeMaterialRef& material,
         const Float4& tint,
@@ -174,7 +202,9 @@ bool CreateRefractionGalleryScene(
     // Tighter framing exposes overlap artifacts while preserving the same camera for every variant.
     world.tryGetComponent<Impl::Scene::CameraComponent>(camera)->setVerticalFovRadians(s_PI * (40.0f / 180.0f));
     __hidden_refraction_gallery_scene::GalleryBuilder scene(context, world, geometryPreview);
-    if(caseName == "single")
+    if(caseName == "csg_reference" || caseName == "csg_cap" || caseName == "csg_middle" || caseName == "csg_uncut")
+        scene.csgSlab(caseName);
+    else if(caseName == "single")
         scene.sphere(0.0f, 0.0f, 1.15f);
     else if(caseName == "separate"){
         scene.sphere(-1.15f, 0.0f, 0.85f);

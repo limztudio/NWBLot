@@ -113,7 +113,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             return false;
     }
 
-    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings))
+    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), false, m_reflectionSettings))
         return false;
 
     if(!m_avboitSystem.createAvboitPipelines())
@@ -486,14 +486,6 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     DeferredFrameTargets& deferredTargets = m_frameTargets;
 
     m_reflectionSystem.pollStatistics();
-    if(!m_reflectionSystem.prepareResources(
-        deferredTargets.width,
-        deferredTargets.height,
-        m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
-        m_reflectionSettings
-    ))
-        return false;
-
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     if(m_preparedHasTransparentRenderers)
         m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
@@ -505,6 +497,15 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     ;
     m_preparedCsgFrameStateValid = true;
     const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
+    if(!m_reflectionSystem.prepareResources(
+        deferredTargets.width,
+        deferredTargets.height,
+        m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
+        hasCsgFrameWork && m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
+        m_reflectionSettings
+    ))
+        return false;
+
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
@@ -564,6 +565,9 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the prepared snapshot and never creates resources.
     const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
+    const bool hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;
+    if(m_preparedRefractionActive && hasTransparentCsgFrameWork && !m_csgSystem.prepareRefractionIntervalCapResources(deferredTargets))
+        return false;
     m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
     m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;
     if(!m_refractionEnabled){

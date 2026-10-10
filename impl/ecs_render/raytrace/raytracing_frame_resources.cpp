@@ -113,11 +113,19 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
 
 RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
     const auto& state = m_rayTracingState;
-    const bool hasCsgTrace = hasSurfelWork() && state.m_surfelUseCsgTrace;
+    const bool hasCsgTrace = m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    usize csgReadTokenCount = 0u;
+    for(const auto& token : state.m_csgTraceContextReadSubmissionTokens){
+        if(token.valid()){
+            csgReadTokenCount = state.m_csgTraceContextReadSubmissionTokens.size();
+            break;
+        }
+    }
     return RayTracingDeferredGraphResourceSnapshot{
         .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
         .csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr,
-        .csgTraceContextReadSubmissionToken = hasCsgTrace ? state.m_csgTraceContextReadSubmissionToken : Core::QueueSubmissionToken{},
+        .csgTraceContextReadSubmissionTokens = csgReadTokenCount != 0u ? state.m_csgTraceContextReadSubmissionTokens.data() : nullptr,
+        .csgTraceContextReadSubmissionTokenCount = csgReadTokenCount,
         .csgTraceBoundsBuffers = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.data() : nullptr,
         .csgTraceBoundsBufferCount = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.size() : 0u,
         .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,

@@ -29,6 +29,7 @@
 #define NWB_CSG_RAY_FAILURE_UNSUPPORTED 1u
 #define NWB_CSG_RAY_FAILURE_CAPACITY 2u
 #define NWB_CSG_RAY_FAILURE_TOPOLOGY 4u
+#define NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL 8u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

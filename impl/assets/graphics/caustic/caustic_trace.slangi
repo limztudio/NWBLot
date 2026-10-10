@@ -15,6 +15,10 @@
 #include "refract.slangi"
 #include "splat_constants.slangi"
 
+#ifndef NWB_RT_CSG_ENABLED
+#define NWB_RT_CSG_ENABLED 0
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,7 +26,8 @@
 // Shared transport keeps HW and SW photon physics and deposition arithmetic identical; only closest-hit differs.
 
 
-#define NWB_CAUSTIC_MAX_BOUNCES 4u
+// Several ordinary refractors or CSG retained spans require more than four interfaces before deposition.
+#define NWB_CAUSTIC_MAX_BOUNCES 16u
 
 #define NWB_CAUSTIC_FLUX_EPSILON 1e-6
 
@@ -34,6 +39,9 @@
 // Refractive hits provide world-space shading normal, IOR, and transmission.
 struct NwbCausticHit{
     bool hit;
+#if NWB_RT_CSG_ENABLED
+    uint failure;
+#endif
     bool isRefractive;
     float t;
     float ior;
@@ -94,6 +102,10 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             return splat;
 
         const NwbCausticHit hit = nwbCausticTraceClosest(origin, direction, tMin, tMax);
+#if NWB_RT_CSG_ENABLED
+        if(hit.failure != 0u)
+            return splat;
+#endif
         if(!hit.hit)
             return splat;
 

@@ -29,6 +29,10 @@ uint nwbMeshFrameViewHeapSlot(){ return g_NwbRefractionPush.viewHeapSlot; }
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbRefractionResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbRefractionResources.avboitSlots.w
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
+#if NWB_RT_CSG_ENABLED
+#define NWB_RT_CSG_CONTEXT_SLOT g_NwbRefractionMaterialContext.materialSlots.w
+#define NWB_RT_CSG_MATERIAL_SLOT g_NwbRefractionMaterialContext.sceneSlots.z
+#endif
 #include "interface_hit.slangi"
 #include "../scene/lighting.slangi"
 
@@ -71,9 +75,6 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
 }
 
 float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
-    // Raster capture respects CSG cuts, but the shared triangle TLAS contains the original uncut mesh. Its exit would produce the wrong optical thickness, so CSG primaries use the bounded screen-space approximation.
-    if(entry.csgPrimary)
-        return nwbRefractionResolveScreen(pixel, entry);
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
     const float entryDistance = length(entry.position - camera);
     const float associationTolerance = max(entry.bias * 8.0, entryDistance * 0.0002);
@@ -128,6 +129,10 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         const NwbRayTraceSurfaceHit background = nwbRayTraceClosestSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
         if(!background.hit)
             break;
+#if NWB_RT_CSG_ENABLED
+        if(background.failure != 0u)
+            return float4(0.0, 0.0, 0.0, 1.0);
+#endif
         if(float(background.surface.refractionIor) > 1.001)
             break;
         const half coverage = half(saturate(float(background.surface.renderCoverage)));

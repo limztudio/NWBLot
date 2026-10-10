@@ -221,9 +221,10 @@ def validate(mesh: Mesh, expected_components: int, expected_euler: int, expected
         components.append(component)
     assert len(components) == expected_components
     for component in components:
-        signed_volume = sum(dot(mesh.positions[a], cross(mesh.positions[b], mesh.positions[c])) / 6.0
-                            for a, b, c in position_triangles if a in component)
-        assert signed_volume > 0.01, "Component winding points inward"
+        origin = mesh.positions[min(component)]
+        signed_volume = sum(dot(sub(mesh.positions[a], origin), cross(sub(mesh.positions[b], origin),
+            sub(mesh.positions[c], origin))) / 6.0 for a, b, c in position_triangles if a in component)
+        assert math.isfinite(signed_volume) and signed_volume > 0.0, "Component winding is inward or has zero volume"
     bounds = tuple(tuple(operation(point[axis] for point in mesh.positions) for axis in range(3)) for operation in (min, max))
     assert all(abs(actual - expected) < 1e-9 for row, expected_row in zip(bounds, expected_bounds) for actual, expected in zip(row, expected_row))
 

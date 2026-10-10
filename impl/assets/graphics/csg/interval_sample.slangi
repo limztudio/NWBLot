@@ -282,10 +282,10 @@ bool nwbCsgReceiverIntervalPixelDiscard(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
+NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition, const uint receiverIndex){
     const uint2 pixel = uint2(rasterPosition.xy);
     const uint3 slots = uint3(g_NwbCsgBindlessResources.csgSpanSlots.w, g_NwbCsgBindlessResources.csgRemovedSlots.yz);
-    const NwbCsgRemovedCapSample sample = nwbCsgSampleNearestRemovedCap(pixel, g_NwbCsgIntervalSampleState.workRect, slots);
+    const NwbCsgRemovedCapSample sample = nwbCsgSampleNearestRemovedCap(pixel, g_NwbCsgIntervalSampleState.workRect, slots, receiverIndex);
     NwbCsgIntervalCapPixel result = (NwbCsgIntervalCapPixel)0;
     result.depth = sample.depth;
     if(!sample.visible || !isfinite(sample.linearDepth) || sample.linearDepth <= 0.0)

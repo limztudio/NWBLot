@@ -59,6 +59,11 @@ uint nwbMeshFrameViewHeapSlot(){
 
 #include "caustic_trace.slangi"
 #include "light_pick.slangi"
+#if NWB_RT_CSG_ENABLED
+#define NWB_CSG_RAY_HARDWARE 0
+#define NWB_CSG_RAY_SW_STACK_SIZE NWB_CAUSTIC_SW_MESH_STACK_SIZE
+#include "csg_hit.slangi"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,6 +121,17 @@ NwbRayTraceVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, c
 void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbCausticHit closest){
     const NwbSwBvhInstance instance = nwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
+#if NWB_RT_CSG_ENABLED
+    if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u){
+        const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(
+            g_NwbCausticSwMaterialContextSlots.materialSlots.w, g_NwbCausticSwMaterialContextSlots.sceneSlots.z,
+            instanceIndex, worldOrigin, worldDirection, tMin, closest.t
+        );
+        if(candidate.hit || candidate.failure != 0u)
+            closest = candidate;
+        return;
+    }
+#endif
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
     // Per-mesh geometry slots must remain non-uniform at every access.
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
@@ -237,7 +253,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
 
 // Software closest-hit refines scene-BVH candidates through mesh BVHs.
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
-    NwbCausticHit closest;
+    NwbCausticHit closest = (NwbCausticHit)0;
     closest.hit = false;
     closest.isRefractive = false;
     closest.t = tMax;
@@ -266,6 +282,10 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
         while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
+#if NWB_RT_CSG_ENABLED
+                if(closest.failure != 0u)
+                    return closest;
+#endif
                 break;
             }
             else{

@@ -42,9 +42,9 @@ inline constexpr AStringView s_NamesymProducerSuffix = "\tproducer=runtime\n";
 inline constexpr AStringView s_NamesymRuntimeSource = "\truntime\t";
 
 void AppendDebugHashText(SymbolString& outText, const NameHash& hash){
-    char hashText[NameSymbols::s_DebugHashTextLength + 1u] = {};
+    char hashText[::NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(hash, hashText, sizeof(hashText));
-    outText += AStringView(hashText, NameSymbols::s_DebugHashTextLength);
+    outText += AStringView(hashText, ::NameDetail::s_DebugHashTextLength);
 }
 
 void AppendEscapedNamesymText(SymbolString& outText, const AStringView text){
@@ -200,7 +200,7 @@ public:
         if(sourceEnd == AStringView::npos)
             return false;
 
-        const auto hash = NameSymbols::DecodeDebugHashText(line.substr(0u, hashEnd));
+        const auto hash = ::NameDetail::DecodeDebugHashText(line.substr(0u, hashEnd));
         if(!hash)
             return false;
 

@@ -38,13 +38,13 @@ constexpr usize s_ErrnoMessageBufferBytes = 256u;
 
 
 static Expected<GlobalFilesystemDetail::StreamOffset> ToStreamOff(const u64 value)noexcept{
-    if(!CanRepresentU64<GlobalFilesystemDetail::StreamOffset>(value))
+    if(!::CanRepresentU64<GlobalFilesystemDetail::StreamOffset>(value))
         return MakeUnexpected(Failure{});
     return static_cast<GlobalFilesystemDetail::StreamOffset>(value);
 }
 
 static Expected<GlobalFilesystemDetail::StreamSize> ToStreamSize(const u64 value)noexcept{
-    if(!CanRepresentU64<GlobalFilesystemDetail::StreamSize>(value))
+    if(!::CanRepresentU64<GlobalFilesystemDetail::StreamSize>(value))
         return MakeUnexpected(Failure{});
     return static_cast<GlobalFilesystemDetail::StreamSize>(value);
 }
@@ -533,7 +533,7 @@ Expected<u64> VolumeFileSystem::computePhysicalCapacityLocked()const{
     }
 
     const u64 fullSegmentBytes = static_cast<u64>(fullSegmentCount) * m_segmentSize;
-    const auto capacityBytes = FilesystemVolumeDetail::AddNoOverflow(fullSegmentBytes, *lastSegmentBytes);
+    const auto capacityBytes = ::AddNoOverflow(fullSegmentBytes, *lastSegmentBytes);
     if(capacityBytes)
         return capacityBytes;
 
@@ -571,7 +571,7 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     }
 
     u64 endOffset = 0;
-    const auto endOffsetResult = FilesystemVolumeDetail::AddNoOverflow(offset, byteCount);
+    const auto endOffsetResult = ::AddNoOverflow(offset, byteCount);
     if(!endOffsetResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, "offset overflow");
         return false;

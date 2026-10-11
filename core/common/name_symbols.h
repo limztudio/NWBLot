@@ -32,15 +32,10 @@ namespace NameSymbols{
 inline constexpr usize s_MaxResolvedTextLength = 1024u;
 inline constexpr TStringView s_FileExtension = NWB_TEXT(".namesym");
 inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
-inline constexpr usize s_DebugHashTextLength = NameDetail::s_DebugHashTextLength;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-using NameDetail::CopyDebugHashToken;
-using NameDetail::DecodeDebugHashText;
-using NameDetail::IsNameHashTokenChar;
 
 [[nodiscard]] bool Resolve(const NameHash& hash, char* outText, usize outTextSize);
 
@@ -107,16 +102,16 @@ inline void AppendResolvedText(ArenaT& arena, BasicString<CharT, ArenaT>& outTex
 
 template<typename CharT, typename ArenaT>
 inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutText){
-    if(inOutText.size() < s_DebugHashTextLength)
+    if(inOutText.size() < ::NameDetail::s_DebugHashTextLength)
         return;
 
     Optional<BasicString<CharT, ArenaT>> decoded;
     usize copiedUntil = 0u;
-    const usize lastTokenOffset = inOutText.size() - s_DebugHashTextLength;
+    const usize lastTokenOffset = inOutText.size() - ::NameDetail::s_DebugHashTextLength;
     for(usize i = 0u; i <= lastTokenOffset;){
-        const auto hashText = CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
+        const auto hashText = ::NameDetail::CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
         const auto hash = hashText
-            ? DecodeDebugHashText(AStringView(hashText->data(), s_DebugHashTextLength))
+            ? ::NameDetail::DecodeDebugHashText(AStringView(hashText->data(), ::NameDetail::s_DebugHashTextLength))
             : Expected<NameHash>(MakeUnexpected(Failure{}))
         ;
         char resolvedText[s_MaxResolvedTextLength] = {};
@@ -127,7 +122,7 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
             }
             decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
             AppendResolvedText(arena, *decoded, AStringView(resolvedText));
-            i += s_DebugHashTextLength;
+            i += ::NameDetail::s_DebugHashTextLength;
             copiedUntil = i;
             continue;
         }

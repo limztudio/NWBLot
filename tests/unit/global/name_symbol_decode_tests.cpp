@@ -39,8 +39,8 @@ static void VerifyUnknownAndBoundaryTokens(){
     NameSymbols::ClearRuntimeSymbols();
     Arena arena("Tests/NameSymbols/Boundaries");
     const Name known(AStringView("decode/known"));
-    char knownToken[NameSymbols::s_DebugHashTextLength + 1u] = {};
-    char unknownToken[NameSymbols::s_DebugHashTextLength + 1u] = {};
+    char knownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
+    char unknownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(known.identityHash(), knownToken, sizeof(knownToken));
     NameDetail::HashToDebugString(ComputeNameHash("decode/unknown"), unknownToken, sizeof(unknownToken));
     AString<Arena> source(arena);
@@ -70,9 +70,9 @@ static void VerifyResolvedSpans(){
     expanded.assign(300u, 'z');
     const Name shortName(AStringView("decode/short"));
     const Name longName(AStringView(expanded.data(), expanded.size()));
-    char shortToken[NameSymbols::s_DebugHashTextLength + 1u] = {};
-    char longToken[NameSymbols::s_DebugHashTextLength + 1u] = {};
-    char unknownToken[NameSymbols::s_DebugHashTextLength + 1u] = {};
+    char shortToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
+    char longToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
+    char unknownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(shortName.identityHash(), shortToken, sizeof(shortToken));
     NameDetail::HashToDebugString(longName.identityHash(), longToken, sizeof(longToken));
     NameDetail::HashToDebugString(ComputeNameHash("decode/unresolved"), unknownToken, sizeof(unknownToken));
@@ -125,7 +125,7 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
     NWB::Core::Alloc::GlobalArena arena("Tests/NameSymbols/DocumentAdmission");
     const Name retained(AStringView("admission/retained"));
     const NameHash incomingHash = ComputeNameHash("admission/incoming");
-    char incomingToken[NameSymbols::s_DebugHashTextLength + 1u] = {};
+    char incomingToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(incomingHash, incomingToken, sizeof(incomingToken));
     AString<NWB::Core::Alloc::GlobalArena> record(arena);
     StringAppendFormat(record, "{}\truntime\tAdmission/Incoming\n", incomingToken);

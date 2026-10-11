@@ -80,7 +80,7 @@ struct CausticAccumulatorDecayGraphTask{
             return true;
 
         // A prior rejected record can retry this task before its graph transaction gets discarded.  Release the incomplete query reservation before starting the retry's one caustic-photons interval.
-        DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+        Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         payload.causticPhotonTiming.emplace(
             payload.graphics.gpuTiming(),
@@ -96,14 +96,14 @@ struct CausticAccumulatorDecayGraphTask{
             payload.decayFactor
         );
         if(!dispatched){
-            DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+            Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
         }
         return true;
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+        Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
     }
 };
 
@@ -146,7 +146,7 @@ struct SoftwareCausticsGraphTask{
                 &payload.causticPhotonTiming
             );
             if(!causticsDispatched)
-                DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+                Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
             payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem.hasCausticWork(payload.meshView))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
@@ -204,7 +204,7 @@ struct HardwareCausticsGraphTask{
                 &payload.causticPhotonTiming
             );
             if(!causticsDispatched)
-                DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+                Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
             payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem.hasHwCausticWork(payload.meshView))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
@@ -245,7 +245,7 @@ struct CausticGeometryDownsampleGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+        Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
         if(!payload.causticProducerDispatched)
             return true;
 
@@ -265,7 +265,7 @@ struct CausticGeometryDownsampleGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+        Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
     }
 };
 
@@ -495,7 +495,7 @@ struct CausticResolveGraphTask{
         static_cast<void>(context);
         // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and no resolve dispatch is emitted when the selected photon producer did not record.
         if(!payload.causticProducerDispatched){
-            DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+            Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
             return true;
         }
         if(!payload.causticResolveTiming.has_value())
@@ -508,7 +508,7 @@ struct CausticResolveGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+        Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
     }
 };
 

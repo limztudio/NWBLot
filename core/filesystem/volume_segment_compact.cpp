@@ -46,7 +46,7 @@ static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCoun
         return MakeUnexpected(errorCode);
     return {};
 #else
-    if(!CanRepresentU64<off_t>(byteCount))
+    if(!::CanRepresentU64<off_t>(byteCount))
         return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
     if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) != 0)
         return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
@@ -63,7 +63,7 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
 
     u64 sourceEndOffset = 0;
-    const auto sourceEndOffsetResult = FilesystemVolumeDetail::AddNoOverflow(sourceOffset, byteCount);
+    const auto sourceEndOffsetResult = ::AddNoOverflow(sourceOffset, byteCount);
     if(!sourceEndOffsetResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "source range overflow");
         return false;
@@ -87,7 +87,7 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
 
     u64 destinationEndOffset = 0;
-    const auto destinationEndOffsetResult = FilesystemVolumeDetail::AddNoOverflow(destinationOffset, byteCount);
+    const auto destinationEndOffsetResult = ::AddNoOverflow(destinationOffset, byteCount);
     if(!destinationEndOffsetResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "destination range overflow");
         return false;

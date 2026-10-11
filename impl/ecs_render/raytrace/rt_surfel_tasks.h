@@ -153,7 +153,7 @@ struct SurfelGiAgeFreeGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     }
 };
 
@@ -196,7 +196,7 @@ struct SurfelGiHashBuildGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     }
 };
 
@@ -239,7 +239,7 @@ struct SurfelGiSpawnGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     }
 };
 
@@ -282,7 +282,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     }
 };
 
@@ -329,7 +329,7 @@ struct SurfelGiTraceGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     }
 };
 
@@ -372,7 +372,7 @@ struct SurfelGiResolveGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(&payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     }
 };
 
@@ -427,7 +427,7 @@ struct SurfelGiGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 

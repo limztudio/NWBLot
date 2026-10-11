@@ -894,17 +894,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         );
     };
     const auto discardRenderPackets = [&](){
-        DiscardGpuTimingMeasure(&asyncPrefixTiming);
-        DiscardGpuTimingMeasure(&deferredClearTiming);
-        DiscardGpuTimingMeasure(&asyncFinalTiming);
-        DiscardGpuTimingMeasure(&causticPhotonTiming);
-        DiscardGpuTimingMeasure(&causticResolveTiming);
-        DiscardGpuTimingMeasure(&transparentCsgIntervalsTiming);
-        DiscardGpuTimingMeasure(&avboitOccupancyComputeEmulationTiming);
-        DiscardGpuTimingMeasure(&avboitExtinctionComputeEmulationTiming);
-        DiscardGpuTimingMeasure(&avboitAccumulationComputeEmulationTiming);
-        DiscardGpuTimingMeasure(&opaqueRegularSharedComputeEmulationTiming);
-        DiscardGpuTimingMeasure(&opaqueCsgIntervalSampleComputeEmulationTiming);
+        Core::DiscardGpuTimingMeasure(&asyncPrefixTiming);
+        Core::DiscardGpuTimingMeasure(&deferredClearTiming);
+        Core::DiscardGpuTimingMeasure(&asyncFinalTiming);
+        Core::DiscardGpuTimingMeasure(&causticPhotonTiming);
+        Core::DiscardGpuTimingMeasure(&causticResolveTiming);
+        Core::DiscardGpuTimingMeasure(&transparentCsgIntervalsTiming);
+        Core::DiscardGpuTimingMeasure(&avboitOccupancyComputeEmulationTiming);
+        Core::DiscardGpuTimingMeasure(&avboitExtinctionComputeEmulationTiming);
+        Core::DiscardGpuTimingMeasure(&avboitAccumulationComputeEmulationTiming);
+        Core::DiscardGpuTimingMeasure(&opaqueRegularSharedComputeEmulationTiming);
+        Core::DiscardGpuTimingMeasure(&opaqueCsgIntervalSampleComputeEmulationTiming);
         frameTimingTransaction.discard();
         discardTimingTickets();
         if(!discardUnacceptedGraphPackets()){

@@ -28,9 +28,6 @@ inline constexpr u64 s_VolumeMinMetadataBytes = 4ull * 1024ull;
 inline constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
 inline constexpr u64 s_VolumeFallbackMetadataDivisor = 8u;
 
-using ::AddNoOverflow;
-using ::CanRepresentU64;
-
 inline constexpr AStringView s_VolumeOpLoadMetadata = "loadMetadata";
 inline constexpr AStringView s_VolumeOpFlushMetadata = "flushMetadata";
 inline constexpr AStringView s_VolumeOpMount = "mount";

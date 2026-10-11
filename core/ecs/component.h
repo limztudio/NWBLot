@@ -46,7 +46,7 @@ struct ViewTupleAccess;
 
 template<typename T>
 inline ComponentTypeId ComponentType()noexcept{
-    return ECSDetail::TypeCounter<ECSDetail::ComponentTypeTag>::Id<Decay_T<T>>();
+    return ::TypeCounter<ECSDetail::ComponentTypeTag>::Id<Decay_T<T>>();
 }
 
 template<typename... Ts>

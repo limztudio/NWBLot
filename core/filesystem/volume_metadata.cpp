@@ -87,7 +87,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
     }
 
     u64 headerTotalBytes = 0;
-    const auto headerTotalBytesResult = FilesystemVolumeDetail::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
+    const auto headerTotalBytesResult = ::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
     if(!headerTotalBytesResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "metadata byte overflow");
         return false;
@@ -165,7 +165,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
         cursor += sizeof(entry);
 
         u64 endOffset = 0;
-        const auto endOffsetResult = FilesystemVolumeDetail::AddNoOverflow(entry.offset, entry.size);
+        const auto endOffsetResult = ::AddNoOverflow(entry.offset, entry.size);
         if(!endOffsetResult){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "index entry offset overflow");
             return false;
@@ -240,7 +240,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     }
 
     u64 totalMetaBytes = 0;
-    const auto totalMetaBytesResult = FilesystemVolumeDetail::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
+    const auto totalMetaBytesResult = ::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
     if(!totalMetaBytesResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "metadata byte overflow");
         return false;

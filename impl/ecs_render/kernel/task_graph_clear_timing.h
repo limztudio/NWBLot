@@ -103,7 +103,7 @@ inline void DiscardGraphClearTimingRecord(void* const rawState){
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)
         return;
-    DiscardGpuTimingMeasure(state->timing);
+    Core::DiscardGpuTimingMeasure(state->timing);
 }
 
 

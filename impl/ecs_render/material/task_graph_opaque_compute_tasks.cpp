@@ -136,7 +136,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
         )
         || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     ){
-        DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
+        Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
         if(payload.phase == Phase::Raster)
             commandList.endRenderPass();
         return true;

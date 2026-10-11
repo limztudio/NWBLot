@@ -25,7 +25,7 @@ using MessageTypeId = usize;
 
 template<typename T>
 inline MessageTypeId MessageType()noexcept{
-    return ECSDetail::TypeCounter<ECSDetail::MessageTypeTag>::Id<Decay_T<T>>();
+    return ::TypeCounter<ECSDetail::MessageTypeTag>::Id<Decay_T<T>>();
 }
 
 

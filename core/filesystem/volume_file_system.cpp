@@ -278,7 +278,7 @@ u64 VolumeFileSystem::usedBytes()const{
 
     u64 totalUsedBytes = 0;
     for(const auto& [_, record] : m_files){
-        const auto totalUsedBytesResult = FilesystemVolumeDetail::AddNoOverflow(totalUsedBytes, record.size);
+        const auto totalUsedBytesResult = ::AddNoOverflow(totalUsedBytes, record.size);
         if(!totalUsedBytesResult)
             return Limit<u64>::s_Max;
         totalUsedBytes = *totalUsedBytesResult;
@@ -294,7 +294,7 @@ u64 VolumeFileSystem::wastedBytes()const{
 
     u64 totalUsedBytes = 0;
     for(const auto& [_, record] : m_files){
-        const auto totalUsedBytesResult = FilesystemVolumeDetail::AddNoOverflow(totalUsedBytes, record.size);
+        const auto totalUsedBytesResult = ::AddNoOverflow(totalUsedBytes, record.size);
         if(!totalUsedBytesResult)
             return 0;
         totalUsedBytes = *totalUsedBytesResult;
@@ -472,7 +472,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 
     for(const auto& [path, record] : m_files){
         u64 endOffset = 0;
-        const auto endOffsetResult = FilesystemVolumeDetail::AddNoOverflow(record.offset, record.size);
+        const auto endOffsetResult = ::AddNoOverflow(record.offset, record.size);
         if(!endOffsetResult){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "offset overflow detected in file layout");
             return false;
@@ -508,13 +508,13 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 
         layout.destinationOffset = compactedWriteOffset;
 
-        const auto previousSourceEndResult = FilesystemVolumeDetail::AddNoOverflow(layout.sourceOffset, layout.size);
+        const auto previousSourceEndResult = ::AddNoOverflow(layout.sourceOffset, layout.size);
         if(!previousSourceEndResult){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "source offset overflow while building compaction plan");
             return false;
         }
         previousSourceEnd = *previousSourceEndResult;
-        const auto compactedWriteOffsetResult = FilesystemVolumeDetail::AddNoOverflow(compactedWriteOffset, layout.size);
+        const auto compactedWriteOffsetResult = ::AddNoOverflow(compactedWriteOffset, layout.size);
         if(!compactedWriteOffsetResult){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "destination offset overflow while building compaction plan");
             return false;
@@ -595,7 +595,7 @@ bool VolumeFileSystem::writeFileLocked(
 
     const u64 byteCount = static_cast<u64>(bytes);
     u64 newFileEnd = 0;
-    const auto newFileEndResult = FilesystemVolumeDetail::AddNoOverflow(m_nextFreeOffset, byteCount);
+    const auto newFileEndResult = ::AddNoOverflow(m_nextFreeOffset, byteCount);
     if(!newFileEndResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, "offset overflow while reserving payload bytes");
         return false;

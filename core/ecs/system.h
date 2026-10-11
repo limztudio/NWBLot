@@ -32,7 +32,7 @@ using SystemTypeId = usize;
 
 template<typename T>
 inline SystemTypeId SystemType()noexcept{
-    return ECSDetail::TypeCounter<ECSDetail::SystemTypeTag>::Id<Decay_T<T>>();
+    return ::TypeCounter<ECSDetail::SystemTypeTag>::Id<Decay_T<T>>();
 }
 
 

@@ -133,7 +133,7 @@ bool AvboitCsgReceiverSpanGraphTask::Record(
     }
     else{
         // Drop the reservation on mismatch; never feed Combine a stale image.
-        DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
+        Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();
     return true;
@@ -188,7 +188,7 @@ bool AvboitCsgIntervalCombineGraphTask::Record(
     }
     else{
         // Drop the reservation on mismatch; never publish a stale image.
-        DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
+        Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();
     return true;

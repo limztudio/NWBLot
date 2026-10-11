@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "deform_wall_builder.h"
 
 #include "deform_cutter_field.h"
@@ -106,8 +108,8 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(
     if(found != edgeSplits.end()){
         return found.value();
     }
-    const f32 denominator = firstDistance - secondDistance;
-    if(!CsgDeformValidator::FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
+    const f32 denominator = NumericSimd::Subtract(firstDistance, secondDistance);
+    if(!CsgDeformValidator::FiniteFloat(denominator) || NumericSimd::Abs(denominator) < s_SplitDenominatorEpsilon)
         return MakeUnexpected(Failure{});
     // A zero secondDistance selects the second endpoint.
     const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(

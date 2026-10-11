@@ -8,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/math/vector_double.h>
+
 #include "skin_cook.h"
 #include "skin_binary_payload.h"
 #include "skin_validation.h"
@@ -161,7 +163,7 @@ template<usize ComponentCount>
 
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const f64 numericValue = (*numericValues)[componentIndex];
-        if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue) || numericValue > static_cast<f64>(Limit<u16>::s_Max)){
+        if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleFloor(SIMDVectorDouble{ numericValue, numericValue }).x || numericValue > static_cast<f64>(Limit<u16>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(label)

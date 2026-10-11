@@ -3,6 +3,7 @@
 
 
 #include "encode_backend.h"
+#include "alpha_batches.h"
 
 #include <core/common/log.h>
 
@@ -133,6 +134,24 @@ namespace EncodeBackendDetail{
                     plane(x + 1u, y)[3u] = VectorGetY(saturatedLanes);
                     plane(x + 2u, y)[3u] = VectorGetZ(saturatedLanes);
                     plane(x + 3u, y)[3u] = VectorGetW(saturatedLanes);
+                }
+            }
+            const u32 remaining = width - x;
+            if(remaining >= 2u){
+                f32 values[4]{};
+                for(u32 lane = 0u; lane < remaining; ++lane){
+                    if(alphaSource.mode == AlphaSourceMode::Original)
+                        values[lane] = plane(x + lane, y)[3u];
+                    else if(alphaSource.mode == AlphaSourceMode::Constant)
+                        values[lane] = VectorGetX(saturatedConstantAlpha);
+                    else
+                        values[lane] = (*alphaMask)(x + lane, y)[0u];
+                }
+                f32 saturated[4]{};
+                if(AlphaBatchDetail::TrySaturate(values, remaining, saturated)){
+                    for(u32 lane = 0u; lane < remaining; ++lane)
+                        plane(x + lane, y)[3u] = saturated[lane];
+                    x += remaining;
                 }
             }
             for(; x < width; ++x){
@@ -271,22 +290,14 @@ struct HdrAlphaMips{
             basisu::image& alphaPlane = alphaPlanes[planeIndex];
             alphaPlane.resize(width, height);
             for(u32 y = 0u; y < height; ++y){
-                for(u32 x = 0u; x < width; ++x){
-                    basisu::vec4F& hdrColor = hdrPlane(x, y);
-                    const f32 alpha = hdrColor[3u];
-                    if(!IsFinite(alpha)){
-                        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR mip generation produced a non-finite alpha value."));
-                        return MakeUnexpected(Failure{});
-                    }
-                    const SIMDVector quantizedAlphaLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
-                    const u8 quantizedAlpha = static_cast<u8>(VectorGetX(quantizedAlphaLanes));
+                auto publish = [&](const u32 x, const u8 quantizedAlpha){
                     alphaPlane(x, y) = basisu::color_rgba(
                         quantizedAlpha,
                         quantizedAlpha,
                         quantizedAlpha,
                         TextureFormat::s_OpaqueAlphaUnorm8
                     );
-                    hdrColor[3u] = 1.0f;
+                    hdrPlane(x, y)[3u] = 1.0f;
 
                     if(!foundAlpha){
                         foundAlpha = true;
@@ -296,6 +307,31 @@ struct HdrAlphaMips{
                         allConstant = false;
                     if(quantizedAlpha != TextureFormat::s_OpaqueAlphaUnorm8)
                         allOpaque = false;
+                };
+                for(u32 x = 0u; x < width;){
+                    const u32 count = width - x < 4u ? width - x : 4u;
+                    f32 values[4]{};
+                    for(u32 lane = 0u; lane < count; ++lane)
+                        values[lane] = hdrPlane(x + lane, y)[3u];
+                    u8 quantized[4]{};
+                    if(AlphaBatchDetail::TryQuantize(values, count, quantized)){
+                        for(u32 lane = 0u; lane < count; ++lane)
+                            publish(x + lane, quantized[lane]);
+                    }
+                    else{
+                        // A rejected packet retains the original finite-check,
+                        // quantization and publication order up to its first error.
+                        for(u32 lane = 0u; lane < count; ++lane){
+                            const f32 alpha = hdrPlane(x + lane, y)[3u];
+                            if(!IsFinite(alpha)){
+                                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR mip generation produced a non-finite alpha value."));
+                                return MakeUnexpected(Failure{});
+                            }
+                            const SIMDVector quantizedAlphaLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
+                            publish(x + lane, static_cast<u8>(VectorGetX(quantizedAlphaLanes)));
+                        }
+                    }
+                    x += count;
                 }
             }
         }

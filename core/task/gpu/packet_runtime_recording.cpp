@@ -13,6 +13,7 @@
 #include <global/exception.h>
 #include <global/termination.h>
 #include <global/timer.h>
+#include <core/perf/timing_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -458,7 +459,7 @@ bool GpuNativePacketRecorder::recordPacket(
             );
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin);
+        graphBarrierRecordingSeconds = Perf::AddTimingSeconds(graphBarrierRecordingSeconds, DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin));
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
         bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
@@ -507,7 +508,7 @@ bool GpuNativePacketRecorder::recordPacket(
             const Timer taskRecordBegin = TimerNow();
             bool recordThunkInvoked = false;
             recorded = graph.recordTask(task, *commandList, context, recordingLease, recordThunkInvoked);
-            taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
+            taskRecordSeconds = Perf::AddTimingSeconds(taskRecordSeconds, DurationInSeconds<f64>(TimerNow(), taskRecordBegin));
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
                 NWB_LOGGER_CRITICAL_WARNING(
@@ -610,7 +611,7 @@ bool GpuNativePacketRecorder::recordPacket(
         barrierCount += compiledTask->epilogueBarrierCount;
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin);
+        graphBarrierRecordingSeconds = Perf::AddTimingSeconds(graphBarrierRecordingSeconds, DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin));
     }
     packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
     if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "router.h"
 
 
@@ -80,7 +82,7 @@ bool InputRouter::routeContextMenuKey(
         source.contextOwner = {
             focused->id, focused->declarationGeneration, focused->popup, focused->control
         };
-        appendContextMenu(*focused, { focused->rectangle.x, focused->rectangle.y + focused->rectangle.height }, true, result);
+        appendContextMenu(*focused, { focused->rectangle.x, NumericSimd::Add(focused->rectangle.y, focused->rectangle.height) }, true, result);
     }
     return true;
 }

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "context_menu.h"
 
 #include <global/simplemath.h>
@@ -21,7 +23,7 @@ bool ContextMenuState::open(const Rect& anchor)noexcept{
     if(
         !IsFinite(anchor.x) || !IsFinite(anchor.y) || !IsFinite(anchor.width) || !IsFinite(anchor.height)
         || anchor.width < 0.0f || anchor.height < 0.0f
-        || !IsFinite(anchor.x + anchor.width) || !IsFinite(anchor.y + anchor.height)
+        || !IsFinite(NumericSimd::Add(anchor.x, anchor.width)) || !IsFinite(NumericSimd::Add(anchor.y, anchor.height))
     )
         return false;
     m_popup.close();

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "texture_mip_decoder.h"
 
 #include <core/common/log.h>
@@ -404,7 +406,7 @@ static void StoreHdrAlpha(
     const u8 alphaUnorm8
 ){
     const basist::half_float alphaHalf = basist::float_to_half(
-        static_cast<float>(alphaUnorm8) / static_cast<float>(Limit<u8>::s_Max)
+        NumericSimd::Divide(static_cast<f32>(alphaUnorm8), static_cast<f32>(Limit<u8>::s_Max))
     );
     u8* const destination = outRgba16FloatBytes
         + texelIndex * s_Rgba16FloatBytesPerTexel

@@ -143,9 +143,11 @@ Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
         if(res == VK_ERROR_DEVICE_LOST)
             markDeviceLost();
         if(res == VK_SUCCESS){
-            const f64 secondsPerTick = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
-                * VulkanTimerQueryDetail::s_TimestampNanosecondsToSeconds
-            ;
+            const f64 periodNanoseconds = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod);
+            const SIMDVectorDouble secondsPerTickLanes = SIMDVectorDouble{ periodNanoseconds, periodNanoseconds } * SIMDVectorDouble{
+                VulkanTimerQueryDetail::s_TimestampNanosecondsToSeconds, VulkanTimerQueryDetail::s_TimestampNanosecondsToSeconds
+            };
+            const f64 secondsPerTick = secondsPerTickLanes.x;
             result.beginTicks = (*timestamps)[s_TimerQueryBeginIndex];
             result.endTicks = (*timestamps)[s_TimerQueryEndIndex];
             result.secondsPerTick = secondsPerTick;

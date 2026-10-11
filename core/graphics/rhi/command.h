@@ -7,6 +7,8 @@
 
 #include "pipeline.h"
 
+#include <global/math/vector_double.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -219,7 +221,11 @@ struct TimerQueryResult{
         const u64 duration = (endTicks & mask) - (beginTicks & mask);
         return timestampValidBits == s_FullWidthBits ? duration : duration & mask;
     }
-    [[nodiscard]] f64 durationSeconds()const noexcept{ return static_cast<f64>(durationTicks()) * secondsPerTick; }
+    [[nodiscard]] f64 durationSeconds()const noexcept{
+        const f64 ticks = static_cast<f64>(durationTicks());
+        const SIMDVectorDouble seconds = SIMDVectorDouble{ ticks, ticks } * SIMDVectorDouble{ secondsPerTick, secondsPerTick };
+        return seconds.x;
+    }
     [[nodiscard]] bool hasComparableRange()const noexcept{
         return
             valid()

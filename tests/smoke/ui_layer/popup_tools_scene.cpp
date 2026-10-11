@@ -3,6 +3,7 @@
 
 
 #include "popup_tools_scene.h"
+#include "marker_positions.h"
 
 #include "smoke_geometry.h"
 #include "../smoke_environment.h"
@@ -199,12 +200,13 @@ void UiPopupToolsSmokeScene::observeState(){
 
 void UiPopupToolsSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const auto current = values();
+    const auto positions = BuildSmokeMarkerPositions<(std::tuple_size_v<decltype(current)> + 1u) * 2u, 12u, 16u>();
     const f32 y = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index <= current.size(); ++index){
         const u64 value = index == current.size() ? m_sequence : current[index];
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 16.0f, y, 12.0f, 12.0f },
+            context.paint.fillRect({ positions[marker], y, 12.0f, 12.0f },
                 EncodeSmokeColor(value >> (part * 12u)));
         }
     }

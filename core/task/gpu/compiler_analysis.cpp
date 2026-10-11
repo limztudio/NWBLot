@@ -9,6 +9,7 @@
 #include <global/hash_utils.h>
 #include <global/timer.h>
 #include <global/termination.h>
+#include <core/perf/timing_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -632,9 +633,9 @@ bool GpuTaskGraphCompiler::analyze(
         ))
             return fail(GpuTaskGraphAnalysisStatus::InvalidTaskDependency);
     }
-    const f64 topologicalOrderSeconds = semanticTopologySeconds
-        + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin)
-    ;
+    const f64 topologicalOrderSeconds = Perf::AddTimingSeconds(
+        semanticTopologySeconds, DurationInSeconds<f64>(TimerNow(), finalTopologyBegin)
+    );
 
     const Timer acceptedQueueFrontierValidationBegin = TimerNow();
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
@@ -676,7 +677,7 @@ bool GpuTaskGraphCompiler::analyze(
             }
         }
     }
-    validationSeconds += DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin);
+    validationSeconds = Perf::AddTimingSeconds(validationSeconds, DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin));
 
     const Timer presentationValidationBegin = TimerNow();
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
@@ -750,7 +751,7 @@ bool GpuTaskGraphCompiler::analyze(
         if(!hasBackBufferWriter)
             return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
     }
-    validationSeconds += DurationInSeconds<f64>(TimerNow(), presentationValidationBegin);
+    validationSeconds = Perf::AddTimingSeconds(validationSeconds, DurationInSeconds<f64>(TimerNow(), presentationValidationBegin));
 
     outAnalysis.m_validationSeconds = validationSeconds;
     outAnalysis.m_dependencyAnalysisSeconds = dependencyAnalysisSeconds;

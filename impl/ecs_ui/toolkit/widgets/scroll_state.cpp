@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "scroll.h"
 
 #include <global/simplemath.h>
@@ -64,10 +66,10 @@ bool ScrollState::ensureVisible(const f64 start, const f64 end, const f64 viewpo
     )
         return false;
     f64 candidate = m_offset;
-    if(end - start > viewportHeight || start < candidate)
+    if(NumericSimd::Subtract(end, start) > viewportHeight || start < candidate)
         candidate = start;
-    else if(end > candidate && end - candidate > viewportHeight)
-        candidate = end - viewportHeight;
+    else if(end > candidate && NumericSimd::Subtract(end, candidate) > viewportHeight)
+        candidate = NumericSimd::Subtract(end, viewportHeight);
     m_offset = candidate;
     return true;
 }
@@ -75,19 +77,19 @@ bool ScrollState::ensureVisible(const f64 start, const f64 end, const f64 viewpo
 bool ScrollState::scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{
     if(!IsFinite(delta) || !__hidden_ui_scroll_state::ValidRange(contentHeight, viewportHeight))
         return false;
-    const f64 maxOffset = Max(0.0, contentHeight - viewportHeight);
-    const f64 base = Min(m_offset, maxOffset);
+    const f64 maxOffset = NumericSimd::Max(0.0, NumericSimd::Subtract(contentHeight, viewportHeight));
+    const f64 base = NumericSimd::Min(m_offset, maxOffset);
     if(delta >= 0.0)
-        m_offset = base + Min(delta, maxOffset - base);
+        m_offset = NumericSimd::Add(base, NumericSimd::Min(delta, NumericSimd::Subtract(maxOffset, base)));
     else
-        m_offset = Max(0.0, base + delta);
+        m_offset = NumericSimd::Max(0.0, NumericSimd::Add(base, delta));
     return true;
 }
 
 bool ScrollState::clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{
     if(!__hidden_ui_scroll_state::ValidRange(contentHeight, viewportHeight))
         return false;
-    m_offset = Min(m_offset, Max(0.0, contentHeight - viewportHeight));
+    m_offset = NumericSimd::Min(m_offset, NumericSimd::Max(0.0, NumericSimd::Subtract(contentHeight, viewportHeight)));
     return true;
 }
 

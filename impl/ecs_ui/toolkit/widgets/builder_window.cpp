@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "../builder.h"
 
 #include <global/math/vector_arithmetic.h>
@@ -105,7 +107,7 @@ bool Builder::beginWindow(
     description.padding = m_scope->m_window.metrics.contentPadding;
     description.gap = m_style.gap;
     const SIMDVector minimum = VectorSet(m_scope->m_window.metrics.minimumSize.x,
-        m_scope->m_window.metrics.minimumSize.y - m_scope->m_window.metrics.titleHeight, 0.0f, 0.0f);
+        NumericSimd::Subtract(m_scope->m_window.metrics.minimumSize.y, m_scope->m_window.metrics.titleHeight), 0.0f, 0.0f);
     const SIMDVector paddingStart = VectorSet(description.padding.left, description.padding.top, 0.0f, 0.0f);
     const SIMDVector paddingEnd = VectorSet(description.padding.right, description.padding.bottom, 0.0f, 0.0f);
     const SIMDVector extent = VectorSubtract(VectorSubtract(minimum, paddingStart), paddingEnd);
@@ -145,10 +147,10 @@ bool Builder::endWindow(){
         const LayoutBox* root = m_scope->m_layout.box(0u);
         if(arranged && root){
             if(m_scope->m_window.firstUse && m_scope->m_window.options.contentWidthFirstUse)
-                state.bounds.width = Max(root->rectangle.width, m_scope->m_window.metrics.minimumSize.x);
+                state.bounds.width = NumericSimd::Max(root->rectangle.width, m_scope->m_window.metrics.minimumSize.x);
             if(m_scope->m_window.firstUse && m_scope->m_window.options.contentHeightFirstUse)
-                state.bounds.height = Max(
-                    root->rectangle.height + m_scope->m_window.metrics.titleHeight, m_scope->m_window.metrics.minimumSize.y
+                state.bounds.height = NumericSimd::Max(
+                    NumericSimd::Add(root->rectangle.height, m_scope->m_window.metrics.titleHeight), m_scope->m_window.metrics.minimumSize.y
                 );
             arranged = WindowBehavior::Constrain(state, display, m_scope->m_window.metrics.titleHeight);
             m_scope->m_bounds = WindowLayout::Content(state, m_scope->m_window.metrics);

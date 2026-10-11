@@ -3,6 +3,7 @@
 
 
 #include "interactive_scene.h"
+#include "marker_positions.h"
 
 #include "../smoke_environment.h"
 
@@ -104,9 +105,10 @@ void UiInteractiveSmokeScene::logAction(const TStringView action){
 
 void UiInteractiveSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const f32 y = context.display.logicalHeight - 20.0f;
+    const auto positions = BuildSmokeMarkerPositions<8u, 18u, 20u>();
     for(u32 bit = 0u; bit < 8u; ++bit){
         const bool set = (m_count & (1u << bit)) != 0u;
-        const Impl::Ui::Rect marker{ 18.0f + static_cast<f32>(bit) * 20.0f, y, 14.0f, 12.0f };
+        const Impl::Ui::Rect marker{ positions[bit], y, 14.0f, 12.0f };
         context.paint.fillRect(marker, set ? __hidden_ui_interactive_smoke::s_On : __hidden_ui_interactive_smoke::s_Off);
     }
     const Impl::Ui::Rect enabledMarker{ 210.0f, y, 28.0f, 12.0f };

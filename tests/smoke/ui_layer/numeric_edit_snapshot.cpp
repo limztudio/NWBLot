@@ -3,6 +3,7 @@
 
 
 #include "numeric_edit_scene.h"
+#include "marker_positions.h"
 #include "edit_selection_probe.h"
 #include "smoke_geometry.h"
 
@@ -117,12 +118,20 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
 
 void UiNumericEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const f32 y = context.display.logicalHeight - 18.0f;
+    constexpr usize s_ValueCount = std::tuple_size_v<decltype(m_snapshot.values)>;
+    constexpr usize s_MarkerCount = [](){
+        usize count = 0u;
+        for(usize index = 0u; index <= s_ValueCount; ++index)
+            count += index < 2u ? 6u : index == 3u || index == 10u || index == 17u ? 3u : 2u;
+        return count;
+    }();
+    const auto positions = BuildSmokeMarkerPositions<s_MarkerCount, 8u, 8u>();
     usize marker = 0u;
     for(usize index = 0u; index <= m_snapshot.values.size(); ++index){
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
         const u32 parts = index < 2u ? 6u : index == 3u || index == 10u || index == 17u ? 3u : 2u;
         for(u32 part = 0u; part < parts; ++part){
-            context.paint.fillRect({ 8.0f + static_cast<f32>(marker) * 8.0f, y, 6.0f, 10.0f },
+            context.paint.fillRect({ positions[marker], y, 6.0f, 10.0f },
                 EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }

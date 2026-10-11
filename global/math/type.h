@@ -6,6 +6,7 @@
 
 
 #include "../type.h"
+#include "../bit.h"
 #include "../hash_utils.h"
 #include "macro.h"
 
@@ -19,13 +20,98 @@ namespace MathTypeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON) || defined(__SSE2__) || defined(_M_X64)
+inline constexpr bool s_NativeEqualityPackets = true;
+#else
+inline constexpr bool s_NativeEqualityPackets = false;
+#endif
+
+template<typename Element>
+using EqualityPacket = Element __attribute__((ext_vector_type(16u / sizeof(Element))));
+
+[[nodiscard]] NWB_INLINE bool EqualFloatPacket(const EqualityPacket<f32> lhs, const EqualityPacket<f32> rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
+#if defined(NWB_HAS_SSE4)
+    return _mm_movemask_ps(_mm_cmpeq_ps(BitCast<__m128>(lhs), BitCast<__m128>(rhs))) == 0xFu;
+#elif defined(NWB_HAS_NEON)
+    const uint64x2_t equal = vreinterpretq_u64_u32(vceqq_f32(BitCast<float32x4_t>(lhs), BitCast<float32x4_t>(rhs)));
+    return vgetq_lane_u64(equal, 0) == ~u64{ 0u } && vgetq_lane_u64(equal, 1) == ~u64{ 0u };
+#else
+    return __builtin_reduce_and(lhs == rhs) != 0;
+#endif
+}
+
+template<typename Element>
+[[nodiscard]] NWB_INLINE bool EqualIntegralPacket(const EqualityPacket<Element> lhs, const EqualityPacket<Element> rhs)noexcept{
+#if defined(NWB_HAS_SSE4)
+    return _mm_movemask_epi8(_mm_cmpeq_epi8(BitCast<__m128i>(lhs), BitCast<__m128i>(rhs))) == 0xFFFF;
+#elif defined(NWB_HAS_NEON)
+    const uint64x2_t equal = vreinterpretq_u64_u8(vceqq_u8(BitCast<uint8x16_t>(lhs), BitCast<uint8x16_t>(rhs)));
+    return vgetq_lane_u64(equal, 0) == ~u64{ 0u } && vgetq_lane_u64(equal, 1) == ~u64{ 0u };
+#else
+    return __builtin_reduce_and(lhs == rhs) != 0;
+#endif
+}
+
+template<typename Element, usize Count>
+[[nodiscard]] NWB_INLINE bool EqualElements(const Element* lhs, const Element* rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
+    // Clang bool vectors use packed bits; wide integers are not supported native lane elements.
+    if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32>
+        || (IsIntegral_V<Element> && !IsSame_V<Element, bool> && sizeof(Element) <= sizeof(u64)))){
+        constexpr usize lanes = 16u / sizeof(Element);
+        for(usize first = 0u; first < Count; first += lanes){
+            const usize count = Count - first < lanes ? Count - first : lanes;
+            EqualityPacket<Element> lhsPacket{}, rhsPacket{};
+            // Exact-sized loads support borrowed unaligned arrays and two/three-lane tails.
+            __builtin_memcpy(&lhsPacket, lhs + first, count * sizeof(Element));
+            __builtin_memcpy(&rhsPacket, rhs + first, count * sizeof(Element));
+            if constexpr(IsSame_V<Element, f32>){
+                using UInt4 = EqualityPacket<u32>;
+                const UInt4 lhsMagnitude = BitCast<UInt4>(lhsPacket) & UInt4{ 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu };
+                const UInt4 rhsMagnitude = BitCast<UInt4>(rhsPacket) & UInt4{ 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu };
+                const UInt4 infinity{ 0x7F800000u, 0x7F800000u, 0x7F800000u, 0x7F800000u };
+                const UInt4 minimumNormal{ 0x00800000u, 0x00800000u, 0x00800000u, 0x00800000u };
+                const auto exceptional = (lhsMagnitude > infinity) | (rhsMagnitude > infinity)
+                    | ((lhsMagnitude != UInt4{}) & (lhsMagnitude < minimumNormal))
+                    | ((rhsMagnitude != UInt4{}) & (rhsMagnitude < minimumNormal));
+                if(__builtin_reduce_or(exceptional) != 0){
+                    // Preserve skipped NaN/denormal flags and traps after an earlier mismatch.
+                    for(usize lane = 0u; lane < count; ++lane){
+                        if(lhs[first + lane] != rhs[first + lane])
+                            return false;
+                    }
+                }
+                else if(!EqualFloatPacket(lhsPacket, rhsPacket))
+                    return false;
+            }
+            else if(!EqualIntegralPacket(lhsPacket, rhsPacket))
+                return false;
+        }
+        return true;
+    }
+    else{
+        for(usize i = 0u; i < Count; ++i){
+            if(lhs[i] != rhs[i])
+                return false;
+        }
+        return true;
+    }
+}
+
 template<typename Value, usize Count>
 [[nodiscard]] NWB_INLINE bool EqualArray(const Value& lhs, const Value& rhs)noexcept{
-    for(usize i = 0u; i < Count; ++i){
-        if(lhs.raw[i] != rhs.raw[i])
-            return false;
-    }
-    return true;
+    using Element = RemoveCVRef_T<decltype(lhs.raw[0])>;
+    return EqualElements<Element, Count>(lhs.raw, rhs.raw);
+}
+
+template<typename Value>
+[[nodiscard]] NWB_INLINE bool EqualMixedFloat3(const Value& lhs, const Value& rhs)noexcept{
+    f32 lhsValues[3], rhsValues[3];
+    // Copy XYZ as storage so an unused signaling NaN never crosses a scalar FP ABI.
+    __builtin_memcpy(lhsValues, &lhs, sizeof(lhsValues));
+    __builtin_memcpy(rhsValues, &rhs, sizeof(rhsValues));
+    return EqualElements<f32, 3u>(lhsValues, rhsValues) && lhs.w == rhs.w;
 }
 
 template<typename Value, usize Count>
@@ -538,12 +624,12 @@ struct UInt4U{
 [[nodiscard]] NWB_INLINE bool operator!=(const UInt4& lhs, const UInt4& rhs)noexcept{ return !(lhs == rhs); }
 
 [[nodiscard]] NWB_INLINE bool operator==(const Float3Int& lhs, const Float3Int& rhs)noexcept{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+    return MathTypeDetail::EqualMixedFloat3(lhs, rhs);
 }
 [[nodiscard]] NWB_INLINE bool operator!=(const Float3Int& lhs, const Float3Int& rhs)noexcept{ return !(lhs == rhs); }
 
 [[nodiscard]] NWB_INLINE bool operator==(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+    return MathTypeDetail::EqualMixedFloat3(lhs, rhs);
 }
 [[nodiscard]] NWB_INLINE bool operator!=(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{ return !(lhs == rhs); }
 

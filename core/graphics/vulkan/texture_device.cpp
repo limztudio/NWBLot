@@ -8,6 +8,7 @@
 #include "native_sharing_validation.h"
 
 #include <core/graphics/rhi/queue_sharing.h>
+#include <global/math/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -309,11 +310,12 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     }
 
     SamplerDesc normalizedDesc = d;
-    const f32 maxSupportedAnisotropy = Max(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 1.f);
-    if(!(normalizedDesc.maxAnisotropy >= 1.f))
-        normalizedDesc.maxAnisotropy = 1.f;
-    if(normalizedDesc.maxAnisotropy > maxSupportedAnisotropy)
-        normalizedDesc.maxAnisotropy = maxSupportedAnisotropy;
+    const SIMDVector one = VectorReplicate(1.f);
+    const SIMDVector supported = VectorReplicate(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy);
+    const SIMDVector maximum = VectorSelect(one, supported, VectorGreater(supported, one));
+    const SIMDVector requested = VectorReplicate(normalizedDesc.maxAnisotropy);
+    const SIMDVector lowerBounded = VectorSelect(one, requested, VectorGreaterOrEqual(requested, one));
+    normalizedDesc.maxAnisotropy = VectorGetX(VectorSelect(lowerBounded, maximum, VectorGreater(lowerBounded, maximum)));
 
     auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);
     sampler->m_desc = normalizedDesc;

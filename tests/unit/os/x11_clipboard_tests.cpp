@@ -175,22 +175,25 @@ TEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText){
     XSync(m_displays[1], False);
     ASSERT_EQ(XGetSelectionOwner(m_displays[1], clipboard), temporaryOwner);
 
-    ClipboardCompletion completion(m_arena.arena);
-    const ClipboardRequestToken write = m_services[0]->requestWriteText(ClipboardChannel::Clipboard, "after reacquisition").token;
-    ASSERT_TRUE(m_services[0]->pump());
-    bool completed = false;
-    const Timer deadline = TimerAddMS(TimerNow(), 3000u);
-    while(!completed && TimerNow() < deadline){
-        XEvent event{};
-        while(XCheckTypedEvent(m_displays[0], PropertyNotify, &event))
-            ASSERT_TRUE(DispatchX11ClipboardEvent(*m_services[0], event));
-        completed = m_services[0]->poll(write, completion) == ClipboardPollResult::Completed;
-        if(!completed)
+    // Retain the genuine loss event until the new ownership is established.
+    XEvent ownershipLoss{};
+    bool queuedLoss = false;
+    const Timer lossDeadline = TimerAddMS(TimerNow(), 3000u);
+    while(!queuedLoss && TimerNow() < lossDeadline){
+        queuedLoss = XCheckTypedEvent(m_displays[0], SelectionClear, &ownershipLoss) != False;
+        if(!queuedLoss)
             SleepMS(1u);
     }
-    ASSERT_TRUE(completed);
+    ASSERT_TRUE(queuedLoss);
+    ASSERT_EQ(ownershipLoss.xselectionclear.selection, clipboard);
+
+    ClipboardCompletion completion(m_arena.arena);
+    const ClipboardRequestToken write = m_services[0]->requestWriteText(ClipboardChannel::Clipboard, "after reacquisition").token;
+    ASSERT_TRUE(write.valid());
+    ASSERT_TRUE(awaitCompletion(*m_services[0], write, completion));
     ASSERT_EQ(completion.status, ClipboardStatus::Success);
     ASSERT_NE(XGetSelectionOwner(m_displays[1], clipboard), temporaryOwner);
+    ASSERT_TRUE(DispatchX11ClipboardEvent(*m_services[0], ownershipLoss));
     ASSERT_TRUE(pumpAll());
     const ClipboardRequestToken read = m_services[1]->requestReadText(ClipboardChannel::Clipboard).token;
     ASSERT_TRUE(awaitCompletion(*m_services[1], read, completion));

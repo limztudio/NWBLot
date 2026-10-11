@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "deform_cutter_field.h"
 
 #include "deform_validator.h"
@@ -106,7 +108,7 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
         if(!CsgDeformValidator::FiniteFloat(distance)){
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
         }
-        if(Abs(distance) <= epsilon)
+        if(NumericSimd::Abs(distance) <= epsilon)
             distance = s_KeepDistanceZero;
         outDistances[vertexIndex] = distance;
     }

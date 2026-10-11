@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "caret_clock.h"
 
 #include <global/simplemath.h>
@@ -20,8 +22,8 @@ f64 AdvanceCaretPhase(const f64 phase, const f64 deltaSeconds)noexcept{
     const f64 current = IsFinite(phase) && phase > 0.0 ? FMod(phase, 1.0) : 0.0;
     if(!IsFinite(deltaSeconds) || deltaSeconds <= 0.0)
         return current;
-    const f64 next = current + FMod(deltaSeconds, 1.0);
-    return next >= 1.0 ? next - 1.0 : next;
+    const f64 next = NumericSimd::Add(current, FMod(deltaSeconds, 1.0));
+    return next >= 1.0 ? NumericSimd::Subtract(next, 1.0) : next;
 }
 
 

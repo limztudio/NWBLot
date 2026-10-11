@@ -34,9 +34,13 @@ bool IsTextInputUtf8Boundary(const AStringView text, const usize byteOffset)noex
 }
 
 bool IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
-    return rect.width > 0 && rect.height > 0
-        && rect.x <= Limit<i32>::s_Max - rect.width && rect.y <= Limit<i32>::s_Max - rect.height
-    ;
+    using CoordinatePair = i32 __attribute__((ext_vector_type(2)));
+    const CoordinatePair extent = { rect.width, rect.height };
+    if(!__builtin_reduce_and(extent > CoordinatePair{ 0, 0 }))
+        return false;
+    const CoordinatePair maximum = { Limit<i32>::s_Max, Limit<i32>::s_Max };
+    const CoordinatePair origin = { rect.x, rect.y };
+    return __builtin_reduce_and(origin <= maximum - extent);
 }
 
 Expected<usize, TextInputAdmission::Enum> EncodeTextInputCodePoint(const u32 codePoint, char (&bytes)[4])noexcept{

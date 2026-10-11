@@ -4,6 +4,7 @@
 
 #include "module.h"
 #include "encode_backend.h"
+#include "alpha_batches.h"
 
 #include <core/common/log.h>
 
@@ -117,6 +118,19 @@ private:
                 plane(x + 1u, y).a = static_cast<u8>(VectorGetY(quantizedLanes));
                 plane(x + 2u, y).a = static_cast<u8>(VectorGetZ(quantizedLanes));
                 plane(x + 3u, y).a = static_cast<u8>(VectorGetW(quantizedLanes));
+            }
+            const u32 remaining = width - x;
+            if(remaining >= 2u){
+                f32 values[4]{};
+                for(u32 lane = 0u; lane < remaining; ++lane)
+                    values[lane] = alphaSource.mode == AlphaSourceMode::Constant
+                        ? VectorGetX(saturatedConstantAlpha) : (*alphaMask)(x + lane, y)[0u];
+                u8 quantized[4]{};
+                if(AlphaBatchDetail::TryQuantize(values, remaining, quantized)){
+                    for(u32 lane = 0u; lane < remaining; ++lane)
+                        plane(x + lane, y).a = quantized[lane];
+                    x += remaining;
+                }
             }
             for(; x < width; ++x){
                 const f32 alpha = (alphaSource.mode == AlphaSourceMode::Constant)

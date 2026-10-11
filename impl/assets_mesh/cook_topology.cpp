@@ -8,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "cook_topology.h"
 
 #include <global/math/vector_double.h>
@@ -70,7 +72,14 @@ static void JoinComponents(
     const SIMDVectorDouble acYAcZValue = (SIMDVectorDouble{ static_cast<f64>(c.y), static_cast<f64>(c.z) } - SIMDVectorDouble{ a.y, a.z });
     const f64 acY = acYAcZValue.x;
     const f64 acZ = acYAcZValue.y;
-    return abY * acZ == abZ * acY && abZ * acX == abX * acZ && abX * acY == abY * acX;
+    const auto equalProducts = [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+        const SIMDVectorDouble products = lhs * rhs;
+        return products.x == products.y;
+    };
+    // Each pair is evaluated only after the preceding cross component matched.
+    return equalProducts(SIMDVectorDouble{ abY, abZ }, SIMDVectorDouble{ acZ, acY })
+        && equalProducts(SIMDVectorDouble{ abZ, abX }, SIMDVectorDouble{ acX, acZ })
+        && equalProducts(SIMDVectorDouble{ abX, abY }, SIMDVectorDouble{ acY, acX });
 }
 
 [[nodiscard]] static f64 RelativeTriangleVolume(
@@ -91,8 +100,12 @@ static void JoinComponents(
     const SIMDVectorDouble cXCYValue = (SIMDVectorDouble{ static_cast<f64>(c.x), static_cast<f64>(c.y) } - SIMDVectorDouble{ origin.x, origin.y });
     const f64 cX = cXCYValue.x;
     const f64 cY = cXCYValue.y;
-    const f64 cZ = static_cast<f64>(c.z) - origin.z;
-    return aX * (bY * cZ - bZ * cY) + aY * (bZ * cX - bX * cZ) + aZ * (bX * cY - bY * cX);
+    const f64 cZ = NumericSimd::Subtract(static_cast<f64>(c.z), static_cast<f64>(origin.z));
+    const SIMDVectorDouble ax{ aX, aX }, ay{ aY, aY }, az{ aZ, aZ };
+    const SIMDVectorDouble bx{ bX, bX }, by{ bY, bY }, bz{ bZ, bZ };
+    const SIMDVectorDouble cx{ cX, cX }, cy{ cY, cY }, cz{ cZ, cZ };
+    // Keep the full determinant expression and left-associated sum under the caller's contraction policy.
+    return (ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx)).x;
 }
 
 
@@ -169,9 +182,9 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(
             continue;
         const usize base = static_cast<usize>(triangle) * s_MeshletTriangleIndexCount;
         const Float3U& origin = positions[triangleIndices[static_cast<usize>(component) * s_MeshletTriangleIndexCount]];
-        componentVolumes[component] += RelativeTriangleVolume(
+        componentVolumes[component] = NumericSimd::Add(componentVolumes[component], RelativeTriangleVolume(
             positions[triangleIndices[base]], positions[triangleIndices[base + 1u]], positions[triangleIndices[base + 2u]], origin
-        );
+        ));
     }
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         const u32 component = FindComponent(parents, triangle);

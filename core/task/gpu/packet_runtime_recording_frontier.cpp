@@ -7,6 +7,7 @@
 
 #include <core/graphics/backend_selection/backend.h>
 #include <global/termination.h>
+#include <global/math/vector_double.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -372,7 +373,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     Alloc::ScratchArena& serialStateFanInScratchArena = *serialScratch->stateFanInScratchArena;
     const auto completeReadyFrontierTelemetry = [&]{
         const f64 elapsedSeconds = DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
-        f64 workerBusySeconds = 0.0;
+        SIMDVectorDouble workerBusySeconds = {};
         for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
             const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
             const GpuRecordedPacket* const recordedPacket = outRecordedGraph.findWithinArtifactOperation(
@@ -380,17 +381,19 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 artifactOperation
             );
             if(recordedPacket)
-                workerBusySeconds += recordedPacket->recordingSeconds;
+                workerBusySeconds += SIMDVectorDouble{ recordedPacket->recordingSeconds, recordedPacket->recordingSeconds };
         }
 
         // CpuTaskScheduler workers and its calling thread are all callable logical recording slots.
         // Keeping the entire successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
-        const f64 logicalWorkerSlotCount = static_cast<f64>(cpuScheduler.workerThreadCount()) + 1.0;
+        const f64 workerCount = static_cast<f64>(cpuScheduler.workerThreadCount());
+        const SIMDVectorDouble logicalWorkerSlotCount = SIMDVectorDouble{ workerCount, workerCount } + SIMDVectorDouble{ 1.0, 1.0 };
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
+        const SIMDVectorDouble availableWorkerSeconds = SIMDVectorDouble{ elapsedSeconds, elapsedSeconds } * logicalWorkerSlotCount;
         outRecordedGraph.addReadyFrontierStatistics(
             elapsedSeconds,
-            workerBusySeconds,
-            elapsedSeconds * logicalWorkerSlotCount,
+            workerBusySeconds.x,
+            availableWorkerSeconds.x,
             artifactOperation
         );
     };

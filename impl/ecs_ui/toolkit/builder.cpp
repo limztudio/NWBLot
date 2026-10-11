@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "builder.h"
 
 #include <global/math/vector_arithmetic.h>
@@ -240,10 +242,10 @@ Builder::Item* Builder::addItem(
         }
         for(const auto& name : names){
             const UiSkinRegion* skinRegion = region(name, m_style.checkbox);
-            item.checkboxExtent = Max(item.checkboxExtent, Max(skinRegion->minimumWidth, skinRegion->minimumHeight));
+            item.checkboxExtent = NumericSimd::Max(item.checkboxExtent, NumericSimd::Max(skinRegion->minimumWidth, skinRegion->minimumHeight));
         }
-        measured.x += item.checkboxExtent + m_style.gap;
-        measured.y = Max(measured.y, item.checkboxExtent);
+        measured.x = NumericSimd::Add(measured.x, NumericSimd::Add(item.checkboxExtent, m_style.gap));
+        measured.y = NumericSimd::Max(measured.y, item.checkboxExtent);
     }
     LayoutNodeDesc description;
     description.width = options.width;

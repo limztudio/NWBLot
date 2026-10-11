@@ -6,6 +6,7 @@
 #include "timing.h"
 
 #include <core/task/cpu/scheduler.h>
+#include <global/math/vector_double.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,7 +75,11 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
             if(!scopeName)
                 continue;
             const TimingScopeId scope = timing.registerScope(*scopeName);
-            timing.recordSample(scope, static_cast<f64>(event.durationNanoseconds) * __hidden_cpu_task_profile::s_NanosecondsToSeconds, event.frameIndex);
+            const f64 nanoseconds = static_cast<f64>(event.durationNanoseconds);
+            const SIMDVectorDouble seconds = SIMDVectorDouble{ nanoseconds, nanoseconds } * SIMDVectorDouble{
+                __hidden_cpu_task_profile::s_NanosecondsToSeconds, __hidden_cpu_task_profile::s_NanosecondsToSeconds
+            };
+            timing.recordSample(scope, seconds.x, event.frameIndex);
         }
     }
 }

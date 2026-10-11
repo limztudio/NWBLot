@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/numeric_simd.h>
+
 #include "../builder.h"
 
 #include <global/math/vector_arithmetic.h>
@@ -64,7 +66,7 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const f32 thumbStart = horizontal ? bar.thumb.x : bar.thumb.y;
         const f32 trackExtent = horizontal ? bar.track.width : bar.track.height;
         const f32 thumbExtent = horizontal ? bar.thumb.width : bar.thumb.height;
-        const f32 afterStart = start + trackExtent - thumbStart;
+        const f32 afterStart = NumericSimd::Subtract(NumericSimd::Add(start, trackExtent), thumbStart);
         const SIMDVector extent = VectorSubtract(VectorSet(thumbStart, afterStart, thumbStart, afterStart),
             VectorSet(start, thumbExtent, start, thumbExtent));
         const SIMDVector visible = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
@@ -85,11 +87,11 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         target.value = horizontal ? 2u : 4u;
         target.rectangle = bar.track;
         if(horizontal){
-            target.rectangle.x = thumbStart + thumbExtent;
+            target.rectangle.x = NumericSimd::Add(thumbStart, thumbExtent);
             target.rectangle.width = after;
         }
         else{
-            target.rectangle.y = thumbStart + thumbExtent;
+            target.rectangle.y = NumericSimd::Add(thumbStart, thumbExtent);
             target.rectangle.height = after;
         }
         if(!m_context.addPartTarget(item.state, MakeWidgetId(item.state.id, horizontal ? "scroll.x.after" : "scroll.y.after"), target))

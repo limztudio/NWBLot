@@ -3,6 +3,7 @@
 
 
 #include "edit_scene.h"
+#include "marker_positions.h"
 
 #include "edit_selection_probe.h"
 #include "smoke_geometry.h"
@@ -181,10 +182,11 @@ void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
 
 void UiEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const auto current = values();
+    const auto positions = BuildSmokeMarkerPositions<std::tuple_size_v<decltype(current)> + 1u, 12u, 20u>();
     const f32 y = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index <= current.size(); ++index){
         const u32 value = index == current.size() ? m_sequence : current[index];
-        context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, y, 14.0f, 12.0f },
+        context.paint.fillRect({ positions[index], y, 14.0f, 12.0f },
             EncodeSmokeColor(value));
     }
 }

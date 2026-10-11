@@ -5,11 +5,22 @@
 #include "value.h"
 #include "arena_names.h"
 
+#include <global/math/vector_double.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_METASCRIPT_BEGIN
+
+namespace{
+
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NumericLanes(const Value& value){
+    const f64 number = value.toDouble();
+    return { number, number };
+}
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +103,7 @@ Value Value::operator+(const Value& rhs)const{
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(toDouble() + rhs.toDouble(), m_arena);
+        return Value((NumericLanes(*this) + NumericLanes(rhs)).x, m_arena);
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         const auto lsv = asString();
@@ -141,7 +152,7 @@ Value Value::operator-(const Value& rhs)const{
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(toDouble() - rhs.toDouble(), m_arena);
+        return Value((NumericLanes(*this) - NumericLanes(rhs)).x, m_arena);
 
     NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator-"));
     return Value(m_arena);
@@ -157,7 +168,7 @@ Value Value::operator*(const Value& rhs)const{
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(toDouble() * rhs.toDouble(), m_arena);
+        return Value((NumericLanes(*this) * NumericLanes(rhs)).x, m_arena);
 
     NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator*"));
     return Value(m_arena);
@@ -181,7 +192,7 @@ Value Value::operator/(const Value& rhs)const{
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return Value(m_arena);
         }
-        return Value(toDouble() / rhs.toDouble(), m_arena);
+        return Value((NumericLanes(*this) / NumericLanes(rhs)).x, m_arena);
     }
 
     NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator/"));
@@ -199,7 +210,7 @@ Value& Value::operator+=(const Value& rhs){
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(toDouble() + rhs.toDouble());
+        setDouble((NumericLanes(*this) + NumericLanes(rhs)).x);
         return *this;
     }
 
@@ -256,7 +267,7 @@ Value& Value::operator-=(const Value& rhs){
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(toDouble() - rhs.toDouble());
+        setDouble((NumericLanes(*this) - NumericLanes(rhs)).x);
         return *this;
     }
 
@@ -275,7 +286,7 @@ Value& Value::operator*=(const Value& rhs){
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(toDouble() * rhs.toDouble());
+        setDouble((NumericLanes(*this) * NumericLanes(rhs)).x);
         return *this;
     }
 
@@ -302,7 +313,7 @@ Value& Value::operator/=(const Value& rhs){
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return *this;
         }
-        setDouble(toDouble() / rhs.toDouble());
+        setDouble((NumericLanes(*this) / NumericLanes(rhs)).x);
         return *this;
     }
 

@@ -3,6 +3,7 @@
 
 
 #include "radio_group_snapshot.h"
+#include "marker_positions.h"
 
 #include "smoke_geometry.h"
 #include "radio_group_scene.h"
@@ -158,11 +159,12 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
 
 void UiRadioGroupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const f32 y = context.display.logicalHeight - 18.0f;
+    const auto positions = BuildSmokeMarkerPositions<(std::tuple_size_v<decltype(m_snapshot.values)> + 1u) * 2u, 12u, 12u>();
     for(usize index = 0u; index <= m_snapshot.values.size(); ++index){
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f },
+            context.paint.fillRect({ positions[marker], y, 8.0f, 8.0f },
                 EncodeSmokeColor(value >> (part * 12u)));
         }
     }

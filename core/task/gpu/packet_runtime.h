@@ -14,6 +14,7 @@
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/rhi/device.h>
 #include <global/sync.h>
+#include <global/math/vector_double.h>
 #include <global/termination.h>
 
 
@@ -110,10 +111,13 @@ struct GpuTaskGraphRecordingStatistics{
     f64 readyFrontierWorkerCapacitySeconds = 0.0;
 
     [[nodiscard]] f64 readyFrontierWorkerUtilization()const noexcept{
-        return readyFrontierWorkerCapacitySeconds > 0.0
-            ? Saturate(readyFrontierWorkerBusySeconds / readyFrontierWorkerCapacitySeconds)
-            : 0.0
-        ;
+        if(!(readyFrontierWorkerCapacitySeconds > 0.0))
+            return 0.0;
+        const SIMDVectorDouble busy = { readyFrontierWorkerBusySeconds, readyFrontierWorkerBusySeconds };
+        const SIMDVectorDouble capacity = { readyFrontierWorkerCapacitySeconds, readyFrontierWorkerCapacitySeconds };
+        const SIMDVectorDouble utilization = busy / capacity;
+        const SIMDVectorDouble lowerBounded = (utilization < SIMDVectorDouble{ 0.0, 0.0 }) ? SIMDVectorDouble{ 0.0, 0.0 } : utilization;
+        return ((lowerBounded > SIMDVectorDouble{ 1.0, 1.0 }) ? SIMDVectorDouble{ 1.0, 1.0 } : lowerBounded).x;
     }
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };

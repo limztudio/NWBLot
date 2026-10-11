@@ -122,25 +122,25 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 }
 
 
-[[nodiscard]] static SIMDVector BuildReceiverRotation(const f32 animationTime){
+[[nodiscard]] static SIMDVectorSingle BuildReceiverRotation(const f32 animationTime){
     return QuaternionRotationRollPitchYaw(0.0f, animationTime * s_ReceiverYawSpeed, 0.0f);
 }
 
-[[nodiscard]] static SIMDVector BuildCsgReceiverPosition(){
+[[nodiscard]] static SIMDVectorSingle BuildCsgReceiverPosition(){
     return VectorSet(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f);
 }
 
-[[nodiscard]] static SIMDVector BuildCutterLocalRotation(const f32 animationTime){
-    const SIMDVector horizontalCapsule = QuaternionRotationRollPitchYaw(s_PIDIV2, s_PIDIV2, 0.0f);
-    const SIMDVector gentleRoll = QuaternionRotationRollPitchYaw(0.0f, animationTime * s_CutterGentleRollSpeed, 0.0f);
+[[nodiscard]] static SIMDVectorSingle BuildCutterLocalRotation(const f32 animationTime){
+    const SIMDVectorSingle horizontalCapsule = QuaternionRotationRollPitchYaw(s_PIDIV2, s_PIDIV2, 0.0f);
+    const SIMDVectorSingle gentleRoll = QuaternionRotationRollPitchYaw(0.0f, animationTime * s_CutterGentleRollSpeed, 0.0f);
     return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
 }
 
-[[nodiscard]] static SIMDVector BuildCutterWorldCenter(const SIMDVector cutterLocalCenter, const SIMDVector receiverRotation){
+[[nodiscard]] static SIMDVectorSingle BuildCutterWorldCenter(const SIMDVectorSingle cutterLocalCenter, const SIMDVectorSingle receiverRotation){
     return VectorAdd(BuildCsgReceiverPosition(), Vector3Rotate(cutterLocalCenter, receiverRotation));
 }
 
-[[nodiscard]] static SIMDVector BuildCutterWorldRotation(const f32 animationTime, const SIMDVector receiverRotation){
+[[nodiscard]] static SIMDVectorSingle BuildCutterWorldRotation(const f32 animationTime, const SIMDVectorSingle receiverRotation){
     return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCutterLocalRotation(animationTime)));
 }
 
@@ -225,8 +225,8 @@ private:
         );
     }
 
-    [[nodiscard]] SIMDVector resolveCutterAnchorLocalCenter()const{
-        const SIMDVector fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
+    [[nodiscard]] SIMDVectorSingle resolveCutterAnchorLocalCenter()const{
+        const SIMDVectorSingle fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
         if(!modelAsset){
@@ -274,7 +274,7 @@ private:
         );
     }
 
-    void createCutter(const SIMDVector cutterLocalCenter){
+    void createCutter(const SIMDVectorSingle cutterLocalCenter){
         auto entity = m_world->createEntity();
         auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
         cutter.receiverGroup = s_ReceiverGroup;
@@ -292,7 +292,7 @@ private:
         parameters.radiusHalfHeight = Float4(s_CapsuleCutterRadius, s_CapsuleCutterHalfHeight, 0.0f, 0.0f);
 #endif
         AssignCsgCutterParameters(cutter, parameters);
-        const SIMDVector receiverRotation = BuildReceiverRotation(0.0f);
+        const SIMDVectorSingle receiverRotation = BuildReceiverRotation(0.0f);
         AssignCsgCutterTransform(
             cutter,
             BuildCutterWorldCenter(cutterLocalCenter, receiverRotation),
@@ -302,7 +302,7 @@ private:
         m_cutter = entity.id();
     }
 
-    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVector receiverRotation){
+    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle receiverRotation){
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(!transform)
             return;
@@ -310,12 +310,12 @@ private:
         StoreFloat(receiverRotation, transform->rotation);
     }
 
-    void updateReceiverTransforms(const SIMDVector receiverRotation){
+    void updateReceiverTransforms(const SIMDVectorSingle receiverRotation){
         updateReceiverRotation(m_plainReceiver, receiverRotation);
         updateReceiverRotation(m_receiver, receiverRotation);
     }
 
-    void updateCutterTransform(const SIMDVector receiverRotation, const SIMDVector cutterLocalCenter){
+    void updateCutterTransform(const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalCenter){
         auto* cutter = m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_cutter);
         if(!cutter)
             return;
@@ -359,7 +359,7 @@ public:
         createReceiver();
         SyncSmokeModelRuntimes(*m_world);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
-        const SIMDVector cutterLocalCenter = resolveCutterAnchorLocalCenter();
+        const SIMDVectorSingle cutterLocalCenter = resolveCutterAnchorLocalCenter();
         StoreFloat(cutterLocalCenter, m_cutterLocalCenter);
         createCutter(cutterLocalCenter);
         NWB_FATAL_ASSERT_MSG(
@@ -410,7 +410,7 @@ public:
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;
-        const SIMDVector receiverRotation = BuildReceiverRotation(m_animationTime);
+        const SIMDVectorSingle receiverRotation = BuildReceiverRotation(m_animationTime);
         updateReceiverTransforms(receiverRotation);
         updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
 

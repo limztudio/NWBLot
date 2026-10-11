@@ -90,7 +90,7 @@ bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView conte
 
 
 Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept{
-    SIMDVector determinant;
+    SIMDVectorSingle determinant;
     const SIMDMatrix inverse = MatrixInverse(&determinant, matrix);
     if(
         !VectorIsFinite(determinant, VectorComponentMask::s_XYZW)

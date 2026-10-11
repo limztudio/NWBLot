@@ -11,13 +11,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorExp2(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
     __m128i iTrunc = _mm_cvttps_epi32(value);
-    SIMDVector fTrunc = _mm_cvtepi32_ps(iTrunc);
-    SIMDVector y = VectorSubtract(value, fTrunc);
+    SIMDVectorSingle fTrunc = _mm_cvtepi32_ps(iTrunc);
+    SIMDVectorSingle y = VectorSubtract(value, fTrunc);
 
-    SIMDVector poly = VectorMultiplyAdd(s_SIMDExpEst7, y, s_SIMDExpEst6);
+    SIMDVectorSingle poly = VectorMultiplyAdd(s_SIMDExpEst7, y, s_SIMDExpEst6);
     poly = VectorMultiplyAdd(poly, y, s_SIMDExpEst5);
     poly = VectorMultiplyAdd(poly, y, s_SIMDExpEst4);
     poly = VectorMultiplyAdd(poly, y, s_SIMDExpEst3);
@@ -27,11 +27,11 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorExp2(SIMDVector value)noexcept{
 
     __m128i biased = _mm_add_epi32(iTrunc, s_SIMDExponentBias);
     biased = _mm_slli_epi32(biased, 23);
-    SIMDVector result0 = VectorDivide(_mm_castsi128_ps(biased), poly);
+    SIMDVectorSingle result0 = VectorDivide(_mm_castsi128_ps(biased), poly);
 
     biased = _mm_add_epi32(iTrunc, s_SIMD253);
     biased = _mm_slli_epi32(biased, 23);
-    SIMDVector result1 = VectorDivide(_mm_castsi128_ps(biased), poly);
+    SIMDVectorSingle result1 = VectorDivide(_mm_castsi128_ps(biased), poly);
     result1 = VectorMultiply(s_SIMDMinNormal, result1);
 
     __m128i comp = _mm_cmplt_epi32(_mm_castps_si128(value), s_SIMDBin128);
@@ -111,17 +111,17 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorExp2(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorExp10(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp10(SIMDVectorSingle value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLg10, value));
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorExpE(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExpE(SIMDVectorSingle value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLgE, value));
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorExp(SIMDVector value)noexcept{ return VectorExpE(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp(SIMDVectorSingle value)noexcept{ return VectorExpE(value); }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLog2(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
     __m128i rawBiased = _mm_and_si128(_mm_castps_si128(value), s_SIMDInfinity);
     __m128i trailing = _mm_and_si128(_mm_castps_si128(value), s_SIMDQNaNTest);
@@ -146,9 +146,9 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLog2(SIMDVector value)noexcept{
     const __m128i mantissa = _mm_or_si128(select0, select1);
 
     const __m128i normalized = _mm_or_si128(s_SIMDOne, mantissa);
-    const SIMDVector y = _mm_sub_ps(_mm_castsi128_ps(normalized), s_SIMDOne);
+    const SIMDVectorSingle y = _mm_sub_ps(_mm_castsi128_ps(normalized), s_SIMDOne);
 
-    SIMDVector log2 = VectorMultiplyAdd(s_SIMDLogEst7, y, s_SIMDLogEst6);
+    SIMDVectorSingle log2 = VectorMultiplyAdd(s_SIMDLogEst7, y, s_SIMDLogEst6);
     log2 = VectorMultiplyAdd(log2, y, s_SIMDLogEst5);
     log2 = VectorMultiplyAdd(log2, y, s_SIMDLogEst4);
     log2 = VectorMultiplyAdd(log2, y, s_SIMDLogEst3);
@@ -243,7 +243,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLog2(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLog10(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog10(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLg10, VectorLog2(value));
 #else
@@ -251,7 +251,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLog10(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLogE(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLogE(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
 #else
@@ -259,9 +259,9 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLogE(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorLog(SIMDVector value)noexcept{ return VectorLogE(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog(SIMDVectorSingle value)noexcept{ return VectorLogE(value); }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPow(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
 #elif defined(NWB_HAS_NEON)

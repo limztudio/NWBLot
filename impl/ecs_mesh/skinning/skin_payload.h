@@ -88,7 +88,7 @@ namespace MeshSkinningPayload{
     influences.reserve(instance.skin.size());
     for(usize vertexIndex = 0u; vertexIndex < instance.skin.size(); ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
-        const SIMDVector weights = LoadFloat(sourceSkin.weight);
+        const SIMDVectorSingle weights = LoadFloat(sourceSkin.weight);
         if(
             !SkinValidation::ValidSkinInfluenceWeights(weights)
             || !SkinValidation::SkinInfluenceFitsSkeleton(sourceSkin, instance.skeletonJointCount)

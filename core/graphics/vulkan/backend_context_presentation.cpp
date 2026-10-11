@@ -87,10 +87,10 @@ BeginFrameResult BackendContext::beginFrame(){
             result.suggestedHeight = surfaceCaps.currentExtent.height;
         }
         else{
-            const SIMDVector requestedExtent = VectorSet(static_cast<f32>(m_swapChainState.backBufferWidth), static_cast<f32>(m_swapChainState.backBufferHeight), 0.0f, 0.0f);
-            const SIMDVector minExtent = VectorSet(static_cast<f32>(surfaceCaps.minImageExtent.width), static_cast<f32>(surfaceCaps.minImageExtent.height), 0.0f, 0.0f);
-            const SIMDVector maxExtent = VectorSet(static_cast<f32>(surfaceCaps.maxImageExtent.width), static_cast<f32>(surfaceCaps.maxImageExtent.height), 0.0f, 0.0f);
-            const SIMDVector clampedExtent = VectorClamp(requestedExtent, minExtent, maxExtent);
+            const SIMDVectorSingle requestedExtent = VectorSet(static_cast<f32>(m_swapChainState.backBufferWidth), static_cast<f32>(m_swapChainState.backBufferHeight), 0.0f, 0.0f);
+            const SIMDVectorSingle minExtent = VectorSet(static_cast<f32>(surfaceCaps.minImageExtent.width), static_cast<f32>(surfaceCaps.minImageExtent.height), 0.0f, 0.0f);
+            const SIMDVectorSingle maxExtent = VectorSet(static_cast<f32>(surfaceCaps.maxImageExtent.width), static_cast<f32>(surfaceCaps.maxImageExtent.height), 0.0f, 0.0f);
+            const SIMDVectorSingle clampedExtent = VectorClamp(requestedExtent, minExtent, maxExtent);
             result.suggestedWidth = static_cast<u32>(VectorGetX(clampedExtent));
             result.suggestedHeight = static_cast<u32>(VectorGetY(clampedExtent));
         }

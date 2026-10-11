@@ -36,7 +36,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<SIMDVector> TryComputeCameraTanHalfVerticalFov(const SIMDVector verticalFovRadians)noexcept{
+[[nodiscard]] inline Expected<SIMDVectorSingle> TryComputeCameraTanHalfVerticalFov(const SIMDVectorSingle verticalFovRadians)noexcept{
     constexpr f32 s_CameraFovCosEpsilon = 0.000001f;
 
     if(
@@ -46,8 +46,8 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     )
         return MakeUnexpected(Failure{});
 
-    SIMDVector sinHalfFovVector;
-    SIMDVector cosHalfFovVector;
+    SIMDVectorSingle sinHalfFovVector;
+    SIMDVectorSingle cosHalfFovVector;
     constexpr f32 s_HalfFovWeight = 0.5f;
     VectorSinCos(sinHalfFovVector, cosHalfFovVector, VectorScale(verticalFovRadians, s_HalfFovWeight));
     if(
@@ -60,14 +60,14 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     )
         return MakeUnexpected(Failure{});
 
-    const SIMDVector tanHalfFovVector = VectorDivide(sinHalfFovVector, cosHalfFovVector);
+    const SIMDVectorSingle tanHalfFovVector = VectorDivide(sinHalfFovVector, cosHalfFovVector);
     if(!VectorIsFinite(tanHalfFovVector, VectorComponentMask::s_XYZW) || !Vector4Greater(tanHalfFovVector, VectorZero()))
         return MakeUnexpected(Failure{});
 
     return tanHalfFovVector;
 }
 
-[[nodiscard]] inline bool CameraClipRangeValid(const SIMDVector nearPlane, const SIMDVector farPlane)noexcept{
+[[nodiscard]] inline bool CameraClipRangeValid(const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
     return
         VectorIsFinite(nearPlane, VectorComponentMask::s_XYZW)
         && VectorIsFinite(farPlane, VectorComponentMask::s_XYZW)
@@ -76,17 +76,17 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     ;
 }
 
-[[nodiscard]] inline SIMDVector ResolveCameraAspectRatio(const SIMDVector cameraAspectRatio, const SIMDVector fallbackAspectRatio)noexcept{
-    const SIMDVector fallbackValid = VectorAndCInt(
+[[nodiscard]] inline SIMDVectorSingle ResolveCameraAspectRatio(const SIMDVectorSingle cameraAspectRatio, const SIMDVectorSingle fallbackAspectRatio)noexcept{
+    const SIMDVectorSingle fallbackValid = VectorAndCInt(
         VectorGreater(fallbackAspectRatio, s_SIMDZero),
         VectorOrInt(VectorIsNaN(fallbackAspectRatio), VectorIsInfinite(fallbackAspectRatio))
     );
-    const SIMDVector resolvedFallbackAspectRatio = VectorSelect(
+    const SIMDVectorSingle resolvedFallbackAspectRatio = VectorSelect(
         s_SIMDOne,
         fallbackAspectRatio,
         fallbackValid
     );
-    const SIMDVector cameraValid = VectorAndCInt(
+    const SIMDVectorSingle cameraValid = VectorAndCInt(
         VectorGreater(cameraAspectRatio, s_SIMDZero),
         VectorOrInt(VectorIsNaN(cameraAspectRatio), VectorIsInfinite(cameraAspectRatio))
     );
@@ -94,13 +94,13 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 }
 
 [[nodiscard]] inline bool CameraProjectionValuesValid(
-    const SIMDVector projectionParams,
-    const SIMDVector aspectRatio,
-    const SIMDVector tanHalfVerticalFov,
-    const SIMDVector nearPlane,
-    const SIMDVector farPlane
+    const SIMDVectorSingle projectionParams,
+    const SIMDVectorSingle aspectRatio,
+    const SIMDVectorSingle tanHalfVerticalFov,
+    const SIMDVectorSingle nearPlane,
+    const SIMDVectorSingle farPlane
 )noexcept{
-    const SIMDVector validProjectionParams = VectorOrInt(
+    const SIMDVectorSingle validProjectionParams = VectorOrInt(
         VectorAndInt(VectorGreater(projectionParams, s_SIMDZero), s_SIMDMask3),
         VectorAndInt(VectorLess(projectionParams, s_SIMDZero), s_SIMDMaskW)
     );
@@ -118,7 +118,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     ;
 }
 
-inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDVector& outProjectionParams, SIMDVector& outAspectRatio, SIMDVector& outTanHalfVerticalFov, SIMDVector& outNearPlane, SIMDVector& outFarPlane)noexcept{
+inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDVectorSingle& outProjectionParams, SIMDVectorSingle& outAspectRatio, SIMDVectorSingle& outTanHalfVerticalFov, SIMDVectorSingle& outNearPlane, SIMDVectorSingle& outFarPlane)noexcept{
     outProjectionParams = LoadFloat(projection.projectionParams);
     outAspectRatio = VectorReplicate(projection.aspectRatio);
     outTanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
@@ -127,38 +127,38 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
 }
 
 [[nodiscard]] inline bool CameraProjectionStorageValid(const CameraProjection& projection)noexcept{
-    SIMDVector projectionParams{};
-    SIMDVector aspectRatio{};
-    SIMDVector tanHalfVerticalFov{};
-    SIMDVector nearPlane{};
-    SIMDVector farPlane{};
+    SIMDVectorSingle projectionParams{};
+    SIMDVectorSingle aspectRatio{};
+    SIMDVectorSingle tanHalfVerticalFov{};
+    SIMDVectorSingle nearPlane{};
+    SIMDVectorSingle farPlane{};
     LoadCameraProjectionValues(projection, projectionParams, aspectRatio, tanHalfVerticalFov, nearPlane, farPlane);
     return CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalfVerticalFov, nearPlane, farPlane);
 }
 
 [[nodiscard]] inline Expected<CameraProjection> TryBuildCameraProjection(
-    const SIMDVector verticalFovRadians,
-    const SIMDVector nearPlane,
-    const SIMDVector farPlane,
-    const SIMDVector cameraAspectRatio,
-    const SIMDVector fallbackAspectRatio
+    const SIMDVectorSingle verticalFovRadians,
+    const SIMDVectorSingle nearPlane,
+    const SIMDVectorSingle farPlane,
+    const SIMDVectorSingle cameraAspectRatio,
+    const SIMDVectorSingle fallbackAspectRatio
 )noexcept{
     const auto tanHalfFov = TryComputeCameraTanHalfVerticalFov(verticalFovRadians);
     if(!tanHalfFov || !CameraClipRangeValid(nearPlane, farPlane))
         return MakeUnexpected(Failure{});
 
-    const SIMDVector aspectRatio = ResolveCameraAspectRatio(cameraAspectRatio, fallbackAspectRatio);
-    const SIMDVector depthRange = VectorSubtract(farPlane, nearPlane);
-    const SIMDVector selectZW = VectorOrInt(s_SIMDMaskZ, s_SIMDMaskW);
-    const SIMDVector projectionDenominators = VectorMultiply(
+    const SIMDVectorSingle aspectRatio = ResolveCameraAspectRatio(cameraAspectRatio, fallbackAspectRatio);
+    const SIMDVectorSingle depthRange = VectorSubtract(farPlane, nearPlane);
+    const SIMDVectorSingle selectZW = VectorOrInt(s_SIMDMaskZ, s_SIMDMaskW);
+    const SIMDVectorSingle projectionDenominators = VectorMultiply(
         VectorSelect(*tanHalfFov, depthRange, selectZW),
         VectorSelect(s_SIMDOne, aspectRatio, s_SIMDMaskX)
     );
-    const SIMDVector projectionNumerators = VectorMultiply(
+    const SIMDVectorSingle projectionNumerators = VectorMultiply(
         VectorSelect(s_SIMDOne, VectorMergeXY(farPlane, nearPlane), selectZW),
         VectorSelect(s_SIMDOne, VectorNegate(farPlane), s_SIMDMaskW)
     );
-    const SIMDVector projectionParams = VectorDivide(projectionNumerators, projectionDenominators);
+    const SIMDVectorSingle projectionParams = VectorDivide(projectionNumerators, projectionDenominators);
     if(!CameraProjectionValuesValid(projectionParams, aspectRatio, *tanHalfFov, nearPlane, farPlane))
         return MakeUnexpected(Failure{});
 

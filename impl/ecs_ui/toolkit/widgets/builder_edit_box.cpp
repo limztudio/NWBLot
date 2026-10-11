@@ -123,10 +123,10 @@ Point Builder::editMinimumSize()const noexcept{
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
         if(skinRegion){
-            const SIMDVector minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-            const SIMDVector minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
+            const SIMDVectorSingle minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
+            const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
                 skinRegion->minimumWidth, skinRegion->minimumHeight);
-            const SIMDVector minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
+            const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
                 VectorGreater(minimumCurrent, minimumCandidate));
             minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
         }
@@ -170,9 +170,9 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
             skinRegion = region(m_editStyle.fallback, m_editStyle.fallback);
         if(!skinRegion)
             continue;
-        const SIMDVector itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
-        const SIMDVector itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVector itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent,
+        const SIMDVectorSingle itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
+        const SIMDVectorSingle itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
+        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent,
             VectorGreater(itempaddingCurrent, itempaddingCandidate));
         item.padding = { VectorGetX(itempaddingMaximum), VectorGetY(itempaddingMaximum), VectorGetZ(itempaddingMaximum), VectorGetW(itempaddingMaximum) };
     }

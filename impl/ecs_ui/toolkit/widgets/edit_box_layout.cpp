@@ -33,7 +33,7 @@ namespace __hidden_ui_edit_box_layout{
 }
 
 [[nodiscard]] static Rect Intersection(const Rect& first, const Rect& second)noexcept{
-    const SIMDVector intersection = IntersectRectValue(
+    const SIMDVectorSingle intersection = IntersectRectValue(
         VectorSet(first.x, first.y, first.width, first.height), VectorSet(second.x, second.y, second.width, second.height)
     );
     return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
@@ -65,16 +65,16 @@ Expected<EditBoxPlacement> EditBoxView::arrange(
         || !IsFinite(caretWidth) || caretWidth <= 0.0f
     )
         return MakeUnexpected(Failure{});
-    const SIMDVector origin = VectorSet(bounds.x, bounds.y, bounds.x, bounds.y);
-    const SIMDVector size = VectorSet(bounds.width, bounds.height, bounds.width, bounds.height);
-    const SIMDVector paddingStart = VectorSet(padding.left, padding.top, padding.left, padding.top);
-    const SIMDVector paddingEnd = VectorSet(padding.right, padding.bottom, padding.right, padding.bottom);
-    const SIMDVector firstInset = VectorSelect(size, paddingStart, VectorLess(paddingStart, size));
-    const SIMDVector lastInset = VectorSelect(size, paddingEnd, VectorLess(paddingEnd, size));
-    const SIMDVector first = VectorAdd(origin, firstInset);
-    const SIMDVector last = VectorSubtract(VectorAdd(origin, size), lastInset);
-    const SIMDVector end = VectorSelect(last, first, VectorGreater(first, last));
-    const SIMDVector extent = VectorSubtract(end, first);
+    const SIMDVectorSingle origin = VectorSet(bounds.x, bounds.y, bounds.x, bounds.y);
+    const SIMDVectorSingle size = VectorSet(bounds.width, bounds.height, bounds.width, bounds.height);
+    const SIMDVectorSingle paddingStart = VectorSet(padding.left, padding.top, padding.left, padding.top);
+    const SIMDVectorSingle paddingEnd = VectorSet(padding.right, padding.bottom, padding.right, padding.bottom);
+    const SIMDVectorSingle firstInset = VectorSelect(size, paddingStart, VectorLess(paddingStart, size));
+    const SIMDVectorSingle lastInset = VectorSelect(size, paddingEnd, VectorLess(paddingEnd, size));
+    const SIMDVectorSingle first = VectorAdd(origin, firstInset);
+    const SIMDVectorSingle last = VectorSubtract(VectorAdd(origin, size), lastInset);
+    const SIMDVectorSingle end = VectorSelect(last, first, VectorGreater(first, last));
+    const SIMDVectorSingle extent = VectorSubtract(end, first);
     const Rect viewport{ VectorGetX(first), VectorGetY(first), VectorGetX(extent), VectorGetY(extent) };
     return arrangeViewport(bounds, viewport, clip, previousScroll, caretWidth, revealCaret);
 }
@@ -124,13 +124,13 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(
         if(revealCaret && caret->y + caret->height > placement.scrollY + placement.content.height)
             placement.scrollY = caret->y + caret->height - placement.content.height;
         placement.scrollY = Clamp(placement.scrollY, 0.0f, maximumScrollY);
-        const SIMDVector origin = VectorSubtract(VectorSet(left, top, left, top),
+        const SIMDVectorSingle origin = VectorSubtract(VectorSet(left, top, left, top),
             VectorSet(placement.scroll, placement.scrollY, placement.scroll, placement.scrollY));
         placement.textOrigin = { VectorGetX(origin), VectorGetY(origin) };
     }
     else
         placement.textOrigin = { left - placement.scroll, top + Max(0.0f, (placement.content.height - caret->height) * 0.5f) };
-    const SIMDVector caretOrigin = VectorAdd(
+    const SIMDVectorSingle caretOrigin = VectorAdd(
         VectorSet(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y),
         VectorSet(caret->x, caret->y, caret->x, caret->y)
     );
@@ -139,7 +139,7 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(
     if(!selection)
         return MakeUnexpected(Failure{});
     if(selection->width > 0.0f){
-        const SIMDVector selectionOrigin = VectorAdd(VectorSet(selection->x, selection->y, selection->x, selection->y),
+        const SIMDVectorSingle selectionOrigin = VectorAdd(VectorSet(selection->x, selection->y, selection->x, selection->y),
             VectorSet(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y));
         selection->x = VectorGetX(selectionOrigin);
         selection->y = VectorGetY(selectionOrigin);
@@ -153,7 +153,7 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(
         if(preeditUnderline.width > 0.0f){
             const f32 thickness = Min(caretWidth, preeditUnderline.height);
             const f32 verticalOffset = placement.textOrigin.y + Max(0.0f, preeditUnderline.height - thickness);
-            const SIMDVector underlineOrigin = VectorAdd(VectorSet(preeditUnderline.x, preeditUnderline.y, preeditUnderline.x, preeditUnderline.y),
+            const SIMDVectorSingle underlineOrigin = VectorAdd(VectorSet(preeditUnderline.x, preeditUnderline.y, preeditUnderline.x, preeditUnderline.y),
                 VectorSet(placement.textOrigin.x, verticalOffset, placement.textOrigin.x, verticalOffset));
             preeditUnderline.x = VectorGetX(underlineOrigin);
             preeditUnderline.y = VectorGetY(underlineOrigin);
@@ -172,7 +172,7 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(
 Expected<usize> EditBoxView::hitTest(const Point point, const EditBoxPlacement& placement)const noexcept{
     if(!m_ready || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))
         return MakeUnexpected(Failure{});
-    const SIMDVector local = VectorSubtract(VectorSet(point.x, point.y, point.x, point.y),
+    const SIMDVectorSingle local = VectorSubtract(VectorSet(point.x, point.y, point.x, point.y),
         VectorSet(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y));
     return m_geometry.hitTest({ VectorGetX(local), VectorGetY(local) });
 }

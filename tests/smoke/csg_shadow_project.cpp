@@ -164,8 +164,8 @@ private:
     }
 
     EntityID createBox(const Box& box, const bool transparent, const SmokeMeshRef& mesh = s_CubeMesh){
-        const SIMDVector minimum = LoadFloat(box.minimum);
-        const SIMDVector maximum = LoadFloat(box.maximum);
+        const SIMDVectorSingle minimum = LoadFloat(box.minimum);
+        const SIMDVectorSingle maximum = LoadFloat(box.maximum);
         Float4 center;
         Float4 extent;
         StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
@@ -228,8 +228,8 @@ private:
         cutter.shapeType = Name("engine/csg/box");
         cutter.active = m_arm != Arm::Uncut;
         NWB::Impl::CsgBoxShapeParameters parameters;
-        const SIMDVector minimum = LoadFloat(cutterBox.minimum);
-        const SIMDVector maximum = LoadFloat(cutterBox.maximum);
+        const SIMDVectorSingle minimum = LoadFloat(cutterBox.minimum);
+        const SIMDVectorSingle maximum = LoadFloat(cutterBox.maximum);
         StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
         AssignCsgCutterParameters(cutter, parameters);
         Float4 finalCenter;
@@ -301,7 +301,7 @@ private:
         cutter.shapeType = shapeType;
         cutter.active = m_arm == Arm::Cut;
         AssignCsgCutterParameters(cutter, parameters);
-        SIMDVector determinant;
+        SIMDVectorSingle determinant;
         StoreFloat(MatrixInverse(&determinant, shapeToWorld), cutter.worldToShape);
         StoreFloat(shapeToWorld, cutter.shapeToWorld);
     }

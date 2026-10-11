@@ -204,10 +204,10 @@ template<usize ComponentCount>
     return values;
 }
 
-[[nodiscard]] Expected<SIMDVector> NormalizeSkinInfluenceWeights(
+[[nodiscard]] Expected<SIMDVectorSingle> NormalizeSkinInfluenceWeights(
     const Path& nwbFilePath,
     const usize influenceIndex,
-    const SIMDVector weights
+    const SIMDVectorSingle weights
 ){
     if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
@@ -217,7 +217,7 @@ template<usize ComponentCount>
         return MakeUnexpected(Failure{});
     }
 
-    const SIMDVector weightSum = Vector4Dot(weights, s_SIMDOne);
+    const SIMDVectorSingle weightSum = Vector4Dot(weights, s_SIMDOne);
     if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(SkinValidation::s_Epsilon))){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total")
             , PathToString<tchar>(nwbFilePath)
@@ -226,7 +226,7 @@ template<usize ComponentCount>
         return MakeUnexpected(Failure{});
     }
 
-    const SIMDVector normalizedWeights = VectorDivide(weights, weightSum);
+    const SIMDVectorSingle normalizedWeights = VectorDivide(weights, weightSum);
     if(!SkinValidation::ValidSkinInfluenceWeights(normalizedWeights))
         return MakeUnexpected(Failure{});
     return normalizedWeights;

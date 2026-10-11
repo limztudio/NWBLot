@@ -66,11 +66,11 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
             m_context.fail();
         return false;
     }
-    const SIMDVector firstPadding = VectorSet(frame.popupStyle.padding.left, frame.popupStyle.padding.top,
+    const SIMDVectorSingle firstPadding = VectorSet(frame.popupStyle.padding.left, frame.popupStyle.padding.top,
         frame.popupStyle.padding.right, frame.popupStyle.padding.bottom);
-    const SIMDVector secondPadding = VectorSet(background->padding.left, background->padding.top,
+    const SIMDVectorSingle secondPadding = VectorSet(background->padding.left, background->padding.top,
         background->padding.right, background->padding.bottom);
-    const SIMDVector paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
+    const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
     const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
     m_paint.pushClip(placement->bounds);
     const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
@@ -84,7 +84,7 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
         item.state = frame.rows;
         item.list = frame.list;
         LayoutBox box;
-        const SIMDVector inset = InsetRectValue(
+        const SIMDVectorSingle inset = InsetRectValue(
             VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height),
             VectorSet(padding.left, padding.top, padding.right, padding.bottom)
         );

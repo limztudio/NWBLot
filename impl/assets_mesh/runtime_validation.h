@@ -29,13 +29,13 @@ NWB_IMPL_BEGIN
 
 class MeshRuntimeValidation final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVector MakeMeshPositionVector(const SIMDVector position)noexcept;
-    [[nodiscard]] static SIMDVector MakeMeshNormalVector(const SIMDVector normal)noexcept;
-    [[nodiscard]] static SIMDVector MakeMeshTangentVector(const SIMDVector tangent)noexcept;
-    [[nodiscard]] static SIMDVector MakeMeshUvVector(const SIMDVector uv)noexcept;
-    [[nodiscard]] static SIMDVector MakeMeshColorVector(const SIMDVector color)noexcept;
-    [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction)noexcept;
-    [[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MakeMeshPositionVector(const SIMDVectorSingle position)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MakeMeshNormalVector(const SIMDVectorSingle normal)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MakeMeshTangentVector(const SIMDVectorSingle tangent)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MakeMeshUvVector(const SIMDVectorSingle uv)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MakeMeshColorVector(const SIMDVectorSingle color)noexcept;
+    [[nodiscard]] static bool ValidDirectionVector(const SIMDVectorSingle direction)noexcept;
+    [[nodiscard]] static bool ValidTangentVector(const SIMDVectorSingle tangent)noexcept;
     [[nodiscard]] static bool ValidateMeshStreams(
     const Core::Assets::AssetVector<Float3U>& positions,
     const Core::Assets::AssetVector<Half4U>& normals,

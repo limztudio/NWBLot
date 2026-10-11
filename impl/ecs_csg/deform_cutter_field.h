@@ -36,10 +36,10 @@ class CsgDeformCutterField final : NoCopy{
 public:
     [[nodiscard]] static CsgDeformShapeKind::Enum ClassifyDeformShape(const Name& shapeType)noexcept;
     // SIMD-domain cores: inputs and outputs stay on vector lanes (replicated distance), never touch storage.
-    [[nodiscard]] static SIMDVector PlaneSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0)noexcept;
-    [[nodiscard]] static SIMDVector BoxSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0)noexcept;
-    [[nodiscard]] static SIMDVector SphereSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0)noexcept;
-    [[nodiscard]] static SIMDVector CapsuleSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0)noexcept;
+    [[nodiscard]] static SIMDVectorSingle PlaneSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept;
+    [[nodiscard]] static SIMDVectorSingle BoxSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept;
+    [[nodiscard]] static SIMDVectorSingle SphereSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept;
+    [[nodiscard]] static SIMDVectorSingle CapsuleSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept;
     [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(
         const CsgDeformShape& shape,
         const CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices,

@@ -64,7 +64,7 @@ bool Builder::paintWindowTitle(){
             painted = m_paint.drawRegion(style.focus, collapse);
     }
     const Point titleSize = m_scope->m_window.title.measure();
-    const SIMDVector titleOrigin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y),
+    const SIMDVectorSingle titleOrigin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y),
         VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top));
     Point origin{ VectorGetX(titleOrigin), VectorGetY(titleOrigin)
         + Max(0.0f, (metrics.titleHeight - metrics.titlePadding.top - metrics.titlePadding.bottom - titleSize.y) * 0.5f) };
@@ -106,11 +106,11 @@ bool Builder::paintWindowResize(){
     else{
         // Skins may supply a resize sprite. The default atlas uses its white sprite for a logical corner grip.
         const f32 thickness = Min(2.0f, corner.width * 0.125f);
-        const SIMDVector scaledSize = VectorMultiply(VectorSet(corner.width, corner.height, corner.width, corner.height),
+        const SIMDVectorSingle scaledSize = VectorMultiply(VectorSet(corner.width, corner.height, corner.width, corner.height),
             VectorSet(0.25f, 0.25f, 0.75f, 0.75f));
-        const SIMDVector ends = VectorMultiplyAddExpression(VectorSet(corner.width, corner.height, corner.width, corner.height),
+        const SIMDVectorSingle ends = VectorMultiplyAddExpression(VectorSet(corner.width, corner.height, corner.width, corner.height),
             VectorSet(0.25f, 1.0f, 1.0f, 0.25f), VectorSet(corner.x, corner.y, corner.x, corner.y));
-        const SIMDVector origins = VectorSubtract(ends, VectorSet(0.0f, thickness, thickness, 0.0f));
+        const SIMDVectorSingle origins = VectorSubtract(ends, VectorSet(0.0f, thickness, thickness, 0.0f));
         const Rect horizontal{ VectorGetX(origins), VectorGetY(origins), VectorGetZ(scaledSize), thickness };
         const Rect vertical{ VectorGetZ(origins), VectorGetW(origins), thickness, VectorGetW(scaledSize) };
         painted = m_paint.drawRegion(style.white, horizontal, style.text)

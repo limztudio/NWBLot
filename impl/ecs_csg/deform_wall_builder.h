@@ -21,11 +21,11 @@ NWB_IMPL_BEGIN
 class CsgDeformWallBuilder final : NoCopy{
 public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
-    [[nodiscard]] static SIMDVector MixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec)noexcept;
-    [[nodiscard]] static SIMDVector NormalizeDirectionVec(SIMDVector direction)noexcept;
-    [[nodiscard]] static SIMDVector KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec)noexcept;
-    [[nodiscard]] static SIMDVector TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec)noexcept;
-    [[nodiscard]] static SIMDVector UpAxisVec()noexcept;
+    [[nodiscard]] static SIMDVectorSingle MixAttributeVec(SIMDVectorSingle firstVec, SIMDVectorSingle secondVec, SIMDVectorSingle blendVec, SIMDVectorSingle otherVec)noexcept;
+    [[nodiscard]] static SIMDVectorSingle NormalizeDirectionVec(SIMDVectorSingle direction)noexcept;
+    [[nodiscard]] static SIMDVectorSingle KeepWVec(SIMDVectorSingle normalizedVec, SIMDVectorSingle sourceVec)noexcept;
+    [[nodiscard]] static SIMDVectorSingle TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept;
+    [[nodiscard]] static SIMDVectorSingle UpAxisVec()noexcept;
     // Storage conversion stays at these boundaries; the cores use SIMD lanes.
     [[nodiscard]] static CsgDeformVertex MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight)noexcept;
     [[nodiscard]] static bool NormalizeDeformVertex(CsgDeformVertex& vertex)noexcept;

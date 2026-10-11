@@ -122,7 +122,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const f64 designMargin = glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize) / glyph.face->unitsPerEm();
     const f64 rasterMargin = Max(1.0, correction) / 64.0 + 2.0 / rasterScale + designMargin;
-    const SIMDVectorDouble marginXMarginYValue = (SIMDVectorDouble{ rasterMargin, rasterMargin } + (SIMDVectorDouble{ 0.5, 0.5 } / SIMDVectorDouble{ pixelScale.x, pixelScale.y }));
+    const SIMDVectorDouble marginXMarginYValue = (SIMDVectorDouble{ rasterMargin, rasterMargin } + (SIMDVectorDouble{ 0.5, 0.5 } / SIMDVectorDouble{ pixelScale.x, pixelScale.y, 1.0, 1.0 }));
     const f64 marginX = marginXMarginYValue.x;
     const f64 marginY = marginXMarginYValue.y;
     const SIMDVectorDouble inkRightInkBottomValue = (SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) } + SIMDVectorDouble{ ink.width, ink.height });
@@ -194,18 +194,18 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(
     const SIMDVectorDouble origin = SIMDVectorDouble{ topLeft.x, topLeft.y }
         + SIMDVectorDouble{ glyph.position.x, glyph.position.y };
     const SIMDVectorDouble bearing = SIMDVectorDouble{ static_cast<f64>(record.bearingX), static_cast<f64>(record.bearingY) }
-        / SIMDVectorDouble{ rasterScale, rasterScale };
+        / VectorDoubleReplicate(rasterScale);
     const SIMDVectorDouble positive = origin + bearing;
     const SIMDVectorDouble negative = origin - bearing;
     const f64 x = positive.x;
     const f64 y = negative.y;
     // FreeType has already rasterized this bitmap on an integer grid; align its texel edges to physical pixels.
     const SIMDVectorDouble geometryPair5Operand0 = ((SIMDVectorDouble{ x, y } * SIMDVectorDouble{ pixelScale.x, pixelScale.y }) + SIMDVectorDouble{ 0.5, 0.5 });
-    const SIMDVectorDouble alignedXAlignedYValue = (VectorDoubleFloor(geometryPair5Operand0) / SIMDVectorDouble{ pixelScale.x, pixelScale.y });
+    const SIMDVectorDouble alignedXAlignedYValue = (VectorDoubleFloor(geometryPair5Operand0) / SIMDVectorDouble{ pixelScale.x, pixelScale.y, 1.0, 1.0 });
     const f64 alignedX = alignedXAlignedYValue.x;
     const f64 alignedY = alignedXAlignedYValue.y;
     const SIMDVectorDouble size = SIMDVectorDouble{ record.pixels.width, record.pixels.height }
-        / SIMDVectorDouble{ static_cast<f64>(rasterScale), static_cast<f64>(rasterScale) };
+        / VectorDoubleReplicate(static_cast<f64>(rasterScale));
     return MakeUiRect<UiRectPrecision::BoundedEndpoints>(alignedX, alignedY, size.x, size.y);
 }
 

@@ -15,7 +15,7 @@
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
 #endif
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose4(SIMDVectorSingle r0, SIMDVectorSingle r1, SIMDVectorSingle r2, SIMDVectorSingle r3)noexcept{
 #if defined(NWB_HAS_NEON)
     const float32x4x2_t p0 = vzipq_f32(r0, r2);
     const float32x4x2_t p1 = vzipq_f32(r1, r3);
@@ -36,10 +36,10 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose4(SIMDVector r0, SIMDVector r
 
     return MatrixTransposePackedRows(t0, t1);
 #elif defined(NWB_HAS_SSE4)
-    SIMDVector temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
-    SIMDVector temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp3 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(3, 2, 3, 2));
+    SIMDVectorSingle temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
+    SIMDVectorSingle temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
+    SIMDVectorSingle temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));
+    SIMDVectorSingle temp3 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(3, 2, 3, 2));
 
     SIMDMatrix result{};
     result.v[0] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(2, 0, 2, 0));
@@ -93,16 +93,16 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 
 }
 #endif
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL Vector4TransformTransposed(SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4TransformTransposed(SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
 #if defined(NWB_HAS_SCALAR)
     const f32 x = value.f[0];
     const f32 y = value.f[1];
     const f32 z = value.f[2];
     const f32 w = value.f[3];
-    const SIMDVector& m0 = transposedMatrix.v[0];
-    const SIMDVector& m1 = transposedMatrix.v[1];
-    const SIMDVector& m2 = transposedMatrix.v[2];
-    const SIMDVector& m3 = transposedMatrix.v[3];
+    const SIMDVectorSingle& m0 = transposedMatrix.v[0];
+    const SIMDVectorSingle& m1 = transposedMatrix.v[1];
+    const SIMDVectorSingle& m2 = transposedMatrix.v[2];
+    const SIMDVectorSingle& m3 = transposedMatrix.v[3];
     return SIMDConvertDetail::MakeF32(
         (m0.f[0] * x) + (m1.f[0] * y) + (m2.f[0] * z) + (m3.f[0] * w),
         (m0.f[1] * x) + (m1.f[1] * y) + (m2.f[1] * z) + (m3.f[1] * w),
@@ -112,15 +112,15 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL Vector4TransformTransposed(SIMDVector value,
 #elif defined(NWB_HAS_NEON)
     const float32x2_t low = vget_low_f32(value);
     const float32x2_t high = vget_high_f32(value);
-    SIMDVector result = vmulq_lane_f32(transposedMatrix.v[0], low, 0);
+    SIMDVectorSingle result = vmulq_lane_f32(transposedMatrix.v[0], low, 0);
     result = vmlaq_lane_f32(result, transposedMatrix.v[1], low, 1);
     result = vmlaq_lane_f32(result, transposedMatrix.v[2], high, 0);
     return vmlaq_lane_f32(result, transposedMatrix.v[3], high, 1);
 #else
-    SIMDVector x{};
-    SIMDVector y{};
-    SIMDVector z{};
-    SIMDVector w{};
+    SIMDVectorSingle x{};
+    SIMDVectorSingle y{};
+    SIMDVectorSingle z{};
+    SIMDVectorSingle w{};
 #if defined(NWB_HAS_AVX2)
 #if defined(__AVX2__) || defined(_M_AVX2)
     x = _mm_broadcastss_ps(value);
@@ -137,7 +137,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL Vector4TransformTransposed(SIMDVector value,
     w = _mm_shuffle_ps(value, value, _MM_SHUFFLE(3, 3, 3, 3));
 #endif
 #if defined(__FMA__) || defined(_M_FMA)
-    SIMDVector result = _mm_fmadd_ps(w, transposedMatrix.v[3], _mm_mul_ps(z, transposedMatrix.v[2]));
+    SIMDVectorSingle result = _mm_fmadd_ps(w, transposedMatrix.v[3], _mm_mul_ps(z, transposedMatrix.v[2]));
     result = _mm_fmadd_ps(y, transposedMatrix.v[1], result);
     return _mm_fmadd_ps(x, transposedMatrix.v[0], result);
 #else
@@ -169,7 +169,7 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorTransformStreamImpl(
 
     const SIMDMatrix transposedMatrix = MatrixTransposeForTransform(matrix);
     for(usize i = 0u; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*StridePointer(inputStream, inputStride, i));
+        const SIMDVectorSingle value = LoadFloat(*StridePointer(inputStream, inputStride, i));
         StoreFloat(transform(value, transposedMatrix), *StridePointer(outputStream, outputStride, i));
     }
 
@@ -178,13 +178,13 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorTransformStreamImpl(
 
 #if defined(NWB_HAS_SSE4)
 template<int Mask>
-NWB_INLINE SIMDVector NWB_SIMD_CALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVector value)noexcept{
-    const SIMDVector x = _mm_dp_ps(matrix.v[0], value, Mask);
-    const SIMDVector y = _mm_dp_ps(matrix.v[1], value, Mask);
-    const SIMDVector z = _mm_dp_ps(matrix.v[2], value, Mask);
-    const SIMDVector w = _mm_dp_ps(matrix.v[3], value, Mask);
-    const SIMDVector xy = _mm_unpacklo_ps(x, y);
-    const SIMDVector zw = _mm_unpacklo_ps(z, w);
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVectorSingle value)noexcept{
+    const SIMDVectorSingle x = _mm_dp_ps(matrix.v[0], value, Mask);
+    const SIMDVectorSingle y = _mm_dp_ps(matrix.v[1], value, Mask);
+    const SIMDVectorSingle z = _mm_dp_ps(matrix.v[2], value, Mask);
+    const SIMDVectorSingle w = _mm_dp_ps(matrix.v[3], value, Mask);
+    const SIMDVectorSingle xy = _mm_unpacklo_ps(x, y);
+    const SIMDVectorSingle zw = _mm_unpacklo_ps(z, w);
     return _mm_movelh_ps(xy, zw);
 }
 #endif

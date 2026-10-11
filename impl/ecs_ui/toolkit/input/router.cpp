@@ -323,7 +323,7 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const{
 }
 
 bool InputRouter::isInteractive(const HitTarget& target)const{
-    const SIMDVector visibleBounds = IntersectRectBoundsValue(
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
         VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height)
     );
     const f32 left = VectorGetX(visibleBounds);

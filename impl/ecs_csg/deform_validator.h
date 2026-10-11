@@ -21,10 +21,10 @@ NWB_IMPL_BEGIN
 class CsgDeformValidator final : NoCopy{
 public:
     [[nodiscard]] static bool FiniteFloat(const f32 value)noexcept;
-    [[nodiscard]] static bool FiniteVertexVec(const SIMDVector position, const SIMDVector normal, const SIMDVector tangent, const SIMDVector uv0, const SIMDVector color)noexcept;
+    [[nodiscard]] static bool FiniteVertexVec(const SIMDVectorSingle position, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle uv0, const SIMDVectorSingle color)noexcept;
     [[nodiscard]] static bool FiniteVertex(const CsgDeformVertex& vertex)noexcept;
-    [[nodiscard]] static SIMDVector SaturateVec(const SIMDVector value)noexcept;
-    [[nodiscard]] static SIMDVector AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator)noexcept;
+    [[nodiscard]] static SIMDVectorSingle SaturateVec(const SIMDVectorSingle value)noexcept;
+    [[nodiscard]] static SIMDVectorSingle AbsDivideVec(const SIMDVectorSingle numerator, const SIMDVectorSingle denominator)noexcept;
     [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept;
     [[nodiscard]] static bool ValidOptions(const CsgDeformBuildOptions& options)noexcept;
     [[nodiscard]] static bool ValidTopology(

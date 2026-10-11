@@ -50,7 +50,7 @@ void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     valid = ui.label("hint", "Escape/outside closes the top child", title) && valid;
     valid = ui.endPanel() && valid;
     PopupOptions parent;
-    const SIMDVector parentOrigin = VectorAdd(VectorSet(x, y, 0.0f, 0.0f), VectorSet(8.0f, 28.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle parentOrigin = VectorAdd(VectorSet(x, y, 0.0f, 0.0f), VectorSet(8.0f, 28.0f, 0.0f, 0.0f));
     parent.anchor = { VectorGetX(parentOrigin), VectorGetY(parentOrigin), 264.0f, 28.0f };
     parent.size = { 300.0f, 420.0f };
     if(ui.beginPopup("nested_parent", m_parent, parent)){
@@ -119,11 +119,11 @@ bool UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
     using namespace NWB::Impl::Ui;
     const Rect& parent = m_parent.placement().bounds;
     PopupOptions options;
-    const SIMDVector parentEnd = VectorAdd(
+    const SIMDVectorSingle parentEnd = VectorAdd(
         VectorSet(parent.x, parent.y, 0.0f, 0.0f),
         VectorSet(parent.width, 124.0f, 0.0f, 0.0f)
     );
-    const SIMDVector childOrigin = VectorSubtract(parentEnd, VectorSet(8.0f, 0.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle childOrigin = VectorSubtract(parentEnd, VectorSet(8.0f, 0.0f, 0.0f, 0.0f));
     options.anchor = { VectorGetX(childOrigin), VectorGetY(parentEnd), 8.0f, 32.0f };
     options.side = PopupPlacementSide::Right;
     options.size = { 220.0f, 178.0f };

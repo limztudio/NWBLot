@@ -32,7 +32,7 @@ void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     options.contentHeightFirstUse = true;
     const auto gallery = UiWidgetGallery::LayoutBounds(context.display);
     const auto& overview = options.initialBounds;
-    const SIMDVector overviewEnd = VectorAdd(
+    const SIMDVectorSingle overviewEnd = VectorAdd(
         VectorSet(overview.x, overview.y, 0.0f, 0.0f),
         VectorSet(overview.width, overview.height, 0.0f, 0.0f)
     );

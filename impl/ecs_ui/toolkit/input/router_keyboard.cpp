@@ -178,7 +178,7 @@ bool InputRouter::moveFocusForTraversal(const bool reverse){
         const HitTarget& target = m_targets[index];
         if(target.popup != parent || !target.enabled || !target.focusable || target.owner.valid())
             continue;
-        const SIMDVector visibleBounds = IntersectRectBoundsValue(
+        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
             VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height)
         );
         if((VectorMoveMask(VectorLessOrEqual(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) != 0u)

@@ -25,40 +25,40 @@ NWB_FBX_TO_NWB_BEGIN
 
 class FbxMeshBuild final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f);
-    [[nodiscard]] static PositionKey MakePositionKey(const SIMDVector position);
-    [[nodiscard]] static SIMDVector BuildCornerOutputPositionVector(
+    [[nodiscard]] static SIMDVectorSingle ToVector(const ufbx_vec3 value, const f32 w = 0.0f);
+    [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position);
+    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputPositionVector(
         const ufbx_mesh& mesh,
         const ufbx_node& node,
         const ImportOptions& options,
         const bool wantsSkinning,
         const u32 cornerIndex
     );
-    [[nodiscard]] static SIMDVector BuildCornerOutputNormalVector(
+    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputNormalVector(
         const ufbx_mesh& mesh,
         const ufbx_matrix& normalToWorld,
         const ImportOptions& options,
         const bool wantsSkinning,
         const u32 cornerIndex
     );
-    [[nodiscard]] static Expected<SIMDVector> BuildCornerOutputTangentVector(
+    [[nodiscard]] static Expected<SIMDVectorSingle> BuildCornerOutputTangentVector(
         const ufbx_mesh& mesh,
         const ufbx_matrix& normalToWorld,
         const ImportOptions& options,
         const bool wantsSkinning,
         const u32 cornerIndex,
-        const SIMDVector normal
+        const SIMDVectorSingle normal
     );
-    [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVector weights);
+    [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVectorSingle weights);
     [[nodiscard]] static bool IsFiniteSourceTriangleCorner(
-        const SIMDVector position,
-        const SIMDVector normal,
-        const SIMDVector tangent,
-        const SIMDVector uv0,
-        const SIMDVector color,
+        const SIMDVectorSingle position,
+        const SIMDVectorSingle normal,
+        const SIMDVectorSingle tangent,
+        const SIMDVectorSingle uv0,
+        const SIMDVectorSingle color,
         const bool hasTangent,
         const bool wantsSkinning,
-        const SIMDVector skinWeights
+        const SIMDVectorSingle skinWeights
     );
     template<typename VisitTriangle>
     [[nodiscard]] static bool VisitTriangulatedMeshTriangles(

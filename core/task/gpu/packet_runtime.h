@@ -113,8 +113,8 @@ struct GpuTaskGraphRecordingStatistics{
     [[nodiscard]] f64 readyFrontierWorkerUtilization()const noexcept{
         if(!(readyFrontierWorkerCapacitySeconds > 0.0))
             return 0.0;
-        const SIMDVectorDouble busy = { readyFrontierWorkerBusySeconds, readyFrontierWorkerBusySeconds };
-        const SIMDVectorDouble capacity = { readyFrontierWorkerCapacitySeconds, readyFrontierWorkerCapacitySeconds };
+        const SIMDVectorDouble busy = VectorDoubleReplicate(readyFrontierWorkerBusySeconds);
+        const SIMDVectorDouble capacity = VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds);
         const SIMDVectorDouble utilization = busy / capacity;
         const SIMDVectorDouble lowerBounded = (utilization < SIMDVectorDouble{ 0.0, 0.0 }) ? SIMDVectorDouble{ 0.0, 0.0 } : utilization;
         return ((lowerBounded > SIMDVectorDouble{ 1.0, 1.0 }) ? SIMDVectorDouble{ 1.0, 1.0 } : lowerBounded).x;

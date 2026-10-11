@@ -29,7 +29,7 @@ using float4 = ShaderFloat4;
 using uint = u32;
 
 [[nodiscard]] ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale){
-    const SIMDVector scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
+    const SIMDVectorSingle scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
     return { VectorGetX(scaled), VectorGetY(scaled), VectorGetZ(scaled), VectorGetW(scaled) };
 }
 

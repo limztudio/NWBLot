@@ -29,9 +29,9 @@ NWB_IMPL_BEGIN
 
 
 struct MeshletTriangleVectors{
-    SIMDVector positions[s_MeshletTriangleIndexCount] = {};
-    SIMDVector centroid = {};
-    SIMDVector areaNormal = {};
+    SIMDVectorSingle positions[s_MeshletTriangleIndexCount] = {};
+    SIMDVectorSingle centroid = {};
+    SIMDVectorSingle areaNormal = {};
 };
 
 struct MeshletTriangleData{
@@ -84,11 +84,11 @@ struct MeshletConeScore{
 };
 
 struct MeshletScoreState{
-    SIMDVector minBounds;
-    SIMDVector maxBounds;
-    SIMDVector centroidSum;
-    SIMDVector normalSum;
-    SIMDVector normalAxis;
+    SIMDVectorSingle minBounds;
+    SIMDVectorSingle maxBounds;
+    SIMDVectorSingle centroidSum;
+    SIMDVectorSingle normalSum;
+    SIMDVectorSingle normalAxis;
     u32 primitiveCount = 0u;
     f32 radius = 0.0f;
     f32 coneCutoff = -1.0f;
@@ -129,8 +129,8 @@ static constexpr f64 s_MeshletPercentScale = 100.0;
 static constexpr f32 s_TriangleVertexCount = 3.0f;
 
 struct MeshletBoundsCalculation{
-    SIMDVector center = {};
-    SIMDVector coneAxis = {};
+    SIMDVectorSingle center = {};
+    SIMDVectorSingle coneAxis = {};
     f32 radius = 0.0f;
     f32 coneCutoff = -1.0f;
 };
@@ -141,15 +141,15 @@ struct MeshletBoundsCalculation{
 
 class MeshCookMeshlets final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVector MakeMeshletPositionVector(const SIMDVector position)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MakeMeshletPositionVector(const SIMDVectorSingle position)noexcept;
     [[nodiscard]] static MeshletTriangleVectors MakeMeshletTriangleVectors(
-    const SIMDVector position0,
-    const SIMDVector position1,
-    const SIMDVector position2,
-    const SIMDVector centroid,
-    const SIMDVector areaNormal
+    const SIMDVectorSingle position0,
+    const SIMDVectorSingle position1,
+    const SIMDVectorSingle position2,
+    const SIMDVectorSingle centroid,
+    const SIMDVectorSingle areaNormal
     )noexcept;
-    [[nodiscard]] static SIMDVector NormalizeMeshletDirectionOrZero(const SIMDVector value)noexcept;
+    [[nodiscard]] static SIMDVectorSingle NormalizeMeshletDirectionOrZero(const SIMDVectorSingle value)noexcept;
     template<typename VectorT>
     [[nodiscard]] static usize MeshletCookVectorBytes(const VectorT& values);
     template<typename CookEntryT>
@@ -201,26 +201,26 @@ public:
     );
     static void ResetMeshletScoreState(MeshletScoreState& state)noexcept;
     static void AccumulateMeshletScoreBounds(
-    const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount],
-    SIMDVector& minBounds,
-    SIMDVector& maxBounds
+    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount],
+    SIMDVectorSingle& minBounds,
+    SIMDVectorSingle& maxBounds
     )noexcept;
     [[nodiscard]] static f32 PredictMeshletScoreRadius(
     const MeshletScoreState& state,
-    const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount]
+    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount]
     )noexcept;
-    [[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVector triangleCentroid)noexcept;
-    [[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVector triangleAreaNormal)noexcept;
+    [[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept;
+    [[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept;
     static void UpdateMeshletScoreConeCutoff(
-    const SIMDVector axis,
-    const SIMDVector triangleAreaNormal,
+    const SIMDVectorSingle axis,
+    const SIMDVectorSingle triangleAreaNormal,
     bool& hasNormal,
     f32& coneCutoff
     )noexcept;
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
     [[nodiscard]] static MeshletConeScore ComputeMeshletScoreConeCutoff(
     const TriangleIndexVectorT& triangleIndices,
-    const SIMDVector axis,
+    const SIMDVectorSingle axis,
     const u32 extraTriangleIndex,
     const bool hasExtraTriangle,
     const TriangleAreaNormalAtT& triangleAreaNormalAt
@@ -230,7 +230,7 @@ public:
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& state,
     const u32 triangleIndex,
-    const SIMDVector triangleAreaNormal,
+    const SIMDVectorSingle triangleAreaNormal,
     const TriangleAreaNormalAtT& triangleAreaNormalAt
     );
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
@@ -589,11 +589,11 @@ Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleD
         triangle.positions[1] = entry.vertexRefs[triangle.vertexRefs[1]].position;
         triangle.positions[2] = entry.vertexRefs[triangle.vertexRefs[2]].position;
 
-        const SIMDVector p0 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[0u]]));
-        const SIMDVector p1 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[1u]]));
-        const SIMDVector p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
-        const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / s_TriangleVertexCount);
-        const SIMDVector areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
+        const SIMDVectorSingle p0 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[0u]]));
+        const SIMDVectorSingle p1 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[1u]]));
+        const SIMDVectorSingle p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
+        const SIMDVectorSingle centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / s_TriangleVertexCount);
+        const SIMDVectorSingle areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
         calculation.vectors = MakeMeshletTriangleVectors(
             p0,
             p1,
@@ -622,23 +622,23 @@ MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(
 ){
     MeshletBoundsCalculation result;
 
-    SIMDVector minBounds;
-    SIMDVector maxBounds;
+    SIMDVectorSingle minBounds;
+    SIMDVectorSingle maxBounds;
     AabbTests::Reset(minBounds, maxBounds);
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex)
         AabbTests::Expand(positionAt(localPositionIndex), minBounds, maxBounds);
 
     result.center = AabbTests::Center(minBounds, maxBounds);
-    SIMDVector radiusSquared = VectorZero();
+    SIMDVectorSingle radiusSquared = VectorZero();
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
-        const SIMDVector delta = VectorSubtract(positionAt(localPositionIndex), result.center);
+        const SIMDVectorSingle delta = VectorSubtract(positionAt(localPositionIndex), result.center);
         radiusSquared = VectorMax(radiusSquared, Vector3LengthSq(delta));
     }
     result.radius = VectorGetX(VectorSqrt(radiusSquared));
 
-    SIMDVector areaWeightedNormal = VectorZero();
+    SIMDVectorSingle areaWeightedNormal = VectorZero();
     u32 validFaceNormalCount = 0u;
-    visitFaceNormals([&](const SIMDVector faceNormal){
+    visitFaceNormals([&](const SIMDVectorSingle faceNormal){
         if(!::FrameValidDirection(faceNormal))
             return;
 
@@ -649,8 +649,8 @@ MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(
     result.coneAxis = NormalizeMeshletDirectionOrZero(areaWeightedNormal);
     if(validFaceNormalCount == primitiveCount && ::FrameValidDirection(result.coneAxis)){
         result.coneCutoff = 1.0f;
-        visitFaceNormals([&](const SIMDVector meshletFaceNormal){
-            const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);
+        visitFaceNormals([&](const SIMDVectorSingle meshletFaceNormal){
+            const SIMDVectorSingle faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);
             if(::FrameValidDirection(faceNormal))
                 result.coneCutoff = VectorGetX(VectorMin(VectorReplicate(result.coneCutoff), Vector3Dot(result.coneAxis, faceNormal)));
         });
@@ -666,7 +666,7 @@ template<typename CookEntryT>
 MeshletBounds MeshCookMeshlets::BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
     const u32 positionCount = MeshletPositionCount(meshlet);
     NWB_ASSERT(positionCount <= s_MeshMaxMeshletVertices);
-    SIMDVector positions[s_MeshMaxMeshletVertices];
+    SIMDVectorSingle positions[s_MeshMaxMeshletVertices];
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
         positions[localPositionIndex] = MakeMeshletPositionVector(LoadFloat(entry.positions[ref.position]));
@@ -688,9 +688,9 @@ MeshletBounds MeshCookMeshlets::BuildMeshletBounds(const CookEntryT& entry, cons
             const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
             const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
             const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];
-            const SIMDVector p0 = localPositionAt(localVertex0);
-            const SIMDVector p1 = localPositionAt(localVertex1);
-            const SIMDVector p2 = localPositionAt(localVertex2);
+            const SIMDVectorSingle p0 = localPositionAt(localVertex0);
+            const SIMDVectorSingle p1 = localPositionAt(localVertex1);
+            const SIMDVectorSingle p2 = localPositionAt(localVertex2);
             callback(TriangleTests::AreaNormal(p0, p1, p2));
         }
     };
@@ -758,7 +758,7 @@ MeshletVertexCounts MeshCookMeshlets::CountMeshletMissingVertices(
 template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
 MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(
     const TriangleIndexVectorT& triangleIndices,
-    const SIMDVector axis,
+    const SIMDVectorSingle axis,
     const u32 extraTriangleIndex,
     const bool hasExtraTriangle,
     const TriangleAreaNormalAtT& triangleAreaNormalAt
@@ -769,11 +769,11 @@ MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(
     bool hasNormal = false;
     f32 coneCutoff = 1.0f;
     for(const u32 triangleIndex : triangleIndices){
-        const SIMDVector triangleAreaNormal = triangleAreaNormalAt(triangleIndex);
+        const SIMDVectorSingle triangleAreaNormal = triangleAreaNormalAt(triangleIndex);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
     if(hasExtraTriangle){
-        const SIMDVector triangleAreaNormal = triangleAreaNormalAt(extraTriangleIndex);
+        const SIMDVectorSingle triangleAreaNormal = triangleAreaNormalAt(extraTriangleIndex);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
 
@@ -789,13 +789,13 @@ f32 MeshCookMeshlets::PredictMeshletScoreConeWidening(
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& state,
     const u32 triangleIndex,
-    const SIMDVector triangleAreaNormal,
+    const SIMDVectorSingle triangleAreaNormal,
     const TriangleAreaNormalAtT& triangleAreaNormalAt
 ){
     if(!state.coneEnabled)
         return 0.0f;
 
-    const SIMDVector predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal));
+    const SIMDVectorSingle predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal));
     const auto predictedCone = ComputeMeshletScoreConeCutoff(
         triangleIndices,
         predictedAxis,

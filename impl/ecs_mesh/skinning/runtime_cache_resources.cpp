@@ -156,7 +156,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
 
     for(usize skinIndex = 0u; skinIndex < instance.skin.size(); ++skinIndex){
         const SkinInfluence4& skin = instance.skin[skinIndex];
-        const SIMDVector weights = LoadFloat(skin.weight);
+        const SIMDVectorSingle weights = LoadFloat(skin.weight);
         if(
             SkinValidation::ValidSkinInfluenceWeights(weights)
             && SkinValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount)

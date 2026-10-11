@@ -53,7 +53,7 @@ namespace __hidden_ui_progress_layout{
     if(!sliceExtents)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
-    const SIMDVectorDouble geometryPair1Operand1 = (*sliceExtents / SIMDVectorDouble{ density, density });
+    const SIMDVectorDouble geometryPair1Operand1 = (*sliceExtents / VectorDoubleReplicate(density));
     const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
     const f64 width = widthHeightValue.x;
     const f64 height = widthHeightValue.y;

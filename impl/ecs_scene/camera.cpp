@@ -23,9 +23,9 @@ namespace __hidden_camera{
 
 
 [[nodiscard]] bool SceneCameraTransformValid(
-    const SIMDVector position,
-    const SIMDVector rotation,
-    const SIMDVector scale
+    const SIMDVectorSingle position,
+    const SIMDVectorSingle rotation,
+    const SIMDVectorSingle scale
 )noexcept{
     constexpr f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
@@ -46,9 +46,9 @@ namespace __hidden_camera{
     TransformComponent& transform,
     CameraComponent& camera,
     const f32 fallbackAspectRatio,
-    const SIMDVector position,
-    const SIMDVector rotation,
-    const SIMDVector scale
+    const SIMDVectorSingle position,
+    const SIMDVectorSingle rotation,
+    const SIMDVectorSingle scale
 )noexcept{
     if(!SceneCameraTransformValid(position, rotation, scale))
         return MakeUnexpected(Failure{});

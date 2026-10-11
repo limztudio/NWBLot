@@ -83,9 +83,9 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
     using namespace __hidden_ui_popup_layout;
     if(!ValidOptions(options, display))
         return MakeUnexpected(Failure{});
-    const SIMDVector requestedSize = VectorSet(options.size.x, options.size.y, options.size.x, options.size.y);
-    const SIMDVector displaySize = VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight);
-    const SIMDVector boundedSize = VectorSelect(displaySize, requestedSize, VectorLess(requestedSize, displaySize));
+    const SIMDVectorSingle requestedSize = VectorSet(options.size.x, options.size.y, options.size.x, options.size.y);
+    const SIMDVectorSingle displaySize = VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight);
+    const SIMDVectorSingle boundedSize = VectorSelect(displaySize, requestedSize, VectorLess(requestedSize, displaySize));
     const f32 width = VectorGetX(boundedSize);
     const f32 height = VectorGetY(boundedSize);
     PopupPlacementSide::Enum side = options.side;

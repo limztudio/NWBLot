@@ -137,15 +137,15 @@ static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu m
 
 // Scratch scene-BVH build values.
 struct SceneBvhPrimitiveCalculation{
-    SIMDVector aabbMin = {};
-    SIMDVector aabbMax = {};
-    SIMDVector centroid = {};
+    SIMDVectorSingle aabbMin = {};
+    SIMDVectorSingle aabbMax = {};
+    SIMDVectorSingle centroid = {};
     bool transparentOccluder = false;
 };
 
 struct SceneBvhNodeCalculation{
-    SIMDVector aabbMin = {};
-    SIMDVector aabbMax = {};
+    SIMDVectorSingle aabbMin = {};
+    SIMDVectorSingle aabbMax = {};
     u32 leftChild = 0u;
     u32 rightChild = 0u;
     bool containsTransparentOccluder = false;
@@ -465,10 +465,10 @@ inline constexpr f32 s_CausticIntensity = 2.0f;
 // VectorNegativeMultiplySubtract(decay, intensity, intensity) = intensity * (1 - decay); the temporal gate is a
 // lane select, so both candidates stay on lanes and no scalar branch computes the surviving candidate.
 [[nodiscard]] NWB_INLINE f32 EffectiveCausticIntensity(const f32 temporalDecay)noexcept{
-    const SIMDVector decayLanes = VectorReplicate(temporalDecay);
-    const SIMDVector intensityLanes = VectorReplicate(s_CausticIntensity);
-    const SIMDVector decayedLanes = VectorNegativeMultiplySubtract(decayLanes, intensityLanes, intensityLanes);
-    const SIMDVector gate = VectorGreater(decayLanes, VectorZero());
+    const SIMDVectorSingle decayLanes = VectorReplicate(temporalDecay);
+    const SIMDVectorSingle intensityLanes = VectorReplicate(s_CausticIntensity);
+    const SIMDVectorSingle decayedLanes = VectorNegativeMultiplySubtract(decayLanes, intensityLanes, intensityLanes);
+    const SIMDVectorSingle gate = VectorGreater(decayLanes, VectorZero());
     return VectorGetX(VectorSelect(intensityLanes, decayedLanes, gate));
 }
 
@@ -490,7 +490,7 @@ namespace RayTracingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept;
+void InflateSwShadowSceneBounds(SIMDVectorSingle& boundsMin, SIMDVectorSingle& boundsMax)noexcept;
 struct RenderableRayTracingMeshResources{
     RenderableMeshDesc resolvedMesh;
     ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;

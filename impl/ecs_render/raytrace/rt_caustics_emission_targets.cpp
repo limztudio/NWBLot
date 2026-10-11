@@ -35,8 +35,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
     Vector<NwbCausticEmissionTargetGpu, Core::Alloc::ScratchArena> targets{ scratchArena };
     targets.reserve(candidateCount);
 
-    SIMDVector combinedMin = VectorReplicate(s_RayTracingFiniteInfinity);
-    SIMDVector combinedMax = VectorReplicate(-s_RayTracingFiniteInfinity);
+    SIMDVectorSingle combinedMin = VectorReplicate(s_RayTracingFiniteInfinity);
+    SIMDVectorSingle combinedMax = VectorReplicate(-s_RayTracingFiniteInfinity);
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
@@ -68,21 +68,21 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
             : MatrixIdentity()
         ;
 
-        SIMDVector localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
-        SIMDVector localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
+        SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
+        SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
         if(meshResult->resolvedMesh.runtime){
             // Conservative deformation inflation keeps skinned refractors in the emission domain.
             constexpr f32 s_BoundsMidpointWeight = 0.5f;
-            const SIMDVector center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(s_BoundsMidpointWeight));
-            const SIMDVector half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(s_BoundsMidpointWeight * s_CausticRuntimeBoundsInflation));
+            const SIMDVectorSingle center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(s_BoundsMidpointWeight));
+            const SIMDVectorSingle half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(s_BoundsMidpointWeight * s_CausticRuntimeBoundsInflation));
             localMin = VectorSubtract(center, half);
             localMax = VectorAdd(center, half);
         }
         const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
         if(!worldBounds)
             continue;
-        const SIMDVector worldMin = worldBounds->minBounds;
-        const SIMDVector worldMax = worldBounds->maxBounds;
+        const SIMDVectorSingle worldMin = worldBounds->minBounds;
+        const SIMDVectorSingle worldMax = worldBounds->maxBounds;
 
         combinedMin = VectorMin(combinedMin, worldMin);
         combinedMax = VectorMax(combinedMax, worldMax);

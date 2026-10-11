@@ -49,8 +49,8 @@ void RayTracingOpticalSceneGather::append(
             unspecifiedBoundariesOnly = false;
         instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT;
         ++header.transparentCount;
-        const SIMDVector boundsMinVector = LoadFloat(boundsMin);
-        const SIMDVector boundsMaxVector = LoadFloat(boundsMax);
+        const SIMDVectorSingle boundsMinVector = LoadFloat(boundsMin);
+        const SIMDVectorSingle boundsMaxVector = LoadFloat(boundsMax);
         const bool finiteBounds =
             boundsValid
             && Vector3IsFinite(boundsMinVector)
@@ -124,39 +124,39 @@ Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(
     constexpr f64 s_UnitRoundoff = 0x1p-24;
     constexpr f64 s_TransformError = (8.0 * s_UnitRoundoff) / (1.0 - 8.0 * s_UnitRoundoff);
     constexpr f64 s_UnderflowMargin = 8.0 * 0x1p-126;
-    const SIMDVector localMinVec = LoadFloat(localMin);
-    const SIMDVector localMaxVec = LoadFloat(localMax);
+    const SIMDVectorSingle localMinVec = LoadFloat(localMin);
+    const SIMDVectorSingle localMaxVec = LoadFloat(localMax);
     if(!VectorIsFinite(localMinVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(localMaxVec, VectorComponentMask::s_XYZ))
         return MakeUnexpected(Failure{});
     if(!Vector3LessOrEqual(localMinVec, localMaxVec))
         return MakeUnexpected(Failure{});
-    const SIMDVector row0 = LoadFloat(objectToWorld.rows[0u]);
-    const SIMDVector row1 = LoadFloat(objectToWorld.rows[1u]);
-    const SIMDVector row2 = LoadFloat(objectToWorld.rows[2u]);
+    const SIMDVectorSingle row0 = LoadFloat(objectToWorld.rows[0u]);
+    const SIMDVectorSingle row1 = LoadFloat(objectToWorld.rows[1u]);
+    const SIMDVectorSingle row2 = LoadFloat(objectToWorld.rows[2u]);
     if(!VectorIsFinite(row0, VectorComponentMask::s_XYZW) || !VectorIsFinite(row1, VectorComponentMask::s_XYZW) || !VectorIsFinite(row2, VectorComponentMask::s_XYZW))
         return MakeUnexpected(Failure{});
-    SIMDVector laneMin = VectorReplicate(Limit<f32>::s_Infinity);
-    SIMDVector laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
-    SIMDVector laneMagnitude = VectorZero();
+    SIMDVectorSingle laneMin = VectorReplicate(Limit<f32>::s_Infinity);
+    SIMDVectorSingle laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
+    SIMDVectorSingle laneMagnitude = VectorZero();
     for(u32 corner = 0u; corner < 8u; ++corner){
-        const SIMDVector selectX = ((corner & 1u) != 0u) ? localMaxVec : localMinVec;
-        const SIMDVector selectY = ((corner & 2u) != 0u) ? localMaxVec : localMinVec;
-        const SIMDVector selectZ = ((corner & 4u) != 0u) ? localMaxVec : localMinVec;
-        SIMDVector point = VectorSelect(selectX, selectY, s_SIMDMaskY);
+        const SIMDVectorSingle selectX = ((corner & 1u) != 0u) ? localMaxVec : localMinVec;
+        const SIMDVectorSingle selectY = ((corner & 2u) != 0u) ? localMaxVec : localMinVec;
+        const SIMDVectorSingle selectZ = ((corner & 4u) != 0u) ? localMaxVec : localMinVec;
+        SIMDVectorSingle point = VectorSelect(selectX, selectY, s_SIMDMaskY);
         point = VectorSelect(point, selectZ, s_SIMDMaskZ);
-        const SIMDVector x = VectorSplatX(point);
-        const SIMDVector y = VectorSplatY(point);
-        const SIMDVector z = VectorSplatZ(point);
-        SIMDVector transformed = VectorMultiply(VectorSplatX(row0), x);
+        const SIMDVectorSingle x = VectorSplatX(point);
+        const SIMDVectorSingle y = VectorSplatY(point);
+        const SIMDVectorSingle z = VectorSplatZ(point);
+        SIMDVectorSingle transformed = VectorMultiply(VectorSplatX(row0), x);
         transformed = VectorMultiplyAdd(VectorSplatY(row0), y, transformed);
         transformed = VectorMultiplyAdd(VectorSplatZ(row0), z, transformed);
-        SIMDVector transformed1 = VectorMultiply(VectorSplatX(row1), x);
+        SIMDVectorSingle transformed1 = VectorMultiply(VectorSplatX(row1), x);
         transformed1 = VectorMultiplyAdd(VectorSplatY(row1), y, transformed1);
         transformed1 = VectorMultiplyAdd(VectorSplatZ(row1), z, transformed1);
-        SIMDVector transformed2 = VectorMultiply(VectorSplatX(row2), x);
+        SIMDVectorSingle transformed2 = VectorMultiply(VectorSplatX(row2), x);
         transformed2 = VectorMultiplyAdd(VectorSplatY(row2), y, transformed2);
         transformed2 = VectorMultiplyAdd(VectorSplatZ(row2), z, transformed2);
-        SIMDVector cornerVec = VectorSelect(transformed, transformed1, s_SIMDMaskY);
+        SIMDVectorSingle cornerVec = VectorSelect(transformed, transformed1, s_SIMDMaskY);
         cornerVec = VectorSelect(cornerVec, transformed2, s_SIMDMaskZ);
         // Float34U rows pack translation in W lanes (_14/_24/_34); W lane itself stays zero.
         cornerVec = VectorAdd(cornerVec, VectorSet(VectorGetW(row0), VectorGetW(row1), VectorGetW(row2), 0.0f));
@@ -166,10 +166,10 @@ Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(
         laneMax = VectorMax(laneMax, cornerVec);
         laneMagnitude = VectorMax(laneMagnitude, VectorAbs(cornerVec));
     }
-    const SIMDVector magnitudeSum = VectorAdd(VectorAdd(VectorSplatX(laneMagnitude), VectorSplatY(laneMagnitude)), VectorSplatZ(laneMagnitude));
-    const SIMDVector marginVec = VectorAdd(VectorMultiply(VectorReplicate(static_cast<f32>(s_TransformError)), magnitudeSum), VectorReplicate(static_cast<f32>(s_UnderflowMargin)));
-    const SIMDVector minimum = VectorSubtract(laneMin, marginVec);
-    const SIMDVector maximum = VectorAdd(laneMax, marginVec);
+    const SIMDVectorSingle magnitudeSum = VectorAdd(VectorAdd(VectorSplatX(laneMagnitude), VectorSplatY(laneMagnitude)), VectorSplatZ(laneMagnitude));
+    const SIMDVectorSingle marginVec = VectorAdd(VectorMultiply(VectorReplicate(static_cast<f32>(s_TransformError)), magnitudeSum), VectorReplicate(static_cast<f32>(s_UnderflowMargin)));
+    const SIMDVectorSingle minimum = VectorSubtract(laneMin, marginVec);
+    const SIMDVectorSingle maximum = VectorAdd(laneMax, marginVec);
     if(!VectorIsFinite(minimum, VectorComponentMask::s_XYZ) || !VectorIsFinite(maximum, VectorComponentMask::s_XYZ))
         return MakeUnexpected(Failure{});
     OpticalWorldBounds result;

@@ -41,7 +41,7 @@ bool PaintBuilder::drawImage(
     )
         return false;
     const Rect clip = m_clips.back();
-    const SIMDVector visibleBounds = IntersectRectBoundsValue(
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
         VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height)
     );
     const f32 visibleLeft = VectorGetX(visibleBounds);

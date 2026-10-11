@@ -75,8 +75,8 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
-    const SIMDVector positiveLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(positive ? 0xFFFFFFFFu : 0u));
-    const SIMDVector negativeLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(negative ? 0xFFFFFFFFu : 0u));
+    const SIMDVectorSingle positiveLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(positive ? 0xFFFFFFFFu : 0u));
+    const SIMDVectorSingle negativeLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(negative ? 0xFFFFFFFFu : 0u));
     return VectorGetX(VectorSubtract(positiveLane, negativeLane));
 }
 
@@ -104,17 +104,17 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 }
 
 static void ResolveFlyCameraAnglesFromRotation(
-    const SIMDVector rotation,
+    const SIMDVectorSingle rotation,
     f32& outYawRadians,
     f32& outPitchRadians
 ){
-    const SIMDVector localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    const SIMDVector forwardVector = Vector3NormalizeOr(
+    const SIMDVectorSingle localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    const SIMDVectorSingle forwardVector = Vector3NormalizeOr(
         Vector3Rotate(localForward, rotation),
         localForward,
         s_CameraMoveEpsilon
     );
-    const SIMDVector clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
+    const SIMDVectorSingle clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
     const f32 yawRadians = VectorGetX(VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector)));
     const f32 pitchRadians = VectorGetX(VectorNegate(VectorASin(VectorSplatY(clampedForward))));
 
@@ -123,7 +123,7 @@ static void ResolveFlyCameraAnglesFromRotation(
 }
 
 static void ResolveFlyCameraInput(
-    const SIMDVector currentPosition,
+    const SIMDVectorSingle currentPosition,
     f32& yawRadians,
     f32& pitchRadians,
     const f32 rightAxis,
@@ -132,8 +132,8 @@ static void ResolveFlyCameraInput(
     const f32 mouseDeltaX,
     const f32 mouseDeltaY,
     const f32 delta,
-    SIMDVector& outRotation,
-    SIMDVector& outPosition
+    SIMDVectorSingle& outRotation,
+    SIMDVectorSingle& outPosition
 ){
     if(!IsFinite(yawRadians))
         yawRadians = 0.0f;
@@ -142,12 +142,12 @@ static void ResolveFlyCameraInput(
 
     const f32 safeMouseDeltaX = IsFinite(mouseDeltaX) ? mouseDeltaX : 0.0f;
     const f32 safeMouseDeltaY = IsFinite(mouseDeltaY) ? mouseDeltaY : 0.0f;
-    const SIMDVector sanitizedAxes = VectorSaturate(VectorSet(IsFinite(rightAxis) ? rightAxis : 0.0f, IsFinite(forwardAxis) ? forwardAxis : 0.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle sanitizedAxes = VectorSaturate(VectorSet(IsFinite(rightAxis) ? rightAxis : 0.0f, IsFinite(forwardAxis) ? forwardAxis : 0.0f, 0.0f, 0.0f));
     const f32 safeRightAxis = VectorGetX(sanitizedAxes);
     const f32 safeForwardAxis = VectorGetY(sanitizedAxes);
     const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
-    const SIMDVector updatedAngles = VectorMultiplyAddExpression(
+    const SIMDVectorSingle updatedAngles = VectorMultiplyAddExpression(
         VectorSet(safeMouseDeltaX, safeMouseDeltaY, 0.0f, 0.0f),
         VectorReplicate(s_FlyCameraMouseSensitivityRadiansPerPixel),
         VectorSet(yawRadians, pitchRadians, 0.0f, 0.0f)
@@ -160,28 +160,28 @@ static void ResolveFlyCameraInput(
     outRotation = QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
     outPosition = Vector3IsFinite(currentPosition) ? currentPosition : VectorZero();
 
-    const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
-    const SIMDVector moveLengthSqVector = Vector2LengthSq(moveAxis);
+    const SIMDVectorSingle moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
+    const SIMDVectorSingle moveLengthSqVector = Vector2LengthSq(moveAxis);
     if(Vector4Greater(moveLengthSqVector, VectorReplicate(s_CameraMoveEpsilon))){
-        const SIMDVector boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? 0xFFFFFFFFu : 0u));
-        const SIMDVector speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
-        const SIMDVector speedDeltaLanes = VectorMultiply(speedLanes, VectorReplicate(safeDelta));
-        const SIMDVector moveScale = VectorMultiply(
+        const SIMDVectorSingle boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? 0xFFFFFFFFu : 0u));
+        const SIMDVectorSingle speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
+        const SIMDVectorSingle speedDeltaLanes = VectorMultiply(speedLanes, VectorReplicate(safeDelta));
+        const SIMDVectorSingle moveScale = VectorMultiply(
             speedDeltaLanes,
             VectorReciprocalSqrt(moveLengthSqVector)
         );
         if(!VectorIsFinite(moveScale, VectorComponentMask::s_XYZW))
             return;
 
-        const SIMDVector localMove = VectorMultiply(
+        const SIMDVectorSingle localMove = VectorMultiply(
             VectorSet(safeRightAxis, 0.0f, safeForwardAxis, 0.0f),
             moveScale
         );
-        const SIMDVector worldMove = Vector3Rotate(localMove, outRotation);
+        const SIMDVectorSingle worldMove = Vector3Rotate(localMove, outRotation);
         if(!Vector3IsFinite(worldMove))
             return;
 
-        const SIMDVector newPosition = VectorAdd(outPosition, worldMove);
+        const SIMDVectorSingle newPosition = VectorAdd(outPosition, worldMove);
         if(Vector3IsFinite(newPosition))
             outPosition = newPosition;
     }
@@ -202,8 +202,8 @@ static void ApplyFlyCameraInputToMainCamera(
     f32 yawRadians = 0.0f;
     f32 pitchRadians = 0.0f;
     ResolveFlyCameraAnglesFromRotation(LoadFloat(cameraView.transform->rotation), yawRadians, pitchRadians);
-    SIMDVector resolvedRotation;
-    SIMDVector resolvedPosition;
+    SIMDVectorSingle resolvedRotation;
+    SIMDVectorSingle resolvedPosition;
     ResolveFlyCameraInput(
         LoadFloat(cameraView.transform->position),
         yawRadians,
@@ -503,8 +503,8 @@ bool Project::mousePosUpdate(const f64 xpos, const f64 ypos){
     const SIMDVectorDouble deltaPosition = mousePosition - previousMousePosition;
     const f32 deltaX = static_cast<f32>(deltaPosition.x);
     const f32 deltaY = static_cast<f32>(deltaPosition.y);
-    const SIMDVector mouseDelta = VectorSet(deltaX, deltaY, 0.0f, 0.0f);
-    const SIMDVector pendingDelta = VectorAdd(VectorSet(m_pendingMouseDeltaX, m_pendingMouseDeltaY, 0.0f, 0.0f), mouseDelta);
+    const SIMDVectorSingle mouseDelta = VectorSet(deltaX, deltaY, 0.0f, 0.0f);
+    const SIMDVectorSingle pendingDelta = VectorAdd(VectorSet(m_pendingMouseDeltaX, m_pendingMouseDeltaY, 0.0f, 0.0f), mouseDelta);
     if(VectorIsFinite(mouseDelta, VectorComponentMask::s_XY) && VectorIsFinite(pendingDelta, VectorComponentMask::s_XY)){
         m_pendingMouseDeltaX = VectorGetX(pendingDelta);
         m_pendingMouseDeltaY = VectorGetY(pendingDelta);

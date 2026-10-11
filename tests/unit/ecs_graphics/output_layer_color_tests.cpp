@@ -36,17 +36,17 @@ struct ShaderFloat3{
 using float3 = ShaderFloat3;
 
 [[nodiscard]] ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble4 result = SIMDVectorDouble4{ a.x, a.y, a.z, 0. } + SIMDVectorDouble4{ b.x, b.y, b.z, 0. };
+    const SIMDVectorDouble result = SIMDVectorDouble{ a.x, a.y, a.z, 0. } + SIMDVectorDouble{ b.x, b.y, b.z, 0. };
     return { result.x, result.y, result.z };
 }
 
 [[nodiscard]] ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble4 result = SIMDVectorDouble4{ a.x, a.y, a.z, 0. } * SIMDVectorDouble4{ b.x, b.y, b.z, 0. };
+    const SIMDVectorDouble result = SIMDVectorDouble{ a.x, a.y, a.z, 0. } * SIMDVectorDouble{ b.x, b.y, b.z, 0. };
     return { result.x, result.y, result.z };
 }
 
 [[nodiscard]] ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble4 result = SIMDVectorDouble4{ a.x, a.y, a.z, 0. } / SIMDVectorDouble4{ b.x, b.y, b.z, 1. };
+    const SIMDVectorDouble result = SIMDVectorDouble{ a.x, a.y, a.z, 0. } / SIMDVectorDouble{ b.x, b.y, b.z, 1. };
     return { result.x, result.y, result.z };
 }
 
@@ -55,9 +55,9 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble4 first{ a.x, a.y, a.z, 0. };
-    const SIMDVectorDouble4 second{ b.x, b.y, b.z, 0. };
-    const SIMDVectorDouble4 result = (first > second) ? first : second;
+    const SIMDVectorDouble first{ a.x, a.y, a.z, 0. };
+    const SIMDVectorDouble second{ b.x, b.y, b.z, 0. };
+    const SIMDVectorDouble result = (first > second) ? first : second;
     return { result.x, result.y, result.z };
 }
 
@@ -66,11 +66,11 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
-    const SIMDVectorDouble4 value{ a.x, a.y, a.z, 0. };
-    const SIMDVectorDouble4 zero{ 0., 0., 0., 0. };
-    const SIMDVectorDouble4 one{ 1., 1., 1., 1. };
-    const SIMDVectorDouble4 lower = (value > zero) ? value : zero;
-    const SIMDVectorDouble4 result = (lower > one) ? one : lower;
+    const SIMDVectorDouble value{ a.x, a.y, a.z, 0. };
+    const SIMDVectorDouble zero{ 0., 0., 0., 0. };
+    const SIMDVectorDouble one{ 1., 1., 1., 1. };
+    const SIMDVectorDouble lower = (value > zero) ? value : zero;
+    const SIMDVectorDouble result = (lower > one) ? one : lower;
     return { result.x, result.y, result.z };
 }
 

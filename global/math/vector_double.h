@@ -5,29 +5,19 @@
 #pragma once
 
 
-#include "../type.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Native FP64 lanes retain binary64 precision and the compiler's arithmetic/contraction policy on supported Clang targets.
-using SIMDVectorDouble = f64 __attribute__((ext_vector_type(2)));
-static_assert(sizeof(SIMDVectorDouble) == sizeof(f64) * 2u);
-using SIMDVectorDouble4 = f64 __attribute__((ext_vector_type(4)));
-static_assert(sizeof(SIMDVectorDouble4) == sizeof(f64) * 4u);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] NWB_INLINE SIMDVectorDouble VectorDoubleFloor(SIMDVectorDouble value)noexcept{
-    return __builtin_elementwise_floor(value);
-}
-
-[[nodiscard]] NWB_INLINE SIMDVectorDouble VectorDoubleCeiling(SIMDVectorDouble value)noexcept{
-    return __builtin_elementwise_ceil(value);
-}
+#include "vector_lane_double.h"
+#include "vector_matrix_double.h"
+#include "vector_construct_double.h"
+#include "vector_compare_double.h"
+#include "vector_arithmetic_double.h"
+#include "vector_exp_log_double.h"
+#include "vector_trig_double.h"
+#include "vector_inverse_trig_double.h"
+#include "vector_interp_double.h"
+#include "vector2_double.h"
+#include "vector3_double.h"
+#include "vector4_double.h"
+#include "vector_transform_double.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

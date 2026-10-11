@@ -20,33 +20,33 @@ NWB_IMPL_UI_BEGIN
 
 
 // Rectangle lanes are x, y, width, height; comparisons preserve scalar Min/Max ties and NaNs on every backend.
-[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL IntersectRectBoundsValue(SIMDVector lhs, SIMDVector rhs)noexcept{
-    const SIMDVector lhsOrigin = VectorSwizzle<0, 1, 0, 1>(lhs);
-    const SIMDVector rhsOrigin = VectorSwizzle<0, 1, 0, 1>(rhs);
-    const SIMDVector lhsEnd = VectorAdd(lhsOrigin, VectorSwizzle<2, 3, 2, 3>(lhs));
-    const SIMDVector rhsEnd = VectorAdd(rhsOrigin, VectorSwizzle<2, 3, 2, 3>(rhs));
-    const SIMDVector origin = VectorSelect(rhsOrigin, lhsOrigin, VectorGreater(lhsOrigin, rhsOrigin));
-    const SIMDVector end = VectorSelect(rhsEnd, lhsEnd, VectorLess(lhsEnd, rhsEnd));
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL IntersectRectBoundsValue(SIMDVectorSingle lhs, SIMDVectorSingle rhs)noexcept{
+    const SIMDVectorSingle lhsOrigin = VectorSwizzle<0, 1, 0, 1>(lhs);
+    const SIMDVectorSingle rhsOrigin = VectorSwizzle<0, 1, 0, 1>(rhs);
+    const SIMDVectorSingle lhsEnd = VectorAdd(lhsOrigin, VectorSwizzle<2, 3, 2, 3>(lhs));
+    const SIMDVectorSingle rhsEnd = VectorAdd(rhsOrigin, VectorSwizzle<2, 3, 2, 3>(rhs));
+    const SIMDVectorSingle origin = VectorSelect(rhsOrigin, lhsOrigin, VectorGreater(lhsOrigin, rhsOrigin));
+    const SIMDVectorSingle end = VectorSelect(rhsEnd, lhsEnd, VectorLess(lhsEnd, rhsEnd));
     return VectorPermute<0, 1, 4, 5>(origin, end);
 }
 
-[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL IntersectRectValue(SIMDVector lhs, SIMDVector rhs)noexcept{
-    const SIMDVector bounds = IntersectRectBoundsValue(lhs, rhs);
-    const SIMDVector origin = VectorSwizzle<0, 1, 0, 1>(bounds);
-    const SIMDVector end = VectorSwizzle<2, 3, 2, 3>(bounds);
-    const SIMDVector extent = VectorSubtract(end, origin);
-    const SIMDVector size = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL IntersectRectValue(SIMDVectorSingle lhs, SIMDVectorSingle rhs)noexcept{
+    const SIMDVectorSingle bounds = IntersectRectBoundsValue(lhs, rhs);
+    const SIMDVectorSingle origin = VectorSwizzle<0, 1, 0, 1>(bounds);
+    const SIMDVectorSingle end = VectorSwizzle<2, 3, 2, 3>(bounds);
+    const SIMDVectorSingle extent = VectorSubtract(end, origin);
+    const SIMDVectorSingle size = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
     return VectorPermute<0, 1, 4, 5>(origin, size);
 }
 
 // Padding lanes are left, top, right, bottom; retain the two separately rounded size subtractions.
-[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL InsetRectValue(SIMDVector rectangle, SIMDVector padding)noexcept{
-    const SIMDVector origin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(rectangle), VectorSwizzle<0, 1, 0, 1>(padding));
-    const SIMDVector extent = VectorSubtract(
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL InsetRectValue(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept{
+    const SIMDVectorSingle origin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(rectangle), VectorSwizzle<0, 1, 0, 1>(padding));
+    const SIMDVectorSingle extent = VectorSubtract(
         VectorSubtract(VectorSwizzle<2, 3, 2, 3>(rectangle), VectorSwizzle<0, 1, 0, 1>(padding)),
         VectorSwizzle<2, 3, 2, 3>(padding)
     );
-    const SIMDVector size = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
+    const SIMDVectorSingle size = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
     return VectorPermute<0, 1, 4, 5>(origin, size);
 }
 

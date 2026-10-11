@@ -23,9 +23,9 @@ namespace RayTracingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept{
-    const SIMDVector extent = VectorSubtract(boundsMax, boundsMin);
-    const SIMDVector paddingVector = VectorSetW(
+void InflateSwShadowSceneBounds(SIMDVectorSingle& boundsMin, SIMDVectorSingle& boundsMax)noexcept{
+    const SIMDVectorSingle extent = VectorSubtract(boundsMax, boundsMin);
+    const SIMDVectorSingle paddingVector = VectorSetW(
         VectorMax(
             VectorReplicate(s_SwShadowSceneBoundsMinPadding),
             VectorScale(Vector3MaxComponent(extent), s_SwShadowSceneBoundsRelativePadding)
@@ -147,18 +147,18 @@ u32 BuildSceneBvhNode(
 
     // Bounding centroid extent over the slice: the per-axis extent picks which axes are binable (a zero extent
     // axis cannot separate any instances and is skipped).
-    SIMDVector centroidMin = VectorReplicate(s_RayTracingFiniteInfinity);
-    SIMDVector centroidMax = VectorReplicate(-s_RayTracingFiniteInfinity);
+    SIMDVectorSingle centroidMin = VectorReplicate(s_RayTracingFiniteInfinity);
+    SIMDVectorSingle centroidMax = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 i = lo; i < hi; ++i){
-        const SIMDVector centroid = primitiveBounds[indices[i]].centroid;
+        const SIMDVectorSingle centroid = primitiveBounds[indices[i]].centroid;
         centroidMin = VectorMin(centroidMin, centroid);
         centroidMax = VectorMax(centroidMax, centroid);
     }
 
     // Per-bin accumulators for a single axis: AABB min/max, instance count, summed leaf cost. s_SceneBvhSahBinCount
     // bins is the standard binned-BVH granularity and keeps the bin grid cache-resident.
-    SIMDVector binMin[s_SceneBvhSahBinCount];
-    SIMDVector binMax[s_SceneBvhSahBinCount];
+    SIMDVectorSingle binMin[s_SceneBvhSahBinCount];
+    SIMDVectorSingle binMax[s_SceneBvhSahBinCount];
     f32 binCost[s_SceneBvhSahBinCount];
     u32 binCount[s_SceneBvhSahBinCount];
 
@@ -196,13 +196,13 @@ u32 BuildSceneBvhNode(
 
         // Right-to-left suffix AABB / count / cost so every boundary's right partition is exact, then sweep
         // boundaries left-to-right building the matching left prefix and evaluate the SAH at each one.
-        SIMDVector suffixMin[s_SceneBvhSahBinCount];
-        SIMDVector suffixMax[s_SceneBvhSahBinCount];
+        SIMDVectorSingle suffixMin[s_SceneBvhSahBinCount];
+        SIMDVectorSingle suffixMax[s_SceneBvhSahBinCount];
         f32 suffixCost[s_SceneBvhSahBinCount];
         u32 suffixCount[s_SceneBvhSahBinCount];
         {
-            SIMDVector accMin = VectorReplicate(s_RayTracingFiniteInfinity);
-            SIMDVector accMax = VectorReplicate(-s_RayTracingFiniteInfinity);
+            SIMDVectorSingle accMin = VectorReplicate(s_RayTracingFiniteInfinity);
+            SIMDVectorSingle accMax = VectorReplicate(-s_RayTracingFiniteInfinity);
             f32 accCost = 0.0f;
             u32 accCount = 0u;
             for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
@@ -221,12 +221,12 @@ u32 BuildSceneBvhNode(
         // Boundary k splits at bin k: left = bins [0, k), right = bins [k, end). The parent AABB is the union of
         // every bin (suffix at index 0); the SAH parent-area divisor is folded out by comparing costs on the same
         // slice, so the un-normalized cost ct*SA + SA_L*cost_L + SA_R*cost_R is minimized directly.
-        const SIMDVector parentMin = suffixMin[0u];
-        const SIMDVector parentMax = suffixMax[0u];
+        const SIMDVectorSingle parentMin = suffixMin[0u];
+        const SIMDVectorSingle parentMax = suffixMax[0u];
         const f32 parentArea = AabbTests::SurfaceArea(parentMin, parentMax);
 
-        SIMDVector leftMin = VectorReplicate(s_RayTracingFiniteInfinity);
-        SIMDVector leftMax = VectorReplicate(-s_RayTracingFiniteInfinity);
+        SIMDVectorSingle leftMin = VectorReplicate(s_RayTracingFiniteInfinity);
+        SIMDVectorSingle leftMax = VectorReplicate(-s_RayTracingFiniteInfinity);
         f32 leftCost = 0.0f;
         u32 leftCount = 0u;
         for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){
@@ -243,7 +243,7 @@ u32 BuildSceneBvhNode(
             const f32 leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
             const f32 rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
             // SAH cost on lanes: parent*s_Traversal + left*leftCost + right*rightCost via multiply-add chains.
-            const SIMDVector sahCostLanes = VectorMultiplyAdd(
+            const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(
                 VectorReplicate(leftArea),
                 VectorReplicate(leftCost),
                 VectorMultiplyAdd(

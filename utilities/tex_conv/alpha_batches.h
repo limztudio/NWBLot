@@ -1,9 +1,29 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #pragma once
+
+
+#include "global.h"
 
 #include <global/simdmath.h>
 
-namespace NWB::TexConv::AlphaBatchDetail{
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_TEX_CONV_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AlphaBatchDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline bool TrapsMasked()noexcept{
 #if defined(NWB_HAS_SSE4)
@@ -29,7 +49,7 @@ namespace NWB::TexConv::AlphaBatchDetail{
     return true;
 }
 
-[[nodiscard]] inline SIMDVector Load(const f32* values, const u32 count)noexcept{
+[[nodiscard]] inline SIMDVectorSingle Load(const f32* values, const u32 count)noexcept{
     // Repeat a real lane for padding; never read a missing pixel.
     return VectorSet(values[0], values[1], count > 2u ? values[2] : values[0],
         count > 3u ? values[3] : values[0]);
@@ -38,7 +58,7 @@ namespace NWB::TexConv::AlphaBatchDetail{
 [[nodiscard]] inline bool TrySaturate(const f32* values, const u32 count, f32* output)noexcept{
     if(!Admit(values, count))
         return false;
-    const SIMDVector saturated = VectorSaturate(Load(values, count));
+    const SIMDVectorSingle saturated = VectorSaturate(Load(values, count));
     for(u32 lane = 0u; lane < count; ++lane)
         output[lane] = VectorGetByIndex(saturated, lane);
     return true;
@@ -49,7 +69,7 @@ namespace NWB::TexConv::AlphaBatchDetail{
         return false;
     // Retain the original separate saturation, multiplication, addition and
     // truncation operations, including their existing backend rounding policy.
-    const SIMDVector quantized = VectorTruncate(VectorAdd(
+    const SIMDVectorSingle quantized = VectorTruncate(VectorAdd(
         VectorMultiply(VectorSaturate(Load(values, count)), VectorReplicate(255.0f)),
         VectorReplicate(0.5f)));
     for(u32 lane = 0u; lane < count; ++lane)
@@ -57,4 +77,14 @@ namespace NWB::TexConv::AlphaBatchDetail{
     return true;
 }
 
-}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_TEX_CONV_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

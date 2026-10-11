@@ -36,7 +36,7 @@ namespace __hidden_ui_router_popup{
 [[nodiscard]] static bool Focusable(const HitTarget* target)noexcept{
     if(!target || !target->enabled || !target->focusable)
         return false;
-    const SIMDVector visibleBounds = IntersectRectBoundsValue(
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
         VectorSet(target->rectangle.x, target->rectangle.y, target->rectangle.width, target->rectangle.height), VectorSet(target->clip.x, target->clip.y, target->clip.width, target->clip.height)
     );
     return (VectorMoveMask(VectorGreater(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;

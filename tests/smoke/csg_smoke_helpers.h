@@ -40,11 +40,11 @@ inline void AssignCsgCutterParameters(Impl::CsgCutterComponent& cutter, const Pa
 
 inline void AssignCsgCutterTransform(
     Impl::CsgCutterComponent& cutter,
-    const SIMDVector center,
-    const SIMDVector rotation
+    const SIMDVectorSingle center,
+    const SIMDVectorSingle rotation
 ){
     const SIMDMatrix shapeToWorld = MatrixAffineTransformation(s_SIMDOne, VectorZero(), rotation, center);
-    SIMDVector determinant;
+    SIMDVectorSingle determinant;
     const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);
     StoreFloat(worldToShape, cutter.worldToShape);
     StoreFloat(shapeToWorld, cutter.shapeToWorld);

@@ -166,7 +166,7 @@ void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     m_context.abandonFrame();
     m_editHost.reset();
     m_ui.reset();
-    const SIMDVector logicalSize = VectorDivide(
+    const SIMDVectorSingle logicalSize = VectorDivide(
         VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height)),
         VectorSet(scaleX, scaleY, scaleX, scaleY)
     );

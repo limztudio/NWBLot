@@ -310,11 +310,11 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     }
 
     SamplerDesc normalizedDesc = d;
-    const SIMDVector one = VectorReplicate(1.f);
-    const SIMDVector supported = VectorReplicate(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy);
-    const SIMDVector maximum = VectorSelect(one, supported, VectorGreater(supported, one));
-    const SIMDVector requested = VectorReplicate(normalizedDesc.maxAnisotropy);
-    const SIMDVector lowerBounded = VectorSelect(one, requested, VectorGreaterOrEqual(requested, one));
+    const SIMDVectorSingle one = VectorReplicate(1.f);
+    const SIMDVectorSingle supported = VectorReplicate(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy);
+    const SIMDVectorSingle maximum = VectorSelect(one, supported, VectorGreater(supported, one));
+    const SIMDVectorSingle requested = VectorReplicate(normalizedDesc.maxAnisotropy);
+    const SIMDVectorSingle lowerBounded = VectorSelect(one, requested, VectorGreaterOrEqual(requested, one));
     normalizedDesc.maxAnisotropy = VectorGetX(VectorSelect(lowerBounded, maximum, VectorGreater(lowerBounded, maximum)));
 
     auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);

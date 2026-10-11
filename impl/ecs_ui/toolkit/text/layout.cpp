@@ -144,9 +144,9 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
     f32 nearest = Limit<f32>::s_Max;
     for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
         const TextCluster& cluster = m_clusters[index];
-        const SIMDVector difference = VectorSubtract(VectorReplicate(point.x),
+        const SIMDVectorSingle difference = VectorSubtract(VectorReplicate(point.x),
             VectorSet(cluster.leadingX, cluster.trailingX, cluster.leadingX, cluster.trailingX));
-        const SIMDVector magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
+        const SIMDVectorSingle magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
         const f32 leadingDistance = VectorGetX(magnitude);
         const f32 trailingDistance = VectorGetY(magnitude);
         if(leadingDistance <= nearest){

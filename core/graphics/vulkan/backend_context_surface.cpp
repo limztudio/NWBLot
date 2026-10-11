@@ -228,10 +228,10 @@ bool BackendContext::createVulkanSwapChain(){
         extent = surfaceCaps.currentExtent;
     }
     else{
-        const SIMDVector requestedExtent = VectorSet(static_cast<f32>(m_swapChainState.backBufferWidth), static_cast<f32>(m_swapChainState.backBufferHeight), 0.0f, 0.0f);
-        const SIMDVector minExtent = VectorSet(static_cast<f32>(surfaceCaps.minImageExtent.width), static_cast<f32>(surfaceCaps.minImageExtent.height), 0.0f, 0.0f);
-        const SIMDVector maxExtent = VectorSet(static_cast<f32>(surfaceCaps.maxImageExtent.width), static_cast<f32>(surfaceCaps.maxImageExtent.height), 0.0f, 0.0f);
-        const SIMDVector clampedExtent = VectorClamp(requestedExtent, minExtent, maxExtent);
+        const SIMDVectorSingle requestedExtent = VectorSet(static_cast<f32>(m_swapChainState.backBufferWidth), static_cast<f32>(m_swapChainState.backBufferHeight), 0.0f, 0.0f);
+        const SIMDVectorSingle minExtent = VectorSet(static_cast<f32>(surfaceCaps.minImageExtent.width), static_cast<f32>(surfaceCaps.minImageExtent.height), 0.0f, 0.0f);
+        const SIMDVectorSingle maxExtent = VectorSet(static_cast<f32>(surfaceCaps.maxImageExtent.width), static_cast<f32>(surfaceCaps.maxImageExtent.height), 0.0f, 0.0f);
+        const SIMDVectorSingle clampedExtent = VectorClamp(requestedExtent, minExtent, maxExtent);
         extent.width = static_cast<u32>(VectorGetX(clampedExtent));
         extent.height = static_cast<u32>(VectorGetY(clampedExtent));
     }
@@ -278,8 +278,8 @@ bool BackendContext::createVulkanSwapChain(){
         selectedPresentMode = presentModes[0];
     }
 
-    const SIMDVector imageCountBounds = VectorSet(static_cast<f32>(m_deviceParams.swapChainBufferCount), static_cast<f32>(surfaceCaps.minImageCount), static_cast<f32>(surfaceCaps.maxImageCount), 0.0f);
-    SIMDVector selectedImageCountLanes = VectorMax(VectorSplatX(imageCountBounds), VectorSplatY(imageCountBounds));
+    const SIMDVectorSingle imageCountBounds = VectorSet(static_cast<f32>(m_deviceParams.swapChainBufferCount), static_cast<f32>(surfaceCaps.minImageCount), static_cast<f32>(surfaceCaps.maxImageCount), 0.0f);
+    SIMDVectorSingle selectedImageCountLanes = VectorMax(VectorSplatX(imageCountBounds), VectorSplatY(imageCountBounds));
     if(surfaceCaps.maxImageCount > 0)
         selectedImageCountLanes = VectorMin(selectedImageCountLanes, VectorSplatZ(imageCountBounds));
     uint32_t selectedImageCount = static_cast<uint32_t>(VectorGetX(selectedImageCountLanes));

@@ -472,7 +472,7 @@ private:
             const f32 bAngle = b.yawDegrees * (s_PI / 180.0f);
             const f32 aCos = absolute(Cos(aAngle)), aSin = absolute(Sin(aAngle));
             const f32 bCos = absolute(Cos(bAngle)), bSin = absolute(Sin(bAngle));
-            const SIMDVector halfExtents = VectorScale(VectorMultiplyAddExpression(
+            const SIMDVectorSingle halfExtents = VectorScale(VectorMultiplyAddExpression(
                 VectorSet(aCos, aSin, bCos, bSin), VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x),
                 VectorMultiply(VectorSet(aSin, aCos, bSin, bCos), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))
             ), 0.5f);
@@ -562,10 +562,10 @@ private:
         const f32 width = s_BoxScale,
         const f32 height = s_BoxHeight
     ){
-        const SIMDVector pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
+        const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
         const f32 yawRad = yawDeg * (s_PI / 180.0f);
-        const SIMDVector yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
-        const SIMDVector wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
+        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
+        const SIMDVectorSingle wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
 
         auto entity = CreateTintedStaticMeshEntity(
             *m_world,

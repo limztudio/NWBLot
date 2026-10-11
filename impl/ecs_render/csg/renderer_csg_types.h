@@ -113,8 +113,8 @@ using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchAren
 
 
 struct CsgClipWorkBounds{
-    SIMDVector minBounds = VectorZero();
-    SIMDVector maxBounds = VectorZero();
+    SIMDVectorSingle minBounds = VectorZero();
+    SIMDVectorSingle maxBounds = VectorZero();
     bool valid = false;
 
     // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
@@ -142,8 +142,8 @@ struct CsgFrameWorkRegion{
 
     void expandWorldBounds(
         const SIMDMatrix& worldToClip,
-        SIMDVector minBounds,
-        SIMDVector maxBounds,
+        SIMDVectorSingle minBounds,
+        SIMDVectorSingle maxBounds,
         u32 frameWidth,
         u32 frameHeight
     );
@@ -152,9 +152,9 @@ struct CsgFrameWorkRegion{
         if(fullFrame || frameWidth == 0u || frameHeight == 0u)
             return;
 
-        const SIMDVector clampInput = VectorSet(static_cast<f32>(rectMinX), static_cast<f32>(rectMaxX), static_cast<f32>(rectMinY), static_cast<f32>(rectMaxY));
-        const SIMDVector clampExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), static_cast<f32>(frameHeight));
-        const SIMDVector clampedLanes = VectorMax(VectorMin(clampInput, clampExtent), VectorZero());
+        const SIMDVectorSingle clampInput = VectorSet(static_cast<f32>(rectMinX), static_cast<f32>(rectMaxX), static_cast<f32>(rectMinY), static_cast<f32>(rectMaxY));
+        const SIMDVectorSingle clampExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), static_cast<f32>(frameHeight));
+        const SIMDVectorSingle clampedLanes = VectorMax(VectorMin(clampInput, clampExtent), VectorZero());
         const i32 clampedMinX = static_cast<i32>(VectorGetX(clampedLanes));
         const i32 clampedMaxX = static_cast<i32>(VectorGetY(clampedLanes));
         const i32 clampedMinY = static_cast<i32>(VectorGetZ(clampedLanes));
@@ -162,8 +162,8 @@ struct CsgFrameWorkRegion{
         if(clampedMinX >= clampedMaxX || clampedMinY >= clampedMaxY)
             return;
 
-        const SIMDVector accumulatedMin = VectorMin(VectorSet(static_cast<f32>(minX), static_cast<f32>(minY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMinX), static_cast<f32>(clampedMinY), 0.0f, 0.0f));
-        const SIMDVector accumulatedMax = VectorMax(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMaxX), static_cast<f32>(clampedMaxY), 0.0f, 0.0f));
+        const SIMDVectorSingle accumulatedMin = VectorMin(VectorSet(static_cast<f32>(minX), static_cast<f32>(minY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMinX), static_cast<f32>(clampedMinY), 0.0f, 0.0f));
+        const SIMDVectorSingle accumulatedMax = VectorMax(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMaxX), static_cast<f32>(clampedMaxY), 0.0f, 0.0f));
         minX = static_cast<u32>(VectorGetX(accumulatedMin));
         minY = static_cast<u32>(VectorGetY(accumulatedMin));
         maxX = static_cast<u32>(VectorGetX(accumulatedMax));
@@ -173,7 +173,7 @@ struct CsgFrameWorkRegion{
         if(!bounded())
             return Core::Rect(static_cast<i32>(frameWidth), static_cast<i32>(frameHeight));
 
-        const SIMDVector resolvedMax = VectorMin(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f));
+        const SIMDVectorSingle resolvedMax = VectorMin(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f));
         return Core::Rect(
             static_cast<i32>(minX),
             static_cast<i32>(VectorGetX(resolvedMax)),

@@ -31,7 +31,7 @@ namespace __hidden_builder_slider{
         || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f
     )
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble horizontalVerticalValue = (SIMDVectorDouble{ static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) } / SIMDVectorDouble{ density, density });
+    const SIMDVectorDouble horizontalVerticalValue = (SIMDVectorDouble{ static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) } / VectorDoubleReplicate(density));
     const f64 horizontal = horizontalVerticalValue.x;
     const f64 vertical = horizontalVerticalValue.y;
     const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
@@ -127,10 +127,10 @@ bool Builder::prepareSlider(SliderFrame& frame){
         const auto minimum = __hidden_builder_slider::MinimumSize(*thumb, m_skin->referenceDensity());
         if(!minimum)
             return false;
-        const SIMDVector currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y,
+        const SIMDVectorSingle currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y,
             frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
-        const SIMDVector minimumSize = VectorSet(minimum->x, minimum->y, minimum->x, minimum->y);
-        const SIMDVector maximumSize = VectorSelect(minimumSize, currentSize, VectorGreater(currentSize, minimumSize));
+        const SIMDVectorSingle minimumSize = VectorSet(minimum->x, minimum->y, minimum->x, minimum->y);
+        const SIMDVectorSingle maximumSize = VectorSelect(minimumSize, currentSize, VectorGreater(currentSize, minimumSize));
         frame.m_style.thumbExtent = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
     }
     const auto metrics = SliderLayout::Measure(frame.m_options, frame.m_style);

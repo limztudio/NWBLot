@@ -31,7 +31,7 @@ static_assert(alignof(SceneViewBasis) >= alignof(Float4), "SceneViewBasis must k
 
 
 [[nodiscard]] SceneViewBasis BuildDefaultSceneViewBasis()noexcept;
-[[nodiscard]] SceneViewBasis BuildSceneViewBasis(SIMDVector position, SIMDVector rotation)noexcept;
+[[nodiscard]] SceneViewBasis BuildSceneViewBasis(SIMDVectorSingle position, SIMDVectorSingle rotation)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

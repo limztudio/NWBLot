@@ -39,7 +39,7 @@ using float3 = ShaderFloat3;
 using float4 = ShaderFloat4;
 
 ShaderFloat3 operator/(ShaderFloat3 value, float divisor){
-    const SIMDVector quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorReplicate(divisor));
+    const SIMDVectorSingle quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorReplicate(divisor));
     return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
 }
 

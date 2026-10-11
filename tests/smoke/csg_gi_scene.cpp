@@ -58,8 +58,8 @@ struct Box{
     const SmokeMaterialRef& material,
     const Float4& tint
 ){
-    const SIMDVector minimum = LoadFloat(box.minimum);
-    const SIMDVector maximum = LoadFloat(box.maximum);
+    const SIMDVectorSingle minimum = LoadFloat(box.minimum);
+    const SIMDVectorSingle maximum = LoadFloat(box.maximum);
     Float4 center;
     Float4 extent;
     StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
@@ -131,8 +131,8 @@ struct Box{
         component.shapeType = Name("engine/csg/box");
         component.active = arm == "cut";
         Impl::CsgBoxShapeParameters parameters;
-        const SIMDVector minimum = LoadFloat(cut.minimum);
-        const SIMDVector maximum = LoadFloat(cut.maximum);
+        const SIMDVectorSingle minimum = LoadFloat(cut.minimum);
+        const SIMDVectorSingle maximum = LoadFloat(cut.maximum);
         StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
         AssignCsgCutterParameters(component, parameters);
         AssignCsgCutterTransform(component, VectorScale(VectorAdd(minimum, maximum), 0.5f), QuaternionIdentity());

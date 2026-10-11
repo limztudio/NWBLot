@@ -80,8 +80,8 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
         return false;
     }
 
-    SIMDVector minBounds;
-    SIMDVector maxBounds;
+    SIMDVectorSingle minBounds;
+    SIMDVectorSingle maxBounds;
     AabbTests::Reset(minBounds, maxBounds);
     for(const Float3U& position : instance.restPositions)
         AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);

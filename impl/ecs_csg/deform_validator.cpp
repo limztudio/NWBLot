@@ -24,7 +24,7 @@ bool CsgDeformValidator::FiniteFloat(const f32 value)noexcept{
     return value == value && value != Limit<f32>::s_Infinity && value != -Limit<f32>::s_Infinity;
 }
 
-bool CsgDeformValidator::FiniteVertexVec(const SIMDVector position, const SIMDVector normal, const SIMDVector tangent, const SIMDVector uv0, const SIMDVector color)noexcept{
+bool CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle uv0, const SIMDVectorSingle color)noexcept{
     return VectorIsFinite(position, VectorComponentMask::s_XYZ)
         && VectorIsFinite(normal, VectorComponentMask::s_XYZW)
         && VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
@@ -37,11 +37,11 @@ bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex)noexcept{
     return CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color));
 }
 
-SIMDVector CsgDeformValidator::SaturateVec(const SIMDVector value)noexcept{
+SIMDVectorSingle CsgDeformValidator::SaturateVec(const SIMDVectorSingle value)noexcept{
     return VectorSaturate(value);
 }
 
-SIMDVector CsgDeformValidator::AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator)noexcept{
+SIMDVectorSingle CsgDeformValidator::AbsDivideVec(const SIMDVectorSingle numerator, const SIMDVectorSingle denominator)noexcept{
     return VectorAbs(VectorDivide(numerator, denominator));
 }
 

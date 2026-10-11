@@ -69,7 +69,7 @@ const HitTarget* InputRouter::controlHost(const HitTarget& target)const{
         || host->control != target.control || host->popup != target.popup || !allowedByPopup(*host)
     )
         return nullptr;
-    const SIMDVector visibleBounds = IntersectRectBoundsValue(
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
         VectorSet(host->rectangle.x, host->rectangle.y, host->rectangle.width, host->rectangle.height), VectorSet(host->clip.x, host->clip.y, host->clip.width, host->clip.height)
     );
     if((VectorMoveMask(VectorLessOrEqual(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) != 0u)

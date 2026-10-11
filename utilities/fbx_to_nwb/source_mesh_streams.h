@@ -64,7 +64,7 @@ struct PositionKeyEqual{
 
 // SIMD calculation scratch; serialized normals stay in SourceMesh's Float/Vec streams.
 struct alignas(Float4) PositionNormalCalculation{
-    SIMDVector value = {};
+    SIMDVectorSingle value = {};
 };
 
 using PositionNormalMap = HashMap<PositionKey, PositionNormalCalculation, PositionKeyHasher, PositionKeyEqual>;

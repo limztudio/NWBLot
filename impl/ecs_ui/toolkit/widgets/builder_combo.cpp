@@ -161,15 +161,15 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
             m_context.fail();
             return {};
         }
-        const SIMDVector minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-        const SIMDVector minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
+        const SIMDVectorSingle minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
+        const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
             skinRegion->minimumWidth, skinRegion->minimumHeight);
-        const SIMDVector minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
+        const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
             VectorGreater(minimumCurrent, minimumCandidate));
         minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
-        const SIMDVector itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
-        const SIMDVector itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVector itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent,
+        const SIMDVectorSingle itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
+        const SIMDVectorSingle itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
+        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent,
             VectorGreater(itempaddingCurrent, itempaddingCandidate));
         item.padding = { VectorGetX(itempaddingMaximum), VectorGetY(itempaddingMaximum), VectorGetZ(itempaddingMaximum), VectorGetW(itempaddingMaximum) };
     }
@@ -221,21 +221,21 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return {};
     }
-    const SIMDVector listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
-    const SIMDVector listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVector listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
+    const SIMDVectorSingle listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
+    const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
         VectorGreater(listpaddingCurrent, listpaddingCandidate));
     list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
     const Point measured = item.text.measure();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVector contentSize = VectorSet(NumericSimd::Add(NumericSimd::Add(measured.x, frame.arrowExtent), frame.style.arrowGap),
+    const SIMDVectorSingle contentSize = VectorSet(NumericSimd::Add(NumericSimd::Add(measured.x, frame.arrowExtent), frame.style.arrowGap),
         NumericSimd::Max(measured.y, frame.arrowExtent), 0.0f, 0.0f);
-    const SIMDVector paddedSize = VectorAdd(VectorAdd(contentSize, VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f)),
+    const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f)),
         VectorSet(item.padding.right, item.padding.bottom, 0.0f, 0.0f));
-    const SIMDVector minimumSize = VectorSet(minimum.x, minimum.y, 0.0f, 0.0f);
-    const SIMDVector intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
+    const SIMDVectorSingle minimumSize = VectorSet(minimum.x, minimum.y, 0.0f, 0.0f);
+    const SIMDVectorSingle intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
     description.intrinsicSize = { VectorGetX(intrinsicSize), VectorGetY(intrinsicSize) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){

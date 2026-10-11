@@ -36,32 +36,32 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshPositionVector(const SIMDVector position)noexcept{
+[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshPositionVector(const SIMDVectorSingle position)noexcept{
     return VectorSetW(position, 0.0f);
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshNormalVector(const SIMDVector normal)noexcept{
+[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshNormalVector(const SIMDVectorSingle normal)noexcept{
     return VectorSetW(normal, 0.0f);
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshTangentVector(const SIMDVector tangent)noexcept{
+[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshTangentVector(const SIMDVectorSingle tangent)noexcept{
     return tangent;
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshUvVector(const SIMDVector uv)noexcept{
+[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshUvVector(const SIMDVectorSingle uv)noexcept{
     return VectorSetW(VectorSetZ(uv, 0.0f), 0.0f);
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshColorVector(const SIMDVector color)noexcept{
+[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshColorVector(const SIMDVectorSingle color)noexcept{
     return color;
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidDirectionVector(const SIMDVector direction)noexcept{
+[[nodiscard]] bool MeshRuntimeValidation::ValidDirectionVector(const SIMDVectorSingle direction)noexcept{
     return
         VectorIsFinite(direction, VectorComponentMask::s_XYZ)
         && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_validation::s_DirectionLengthTolerance))
@@ -69,8 +69,8 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidTangentVector(const SIMDVector tangent)noexcept{
-    const SIMDVector direction = VectorSetW(tangent, 0.0f);
+[[nodiscard]] bool MeshRuntimeValidation::ValidTangentVector(const SIMDVectorSingle tangent)noexcept{
+    const SIMDVectorSingle direction = VectorSetW(tangent, 0.0f);
     return
         VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
         && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_validation::s_DirectionLengthTolerance))
@@ -359,7 +359,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         }
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
-        const SIMDVector sphere = LoadFloat(bounds.sphere);
+        const SIMDVectorSingle sphere = LoadFloat(bounds.sphere);
         if(!VectorIsFinite(sphere, VectorComponentMask::s_XYZW) || VectorGetW(sphere) < 0.0f){
             return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
                 contextText,

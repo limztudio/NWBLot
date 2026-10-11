@@ -82,7 +82,7 @@ bool Builder::paintTooltips(){
             continue;
         const Rect clip = visibleClip(box->clip);
         const Point& pointer = m_context.input().pointerPosition();
-        const SIMDVector visibleBounds = IntersectRectBoundsValue(
+        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
             VectorSet(box->rectangle.x, box->rectangle.y, box->rectangle.width, box->rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height)
         );
         const f32 left = VectorGetX(visibleBounds);
@@ -106,22 +106,22 @@ bool Builder::paintTooltips(){
         const UiSkinRegion* background = region(frame.style.background, frame.style.fallback);
         if(!background)
             return false;
-        const SIMDVector firstPadding = VectorSet(background->padding.left, background->padding.top,
+        const SIMDVectorSingle firstPadding = VectorSet(background->padding.left, background->padding.top,
             background->padding.right, background->padding.bottom);
-        const SIMDVector secondPadding = VectorSet(frame.style.padding.left, frame.style.padding.top,
+        const SIMDVectorSingle secondPadding = VectorSet(frame.style.padding.left, frame.style.padding.top,
             frame.style.padding.right, frame.style.padding.bottom);
-        const SIMDVector paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
+        const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
         const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
         const Point measured = frame.text.measure();
         PopupOptions options;
         options.anchor = box->rectangle;
-        const SIMDVector paddedSize = VectorAdd(
+        const SIMDVectorSingle paddedSize = VectorAdd(
             VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), VectorSwizzle<0, 1, 0, 1>(paddingValue)),
             VectorSwizzle<2, 3, 2, 3>(paddingValue)
         );
-        const SIMDVector minimumSize = VectorSet(background->minimumWidth, background->minimumHeight,
+        const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight,
             background->minimumWidth, background->minimumHeight);
-        const SIMDVector size = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
+        const SIMDVectorSingle size = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
         options.size = { Min(frame.options.maximumWidth, VectorGetX(size)), VectorGetY(size) };
         options.gap = frame.options.gap;
         options.side = frame.options.side;
@@ -133,7 +133,7 @@ bool Builder::paintTooltips(){
             return false;
         m_paint.pushClip(placement->bounds);
         const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-        const SIMDVector inset = InsetRectValue(
+        const SIMDVectorSingle inset = InsetRectValue(
             VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height),
             VectorSet(padding.left, padding.top, padding.right, padding.bottom)
         );

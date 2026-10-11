@@ -204,19 +204,19 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             )
             : MatrixIdentity()
         ;
-        SIMDVector determinant;
+        SIMDVectorSingle determinant;
         const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
 
-        const SIMDVector localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
-        const SIMDVector localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
+        const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
+        const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
         const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
         if(!worldBounds){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
         }
-        SIMDVector worldMin = worldBounds->minBounds;
-        SIMDVector worldMax = worldBounds->maxBounds;
+        SIMDVectorSingle worldMin = worldBounds->minBounds;
+        SIMDVectorSingle worldMax = worldBounds->maxBounds;
         RayTracingDetail::InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;

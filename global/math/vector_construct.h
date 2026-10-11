@@ -17,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVector value)noexcept{
+NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return ((value.u[0] >> 31) & 1u) | (((value.u[1] >> 31) & 1u) << 1) | (((value.u[2] >> 31) & 1u) << 2) | (((value.u[3] >> 31) & 1u) << 3);
 #elif defined(NWB_HAS_NEON)
@@ -28,7 +28,7 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorZero()noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorZero()noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(0.0f, 0.0f, 0.0f, 0.0f);
 #elif defined(NWB_HAS_NEON)
@@ -38,15 +38,15 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorZero()noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSet(f32 x, f32 y, f32 z, f32 w)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSet(f32 x, f32 y, f32 z, f32 w)noexcept{
     return SIMDConvertDetail::MakeF32(x, y, z, w);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetInt(u32 x, u32 y, u32 z, u32 w)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetInt(u32 x, u32 y, u32 z, u32 w)noexcept{
     return SIMDConvertDetail::MakeU32(x, y, z, w);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReplicate(f32 value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReplicate(f32 value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(value, value, value, value);
 #elif defined(NWB_HAS_NEON)
@@ -56,11 +56,11 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReplicate(f32 value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReplicatePtr(const f32 value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReplicatePtr(const f32 value)noexcept{
     return VectorReplicate(value);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReplicateInt(u32 value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReplicateInt(u32 value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(value, value, value, value);
 #elif defined(NWB_HAS_NEON)
@@ -70,11 +70,11 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReplicateInt(u32 value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReplicateIntPtr(const u32 value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReplicateIntPtr(const u32 value)noexcept{
     return VectorReplicateInt(value);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorTrueInt()noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTrueInt()noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu);
 #elif defined(NWB_HAS_NEON)
@@ -84,7 +84,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorTrueInt()noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorFalseInt()noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorFalseInt()noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(0u, 0u, 0u, 0u);
 #elif defined(NWB_HAS_NEON)
@@ -94,12 +94,12 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorFalseInt()noexcept{
 #endif
 }
 
-NWB_INLINE f32 NWB_SIMD_CALL VectorGetX(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<0u>(value); }
-NWB_INLINE f32 NWB_SIMD_CALL VectorGetY(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<1u>(value); }
-NWB_INLINE f32 NWB_SIMD_CALL VectorGetZ(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<2u>(value); }
-NWB_INLINE f32 NWB_SIMD_CALL VectorGetW(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<3u>(value); }
+NWB_INLINE f32 NWB_SIMD_CALL VectorGetX(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetLane<0u>(value); }
+NWB_INLINE f32 NWB_SIMD_CALL VectorGetY(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetLane<1u>(value); }
+NWB_INLINE f32 NWB_SIMD_CALL VectorGetZ(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetLane<2u>(value); }
+NWB_INLINE f32 NWB_SIMD_CALL VectorGetW(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetLane<3u>(value); }
 
-NWB_INLINE f32 NWB_SIMD_CALL VectorGetByIndex(SIMDVector value, usize index)noexcept{
+NWB_INLINE f32 NWB_SIMD_CALL VectorGetByIndex(SIMDVectorSingle value, usize index)noexcept{
     NWB_ASSERT(index < 4);
     switch(index){
     case 0u: return VectorGetX(value);
@@ -109,22 +109,22 @@ NWB_INLINE f32 NWB_SIMD_CALL VectorGetByIndex(SIMDVector value, usize index)noex
     }
 }
 
-NWB_INLINE void NWB_SIMD_CALL VectorGetByIndexPtr(f32& out, SIMDVector value, usize index)noexcept{
+NWB_INLINE void NWB_SIMD_CALL VectorGetByIndexPtr(f32& out, SIMDVectorSingle value, usize index)noexcept{
     NWB_ASSERT(index < 4);
     out = VectorGetByIndex(value, index);
 }
 
-NWB_INLINE void NWB_SIMD_CALL VectorGetXPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetX(value); }
-NWB_INLINE void NWB_SIMD_CALL VectorGetYPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetY(value); }
-NWB_INLINE void NWB_SIMD_CALL VectorGetZPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetZ(value); }
-NWB_INLINE void NWB_SIMD_CALL VectorGetWPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetW(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetXPtr(f32& out, SIMDVectorSingle value)noexcept{ out = VectorGetX(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetYPtr(f32& out, SIMDVectorSingle value)noexcept{ out = VectorGetY(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetZPtr(f32& out, SIMDVectorSingle value)noexcept{ out = VectorGetZ(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetWPtr(f32& out, SIMDVectorSingle value)noexcept{ out = VectorGetW(value); }
 
-NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntX(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<0u>(value); }
-NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntY(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<1u>(value); }
-NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntZ(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<2u>(value); }
-NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntW(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<3u>(value); }
+NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntX(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetIntLane<0u>(value); }
+NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntY(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetIntLane<1u>(value); }
+NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntZ(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetIntLane<2u>(value); }
+NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntW(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::GetIntLane<3u>(value); }
 
-NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntByIndex(SIMDVector value, usize index)noexcept{
+NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntByIndex(SIMDVectorSingle value, usize index)noexcept{
     NWB_ASSERT(index < 4);
     switch(index){
     case 0u: return VectorGetIntX(value);
@@ -134,17 +134,17 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorGetIntByIndex(SIMDVector value, usize index)n
     }
 }
 
-NWB_INLINE void NWB_SIMD_CALL VectorGetIntByIndexPtr(u32& out, SIMDVector value, usize index)noexcept{
+NWB_INLINE void NWB_SIMD_CALL VectorGetIntByIndexPtr(u32& out, SIMDVectorSingle value, usize index)noexcept{
     NWB_ASSERT(index < 4);
     out = VectorGetIntByIndex(value, index);
 }
 
-NWB_INLINE void NWB_SIMD_CALL VectorGetIntXPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntX(value); }
-NWB_INLINE void NWB_SIMD_CALL VectorGetIntYPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntY(value); }
-NWB_INLINE void NWB_SIMD_CALL VectorGetIntZPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntZ(value); }
-NWB_INLINE void NWB_SIMD_CALL VectorGetIntWPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntW(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetIntXPtr(u32& out, SIMDVectorSingle value)noexcept{ out = VectorGetIntX(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetIntYPtr(u32& out, SIMDVectorSingle value)noexcept{ out = VectorGetIntY(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetIntZPtr(u32& out, SIMDVectorSingle value)noexcept{ out = VectorGetIntZ(value); }
+NWB_INLINE void NWB_SIMD_CALL VectorGetIntWPtr(u32& out, SIMDVectorSingle value)noexcept{ out = VectorGetIntW(value); }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetX(SIMDVector value, f32 x)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetX(SIMDVectorSingle value, f32 x)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.f[0] = x;
     return value;
@@ -155,7 +155,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetX(SIMDVector value, f32 x)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetY(SIMDVector value, f32 y)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetY(SIMDVectorSingle value, f32 y)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.f[1] = y;
     return value;
@@ -166,7 +166,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetY(SIMDVector value, f32 y)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetZ(SIMDVector value, f32 z)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetZ(SIMDVectorSingle value, f32 z)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.f[2] = z;
     return value;
@@ -177,7 +177,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetZ(SIMDVector value, f32 z)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetW(SIMDVector value, f32 w)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetW(SIMDVectorSingle value, f32 w)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.f[3] = w;
     return value;
@@ -188,7 +188,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetW(SIMDVector value, f32 w)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetByIndex(SIMDVector value, f32 component, usize index)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetByIndex(SIMDVectorSingle value, f32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
     switch(index){
     case 0u: return VectorSetX(value, component);
@@ -198,28 +198,28 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetByIndex(SIMDVector value, f32 compo
     }
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetByIndexPtr(SIMDVector value, const f32 component, usize index)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetByIndexPtr(SIMDVectorSingle value, const f32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
     return VectorSetByIndex(value, component, index);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetXPtr(SIMDVector value, const f32 x)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetXPtr(SIMDVectorSingle value, const f32 x)noexcept{
     return VectorSetX(value, x);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetYPtr(SIMDVector value, const f32 y)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetYPtr(SIMDVectorSingle value, const f32 y)noexcept{
     return VectorSetY(value, y);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetZPtr(SIMDVector value, const f32 z)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetZPtr(SIMDVectorSingle value, const f32 z)noexcept{
     return VectorSetZ(value, z);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetWPtr(SIMDVector value, const f32 w)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetWPtr(SIMDVectorSingle value, const f32 w)noexcept{
     return VectorSetW(value, w);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntX(SIMDVector value, u32 x)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntX(SIMDVectorSingle value, u32 x)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.u[0] = x;
     return value;
@@ -230,7 +230,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntX(SIMDVector value, u32 x)noexce
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntY(SIMDVector value, u32 y)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntY(SIMDVectorSingle value, u32 y)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.u[1] = y;
     return value;
@@ -241,7 +241,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntY(SIMDVector value, u32 y)noexce
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntZ(SIMDVector value, u32 z)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntZ(SIMDVectorSingle value, u32 z)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.u[2] = z;
     return value;
@@ -252,7 +252,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntZ(SIMDVector value, u32 z)noexce
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntW(SIMDVector value, u32 w)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntW(SIMDVectorSingle value, u32 w)noexcept{
 #if defined(NWB_HAS_SCALAR)
     value.u[3] = w;
     return value;
@@ -263,7 +263,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntW(SIMDVector value, u32 w)noexce
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntByIndex(SIMDVector value, u32 component, usize index)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntByIndex(SIMDVectorSingle value, u32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
     switch(index){
     case 0u: return VectorSetIntX(value, component);
@@ -273,38 +273,38 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntByIndex(SIMDVector value, u32 co
     }
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntByIndexPtr(SIMDVector value, const u32 component, usize index)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntByIndexPtr(SIMDVectorSingle value, const u32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
     return VectorSetIntByIndex(value, component, index);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntXPtr(SIMDVector value, const u32 x)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntXPtr(SIMDVectorSingle value, const u32 x)noexcept{
     return VectorSetIntX(value, x);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntYPtr(SIMDVector value, const u32 y)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntYPtr(SIMDVectorSingle value, const u32 y)noexcept{
     return VectorSetIntY(value, y);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntZPtr(SIMDVector value, const u32 z)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntZPtr(SIMDVectorSingle value, const u32 z)noexcept{
     return VectorSetIntZ(value, z);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSetIntWPtr(SIMDVector value, const u32 w)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntWPtr(SIMDVectorSingle value, const u32 w)noexcept{
     return VectorSetIntW(value, w);
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatX(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<0u>(value); }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatY(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<1u>(value); }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatZ(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<2u>(value); }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatW(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<3u>(value); }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatOne()noexcept{ return s_SIMDOne; }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatInfinity()noexcept{ return s_SIMDInfinity; }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatQNaN()noexcept{ return s_SIMDQNaN; }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatEpsilon()noexcept{ return s_SIMDEpsilon; }
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSplatSignMask()noexcept{ return s_SIMDNegativeZero; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatX(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::SplatLane<0u>(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatY(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::SplatLane<1u>(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatZ(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::SplatLane<2u>(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatW(SIMDVectorSingle value)noexcept{ return SIMDVectorDetail::SplatLane<3u>(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatOne()noexcept{ return s_SIMDOne; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatInfinity()noexcept{ return s_SIMDInfinity; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatQNaN()noexcept{ return s_SIMDQNaN; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatEpsilon()noexcept{ return s_SIMDEpsilon; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatSignMask()noexcept{ return s_SIMDNegativeZero; }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle(SIMDVector value, u32 e0, u32 e1, u32 e2, u32 e3)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, u32 e0, u32 e1, u32 e2, u32 e3)noexcept{
     NWB_ASSERT(e0 < 4 && e1 < 4 && e2 < 4 && e3 < 4);
 #if defined(NWB_HAS_NEON)
     static const u32 controlElement[4] = {
@@ -340,7 +340,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle(SIMDVector value, u32 e0, u32 
 }
 
 template<u32 E0, u32 E1, u32 E2, u32 E3>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value)noexcept{
     static_assert(E0 < 4 && E1 < 4 && E2 < 4 && E3 < 4);
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
     return VectorSwizzle(value, E0, E1, E2, E3);
@@ -352,90 +352,90 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle(SIMDVector value)noexcept{
 }
 
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 1, 2, 3>(SIMDVector value)noexcept{ return value; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 1, 2, 3>(SIMDVectorSingle value)noexcept{ return value; }
 
 #if defined(NWB_HAS_SSE4)
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 1, 0, 1>(SIMDVector value)noexcept{ return _mm_movelh_ps(value, value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 1, 0, 1>(SIMDVectorSingle value)noexcept{ return _mm_movelh_ps(value, value); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<2, 3, 2, 3>(SIMDVector value)noexcept{ return _mm_movehl_ps(value, value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<2, 3, 2, 3>(SIMDVectorSingle value)noexcept{ return _mm_movehl_ps(value, value); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 0, 1, 1>(SIMDVector value)noexcept{ return _mm_unpacklo_ps(value, value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 0, 1, 1>(SIMDVectorSingle value)noexcept{ return _mm_unpacklo_ps(value, value); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<2, 2, 3, 3>(SIMDVector value)noexcept{ return _mm_unpackhi_ps(value, value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<2, 2, 3, 3>(SIMDVectorSingle value)noexcept{ return _mm_unpackhi_ps(value, value); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 0, 2, 2>(SIMDVector value)noexcept{ return _mm_moveldup_ps(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 0, 2, 2>(SIMDVectorSingle value)noexcept{ return _mm_moveldup_ps(value); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 1, 3, 3>(SIMDVector value)noexcept{ return _mm_movehdup_ps(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 1, 3, 3>(SIMDVectorSingle value)noexcept{ return _mm_movehdup_ps(value); }
 #endif
 
 #if defined(__AVX2__) || defined(_M_AVX2)
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 0, 0, 0>(SIMDVector value)noexcept{ return _mm_broadcastss_ps(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 0, 0, 0>(SIMDVectorSingle value)noexcept{ return _mm_broadcastss_ps(value); }
 #endif
 
 #if defined(NWB_HAS_NEON)
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 0, 0, 0>(SIMDVector value)noexcept{ return vdupq_lane_f32(vget_low_f32(value), 0); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 0, 0, 0>(SIMDVectorSingle value)noexcept{ return vdupq_lane_f32(vget_low_f32(value), 0); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 1, 1, 1>(SIMDVector value)noexcept{ return vdupq_lane_f32(vget_low_f32(value), 1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 1, 1, 1>(SIMDVectorSingle value)noexcept{ return vdupq_lane_f32(vget_low_f32(value), 1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<2, 2, 2, 2>(SIMDVector value)noexcept{ return vdupq_lane_f32(vget_high_f32(value), 0); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<2, 2, 2, 2>(SIMDVectorSingle value)noexcept{ return vdupq_lane_f32(vget_high_f32(value), 0); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<3, 3, 3, 3>(SIMDVector value)noexcept{ return vdupq_lane_f32(vget_high_f32(value), 1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<3, 3, 3, 3>(SIMDVectorSingle value)noexcept{ return vdupq_lane_f32(vget_high_f32(value), 1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 0, 3, 2>(SIMDVector value)noexcept{ return vrev64q_f32(value); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 0, 3, 2>(SIMDVectorSingle value)noexcept{ return vrev64q_f32(value); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 1, 0, 1>(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 1, 0, 1>(SIMDVectorSingle value)noexcept{
     const float32x2_t temp = vget_low_f32(value);
     return vcombine_f32(temp, temp);
 }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<2, 3, 2, 3>(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<2, 3, 2, 3>(SIMDVectorSingle value)noexcept{
     const float32x2_t temp = vget_high_f32(value);
     return vcombine_f32(temp, temp);
 }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 0, 1, 0>(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 0, 1, 0>(SIMDVectorSingle value)noexcept{
     const float32x2_t temp = vrev64_f32(vget_low_f32(value));
     return vcombine_f32(temp, temp);
 }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<3, 2, 3, 2>(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<3, 2, 3, 2>(SIMDVectorSingle value)noexcept{
     const float32x2_t temp = vrev64_f32(vget_high_f32(value));
     return vcombine_f32(temp, temp);
 }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 1, 3, 2>(SIMDVector value)noexcept{ return vcombine_f32(vget_low_f32(value), vrev64_f32(vget_high_f32(value))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 1, 3, 2>(SIMDVectorSingle value)noexcept{ return vcombine_f32(vget_low_f32(value), vrev64_f32(vget_high_f32(value))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 0, 2, 3>(SIMDVector value)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(value)), vget_high_f32(value)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 0, 2, 3>(SIMDVectorSingle value)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(value)), vget_high_f32(value)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<2, 3, 1, 0>(SIMDVector value)noexcept{ return vcombine_f32(vget_high_f32(value), vrev64_f32(vget_low_f32(value))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<2, 3, 1, 0>(SIMDVectorSingle value)noexcept{ return vcombine_f32(vget_high_f32(value), vrev64_f32(vget_low_f32(value))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<3, 2, 0, 1>(SIMDVector value)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(value)), vget_low_f32(value)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<3, 2, 0, 1>(SIMDVectorSingle value)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(value)), vget_low_f32(value)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<3, 2, 1, 0>(SIMDVector value)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(value)), vrev64_f32(vget_low_f32(value))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<3, 2, 1, 0>(SIMDVectorSingle value)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(value)), vrev64_f32(vget_low_f32(value))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 0, 2, 2>(SIMDVector value)noexcept{ return vtrnq_f32(value, value).val[0]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 0, 2, 2>(SIMDVectorSingle value)noexcept{ return vtrnq_f32(value, value).val[0]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 1, 3, 3>(SIMDVector value)noexcept{ return vtrnq_f32(value, value).val[1]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 1, 3, 3>(SIMDVectorSingle value)noexcept{ return vtrnq_f32(value, value).val[1]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 0, 1, 1>(SIMDVector value)noexcept{ return vzipq_f32(value, value).val[0]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 0, 1, 1>(SIMDVectorSingle value)noexcept{ return vzipq_f32(value, value).val[0]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<2, 2, 3, 3>(SIMDVector value)noexcept{ return vzipq_f32(value, value).val[1]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<2, 2, 3, 3>(SIMDVectorSingle value)noexcept{ return vzipq_f32(value, value).val[1]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<0, 2, 0, 2>(SIMDVector value)noexcept{ return vuzpq_f32(value, value).val[0]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<0, 2, 0, 2>(SIMDVectorSingle value)noexcept{ return vuzpq_f32(value, value).val[0]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 3, 1, 3>(SIMDVector value)noexcept{ return vuzpq_f32(value, value).val[1]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 3, 1, 3>(SIMDVectorSingle value)noexcept{ return vuzpq_f32(value, value).val[1]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<1, 2, 3, 0>(SIMDVector value)noexcept{ return vextq_f32(value, value, 1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<1, 2, 3, 0>(SIMDVectorSingle value)noexcept{ return vextq_f32(value, value, 1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<2, 3, 0, 1>(SIMDVector value)noexcept{ return vextq_f32(value, value, 2); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<2, 3, 0, 1>(SIMDVectorSingle value)noexcept{ return vextq_f32(value, value, 2); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSwizzle<3, 0, 1, 2>(SIMDVector value)noexcept{ return vextq_f32(value, value, 3); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle<3, 0, 1, 2>(SIMDVectorSingle value)noexcept{ return vextq_f32(value, value, 3); }
 #endif
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute(SIMDVector v0, SIMDVector v1, u32 x, u32 y, u32 z, u32 w)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIMDVectorSingle v1, u32 x, u32 y, u32 z, u32 w)noexcept{
     NWB_ASSERT(x < 8 && y < 8 && z < 8 && w < 8);
 #if defined(NWB_HAS_NEON)
     static const u32 controlElement[8] = {
@@ -465,8 +465,8 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute(SIMDVector v0, SIMDVector v1, 
     const __m128i controlVector = _mm_set_epi32(static_cast<i32>(w), static_cast<i32>(z), static_cast<i32>(y), static_cast<i32>(x));
     const __m128i select = _mm_cmpgt_epi32(controlVector, _mm_set1_epi32(3));
     const __m128i swizzle = _mm_and_si128(controlVector, _mm_set1_epi32(3));
-    const SIMDVector a = _mm_permutevar_ps(v0, swizzle);
-    const SIMDVector b = _mm_permutevar_ps(v1, swizzle);
+    const SIMDVectorSingle a = _mm_permutevar_ps(v0, swizzle);
+    const SIMDVectorSingle b = _mm_permutevar_ps(v1, swizzle);
     return _mm_or_ps(_mm_andnot_ps(_mm_castsi128_ps(select), a), _mm_and_ps(_mm_castsi128_ps(select), b));
 #elif defined(NWB_HAS_SSE4)
     return VectorSetInt(
@@ -486,7 +486,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute(SIMDVector v0, SIMDVector v1, 
 }
 
 template<u32 X, u32 Y, u32 Z, u32 W>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
     static_assert(X < 8 && Y < 8 && Z < 8 && W < 8);
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
     return VectorPermute(v0, v1, X, Y, Z, W);
@@ -503,8 +503,8 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute(SIMDVector v0, SIMDVector v1)n
     else if constexpr(blend == 0x3)
         return _mm_shuffle_ps(v1, v0, shuffle);
     else{
-        const SIMDVector a = _mm_permute_ps(v0, shuffle);
-        const SIMDVector b = _mm_permute_ps(v1, shuffle);
+        const SIMDVectorSingle a = _mm_permute_ps(v0, shuffle);
+        const SIMDVectorSingle b = _mm_permute_ps(v1, shuffle);
         return _mm_blend_ps(a, b, blend);
     }
 #else
@@ -517,8 +517,8 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute(SIMDVector v0, SIMDVector v1)n
     else if constexpr(blend == 0x3)
         return _mm_shuffle_ps(v1, v0, shuffle);
     else{
-        const SIMDVector a = _mm_shuffle_ps(v0, v0, shuffle);
-        const SIMDVector b = _mm_shuffle_ps(v1, v1, shuffle);
+        const SIMDVectorSingle a = _mm_shuffle_ps(v0, v0, shuffle);
+        const SIMDVectorSingle b = _mm_shuffle_ps(v1, v1, shuffle);
         return _mm_blend_ps(a, b, blend);
     }
 #endif
@@ -526,103 +526,103 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute(SIMDVector v0, SIMDVector v1)n
 }
 
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 2, 3>(SIMDVector v0, SIMDVector)noexcept{ return v0; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 2, 3>(SIMDVectorSingle v0, SIMDVectorSingle)noexcept{ return v0; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 5, 6, 7>(SIMDVector, SIMDVector v1)noexcept{ return v1; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 5, 6, 7>(SIMDVectorSingle, SIMDVectorSingle v1)noexcept{ return v1; }
 
 #if defined(NWB_HAS_SSE4)
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 4, 5>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_movelh_ps(v0, v1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 4, 5>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_movelh_ps(v0, v1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<6, 7, 2, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_movehl_ps(v0, v1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<6, 7, 2, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_movehl_ps(v0, v1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 4, 1, 5>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_unpacklo_ps(v0, v1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 4, 1, 5>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_unpacklo_ps(v0, v1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<2, 6, 3, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_unpackhi_ps(v0, v1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<2, 6, 3, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_unpackhi_ps(v0, v1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<2, 3, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(v0), _mm_castps_pd(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<2, 3, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(v0), _mm_castps_pd(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 1, 2, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 1, 2, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 5, 2, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x2); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 5, 2, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x2); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 5, 2, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x3); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 5, 2, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x3); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 6, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x4); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 6, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x4); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 1, 6, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x5); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 1, 6, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x5); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 5, 6, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x6); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 5, 6, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x6); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 5, 6, 3>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x7); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 5, 6, 3>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x7); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 2, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x8); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 2, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x8); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 1, 2, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0x9); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 1, 2, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0x9); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 5, 2, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0xA); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 5, 2, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0xA); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 5, 2, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0xB); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 5, 2, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0xB); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0xC); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0xC); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<4, 1, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0xD); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<4, 1, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0xD); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 5, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return _mm_blend_ps(v0, v1, 0xE); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 5, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return _mm_blend_ps(v0, v1, 0xE); }
 #endif
 
 #if defined(NWB_HAS_NEON)
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 4, 5>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vget_low_f32(v1)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 4, 5>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vget_low_f32(v1)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<1, 0, 4, 5>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vget_low_f32(v1)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<1, 0, 4, 5>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vget_low_f32(v1)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 5, 4>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vrev64_f32(vget_low_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 5, 4>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vrev64_f32(vget_low_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<1, 0, 5, 4>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vrev64_f32(vget_low_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<1, 0, 5, 4>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vrev64_f32(vget_low_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<2, 3, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vget_high_f32(v0), vget_high_f32(v1)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<2, 3, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vget_high_f32(v0), vget_high_f32(v1)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<3, 2, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vget_high_f32(v1)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<3, 2, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vget_high_f32(v1)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<2, 3, 7, 6>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vget_high_f32(v0), vrev64_f32(vget_high_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<2, 3, 7, 6>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vget_high_f32(v0), vrev64_f32(vget_high_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<3, 2, 7, 6>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vrev64_f32(vget_high_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<3, 2, 7, 6>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vrev64_f32(vget_high_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vget_high_f32(v1)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vget_high_f32(v1)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<1, 0, 6, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vget_high_f32(v1)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<1, 0, 6, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vget_high_f32(v1)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 1, 7, 6>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vrev64_f32(vget_high_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 1, 7, 6>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vget_low_f32(v0), vrev64_f32(vget_high_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<1, 0, 7, 6>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vrev64_f32(vget_high_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<1, 0, 7, 6>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_low_f32(v0)), vrev64_f32(vget_high_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<3, 2, 4, 5>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vget_low_f32(v1)); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<3, 2, 4, 5>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vget_low_f32(v1)); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<2, 3, 5, 4>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vget_high_f32(v0), vrev64_f32(vget_low_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<2, 3, 5, 4>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vget_high_f32(v0), vrev64_f32(vget_low_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<3, 2, 5, 4>(SIMDVector v0, SIMDVector v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vrev64_f32(vget_low_f32(v1))); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<3, 2, 5, 4>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vcombine_f32(vrev64_f32(vget_high_f32(v0)), vrev64_f32(vget_low_f32(v1))); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 4, 2, 6>(SIMDVector v0, SIMDVector v1)noexcept{ return vtrnq_f32(v0, v1).val[0]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 4, 2, 6>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vtrnq_f32(v0, v1).val[0]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<1, 5, 3, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return vtrnq_f32(v0, v1).val[1]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<1, 5, 3, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vtrnq_f32(v0, v1).val[1]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 4, 1, 5>(SIMDVector v0, SIMDVector v1)noexcept{ return vzipq_f32(v0, v1).val[0]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 4, 1, 5>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vzipq_f32(v0, v1).val[0]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<2, 6, 3, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return vzipq_f32(v0, v1).val[1]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<2, 6, 3, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vzipq_f32(v0, v1).val[1]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<0, 2, 4, 6>(SIMDVector v0, SIMDVector v1)noexcept{ return vuzpq_f32(v0, v1).val[0]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<0, 2, 4, 6>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vuzpq_f32(v0, v1).val[0]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<1, 3, 5, 7>(SIMDVector v0, SIMDVector v1)noexcept{ return vuzpq_f32(v0, v1).val[1]; }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<1, 3, 5, 7>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vuzpq_f32(v0, v1).val[1]; }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<1, 2, 3, 4>(SIMDVector v0, SIMDVector v1)noexcept{ return vextq_f32(v0, v1, 1); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<1, 2, 3, 4>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vextq_f32(v0, v1, 1); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<2, 3, 4, 5>(SIMDVector v0, SIMDVector v1)noexcept{ return vextq_f32(v0, v1, 2); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<2, 3, 4, 5>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vextq_f32(v0, v1, 2); }
 template<>
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorPermute<3, 4, 5, 6>(SIMDVector v0, SIMDVector v1)noexcept{ return vextq_f32(v0, v1, 3); }
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute<3, 4, 5, 6>(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return vextq_f32(v0, v1, 3); }
 #endif
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 selectY, u32 selectZ, u32 selectW)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 selectY, u32 selectZ, u32 selectW)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(selectX ? 0xFFFFFFFFu : 0u, selectY ? 0xFFFFFFFFu : 0u, selectZ ? 0xFFFFFFFFu : 0u, selectW ? 0xFFFFFFFFu : 0u);
 #elif defined(NWB_HAS_NEON)
@@ -636,7 +636,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 selectY
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAndInt(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAndInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(VectorGetIntX(v0) & VectorGetIntX(v1), VectorGetIntY(v0) & VectorGetIntY(v1), VectorGetIntZ(v0) & VectorGetIntZ(v1), VectorGetIntW(v0) & VectorGetIntW(v1));
 #elif defined(NWB_HAS_NEON)
@@ -646,7 +646,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAndInt(SIMDVector v0, SIMDVector v1)no
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorOrInt(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorOrInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(VectorGetIntX(v0) | VectorGetIntX(v1), VectorGetIntY(v0) | VectorGetIntY(v1), VectorGetIntZ(v0) | VectorGetIntZ(v1), VectorGetIntW(v0) | VectorGetIntW(v1));
 #elif defined(NWB_HAS_NEON)
@@ -656,7 +656,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorOrInt(SIMDVector v0, SIMDVector v1)noe
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorXorInt(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorXorInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(VectorGetIntX(v0) ^ VectorGetIntX(v1), VectorGetIntY(v0) ^ VectorGetIntY(v1), VectorGetIntZ(v0) ^ VectorGetIntZ(v1), VectorGetIntW(v0) ^ VectorGetIntW(v1));
 #elif defined(NWB_HAS_NEON)
@@ -666,7 +666,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorXorInt(SIMDVector v0, SIMDVector v1)no
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAndCInt(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAndCInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(v0.u[0] & ~v1.u[0], v0.u[1] & ~v1.u[1], v0.u[2] & ~v1.u[2], v0.u[3] & ~v1.u[3]);
 #elif defined(NWB_HAS_NEON)
@@ -676,7 +676,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAndCInt(SIMDVector v0, SIMDVector v1)n
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorNorInt(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNorInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(~(v0.u[0] | v1.u[0]), ~(v0.u[1] | v1.u[1]), ~(v0.u[2] | v1.u[2]), ~(v0.u[3] | v1.u[3]));
 #elif defined(NWB_HAS_NEON)
@@ -688,7 +688,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorNorInt(SIMDVector v0, SIMDVector v1)no
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSelect(SIMDVector v0, SIMDVector v1, SIMDVector control)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelect(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle control)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorOrInt(VectorAndCInt(v0, control), VectorAndInt(v1, control));
 #elif defined(NWB_HAS_NEON)
@@ -698,7 +698,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSelect(SIMDVector v0, SIMDVector v1, S
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMergeXY(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMergeXY(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(v0.u[0], v1.u[0], v0.u[1], v1.u[1]);
 #elif defined(NWB_HAS_NEON)
@@ -708,7 +708,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMergeXY(SIMDVector v0, SIMDVector v1)n
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMergeZW(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMergeZW(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(v0.u[2], v1.u[2], v0.u[3], v1.u[3]);
 #elif defined(NWB_HAS_NEON)
@@ -718,7 +718,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMergeZW(SIMDVector v0, SIMDVector v1)n
 #endif
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorShiftLeft(SIMDVector v0, SIMDVector v1, u32 elements)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorShiftLeft(SIMDVectorSingle v0, SIMDVectorSingle v1, u32 elements)noexcept{
     NWB_ASSERT(elements < 4);
     switch(elements){
     case 0: return VectorPermute<0, 1, 2, 3>(v0, v1);
@@ -728,7 +728,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorShiftLeft(SIMDVector v0, SIMDVector v1
     }
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorRotateLeft(SIMDVector value, u32 elements)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRotateLeft(SIMDVectorSingle value, u32 elements)noexcept{
     NWB_ASSERT(elements < 4);
     switch(elements){
     case 0: return value;
@@ -738,7 +738,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorRotateLeft(SIMDVector value, u32 eleme
     }
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorRotateRight(SIMDVector value, u32 elements)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRotateRight(SIMDVectorSingle value, u32 elements)noexcept{
     NWB_ASSERT(elements < 4);
     switch(elements){
     case 0: return value;
@@ -748,8 +748,8 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorRotateRight(SIMDVector value, u32 elem
     }
 }
 
-NWB_INLINE SIMDVector NWB_SIMD_CALL VectorInsert(SIMDVector vd, SIMDVector vs, u32 vsLeftRotateElements, u32 select0, u32 select1, u32 select2, u32 select3)noexcept{
-    const SIMDVector control = VectorSelectControl(select0 & 1u, select1 & 1u, select2 & 1u, select3 & 1u);
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorInsert(SIMDVectorSingle vd, SIMDVectorSingle vs, u32 vsLeftRotateElements, u32 select0, u32 select1, u32 select2, u32 select3)noexcept{
+    const SIMDVectorSingle control = VectorSelectControl(select0 & 1u, select1 & 1u, select2 & 1u, select3 & 1u);
     return VectorSelect(vd, VectorRotateLeft(vs, vsLeftRotateElements), control);
 }
 

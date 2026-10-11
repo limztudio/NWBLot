@@ -78,20 +78,20 @@ template<typename ParameterT>
     return parameters;
 }
 
-[[nodiscard]] bool ValidBoundsVectors(const SIMDVector minBounds, const SIMDVector maxBounds, const bool finiteBounds){
+[[nodiscard]] bool ValidBoundsVectors(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const bool finiteBounds){
     if(!finiteBounds)
         return true;
 
     return AabbTests::Valid(minBounds, maxBounds);
 }
 
-[[nodiscard]] bool ValidPlaneParameters(const SIMDVector normalDistance)noexcept{
+[[nodiscard]] bool ValidPlaneParameters(const SIMDVectorSingle normalDistance)noexcept{
     return !Vector4IsNaN(normalDistance) && !Vector4IsInfinite(normalDistance);
 }
 
 [[nodiscard]] Expected<AabbTests::Bounds> BuildBoxBounds(
     const SIMDMatrix& shapeToWorld,
-    const SIMDVector halfExtents
+    const SIMDVectorSingle halfExtents
 )noexcept{
     if(
         Vector3IsNaN(halfExtents)
@@ -109,12 +109,12 @@ template<typename ParameterT>
 
 [[nodiscard]] Expected<AabbTests::Bounds> BuildSphereBounds(
     const SIMDMatrix& shapeToWorld,
-    const SIMDVector radius
+    const SIMDVectorSingle radius
 )noexcept{
     if(Vector3IsNaN(radius) || Vector3IsInfinite(radius) || !Vector3Greater(radius, VectorZero()))
         return MakeUnexpected(Failure{});
 
-    const SIMDVector localMax = VectorSetW(radius, s_CsgShapeBoundsW);
+    const SIMDVectorSingle localMax = VectorSetW(radius, s_CsgShapeBoundsW);
     return AabbTests::Transform(
         shapeToWorld,
         VectorSetW(VectorNegate(localMax), s_CsgShapeBoundsW),
@@ -124,10 +124,10 @@ template<typename ParameterT>
 
 [[nodiscard]] Expected<AabbTests::Bounds> BuildCapsuleBounds(
     const SIMDMatrix& shapeToWorld,
-    const SIMDVector radiusHalfHeight
+    const SIMDVectorSingle radiusHalfHeight
 )noexcept{
-    const SIMDVector radius = VectorSplatX(radiusHalfHeight);
-    const SIMDVector halfHeight = VectorSplatY(radiusHalfHeight);
+    const SIMDVectorSingle radius = VectorSplatX(radiusHalfHeight);
+    const SIMDVectorSingle halfHeight = VectorSplatY(radiusHalfHeight);
     if(
         Vector3IsNaN(radius)
         || Vector3IsInfinite(radius)
@@ -138,14 +138,14 @@ template<typename ParameterT>
     )
         return MakeUnexpected(Failure{});
 
-    const SIMDVector yExtent = VectorAdd(halfHeight, radius);
-    const SIMDVector capsuleSelect = VectorSelectControl(
+    const SIMDVectorSingle yExtent = VectorAdd(halfHeight, radius);
+    const SIMDVectorSingle capsuleSelect = VectorSelectControl(
         s_CsgCapsuleAxisSelectX,
         s_CsgCapsuleAxisSelectY,
         s_CsgCapsuleAxisSelectZ,
         s_CsgCapsuleAxisSelectW
     );
-    const SIMDVector localMax = VectorSetW(VectorSelect(radius, yExtent, capsuleSelect), s_CsgShapeBoundsW);
+    const SIMDVectorSingle localMax = VectorSetW(VectorSelect(radius, yExtent, capsuleSelect), s_CsgShapeBoundsW);
     return AabbTests::Transform(
         shapeToWorld,
         VectorSetW(VectorNegate(localMax), s_CsgShapeBoundsW),
@@ -185,7 +185,7 @@ template<typename ParameterT>
     return CsgShapeBounds{};
 }
 
-[[nodiscard]] SIMDVector LoadBoxHalfExtents(const Float4& halfExtentsStorage)noexcept{
+[[nodiscard]] SIMDVectorSingle LoadBoxHalfExtents(const Float4& halfExtentsStorage)noexcept{
     return VectorSetW(LoadFloat(halfExtentsStorage), s_CsgShapeBoundsW);
 }
 
@@ -203,7 +203,7 @@ template<typename ParameterT>
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
-[[nodiscard]] SIMDVector LoadSphereRadius(const Float4& radiusStorage)noexcept{
+[[nodiscard]] SIMDVectorSingle LoadSphereRadius(const Float4& radiusStorage)noexcept{
     return VectorSplatX(LoadFloat(radiusStorage));
 }
 
@@ -221,7 +221,7 @@ template<typename ParameterT>
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
-[[nodiscard]] SIMDVector LoadCapsuleRadiusHalfHeight(const Float4& radiusHalfHeightStorage)noexcept{
+[[nodiscard]] SIMDVectorSingle LoadCapsuleRadiusHalfHeight(const Float4& radiusHalfHeightStorage)noexcept{
     return LoadFloat(radiusHalfHeightStorage);
 }
 

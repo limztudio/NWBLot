@@ -67,9 +67,9 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const f32 trackExtent = horizontal ? bar.track.width : bar.track.height;
         const f32 thumbExtent = horizontal ? bar.thumb.width : bar.thumb.height;
         const f32 afterStart = NumericSimd::Subtract(NumericSimd::Add(start, trackExtent), thumbStart);
-        const SIMDVector extent = VectorSubtract(VectorSet(thumbStart, afterStart, thumbStart, afterStart),
+        const SIMDVectorSingle extent = VectorSubtract(VectorSet(thumbStart, afterStart, thumbStart, afterStart),
             VectorSet(start, thumbExtent, start, thumbExtent));
-        const SIMDVector visible = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
+        const SIMDVectorSingle visible = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
         const f32 before = VectorGetX(visible);
         const f32 after = VectorGetY(visible);
         HitTarget target;

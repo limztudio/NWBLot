@@ -30,7 +30,7 @@ namespace TriangleAreaDetail{
 
 
 #if defined(__AVX2__) || defined(_M_AVX2)
-[[nodiscard]] NWB_INLINE __m256d MakeVector3F64(const SIMDVector value)noexcept{
+[[nodiscard]] NWB_INLINE __m256d MakeVector3F64(const SIMDVectorSingle value)noexcept{
     return _mm256_cvtps_pd(value);
 }
 
@@ -125,9 +125,9 @@ namespace TriangleAreaDetail{
 
 
 [[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64(
-    const SIMDVector a,
-    const SIMDVector b,
-    const SIMDVector c
+    const SIMDVectorSingle a,
+    const SIMDVectorSingle b,
+    const SIMDVectorSingle c
 )noexcept{
 #if defined(__AVX2__) || defined(_M_AVX2)
     const __m256d ab = _mm256_sub_pd(TriangleAreaDetail::MakeVector3F64(b), TriangleAreaDetail::MakeVector3F64(a));
@@ -175,9 +175,9 @@ namespace TriangleAreaDetail{
 }
 
 [[nodiscard]] NWB_INLINE bool TriangleHasArea(
-    const SIMDVector a,
-    const SIMDVector b,
-    const SIMDVector c,
+    const SIMDVectorSingle a,
+    const SIMDVectorSingle b,
+    const SIMDVectorSingle c,
     const f64 triangleAreaLengthSquaredEpsilon
 )noexcept{
     return TriangleAreaNormalLengthSquared(BuildTriangleAreaNormal64(a, b, c)) > triangleAreaLengthSquaredEpsilon;

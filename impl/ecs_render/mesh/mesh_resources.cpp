@@ -244,8 +244,8 @@ template<typename PositionVector>
     if(positions.empty())
         return MakeUnexpected(Failure{});
 
-    SIMDVector minBounds;
-    SIMDVector maxBounds;
+    SIMDVectorSingle minBounds;
+    SIMDVectorSingle maxBounds;
     AabbTests::Reset(minBounds, maxBounds);
     for(const Float3U& position : positions)
         AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);

@@ -57,11 +57,11 @@ struct CsgCutterTransforms{
     SIMDMatrix worldToShape;
 };
 
-[[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape)noexcept{
-    const SIMDVector row0 = VectorSetW(worldToShape.v[0], 0.0f);
-    const SIMDVector row1 = VectorSetW(worldToShape.v[1], 0.0f);
-    const SIMDVector row2 = VectorSetW(worldToShape.v[2], 0.0f);
-    SIMDVector lengthSquared = VectorAdd(Vector3LengthSq(row0), Vector3LengthSq(row1));
+[[nodiscard]] static SIMDVectorSingle ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape)noexcept{
+    const SIMDVectorSingle row0 = VectorSetW(worldToShape.v[0], 0.0f);
+    const SIMDVectorSingle row1 = VectorSetW(worldToShape.v[1], 0.0f);
+    const SIMDVectorSingle row2 = VectorSetW(worldToShape.v[2], 0.0f);
+    SIMDVectorSingle lengthSquared = VectorAdd(Vector3LengthSq(row0), Vector3LengthSq(row1));
     lengthSquared = VectorAdd(lengthSquared, Vector3LengthSq(row2));
     return VectorSqrt(lengthSquared);
 }
@@ -106,7 +106,7 @@ static void CopyCsgCutterInlineParameters(
     if(!localToWorld)
         return MatrixIdentity();
 
-    SIMDVector determinant;
+    SIMDVectorSingle determinant;
     const SIMDMatrix worldToLocal = MatrixInverse(&determinant, *localToWorld);
     if(!VectorIsFinite(determinant, VectorComponentMask::s_XYZW) || !Vector4Greater(VectorAbs(determinant), VectorZero()))
         return MakeUnexpected(Failure{});
@@ -114,8 +114,8 @@ static void CopyCsgCutterInlineParameters(
 }
 
 [[nodiscard]] Expected<AabbTests::Bounds> BuildCsgReceiverWorldBounds(
-    const SIMDVector localMinBounds,
-    const SIMDVector localMaxBounds,
+    const SIMDVectorSingle localMinBounds,
+    const SIMDVectorSingle localMaxBounds,
     const SIMDMatrix* localToWorld
 )noexcept{
     if(!AabbTests::Valid(localMinBounds, localMaxBounds))
@@ -126,8 +126,8 @@ static void CopyCsgCutterInlineParameters(
 }
 
 struct CsgReceiverLocalSpace{
-    SIMDVector localMinBounds = VectorZero();
-    SIMDVector localMaxBounds = VectorZero();
+    SIMDVectorSingle localMinBounds = VectorZero();
+    SIMDVectorSingle localMaxBounds = VectorZero();
     SIMDMatrix localToWorld = MatrixIdentity();
     bool boundsCanCull = false;
     bool hasLocalToWorld = false;
@@ -139,8 +139,8 @@ struct CsgReceiverLocalSpace{
 
 [[nodiscard]] static CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(
     const bool boundsCanCull,
-    const SIMDVector localMinBounds,
-    const SIMDVector localMaxBounds,
+    const SIMDVectorSingle localMinBounds,
+    const SIMDVectorSingle localMaxBounds,
     const SIMDMatrix* localToWorld
 )noexcept{
     CsgReceiverLocalSpace localSpace;
@@ -162,8 +162,8 @@ struct CsgReceiverLocalSpace{
     const Scene::TransformComponent* transform
 )noexcept{
     const bool boundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
-    const SIMDVector localMinBounds = boundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
-    const SIMDVector localMaxBounds = boundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
+    const SIMDVectorSingle localMinBounds = boundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
+    const SIMDVectorSingle localMaxBounds = boundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
     SIMDMatrix localToWorld;
     const SIMDMatrix* localToWorldPtr = nullptr;
     if(transform){
@@ -200,8 +200,8 @@ static void BuildResolvedClipCutterGpuData(
     const CsgCutterComponent& cutter,
     const SIMDMatrix& cutterShapeToWorld,
     const SIMDMatrix& cutterWorldToShape,
-    const SIMDVector receiverLocalMinBounds,
-    const SIMDVector receiverLocalMaxBounds,
+    const SIMDVectorSingle receiverLocalMinBounds,
+    const SIMDVectorSingle receiverLocalMaxBounds,
     const bool receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld
 ){
@@ -243,8 +243,8 @@ template<typename CutterTransformLoader, typename CutterHandler>
     const CsgShapeRegistry& shapeRegistry,
     const CsgFrameReceiverLookup& receiverLookup,
     const CsgReceiverDrawState& receiverDrawState,
-    const SIMDVector receiverLocalMinBounds,
-    const SIMDVector receiverLocalMaxBounds,
+    const SIMDVectorSingle receiverLocalMinBounds,
+    const SIMDVectorSingle receiverLocalMaxBounds,
     const bool receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld,
     CutterTransformLoader&& loadCutterTransforms,
@@ -314,8 +314,8 @@ bool CsgClipWorkBounds::resolveCutter(
         return true;
     }
 
-    const SIMDVector cutterMinBounds = cutterBounds->minBounds;
-    const SIMDVector cutterMaxBounds = cutterBounds->maxBounds;
+    const SIMDVectorSingle cutterMinBounds = cutterBounds->minBounds;
+    const SIMDVectorSingle cutterMaxBounds = cutterBounds->maxBounds;
     if(!receiverBounds.valid){
         // The cutter bounds contain every removed point even when the receiver's current pose has no CPU bounds.
         minBounds = cutterMinBounds;
@@ -338,8 +338,8 @@ bool CsgClipWorkBounds::resolveCutter(
 
 void CsgFrameWorkRegion::expandWorldBounds(
     const SIMDMatrix& worldToClip,
-    const SIMDVector minBounds,
-    const SIMDVector maxBounds,
+    const SIMDVectorSingle minBounds,
+    const SIMDVectorSingle maxBounds,
     const u32 frameWidth,
     const u32 frameHeight
 ){
@@ -352,19 +352,19 @@ void CsgFrameWorkRegion::expandWorldBounds(
         return;
     }
 
-    const SIMDVector frameExtent = VectorSet(
+    const SIMDVectorSingle frameExtent = VectorSet(
         static_cast<f32>(frameWidth),
         static_cast<f32>(frameHeight),
         0.0f,
         0.0f
     );
-    SIMDVector minPixel = frameExtent;
-    SIMDVector maxPixel = VectorZero();
+    SIMDVectorSingle minPixel = frameExtent;
+    SIMDVectorSingle maxPixel = VectorZero();
     for(u32 corner = 0u; corner < s_BoxCornerCount; ++corner){
-        const SIMDVector cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
-        const SIMDVector worldPosition = VectorSetW(VectorSelect(minBounds, maxBounds, cornerSelect), 1.0f);
-        const SIMDVector clipPosition = Vector4Transform(worldPosition, worldToClip);
-        const SIMDVector clipW = VectorSplatW(clipPosition);
+        const SIMDVectorSingle cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
+        const SIMDVectorSingle worldPosition = VectorSetW(VectorSelect(minBounds, maxBounds, cornerSelect), 1.0f);
+        const SIMDVectorSingle clipPosition = Vector4Transform(worldPosition, worldToClip);
+        const SIMDVectorSingle clipW = VectorSplatW(clipPosition);
         if(
             !VectorIsFinite(clipW, VectorComponentMask::s_XYZW)
             || !Vector4Greater(clipW, VectorReplicate(s_MinClipWForWorkRegion))
@@ -373,13 +373,13 @@ void CsgFrameWorkRegion::expandWorldBounds(
             return;
         }
 
-        const SIMDVector ndcPosition = VectorDivide(clipPosition, clipW);
+        const SIMDVectorSingle ndcPosition = VectorDivide(clipPosition, clipW);
         if(!VectorIsFinite(ndcPosition, VectorComponentMask::s_XY)){
             expandFull();
             return;
         }
 
-        SIMDVector normalizedPosition = VectorAdd(
+        SIMDVectorSingle normalizedPosition = VectorAdd(
             VectorMultiply(ndcPosition, s_SIMDOneHalf),
             s_SIMDOneHalf
         );
@@ -388,7 +388,7 @@ void CsgFrameWorkRegion::expandWorldBounds(
             VectorSubtract(s_SIMDOne, normalizedPosition),
             s_SIMDMaskY
         );
-        const SIMDVector pixelPosition = VectorAndInt(
+        const SIMDVectorSingle pixelPosition = VectorAndInt(
             VectorMultiply(normalizedPosition, frameExtent),
             s_SIMDMaskXY
         );
@@ -408,18 +408,18 @@ void CsgFrameWorkRegion::expandWorldBounds(
     if(maxPixelX < 0.0f || maxPixelY < 0.0f || minPixelX > static_cast<f32>(frameWidth) || minPixelY > static_cast<f32>(frameHeight))
         return;
 
-    const SIMDVector workPixelMin = VectorMax(VectorSet(minPixelX, minPixelY, 0.0f, 0.0f), VectorZero());
-    const SIMDVector workFrameExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f);
-    const SIMDVector workPixelMax = VectorMin(VectorSet(maxPixelX, maxPixelY, 0.0f, 0.0f), workFrameExtent);
-    const SIMDVector flooredWorkMin = VectorFloor(workPixelMin);
-    const SIMDVector ceiledWorkMax = VectorCeiling(workPixelMax);
-    const SIMDVector endpoints = VectorSetInt(
+    const SIMDVectorSingle workPixelMin = VectorMax(VectorSet(minPixelX, minPixelY, 0.0f, 0.0f), VectorZero());
+    const SIMDVectorSingle workFrameExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f);
+    const SIMDVectorSingle workPixelMax = VectorMin(VectorSet(maxPixelX, maxPixelY, 0.0f, 0.0f), workFrameExtent);
+    const SIMDVectorSingle flooredWorkMin = VectorFloor(workPixelMin);
+    const SIMDVectorSingle ceiledWorkMax = VectorCeiling(workPixelMax);
+    const SIMDVectorSingle endpoints = VectorSetInt(
         static_cast<u32>(static_cast<i32>(VectorGetX(flooredWorkMin))),
         static_cast<u32>(static_cast<i32>(VectorGetX(ceiledWorkMax))),
         static_cast<u32>(static_cast<i32>(VectorGetY(flooredWorkMin))),
         static_cast<u32>(static_cast<i32>(VectorGetY(ceiledWorkMax)))
     );
-    const SIMDVector paddedEndpoints = VectorAddInt(endpoints, VectorSetInt(
+    const SIMDVectorSingle paddedEndpoints = VectorAddInt(endpoints, VectorSetInt(
         static_cast<u32>(-s_WorkRegionPixelPadding), static_cast<u32>(s_WorkRegionPixelPadding),
         static_cast<u32>(-s_WorkRegionPixelPadding), static_cast<u32>(s_WorkRegionPixelPadding)
     ));

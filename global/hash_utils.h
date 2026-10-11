@@ -113,6 +113,20 @@ inline void HashCombineFloat(usize& seed, const f32 value)noexcept{
 }
 
 
+[[nodiscard]] inline u64 DoubleHashBits(f64 value)noexcept{
+    if(value == 0.0)
+        value = 0.0;
+
+    u64 bits = 0u;
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    return bits;
+}
+
+inline void HashCombineDouble(usize& seed, const f64 value)noexcept{
+    HashCombine(seed, DoubleHashBits(value));
+}
+
+
 template<typename CharT>
 [[nodiscard]] inline u64 ComputeFnv64Text(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return ComputeFnv64Bytes(text.data(), text.size() * sizeof(CharT));

@@ -23,7 +23,7 @@ namespace CollisionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void AabbCorners(const SIMDVector center, const SIMDVector extents, SIMDVector* outCorners)noexcept{
+inline void AabbCorners(const SIMDVectorSingle center, const SIMDVectorSingle extents, SIMDVectorSingle* outCorners)noexcept{
     for(u32 i = 0u; i < BoundingBox::s_CornerCount; ++i)
         outCorners[i] = VectorMultiplyAdd(extents, BoxCornerOffset(i), center);
 }
@@ -32,17 +32,17 @@ inline void AabbCorners(const SIMDVector center, const SIMDVector extents, SIMDV
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void ObbCorners(const SIMDVector center, const SIMDVector extents, const SIMDVector orientation, SIMDVector* outCorners)noexcept{
-    SIMDVector axis0{};
-    SIMDVector axis1{};
-    SIMDVector axis2{};
+inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation, SIMDVectorSingle* outCorners)noexcept{
+    SIMDVectorSingle axis0{};
+    SIMDVectorSingle axis1{};
+    SIMDVectorSingle axis2{};
     ObbAxes(orientation, axis0, axis1, axis2);
     axis0 = VectorMultiply(axis0, VectorSplatX(extents));
     axis1 = VectorMultiply(axis1, VectorSplatY(extents));
     axis2 = VectorMultiply(axis2, VectorSplatZ(extents));
     for(u32 i = 0u; i < BoundingOrientedBox::s_CornerCount; ++i){
-        const SIMDVector offset = BoxCornerOffset(i);
-        SIMDVector corner = VectorMultiply(axis0, VectorSplatX(offset));
+        const SIMDVectorSingle offset = BoxCornerOffset(i);
+        SIMDVectorSingle corner = VectorMultiply(axis0, VectorSplatX(offset));
         corner = VectorMultiplyAdd(axis1, VectorSplatY(offset), corner);
         corner = VectorMultiplyAdd(axis2, VectorSplatZ(offset), corner);
         outCorners[i] = VectorAdd(corner, center);
@@ -54,36 +54,36 @@ inline void ObbCorners(const SIMDVector center, const SIMDVector extents, const 
 
 
 inline void FrustumCorners(
-    const SIMDVector origin,
-    const SIMDVector orientation,
+    const SIMDVectorSingle origin,
+    const SIMDVectorSingle orientation,
     const f32 rightSlope,
     const f32 leftSlope,
     const f32 topSlope,
     const f32 bottomSlope,
     const f32 nearPlane,
     const f32 farPlane,
-    SIMDVector* outCorners
+    SIMDVectorSingle* outCorners
 )noexcept{
-    const SIMDVector slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
-    const SIMDVector depths[2] = {
+    const SIMDVectorSingle slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
+    const SIMDVectorSingle depths[2] = {
         VectorReplicate(nearPlane),
         VectorReplicate(farPlane),
     };
-    const SIMDVector zero = VectorZero();
+    const SIMDVectorSingle zero = VectorZero();
     u32 corner = 0u;
-    for(const SIMDVector depth : depths){
-        const SIMDVector scaledSlopes = VectorMultiply(slopes, depth);
-        const SIMDVector right = VectorSplatX(scaledSlopes);
-        const SIMDVector left = VectorSplatY(scaledSlopes);
-        const SIMDVector bottom = VectorSplatZ(scaledSlopes);
-        const SIMDVector top = VectorSplatW(scaledSlopes);
-        const SIMDVector localCorners[4] = {
+    for(const SIMDVectorSingle depth : depths){
+        const SIMDVectorSingle scaledSlopes = VectorMultiply(slopes, depth);
+        const SIMDVectorSingle right = VectorSplatX(scaledSlopes);
+        const SIMDVectorSingle left = VectorSplatY(scaledSlopes);
+        const SIMDVectorSingle bottom = VectorSplatZ(scaledSlopes);
+        const SIMDVectorSingle top = VectorSplatW(scaledSlopes);
+        const SIMDVectorSingle localCorners[4] = {
             VectorMergeX(right, top, depth, zero),
             VectorMergeX(left, top, depth, zero),
             VectorMergeX(left, bottom, depth, zero),
             VectorMergeX(right, bottom, depth, zero),
         };
-        for(const SIMDVector localCorner : localCorners){
+        for(const SIMDVectorSingle localCorner : localCorners){
             outCorners[corner] = VectorAdd(Vector3Rotate(localCorner, orientation), origin);
             ++corner;
         }
@@ -100,17 +100,17 @@ inline void FrustumCorners(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVector sphereValue, const SIMDMatrix& matrix)noexcept{
-    const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector sphereRadius = VectorSplatW(sphereValue);
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const SIMDMatrix& matrix)noexcept{
+    const SIMDVectorSingle centerVector = CollisionDetail::SphereCenter(sphereValue);
+    const SIMDVectorSingle sphereRadius = VectorSplatW(sphereValue);
     const auto decomposition = MatrixDecompose(matrix);
     if(decomposition){
-        const SIMDVector absScale = VectorAbs(decomposition->scale);
-        const SIMDVector maxScale = CollisionDetail::Vector3MaxComponent(absScale);
+        const SIMDVectorSingle absScale = VectorAbs(decomposition->scale);
+        const SIMDVectorSingle maxScale = CollisionDetail::Vector3MaxComponent(absScale);
         return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScale));
     }
 
-    const SIMDVector maxScaleVector = VectorMax(Vector3Length(matrix.v[0]), VectorMax(Vector3Length(matrix.v[1]), Vector3Length(matrix.v[2])));
+    const SIMDVectorSingle maxScaleVector = VectorMax(Vector3Length(matrix.v[0]), VectorMax(Vector3Length(matrix.v[1]), Vector3Length(matrix.v[2])));
     return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScaleVector));
 }
 
@@ -118,13 +118,13 @@ inline void FrustumCorners(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector NWB_SIMD_CALL BoundingSphere::TransformSphereValue(
-    SIMDVector sphereValue,
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(
+    SIMDVectorSingle sphereValue,
     const f32 scale,
-    const SIMDVector rotation,
-    const SIMDVector translation
+    const SIMDVectorSingle rotation,
+    const SIMDVectorSingle translation
 )noexcept{
-    const SIMDVector transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
+    const SIMDVectorSingle transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
     return CollisionDetail::SphereCenterRadius(transformedCenter, VectorScale(VectorSplatW(sphereValue), Abs(scale)));
 }
 

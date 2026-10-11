@@ -60,8 +60,8 @@ void AppendReceiverCutters(
     const CsgFrameReceiverLookup& receiverLookup, const CsgShapeRegistry& shapeRegistry,
     CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range
 ){
-    const SIMDVector receiverMin = LoadFloat(receiver.worldMin);
-    const SIMDVector receiverMax = LoadFloat(receiver.worldMax);
+    const SIMDVectorSingle receiverMin = LoadFloat(receiver.worldMin);
+    const SIMDVectorSingle receiverMax = LoadFloat(receiver.worldMax);
     const bool boundsCanCull = receiver.boundsValid && AabbTests::Valid(receiverMin, receiverMax);
     range.firstCutter = static_cast<u32>(snapshot.cutters.size());
     receiverLookup.forEachReceiverCutter(drawState, [&](const Core::ECS::EntityID entity, const CsgCutterComponent& cutter){

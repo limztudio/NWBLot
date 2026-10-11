@@ -65,28 +65,28 @@ NWB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& fram
 // local lights are weighted by their influence range relative to the camera distance (a squared proxy --
 // monotonic, no sqrt). Higher = more worth a scarce shadow slot.
 inline f32 ShadowSlotImportance(
-    const SIMDVector colorIntensity,
-    const SIMDVector params,
-    const SIMDVector lightPosition,
-    const SIMDVector cameraPosition
+    const SIMDVectorSingle colorIntensity,
+    const SIMDVectorSingle params,
+    const SIMDVectorSingle lightPosition,
+    const SIMDVectorSingle cameraPosition
 )noexcept{
-    const SIMDVector luminance = Vector3Dot(
+    const SIMDVectorSingle luminance = Vector3Dot(
         colorIntensity,
         VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f)
     );
-    const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
-    const SIMDVector radiantImportance = VectorMultiply(luminance, intensity);
+    const SIMDVectorSingle intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
+    const SIMDVectorSingle radiantImportance = VectorMultiply(luminance, intensity);
 
     if(VectorGetY(params) < s_LightTypeDirectionalMax)
         return VectorGetX(VectorMultiplyAdd(radiantImportance, VectorReplicate(s_DirectionalShadowImportanceBoost), s_SIMDOne));
 
-    const SIMDVector delta = VectorSubtract(lightPosition, cameraPosition);
-    const SIMDVector distanceSquared = Vector3LengthSq(delta);
-    const SIMDVector range = VectorMax(VectorSplatX(params), VectorZero());
-    const SIMDVector rangeSquared = VectorMultiply(range, range);
-    const SIMDVector hasDistance = VectorGreater(distanceSquared, VectorReplicate(s_ShadowImportanceDistanceSquaredEpsilon));
-    const SIMDVector safeDistanceSquared = VectorSelect(s_SIMDOne, distanceSquared, hasDistance);
-    const SIMDVector coverageSquared = VectorSelect(
+    const SIMDVectorSingle delta = VectorSubtract(lightPosition, cameraPosition);
+    const SIMDVectorSingle distanceSquared = Vector3LengthSq(delta);
+    const SIMDVectorSingle range = VectorMax(VectorSplatX(params), VectorZero());
+    const SIMDVectorSingle rangeSquared = VectorMultiply(range, range);
+    const SIMDVectorSingle hasDistance = VectorGreater(distanceSquared, VectorReplicate(s_ShadowImportanceDistanceSquaredEpsilon));
+    const SIMDVectorSingle safeDistanceSquared = VectorSelect(s_SIMDOne, distanceSquared, hasDistance);
+    const SIMDVectorSingle coverageSquared = VectorSelect(
         s_SIMDOne,
         VectorDivide(rangeSquared, safeDistanceSquared),
         hasDistance
@@ -97,12 +97,12 @@ inline f32 ShadowSlotImportance(
 // Caustic importance: pure radiant power (luminance * intensity), the same energy proxy ShadowSlotImportance
 // uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
 // the camera). Higher = more worth a scarce caustic slot.
-inline f32 CausticSlotImportance(const SIMDVector colorIntensity)noexcept{
-    const SIMDVector luminance = Vector3Dot(
+inline f32 CausticSlotImportance(const SIMDVectorSingle colorIntensity)noexcept{
+    const SIMDVectorSingle luminance = Vector3Dot(
         colorIntensity,
         VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f)
     );
-    const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
+    const SIMDVectorSingle intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
     return VectorGetX(VectorMultiply(luminance, intensity));
 }
 
@@ -153,7 +153,7 @@ inline u32 ResolveSceneLights(
         world,
         NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio
     );
-    const SIMDVector cameraPosition = cameraView.valid()
+    const SIMDVectorSingle cameraPosition = cameraView.valid()
         ? LoadFloat(cameraView.transform->position)
         : VectorZero()
     ;
@@ -248,7 +248,7 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
     const NWB::Impl::Scene::SceneViewBasis defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
 
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
-    const SIMDVector cameraPosition = cameraView.valid()
+    const SIMDVectorSingle cameraPosition = cameraView.valid()
         ? LoadFloat(cameraView.transform->position)
         : LoadFloat(defaultBasis.positionDepthBias)
     ;

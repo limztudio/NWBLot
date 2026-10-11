@@ -68,7 +68,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const TextLayout& label = frame.m_labels[index];
         const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + frame.m_metrics.gap);
         const f32 verticalOffset = Max(0.0f, (row.rectangle.height - label.measure().y) * 0.5f);
-        const SIMDVector textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, row.rectangle.x, row.rectangle.y),
+        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, row.rectangle.x, row.rectangle.y),
             VectorSet(horizontalOffset, verticalOffset, horizontalOffset, verticalOffset));
         const Point origin{ VectorGetX(textOrigin), VectorGetY(textOrigin) };
         m_paint.pushClip(row.textClip);

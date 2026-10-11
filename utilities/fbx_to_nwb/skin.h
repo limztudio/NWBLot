@@ -36,7 +36,7 @@ struct ExportContext{
 
 struct SkinInfluenceResult{
     MeshSkinInfluence influence;
-    SIMDVector weights;
+    SIMDVectorSingle weights;
 };
 
 Expected<UtilityVector<u16>> BuildClusterJointMap(

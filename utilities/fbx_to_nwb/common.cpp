@@ -163,7 +163,7 @@ Expected<Vec4> ParseColorText(const AStringView text){
     if(in >> trailing)
         return MakeUnexpected(Failure{});
 
-    const SIMDVector color = VectorSet(red, green, blue, alpha);
+    const SIMDVectorSingle color = VectorSet(red, green, blue, alpha);
     if(!VectorIsFinite(color, VectorComponentMask::s_XYZW))
         return MakeUnexpected(Failure{});
 

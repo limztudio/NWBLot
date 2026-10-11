@@ -44,22 +44,22 @@ bool LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
 }
 
 Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVector intersection = IntersectRectValue(
+    const SIMDVectorSingle intersection = IntersectRectValue(
         VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height)
     );
     return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
 }
 
 Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding)noexcept{
-    const SIMDVector paddingStart = VectorSet(padding.left, padding.top, padding.left, padding.top);
-    const SIMDVector rectangleSize = VectorSet(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
-    const SIMDVector firstInset = VectorSelect(rectangleSize, paddingStart, VectorLess(paddingStart, rectangleSize));
+    const SIMDVectorSingle paddingStart = VectorSet(padding.left, padding.top, padding.left, padding.top);
+    const SIMDVectorSingle rectangleSize = VectorSet(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+    const SIMDVectorSingle firstInset = VectorSelect(rectangleSize, paddingStart, VectorLess(paddingStart, rectangleSize));
     const f32 left = VectorGetX(firstInset);
     const f32 top = VectorGetY(firstInset);
     const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(rectangle.width), static_cast<f64>(rectangle.height) } - SIMDVectorDouble{ padding.left, padding.top }) - SIMDVectorDouble{ padding.right, padding.bottom });
     const f64 width = widthHeightValue.x;
     const f64 height = widthHeightValue.y;
-    const SIMDVector origin = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(left, top, 0.0f, 0.0f));
+    const SIMDVectorSingle origin = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(left, top, 0.0f, 0.0f));
     return { VectorGetX(origin), VectorGetY(origin), static_cast<f32>(Max(0.0, width)), static_cast<f32>(Max(0.0, height)) };
 }
 

@@ -353,6 +353,35 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
 }
 
 
+TEST(Telemetry, FrameGraphDurationTailsRejectInvalidValuesAndPreserveSignedZeroSubnormals){
+    // The final submission durations are scalar tails after four-lane validation blocks.
+    const f64 minimumSubnormal = BitCast<f64>(u64{ 1u });
+    const f64 invalidDurations[]{
+        -1.0, -minimumSubnormal, Limit<f64>::s_Infinity,
+        Limit<f64>::s_QuietNaN, BitCast<f64>(u64{ 0x7FF0000000000001ull })
+    };
+    for(const f64 duration : invalidDurations){
+        Telemetry::FrameGraphRuntimeStatistics owner = MakeFrameGraphRuntimeStatistics();
+        Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queue = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);
+        owner.submission.submissionSeconds = duration;
+        EXPECT_FALSE(Telemetry::IsValidFrameGraphRuntimeStatistics(owner));
+        owner = MakeFrameGraphRuntimeStatistics();
+        queue.submission.submissionSeconds = duration;
+        EXPECT_FALSE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(queue));
+        EXPECT_FALSE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(queue, owner));
+    }
+    for(const f64 duration : { -0.0, minimumSubnormal }){
+        Telemetry::FrameGraphRuntimeStatistics owner = MakeFrameGraphRuntimeStatistics();
+        Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queue = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);
+        owner.submission.submissionSeconds = duration;
+        queue.submission.submissionSeconds = duration;
+        EXPECT_TRUE(Telemetry::IsValidFrameGraphRuntimeStatistics(owner));
+        EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(queue));
+        EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(queue, owner));
+    }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

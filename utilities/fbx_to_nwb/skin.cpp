@@ -67,7 +67,7 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
 }
 
 bool NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
-    const SIMDVector epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
+    const SIMDVectorSingle epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
     for(usize rowIndex = 0u; rowIndex < s_JointMatrixRowCount; ++rowIndex){
         if(!Vector4NearEqual(lhs.v[rowIndex], rhs.v[rowIndex], epsilon))
             return false;

@@ -97,9 +97,9 @@ ListResult Builder::virtualList(
         result.valid = false;
         return result;
     }
-    const SIMDVector framepaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
-    const SIMDVector framepaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVector framepaddingMaximum = VectorSelect(framepaddingCandidate, framepaddingCurrent,
+    const SIMDVectorSingle framepaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
+    const SIMDVectorSingle framepaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle framepaddingMaximum = VectorSelect(framepaddingCandidate, framepaddingCurrent,
         VectorGreater(framepaddingCurrent, framepaddingCandidate));
     frame.padding = { VectorGetX(framepaddingMaximum), VectorGetY(framepaddingMaximum), VectorGetZ(framepaddingMaximum), VectorGetW(framepaddingMaximum) };
     Item item(m_arena);
@@ -109,9 +109,9 @@ ListResult Builder::virtualList(
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVector preferredSize = VectorSet(120.0f, NumericSimd::Add(NumericSimd::Add(options.rowHeight, frame.padding.top), frame.padding.bottom), 0.0f, 0.0f);
-    const SIMDVector minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
-    const SIMDVector intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
+    const SIMDVectorSingle preferredSize = VectorSet(120.0f, NumericSimd::Add(NumericSimd::Add(options.rowHeight, frame.padding.top), frame.padding.bottom), 0.0f, 0.0f);
+    const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
+    const SIMDVectorSingle intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){

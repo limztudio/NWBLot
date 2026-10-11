@@ -136,8 +136,8 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     return entity;
 }
 
-[[nodiscard]] static SIMDVector BuildCubeRotation(const f32 time, const f32 phase){
-    SIMDVector angles = VectorMultiply(VectorSet(time, 0.0f, time, 0.0f), VectorSet(0.35f, 0.0f, 0.18f, 0.0f));
+[[nodiscard]] static SIMDVectorSingle BuildCubeRotation(const f32 time, const f32 phase){
+    SIMDVectorSingle angles = VectorMultiply(VectorSet(time, 0.0f, time, 0.0f), VectorSet(0.35f, 0.0f, 0.18f, 0.0f));
     angles = VectorSetY(angles, time + phase);
     return QuaternionRotationRollPitchYawFromVector(angles);
 }
@@ -145,7 +145,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
 static void ApplyCubeRotation(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID entity,
-    const SIMDVector rotation
+    const SIMDVectorSingle rotation
 ){
     auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
     if(!transform)
@@ -174,7 +174,7 @@ static void ApplyCubeRotation(
     }
 }
 
-[[nodiscard]] static SIMDVector CsgVisibleCutterLocalOffset(const usize shapeSlot){
+[[nodiscard]] static SIMDVectorSingle CsgVisibleCutterLocalOffset(const usize shapeSlot){
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane: return VectorZero();
     case CsgVisibleShapeSlot::Box: return VectorSet(0.0f, 0.0f, -0.30f * s_CutterScale, 0.0f);
@@ -187,15 +187,15 @@ static void ApplyCubeRotation(
 static void ApplyCutterTransform(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID cutterEntity,
-    const SIMDVector receiverCenter,
-    const SIMDVector receiverRotation,
-    const SIMDVector cutterLocalOffset
+    const SIMDVectorSingle receiverCenter,
+    const SIMDVectorSingle receiverRotation,
+    const SIMDVectorSingle cutterLocalOffset
 ){
     auto* cutter = world.tryGetComponent<NWB::Impl::CsgCutterComponent>(cutterEntity);
     if(!cutter)
         return;
 
-    const SIMDVector cutterCenter = VectorAdd(receiverCenter, Vector3Rotate(cutterLocalOffset, receiverRotation));
+    const SIMDVectorSingle cutterCenter = VectorAdd(receiverCenter, Vector3Rotate(cutterLocalOffset, receiverRotation));
     AssignCsgCutterTransform(*cutter, cutterCenter, receiverRotation);
 }
 
@@ -204,7 +204,7 @@ static void ApplyCutterTransform(
     NWB::Core::Alloc::GlobalArena& arena,
     const usize shapeSlot,
     const Name receiverGroup,
-    const SIMDVector center
+    const SIMDVectorSingle center
 ){
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
@@ -464,9 +464,9 @@ public:
 
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
             const Float4 receiverPosition = CsgVisibleShapePosition(shapeSlot);
-            const SIMDVector receiverPositionVector = LoadFloat(receiverPosition);
-            const SIMDVector cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
-            const SIMDVector cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
+            const SIMDVectorSingle receiverPositionVector = LoadFloat(receiverPosition);
+            const SIMDVectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
+            const SIMDVectorSingle cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
             m_receivers[shapeSlot] = CreateSolidCubeEntity(
                 *m_world,
                 m_context.objectArena,
@@ -535,7 +535,7 @@ public:
             m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CubeRotationSpeed;
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
             const f32 rotationPhase = static_cast<f32>(shapeSlot) * 0.18f;
-            const SIMDVector rotation = BuildCubeRotation(m_animationTime, rotationPhase);
+            const SIMDVectorSingle rotation = BuildCubeRotation(m_animationTime, rotationPhase);
             ApplyCubeRotation(*m_world, m_receivers[shapeSlot], rotation);
             ApplyCutterTransform(
                 *m_world,

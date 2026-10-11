@@ -81,9 +81,9 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
     }
     if(!__hidden_ui_window_behavior::ValidBounds(candidate.bounds))
         return false;
-    const SIMDVector size = VectorSet(candidate.bounds.width, candidate.bounds.height, candidate.bounds.width, candidate.bounds.height);
-    const SIMDVector minimum = VectorSet(metrics.minimumSize.x, metrics.minimumSize.y, metrics.minimumSize.x, metrics.minimumSize.y);
-    const SIMDVector constrained = VectorSelect(minimum, size, VectorGreater(size, minimum));
+    const SIMDVectorSingle size = VectorSet(candidate.bounds.width, candidate.bounds.height, candidate.bounds.width, candidate.bounds.height);
+    const SIMDVectorSingle minimum = VectorSet(metrics.minimumSize.x, metrics.minimumSize.y, metrics.minimumSize.x, metrics.minimumSize.y);
+    const SIMDVectorSingle constrained = VectorSelect(minimum, size, VectorGreater(size, minimum));
     candidate.bounds.width = VectorGetX(constrained);
     candidate.bounds.height = VectorGetY(constrained);
     candidate.initialized = true;
@@ -156,14 +156,14 @@ bool WindowBehavior::Constrain(WindowState& state, const DisplayMetrics& display
     )
         return false;
     const f32 height = state.collapsed ? titleHeight : state.bounds.height;
-    const SIMDVector remaining = VectorSubtract(
+    const SIMDVectorSingle remaining = VectorSubtract(
         VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight),
         VectorSet(state.bounds.width, height, state.bounds.width, height)
     );
-    const SIMDVector maximum = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
-    const SIMDVector origin = VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y);
-    const SIMDVector positive = VectorSelect(VectorZero(), origin, VectorGreater(origin, VectorZero()));
-    const SIMDVector constrained = VectorSelect(positive, maximum, VectorGreater(positive, maximum));
+    const SIMDVectorSingle maximum = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
+    const SIMDVectorSingle origin = VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y);
+    const SIMDVectorSingle positive = VectorSelect(VectorZero(), origin, VectorGreater(origin, VectorZero()));
+    const SIMDVectorSingle constrained = VectorSelect(positive, maximum, VectorGreater(positive, maximum));
     state.bounds.x = VectorGetX(constrained);
     state.bounds.y = VectorGetY(constrained);
     return true;

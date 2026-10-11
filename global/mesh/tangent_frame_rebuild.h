@@ -56,9 +56,9 @@ inline constexpr u32 s_UvComponentMask = 0x3u;
 
 
 struct alignas(Float4) TangentFrameAccumulator{
-    SIMDVector normal = {};
-    SIMDVector tangent = {};
-    SIMDVector bitangent = {};
+    SIMDVectorSingle normal = {};
+    SIMDVectorSingle tangent = {};
+    SIMDVectorSingle bitangent = {};
 };
 static_assert(
     alignof(TangentFrameAccumulator) >= alignof(Float4),
@@ -79,41 +79,41 @@ static_assert(
     return 1.0f;
 }
 
-[[nodiscard]] inline bool ValidInputVertex(const SIMDVector position, const SIMDVector uv0)noexcept{
+[[nodiscard]] inline bool ValidInputVertex(const SIMDVectorSingle position, const SIMDVectorSingle uv0)noexcept{
     return Vector3IsFinite(position) && VectorIsFinite(uv0, s_UvComponentMask);
 }
 
 struct TangentFrameDirections{
-    SIMDVector tangent;
-    SIMDVector bitangent;
+    SIMDVectorSingle tangent;
+    SIMDVectorSingle bitangent;
 };
 
 [[nodiscard]] inline Expected<TangentFrameDirections> AccumulateTriangleTangentFrame(
-    const SIMDVector uv0,
-    const SIMDVector uv1,
-    const SIMDVector uv2,
-    SIMDVector edge01,
-    SIMDVector edge02
+    const SIMDVectorSingle uv0,
+    const SIMDVectorSingle uv1,
+    const SIMDVectorSingle uv2,
+    SIMDVectorSingle edge01,
+    SIMDVectorSingle edge02
 )noexcept{
-    const SIMDVector uvDelta1 = VectorSubtract(uv1, uv0);
-    const SIMDVector uvDelta2 = VectorSubtract(uv2, uv0);
-    const SIMDVector determinantVector = Vector2Cross(uvDelta1, uvDelta2);
+    const SIMDVectorSingle uvDelta1 = VectorSubtract(uv1, uv0);
+    const SIMDVectorSingle uvDelta2 = VectorSubtract(uv2, uv0);
+    const SIMDVectorSingle determinantVector = Vector2Cross(uvDelta1, uvDelta2);
     if(
         !VectorIsFinite(determinantVector, VectorComponentMask::s_XYZW)
         || Vector4LessOrEqual(VectorAbs(determinantVector), VectorReplicate(s_Epsilon))
     )
         return MakeUnexpected(Failure{});
 
-    const SIMDVector du1 = VectorSplatX(uvDelta1);
-    const SIMDVector dv1 = VectorSplatY(uvDelta1);
-    const SIMDVector du2 = VectorSplatX(uvDelta2);
-    const SIMDVector dv2 = VectorSplatY(uvDelta2);
-    const SIMDVector inverseDeterminant = VectorReciprocal(determinantVector);
-    const SIMDVector tangent = VectorMultiply(
+    const SIMDVectorSingle du1 = VectorSplatX(uvDelta1);
+    const SIMDVectorSingle dv1 = VectorSplatY(uvDelta1);
+    const SIMDVectorSingle du2 = VectorSplatX(uvDelta2);
+    const SIMDVectorSingle dv2 = VectorSplatY(uvDelta2);
+    const SIMDVectorSingle inverseDeterminant = VectorReciprocal(determinantVector);
+    const SIMDVectorSingle tangent = VectorMultiply(
         VectorSubtract(VectorMultiply(edge01, dv2), VectorMultiply(edge02, dv1)),
         inverseDeterminant
     );
-    const SIMDVector bitangent = VectorMultiply(
+    const SIMDVectorSingle bitangent = VectorMultiply(
         VectorSubtract(VectorMultiply(edge02, du1), VectorMultiply(edge01, du2)),
         inverseDeterminant
     );
@@ -176,15 +176,15 @@ template<typename ScratchArenaT>
         const TangentFrameRebuildVertex& vertex0 = vertices[i0];
         const TangentFrameRebuildVertex& vertex1 = vertices[i1];
         const TangentFrameRebuildVertex& vertex2 = vertices[i2];
-        const SIMDVector p0 = LoadFloat(vertex0.position);
-        const SIMDVector p1 = LoadFloat(vertex1.position);
-        const SIMDVector p2 = LoadFloat(vertex2.position);
-        const SIMDVector edge01 = VectorSubtract(p1, p0);
-        const SIMDVector edge02 = VectorSubtract(p2, p0);
-        const SIMDVector uv0 = LoadFloat(vertex0.uv0);
-        const SIMDVector uv1 = LoadFloat(vertex1.uv0);
-        const SIMDVector uv2 = LoadFloat(vertex2.uv0);
-        const SIMDVector faceNormal = TriangleTests::AreaNormal(p0, p1, p2);
+        const SIMDVectorSingle p0 = LoadFloat(vertex0.position);
+        const SIMDVectorSingle p1 = LoadFloat(vertex1.position);
+        const SIMDVectorSingle p2 = LoadFloat(vertex2.position);
+        const SIMDVectorSingle edge01 = VectorSubtract(p1, p0);
+        const SIMDVectorSingle edge02 = VectorSubtract(p2, p0);
+        const SIMDVectorSingle uv0 = LoadFloat(vertex0.uv0);
+        const SIMDVectorSingle uv1 = LoadFloat(vertex1.uv0);
+        const SIMDVectorSingle uv2 = LoadFloat(vertex2.uv0);
+        const SIMDVectorSingle faceNormal = TriangleTests::AreaNormal(p0, p1, p2);
         if(!FrameValidDirection(faceNormal))
             return MakeUnexpected(Failure{});
 
@@ -197,8 +197,8 @@ template<typename ScratchArenaT>
 
         const auto directions = TangentFrameRebuildDetail::AccumulateTriangleTangentFrame(uv0, uv1, uv2, edge01, edge02);
         if(directions){
-            const SIMDVector tangent = directions->tangent;
-            const SIMDVector bitangent = directions->bitangent;
+            const SIMDVectorSingle tangent = directions->tangent;
+            const SIMDVectorSingle bitangent = directions->bitangent;
             accumulator0.tangent = VectorAdd(accumulator0.tangent, tangent);
             accumulator1.tangent = VectorAdd(accumulator1.tangent, tangent);
             accumulator2.tangent = VectorAdd(accumulator2.tangent, tangent);
@@ -214,19 +214,19 @@ template<typename ScratchArenaT>
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         TangentFrameRebuildVertex& vertex = vertices[vertexIndex];
         const TangentFrameRebuildDetail::TangentFrameAccumulator& accumulator = accumulators[vertexIndex];
-        const SIMDVector previousNormal = FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-        const SIMDVector normal = FrameNormalizeDirection(accumulator.normal, previousNormal);
+        const SIMDVectorSingle previousNormal = FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+        const SIMDVectorSingle normal = FrameNormalizeDirection(accumulator.normal, previousNormal);
         if(!FrameValidDirection(normal))
             return MakeUnexpected(Failure{});
 
-        const SIMDVector previousTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
-        SIMDVector tangentSource = accumulator.tangent;
+        const SIMDVectorSingle previousTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
+        SIMDVectorSingle tangentSource = accumulator.tangent;
         if(!FrameValidDirection(tangentSource)){
             tangentSource = previousTangent;
             ++result.fallbackTangentVertexCount;
         }
 
-        const SIMDVector tangent = FrameResolveTangent(normal, tangentSource, previousTangent);
+        const SIMDVectorSingle tangent = FrameResolveTangent(normal, tangentSource, previousTangent);
         if(
             !FrameValidDirection(tangent)
             || Vector4Greater(
@@ -237,9 +237,9 @@ template<typename ScratchArenaT>
             return MakeUnexpected(Failure{});
 
         f32 handedness = TangentFrameRebuildDetail::ResolveTangentHandedness(vertex.tangent.w);
-        const SIMDVector bitangent = accumulator.bitangent;
+        const SIMDVectorSingle bitangent = accumulator.bitangent;
         if(FrameValidDirection(bitangent)){
-            const SIMDVector bitangentSign = Vector3Dot(Vector3Cross(normal, tangent), bitangent);
+            const SIMDVectorSingle bitangentSign = Vector3Dot(Vector3Cross(normal, tangent), bitangent);
             if(
                 VectorIsFinite(bitangentSign, VectorComponentMask::s_XYZW)
                 && Vector4Greater(VectorAbs(bitangentSign), VectorReplicate(TangentFrameRebuildDetail::s_Epsilon))

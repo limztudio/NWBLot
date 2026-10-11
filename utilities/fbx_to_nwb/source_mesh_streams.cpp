@@ -150,9 +150,9 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(
         if(i0 == i1 || i0 == i2 || i1 == i2)
             continue;
 
-        const SIMDVector p0 = LoadFloat(rebuildVertices[i0].position);
-        const SIMDVector p1 = LoadFloat(rebuildVertices[i1].position);
-        const SIMDVector p2 = LoadFloat(rebuildVertices[i2].position);
+        const SIMDVectorSingle p0 = LoadFloat(rebuildVertices[i0].position);
+        const SIMDVectorSingle p1 = LoadFloat(rebuildVertices[i1].position);
+        const SIMDVectorSingle p2 = LoadFloat(rebuildVertices[i2].position);
         const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
         const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(::s_FrameDirectionEpsilon))
@@ -181,11 +181,11 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(
         SourceVertexRef& ref = mesh.vertexRefs[vertexRefIndex];
         const Vec3& storedNormal = mesh.normals[ref.normal];
         const Float4& storedTangent = rebuildVertices[vertexRefIndex].tangent;
-        const SIMDVector normal = ::FrameNormalizeDirection(
+        const SIMDVectorSingle normal = ::FrameNormalizeDirection(
             LoadFloat(storedNormal),
             VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
         );
-        const SIMDVector tangent = ::FrameResolveTangent(
+        const SIMDVectorSingle tangent = ::FrameResolveTangent(
             normal,
             VectorSetW(LoadFloat(storedTangent), 0.0f),
             ::FrameFallbackTangent(normal)

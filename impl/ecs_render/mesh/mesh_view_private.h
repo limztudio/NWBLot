@@ -59,13 +59,13 @@ inline constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
 
 
 inline SIMDMatrix BuildWorldToClipMatrix(
-    const SIMDVector positionDepthBias,
-    const SIMDVector right,
-    const SIMDVector up,
-    const SIMDVector forward,
-    const SIMDVector projection
+    const SIMDVectorSingle positionDepthBias,
+    const SIMDVectorSingle right,
+    const SIMDVectorSingle up,
+    const SIMDVectorSingle forward,
+    const SIMDVectorSingle projection
 )noexcept{
-    const SIMDVector translation = VectorAdd(
+    const SIMDVectorSingle translation = VectorAdd(
         VectorNegate(VectorMergeX(
             Vector3Dot(positionDepthBias, right),
             Vector3Dot(positionDepthBias, up),
@@ -92,15 +92,15 @@ inline SIMDMatrix BuildWorldToClipMatrix(
     return MatrixMultiply(viewToClip, worldToView);
 }
 
-NWB_INLINE SIMDVector BuildViewFrustumPlaneVector(const SIMDVector normal, const SIMDVector point){
+NWB_INLINE SIMDVectorSingle BuildViewFrustumPlaneVector(const SIMDVectorSingle normal, const SIMDVectorSingle point){
     return PlaneTests::FromPointNormal(normal, point, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
-NWB_INLINE SIMDVector BuildViewFrustumSidePlaneVector(
-    const SIMDVector forward,
-    const SIMDVector side,
-    const SIMDVector tanHalfAngle,
-    const SIMDVector cameraPosition
+NWB_INLINE SIMDVectorSingle BuildViewFrustumSidePlaneVector(
+    const SIMDVectorSingle forward,
+    const SIMDVectorSingle side,
+    const SIMDVectorSingle tanHalfAngle,
+    const SIMDVectorSingle cameraPosition
 ){
     return BuildViewFrustumPlaneVector(
         VectorSetW(VectorMultiplyAdd(forward, tanHalfAngle, side), 0.0f),
@@ -109,18 +109,18 @@ NWB_INLINE SIMDVector BuildViewFrustumSidePlaneVector(
 }
 
 inline void BuildMeshViewFrustumVectors(
-    SIMDVector& outCameraPosition,
-    SIMDVector (&outFrustumPlanes)[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT],
-    const SIMDVector positionDepthBias,
-    const SIMDVector right,
-    const SIMDVector up,
-    const SIMDVector forward,
-    const SIMDVector tanHalfVertical,
-    const SIMDVector tanHalfHorizontal,
-    const SIMDVector nearPlane,
-    const SIMDVector farPlane
+    SIMDVectorSingle& outCameraPosition,
+    SIMDVectorSingle (&outFrustumPlanes)[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT],
+    const SIMDVectorSingle positionDepthBias,
+    const SIMDVectorSingle right,
+    const SIMDVectorSingle up,
+    const SIMDVectorSingle forward,
+    const SIMDVectorSingle tanHalfVertical,
+    const SIMDVectorSingle tanHalfHorizontal,
+    const SIMDVectorSingle nearPlane,
+    const SIMDVectorSingle farPlane
 ){
-    const SIMDVector cameraPosition = VectorSetW(
+    const SIMDVectorSingle cameraPosition = VectorSetW(
         VectorMultiplyAdd(VectorNegate(forward), VectorSplatW(positionDepthBias), positionDepthBias),
         1.0f
     );
@@ -131,11 +131,11 @@ inline void BuildMeshViewFrustumVectors(
     outFrustumPlanes[2] = BuildViewFrustumSidePlaneVector(forward, up, tanHalfVertical, cameraPosition);
     outFrustumPlanes[3] = BuildViewFrustumSidePlaneVector(forward, VectorNegate(up), tanHalfVertical, cameraPosition);
 
-    const SIMDVector nearPoint = VectorSetW(
+    const SIMDVectorSingle nearPoint = VectorSetW(
         VectorMultiplyAdd(forward, nearPlane, cameraPosition),
         0.0f
     );
-    const SIMDVector farPoint = VectorSetW(
+    const SIMDVectorSingle farPoint = VectorSetW(
         VectorMultiplyAdd(forward, farPlane, cameraPosition),
         0.0f
     );
@@ -157,26 +157,26 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
         projection = cameraView.projection;
     }
 
-    const SIMDVector positionDepthBias = LoadFloat(viewBasis.positionDepthBias);
-    const SIMDVector right = VectorSetW(LoadFloat(viewBasis.right), 0.0f);
-    const SIMDVector up = VectorSetW(LoadFloat(viewBasis.up), 0.0f);
-    const SIMDVector forward = VectorSetW(LoadFloat(viewBasis.forward), 0.0f);
-    const SIMDVector projectionParams = LoadFloat(projection.projectionParams);
-    const SIMDVector tanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
-    const SIMDVector aspectRatio = VectorReplicate(projection.aspectRatio);
-    const SIMDVector nearPlane = VectorReplicate(projection.nearPlane);
-    const SIMDVector farPlane = VectorReplicate(projection.farPlane);
+    const SIMDVectorSingle positionDepthBias = LoadFloat(viewBasis.positionDepthBias);
+    const SIMDVectorSingle right = VectorSetW(LoadFloat(viewBasis.right), 0.0f);
+    const SIMDVectorSingle up = VectorSetW(LoadFloat(viewBasis.up), 0.0f);
+    const SIMDVectorSingle forward = VectorSetW(LoadFloat(viewBasis.forward), 0.0f);
+    const SIMDVectorSingle projectionParams = LoadFloat(projection.projectionParams);
+    const SIMDVectorSingle tanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
+    const SIMDVectorSingle aspectRatio = VectorReplicate(projection.aspectRatio);
+    const SIMDVectorSingle nearPlane = VectorReplicate(projection.nearPlane);
+    const SIMDVectorSingle farPlane = VectorReplicate(projection.farPlane);
 
     const SIMDMatrix worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projectionParams);
     StoreFloat(worldToClip, state.worldToClip);
 
-    SIMDVector determinant;
+    SIMDVectorSingle determinant;
     const SIMDMatrix clipToWorld = MatrixInverse(&determinant, worldToClip);
     NWB_ASSERT(VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorZero()));
     StoreFloat(clipToWorld, state.clipToWorld);
 
-    SIMDVector cameraPosition;
-    SIMDVector frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
+    SIMDVectorSingle cameraPosition;
+    SIMDVectorSingle frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
     BuildMeshViewFrustumVectors(
         cameraPosition,
         frustumPlanes,

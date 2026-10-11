@@ -101,10 +101,10 @@ void AppendLightSpaceCsgReceiver(
     CsgShadowReceiverInput receiver;
     receiver.entity = entity;
     receiver.receiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
-    const SIMDVector localMin = LoadFloatInt(mesh.csgLocalBounds.minBounds);
-    const SIMDVector localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
-    SIMDVector worldMin{};
-    SIMDVector worldMax{};
+    const SIMDVectorSingle localMin = LoadFloatInt(mesh.csgLocalBounds.minBounds);
+    const SIMDVectorSingle localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
+    SIMDVectorSingle worldMin{};
+    SIMDVectorSingle worldMax{};
     receiver.boundsValid = false;
     if(CsgReceiverBoundsCanCull(mesh.csgLocalBounds) && !mesh.runtimeMesh){
         const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);

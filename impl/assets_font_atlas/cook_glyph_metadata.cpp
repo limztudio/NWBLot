@@ -112,10 +112,10 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
-    const SIMDVector size = VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height),
+    const SIMDVectorSingle size = VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height),
         static_cast<f32>(glyph.width), static_cast<f32>(glyph.height));
-    const SIMDVector origin = VectorSet(glyph.planeLeft, glyph.planeTop, glyph.planeLeft, glyph.planeTop);
-    const SIMDVector end = VectorMultiplyAddExpression(size, VectorReplicate(unitsPerPixel), origin);
+    const SIMDVectorSingle origin = VectorSet(glyph.planeLeft, glyph.planeTop, glyph.planeLeft, glyph.planeTop);
+    const SIMDVectorSingle end = VectorMultiplyAddExpression(size, VectorReplicate(unitsPerPixel), origin);
     glyph.planeRight = VectorGetX(end);
     glyph.planeBottom = VectorGetY(end);
     glyph.drawable = 1u;

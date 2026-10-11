@@ -247,11 +247,11 @@ private:
 
     // The XZ source plane spans -1..+1, so wall scales are half-extents.
     [[nodiscard]] NWB::Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 spanScale){
-        const SIMDVector pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
+        const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
         const f32 yawRad = yawDeg * (s_PI / 180.0f);
-        const SIMDVector yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
+        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
         // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
-        const SIMDVector wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
+        const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
 
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
             *m_world,
@@ -272,7 +272,7 @@ private:
 
     // Face the ceiling downward so it bounces light into the crowd.
     [[nodiscard]] NWB::Core::ECS::EntityID createCeiling(const Float4& colorTint){
-        const SIMDVector ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
+        const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,

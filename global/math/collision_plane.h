@@ -18,8 +18,8 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVector NWB_SIMD_CALL Distance(SIMDVector plane, SIMDVector point)noexcept;
-[[nodiscard]] SIMDVector NWB_SIMD_CALL FromPointNormal(SIMDVector normal, SIMDVector point, SIMDVector fallbackNormal)noexcept;
+[[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL Distance(SIMDVectorSingle plane, SIMDVectorSingle point)noexcept;
+[[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL FromPointNormal(SIMDVectorSingle normal, SIMDVectorSingle point, SIMDVectorSingle fallbackNormal)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +31,7 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL PlaneTests::Distance(const SIMDVectorSingle plane, const SIMDVectorSingle point)noexcept{
     return CollisionDetail::PlaneDistance(plane, point);
 }
 
@@ -39,13 +39,13 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL PlaneTests::FromPointNormal(
-    const SIMDVector normal,
-    const SIMDVector point,
-    const SIMDVector fallbackNormal
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL PlaneTests::FromPointNormal(
+    const SIMDVectorSingle normal,
+    const SIMDVectorSingle point,
+    const SIMDVectorSingle fallbackNormal
 )noexcept{
-    const SIMDVector lengthSquared = Vector3LengthSq(normal);
-    SIMDVector unitNormal = VectorSetW(fallbackNormal, 0.0f);
+    const SIMDVectorSingle lengthSquared = Vector3LengthSq(normal);
+    SIMDVectorSingle unitNormal = VectorSetW(fallbackNormal, 0.0f);
     if(
         VectorIsFinite(lengthSquared, VectorComponentMask::s_XYZW)
         && Vector4Greater(lengthSquared, VectorZero())

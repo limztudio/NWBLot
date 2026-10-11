@@ -131,9 +131,9 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         m_context.fail();
         return result;
     }
-    const SIMDVector listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
-    const SIMDVector listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVector listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
+    const SIMDVectorSingle listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
+    const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
         VectorGreater(listpaddingCurrent, listpaddingCandidate));
     list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
     frame.list = static_cast<u32>(m_scope->m_lists.size());

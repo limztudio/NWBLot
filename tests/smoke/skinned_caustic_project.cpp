@@ -104,9 +104,9 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
         return bindJoint;
 
     const f32 phase = static_cast<f32>(jointIndex) * 0.7f;
-    const SIMDVector waves = VectorSin(VectorSet(timeSeconds * s_PoseAnimationSpeed + phase, 0.0f, 0.0f, 0.0f));
-    const SIMDVector angle = VectorScale(waves, s_PoseAnimationAngle);
-    const SIMDVector rotationAngles = VectorMergeX(
+    const SIMDVectorSingle waves = VectorSin(VectorSet(timeSeconds * s_PoseAnimationSpeed + phase, 0.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle angle = VectorScale(waves, s_PoseAnimationAngle);
+    const SIMDVectorSingle rotationAngles = VectorMergeX(
         VectorScale(angle, 0.4f),
         angle,
         VectorScale(angle, 0.25f),

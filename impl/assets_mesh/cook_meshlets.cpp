@@ -14,17 +14,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVector MeshCookMeshlets::MakeMeshletPositionVector(const SIMDVector position)noexcept{
+SIMDVectorSingle MeshCookMeshlets::MakeMeshletPositionVector(const SIMDVectorSingle position)noexcept{
     return VectorSetW(position, 0.0f);
 }
 
 
 MeshletTriangleVectors MeshCookMeshlets::MakeMeshletTriangleVectors(
-    const SIMDVector position0,
-    const SIMDVector position1,
-    const SIMDVector position2,
-    const SIMDVector centroid,
-    const SIMDVector areaNormal
+    const SIMDVectorSingle position0,
+    const SIMDVectorSingle position1,
+    const SIMDVectorSingle position2,
+    const SIMDVectorSingle centroid,
+    const SIMDVectorSingle areaNormal
 )noexcept{
     return MeshletTriangleVectors{
         {
@@ -38,7 +38,7 @@ MeshletTriangleVectors MeshCookMeshlets::MakeMeshletTriangleVectors(
 }
 
 
-SIMDVector MeshCookMeshlets::NormalizeMeshletDirectionOrZero(const SIMDVector value)noexcept{
+SIMDVectorSingle MeshCookMeshlets::NormalizeMeshletDirectionOrZero(const SIMDVectorSingle value)noexcept{
     return Vector3NormalizeOr(value, VectorZero(), ::s_FrameDirectionEpsilon);
 }
 
@@ -69,9 +69,9 @@ void MeshCookMeshlets::ResetMeshletScoreState(MeshletScoreState& state)noexcept{
 
 
 void MeshCookMeshlets::AccumulateMeshletScoreBounds(
-    const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount],
-    SIMDVector& minBounds,
-    SIMDVector& maxBounds
+    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount],
+    SIMDVectorSingle& minBounds,
+    SIMDVectorSingle& maxBounds
 )noexcept{
     AabbTests::ExpandTriangle(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u], minBounds, maxBounds);
 }
@@ -79,27 +79,27 @@ void MeshCookMeshlets::AccumulateMeshletScoreBounds(
 
 f32 MeshCookMeshlets::PredictMeshletScoreRadius(
     const MeshletScoreState& state,
-    const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount]
+    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount]
 )noexcept{
-    SIMDVector minBounds = state.minBounds;
-    SIMDVector maxBounds = state.maxBounds;
+    SIMDVectorSingle minBounds = state.minBounds;
+    SIMDVectorSingle maxBounds = state.maxBounds;
     AccumulateMeshletScoreBounds(trianglePositions, minBounds, maxBounds);
 
     return AabbTests::Radius(minBounds, maxBounds);
 }
 
 
-f32 MeshCookMeshlets::MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVector triangleCentroid)noexcept{
+f32 MeshCookMeshlets::MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept{
     if(state.primitiveCount == 0u)
         return 0.0f;
 
-    const SIMDVector meshletCentroid = VectorDivide(state.centroidSum, VectorReplicate(static_cast<f32>(state.primitiveCount)));
+    const SIMDVectorSingle meshletCentroid = VectorDivide(state.centroidSum, VectorReplicate(static_cast<f32>(state.primitiveCount)));
     return VectorGetX(Vector3Length(VectorSubtract(triangleCentroid, meshletCentroid)));
 }
 
 
-f32 MeshCookMeshlets::MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVector triangleAreaNormal)noexcept{
-    const SIMDVector candidateNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
+f32 MeshCookMeshlets::MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept{
+    const SIMDVectorSingle candidateNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!::FrameValidDirection(state.normalAxis) || !::FrameValidDirection(candidateNormal))
         return 0.0f;
 
@@ -108,12 +108,12 @@ f32 MeshCookMeshlets::MeshletScoreNormalCoherence(const MeshletScoreState& state
 
 
 void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(
-    const SIMDVector axis,
-    const SIMDVector triangleAreaNormal,
+    const SIMDVectorSingle axis,
+    const SIMDVectorSingle triangleAreaNormal,
     bool& hasNormal,
     f32& coneCutoff
 )noexcept{
-    const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
+    const SIMDVectorSingle faceNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!::FrameValidDirection(faceNormal))
         return;
 

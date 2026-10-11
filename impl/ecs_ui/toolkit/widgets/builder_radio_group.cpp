@@ -195,9 +195,9 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
         if(!label || !radioGroupMatches(frame))
             return false;
         const Point measured = label->measure();
-        const SIMDVector currentSize = VectorSet(maximumLabel.x, maximumLabel.y, maximumLabel.x, maximumLabel.y);
-        const SIMDVector labelSize = VectorSet(measured.x, measured.y, measured.x, measured.y);
-        const SIMDVector maximumSize = VectorSelect(labelSize, currentSize, VectorGreater(currentSize, labelSize));
+        const SIMDVectorSingle currentSize = VectorSet(maximumLabel.x, maximumLabel.y, maximumLabel.x, maximumLabel.y);
+        const SIMDVectorSingle labelSize = VectorSet(measured.x, measured.y, measured.x, measured.y);
+        const SIMDVectorSingle maximumSize = VectorSelect(labelSize, currentSize, VectorGreater(currentSize, labelSize));
         maximumLabel = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
         frame.m_labels.push_back(Move(*label));
     }

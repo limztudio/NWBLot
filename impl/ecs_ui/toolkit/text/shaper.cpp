@@ -134,9 +134,9 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
             const auto metrics = face->metrics(request.fontSize);
             if(!metrics)
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
-            const SIMDVector currentMetrics = VectorSet(run.metrics.ascender, run.metrics.descender, run.metrics.lineGap, 0.0f);
-            const SIMDVector candidateMetrics = VectorSet(metrics->ascender, metrics->descender, metrics->lineGap, 0.0f);
-            const SIMDVector maximumMetrics = VectorSelect(candidateMetrics, currentMetrics, VectorGreater(currentMetrics, candidateMetrics));
+            const SIMDVectorSingle currentMetrics = VectorSet(run.metrics.ascender, run.metrics.descender, run.metrics.lineGap, 0.0f);
+            const SIMDVectorSingle candidateMetrics = VectorSet(metrics->ascender, metrics->descender, metrics->lineGap, 0.0f);
+            const SIMDVectorSingle maximumMetrics = VectorSelect(candidateMetrics, currentMetrics, VectorGreater(currentMetrics, candidateMetrics));
             run.metrics.ascender = VectorGetX(maximumMetrics);
             run.metrics.descender = VectorGetY(maximumMetrics);
             run.metrics.lineGap = VectorGetZ(maximumMetrics);

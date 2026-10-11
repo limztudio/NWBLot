@@ -123,15 +123,15 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(
     return true;
 }
 
-SIMDVector CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVector inAreaVec, SIMDVector originVec, SIMDVector firstVec, SIMDVector secondVec)noexcept{
+SIMDVectorSingle CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept{
     return VectorAdd(inAreaVec, Vector3Cross(VectorSubtract(firstVec, originVec), VectorSubtract(secondVec, originVec)));
 }
 
-SIMDVector CsgDeformCapBuilder::ScaleCenterVec(SIMDVector sumVec, SIMDVector loopSizeVec)noexcept{
+SIMDVectorSingle CsgDeformCapBuilder::ScaleCenterVec(SIMDVectorSingle sumVec, SIMDVectorSingle loopSizeVec)noexcept{
     return VectorDivide(sumVec, loopSizeVec);
 }
 
-SIMDVector CsgDeformCapBuilder::CapCenterNormalVec(SIMDVector loopNormalVec)noexcept{
+SIMDVectorSingle CsgDeformCapBuilder::CapCenterNormalVec(SIMDVectorSingle loopNormalVec)noexcept{
     return loopNormalVec;
 }
 
@@ -142,18 +142,18 @@ Expected<Float4> CsgDeformCapBuilder::CapNormal(
     Float4 normal;
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});
-    const SIMDVector originVec = LoadFloat(vertices[loop[0u]].position);
-    SIMDVector areaVec = VectorZero();
+    const SIMDVectorSingle originVec = LoadFloat(vertices[loop[0u]].position);
+    SIMDVectorSingle areaVec = VectorZero();
     for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
-        const SIMDVector firstVec = LoadFloat(vertices[loop[vertexIndex]].position);
-        const SIMDVector secondVec = LoadFloat(vertices[loop[vertexIndex + 1u]].position);
+        const SIMDVectorSingle firstVec = LoadFloat(vertices[loop[vertexIndex]].position);
+        const SIMDVectorSingle secondVec = LoadFloat(vertices[loop[vertexIndex + 1u]].position);
         areaVec = CsgDeformCapBuilder::AccumulateFanAreaVec(areaVec, originVec, firstVec, secondVec);
     }
     const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVec));
     if(!(areaLengthSq > s_LoopAreaEpsilonSq))
         return MakeUnexpected(Failure{});
-    const SIMDVector normalized = Vector3Normalize(areaVec);
-    const SIMDVector packed = VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW);
+    const SIMDVectorSingle normalized = Vector3Normalize(areaVec);
+    const SIMDVectorSingle packed = VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW);
     StoreFloat(packed, normal);
     return normal;
 }
@@ -169,9 +169,9 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(
         return MakeUnexpected(Failure{});
     if(inOutVertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure{});
-    SIMDVector centerPositionVec = VectorZero();
-    SIMDVector centerUvVec = VectorZero();
-    SIMDVector centerColorVec = VectorZero();
+    SIMDVectorSingle centerPositionVec = VectorZero();
+    SIMDVectorSingle centerUvVec = VectorZero();
+    SIMDVectorSingle centerColorVec = VectorZero();
     for(const u32 vertexIndex : loop){
         NWB_ASSERT(vertexIndex < inOutVertices.size());
         const CsgDeformVertex& vertex = inOutVertices[vertexIndex];
@@ -179,9 +179,9 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(
         centerUvVec = VectorAdd(centerUvVec, LoadFloat(vertex.uv0));
         centerColorVec = VectorAdd(centerColorVec, LoadFloat(vertex.color));
     }
-    const SIMDVector loopNormalVec = LoadFloat(loopNormal);
-    const SIMDVector loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
-    const SIMDVector centerNormalVec = CsgDeformCapBuilder::CapCenterNormalVec(loopNormalVec);
+    const SIMDVectorSingle loopNormalVec = LoadFloat(loopNormal);
+    const SIMDVectorSingle loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
+    const SIMDVectorSingle centerNormalVec = CsgDeformCapBuilder::CapCenterNormalVec(loopNormalVec);
     CsgDeformVertex center;
     StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerPositionVec, loopSizeVec), center.position);
     StoreFloat(centerNormalVec, center.normal);

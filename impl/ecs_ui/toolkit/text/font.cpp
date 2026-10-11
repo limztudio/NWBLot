@@ -277,9 +277,9 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     hb_font_extents_t extents{};
     if(!scaled.valid() || !hb_font_get_h_extents(&scaled.get(), &extents))
         return MakeUnexpected(Failure{});
-    const SIMDVector scaledExtents = VectorScale(VectorSet(static_cast<f32>(extents.ascender),
+    const SIMDVectorSingle scaledExtents = VectorScale(VectorSet(static_cast<f32>(extents.ascender),
         -static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), 1.0f / 64.0f);
-    const SIMDVector positiveExtents = VectorSelect(scaledExtents, VectorZero(), VectorGreater(VectorZero(), scaledExtents));
+    const SIMDVectorSingle positiveExtents = VectorSelect(scaledExtents, VectorZero(), VectorGreater(VectorZero(), scaledExtents));
     metrics.ascender = VectorGetX(positiveExtents);
     metrics.descender = VectorGetY(positiveExtents);
     metrics.lineGap = VectorGetZ(positiveExtents);
@@ -354,20 +354,20 @@ bool FontFace::shape(
             hb_glyph_extents_t extents{};
             Rect ink;
             if(hb_font_get_glyph_extents(&scaled.get(), infos[index].codepoint, &extents)){
-                const SIMDVector origin = VectorScale(VectorSet(static_cast<f32>(extents.x_bearing),
+                const SIMDVectorSingle origin = VectorScale(VectorSet(static_cast<f32>(extents.x_bearing),
                     -static_cast<f32>(extents.y_bearing), static_cast<f32>(extents.x_bearing),
                     -static_cast<f32>(extents.y_bearing)), 1.0f / 64.0f);
-                const SIMDVector width = VectorReplicate(static_cast<f32>(extents.width));
-                const SIMDVector height = VectorReplicate(static_cast<f32>(extents.height));
-                const SIMDVector scale = VectorReplicate(1.0f / 64.0f);
-                const SIMDVector end = VectorPermute<0, 5, 2, 7>(VectorMultiplyAddExpression(width, scale, origin),
+                const SIMDVectorSingle width = VectorReplicate(static_cast<f32>(extents.width));
+                const SIMDVectorSingle height = VectorReplicate(static_cast<f32>(extents.height));
+                const SIMDVectorSingle scale = VectorReplicate(1.0f / 64.0f);
+                const SIMDVectorSingle end = VectorPermute<0, 5, 2, 7>(VectorMultiplyAddExpression(width, scale, origin),
                     VectorNegativeMultiplySubtractExpression(height, scale, origin));
-                const SIMDVector minimum = VectorSelect(end, origin, VectorLess(origin, end));
-                const SIMDVector delta = VectorSubtract(end, origin);
-                const SIMDVector size = VectorSelect(delta, VectorNegate(delta), VectorLess(delta, VectorZero()));
+                const SIMDVectorSingle minimum = VectorSelect(end, origin, VectorLess(origin, end));
+                const SIMDVectorSingle delta = VectorSubtract(end, origin);
+                const SIMDVectorSingle size = VectorSelect(delta, VectorNegate(delta), VectorLess(delta, VectorZero()));
                 ink = { VectorGetX(minimum), VectorGetY(minimum), VectorGetX(size), VectorGetY(size) };
             }
-            const SIMDVector position = VectorScale(VectorSet(static_cast<f32>(positions[index].x_offset),
+            const SIMDVectorSingle position = VectorScale(VectorSet(static_cast<f32>(positions[index].x_offset),
                 -static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance),
                 -static_cast<f32>(positions[index].y_advance)), 1.0f / 64.0f);
             output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd,

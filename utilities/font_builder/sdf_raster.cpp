@@ -88,12 +88,12 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
         glyph.record.drawable = 1u;
         glyph.record.width = bitmap.width;
         glyph.record.height = bitmap.rows;
-        const SIMDVector origin = VectorScale(VectorSet(static_cast<f32>(face->glyph->bitmap_left),
+        const SIMDVectorSingle origin = VectorScale(VectorSet(static_cast<f32>(face->glyph->bitmap_left),
             static_cast<f32>(-face->glyph->bitmap_top), static_cast<f32>(face->glyph->bitmap_left),
             static_cast<f32>(-face->glyph->bitmap_top)), designPerPixel);
-        const SIMDVector size = VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows),
+        const SIMDVectorSingle size = VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows),
             static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows));
-        const SIMDVector end = VectorMultiplyAddExpression(size, VectorReplicate(designPerPixel), origin);
+        const SIMDVectorSingle end = VectorMultiplyAddExpression(size, VectorReplicate(designPerPixel), origin);
         glyph.record.planeLeft = VectorGetX(origin);
         glyph.record.planeTop = VectorGetY(origin);
         glyph.record.planeRight = VectorGetX(end);

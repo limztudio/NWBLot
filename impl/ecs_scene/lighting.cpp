@@ -32,7 +32,7 @@ inline constexpr f32 s_ConeCosineMax = 1.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward)noexcept{
+static SIMDVectorSingle BuildDirectionalLightDirectionVector(const SIMDVectorSingle forward)noexcept{
     return Vector3NormalizeOr(
         VectorNegate(forward),
         VectorSet(0.0f, 0.0f, -1.0f, 0.0f),
@@ -40,7 +40,7 @@ static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward)
     );
 }
 
-static SIMDVector BuildLightEmissionVector(const SIMDVector forward)noexcept{
+static SIMDVectorSingle BuildLightEmissionVector(const SIMDVectorSingle forward)noexcept{
     return Vector3NormalizeOr(
         forward,
         VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
@@ -48,7 +48,7 @@ static SIMDVector BuildLightEmissionVector(const SIMDVector forward)noexcept{
     );
 }
 
-static bool IsValidLightRotation(const SIMDVector rotation)noexcept{
+static bool IsValidLightRotation(const SIMDVectorSingle rotation)noexcept{
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
     return
         !QuaternionIsNaN(rotation)
@@ -58,7 +58,7 @@ static bool IsValidLightRotation(const SIMDVector rotation)noexcept{
     ;
 }
 
-static bool IsValidLightColorIntensity(const SIMDVector colorIntensity)noexcept{
+static bool IsValidLightColorIntensity(const SIMDVectorSingle colorIntensity)noexcept{
     const f32 intensity = VectorGetW(colorIntensity);
     return
         !Vector3IsNaN(colorIntensity)
@@ -159,7 +159,7 @@ Core::ECS::EntityID CreateSpotLightEntity(
     return lightEntity.id();
 }
 
-SceneLight BuildDefaultSceneLight(const SIMDVector forward)noexcept{
+SceneLight BuildDefaultSceneLight(const SIMDVectorSingle forward)noexcept{
     SceneLight light;
     StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(forward), light.direction);
     StoreFloat(s_SIMDOne, light.colorIntensity);
@@ -168,9 +168,9 @@ SceneLight BuildDefaultSceneLight(const SIMDVector forward)noexcept{
 }
 
 Expected<SceneLight> TryBuildSceneLight(
-    const SIMDVector position,
-    const SIMDVector rotation,
-    const SIMDVector colorIntensity,
+    const SIMDVectorSingle position,
+    const SIMDVectorSingle rotation,
+    const SIMDVectorSingle colorIntensity,
     const f32 range,
     const f32 innerConeCos,
     const f32 outerConeCos,
@@ -237,7 +237,7 @@ Expected<SceneLight> TryBuildSceneLight(
     }
 }
 
-usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward, SceneLight* outLights, const usize maxLights){
+usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, SceneLight* outLights, const usize maxLights){
     if(maxLights == 0u)
         return 0u;
 
@@ -250,7 +250,7 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward
         auto&& [entity, transform, light] = *it;
         static_cast<void>(entity);
 
-        const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
+        const SIMDVectorSingle colorIntensity = LoadFloat(light.colorIntensity);
         Expected<SceneLight> resolvedLight = MakeUnexpected(Failure{});
         switch(light.type){
         case LightType::Directional:

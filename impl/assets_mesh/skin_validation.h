@@ -31,7 +31,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ValidSkinInfluenceWeights(const SIMDVector weights)noexcept{
+[[nodiscard]] inline bool ValidSkinInfluenceWeights(const SIMDVectorSingle weights)noexcept{
     if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero()))
         return false;
 

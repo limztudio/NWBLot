@@ -41,8 +41,8 @@ bool ValidateReflectionSettings(const ReflectionSettings& settings)noexcept{
         || !IsFinite(settings.screenEdgeFade) || settings.screenEdgeFade < 0.f || settings.screenEdgeFade > s_MaxScreenEdgeFade
     )
         return false;
-    const SIMDVector top = LoadFloat(settings.environmentTop);
-    const SIMDVector bottom = LoadFloat(settings.environmentBottom);
+    const SIMDVectorSingle top = LoadFloat(settings.environmentTop);
+    const SIMDVectorSingle bottom = LoadFloat(settings.environmentBottom);
     return VectorIsFinite(top, VectorComponentMask::s_XYZ) && VectorIsFinite(bottom, VectorComponentMask::s_XYZ)
         && Vector3GreaterOrEqual(top, VectorZero()) && Vector3GreaterOrEqual(bottom, VectorZero());
 }

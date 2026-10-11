@@ -29,9 +29,9 @@ namespace Tests::Smoke{
 
 
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u64 value)noexcept{
-    const SIMDVector channels = VectorSet(static_cast<f32>(value & 15u), static_cast<f32>((value >> 4u) & 15u),
+    const SIMDVectorSingle channels = VectorSet(static_cast<f32>(value & 15u), static_cast<f32>((value >> 4u) & 15u),
         static_cast<f32>((value >> 8u) & 15u), 15.0f);
-    const SIMDVector color = VectorDivide(channels, VectorReplicate(15.0f));
+    const SIMDVectorSingle color = VectorDivide(channels, VectorReplicate(15.0f));
     return { VectorGetX(color), VectorGetY(color), VectorGetZ(color), 1.0f };
 }
 

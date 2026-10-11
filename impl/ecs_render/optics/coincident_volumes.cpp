@@ -31,7 +31,7 @@ namespace __hidden_coincident_volumes{
 using Candidate = CoincidentOpticalVolumeCandidate;
 using CandidatePointer = NotNull<const Candidate*>;
 
-[[nodiscard]] bool ValidCandidateLanes(SIMDVector positionVec, SIMDVector rotationVec, SIMDVector scaleVec)noexcept{
+[[nodiscard]] bool ValidCandidateLanes(SIMDVectorSingle positionVec, SIMDVectorSingle rotationVec, SIMDVectorSingle scaleVec)noexcept{
     if(
         !VectorIsFinite(positionVec, VectorComponentMask::s_XYZ)
         || !VectorIsFinite(rotationVec, VectorComponentMask::s_XYZW)
@@ -53,7 +53,7 @@ using CandidatePointer = NotNull<const Candidate*>;
 }
 
 struct CandidateHasher{
-    usize hashTransformLanes(SIMDVector positionLanes, SIMDVector rotationLanes, SIMDVector scaleLanes, usize hash)const{
+    usize hashTransformLanes(SIMDVectorSingle positionLanes, SIMDVectorSingle rotationLanes, SIMDVectorSingle scaleLanes, usize hash)const{
         HashCombineFloat(hash, VectorGetX(positionLanes));
         HashCombineFloat(hash, VectorGetY(positionLanes));
         HashCombineFloat(hash, VectorGetZ(positionLanes));
@@ -83,7 +83,7 @@ struct CandidateHasher{
 };
 
 struct CandidateEqual{
-    bool equalTransformLanes(SIMDVector lhsPosition, SIMDVector lhsRotation, SIMDVector lhsScale, SIMDVector rhsPosition, SIMDVector rhsRotation, SIMDVector rhsScale)const noexcept{
+    bool equalTransformLanes(SIMDVectorSingle lhsPosition, SIMDVectorSingle lhsRotation, SIMDVectorSingle lhsScale, SIMDVectorSingle rhsPosition, SIMDVectorSingle rhsRotation, SIMDVectorSingle rhsScale)const noexcept{
         return Vector3Equal(lhsPosition, rhsPosition)
             && Vector4Equal(lhsRotation, rhsRotation)
             && Vector3Equal(lhsScale, rhsScale);

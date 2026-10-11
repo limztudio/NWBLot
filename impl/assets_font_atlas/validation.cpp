@@ -149,14 +149,14 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             return false;
         }
         const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
-        const SIMDVector expectedSize = VectorScale(
+        const SIMDVectorSingle expectedSize = VectorScale(
             VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), 0.0f, 0.0f), unitsPerPixel
         );
-        const SIMDVector planeSize = VectorSubtract(VectorSet(glyph.planeRight, glyph.planeBottom, 0.0f, 0.0f),
+        const SIMDVectorSingle planeSize = VectorSubtract(VectorSet(glyph.planeRight, glyph.planeBottom, 0.0f, 0.0f),
             VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f));
-        const SIMDVector difference = VectorSubtract(planeSize, expectedSize);
-        const SIMDVector magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
-        const SIMDVector tolerance = VectorScale(expectedSize, 0.0001f);
+        const SIMDVectorSingle difference = VectorSubtract(planeSize, expectedSize);
+        const SIMDVectorSingle magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
+        const SIMDVectorSingle tolerance = VectorScale(expectedSize, 0.0001f);
         if((VectorMoveMask(VectorGreater(magnitude, tolerance)) & VectorComponentMask::s_XY) != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} plane bounds disagree with bitmap size"), index);
             return false;

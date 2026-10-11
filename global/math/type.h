@@ -818,11 +818,11 @@ struct FPUVector4{
 #endif
 
 #if defined(NWB_HAS_NEON)
-using SIMDVector = float32x4_t;
+using SIMDVectorSingle = float32x4_t;
 #elif defined(NWB_HAS_SCALAR)
-using SIMDVector = FPUVector4;
+using SIMDVectorSingle = FPUVector4;
 #else
-using SIMDVector = __m128;
+using SIMDVectorSingle = __m128;
 #endif
 
 #if defined(NWB_HAS_SCALAR)
@@ -839,11 +839,11 @@ struct alignas(16) SIMDMatrix
             f32 _31, _32, _33, _34;
             f32 _41, _42, _43, _44;
         };
-        SIMDVector v[4];
+        SIMDVectorSingle v[4];
         f32 m[4][4];
     };
 #else
-    SIMDVector v[4];
+    SIMDVectorSingle v[4];
 #endif
 };
 

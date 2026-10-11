@@ -217,7 +217,7 @@ NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
 #endif
 
 template<u32 Lane>
-NWB_INLINE f32 NWB_SIMD_CALL GetLane(SIMDVector value)noexcept{
+NWB_INLINE f32 NWB_SIMD_CALL GetLane(SIMDVectorSingle value)noexcept{
     static_assert(Lane < 4u);
 #if defined(NWB_HAS_SCALAR)
     return value.f[Lane];
@@ -237,7 +237,7 @@ NWB_INLINE f32 NWB_SIMD_CALL GetLane(SIMDVector value)noexcept{
 }
 
 template<u32 Lane>
-NWB_INLINE u32 NWB_SIMD_CALL GetIntLane(SIMDVector value)noexcept{
+NWB_INLINE u32 NWB_SIMD_CALL GetIntLane(SIMDVectorSingle value)noexcept{
     static_assert(Lane < 4u);
 #if defined(NWB_HAS_SCALAR)
     return value.u[Lane];
@@ -252,19 +252,19 @@ NWB_INLINE u32 NWB_SIMD_CALL GetIntLane(SIMDVector value)noexcept{
 }
 
 template<u32 Lane>
-NWB_INLINE void NWB_SIMD_CALL StoreLane(f32& out, SIMDVector value)noexcept{
+NWB_INLINE void NWB_SIMD_CALL StoreLane(f32& out, SIMDVectorSingle value)noexcept{
     static_assert(Lane < 4u);
     out = GetLane<Lane>(value);
 }
 
 template<u32 Lane>
-NWB_INLINE void NWB_SIMD_CALL StoreIntLane(u32& out, SIMDVector value)noexcept{
+NWB_INLINE void NWB_SIMD_CALL StoreIntLane(u32& out, SIMDVectorSingle value)noexcept{
     static_assert(Lane < 4u);
     out = GetIntLane<Lane>(value);
 }
 
 template<u32 Lane>
-NWB_INLINE SIMDVector NWB_SIMD_CALL SplatLane(SIMDVector value)noexcept{
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SplatLane(SIMDVectorSingle value)noexcept{
     static_assert(Lane < 4u);
 #if defined(NWB_HAS_SCALAR)
     const f32 laneValue = value.f[Lane];

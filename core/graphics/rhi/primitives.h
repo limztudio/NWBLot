@@ -172,9 +172,9 @@ struct Rect{
     {}
 
     [[nodiscard]] static Rect FromViewport(const Viewport& viewport)noexcept{
-        const SIMDVector bounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
-        const SIMDVector flooredBounds = VectorFloor(bounds);
-        const SIMDVector ceiledBounds = VectorCeiling(bounds);
+        const SIMDVectorSingle bounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
+        const SIMDVectorSingle flooredBounds = VectorFloor(bounds);
+        const SIMDVectorSingle ceiledBounds = VectorCeiling(bounds);
         return Rect(static_cast<i32>(VectorGetX(flooredBounds)), static_cast<i32>(VectorGetY(ceiledBounds)), static_cast<i32>(VectorGetZ(flooredBounds)), static_cast<i32>(VectorGetW(ceiledBounds)));
     }
 

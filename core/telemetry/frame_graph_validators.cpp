@@ -26,14 +26,14 @@ namespace __hidden_frame_graph_validators{
 
 
 #if defined(__SSE2__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
-[[nodiscard]] NWB_INLINE bool HasExceptionalDurationPair(const SIMDVectorDouble pair)noexcept{
-    using UInt2 = u64 __attribute__((ext_vector_type(2)));
-    const UInt2 absoluteMask{ 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull };
-    const UInt2 infinity{ 0x7FF0000000000000ull, 0x7FF0000000000000ull };
-    const UInt2 minimumNormal{ 0x0010000000000000ull, 0x0010000000000000ull };
-    const UInt2 magnitude = BitCast<UInt2>(pair) & absoluteMask;
+[[nodiscard]] NWB_INLINE bool HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
+    using DurationBits = u64 __attribute__((ext_vector_type(4)));
+    const DurationBits absoluteMask{ 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull };
+    const DurationBits infinity{ 0x7FF0000000000000ull, 0x7FF0000000000000ull, 0x7FF0000000000000ull, 0x7FF0000000000000ull };
+    const DurationBits minimumNormal{ 0x0010000000000000ull, 0x0010000000000000ull, 0x0010000000000000ull, 0x0010000000000000ull };
+    const DurationBits magnitude = BitCast<DurationBits>(pack) & absoluteMask;
     const auto exceptional = (magnitude >= infinity)
-        | ((magnitude != UInt2{}) & (magnitude < minimumNormal));
+        | ((magnitude != DurationBits{}) & (magnitude < minimumNormal));
     return __builtin_reduce_or(exceptional) != 0;
 }
 #endif
@@ -42,13 +42,13 @@ template<usize Count>
 [[nodiscard]] static bool DurationsAreOrdinary(const f64(&durations)[Count])noexcept{
 #if defined(__SSE2__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
     usize index = 0u;
-    for(; index + 1u < Count; index += 2u){
-        SIMDVectorDouble pair;
-        __builtin_memcpy(&pair, durations + index, sizeof(pair));
-        if(HasExceptionalDurationPair(pair))
+    for(; index + 3u < Count; index += 4u){
+        SIMDVectorDouble pack;
+        __builtin_memcpy(&pack, durations + index, sizeof(pack));
+        if(HasExceptionalDurationPack(pack))
             return false;
     }
-    if(index < Count){
+    for(; index < Count; ++index){
         const u64 magnitude = BitCast<u64>(durations[index]) & 0x7FFFFFFFFFFFFFFFull;
         if(magnitude >= 0x7FF0000000000000ull || (magnitude != 0u && magnitude < 0x0010000000000000ull))
             return false;
@@ -63,37 +63,49 @@ template<usize Count>
 [[nodiscard]] static bool DurationsAreValid(const f64(&durations)[Count])noexcept{
 #pragma STDC FENV_ACCESS ON
     usize index = 0u;
-    for(; index + 1u < Count; index += 2u){
-        SIMDVectorDouble pair;
-        __builtin_memcpy(&pair, durations + index, sizeof(pair));
-        if(__builtin_reduce_or(pair < SIMDVectorDouble{}) != 0)
+    for(; index + 3u < Count; index += 4u){
+        SIMDVectorDouble pack;
+        __builtin_memcpy(&pack, durations + index, sizeof(pack));
+        if(__builtin_reduce_or(pack < SIMDVectorDouble{}) != 0)
             return false;
     }
-    return index == Count || !(durations[index] < 0.0);
+    for(; index < Count; ++index){
+        if(durations[index] < 0.0)
+            return false;
+    }
+    return true;
 }
 
 template<usize Count>
 [[nodiscard]] static bool DurationsDoNotExceed(const f64(&durations)[Count], const f64(&limits)[Count])noexcept{
 #pragma STDC FENV_ACCESS ON
     usize index = 0u;
-    for(; index + 1u < Count; index += 2u){
-        SIMDVectorDouble pair, limitPair;
-        __builtin_memcpy(&pair, durations + index, sizeof(pair));
-        __builtin_memcpy(&limitPair, limits + index, sizeof(limitPair));
-        if(__builtin_reduce_or(pair > limitPair) != 0)
+    for(; index + 3u < Count; index += 4u){
+        SIMDVectorDouble pack, limitPack;
+        __builtin_memcpy(&pack, durations + index, sizeof(pack));
+        __builtin_memcpy(&limitPack, limits + index, sizeof(limitPack));
+        if(__builtin_reduce_or(pack > limitPack) != 0)
             return false;
     }
-    return index == Count || !(durations[index] > limits[index]);
+    for(; index < Count; ++index){
+        if(durations[index] > limits[index])
+            return false;
+    }
+    return true;
 }
 
 template<usize Count>
 [[nodiscard]] static bool DurationsAreZero(const f64(&durations)[Count])noexcept{
 #pragma STDC FENV_ACCESS ON
-    static_assert(Count % 2u == 0u);
-    for(usize index = 0u; index < Count; index += 2u){
-        SIMDVectorDouble pair;
-        __builtin_memcpy(&pair, durations + index, sizeof(pair));
-        if(__builtin_reduce_or(pair != SIMDVectorDouble{}) != 0)
+    usize index = 0u;
+    for(; index + 3u < Count; index += 4u){
+        SIMDVectorDouble pack;
+        __builtin_memcpy(&pack, durations + index, sizeof(pack));
+        if(__builtin_reduce_or(pack != SIMDVectorDouble{}) != 0)
+            return false;
+    }
+    for(; index < Count; ++index){
+        if(durations[index] != 0.0)
             return false;
     }
     return true;

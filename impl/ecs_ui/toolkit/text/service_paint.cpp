@@ -107,11 +107,11 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
                 item.sdfPage = &atlas->page(record.group);
                 item.channel = record.channel;
                 const SdfAtlasPageBinding& binding = (*item.sdfPage)->binding();
-                const SIMDVector coordinates = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y),
+                const SIMDVectorSingle coordinates = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y),
                     static_cast<f32>(record.width), static_cast<f32>(record.height));
-                const SIMDVector atlasSize = VectorSet(static_cast<f32>(binding.width), static_cast<f32>(binding.height),
+                const SIMDVectorSingle atlasSize = VectorSet(static_cast<f32>(binding.width), static_cast<f32>(binding.height),
                     static_cast<f32>(binding.width), static_cast<f32>(binding.height));
-                const SIMDVector normalized = VectorDivide(coordinates, atlasSize);
+                const SIMDVectorSingle normalized = VectorDivide(coordinates, atlasSize);
                 item.uv = { VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
             }
         }
@@ -126,8 +126,8 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
                 return false;
             item.rectangle = *rectangle;
             item.pageIndex = record->pageIndex;
-            const SIMDVector coordinates = VectorSet(record->pixels.x, record->pixels.y, record->pixels.width, record->pixels.height);
-            const SIMDVector normalized = VectorDivide(coordinates, VectorReplicate(static_cast<f32>(s_GlyphAtlasPageExtent)));
+            const SIMDVectorSingle coordinates = VectorSet(record->pixels.x, record->pixels.y, record->pixels.width, record->pixels.height);
+            const SIMDVectorSingle normalized = VectorDivide(coordinates, VectorReplicate(static_cast<f32>(s_GlyphAtlasPageExtent)));
             item.uv = { VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
         }
         const TextGlyphIntersection::Enum status = TextGlyphVisibility::Intersect(item.rectangle, clip);

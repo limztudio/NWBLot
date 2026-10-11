@@ -53,17 +53,17 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 
 
 [[nodiscard]] static bool DrawSkinGallery(PaintBuilder& paint, const f32 x, const f32 y){
-    const SIMDVector origin = VectorSet(x, y, 0.0f, 0.0f);
-    const SIMDVector buttonNormal = VectorAdd(origin, VectorSet(12.0f, 12.0f, 0.0f, 0.0f));
-    const SIMDVector buttonHover = VectorAdd(origin, VectorSet(146.0f, 12.0f, 0.0f, 0.0f));
-    const SIMDVector buttonPressed = VectorAdd(origin, VectorSet(12.0f, 50.0f, 0.0f, 0.0f));
-    const SIMDVector buttonDisabled = VectorAdd(origin, VectorSet(146.0f, 50.0f, 0.0f, 0.0f));
-    const SIMDVector editFocused = VectorAdd(origin, VectorSet(12.0f, 88.0f, 0.0f, 0.0f));
-    const SIMDVector comboArrow = VectorAdd(origin, VectorSet(204.0f, 96.0f, 0.0f, 0.0f));
-    const SIMDVector checkbox = VectorAdd(origin, VectorSet(242.0f, 90.0f, 0.0f, 0.0f));
-    const SIMDVector checkboxMark = VectorAdd(origin, VectorSet(247.0f, 95.0f, 0.0f, 0.0f));
-    const SIMDVector progressTrack = VectorAdd(origin, VectorSet(12.0f, 132.0f, 0.0f, 0.0f));
-    const SIMDVector progressFill = VectorAdd(origin, VectorSet(14.0f, 134.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
+    const SIMDVectorSingle buttonNormal = VectorAdd(origin, VectorSet(12.0f, 12.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonHover = VectorAdd(origin, VectorSet(146.0f, 12.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonPressed = VectorAdd(origin, VectorSet(12.0f, 50.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonDisabled = VectorAdd(origin, VectorSet(146.0f, 50.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle editFocused = VectorAdd(origin, VectorSet(12.0f, 88.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle comboArrow = VectorAdd(origin, VectorSet(204.0f, 96.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle checkbox = VectorAdd(origin, VectorSet(242.0f, 90.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle checkboxMark = VectorAdd(origin, VectorSet(247.0f, 95.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle progressTrack = VectorAdd(origin, VectorSet(12.0f, 132.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle progressFill = VectorAdd(origin, VectorSet(14.0f, 134.0f, 0.0f, 0.0f));
     return
         paint.drawRegion(s_Panel, { x, y, s_PanelWidth, s_PanelHeight })
         && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), 122.0f, 30.0f })
@@ -130,17 +130,17 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         return;
     }
 
-    const SIMDVector origin = VectorSet(x, y, 0.0f, 0.0f);
-    const SIMDVector clipOrigin = VectorAdd(origin, VectorSet(12.0f, 160.0f, 0.0f, 0.0f));
-    const SIMDVector firstFillOrigin = VectorAdd(origin, VectorSet(2.0f, 160.0f, 0.0f, 0.0f));
-    const SIMDVector secondFillOrigin = VectorAdd(origin, VectorSet(100.0f, 176.0f, 0.0f, 0.0f));
-    const SIMDVector captionOrigin = VectorAdd(origin, VectorSet(18.0f, 160.0f, 0.0f, 0.0f));
-    const SIMDVector koreanOrigin = VectorAdd(origin, VectorSet(18.0f, 181.0f, 0.0f, 0.0f));
-    const SIMDVector normalOrigin = VectorAdd(origin, VectorSet(20.0f, 17.0f, 0.0f, 0.0f));
-    const SIMDVector hoverOrigin = VectorAdd(origin, VectorSet(154.0f, 17.0f, 0.0f, 0.0f));
-    const SIMDVector pressedOrigin = VectorAdd(origin, VectorSet(20.0f, 55.0f, 0.0f, 0.0f));
-    const SIMDVector disabledOrigin = VectorAdd(origin, VectorSet(154.0f, 55.0f, 0.0f, 0.0f));
-    const SIMDVector editOrigin = VectorAdd(origin, VectorSet(20.0f, 94.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
+    const SIMDVectorSingle clipOrigin = VectorAdd(origin, VectorSet(12.0f, 160.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle firstFillOrigin = VectorAdd(origin, VectorSet(2.0f, 160.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle secondFillOrigin = VectorAdd(origin, VectorSet(100.0f, 176.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(18.0f, 160.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle koreanOrigin = VectorAdd(origin, VectorSet(18.0f, 181.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(20.0f, 17.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(154.0f, 17.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(20.0f, 55.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(154.0f, 55.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle editOrigin = VectorAdd(origin, VectorSet(20.0f, 94.0f, 0.0f, 0.0f));
     context.paint.pushClip({ VectorGetX(clipOrigin), VectorGetY(clipOrigin), 256.0f, 42.0f });
     context.paint.fillRect(
         { VectorGetX(firstFillOrigin), VectorGetY(firstFillOrigin), 184.0f, 34.0f },

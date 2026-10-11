@@ -115,7 +115,7 @@ void InputDispatcher::keyboardCharInput(u32 unicode, i32 mods){
 
 void InputDispatcher::mousePosUpdate(f64 xpos, f64 ypos){
     const SIMDVectorDouble position = SIMDVectorDouble{ xpos, ypos }
-        / SIMDVectorDouble{ m_mousePositionScaleX, m_mousePositionScaleY };
+        / SIMDVectorDouble{ m_mousePositionScaleX, m_mousePositionScaleY, 1.0, 1.0 };
     xpos = position.x;
     ypos = position.y;
 

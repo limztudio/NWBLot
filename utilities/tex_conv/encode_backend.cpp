@@ -210,7 +210,7 @@ void ResetPayload(
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
                 return MakeUnexpected(Failure{});
             }
-            const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alpha0, alpha1, alpha2, alpha3));
+            const SIMDVectorSingle saturatedLanes = VectorSaturate(VectorSet(alpha0, alpha1, alpha2, alpha3));
             mask(x, y)[0u] = VectorGetX(saturatedLanes);
             mask(x + 1u, y)[0u] = VectorGetY(saturatedLanes);
             mask(x + 2u, y)[0u] = VectorGetZ(saturatedLanes);

@@ -9,7 +9,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 #include <global/simplemath.h>
 
 

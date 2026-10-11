@@ -4,7 +4,7 @@
 
 #include "popup.h"
 
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 #include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 

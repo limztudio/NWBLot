@@ -13,11 +13,6 @@
 #include "math/matrix.h"
 #include "math/collision.h"
 #include "math/frame.h"
-#include "math/vector_double.h"
-#include "math/quaternion_double.h"
-#include "math/matrix_double.h"
-#include "math/collision_double.h"
-#include "math/frame_double.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

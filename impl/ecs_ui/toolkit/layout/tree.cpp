@@ -5,7 +5,7 @@
 #include "tree.h"
 #include "../rect_math.h"
 
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 #include <global/simplemath.h>
 
 

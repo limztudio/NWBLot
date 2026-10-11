@@ -11,7 +11,7 @@
 #include <core/task/gpu/scheduler.h>
 #include <core/telemetry/session.h>
 #include <global/exception.h>
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 #include <global/termination.h>
 
 

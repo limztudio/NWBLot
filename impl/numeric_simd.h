@@ -6,7 +6,6 @@
 
 
 #include <global/math/vector_arithmetic.h>
-#include <global/math/vector_double.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,7 +18,7 @@ namespace NumericSimd{
 [[nodiscard]] NWB_INLINE f32 Subtract(const f32 a, const f32 b)noexcept{ return VectorGetX(VectorSubtract(VectorReplicate(a), VectorReplicate(b))); }
 [[nodiscard]] NWB_INLINE f32 Multiply(const f32 a, const f32 b)noexcept{ return VectorGetX(VectorMultiply(VectorReplicate(a), VectorReplicate(b))); }
 [[nodiscard]] NWB_INLINE f32 Divide(const f32 a, const f32 b)noexcept{
-#if defined(NWB_HAS_NEON) && !defined(__aarch64__) && !defined(_M_ARM64)
+#if defined(NWB_HAS_NEON) && !defined(NWB_HAS_NEON64)
     // ARM32's vector backend estimates the reciprocal; numeric admission needs the original rounded quotient.
     return a / b;
 #else

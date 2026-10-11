@@ -12,7 +12,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/task/cpu/scheduler.h>
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 #include <global/math/frame.h>
 
 

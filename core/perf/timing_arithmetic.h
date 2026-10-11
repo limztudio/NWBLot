@@ -5,7 +5,7 @@
 
 #include "global.h"
 
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 
 NWB_PERF_BEGIN
 
@@ -16,3 +16,7 @@ NWB_PERF_BEGIN
 }
 
 NWB_PERF_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

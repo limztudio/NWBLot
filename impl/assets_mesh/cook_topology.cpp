@@ -12,7 +12,7 @@
 
 #include "cook_topology.h"
 
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 #include <global/algorithm.h>
 
 

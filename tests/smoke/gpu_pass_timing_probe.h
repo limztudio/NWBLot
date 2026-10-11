@@ -13,7 +13,7 @@
 #include <global/containers.h>
 #include <global/filesystem.h>
 #include <global/name.h>
-#include <global/math/vector_double.h>
+#include <global/math/vector.h>
 #include <global/simplemath.h>
 #include <global/type.h>
 

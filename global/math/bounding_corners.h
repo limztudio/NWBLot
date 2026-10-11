@@ -100,38 +100,6 @@ inline void FrustumCorners(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const SIMDMatrix& matrix)noexcept{
-    const SIMDVectorSingle centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVectorSingle sphereRadius = VectorSplatW(sphereValue);
-    const auto decomposition = MatrixDecompose(matrix);
-    if(decomposition){
-        const SIMDVectorSingle absScale = VectorAbs(decomposition->scale);
-        const SIMDVectorSingle maxScale = CollisionDetail::Vector3MaxComponent(absScale);
-        return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScale));
-    }
-
-    const SIMDVectorSingle maxScaleVector = VectorMax(Vector3Length(matrix.v[0]), VectorMax(Vector3Length(matrix.v[1]), Vector3Length(matrix.v[2])));
-    return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScaleVector));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(
-    SIMDVectorSingle sphereValue,
-    const f32 scale,
-    const SIMDVectorSingle rotation,
-    const SIMDVectorSingle translation
-)noexcept{
-    const SIMDVectorSingle transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
-    return CollisionDetail::SphereCenterRadius(transformedCenter, VectorScale(VectorSplatW(sphereValue), Abs(scale)));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace CollisionDoubleDetail{
 
 
@@ -215,6 +183,20 @@ inline void FrustumCorners(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const SIMDMatrix& matrix)noexcept{
+    const SIMDVectorSingle centerVector = CollisionDetail::SphereCenter(sphereValue);
+    const SIMDVectorSingle sphereRadius = VectorSplatW(sphereValue);
+    const auto decomposition = MatrixDecompose(matrix);
+    if(decomposition){
+        const SIMDVectorSingle absScale = VectorAbs(decomposition->scale);
+        const SIMDVectorSingle maxScale = CollisionDetail::Vector3MaxComponent(absScale);
+        return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScale));
+    }
+
+    const SIMDVectorSingle maxScaleVector = VectorMax(Vector3Length(matrix.v[0]), VectorMax(Vector3Length(matrix.v[1]), Vector3Length(matrix.v[2])));
+    return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScaleVector));
+}
+
 [[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(SIMDVectorDouble sphereValue, const SIMDMatrixDouble& matrix)noexcept{
     const SIMDVectorDouble centerVector = CollisionDoubleDetail::SphereCenter(sphereValue);
     const SIMDVectorDouble sphereRadius = VectorDoubleSplatW(sphereValue);
@@ -232,6 +214,16 @@ inline void FrustumCorners(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(
+    SIMDVectorSingle sphereValue,
+    const f32 scale,
+    const SIMDVectorSingle rotation,
+    const SIMDVectorSingle translation
+)noexcept{
+    const SIMDVectorSingle transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
+    return CollisionDetail::SphereCenterRadius(transformedCenter, VectorScale(VectorSplatW(sphereValue), Abs(scale)));
+}
 
 [[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(
     SIMDVectorDouble sphereValue,

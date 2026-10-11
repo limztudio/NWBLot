@@ -85,6 +85,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSin(SIMDVectorSingle value)noexc
     return VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
 }
 
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSin(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(Sin(value[0]), Sin(value[1]), Sin(value[2]), Sin(value[3]));
+}
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCos(SIMDVectorSingle value)noexcept{
     SIMDVectorSingle cosSignSelect;
     SIMDVectorSingle x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
@@ -92,6 +96,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCos(SIMDVectorSingle value)noexc
 
     SIMDVectorSingle x2 = VectorMultiply(x, x);
     return VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCos(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(Cos(value[0]), Cos(value[1]), Cos(value[2]), Cos(value[3]));
 }
 
 NWB_INLINE void NWB_SIMD_CALL VectorSinCos(SIMDVectorSingle& outSin, SIMDVectorSingle& outCos, SIMDVectorSingle value)noexcept{
@@ -103,6 +111,11 @@ NWB_INLINE void NWB_SIMD_CALL VectorSinCos(SIMDVectorSingle& outSin, SIMDVectorS
 
     outSin = VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
     outCos = VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
+}
+
+NWB_INLINE void NWB_SIMD_CALL VectorDoubleSinCos(SIMDVectorDouble& outSin, SIMDVectorDouble& outCos, SIMDVectorDouble value)noexcept{
+    outSin = VectorDoubleSin(value);
+    outCos = VectorDoubleCos(value);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTan(SIMDVectorSingle value)noexcept{
@@ -174,16 +187,32 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTan(SIMDVectorSingle value)noexc
     return VectorSelect(result, zero, valueIsZero);
 }
 
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTan(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(Tan(value[0]), Tan(value[1]), Tan(value[2]), Tan(value[3]));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSinH(SIMDVectorSingle value)noexcept{
     const SIMDVectorSingle e1 = VectorExp(value);
     const SIMDVectorSingle e2 = VectorExp(VectorNegate(value));
     return VectorMultiply(VectorSubtract(e1, e2), s_SIMDOneHalf);
 }
 
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSinH(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(SinH(value[0]), SinH(value[1]), SinH(value[2]), SinH(value[3]));
+}
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCosH(SIMDVectorSingle value)noexcept{
     const SIMDVectorSingle e1 = VectorExp(value);
     const SIMDVectorSingle e2 = VectorExp(VectorNegate(value));
     return VectorMultiply(VectorAdd(e1, e2), s_SIMDOneHalf);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCosH(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(CosH(value[0]), CosH(value[1]), CosH(value[2]), CosH(value[3]));
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTanH(SIMDVectorSingle value)noexcept{
@@ -194,33 +223,13 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTanH(SIMDVectorSingle value)noex
     return VectorOrInt(magnitude, sign);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSin(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Sin(value[0]), Sin(value[1]), Sin(value[2]), Sin(value[3]));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCos(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Cos(value[0]), Cos(value[1]), Cos(value[2]), Cos(value[3]));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTan(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Tan(value[0]), Tan(value[1]), Tan(value[2]), Tan(value[3]));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSinH(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(SinH(value[0]), SinH(value[1]), SinH(value[2]), SinH(value[3]));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCosH(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(CosH(value[0]), CosH(value[1]), CosH(value[2]), CosH(value[3]));
-}
-
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTanH(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(TanH(value[0]), TanH(value[1]), TanH(value[2]), TanH(value[3]));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSinEst(SIMDVectorDouble value)noexcept{
     return VectorDoubleSin(value);
@@ -232,11 +241,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCosEst(SIMDVectorDouble va
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTanEst(SIMDVectorDouble value)noexcept{
     return VectorDoubleTan(value);
-}
-
-NWB_INLINE void NWB_SIMD_CALL VectorDoubleSinCos(SIMDVectorDouble& outSin, SIMDVectorDouble& outCos, SIMDVectorDouble value)noexcept{
-    outSin = VectorDoubleSin(value);
-    outCos = VectorDoubleCos(value);
 }
 
 NWB_INLINE void NWB_SIMD_CALL VectorDoubleSinCosEst(SIMDVectorDouble& outSin, SIMDVectorDouble& outCos, SIMDVectorDouble value)noexcept{

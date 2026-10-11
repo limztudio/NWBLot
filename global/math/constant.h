@@ -21,6 +21,15 @@ struct alignas(16) SIMDVectorConstF{
     NWB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 
+struct alignas(32) SIMDVectorDoubleConstF{
+    union{
+        f64 f[4];
+        SIMDVectorDouble v;
+    };
+
+    NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
+};
+
 struct alignas(16) SIMDVectorConstI{
     union{
         i32 i[4];
@@ -30,6 +39,15 @@ struct alignas(16) SIMDVectorConstI{
     NWB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 
+struct alignas(32) SIMDVectorDoubleConstI{
+    union{
+        i64 i[4];
+        SIMDVectorDouble v;
+    };
+
+    NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
+};
+
 struct alignas(16) SIMDVectorConstU{
     union{
         u32 u[4];
@@ -37,6 +55,15 @@ struct alignas(16) SIMDVectorConstU{
     };
 
     NWB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
+};
+
+struct alignas(32) SIMDVectorDoubleConstU{
+    union{
+        u64 u[4];
+        SIMDVectorDouble v;
+    };
+
+    NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
 };
 
 struct alignas(16) SIMDVectorConstB{
@@ -53,33 +80,57 @@ struct alignas(16) SIMDVectorConstB{
 
 
 constexpr f32 s_PI = 3.141592654f;
+inline constexpr f64 s_DoublePI = 0x1.921fb54442d18p+1;
 constexpr f32 s_2PI = 6.283185307f;
+inline constexpr f64 s_Double2PI = 0x1.921fb54442d18p+2;
 constexpr f32 s_1DIVPI = 0.318309886f;
+inline constexpr f64 s_Double1DIVPI = 0x1.45f306dc9c883p-2;
 constexpr f32 s_1DIV2PI = 0.159154943f;
+inline constexpr f64 s_Double1DIV2PI = 0x1.45f306dc9c883p-3;
 constexpr f32 s_PIDIV2 = 1.570796327f;
+inline constexpr f64 s_DoublePIDIV2 = 0x1.921fb54442d18p+0;
 constexpr f32 s_PIDIV4 = 0.785398163f;
+inline constexpr f64 s_DoublePIDIV4 = 0x1.921fb54442d18p-1;
 
 constexpr u32 s_SELECT_0 = 0x00000000;
+constexpr u64 s_DoubleSELECT_0 = 0x00000000;
 constexpr u32 s_SELECT_1 = 0xFFFFFFFF;
+constexpr u64 s_DoubleSELECT_1 = 0xFFFFFFFFFFFFFFFFull;
 
 constexpr u32 s_PERMUTE_0X = 0;
+constexpr u32 s_DoublePERMUTE_0X = 0;
 constexpr u32 s_PERMUTE_0Y = 1;
+constexpr u32 s_DoublePERMUTE_0Y = 1;
 constexpr u32 s_PERMUTE_0Z = 2;
+constexpr u32 s_DoublePERMUTE_0Z = 2;
 constexpr u32 s_PERMUTE_0W = 3;
+constexpr u32 s_DoublePERMUTE_0W = 3;
 constexpr u32 s_PERMUTE_1X = 4;
+constexpr u32 s_DoublePERMUTE_1X = 4;
 constexpr u32 s_PERMUTE_1Y = 5;
+constexpr u32 s_DoublePERMUTE_1Y = 5;
 constexpr u32 s_PERMUTE_1Z = 6;
+constexpr u32 s_DoublePERMUTE_1Z = 6;
 constexpr u32 s_PERMUTE_1W = 7;
+constexpr u32 s_DoublePERMUTE_1W = 7;
 
 constexpr u32 s_SWIZZLE_X = 0;
+constexpr u32 s_DoubleSWIZZLE_X = 0;
 constexpr u32 s_SWIZZLE_Y = 1;
+constexpr u32 s_DoubleSWIZZLE_Y = 1;
 constexpr u32 s_SWIZZLE_Z = 2;
+constexpr u32 s_DoubleSWIZZLE_Z = 2;
 constexpr u32 s_SWIZZLE_W = 3;
+constexpr u32 s_DoubleSWIZZLE_W = 3;
 
 constexpr u32 s_CRMASK_CR6 = 0x000000F0;
+constexpr u32 s_DoubleCRMASK_CR6 = 0x000000F0;
 constexpr u32 s_CRMASK_CR6TRUE = 0x00000080;
+constexpr u32 s_DoubleCRMASK_CR6TRUE = 0x00000080;
 constexpr u32 s_CRMASK_CR6FALSE = 0x00000020;
+constexpr u32 s_DoubleCRMASK_CR6FALSE = 0x00000020;
 constexpr u32 s_CRMASK_CR6BOUNDS = s_CRMASK_CR6FALSE;
+constexpr u32 s_DoubleCRMASK_CR6BOUNDS = s_DoubleCRMASK_CR6FALSE;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,42 +153,69 @@ NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDTanEstCoefficients = { { { 2.484f, -1.95
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDArcEstCoefficients = { { { +1.5707288f, -0.2121144f, +0.0742610f, -0.0187293f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDPiConstants0 = { { { s_PI, s_2PI, s_1DIVPI, s_1DIV2PI } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDIdentityR0 = { { { 1.0f, 0.0f, 0.0f, 0.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR0 = { { { 1.0, 0.0, 0.0, 0.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDIdentityR1 = { { { 0.0f, 1.0f, 0.0f, 0.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR1 = { { { 0.0, 1.0, 0.0, 0.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDIdentityR2 = { { { 0.0f, 0.0f, 1.0f, 0.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR2 = { { { 0.0, 0.0, 1.0, 0.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDIdentityR3 = { { { 0.0f, 0.0f, 0.0f, 1.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR3 = { { { 0.0, 0.0, 0.0, 1.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegIdentityR0 = { { { -1.0f, 0.0f, 0.0f, 0.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegIdentityR1 = { { { 0.0f, -1.0f, 0.0f, 0.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegIdentityR2 = { { { 0.0f, 0.0f, -1.0f, 0.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegIdentityR3 = { { { 0.0f, 0.0f, 0.0f, -1.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDNegativeZero = { { { 0x80000000, 0x80000000, 0x80000000, 0x80000000 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDNegativeZero = { { { 0x8000000000000000, 0x8000000000000000, 0x8000000000000000, 0x8000000000000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDNegate3 = { { { 0x80000000, 0x80000000, 0x80000000, 0x00000000 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDNegate3 = { { { 0x8000000000000000, 0x8000000000000000, 0x8000000000000000, 0x00000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDMaskXY = { { { 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskXY = { { { 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000, 0x00000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDMask3 = { { { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDMask3 = { { { 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDMaskX = { { { 0xFFFFFFFF, 0x00000000, 0x00000000, 0x00000000 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskX = { { { 0xFFFFFFFFFFFFFFFF, 0x00000000, 0x00000000, 0x00000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDMaskY = { { { 0x00000000, 0xFFFFFFFF, 0x00000000, 0x00000000 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskY = { { { 0x00000000, 0xFFFFFFFFFFFFFFFF, 0x00000000, 0x00000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDMaskZ = { { { 0x00000000, 0x00000000, 0xFFFFFFFF, 0x00000000 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskZ = { { { 0x00000000, 0x00000000, 0xFFFFFFFFFFFFFFFF, 0x00000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDMaskW = { { { 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskW = { { { 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFFFFFFFFFF } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDOne = { { { 1.0f, 1.0f, 1.0f, 1.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDOne = { { { 1.0, 1.0, 1.0, 1.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDOne3 = { { { 1.0f, 1.0f, 1.0f, 0.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDOne3 = { { { 1.0, 1.0, 1.0, 0.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDZero = { { { 0.0f, 0.0f, 0.0f, 0.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDZero = { { { 0.0, 0.0, 0.0, 0.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDTwo = { { { 2.f, 2.f, 2.f, 2.f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDTwo = { { { 2., 2., 2., 2. } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDFour = { { { 4.f, 4.f, 4.f, 4.f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDFour = { { { 4., 4., 4., 4. } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDSix = { { { 6.f, 6.f, 6.f, 6.f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegativeOne = { { { -1.0f, -1.0f, -1.0f, -1.0f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDNegativeOne = { { { -1.0, -1.0, -1.0, -1.0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDOneHalf = { { { 0.5f, 0.5f, 0.5f, 0.5f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDOneHalf = { { { 0.5, 0.5, 0.5, 0.5 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegativeOneHalf = { { { -0.5f, -0.5f, -0.5f, -0.5f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegativeTwoPi = { { { -s_2PI, -s_2PI, -s_2PI, -s_2PI } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDNegativeTwoPi = { { { -s_Double2PI, -s_Double2PI, -s_Double2PI, -s_Double2PI } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegativePi = { { { -s_PI, -s_PI, -s_PI, -s_PI } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDNegativePi = { { { -s_DoublePI, -s_DoublePI, -s_DoublePI, -s_DoublePI } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDHalfPi = { { { s_PIDIV2, s_PIDIV2, s_PIDIV2, s_PIDIV2 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDPi = { { { s_PI, s_PI, s_PI, s_PI } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDPi = { { { s_DoublePI, s_DoublePI, s_DoublePI, s_DoublePI } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDReciprocalPi = { { { s_1DIVPI, s_1DIVPI, s_1DIVPI, s_1DIVPI } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDTwoPi = { { { s_2PI, s_2PI, s_2PI, s_2PI } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDTwoPi = { { { s_Double2PI, s_Double2PI, s_Double2PI, s_Double2PI } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDReciprocalTwoPi = { { { s_1DIV2PI, s_1DIV2PI, s_1DIV2PI, s_1DIV2PI } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDEpsilon = { { { 1.192092896e-7f, 1.192092896e-7f, 1.192092896e-7f, 1.192092896e-7f } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDEpsilon = { { { 0x1p-52, 0x1p-52, 0x1p-52, 0x1p-52 } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDInfinity = { { { 0x7F800000, 0x7F800000, 0x7F800000, 0x7F800000 } } };
+inline const SIMDVectorDoubleConstI s_DoubleSIMDInfinity = { { { 0x7FF0000000000000, 0x7FF0000000000000, 0x7FF0000000000000, 0x7FF0000000000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDQNaN = { { { 0x7FC00000, 0x7FC00000, 0x7FC00000, 0x7FC00000 } } };
+inline const SIMDVectorDoubleConstI s_DoubleSIMDQNaN = { { { 0x7FF8000000000000, 0x7FF8000000000000, 0x7FF8000000000000, 0x7FF8000000000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDQNaNTest = { { { 0x007FFFFF, 0x007FFFFF, 0x007FFFFF, 0x007FFFFF } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDAbsMask = { { { 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF } } };
+inline const SIMDVectorDoubleConstI s_DoubleSIMDAbsMask = { { { 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDFltMin = { { { 0x00800000, 0x00800000, 0x00800000, 0x00800000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDFltMax = { { { 0x7F7FFFFF, 0x7F7FFFFF, 0x7F7FFFFF, 0x7F7FFFFF } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDNegOneMask = { { { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF } } };
@@ -164,11 +242,14 @@ NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegateY = { { { 1.0f, -1.0f, 1.0f, 1.0f 
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegateZ = { { { 1.0f, 1.0f, -1.0f, 1.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegateW = { { { 1.0f, 1.0f, 1.0f, -1.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect0101 = { { { s_SELECT_0, s_SELECT_1, s_SELECT_0, s_SELECT_1 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect0101 = { { { s_DoubleSELECT_0, s_DoubleSELECT_1, s_DoubleSELECT_0, s_DoubleSELECT_1 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1010 = { { { s_SELECT_1, s_SELECT_0, s_SELECT_1, s_SELECT_0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDOneHalfMinusEpsilon = { { { 0x3EFFFFFD, 0x3EFFFFFD, 0x3EFFFFFD, 0x3EFFFFFD } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1000 = { { { s_SELECT_1, s_SELECT_0, s_SELECT_0, s_SELECT_0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1100 = { { { s_SELECT_1, s_SELECT_1, s_SELECT_0, s_SELECT_0 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect1100 = { { { s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_0, s_DoubleSELECT_0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1110 = { { { s_SELECT_1, s_SELECT_1, s_SELECT_1, s_SELECT_0 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect1110 = { { { s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_0 } } };
 NWB_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1011 = { { { s_SELECT_1, s_SELECT_0, s_SELECT_1, s_SELECT_1 } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDFixupY16 = { { { 1.0f, 1.0f / 65536.0f, 0.0f, 0.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDFixupY16W16 = { { { 1.0f, 1.0f, 1.0f / 65536.0f, 1.0f / 65536.0f } } };
@@ -227,100 +308,6 @@ NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDByteMax = { { { 127.0f, 127.0f, 127.0f, 
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDShortMin = { { { -32767.0f, -32767.0f, -32767.0f, -32767.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDShortMax = { { { 32767.0f, 32767.0f, 32767.0f, 32767.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDUShortMax = { { { 65535.0f, 65535.0f, 65535.0f, 65535.0f } } };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct alignas(32) SIMDVectorDoubleConstF{
-    union{
-        f64 f[4];
-        SIMDVectorDouble v;
-    };
-
-    NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
-};
-
-struct alignas(32) SIMDVectorDoubleConstI{
-    union{
-        i64 i[4];
-        SIMDVectorDouble v;
-    };
-
-    NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
-};
-
-struct alignas(32) SIMDVectorDoubleConstU{
-    union{
-        u64 u[4];
-        SIMDVectorDouble v;
-    };
-
-    NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u64 s_DoubleSELECT_0 = 0x00000000;
-constexpr u64 s_DoubleSELECT_1 = 0xFFFFFFFFFFFFFFFFull;
-constexpr u32 s_DoublePERMUTE_0X = 0;
-constexpr u32 s_DoublePERMUTE_0Y = 1;
-constexpr u32 s_DoublePERMUTE_0Z = 2;
-constexpr u32 s_DoublePERMUTE_0W = 3;
-constexpr u32 s_DoublePERMUTE_1X = 4;
-constexpr u32 s_DoublePERMUTE_1Y = 5;
-constexpr u32 s_DoublePERMUTE_1Z = 6;
-constexpr u32 s_DoublePERMUTE_1W = 7;
-constexpr u32 s_DoubleSWIZZLE_X = 0;
-constexpr u32 s_DoubleSWIZZLE_Y = 1;
-constexpr u32 s_DoubleSWIZZLE_Z = 2;
-constexpr u32 s_DoubleSWIZZLE_W = 3;
-constexpr u32 s_DoubleCRMASK_CR6 = 0x000000F0;
-constexpr u32 s_DoubleCRMASK_CR6TRUE = 0x00000080;
-constexpr u32 s_DoubleCRMASK_CR6FALSE = 0x00000020;
-constexpr u32 s_DoubleCRMASK_CR6BOUNDS = s_DoubleCRMASK_CR6FALSE;
-
-inline constexpr f64 s_DoublePI = 0x1.921fb54442d18p+1;
-inline constexpr f64 s_Double2PI = 0x1.921fb54442d18p+2;
-inline constexpr f64 s_Double1DIVPI = 0x1.45f306dc9c883p-2;
-inline constexpr f64 s_Double1DIV2PI = 0x1.45f306dc9c883p-3;
-
-inline constexpr f64 s_DoublePIDIV2 = 0x1.921fb54442d18p+0;
-
-inline constexpr f64 s_DoublePIDIV4 = 0x1.921fb54442d18p-1;
-
-inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR0 = { { { 1.0, 0.0, 0.0, 0.0 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR1 = { { { 0.0, 1.0, 0.0, 0.0 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR2 = { { { 0.0, 0.0, 1.0, 0.0 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR3 = { { { 0.0, 0.0, 0.0, 1.0 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDNegativeZero = { { { 0x8000000000000000, 0x8000000000000000, 0x8000000000000000, 0x8000000000000000 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDNegate3 = { { { 0x8000000000000000, 0x8000000000000000, 0x8000000000000000, 0x00000000 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskXY = { { { 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000, 0x00000000 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDMask3 = { { { 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskX = { { { 0xFFFFFFFFFFFFFFFF, 0x00000000, 0x00000000, 0x00000000 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskY = { { { 0x00000000, 0xFFFFFFFFFFFFFFFF, 0x00000000, 0x00000000 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskZ = { { { 0x00000000, 0x00000000, 0xFFFFFFFFFFFFFFFF, 0x00000000 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDMaskW = { { { 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFFFFFFFFFF } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDOne = { { { 1.0, 1.0, 1.0, 1.0 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDOne3 = { { { 1.0, 1.0, 1.0, 0.0 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDZero = { { { 0.0, 0.0, 0.0, 0.0 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDTwo = { { { 2., 2., 2., 2. } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDFour = { { { 4., 4., 4., 4. } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDNegativeOne = { { { -1.0, -1.0, -1.0, -1.0 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDOneHalf = { { { 0.5, 0.5, 0.5, 0.5 } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDNegativeTwoPi = { { { -s_Double2PI, -s_Double2PI, -s_Double2PI, -s_Double2PI } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDNegativePi = { { { -s_DoublePI, -s_DoublePI, -s_DoublePI, -s_DoublePI } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDPi = { { { s_DoublePI, s_DoublePI, s_DoublePI, s_DoublePI } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDTwoPi = { { { s_Double2PI, s_Double2PI, s_Double2PI, s_Double2PI } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDEpsilon = { { { 0x1p-52, 0x1p-52, 0x1p-52, 0x1p-52 } } };
-inline const SIMDVectorDoubleConstI s_DoubleSIMDInfinity = { { { 0x7FF0000000000000, 0x7FF0000000000000, 0x7FF0000000000000, 0x7FF0000000000000 } } };
-inline const SIMDVectorDoubleConstI s_DoubleSIMDQNaN = { { { 0x7FF8000000000000, 0x7FF8000000000000, 0x7FF8000000000000, 0x7FF8000000000000 } } };
-inline const SIMDVectorDoubleConstI s_DoubleSIMDAbsMask = { { { 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect0101 = { { { s_DoubleSELECT_0, s_DoubleSELECT_1, s_DoubleSELECT_0, s_DoubleSELECT_1 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect1100 = { { { s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_0, s_DoubleSELECT_0 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect1110 = { { { s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_0 } } };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

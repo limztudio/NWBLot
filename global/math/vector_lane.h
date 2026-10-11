@@ -36,7 +36,29 @@ inline constexpr u32 s_XYZW = 0xFu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Active component masks for vector helpers that consume only a subset of SIMD lanes.
+namespace VectorDoubleComponentMask{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_DoubleXY = 0x3u;
+inline constexpr u32 s_DoubleXYZ = 0x7u;
+inline constexpr u32 s_DoubleXYZW = 0xFu;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr f32 s_RoundHalfBias = 0.5f;
+
 inline constexpr f32 s_CosQuarticCoeff = 0.5f;
 
 
@@ -48,6 +70,80 @@ namespace SIMDVectorDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+#if defined(NWB_HAS_SSE4)
+struct SllEpi32 final{
+    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_sll_epi32(value, count); }
+};
+
+struct SrlEpi32 final{
+    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_srl_epi32(value, count); }
+};
+
+template<typename ShiftOp>
+NWB_INLINE __m128i MultiShiftEpi32(__m128i value, __m128i count)noexcept{
+    __m128i v = _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 0, 0, 0));
+    __m128i c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(0, 0, 0, 0)), s_SIMDMaskX);
+    const __m128i r0 = ShiftOp::Apply(v, c);
+
+    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 1, 1, 1));
+    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(1, 1, 1, 1)), s_SIMDMaskX);
+    const __m128i r1 = ShiftOp::Apply(v, c);
+
+    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 2, 2, 2));
+    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(2, 2, 2, 2)), s_SIMDMaskX);
+    const __m128i r2 = ShiftOp::Apply(v, c);
+
+    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(3, 3, 3, 3));
+    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(3, 3, 3, 3)), s_SIMDMaskX);
+    const __m128i r3 = ShiftOp::Apply(v, c);
+
+    const __m128 r01 = _mm_shuffle_ps(_mm_castsi128_ps(r0), _mm_castsi128_ps(r1), _MM_SHUFFLE(0, 0, 0, 0));
+    const __m128 r23 = _mm_shuffle_ps(_mm_castsi128_ps(r2), _mm_castsi128_ps(r3), _MM_SHUFFLE(0, 0, 0, 0));
+    return _mm_castps_si128(_mm_shuffle_ps(r01, r23, _MM_SHUFFLE(2, 0, 2, 0)));
+}
+
+NWB_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
+    return MultiShiftEpi32<SllEpi32>(value, count);
+}
+
+NWB_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{
+    return MultiShiftEpi32<SrlEpi32>(value, count);
+}
+
+NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
+    const __m128i mask0000FFFF = _mm_set1_epi32(0x0000FFFF);
+    const __m128i mask000000FF = _mm_set1_epi32(0x000000FF);
+    const __m128i mask0000000F = _mm_set1_epi32(0x0000000F);
+    const __m128i mask00000003 = _mm_set1_epi32(0x00000003);
+
+    __m128i c = _mm_cmpgt_epi32(value, mask0000FFFF);
+    __m128i b = _mm_srli_epi32(c, 31);
+    __m128i r = _mm_slli_epi32(b, 4);
+    value = MultiSrlEpi32(value, r);
+
+    c = _mm_cmpgt_epi32(value, mask000000FF);
+    b = _mm_srli_epi32(c, 31);
+    __m128i s = _mm_slli_epi32(b, 3);
+    value = MultiSrlEpi32(value, s);
+    r = _mm_or_si128(r, s);
+
+    c = _mm_cmpgt_epi32(value, mask0000000F);
+    b = _mm_srli_epi32(c, 31);
+    s = _mm_slli_epi32(b, 2);
+    value = MultiSrlEpi32(value, s);
+    r = _mm_or_si128(r, s);
+
+    c = _mm_cmpgt_epi32(value, mask00000003);
+    b = _mm_srli_epi32(c, 31);
+    s = _mm_slli_epi32(b, 1);
+    value = MultiSrlEpi32(value, s);
+    r = _mm_or_si128(r, s);
+
+    s = _mm_srli_epi32(value, 1);
+    return _mm_or_si128(r, s);
+}
+#endif
 
 template<typename T>
 NWB_INLINE T* StridePointer(T* pointer, usize stride, usize index)noexcept{
@@ -132,80 +228,6 @@ NWB_INLINE u32 TruncateBits(f32 value)noexcept{
     return result.u;
 }
 
-#if defined(NWB_HAS_SSE4)
-struct SllEpi32 final{
-    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_sll_epi32(value, count); }
-};
-
-struct SrlEpi32 final{
-    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_srl_epi32(value, count); }
-};
-
-template<typename ShiftOp>
-NWB_INLINE __m128i MultiShiftEpi32(__m128i value, __m128i count)noexcept{
-    __m128i v = _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 0, 0, 0));
-    __m128i c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(0, 0, 0, 0)), s_SIMDMaskX);
-    const __m128i r0 = ShiftOp::Apply(v, c);
-
-    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 1, 1, 1));
-    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(1, 1, 1, 1)), s_SIMDMaskX);
-    const __m128i r1 = ShiftOp::Apply(v, c);
-
-    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 2, 2, 2));
-    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(2, 2, 2, 2)), s_SIMDMaskX);
-    const __m128i r2 = ShiftOp::Apply(v, c);
-
-    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(3, 3, 3, 3));
-    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(3, 3, 3, 3)), s_SIMDMaskX);
-    const __m128i r3 = ShiftOp::Apply(v, c);
-
-    const __m128 r01 = _mm_shuffle_ps(_mm_castsi128_ps(r0), _mm_castsi128_ps(r1), _MM_SHUFFLE(0, 0, 0, 0));
-    const __m128 r23 = _mm_shuffle_ps(_mm_castsi128_ps(r2), _mm_castsi128_ps(r3), _MM_SHUFFLE(0, 0, 0, 0));
-    return _mm_castps_si128(_mm_shuffle_ps(r01, r23, _MM_SHUFFLE(2, 0, 2, 0)));
-}
-
-NWB_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
-    return MultiShiftEpi32<SllEpi32>(value, count);
-}
-
-NWB_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{
-    return MultiShiftEpi32<SrlEpi32>(value, count);
-}
-
-NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
-    const __m128i mask0000FFFF = _mm_set1_epi32(0x0000FFFF);
-    const __m128i mask000000FF = _mm_set1_epi32(0x000000FF);
-    const __m128i mask0000000F = _mm_set1_epi32(0x0000000F);
-    const __m128i mask00000003 = _mm_set1_epi32(0x00000003);
-
-    __m128i c = _mm_cmpgt_epi32(value, mask0000FFFF);
-    __m128i b = _mm_srli_epi32(c, 31);
-    __m128i r = _mm_slli_epi32(b, 4);
-    value = MultiSrlEpi32(value, r);
-
-    c = _mm_cmpgt_epi32(value, mask000000FF);
-    b = _mm_srli_epi32(c, 31);
-    __m128i s = _mm_slli_epi32(b, 3);
-    value = MultiSrlEpi32(value, s);
-    r = _mm_or_si128(r, s);
-
-    c = _mm_cmpgt_epi32(value, mask0000000F);
-    b = _mm_srli_epi32(c, 31);
-    s = _mm_slli_epi32(b, 2);
-    value = MultiSrlEpi32(value, s);
-    r = _mm_or_si128(r, s);
-
-    c = _mm_cmpgt_epi32(value, mask00000003);
-    b = _mm_srli_epi32(c, 31);
-    s = _mm_slli_epi32(b, 1);
-    value = MultiSrlEpi32(value, s);
-    r = _mm_or_si128(r, s);
-
-    s = _mm_srli_epi32(value, 1);
-    return _mm_or_si128(r, s);
-}
-#endif
-
 #if defined(NWB_HAS_NEON)
 NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
     const uint32x4_t raw = vreinterpretq_u32_s32(value);
@@ -285,27 +307,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SplatLane(SIMDVectorSingle value)noexc
     return _mm_shuffle_ps(value, value, _MM_SHUFFLE(Lane, Lane, Lane, Lane));
 #endif
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Active component masks for vector helpers that consume only a subset of SIMD lanes.
-namespace VectorDoubleComponentMask{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_DoubleXY = 0x3u;
-inline constexpr u32 s_DoubleXYZ = 0x7u;
-inline constexpr u32 s_DoubleXYZW = 0xFu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

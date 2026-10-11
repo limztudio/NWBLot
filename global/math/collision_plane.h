@@ -31,8 +31,31 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace PlaneDoubleTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL Distance(SIMDVectorDouble plane, SIMDVectorDouble point)noexcept;
+[[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL FromPointNormal(SIMDVectorDouble normal, SIMDVectorDouble point, SIMDVectorDouble fallbackNormal)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL PlaneTests::Distance(const SIMDVectorSingle plane, const SIMDVectorSingle point)noexcept{
     return CollisionDetail::PlaneDistance(plane, point);
+}
+
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleTests::Distance(const SIMDVectorDouble plane, const SIMDVectorDouble point)noexcept{
+    return CollisionDoubleDetail::PlaneDoubleDistance(plane, point);
 }
 
 
@@ -53,37 +76,6 @@ namespace PlaneTests{
         unitNormal = VectorSetW(VectorMultiply(normal, VectorReciprocalSqrt(lengthSquared)), 0.0f);
     return VectorSelect(unitNormal, VectorNegate(Vector3Dot(unitNormal, point)), s_SIMDMaskW);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace PlaneDoubleTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL Distance(SIMDVectorDouble plane, SIMDVectorDouble point)noexcept;
-[[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL FromPointNormal(SIMDVectorDouble normal, SIMDVectorDouble point, SIMDVectorDouble fallbackNormal)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleTests::Distance(const SIMDVectorDouble plane, const SIMDVectorDouble point)noexcept{
-    return CollisionDoubleDetail::PlaneDoubleDistance(plane, point);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleTests::FromPointNormal(
     const SIMDVectorDouble normal,

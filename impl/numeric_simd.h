@@ -44,28 +44,28 @@ namespace NumericSimd{
     return VectorGetX(VectorSelect(lane, hi, VectorGreater(lane, hi)));
 }
 
-[[nodiscard]] NWB_INLINE f64 Add(const f64 a, const f64 b)noexcept{ return (VectorDoubleReplicate(a) + VectorDoubleReplicate(b)).x; }
-[[nodiscard]] NWB_INLINE f64 Subtract(const f64 a, const f64 b)noexcept{ return (VectorDoubleReplicate(a) - VectorDoubleReplicate(b)).x; }
-[[nodiscard]] NWB_INLINE f64 Multiply(const f64 a, const f64 b)noexcept{ return (VectorDoubleReplicate(a) * VectorDoubleReplicate(b)).x; }
-[[nodiscard]] NWB_INLINE f64 Divide(const f64 a, const f64 b)noexcept{ return (VectorDoubleReplicate(a) / VectorDoubleReplicate(b)).x; }
-[[nodiscard]] NWB_INLINE f64 Negate(const f64 value)noexcept{ return (-VectorDoubleReplicate(value)).x; }
+[[nodiscard]] NWB_INLINE f64 Add(const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); }
+[[nodiscard]] NWB_INLINE f64 Subtract(const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); }
+[[nodiscard]] NWB_INLINE f64 Multiply(const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); }
+[[nodiscard]] NWB_INLINE f64 Divide(const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); }
+[[nodiscard]] NWB_INLINE f64 Negate(const f64 value)noexcept{ return VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(value))); }
 [[nodiscard]] NWB_INLINE f64 Abs(const f64 value)noexcept{
     const SIMDVectorDouble lane = VectorDoubleReplicate(value);
-    return ((lane < SIMDVectorDouble{}) ? -lane : lane).x;
+    return VectorDoubleGetX(VectorDoubleSelect(lane, VectorDoubleNegate(lane), VectorDoubleLess(lane, VectorDoubleZero())));
 }
 [[nodiscard]] NWB_INLINE f64 Min(const f64 a, const f64 b)noexcept{
     const SIMDVectorDouble first = VectorDoubleReplicate(a), second = VectorDoubleReplicate(b);
-    return ((first < second) ? first : second).x;
+    return VectorDoubleGetX(VectorDoubleSelect(second, first, VectorDoubleLess(first, second)));
 }
 [[nodiscard]] NWB_INLINE f64 Max(const f64 a, const f64 b)noexcept{
     const SIMDVectorDouble first = VectorDoubleReplicate(a), second = VectorDoubleReplicate(b);
-    return ((first > second) ? first : second).x;
+    return VectorDoubleGetX(VectorDoubleSelect(second, first, VectorDoubleGreater(first, second)));
 }
 [[nodiscard]] NWB_INLINE f64 Clamp(const f64 value, const f64 minimum, const f64 maximum)noexcept{
     const SIMDVectorDouble lane = VectorDoubleReplicate(value), lo = VectorDoubleReplicate(minimum), hi = VectorDoubleReplicate(maximum);
-    if((lane > lo).x == 0)
+    if(VectorDoubleGetIntX(VectorDoubleGreater(lane, lo)) == 0u)
         return minimum;
-    return ((lane > hi) ? hi : lane).x;
+    return VectorDoubleGetX(VectorDoubleSelect(lane, hi, VectorDoubleGreater(lane, hi)));
 }
 
 };

@@ -11,8 +11,10 @@
 #include <global/compile.h>
 #include <global/limit.h>
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 
 #include <cfenv>
+#include <fenv.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,6 +166,73 @@ TEST(Math, DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes){
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(BitCast<u64>(rounded[lane]), BitCast<u64>(expected[index][lane])) << index << ':' << lane;
     }
+}
+
+TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero){
+#pragma STDC FENV_ACCESS ON
+    fenv_t originalEnvironment{};
+    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(fesetenv(&originalEnvironment) != 0)
+            NWB_ASSERT(false);
+    });
+
+    const i32 roundingModes[]{ FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    volatile f64 runtimeInputs[][4]{
+        { 0.5, -0.5, 1.5, -1.5 },
+        { 0.25, -0.25, 2.5, -2.5 },
+        { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+        { 0x1p-1074, -0x1p-1074, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
+    };
+    const SIMDVectorDouble expected[][4]{
+        {
+            { 0.0, -0.0, 2.0, -2.0 },
+            { 0.0, -0.0, 2.0, -2.0 },
+            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+            { 0.0, -0.0, 0x1p+52, -0x1p+52 },
+        },
+        {
+            { 0.0, -0.0, 1.0, -1.0 },
+            { 0.0, -0.0, 2.0, -2.0 },
+            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+            { 0.0, -0.0, 0x1.ffffffffffffep+51, -0x1.ffffffffffffep+51 },
+        },
+        {
+            { 0.0, -1.0, 1.0, -2.0 },
+            { 0.0, -1.0, 2.0, -3.0 },
+            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+            { 0.0, -1.0, 0x1.ffffffffffffep+51, -0x1p+52 },
+        },
+        {
+            { 1.0, -0.0, 2.0, -1.0 },
+            { 1.0, -0.0, 3.0, -2.0 },
+            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+            { 1.0, -0.0, 0x1p+52, -0x1.ffffffffffffep+51 },
+        },
+    };
+    for(const i32 mode : roundingModes){
+        const i32 setStatus = fesetround(mode);
+        EXPECT_EQ(setStatus, 0);
+        if(setStatus != 0)
+            continue;
+        for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
+            const SIMDVectorDouble input = VectorDoubleSet(
+                runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]
+            );
+            const SIMDVectorDouble results[]{
+                VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input),
+            };
+            for(usize operation = 0u; operation < LengthOf(results); ++operation){
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(BitCast<u64>(results[operation][lane]), BitCast<u64>(expected[operation][row][lane]))
+                        << mode << ':' << operation << ':' << row << ':' << lane;
+            }
+        }
+    }
+    const i32 restoreStatus = fesetenv(&originalEnvironment);
+    EXPECT_EQ(restoreStatus, 0);
+    if(restoreStatus == 0)
+        restoreEnvironment.release();
 }
 
 TEST(Math, DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering){
@@ -978,6 +1047,121 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
         const u8* bytes = reinterpret_cast<const u8*>(&pairs[index]);
         for(usize offset = 2u * sizeof(f64); offset < sizeof(PairRecord); ++offset)
             EXPECT_EQ(bytes[offset], pairOriginal[index * sizeof(PairRecord) + offset]) << index << ':' << offset;
+    }
+}
+
+TEST(Math, DoubleMinMaxRetainRightOperandNaNPayloadAndZeroSign){
+    const u64 firstBits[]{ 0xfff8000012345678u, 0x8000000000000000u, 0u, 0x3ff8000000000000u };
+    const u64 secondBits[]{ 0x7ff800009abcdef0u, 0u, 0x8000000000000000u, 0x7ff8000013579bdfu };
+    const SIMDVectorDouble first = VectorDoubleSetInt(firstBits[0], firstBits[1], firstBits[2], firstBits[3]);
+    const SIMDVectorDouble second = VectorDoubleSetInt(secondBits[0], secondBits[1], secondBits[2], secondBits[3]);
+    const SIMDVectorDouble forward[]{ VectorDoubleMin(first, second), VectorDoubleMax(first, second) };
+    const SIMDVectorDouble reverse[]{ VectorDoubleMin(second, first), VectorDoubleMax(second, first) };
+    for(usize operation = 0u; operation < LengthOf(forward); ++operation){
+        for(usize lane = 0u; lane < 4u; ++lane){
+            EXPECT_EQ(VectorDoubleGetIntByIndex(forward[operation], lane), secondBits[lane]) << operation << ':' << lane;
+            EXPECT_EQ(VectorDoubleGetIntByIndex(reverse[operation], lane), firstBits[lane]) << operation << ':' << lane;
+        }
+    }
+}
+
+TEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane){
+    const u64 firstBits[]{ 0x0123456789abcdefu, 0x8000000000000000u, 0x7ff800009abcdef0u, 0xfedcba9876543210u };
+    const u64 differences[]{ 0x0000000000000001u, 0x0000000100000000u };
+    const SIMDVectorDouble first = VectorDoubleSetInt(firstBits[0], firstBits[1], firstBits[2], firstBits[3]);
+    for(usize changedLane = 0u; changedLane < 4u; ++changedLane){
+        for(const u64 difference : differences){
+            const SIMDVectorDouble second = VectorDoubleSetIntByIndex(first, firstBits[changedLane] ^ difference, changedLane);
+            const SIMDVectorDouble equality[]{ VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
+            for(const SIMDVectorDouble mask : equality){
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(VectorDoubleGetIntByIndex(mask, lane), lane == changedLane ? 0u : Limit<u64>::s_Max)
+                        << changedLane << ':' << difference << ':' << lane;
+            }
+        }
+    }
+}
+
+TEST(Math, DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEven){
+    volatile f64 runtimeInputs[][4]{
+        { Limit<f64>::s_Max, -Limit<f64>::s_Max, -0.0, 0.0 },
+        { 1.0 + 0x1p-24, 1.0 + 0x1.8p-23, -1.0 - 0x1p-24, -1.0 - 0x1.8p-23 },
+        { 0x1p-150, 0x1.8p-149, -0x1p-150, -0x1.8p-149 },
+    };
+    const SIMDVectorSingle overflow = ConvertVectorDoubleToSingle(
+        VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3])
+    );
+    const u32 overflowExpected[]{ 0x7f800000u, 0xff800000u, 0x80000000u, 0u };
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetIntByIndex(overflow, lane), overflowExpected[lane]) << lane;
+
+    const u32 subnormalBits[]{ 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
+    volatile u32 runtimeSubnormalBits[]{ 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
+    const SIMDVectorSingle subnormals = VectorSetInt(
+        runtimeSubnormalBits[0], runtimeSubnormalBits[1], runtimeSubnormalBits[2], runtimeSubnormalBits[3]
+    );
+    const SIMDVectorDouble widened = ConvertVectorSingleToDouble(subnormals);
+    const f64 widenedExpected[]{ 0x1p-149, -0x1p-149, 0x1.fffffcp-127, -0x1.fffffcp-127 };
+    const SIMDVectorSingle narrowed = ConvertVectorDoubleToSingle(widened);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        EXPECT_EQ(VectorDoubleGetIntByIndex(widened, lane), BitCast<u64>(widenedExpected[lane])) << lane;
+        EXPECT_EQ(VectorGetIntByIndex(narrowed, lane), subnormalBits[lane]) << lane;
+    }
+
+    volatile u32 runtimeZeroBits[]{ 0x80000000u, 0u, 0x80000000u, 0u };
+    const SIMDVectorDouble signedZeros = ConvertVectorSingleToDouble(
+        VectorSetInt(runtimeZeroBits[0], runtimeZeroBits[1], runtimeZeroBits[2], runtimeZeroBits[3])
+    );
+    const u64 zeroExpected[]{ 0x8000000000000000u, 0u, 0x8000000000000000u, 0u };
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorDoubleGetIntByIndex(signedZeros, lane), zeroExpected[lane]) << lane;
+
+    const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(
+        VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3])
+    );
+    const u32 roundedExpected[]{ 0x3f800000u, 0x3f800002u, 0xbf800000u, 0xbf800002u };
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetIntByIndex(rounded, lane), roundedExpected[lane]) << lane;
+
+    const SIMDVectorSingle underflow = ConvertVectorDoubleToSingle(
+        VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3])
+    );
+    const u32 underflowExpected[]{ 0u, 2u, 0x80000000u, 0x80000002u };
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetIntByIndex(underflow, lane), underflowExpected[lane]) << lane;
+}
+
+TEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs){
+    const SIMDVectorDouble first = VectorDoubleSetInt(
+        0xfff8000012345678u, 0x8000000000000000u, 0x0123456789abcdefu, 0x7ff0000000000001u
+    );
+    const SIMDVectorDouble second = VectorDoubleSetInt(0u, 0x7ff800009abcdef0u, 0xfedcba9876543210u, Limit<u64>::s_Max);
+    volatile u32 swizzleControls[][4]{ { 3u, 1u, 0u, 2u }, { 2u, 0u, 3u, 1u }, { 1u, 3u, 1u, 3u } };
+    const u64 swizzleExpected[][4]{
+        { 0x7ff0000000000001u, 0x8000000000000000u, 0xfff8000012345678u, 0x0123456789abcdefu },
+        { 0x0123456789abcdefu, 0xfff8000012345678u, 0x7ff0000000000001u, 0x8000000000000000u },
+        { 0x8000000000000000u, 0x7ff0000000000001u, 0x8000000000000000u, 0x7ff0000000000001u }
+    };
+    for(usize index = 0u; index < LengthOf(swizzleExpected); ++index){
+        const SIMDVectorDouble result = VectorDoubleSwizzle(
+            first, swizzleControls[index][0], swizzleControls[index][1], swizzleControls[index][2], swizzleControls[index][3]
+        );
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), swizzleExpected[index][lane]) << index << ':' << lane;
+    }
+
+    volatile u32 permuteControls[][4]{ { 7u, 0u, 6u, 1u }, { 3u, 4u, 2u, 5u }, { 5u, 3u, 4u, 0u } };
+    const u64 permuteExpected[][4]{
+        { Limit<u64>::s_Max, 0xfff8000012345678u, 0xfedcba9876543210u, 0x8000000000000000u },
+        { 0x7ff0000000000001u, 0u, 0x0123456789abcdefu, 0x7ff800009abcdef0u },
+        { 0x7ff800009abcdef0u, 0x7ff0000000000001u, 0u, 0xfff8000012345678u }
+    };
+    for(usize index = 0u; index < LengthOf(permuteExpected); ++index){
+        const SIMDVectorDouble result = VectorDoublePermute(
+            first, second, permuteControls[index][0], permuteControls[index][1], permuteControls[index][2], permuteControls[index][3]
+        );
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), permuteExpected[index][lane]) << index << ':' << lane;
     }
 }
 

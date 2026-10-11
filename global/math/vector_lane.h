@@ -352,22 +352,145 @@ NWB_INLINE u32 BoundsMaskR(u32 mask, u32 activeMask)noexcept{
     return (mask & activeMask) == activeMask ? s_DoubleCRMASK_CR6BOUNDS : 0;
 }
 
+#if defined(NWB_HAS_NEON64) || defined(NWB_HAS_SSE2)
+template<u32 Lane>
+NWB_INLINE NativeDoublePair NWB_SIMD_CALL GetPermutePair(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    static_assert(Lane < 8u);
+    if constexpr(Lane < 2u)
+        return GetLow(v0);
+    else if constexpr(Lane < 4u)
+        return GetHigh(v0);
+    else if constexpr(Lane < 6u)
+        return GetLow(v1);
+    else
+        return GetHigh(v1);
+}
+
+template<u32 X, u32 Y>
+NWB_INLINE NativeDoublePair NWB_SIMD_CALL PermutePair(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    static_assert(X < 8u && Y < 8u);
+    const NativeDoublePair x = GetPermutePair<X>(v0, v1);
+    const NativeDoublePair y = GetPermutePair<Y>(v0, v1);
+#if defined(NWB_HAS_NEON64)
+    if constexpr((X & 1u) == 0u && (Y & 1u) == 0u)
+        return vzip1q_f64(x, y);
+    else if constexpr((X & 1u) != 0u && (Y & 1u) != 0u)
+        return vzip2q_f64(x, y);
+    else if constexpr((X & 1u) != 0u)
+        return vextq_f64(x, y, 1);
+    else
+        return vcombine_f64(vget_low_f64(x), vget_high_f64(y));
+#else
+    return _mm_shuffle_pd(x, y, (X & 1u) | ((Y & 1u) << 1u));
+#endif
+}
+#endif
+
+#if defined(NWB_HAS_NEON64)
+NWB_INLINE uint8x16_t PermuteByteIndices(u32 x, u32 y)noexcept{
+    const uint64x2_t offsets = vsetq_lane_u64(
+        static_cast<u64>(y) * 0x0808080808080808u,
+        vdupq_n_u64(static_cast<u64>(x) * 0x0808080808080808u),
+        1
+    );
+    const uint8x8_t laneBytes = vcreate_u8(0x0706050403020100u);
+    return vaddq_u8(vreinterpretq_u8_u64(offsets), vcombine_u8(laneBytes, laneBytes));
+}
+#elif defined(NWB_HAS_SSE2)
+NWB_INLINE NativeDoublePair NWB_SIMD_CALL PermutePair(SIMDVectorDouble v0, SIMDVectorDouble v1, u32 x, u32 y)noexcept{
+    const SIMDVectorDouble xVector = x < 4u ? v0 : v1;
+    const SIMDVectorDouble yVector = y < 4u ? v0 : v1;
+    NativeDoublePair xPair = (x & 2u) == 0u ? GetLow(xVector) : GetHigh(xVector);
+    NativeDoublePair yPair = (y & 2u) == 0u ? GetLow(yVector) : GetHigh(yVector);
+    if((x & 1u) != 0u)
+        xPair = _mm_unpackhi_pd(xPair, xPair);
+    if((y & 1u) != 0u)
+        yPair = _mm_unpackhi_pd(yPair, yPair);
+    return _mm_unpacklo_pd(xPair, yPair);
+}
+#endif
+
 template<u32 Lane>
 NWB_INLINE f64 NWB_SIMD_CALL GetLane(SIMDVectorDouble value)noexcept{
     static_assert(Lane < 4u);
+#if defined(NWB_HAS_NEON64)
+    if constexpr(Lane < 2u)
+        return vgetq_lane_f64(GetLow(value), Lane);
+    else
+        return vgetq_lane_f64(GetHigh(value), Lane - 2u);
+#elif defined(NWB_HAS_SSE2)
+    const NativeDoublePair pair = Lane < 2u ? GetLow(value) : GetHigh(value);
+    if constexpr((Lane & 1u) == 0u)
+        return _mm_cvtsd_f64(pair);
+    else
+        return _mm_cvtsd_f64(_mm_unpackhi_pd(pair, pair));
+#else
     return value[Lane];
+#endif
 }
 
 template<u32 Lane>
 NWB_INLINE u64 NWB_SIMD_CALL GetIntLane(SIMDVectorDouble value)noexcept{
     static_assert(Lane < 4u);
+#if defined(NWB_HAS_NEON64)
+    if constexpr(Lane < 2u)
+        return vgetq_lane_u64(GetLowBits(value), Lane);
+    else
+        return vgetq_lane_u64(GetHighBits(value), Lane - 2u);
+#elif defined(NWB_HAS_SSE2)
+    const NativeUIntPair pair = Lane < 2u ? GetLowBits(value) : GetHighBits(value);
+    if constexpr((Lane & 1u) == 0u)
+        return BitCast<u64>(_mm_cvtsi128_si64(pair));
+    else
+        return BitCast<u64>(_mm_cvtsi128_si64(_mm_unpackhi_epi64(pair, pair)));
+#else
     return BitCast<u64>(value[Lane]);
+#endif
+}
+
+template<u32 Lane>
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SetLane(SIMDVectorDouble value, f64 component)noexcept{
+    static_assert(Lane < 4u);
+#if defined(NWB_HAS_NEON64)
+    if constexpr(Lane < 2u)
+        return FromPairs(vsetq_lane_f64(component, GetLow(value), Lane), GetHigh(value));
+    else
+        return FromPairs(GetLow(value), vsetq_lane_f64(component, GetHigh(value), Lane - 2u));
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_blend_pd(BitCast<__m256d>(value), _mm256_set1_pd(component), 1u << Lane));
+#elif defined(NWB_HAS_SSE2)
+    const NativeDoublePair pair = Lane < 2u ? GetLow(value) : GetHigh(value);
+    const NativeDoublePair scalar = _mm_set_sd(component);
+    const NativeDoublePair result = (Lane & 1u) == 0u ? _mm_move_sd(pair, scalar) : _mm_unpacklo_pd(pair, scalar);
+    if constexpr(Lane < 2u)
+        return FromPairs(result, GetHigh(value));
+    else
+        return FromPairs(GetLow(value), result);
+#else
+    value[Lane] = component;
+    return value;
+#endif
 }
 
 template<u32 Lane>
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SplatLane(SIMDVectorDouble value)noexcept{
     static_assert(Lane < 4u);
+#if defined(NWB_HAS_NEON64)
+    const NativeDoublePair pair = Lane < 2u ? GetLow(value) : GetHigh(value);
+    const NativeDoublePair result = vdupq_laneq_f64(pair, Lane & 1u);
+    return FromPairs(result, result);
+#elif defined(NWB_HAS_AVX2)
+    return BitCast<SIMDVectorDouble>(_mm256_permute4x64_pd(BitCast<__m256d>(value), _MM_SHUFFLE(Lane, Lane, Lane, Lane)));
+#elif defined(NWB_HAS_AVX)
+    const __m256d pairs = _mm256_permute2f128_pd(BitCast<__m256d>(value), BitCast<__m256d>(value), Lane < 2u ? 0x00 : 0x11);
+    return BitCast<SIMDVectorDouble>(_mm256_permute_pd(pairs, (Lane & 1u) == 0u ? 0x0 : 0xF));
+#elif defined(NWB_HAS_SSE2)
+    const NativeDoublePair pair = Lane < 2u ? GetLow(value) : GetHigh(value);
+    const NativeDoublePair result = _mm_shuffle_pd(pair, pair, (Lane & 1u) == 0u ? 0x0 : 0x3);
+    return FromPairs(result, result);
+#else
     return __builtin_shufflevector(value, value, Lane, Lane, Lane, Lane);
+#endif
 }
 
 

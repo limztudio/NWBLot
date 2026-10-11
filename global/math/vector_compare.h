@@ -194,60 +194,215 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorIsInfinite(SIMDVectorSingle valu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_HAS_SSE2)
+namespace SIMDVectorDoubleDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_INLINE NativeUIntPair EqualBitsPair(NativeUIntPair v0, NativeUIntPair v1)noexcept{
+#if defined(NWB_HAS_SSE4)
+    return _mm_cmpeq_epi64(v0, v1);
+#else
+    const __m128i words = _mm_cmpeq_epi32(v0, v1);
+    return _mm_and_si128(words, _mm_shuffle_epi32(words, _MM_SHUFFLE(2, 3, 0, 1)));
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqual(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        vceqq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        vceqq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_EQ_OQ));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromPairs(
+        _mm_cmpeq_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        _mm_cmpeq_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#else
     return BitCast<SIMDVectorDouble>(v0 == v1);
+#endif
 }
 
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleEqualR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return SIMDVectorDoubleDetail::ComparisonMaskR(VectorDoubleMoveMask(VectorDoubleEqual(v0, v1)), VectorDoubleComponentMask::s_DoubleXYZW);
+    return SIMDVectorDoubleDetail::ComparisonMaskR(
+        VectorDoubleMoveMask(VectorDoubleEqual(v0, v1)),
+        VectorDoubleComponentMask::s_DoubleXYZW
+    );
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        vceqq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)),
+        vceqq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1))
+    );
+#elif defined(NWB_HAS_AVX2)
+    return BitCast<SIMDVectorDouble>(_mm256_cmpeq_epi64(BitCast<__m256i>(v0), BitCast<__m256i>(v1)));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        SIMDVectorDoubleDetail::EqualBitsPair(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)),
+        SIMDVectorDoubleDetail::EqualBitsPair(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1))
+    );
+#else
     const SIMDVectorDoubleDetail::UIntVector v0Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v0);
     const SIMDVectorDoubleDetail::UIntVector v1Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v1);
     return BitCast<SIMDVectorDouble>(v0Bits == v1Bits);
+#endif
 }
 
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleEqualIntR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return SIMDVectorDoubleDetail::ComparisonMaskR(VectorDoubleMoveMask(VectorDoubleEqualInt(v0, v1)), VectorDoubleComponentMask::s_DoubleXYZW);
+    return SIMDVectorDoubleDetail::ComparisonMaskR(
+        VectorDoubleMoveMask(VectorDoubleEqualInt(v0, v1)),
+        VectorDoubleComponentMask::s_DoubleXYZW
+    );
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNearEqual(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble epsilon)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        vcleq_f64(vabsq_f64(vsubq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1))), SIMDVectorDoubleDetail::GetLow(epsilon)),
+        vcleq_f64(vabsq_f64(vsubq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))), SIMDVectorDoubleDetail::GetHigh(epsilon))
+    );
+#elif defined(NWB_HAS_AVX)
+    const __m256d difference = _mm256_and_pd(
+        _mm256_sub_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)),
+        BitCast<__m256d>(SIMDVectorDouble(s_DoubleSIMDAbsMask))
+    );
+    return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(difference, BitCast<__m256d>(epsilon), _CMP_LE_OQ));
+#elif defined(NWB_HAS_SSE2)
+    const __m128d absMask = SIMDVectorDoubleDetail::GetLow(s_DoubleSIMDAbsMask);
+    return SIMDVectorDoubleDetail::FromPairs(
+        _mm_cmple_pd(_mm_and_pd(_mm_sub_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), absMask), SIMDVectorDoubleDetail::GetLow(epsilon)),
+        _mm_cmple_pd(_mm_and_pd(_mm_sub_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)), absMask), SIMDVectorDoubleDetail::GetHigh(epsilon))
+    );
+#else
     return BitCast<SIMDVectorDouble>(__builtin_elementwise_abs(v0 - v1) <= epsilon);
+#endif
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNotEqual(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_NEON64)
+    const uint64x2_t allBits = vdupq_n_u64(0xFFFFFFFFFFFFFFFFu);
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        veorq_u64(vceqq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), allBits),
+        veorq_u64(vceqq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)), allBits)
+    );
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_NEQ_UQ));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromPairs(
+        _mm_cmpneq_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        _mm_cmpneq_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#else
     return BitCast<SIMDVectorDouble>(v0 != v1);
+#endif
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNotEqualInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    const SIMDVectorDoubleDetail::UIntVector v0Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v0);
-    const SIMDVectorDoubleDetail::UIntVector v1Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v1);
-    return BitCast<SIMDVectorDouble>(v0Bits != v1Bits);
+    return VectorDoubleXorInt(VectorDoubleEqualInt(v0, v1), VectorDoubleTrueInt());
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreater(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        vcgtq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        vcgtq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_GT_OQ));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromPairs(
+        _mm_cmpgt_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        _mm_cmpgt_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#else
     return BitCast<SIMDVectorDouble>(v0 > v1);
+#endif
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterOrEqual(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        vcgeq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        vcgeq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_GE_OQ));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromPairs(
+        _mm_cmpge_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        _mm_cmpge_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#else
     return BitCast<SIMDVectorDouble>(v0 >= v1);
+#endif
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLess(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        vcltq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        vcltq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_LT_OQ));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromPairs(
+        _mm_cmplt_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        _mm_cmplt_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#else
     return BitCast<SIMDVectorDouble>(v0 < v1);
+#endif
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLessOrEqual(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromUIntPairs(
+        vcleq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        vcleq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_LE_OQ));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromPairs(
+        _mm_cmple_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
+        _mm_cmple_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
+    );
+#else
     return BitCast<SIMDVectorDouble>(v0 <= v1);
+#endif
 }
 
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleGreaterR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return SIMDVectorDoubleDetail::ComparisonMaskR(VectorDoubleMoveMask(VectorDoubleGreater(v0, v1)), VectorDoubleComponentMask::s_DoubleXYZW);
+    return SIMDVectorDoubleDetail::ComparisonMaskR(
+        VectorDoubleMoveMask(VectorDoubleGreater(v0, v1)),
+        VectorDoubleComponentMask::s_DoubleXYZW
+    );
 }
 
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleGreaterOrEqualR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return SIMDVectorDoubleDetail::ComparisonMaskR(VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(v0, v1)), VectorDoubleComponentMask::s_DoubleXYZW);
+    return SIMDVectorDoubleDetail::ComparisonMaskR(
+        VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(v0, v1)),
+        VectorDoubleComponentMask::s_DoubleXYZW
+    );
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleInBounds(SIMDVectorDouble value, SIMDVectorDouble bounds)noexcept{
@@ -255,7 +410,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleInBounds(SIMDVectorDouble 
 }
 
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleInBoundsR(SIMDVectorDouble value, SIMDVectorDouble bounds)noexcept{
-    return SIMDVectorDoubleDetail::BoundsMaskR(VectorDoubleMoveMask(VectorDoubleInBounds(value, bounds)), VectorDoubleComponentMask::s_DoubleXYZW);
+    return SIMDVectorDoubleDetail::BoundsMaskR(
+        VectorDoubleMoveMask(VectorDoubleInBounds(value, bounds)),
+        VectorDoubleComponentMask::s_DoubleXYZW
+    );
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{

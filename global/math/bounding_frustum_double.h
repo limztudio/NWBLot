@@ -120,7 +120,8 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(SIMDVectorDouble f
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingDoubleFrustum::getCorners(Double3U* corners)const noexcept{
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+inline void BoundingDoubleFrustum::getCorners(PointT* corners)const noexcept{
     NWB_ASSERT(corners != nullptr);
     SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
     CornersValue(

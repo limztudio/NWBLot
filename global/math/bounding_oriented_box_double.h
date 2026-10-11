@@ -109,7 +109,8 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::CornersValue(SIMDVectorDoub
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingDoubleOrientedBox::getCorners(Double3U* corners)const noexcept{
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+inline void BoundingDoubleOrientedBox::getCorners(PointT* corners)const noexcept{
     NWB_ASSERT(corners != nullptr);
     SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
     CornersValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), cornerVectors);
@@ -448,10 +449,11 @@ inline void BoundingDoubleOrientedBox::CreateFromBoundingBox(BoundingDoubleOrien
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
 inline void BoundingDoubleOrientedBox::CreateFromPoints(
     BoundingDoubleOrientedBox& outBox,
     const usize count,
-    const Double3U* points,
+    const PointT* points,
     const usize stride
 )noexcept{
     BoundingDoubleBox box;

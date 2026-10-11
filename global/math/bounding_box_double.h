@@ -92,7 +92,8 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingDoubleBox::getCorners(Double3U* corners)const noexcept{
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+inline void BoundingDoubleBox::getCorners(PointT* corners)const noexcept{
     NWB_ASSERT(corners != nullptr);
     SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
     CornersValue(LoadDouble(center), LoadDouble(extents), cornerVectors);
@@ -463,18 +464,21 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
 inline void BoundingDoubleBox::CreateFromPoints(
     BoundingDoubleBox& outBox,
     const usize count,
-    const Double3U* points,
+    const PointT* points,
     const usize stride
 )noexcept{
     NWB_ASSERT(points != nullptr);
     NWB_ASSERT(count > 0u);
-    SIMDVectorDouble minBounds = LoadDouble(*CollisionDoubleDetail::StrideDouble3Pointer(points, stride, 0u));
+    NWB_ASSERT(stride >= sizeof(PointT));
+    NWB_ASSERT(stride % alignof(PointT) == 0u);
+    SIMDVectorDouble minBounds = LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, 0u));
     SIMDVectorDouble maxBounds = minBounds;
     for(usize i = 1u; i < count; ++i)
-        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*CollisionDoubleDetail::StrideDouble3Pointer(points, stride, i)), minBounds, maxBounds);
+        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, i)), minBounds, maxBounds);
     SIMDVectorDouble centerVector{};
     SIMDVectorDouble extentsVector{};
     CollisionDoubleDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);

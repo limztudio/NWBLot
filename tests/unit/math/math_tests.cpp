@@ -777,6 +777,74 @@ TEST(Math, SignedZeroStorageEqualityProducesEqualHashes){
     CheckStorageHashMatchesEquality(Float4U(-0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 4.0f));
 }
 
+template<typename Storage, usize LogicalCount, typename Source>
+static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const Source& source, const f64* expected){
+    struct StorageRecord{
+        Storage value;
+        u64 neighbor[4];
+    };
+    StorageRecord record{};
+    NWB_MEMSET(&record, 0xa5, sizeof(record));
+    const u64 poison[]{ 0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u };
+    const usize logicalBytes = LogicalCount * sizeof(f64);
+    NWB_MEMCPY(
+        reinterpret_cast<u8*>(&record.value) + logicalBytes,
+        sizeof(Storage) - logicalBytes,
+        poison,
+        sizeof(Storage) - logicalBytes
+    );
+    Array<u8, sizeof(StorageRecord)> original{};
+    NWB_MEMCPY(original.data(), original.size(), &record, sizeof(record));
+    for(const bool stream : { false, true }){
+        NWB_MEMCPY(&record, sizeof(record), original.data(), original.size());
+        if(stream){
+            StreamDouble(source, record.value);
+            StreamDoubleFence();
+        }
+        else
+            StoreDouble(source, record.value);
+        const u8* bytes = reinterpret_cast<const u8*>(&record);
+        for(usize index = logicalBytes; index < sizeof(record); ++index)
+            EXPECT_EQ(bytes[index], original[index]) << stream << ':' << index;
+        for(usize lane = 0u; lane < LogicalCount; ++lane)
+            EXPECT_EQ(BitCast<u64>(record.value.raw[lane]), BitCast<u64>(expected[lane])) << stream << ':' << lane;
+
+        const auto loaded = LoadDouble(record.value);
+        if constexpr(LogicalCount < 4u){
+            for(usize lane = LogicalCount; lane < 4u; ++lane)
+                EXPECT_EQ(BitCast<u64>(loaded[lane]), 0u) << stream << ':' << lane;
+            const SIMDVectorDouble transformed = VectorDouble4Transform(loaded, MatrixDoubleIdentity());
+            for(usize lane = 0u; lane < LogicalCount; ++lane)
+                EXPECT_EQ(transformed[lane], expected[lane]) << stream << ':' << lane;
+        }
+        else{
+            for(usize row = 0u; row < 3u; ++row){
+                EXPECT_EQ(BitCast<u64>(loaded.v[row].w), 0u) << stream << ':' << row;
+                for(usize lane = 0u; lane < 3u; ++lane)
+                    EXPECT_EQ(BitCast<u64>(loaded.v[row][lane]), BitCast<u64>(expected[row * 3u + lane])) << stream << ':' << row << ':' << lane;
+            }
+            EXPECT_TRUE(VectorDouble4Equal(loaded.v[3], SIMDVectorDouble{ 0.0, 0.0, 0.0, 1.0 }));
+        }
+    }
+}
+
+template<typename Storage, usize LogicalCount>
+static void CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero(){
+    Storage lhs{};
+    Storage rhs{};
+    for(usize lane = 0u; lane < LogicalCount; ++lane){
+        lhs.raw[lane] = lane == 0u ? -0.0 : 1.0 + 0x1p-52;
+        rhs.raw[lane] = lane == 0u ? 0.0 : 1.0 + 0x1p-52;
+    }
+    const usize logicalBytes = LogicalCount * sizeof(f64);
+    NWB_MEMSET(reinterpret_cast<u8*>(&lhs) + logicalBytes, 0x7f, sizeof(Storage) - logicalBytes);
+    NWB_MEMSET(reinterpret_cast<u8*>(&rhs) + logicalBytes, 0xff, sizeof(Storage) - logicalBytes);
+    EXPECT_EQ(lhs, rhs);
+    EXPECT_EQ(Hasher<Storage>{}(lhs), Hasher<Storage>{}(rhs));
+    rhs.raw[LogicalCount - 1u] = 1.0;
+    EXPECT_NE(lhs, rhs);
+}
+
 TEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals){
     EXPECT_EQ(DoubleHashBits(-0.0), DoubleHashBits(0.0));
     EXPECT_NE(DoubleHashBits(1.0 + 0x1p-52), DoubleHashBits(1.0));
@@ -790,6 +858,127 @@ TEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals){
         Double4U(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0),
         Double4U(0.0, 1.0, 0.0, 0x1p+40 + 1.0)
     );
+}
+
+TEST(Math, AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage){
+    const f64 pairExpected[]{ -0.0, 1.0 + 0x1p-52 };
+    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double2, 2u>(
+        SIMDVectorDouble{ pairExpected[0], pairExpected[1], Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairExpected
+    );
+    const f64 tripleExpected[]{ -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0 };
+    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double3, 3u>(
+        SIMDVectorDouble{ tripleExpected[0], tripleExpected[1], tripleExpected[2], Limit<f64>::s_QuietNaN }, tripleExpected
+    );
+    const f64 matrixExpected[]{ -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0, 2.0, -0.0, -0x1p+40 - 1.0, 0x1p-40, -3.0, 1.0 + 0x1p-52 };
+    const SIMDMatrixDouble matrix = {
+        SIMDVectorDouble{ matrixExpected[0], matrixExpected[1], matrixExpected[2], Limit<f64>::s_Infinity },
+        SIMDVectorDouble{ matrixExpected[3], matrixExpected[4], matrixExpected[5], Limit<f64>::s_QuietNaN },
+        SIMDVectorDouble{ matrixExpected[6], matrixExpected[7], matrixExpected[8], -Limit<f64>::s_Infinity },
+        SIMDVectorDouble{ Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN },
+    };
+    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double33, 9u>(matrix, matrixExpected);
+}
+
+TEST(Math, AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZeroAndBinary64Residuals){
+    CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double2, 2u>();
+    CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double3, 3u>();
+    CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double33, 9u>();
+}
+
+TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndInPlaceConversion){
+    struct AlignedRecord{
+        Double3 value;
+        u64 gap[4];
+    };
+    struct alignas(32) UnalignedRecord{
+        u64 prefix;
+        Double3U value;
+        u64 gap[4];
+    };
+    AlignedRecord aligned[3]{};
+    UnalignedRecord unaligned[3]{};
+    NWB_MEMSET(aligned, 0xa5, sizeof(aligned));
+    NWB_MEMSET(unaligned, 0x5a, sizeof(unaligned));
+    const u64 poison = 0x7ff8000000001234u;
+    for(usize index = 0u; index < LengthOf(aligned); ++index){
+        StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25 + 0.25 * static_cast<f64>(index),
+            (static_cast<f64>(index) - 1.0) * 0x1p-40, 1.0 + 0x1p-52, Limit<f64>::s_Infinity }, aligned[index].value);
+        NWB_MEMCPY(
+            reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64),
+            sizeof(aligned[index].value) - 3u * sizeof(f64),
+            &poison,
+            sizeof(poison)
+        );
+    }
+    Array<u8, sizeof(aligned)> alignedOriginal{};
+    Array<u8, sizeof(unaligned)> unalignedOriginal{};
+    NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned, sizeof(aligned));
+    NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned, sizeof(unaligned));
+    const SIMDMatrixDouble matrix = MatrixDoubleTranslation(0.25, 0.0, 0.0);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord),
+        &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &unaligned[0].value);
+    EXPECT_EQ(NWB_MEMCMP(aligned, alignedOriginal.data(), sizeof(aligned)), 0);
+    for(usize index = 0u; index < LengthOf(aligned); ++index)
+        EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.5 + 0.25 * static_cast<f64>(index)) << index;
+
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord),
+        &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(unaligned), matrix), &unaligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord),
+        &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord),
+        &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
+    for(usize index = 0u; index < LengthOf(aligned); ++index){
+        EXPECT_EQ(aligned[index].value.x, 0x1p+40 + 1.25 + 0.25 * static_cast<f64>(index)) << index;
+        EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.75 + 0.25 * static_cast<f64>(index)) << index;
+        EXPECT_EQ(aligned[index].value.y, (static_cast<f64>(index) - 1.0) * 0x1p-40) << index;
+        EXPECT_EQ(aligned[index].value.z, 1.0 + 0x1p-52) << index;
+        const u8* alignedBytes = reinterpret_cast<const u8*>(&aligned[index]);
+        const u8* unalignedBytes = reinterpret_cast<const u8*>(&unaligned[index]);
+        for(usize offset = 3u * sizeof(f64); offset < sizeof(AlignedRecord); ++offset)
+            EXPECT_EQ(alignedBytes[offset], alignedOriginal[index * sizeof(AlignedRecord) + offset]) << index << ':' << offset;
+        for(usize offset = 0u; offset < sizeof(UnalignedRecord); ++offset){
+            if(offset >= offsetof(UnalignedRecord, value) && offset < offsetof(UnalignedRecord, value) + sizeof(Double3U))
+                continue;
+            EXPECT_EQ(unalignedBytes[offset], unalignedOriginal[index * sizeof(UnalignedRecord) + offset]) << index << ':' << offset;
+        }
+    }
+
+    BoundingDoubleBox bounds;
+    BoundingDoubleBox::CreateFromPoints(bounds, LengthOf(aligned), &aligned[0].value, sizeof(AlignedRecord));
+    EXPECT_EQ(bounds.center.x, 0x1p+40 + 1.5);
+    EXPECT_EQ(bounds.center.y, 0.0);
+    EXPECT_EQ(bounds.center.z, 1.0 + 0x1p-52);
+    EXPECT_EQ(bounds.extents.x, 0.25);
+    EXPECT_EQ(bounds.extents.y, 0x1p-40);
+    EXPECT_EQ(bounds.extents.z, 0.0);
+    EXPECT_EQ(bounds.contains(SIMDVectorDouble{ 0x1p+40 + 1.75 + 0x1p-10, 0.0, 1.0 + 0x1p-52, 0.0 }), ContainmentType::Disjoint);
+
+    struct PairRecord{
+        Double2 value;
+        u64 gap[4];
+    };
+    PairRecord pairs[2]{};
+    NWB_MEMSET(pairs, 0xa5, sizeof(pairs));
+    for(usize index = 0u; index < LengthOf(pairs); ++index){
+        StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25, 1.0 + 0x1p-52, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairs[index].value);
+        NWB_MEMCPY(
+            reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64),
+            sizeof(pairs[index].value) - 2u * sizeof(f64),
+            &poison,
+            sizeof(poison)
+        );
+    }
+    Array<u8, sizeof(pairs)> pairOriginal{};
+    NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs, sizeof(pairs));
+    EXPECT_EQ(VectorDouble2TransformCoordStream(&pairs[0].value, sizeof(PairRecord),
+        &pairs[0].value, sizeof(PairRecord), LengthOf(pairs), matrix), &pairs[0].value);
+    for(usize index = 0u; index < LengthOf(pairs); ++index){
+        EXPECT_EQ(pairs[index].value.x, 0x1p+40 + 0.5) << index;
+        EXPECT_EQ(pairs[index].value.y, 1.0 + 0x1p-52) << index;
+        const u8* bytes = reinterpret_cast<const u8*>(&pairs[index]);
+        for(usize offset = 2u * sizeof(f64); offset < sizeof(PairRecord); ++offset)
+            EXPECT_EQ(bytes[offset], pairOriginal[index * sizeof(PairRecord) + offset]) << index << ':' << offset;
+    }
 }
 
 

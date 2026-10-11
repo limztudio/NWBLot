@@ -455,22 +455,25 @@ inline void BoundingDoubleSphere::CreateFromBoundingBox(BoundingDoubleSphere& ou
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
 inline void BoundingDoubleSphere::CreateFromPoints(
     BoundingDoubleSphere& outSphere,
     const usize count,
-    const Double3U* points,
+    const PointT* points,
     const usize stride
 )noexcept{
     NWB_ASSERT(points != nullptr);
     NWB_ASSERT(count > 0u);
+    NWB_ASSERT(stride >= sizeof(PointT));
+    NWB_ASSERT(stride % alignof(PointT) == 0u);
     SIMDVectorDouble centerVector = VectorDoubleZero();
     for(usize i = 0u; i < count; ++i)
-        centerVector = VectorDoubleAdd(centerVector, LoadDouble(*CollisionDoubleDetail::StrideDouble3Pointer(points, stride, i)));
+        centerVector = VectorDoubleAdd(centerVector, LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, i)));
     centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(count)));
 
     SIMDVectorDouble radiusSq = VectorDoubleZero();
     for(usize i = 0u; i < count; ++i){
-        const SIMDVectorDouble delta = VectorDoubleSubtract(LoadDouble(*CollisionDoubleDetail::StrideDouble3Pointer(points, stride, i)), centerVector);
+        const SIMDVectorDouble delta = VectorDoubleSubtract(LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, i)), centerVector);
         radiusSq = VectorDoubleMax(radiusSq, VectorDouble3LengthSq(delta));
     }
 

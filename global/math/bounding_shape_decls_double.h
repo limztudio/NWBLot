@@ -29,7 +29,8 @@ struct BoundingDoubleSphere{
     Double4 centerRadius = Double4(0.0, 0.0, 0.0, 1.0);
 
     constexpr BoundingDoubleSphere()noexcept = default;
-    constexpr BoundingDoubleSphere(const Double3U& centerValue, const f64 radiusValue)noexcept
+    template<typename CenterT> requires (IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>)
+    constexpr BoundingDoubleSphere(const CenterT& centerValue, const f64 radiusValue)noexcept
         : centerRadius(centerValue.x, centerValue.y, centerValue.z, radiusValue)
     {}
     constexpr explicit BoundingDoubleSphere(const Double4& centerRadiusValue)noexcept
@@ -86,7 +87,8 @@ struct BoundingDoubleSphere{
     static void CreateMerged(BoundingDoubleSphere& outSphere, const BoundingDoubleSphere& sphere0, const BoundingDoubleSphere& sphere1)noexcept;
     static void CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleBox& box)noexcept;
     static void CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleOrientedBox& box)noexcept;
-    static void CreateFromPoints(BoundingDoubleSphere& outSphere, usize count, const Double3U* points, usize stride)noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    static void CreateFromPoints(BoundingDoubleSphere& outSphere, usize count, const PointT* points, usize stride)noexcept;
     static void CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept;
 };
 
@@ -101,7 +103,10 @@ struct BoundingDoubleBox{
     Double4 extents = Double4(1.0, 1.0, 1.0, 0.0);
 
     constexpr BoundingDoubleBox()noexcept = default;
-    constexpr BoundingDoubleBox(const Double3U& centerValue, const Double3U& extentsValue)noexcept
+    template<typename CenterT, typename ExtentsT>
+        requires ((IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>)
+            && (IsSame_V<ExtentsT, Double3> || IsSame_V<ExtentsT, Double3U>))
+    constexpr BoundingDoubleBox(const CenterT& centerValue, const ExtentsT& extentsValue)noexcept
         : center(centerValue.x, centerValue.y, centerValue.z, 0.0)
         , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0)
     {}
@@ -123,7 +128,8 @@ struct BoundingDoubleBox{
 
     void NWB_SIMD_CALL transform(BoundingDoubleBox& outBox, const SIMDMatrixDouble& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingDoubleBox& outBox, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)const noexcept;
-    void getCorners(Double3U* corners)const noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    void getCorners(PointT* corners)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL contains(SIMDVectorDouble point)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL contains(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
@@ -159,7 +165,8 @@ struct BoundingDoubleBox{
     static void CreateMerged(BoundingDoubleBox& outBox, const BoundingDoubleBox& box0, const BoundingDoubleBox& box1)noexcept;
     static void CreateFromSphere(BoundingDoubleBox& outBox, const BoundingDoubleSphere& sphere)noexcept;
     static void NWB_SIMD_CALL CreateFromPoints(BoundingDoubleBox& outBox, SIMDVectorDouble point0, SIMDVectorDouble point1)noexcept;
-    static void CreateFromPoints(BoundingDoubleBox& outBox, usize count, const Double3U* points, usize stride)noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    static void CreateFromPoints(BoundingDoubleBox& outBox, usize count, const PointT* points, usize stride)noexcept;
 };
 
 
@@ -174,9 +181,12 @@ struct BoundingDoubleOrientedBox{
     Double4 orientation = Double4(0.0, 0.0, 0.0, 1.0);
 
     constexpr BoundingDoubleOrientedBox()noexcept = default;
+    template<typename CenterT, typename ExtentsT>
+        requires ((IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>)
+            && (IsSame_V<ExtentsT, Double3> || IsSame_V<ExtentsT, Double3U>))
     constexpr BoundingDoubleOrientedBox(
-        const Double3U& centerValue,
-        const Double3U& extentsValue,
+        const CenterT& centerValue,
+        const ExtentsT& extentsValue,
         const Double4& orientationValue
     )noexcept
         : center(centerValue.x, centerValue.y, centerValue.z, 0.0)
@@ -205,7 +215,8 @@ struct BoundingDoubleOrientedBox{
 
     void NWB_SIMD_CALL transform(BoundingDoubleOrientedBox& outBox, const SIMDMatrixDouble& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingDoubleOrientedBox& outBox, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)const noexcept;
-    void getCorners(Double3U* corners)const noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    void getCorners(PointT* corners)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL contains(SIMDVectorDouble point)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL contains(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
@@ -239,7 +250,8 @@ struct BoundingDoubleOrientedBox{
     )const noexcept;
 
     static void CreateFromBoundingBox(BoundingDoubleOrientedBox& outBox, const BoundingDoubleBox& box)noexcept;
-    static void CreateFromPoints(BoundingDoubleOrientedBox& outBox, usize count, const Double3U* points, usize stride)noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    static void CreateFromPoints(BoundingDoubleOrientedBox& outBox, usize count, const PointT* points, usize stride)noexcept;
 };
 
 
@@ -259,8 +271,9 @@ struct BoundingDoubleFrustum{
     f64 farPlane = 1.0;
 
     constexpr BoundingDoubleFrustum()noexcept = default;
+    template<typename OriginT> requires (IsSame_V<OriginT, Double3> || IsSame_V<OriginT, Double3U>)
     constexpr BoundingDoubleFrustum(
-        const Double3U& originValue,
+        const OriginT& originValue,
         const Double4& orientationValue,
         const f64 rightSlopeValue,
         const f64 leftSlopeValue,
@@ -310,7 +323,8 @@ struct BoundingDoubleFrustum{
 
     void NWB_SIMD_CALL transform(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingDoubleFrustum& outFrustum, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)const noexcept;
-    void getCorners(Double3U* corners)const noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    void getCorners(PointT* corners)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL contains(SIMDVectorDouble point)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL contains(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;

@@ -69,10 +69,6 @@ namespace FrustumPlaneIndex{
     return VectorDoubleAndInt(clampedY, s_DoubleSIMDMaskY);
 }
 
-[[nodiscard]] NWB_INLINE const Double3U* StrideDouble3Pointer(const Double3U* points, const usize stride, const usize index)noexcept{
-    return reinterpret_cast<const Double3U*>(reinterpret_cast<const u8*>(points) + stride * index);
-}
-
 [[nodiscard]] NWB_INLINE SIMDVectorDouble SphereCenter(const SIMDVectorDouble centerRadius)noexcept{
     return VectorDoubleSetW(centerRadius, 0.0);
 }

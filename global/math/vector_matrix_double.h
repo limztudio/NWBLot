@@ -52,6 +52,8 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDoubleTransformStreamImpl(
     NWB_ASSERT(inputStream != nullptr);
     NWB_ASSERT(inputStride >= sizeof(InputT));
     NWB_ASSERT(outputStride >= sizeof(OutputT));
+    NWB_ASSERT(inputStride % alignof(InputT) == 0u);
+    NWB_ASSERT(outputStride % alignof(OutputT) == 0u);
 
     const SIMDMatrixDouble transposedMatrix = MatrixDoubleTransposeForTransform(matrix);
     for(usize i = 0u; i < vectorCount; ++i){

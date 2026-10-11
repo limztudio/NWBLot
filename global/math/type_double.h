@@ -29,6 +29,77 @@ template<typename Value, usize Count>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct alignas(32) Double2{
+    union{
+        struct{
+            f64 x;
+            f64 y;
+        };
+        struct{
+            f64 r;
+            f64 g;
+        };
+        f64 raw[2];
+    };
+
+    constexpr Double2()noexcept
+        : x(0.0)
+        , y(0.0)
+    {
+    }
+    constexpr Double2(const f64 xValue, const f64 yValue)noexcept
+        : x(xValue)
+        , y(yValue)
+    {
+    }
+    explicit constexpr Double2(const f64* pArray)noexcept
+        : x(pArray[0])
+        , y(pArray[1])
+    {
+    }
+};
+static_assert(sizeof(Double2) == sizeof(f64) * 4u, "Double2 must stay a 32-byte aligned payload");
+static_assert(alignof(Double2) == 32u, "Double2 must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<Double2> && IsTriviallyCopyable_V<Double2>, "Double2 must stay binary-serializable");
+
+struct alignas(32) Double3{
+    union{
+        struct{
+            f64 x;
+            f64 y;
+            f64 z;
+        };
+        struct{
+            f64 r;
+            f64 g;
+            f64 b;
+        };
+        f64 raw[3];
+    };
+
+    constexpr Double3()noexcept
+        : x(0.0)
+        , y(0.0)
+        , z(0.0)
+    {
+    }
+    constexpr Double3(const f64 xValue, const f64 yValue, const f64 zValue)noexcept
+        : x(xValue)
+        , y(yValue)
+        , z(zValue)
+    {
+    }
+    explicit constexpr Double3(const f64* pArray)noexcept
+        : x(pArray[0])
+        , y(pArray[1])
+        , z(pArray[2])
+    {
+    }
+};
+static_assert(sizeof(Double3) == sizeof(f64) * 4u, "Double3 must stay a 32-byte aligned payload");
+static_assert(alignof(Double3) == 32u, "Double3 must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<Double3> && IsTriviallyCopyable_V<Double3>, "Double3 must stay binary-serializable");
+
 struct alignas(32) Double4{
     union{
         struct{
@@ -79,9 +150,9 @@ struct alignas(32) Double34{
 
 [[nodiscard]] constexpr Double34 Double34Identity()noexcept{
     Double34 matrix = {};
-    matrix.rows[0] = Double4(1.0, 0.0, 0.0, 0.0);
-    matrix.rows[1] = Double4(0.0, 1.0, 0.0, 0.0);
-    matrix.rows[2] = Double4(0.0, 0.0, 1.0, 0.0);
+    matrix._11 = 1.0;
+    matrix._22 = 1.0;
+    matrix._33 = 1.0;
     return matrix;
 }
 
@@ -299,6 +370,24 @@ struct Double33U{
     };
 };
 
+// The nine values are contiguous; 24-byte rows are compact and alignment adds only tail padding.
+struct alignas(32) Double33{
+    union{
+        struct{
+            f64 _11, _12, _13;
+            f64 _21, _22, _23;
+            f64 _31, _32, _33;
+        };
+        Double3U rows[3];
+        f64 m[3][3];
+        f64 raw[9];
+    };
+};
+static_assert(sizeof(Double33) == sizeof(f64) * 12u, "Double33 must stay a 96-byte aligned payload");
+static_assert(alignof(Double33) == 32u, "Double33 must stay SIMD-aligned");
+static_assert(offsetof(Double33, _21) == sizeof(f64) * 3u && offsetof(Double33, _31) == sizeof(f64) * 6u, "Double33 rows must stay compact");
+static_assert(IsStandardLayout_V<Double33> && IsTriviallyCopyable_V<Double33>, "Double33 must stay binary-serializable");
+
 struct Double34U{
     union{
         struct{
@@ -325,6 +414,56 @@ struct Double44U{
         f64 raw[16];
     };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] constexpr Double33 Double33Identity()noexcept{
+    Double33 matrix = {};
+    matrix._11 = 1.0;
+    matrix._22 = 1.0;
+    matrix._33 = 1.0;
+    return matrix;
+}
+
+[[nodiscard]] constexpr Double44 Double44Identity()noexcept{
+    Double44 matrix = {};
+    matrix._11 = 1.0;
+    matrix._22 = 1.0;
+    matrix._33 = 1.0;
+    matrix._44 = 1.0;
+    return matrix;
+}
+
+[[nodiscard]] constexpr Double33U Double33UIdentity()noexcept{
+    Double33U matrix = {};
+    matrix._11 = 1.0;
+    matrix._22 = 1.0;
+    matrix._33 = 1.0;
+    return matrix;
+}
+
+[[nodiscard]] constexpr Double34U Double34UIdentity()noexcept{
+    Double34U matrix = {};
+    matrix._11 = 1.0;
+    matrix._22 = 1.0;
+    matrix._33 = 1.0;
+    return matrix;
+}
+
+[[nodiscard]] constexpr Double44U Double44UIdentity()noexcept{
+    Double44U matrix = {};
+    matrix._11 = 1.0;
+    matrix._22 = 1.0;
+    matrix._33 = 1.0;
+    matrix._44 = 1.0;
+    return matrix;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct Int64x2U{
     union{
@@ -422,6 +561,15 @@ struct UInt64x4U{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] NWB_INLINE bool operator==(const Double2& lhs, const Double2& rhs)noexcept{ return MathTypeDetail::EqualArray<Double2, 2u>(lhs, rhs); }
+[[nodiscard]] NWB_INLINE bool operator!=(const Double2& lhs, const Double2& rhs)noexcept{ return !(lhs == rhs); }
+
+[[nodiscard]] NWB_INLINE bool operator==(const Double3& lhs, const Double3& rhs)noexcept{ return MathTypeDetail::EqualArray<Double3, 3u>(lhs, rhs); }
+[[nodiscard]] NWB_INLINE bool operator!=(const Double3& lhs, const Double3& rhs)noexcept{ return !(lhs == rhs); }
+
+[[nodiscard]] NWB_INLINE bool operator==(const Double33& lhs, const Double33& rhs)noexcept{ return MathTypeDetail::EqualArray<Double33, 9u>(lhs, rhs); }
+[[nodiscard]] NWB_INLINE bool operator!=(const Double33& lhs, const Double33& rhs)noexcept{ return !(lhs == rhs); }
+
 [[nodiscard]] NWB_INLINE bool operator==(const Double4& lhs, const Double4& rhs)noexcept{ return MathTypeDetail::EqualArray<Double4, 4u>(lhs, rhs); }
 [[nodiscard]] NWB_INLINE bool operator!=(const Double4& lhs, const Double4& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -492,6 +640,21 @@ namespace std{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<>
+struct hash<Double2>{
+    usize operator()(const Double2& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double2, 2u>(value); }
+};
+
+template<>
+struct hash<Double3>{
+    usize operator()(const Double3& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double3, 3u>(value); }
+};
+
+template<>
+struct hash<Double33>{
+    usize operator()(const Double33& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double33, 9u>(value); }
+};
 
 template<>
 struct hash<Double4>{

@@ -408,11 +408,11 @@ TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
     NWB::Impl::CsgDeformCutDesc cuts[s_ThirdElementIndex];
     cuts[0u].active = true;
     cuts[0u].shape.shapeType = Name(s_ENGINE_CSG_PLANE);
-    cuts[0u].shape.worldToShape = ::Float34Identity();
+    cuts[0u].shape.worldToShape = ::MatrixIdentity<Float34>();
     cuts[0u].shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.5f);
     cuts[1u].active = true;
     cuts[1u].shape.shapeType = Name(s_ENGINE_CSG_PLANE);
-    cuts[1u].shape.worldToShape = ::Float34Identity();
+    cuts[1u].shape.worldToShape = ::MatrixIdentity<Float34>();
     cuts[1u].shape.parameter0 = Float4(0.0f, 1.0f, 0.0f, 0.5f);
 
     const NWB::Impl::CsgDeformBuildOptions options;
@@ -481,7 +481,7 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     NWB::Impl::CsgDeformCutDesc cut;
     cut.active = true;
     cut.shape.shapeType = Name(s_ENGINE_CSG_PLANE);
-    cut.shape.worldToShape = ::Float34Identity();
+    cut.shape.worldToShape = ::MatrixIdentity<Float34>();
     cut.shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
 
     const NWB::Impl::CsgDeformBuildOptions options;

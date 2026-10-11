@@ -837,7 +837,7 @@ static void CheckStorageHashMatchesEquality(const Value& lhs, const Value& same,
 }
 
 TEST(Math, SignedZeroStorageEqualityProducesEqualHashes){
-    EXPECT_EQ(FloatHashBits(-0.0f), FloatHashBits(0.0f));
+    EXPECT_EQ(FloatingHashBits(-0.0f), FloatingHashBits(0.0f));
     CheckStorageHashMatchesEquality(Float4(-0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 4.0f));
     CheckStorageHashMatchesEquality(Float3Int(-0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -4));
     CheckStorageHashMatchesEquality(Float3UInt(-0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 4u));
@@ -915,8 +915,8 @@ static void CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero(){
 }
 
 TEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals){
-    EXPECT_EQ(DoubleHashBits(-0.0), DoubleHashBits(0.0));
-    EXPECT_NE(DoubleHashBits(1.0 + 0x1p-52), DoubleHashBits(1.0));
+    EXPECT_EQ(FloatingHashBits(-0.0), FloatingHashBits(0.0));
+    EXPECT_NE(FloatingHashBits(1.0 + 0x1p-52), FloatingHashBits(1.0));
     CheckStorageHashMatchesEquality(
         Double4(-0.0, 1.0 + 0x1p-52, -0.0, 0x1p+40 + 1.0),
         Double4(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0),

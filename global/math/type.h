@@ -116,40 +116,29 @@ template<typename Value>
 
 template<typename Value, usize Count>
 [[nodiscard]] NWB_INLINE usize HashArray(const Value& value)noexcept{
+    using Element = RemoveCVRef_T<decltype(value.raw[0])>;
     usize seed = 0u;
-    for(usize i = 0u; i < Count; ++i)
-        HashCombine(seed, value.raw[i]);
+    for(usize i = 0u; i < Count; ++i){
+        if constexpr(IsSame_V<Element, f32> || IsSame_V<Element, f64>)
+            ::HashCombineFloating(seed, value.raw[i]);
+        else
+            ::HashCombine(seed, value.raw[i]);
+    }
     return seed;
 }
 
-template<typename Value, usize Count>
-[[nodiscard]] NWB_INLINE usize HashFloatArray(const Value& value)noexcept{
+template<typename Value>
+[[nodiscard]] NWB_INLINE usize HashMixed3(const Value& value)noexcept{
     usize seed = 0u;
-    for(usize i = 0u; i < Count; ++i)
-        ::HashCombineFloat(seed, value.raw[i]);
+    ::HashCombineFloating(seed, value.x);
+    ::HashCombineFloating(seed, value.y);
+    ::HashCombineFloating(seed, value.z);
+    ::HashCombine(seed, value.w);
     return seed;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MathTypeDoubleDetail{
-
-
-template<typename Value, usize Count>
-[[nodiscard]] NWB_INLINE usize HashDoubleArray(const Value& value)noexcept{
-    usize seed = 0u;
-    for(usize i = 0u; i < Count; ++i)
-        HashCombineDouble(seed, value.raw[i]);
-    return seed;
-}
 
 
 };
@@ -1204,6 +1193,36 @@ struct Double44U{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename T>
+concept MathStorageValue =
+    IsSame_V<T, Half2U> || IsSame_V<T, Half4U> ||
+    IsSame_V<T, Double2> || IsSame_V<T, Double3> ||
+    IsSame_V<T, Float4> || IsSame_V<T, Double4> ||
+    IsSame_V<T, Double33> || IsSame_V<T, Float34> ||
+    IsSame_V<T, Double34> || IsSame_V<T, Float44> ||
+    IsSame_V<T, Double44> || IsSame_V<T, Int4> ||
+    IsSame_V<T, Int64x4> || IsSame_V<T, UInt4> ||
+    IsSame_V<T, UInt64x4> || IsSame_V<T, Float3Int> ||
+    IsSame_V<T, Double3Int> || IsSame_V<T, Float3UInt> ||
+    IsSame_V<T, Double3UInt> || IsSame_V<T, Float2U> ||
+    IsSame_V<T, Double2U> || IsSame_V<T, Float3U> ||
+    IsSame_V<T, Double3U> || IsSame_V<T, Float4U> ||
+    IsSame_V<T, Double4U> || IsSame_V<T, Float33U> ||
+    IsSame_V<T, Double33U> || IsSame_V<T, Float34U> ||
+    IsSame_V<T, Double34U> || IsSame_V<T, Float44U> ||
+    IsSame_V<T, Double44U> || IsSame_V<T, Int2U> ||
+    IsSame_V<T, Int64x2U> || IsSame_V<T, Int3U> ||
+    IsSame_V<T, Int64x3U> || IsSame_V<T, Int4U> ||
+    IsSame_V<T, Int64x4U> || IsSame_V<T, UInt2U> ||
+    IsSame_V<T, UInt64x2U> || IsSame_V<T, UInt3U> ||
+    IsSame_V<T, UInt64x3U> || IsSame_V<T, UInt4U> ||
+    IsSame_V<T, UInt64x4U>
+;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace std{
 
 
@@ -1222,47 +1241,47 @@ struct hash<Half4U>{
 
 template<>
 struct hash<Double2>{
-    usize operator()(const Double2& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double2, 2u>(value); }
+    usize operator()(const Double2& value)const noexcept{ return MathTypeDetail::HashArray<Double2, 2u>(value); }
 };
 
 template<>
 struct hash<Double3>{
-    usize operator()(const Double3& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double3, 3u>(value); }
+    usize operator()(const Double3& value)const noexcept{ return MathTypeDetail::HashArray<Double3, 3u>(value); }
 };
 
 template<>
 struct hash<Float4>{
-    usize operator()(const Float4& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float4, 4u>(value); }
+    usize operator()(const Float4& value)const noexcept{ return MathTypeDetail::HashArray<Float4, 4u>(value); }
 };
 
 template<>
 struct hash<Double4>{
-    usize operator()(const Double4& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double4, 4u>(value); }
+    usize operator()(const Double4& value)const noexcept{ return MathTypeDetail::HashArray<Double4, 4u>(value); }
 };
 
 template<>
 struct hash<Double33>{
-    usize operator()(const Double33& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double33, 9u>(value); }
+    usize operator()(const Double33& value)const noexcept{ return MathTypeDetail::HashArray<Double33, 9u>(value); }
 };
 
 template<>
 struct hash<Float34>{
-    usize operator()(const Float34& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float34, 12u>(value); }
+    usize operator()(const Float34& value)const noexcept{ return MathTypeDetail::HashArray<Float34, 12u>(value); }
 };
 
 template<>
 struct hash<Double34>{
-    usize operator()(const Double34& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double34, 12u>(value); }
+    usize operator()(const Double34& value)const noexcept{ return MathTypeDetail::HashArray<Double34, 12u>(value); }
 };
 
 template<>
 struct hash<Float44>{
-    usize operator()(const Float44& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float44, 16u>(value); }
+    usize operator()(const Float44& value)const noexcept{ return MathTypeDetail::HashArray<Float44, 16u>(value); }
 };
 
 template<>
 struct hash<Double44>{
-    usize operator()(const Double44& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double44, 16u>(value); }
+    usize operator()(const Double44& value)const noexcept{ return MathTypeDetail::HashArray<Double44, 16u>(value); }
 };
 
 template<>
@@ -1287,110 +1306,82 @@ struct hash<UInt64x4>{
 
 template<>
 struct hash<Float3Int>{
-    usize operator()(const Float3Int& value)const noexcept{
-        usize seed = 0u;
-        ::HashCombineFloat(seed, value.x);
-        ::HashCombineFloat(seed, value.y);
-        ::HashCombineFloat(seed, value.z);
-        ::HashCombine(seed, value.w);
-        return seed;
-    }
+    usize operator()(const Float3Int& value)const noexcept{ return MathTypeDetail::HashMixed3(value); }
 };
 
 template<>
 struct hash<Double3Int>{
-    usize operator()(const Double3Int& value)const noexcept{
-        usize seed = 0u;
-        ::HashCombineDouble(seed, value.x);
-        ::HashCombineDouble(seed, value.y);
-        ::HashCombineDouble(seed, value.z);
-        ::HashCombine(seed, value.w);
-        return seed;
-    }
+    usize operator()(const Double3Int& value)const noexcept{ return MathTypeDetail::HashMixed3(value); }
 };
 
 template<>
 struct hash<Float3UInt>{
-    usize operator()(const Float3UInt& value)const noexcept{
-        usize seed = 0u;
-        ::HashCombineFloat(seed, value.x);
-        ::HashCombineFloat(seed, value.y);
-        ::HashCombineFloat(seed, value.z);
-        ::HashCombine(seed, value.w);
-        return seed;
-    }
+    usize operator()(const Float3UInt& value)const noexcept{ return MathTypeDetail::HashMixed3(value); }
 };
 
 template<>
 struct hash<Double3UInt>{
-    usize operator()(const Double3UInt& value)const noexcept{
-        usize seed = 0u;
-        ::HashCombineDouble(seed, value.x);
-        ::HashCombineDouble(seed, value.y);
-        ::HashCombineDouble(seed, value.z);
-        ::HashCombine(seed, value.w);
-        return seed;
-    }
+    usize operator()(const Double3UInt& value)const noexcept{ return MathTypeDetail::HashMixed3(value); }
 };
 
 template<>
 struct hash<Float2U>{
-    usize operator()(const Float2U& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float2U, 2u>(value); }
+    usize operator()(const Float2U& value)const noexcept{ return MathTypeDetail::HashArray<Float2U, 2u>(value); }
 };
 
 template<>
 struct hash<Double2U>{
-    usize operator()(const Double2U& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double2U, 2u>(value); }
+    usize operator()(const Double2U& value)const noexcept{ return MathTypeDetail::HashArray<Double2U, 2u>(value); }
 };
 
 template<>
 struct hash<Float3U>{
-    usize operator()(const Float3U& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float3U, 3u>(value); }
+    usize operator()(const Float3U& value)const noexcept{ return MathTypeDetail::HashArray<Float3U, 3u>(value); }
 };
 
 template<>
 struct hash<Double3U>{
-    usize operator()(const Double3U& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double3U, 3u>(value); }
+    usize operator()(const Double3U& value)const noexcept{ return MathTypeDetail::HashArray<Double3U, 3u>(value); }
 };
 
 template<>
 struct hash<Float4U>{
-    usize operator()(const Float4U& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float4U, 4u>(value); }
+    usize operator()(const Float4U& value)const noexcept{ return MathTypeDetail::HashArray<Float4U, 4u>(value); }
 };
 
 template<>
 struct hash<Double4U>{
-    usize operator()(const Double4U& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double4U, 4u>(value); }
+    usize operator()(const Double4U& value)const noexcept{ return MathTypeDetail::HashArray<Double4U, 4u>(value); }
 };
 
 template<>
 struct hash<Float33U>{
-    usize operator()(const Float33U& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float33U, 9u>(value); }
+    usize operator()(const Float33U& value)const noexcept{ return MathTypeDetail::HashArray<Float33U, 9u>(value); }
 };
 
 template<>
 struct hash<Double33U>{
-    usize operator()(const Double33U& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double33U, 9u>(value); }
+    usize operator()(const Double33U& value)const noexcept{ return MathTypeDetail::HashArray<Double33U, 9u>(value); }
 };
 
 template<>
 struct hash<Float34U>{
-    usize operator()(const Float34U& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float34U, 12u>(value); }
+    usize operator()(const Float34U& value)const noexcept{ return MathTypeDetail::HashArray<Float34U, 12u>(value); }
 };
 
 template<>
 struct hash<Double34U>{
-    usize operator()(const Double34U& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double34U, 12u>(value); }
+    usize operator()(const Double34U& value)const noexcept{ return MathTypeDetail::HashArray<Double34U, 12u>(value); }
 };
 
 template<>
 struct hash<Float44U>{
-    usize operator()(const Float44U& value)const noexcept{ return MathTypeDetail::HashFloatArray<Float44U, 16u>(value); }
+    usize operator()(const Float44U& value)const noexcept{ return MathTypeDetail::HashArray<Float44U, 16u>(value); }
 };
 
 template<>
 struct hash<Double44U>{
-    usize operator()(const Double44U& value)const noexcept{ return MathTypeDoubleDetail::HashDoubleArray<Double44U, 16u>(value); }
+    usize operator()(const Double44U& value)const noexcept{ return MathTypeDetail::HashArray<Double44U, 16u>(value); }
 };
 
 template<>
@@ -1463,61 +1454,21 @@ struct hash<UInt64x4U>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr Double33 Double33Identity()noexcept{
-    Double33 matrix = {};
-    matrix._11 = 1.0;
-    matrix._22 = 1.0;
-    matrix._33 = 1.0;
-    return matrix;
-}
-
-[[nodiscard]] constexpr Float34 Float34Identity()noexcept{
-    Float34 matrix = {};
-    matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    return matrix;
-}
-
-[[nodiscard]] constexpr Double34 Double34Identity()noexcept{
-    Double34 matrix = {};
-    matrix._11 = 1.0;
-    matrix._22 = 1.0;
-    matrix._33 = 1.0;
-    return matrix;
-}
-
-[[nodiscard]] constexpr Double44 Double44Identity()noexcept{
-    Double44 matrix = {};
-    matrix._11 = 1.0;
-    matrix._22 = 1.0;
-    matrix._33 = 1.0;
-    matrix._44 = 1.0;
-    return matrix;
-}
-
-[[nodiscard]] constexpr Double33U Double33UIdentity()noexcept{
-    Double33U matrix = {};
-    matrix._11 = 1.0;
-    matrix._22 = 1.0;
-    matrix._33 = 1.0;
-    return matrix;
-}
-
-[[nodiscard]] constexpr Double34U Double34UIdentity()noexcept{
-    Double34U matrix = {};
-    matrix._11 = 1.0;
-    matrix._22 = 1.0;
-    matrix._33 = 1.0;
-    return matrix;
-}
-
-[[nodiscard]] constexpr Double44U Double44UIdentity()noexcept{
-    Double44U matrix = {};
-    matrix._11 = 1.0;
-    matrix._22 = 1.0;
-    matrix._33 = 1.0;
-    matrix._44 = 1.0;
+template<typename Matrix>
+    requires(MathStorageValue<Matrix> && requires(Matrix value){
+        value.raw[0];
+        value._11;
+        value._22;
+        value._33;
+    })
+[[nodiscard]] constexpr Matrix MatrixIdentity()noexcept(noexcept(Matrix{})){
+    Matrix matrix = {};
+    using Element = RemoveCVRef_T<decltype(matrix._11)>;
+    matrix._11 = Element{ 1 };
+    matrix._22 = Element{ 1 };
+    matrix._33 = Element{ 1 };
+    if constexpr(requires{ matrix._44; })
+        matrix._44 = Element{ 1 };
     return matrix;
 }
 
@@ -1525,142 +1476,22 @@ struct hash<UInt64x4U>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool operator==(const Half2U& lhs, const Half2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Half2U, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Half2U& lhs, const Half2U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Half4U& lhs, const Half4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Half4U, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Half4U& lhs, const Half4U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double2& lhs, const Double2& rhs)noexcept{ return MathTypeDetail::EqualArray<Double2, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double2& lhs, const Double2& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double3& lhs, const Double3& rhs)noexcept{ return MathTypeDetail::EqualArray<Double3, 3u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double3& lhs, const Double3& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float4& lhs, const Float4& rhs)noexcept{ return MathTypeDetail::EqualArray<Float4, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float4& lhs, const Float4& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double4& lhs, const Double4& rhs)noexcept{ return MathTypeDetail::EqualArray<Double4, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double4& lhs, const Double4& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double33& lhs, const Double33& rhs)noexcept{ return MathTypeDetail::EqualArray<Double33, 9u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double33& lhs, const Double33& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float34& lhs, const Float34& rhs)noexcept{ return MathTypeDetail::EqualArray<Float34, 12u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float34& lhs, const Float34& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double34& lhs, const Double34& rhs)noexcept{ return MathTypeDetail::EqualArray<Double34, 12u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double34& lhs, const Double34& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float44& lhs, const Float44& rhs)noexcept{ return MathTypeDetail::EqualArray<Float44, 16u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float44& lhs, const Float44& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double44& lhs, const Double44& rhs)noexcept{ return MathTypeDetail::EqualArray<Double44, 16u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double44& lhs, const Double44& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int4& lhs, const Int4& rhs)noexcept{ return MathTypeDetail::EqualArray<Int4, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int4& lhs, const Int4& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int64x4& lhs, const Int64x4& rhs)noexcept{ return MathTypeDetail::EqualArray<Int64x4, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int64x4& lhs, const Int64x4& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt4& lhs, const UInt4& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt4, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt4& lhs, const UInt4& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt64x4& lhs, const UInt64x4& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt64x4, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt64x4& lhs, const UInt64x4& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float3Int& lhs, const Float3Int& rhs)noexcept{
-    return MathTypeDetail::EqualMixedFloat3(lhs, rhs);
+template<MathStorageValue Value>
+[[nodiscard]] NWB_INLINE bool operator==(const Value& lhs, const Value& rhs)noexcept{
+    if constexpr(requires{ lhs.raw; }){
+        constexpr usize count = sizeof(lhs.raw) / sizeof(lhs.raw[0]);
+        return MathTypeDetail::EqualArray<Value, count>(lhs, rhs);
+    }
+    else if constexpr(IsSame_V<Value, Float3Int> || IsSame_V<Value, Float3UInt>)
+        return MathTypeDetail::EqualMixedFloat3(lhs, rhs);
+    else
+        return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
 }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float3Int& lhs, const Float3Int& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] NWB_INLINE bool operator==(const Double3Int& lhs, const Double3Int& rhs)noexcept{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+template<MathStorageValue Value>
+[[nodiscard]] NWB_INLINE bool operator!=(const Value& lhs, const Value& rhs)noexcept{
+    return !(lhs == rhs);
 }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double3Int& lhs, const Double3Int& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{
-    return MathTypeDetail::EqualMixedFloat3(lhs, rhs);
-}
-[[nodiscard]] NWB_INLINE bool operator!=(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double3UInt& lhs, const Double3UInt& rhs)noexcept{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
-}
-[[nodiscard]] NWB_INLINE bool operator!=(const Double3UInt& lhs, const Double3UInt& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float2U& lhs, const Float2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float2U, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float2U& lhs, const Float2U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double2U& lhs, const Double2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Double2U, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double2U& lhs, const Double2U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float3U& lhs, const Float3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float3U, 3u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float3U& lhs, const Float3U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double3U& lhs, const Double3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Double3U, 3u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double3U& lhs, const Double3U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float4U& lhs, const Float4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float4U, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float4U& lhs, const Float4U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double4U& lhs, const Double4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Double4U, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double4U& lhs, const Double4U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float33U& lhs, const Float33U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float33U, 9u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float33U& lhs, const Float33U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double33U& lhs, const Double33U& rhs)noexcept{ return MathTypeDetail::EqualArray<Double33U, 9u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double33U& lhs, const Double33U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float34U& lhs, const Float34U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float34U, 12u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float34U& lhs, const Float34U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double34U& lhs, const Double34U& rhs)noexcept{ return MathTypeDetail::EqualArray<Double34U, 12u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double34U& lhs, const Double34U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Float44U& lhs, const Float44U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float44U, 16u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Float44U& lhs, const Float44U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Double44U& lhs, const Double44U& rhs)noexcept{ return MathTypeDetail::EqualArray<Double44U, 16u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Double44U& lhs, const Double44U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int2U& lhs, const Int2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int2U, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int2U& lhs, const Int2U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int64x2U& lhs, const Int64x2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int64x2U, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int64x2U& lhs, const Int64x2U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int3U& lhs, const Int3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int3U, 3u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int3U& lhs, const Int3U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int64x3U& lhs, const Int64x3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int64x3U, 3u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int64x3U& lhs, const Int64x3U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int4U& lhs, const Int4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int4U, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int4U& lhs, const Int4U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const Int64x4U& lhs, const Int64x4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int64x4U, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const Int64x4U& lhs, const Int64x4U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt2U& lhs, const UInt2U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt2U, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt2U& lhs, const UInt2U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt64x2U& lhs, const UInt64x2U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt64x2U, 2u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt64x2U& lhs, const UInt64x2U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt3U& lhs, const UInt3U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt3U, 3u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt3U& lhs, const UInt3U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt64x3U& lhs, const UInt64x3U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt64x3U, 3u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt64x3U& lhs, const UInt64x3U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt4U& lhs, const UInt4U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt4U, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt4U& lhs, const UInt4U& rhs)noexcept{ return !(lhs == rhs); }
-
-[[nodiscard]] NWB_INLINE bool operator==(const UInt64x4U& lhs, const UInt64x4U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt64x4U, 4u>(lhs, rhs); }
-[[nodiscard]] NWB_INLINE bool operator!=(const UInt64x4U& lhs, const UInt64x4U& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -767,10 +767,10 @@ inline void BoundingBox::CreateFromPoints(
 )noexcept{
     NWB_ASSERT(points != nullptr);
     NWB_ASSERT(count > 0u);
-    SIMDVectorSingle minBounds = LoadFloat(*CollisionDetail::StrideFloat3Pointer(points, stride, 0u));
+    SIMDVectorSingle minBounds = LoadFloat(*VectorScalarDetail::StridePointer(points, stride, 0u));
     SIMDVectorSingle maxBounds = minBounds;
     for(usize i = 1u; i < count; ++i)
-        CollisionDetail::ExpandMinMax(LoadFloat(*CollisionDetail::StrideFloat3Pointer(points, stride, i)), minBounds, maxBounds);
+        CollisionDetail::ExpandMinMax(LoadFloat(*VectorScalarDetail::StridePointer(points, stride, i)), minBounds, maxBounds);
     SIMDVectorSingle centerVector{};
     SIMDVectorSingle extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
@@ -789,10 +789,10 @@ inline void BoundingDoubleBox::CreateFromPoints(
     NWB_ASSERT(count > 0u);
     NWB_ASSERT(stride >= sizeof(PointT));
     NWB_ASSERT(stride % alignof(PointT) == 0u);
-    SIMDVectorDouble minBounds = LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, 0u));
+    SIMDVectorDouble minBounds = LoadDouble(*VectorScalarDetail::StridePointer(points, stride, 0u));
     SIMDVectorDouble maxBounds = minBounds;
     for(usize i = 1u; i < count; ++i)
-        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, i)), minBounds, maxBounds);
+        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*VectorScalarDetail::StridePointer(points, stride, i)), minBounds, maxBounds);
     SIMDVectorDouble centerVector{};
     SIMDVectorDouble extentsVector{};
     CollisionDoubleDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);

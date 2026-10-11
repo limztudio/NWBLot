@@ -99,31 +99,22 @@ inline void HashCombine(usize& seed, const T& value)noexcept(noexcept(HashCombin
     HashCombineHash(seed, Hasher<T>{}(value));
 }
 
-[[nodiscard]] inline u32 FloatHashBits(f32 value)noexcept{
-    if(value == 0.0f)
-        value = 0.0f;
+template<typename T>
+    requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
+[[nodiscard]] inline auto FloatingHashBits(T value)noexcept{
+    using Bits = Conditional_T<IsSame_V<T, f32>, u32, u64>;
+    if(value == T{ 0 })
+        value = T{ 0 };
 
-    u32 bits = 0u;
+    Bits bits = 0u;
     NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
     return bits;
 }
 
-inline void HashCombineFloat(usize& seed, const f32 value)noexcept{
-    HashCombine(seed, FloatHashBits(value));
-}
-
-
-[[nodiscard]] inline u64 DoubleHashBits(f64 value)noexcept{
-    if(value == 0.0)
-        value = 0.0;
-
-    u64 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
-    return bits;
-}
-
-inline void HashCombineDouble(usize& seed, const f64 value)noexcept{
-    HashCombine(seed, DoubleHashBits(value));
+template<typename T>
+    requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
+inline void HashCombineFloating(usize& seed, const T value)noexcept{
+    HashCombine(seed, FloatingHashBits(value));
 }
 
 

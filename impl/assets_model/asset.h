@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 struct ModelSkeletonObject{
     Name name = s_NameNone;
     Core::Assets::AssetRef<Skeleton> skeleton;
-    SkeletonJointMatrix transform = ::Float34Identity();
+    SkeletonJointMatrix transform = ::MatrixIdentity<Float34>();
 };
 
 struct ModelStaticMeshObject{
@@ -39,7 +39,7 @@ struct ModelStaticMeshObject{
     // If parent_joint is empty, the joint pose term is omitted. If parent_object is empty, the model owner is used.
     Name parentObject = s_NameNone;
     Name parentJoint = s_NameNone;
-    SkeletonJointMatrix transform = ::Float34Identity();
+    SkeletonJointMatrix transform = ::MatrixIdentity<Float34>();
 };
 
 struct ModelSkinnedMeshObject{
@@ -47,7 +47,7 @@ struct ModelSkinnedMeshObject{
     Core::Assets::AssetRef<Skin> skin;
     Core::Assets::AssetRef<Material> material;
     Name skeletonObject = s_NameNone;
-    SkeletonJointMatrix transform = ::Float34Identity();
+    SkeletonJointMatrix transform = ::MatrixIdentity<Float34>();
 };
 
 

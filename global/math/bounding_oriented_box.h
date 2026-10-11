@@ -725,16 +725,13 @@ inline void BoundingDoubleOrientedBox::getCorners(PointT* corners)const noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingOrientedBox::CreateFromBoundingBox(BoundingOrientedBox& outBox, const BoundingBox& box)noexcept{
+template<typename OrientedBoxT, typename BoxT>
+    requires ((IsSame_V<OrientedBoxT, BoundingOrientedBox> && IsSame_V<BoxT, BoundingBox>)
+        || (IsSame_V<OrientedBoxT, BoundingDoubleOrientedBox> && IsSame_V<BoxT, BoundingDoubleBox>))
+inline void BoundingOrientedBoxFromBox(OrientedBoxT& outBox, const BoxT& box)noexcept{
     outBox.center = box.center;
     outBox.extents = box.extents;
-    outBox.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-}
-
-inline void BoundingDoubleOrientedBox::CreateFromBoundingBox(BoundingDoubleOrientedBox& outBox, const BoundingDoubleBox& box)noexcept{
-    outBox.center = box.center;
-    outBox.extents = box.extents;
-    outBox.orientation = Double4(0.0, 0.0, 0.0, 1.0);
+    outBox.orientation = decltype(outBox.orientation)(0, 0, 0, 1);
 }
 
 
@@ -749,7 +746,7 @@ inline void BoundingOrientedBox::CreateFromPoints(
 )noexcept{
     BoundingBox box;
     BoundingBox::CreateFromPoints(box, count, points, stride);
-    CreateFromBoundingBox(outBox, box);
+    BoundingOrientedBoxFromBox(outBox, box);
 }
 
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
@@ -761,7 +758,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(
 )noexcept{
     BoundingDoubleBox box;
     BoundingDoubleBox::CreateFromPoints(box, count, points, stride);
-    CreateFromBoundingBox(outBox, box);
+    BoundingOrientedBoxFromBox(outBox, box);
 }
 
 

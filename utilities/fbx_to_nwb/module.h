@@ -42,7 +42,7 @@ static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 struct MeshSkinInfluenceEqual{
     bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept{
         for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
-            if(lhs.joint[i] != rhs.joint[i] || FloatHashBits(lhs.weight.raw[i]) != FloatHashBits(rhs.weight.raw[i]))
+            if(lhs.joint[i] != rhs.joint[i] || FloatingHashBits(lhs.weight.raw[i]) != FloatingHashBits(rhs.weight.raw[i]))
                 return false;
         }
         return true;

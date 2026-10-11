@@ -76,16 +76,15 @@ static constexpr f64 s_DoubleFrameFallbackTangentZAxisAlignmentThreshold = 0.999
     return FrameDoubleNormalizeDirection(VectorDouble3Cross(axis, normal), VectorDoubleSet(1.0, 0.0, 0.0, 0.0));
 }
 
-[[nodiscard]] NWB_INLINE f32 FrameTangentHandedness(const f32 handedness, const f32 fallbackHandedness)noexcept{
-    if(Abs(handedness) > s_FrameHandednessEpsilon)
-        return handedness < 0.0f ? -1.0f : 1.0f;
-    return fallbackHandedness < 0.0f ? -1.0f : 1.0f;
-}
-
-[[nodiscard]] NWB_INLINE f64 FrameDoubleTangentHandedness(const f64 handedness, const f64 fallbackHandedness)noexcept{
-    if(Abs(handedness) > s_DoubleFrameHandednessEpsilon)
-        return handedness < 0.0 ? -1.0 : 1.0;
-    return fallbackHandedness < 0.0 ? -1.0 : 1.0;
+template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
+[[nodiscard]] NWB_INLINE T FrameTangentHandedness(const T handedness, const T fallbackHandedness)noexcept{
+    constexpr T s_HandednessEpsilon = IsSame_V<T, f32>
+        ? static_cast<T>(s_FrameHandednessEpsilon)
+        : static_cast<T>(s_DoubleFrameHandednessEpsilon)
+    ;
+    if(Abs(handedness) > s_HandednessEpsilon)
+        return handedness < T{ 0 } ? T{ -1 } : T{ 1 };
+    return fallbackHandedness < T{ 0 } ? T{ -1 } : T{ 1 };
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FrameTangentHandedness(const SIMDVectorSingle handedness, const SIMDVectorSingle fallbackHandedness)noexcept{

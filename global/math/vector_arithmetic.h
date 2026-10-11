@@ -17,41 +17,6 @@ namespace SIMDVectorDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Integer-bit rounding keeps binary64 range, signed zero, and ties independent of the floating-point rounding mode.
-[[nodiscard]] NWB_INLINE f64 RoundToNearestScalar(const f64 value)noexcept{
-    const u64 bits = BitCast<u64>(value);
-    const u64 magnitude = bits & 0x7FFFFFFFFFFFFFFFu;
-    const u64 sign = bits & 0x8000000000000000u;
-    const u64 exponent = magnitude >> 52u;
-    if(exponent == 0x7FFu && (magnitude & 0x000FFFFFFFFFFFFFu) != 0u)
-        return value + value;
-    if(exponent >= 1075u)
-        return value;
-    if(exponent < 1023u)
-        return BitCast<f64>(sign | (magnitude > 0x3FE0000000000000u ? 0x3FF0000000000000u : 0u));
-
-    const u64 unit = u64{ 1u } << (1075u - exponent);
-    const u64 fraction = magnitude & (unit - 1u);
-    u64 integer = magnitude & ~(unit - 1u);
-    const u64 halfway = unit >> 1u;
-    if(fraction > halfway || (fraction == halfway && (integer & unit) != 0u))
-        integer += unit;
-    return BitCast<f64>(sign | integer);
-}
-
-[[nodiscard]] NWB_INLINE f64 TruncateScalar(const f64 value)noexcept{
-    const u64 bits = BitCast<u64>(value);
-    const u64 magnitude = bits & 0x7FFFFFFFFFFFFFFFu;
-    const u64 exponent = magnitude >> 52u;
-    if(exponent == 0x7FFu && (magnitude & 0x000FFFFFFFFFFFFFu) != 0u)
-        return value + value;
-    if(exponent >= 1075u)
-        return value;
-    if(exponent < 1023u)
-        return BitCast<f64>(bits & 0x8000000000000000u);
-    return BitCast<f64>(bits & ~((u64{ 1u } << (1075u - exponent)) - 1u));
-}
-
 [[nodiscard]] NWB_INLINE f64 FloorRemainder(const f64 numerator, const f64 denominator)noexcept{
     const f64 remainder = FMod(numerator, denominator);
     if(remainder == 0.0)
@@ -751,10 +716,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRound(SIMDVectorSingle value)noe
 #endif
 #else
     return SIMDConvertDetail::MakeF32(
-        SIMDVectorDetail::RoundToNearest(value.f[0]),
-        SIMDVectorDetail::RoundToNearest(value.f[1]),
-        SIMDVectorDetail::RoundToNearest(value.f[2]),
-        SIMDVectorDetail::RoundToNearest(value.f[3])
+        VectorScalarDetail::RoundToNearest(value.f[0]),
+        VectorScalarDetail::RoundToNearest(value.f[1]),
+        VectorScalarDetail::RoundToNearest(value.f[2]),
+        VectorScalarDetail::RoundToNearest(value.f[3])
     );
 #endif
 }
@@ -774,10 +739,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleRound(SIMDVectorDouble val
     );
 #else
     return VectorDoubleSet(
-        SIMDVectorDoubleDetail::RoundToNearestScalar(value[0]),
-        SIMDVectorDoubleDetail::RoundToNearestScalar(value[1]),
-        SIMDVectorDoubleDetail::RoundToNearestScalar(value[2]),
-        SIMDVectorDoubleDetail::RoundToNearestScalar(value[3])
+        VectorScalarDetail::RoundToNearest(value[0]),
+        VectorScalarDetail::RoundToNearest(value[1]),
+        VectorScalarDetail::RoundToNearest(value[2]),
+        VectorScalarDetail::RoundToNearest(value[3])
     );
 #endif
 }
@@ -796,10 +761,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTruncate(SIMDVectorSingle value)
 #endif
 #else
     return SIMDConvertDetail::MakeU32(
-        SIMDVectorDetail::TruncateBits(value.f[0]),
-        SIMDVectorDetail::TruncateBits(value.f[1]),
-        SIMDVectorDetail::TruncateBits(value.f[2]),
-        SIMDVectorDetail::TruncateBits(value.f[3])
+        VectorScalarDetail::TruncateBits(value.f[0]),
+        VectorScalarDetail::TruncateBits(value.f[1]),
+        VectorScalarDetail::TruncateBits(value.f[2]),
+        VectorScalarDetail::TruncateBits(value.f[3])
     );
 #endif
 }
@@ -819,10 +784,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTruncate(SIMDVectorDouble 
     );
 #else
     return VectorDoubleSet(
-        SIMDVectorDoubleDetail::TruncateScalar(value[0]),
-        SIMDVectorDoubleDetail::TruncateScalar(value[1]),
-        SIMDVectorDoubleDetail::TruncateScalar(value[2]),
-        SIMDVectorDoubleDetail::TruncateScalar(value[3])
+        BitCast<f64>(VectorScalarDetail::TruncateBits(value[0])),
+        BitCast<f64>(VectorScalarDetail::TruncateBits(value[1])),
+        BitCast<f64>(VectorScalarDetail::TruncateBits(value[2])),
+        BitCast<f64>(VectorScalarDetail::TruncateBits(value[3]))
     );
 #endif
 }

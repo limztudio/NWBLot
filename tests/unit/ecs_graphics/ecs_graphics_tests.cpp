@@ -507,7 +507,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
 
 
 static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
-    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
+    NWB::Impl::SkeletonJointMatrix joint = ::MatrixIdentity<Float34>();
     joint.rows[0].w = x;
     joint.rows[1].w = y;
     joint.rows[2].w = z;
@@ -516,7 +516,7 @@ static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, co
 
 
 static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
+    NWB::Impl::SkeletonJointMatrix joint = ::MatrixIdentity<Float34>();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
@@ -654,7 +654,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
     outsidePalette.skeletonJointCount = s_ExpectedDualCount;
     outsidePalette.inverseBindMatrices.clear();
-    joints.joints.resize(1u, ::Float34Identity());
+    joints.joints.resize(1u, ::MatrixIdentity<Float34>());
     EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(outsidePalette, joints.joints, joints.skinningMode, jointMatrices));
 
     NWB::Impl::MeshSkinningRuntimeInstance nonAffineJoint = instance;

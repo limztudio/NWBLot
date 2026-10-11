@@ -39,7 +39,7 @@ namespace AssetsSkeletonCookDetail{
     const AStringView metaKind,
     const AStringView label
 ){
-    SkeletonJointMatrix matrix = ::Float34Identity();
+    SkeletonJointMatrix matrix = ::MatrixIdentity<Float34>();
 
     if(!value.isList() || value.asList().size() != 3u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix")

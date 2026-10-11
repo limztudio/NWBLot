@@ -54,16 +54,16 @@ using CandidatePointer = NotNull<const Candidate*>;
 
 struct CandidateHasher{
     usize hashTransformLanes(SIMDVectorSingle positionLanes, SIMDVectorSingle rotationLanes, SIMDVectorSingle scaleLanes, usize hash)const{
-        HashCombineFloat(hash, VectorGetX(positionLanes));
-        HashCombineFloat(hash, VectorGetY(positionLanes));
-        HashCombineFloat(hash, VectorGetZ(positionLanes));
-        HashCombineFloat(hash, VectorGetX(rotationLanes));
-        HashCombineFloat(hash, VectorGetY(rotationLanes));
-        HashCombineFloat(hash, VectorGetZ(rotationLanes));
-        HashCombineFloat(hash, VectorGetW(rotationLanes));
-        HashCombineFloat(hash, VectorGetX(scaleLanes));
-        HashCombineFloat(hash, VectorGetY(scaleLanes));
-        HashCombineFloat(hash, VectorGetZ(scaleLanes));
+        HashCombineFloating(hash, VectorGetX(positionLanes));
+        HashCombineFloating(hash, VectorGetY(positionLanes));
+        HashCombineFloating(hash, VectorGetZ(positionLanes));
+        HashCombineFloating(hash, VectorGetX(rotationLanes));
+        HashCombineFloating(hash, VectorGetY(rotationLanes));
+        HashCombineFloating(hash, VectorGetZ(rotationLanes));
+        HashCombineFloating(hash, VectorGetW(rotationLanes));
+        HashCombineFloating(hash, VectorGetX(scaleLanes));
+        HashCombineFloating(hash, VectorGetY(scaleLanes));
+        HashCombineFloating(hash, VectorGetZ(scaleLanes));
         return hash;
     }
 

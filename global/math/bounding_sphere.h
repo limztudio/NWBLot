@@ -756,12 +756,12 @@ inline void BoundingSphere::CreateFromPoints(
     NWB_ASSERT(count > 0u);
     SIMDVectorSingle centerVector = VectorZero();
     for(usize i = 0u; i < count; ++i)
-        centerVector = VectorAdd(centerVector, LoadFloat(*CollisionDetail::StrideFloat3Pointer(points, stride, i)));
+        centerVector = VectorAdd(centerVector, LoadFloat(*VectorScalarDetail::StridePointer(points, stride, i)));
     centerVector = VectorDivide(centerVector, VectorReplicate(static_cast<f32>(count)));
 
     SIMDVectorSingle radiusSq = VectorZero();
     for(usize i = 0u; i < count; ++i){
-        const SIMDVectorSingle delta = VectorSubtract(LoadFloat(*CollisionDetail::StrideFloat3Pointer(points, stride, i)), centerVector);
+        const SIMDVectorSingle delta = VectorSubtract(LoadFloat(*VectorScalarDetail::StridePointer(points, stride, i)), centerVector);
         radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
     }
 
@@ -781,12 +781,12 @@ inline void BoundingDoubleSphere::CreateFromPoints(
     NWB_ASSERT(stride % alignof(PointT) == 0u);
     SIMDVectorDouble centerVector = VectorDoubleZero();
     for(usize i = 0u; i < count; ++i)
-        centerVector = VectorDoubleAdd(centerVector, LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, i)));
+        centerVector = VectorDoubleAdd(centerVector, LoadDouble(*VectorScalarDetail::StridePointer(points, stride, i)));
     centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(count)));
 
     SIMDVectorDouble radiusSq = VectorDoubleZero();
     for(usize i = 0u; i < count; ++i){
-        const SIMDVectorDouble delta = VectorDoubleSubtract(LoadDouble(*SIMDVectorDoubleDetail::StridePointer(points, stride, i)), centerVector);
+        const SIMDVectorDouble delta = VectorDoubleSubtract(LoadDouble(*VectorScalarDetail::StridePointer(points, stride, i)), centerVector);
         radiusSq = VectorDoubleMax(radiusSq, VectorDouble3LengthSq(delta));
     }
 

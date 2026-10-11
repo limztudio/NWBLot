@@ -25,7 +25,8 @@ inline constexpr f32 s_MatrixDecomposeEpsilon = 0.0001f;
 inline constexpr f32 s_MatrixProjectionNearEqualEpsilon = 0.00001f;
 inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjectionNearEqualEpsilon * s_MatrixTwo;
 
-NWB_INLINE bool ScalarNearEqual(f32 value0, f32 value1, f32 epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
+template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
+NWB_INLINE bool ScalarNearEqual(T value0, T value1, T epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixRowMultiply(SIMDVectorSingle row, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -148,7 +149,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL PlaneNormalize(SIMDVectorSingle plane)
 #endif
 }
 
-NWB_INLINE void RankDecompose(usize& a, usize& b, usize& c, f32 x, f32 y, f32 z)noexcept{
+template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
+NWB_INLINE void RankDecompose(usize& a, usize& b, usize& c, T x, T y, T z)noexcept{
     if(x < y){
         if(y < z){
             a = 2;
@@ -366,8 +368,6 @@ inline constexpr f64 s_DoubleMatrixDecomposeEpsilon = 1.0e-12;
 inline constexpr f64 s_DoubleMatrixProjectionNearEqualEpsilon = 1.0e-12;
 inline constexpr f64 s_DoubleMatrixPerspectiveFovNearEqualEpsilon = s_DoubleMatrixProjectionNearEqualEpsilon * s_DoubleMatrixTwo;
 
-NWB_INLINE bool ScalarNearEqual(f64 value0, f64 value1, f64 epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
-
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleRowMultiply(SIMDVectorDouble row, const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble result = VectorDoubleMultiply(VectorDoubleSplatX(row), matrix.v[0]);
     result = VectorDoubleMultiplyAdd(VectorDoubleSplatY(row), matrix.v[1], result);
@@ -380,45 +380,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleNormalize(SIMDVectorDouble 
     return VectorDoubleDivide(plane, VectorDouble3Length(plane));
 }
 
-NWB_INLINE void RankDecompose(usize& a, usize& b, usize& c, f64 x, f64 y, f64 z)noexcept{
-    if(x < y){
-        if(y < z){
-            a = 2;
-            b = 1;
-            c = 0;
-        }
-        else{
-            a = 1;
-            if(x < z){
-                b = 2;
-                c = 0;
-            }
-            else{
-                b = 0;
-                c = 2;
-            }
-        }
-    }
-    else{
-        if(x < z){
-            a = 2;
-            b = 0;
-            c = 1;
-        }
-        else{
-            a = 0;
-            if(y < z){
-                b = 2;
-                c = 1;
-            }
-            else{
-                b = 1;
-                c = 2;
-            }
-        }
-    }
-}
-
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(
     const f64 viewWidth,
     const f64 viewHeight,
@@ -429,9 +390,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(
     const f64 forwardZ
 )noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble nearZVector = VectorDoubleReplicate(nearZ);
@@ -457,9 +418,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(
     const f64 forwardZ
 )noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(fovAngleY, 0.0, s_DoubleMatrixPerspectiveFovNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(aspectRatio, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0, s_DoubleMatrixPerspectiveFovNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     SIMDVectorDouble sinFov{};
     SIMDVectorDouble cosFov{};
@@ -494,9 +455,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveOffCenterImpl(
     const f64 forwardZ
 )noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewRight, viewLeft, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewTop, viewBottom, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble left = VectorDoubleReplicate(viewLeft);
@@ -527,9 +488,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicImpl(
     const f64 rangeDenominator,
     const f64 rangeNearScale
 )noexcept{
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble nearZVector = VectorDoubleReplicate(nearZ);
@@ -553,9 +514,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(
     const f64 rangeDenominator,
     const f64 rangeNearScale
 )noexcept{
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewRight, viewLeft, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(viewTop, viewBottom, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDoubleDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble left = VectorDoubleReplicate(viewLeft);
@@ -1089,7 +1050,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     usize a{};
     usize b{};
     usize c{};
-    SIMDMatrixDoubleDetail::RankDecompose(a, b, c, VectorDoubleGetX(scale), VectorDoubleGetY(scale), VectorDoubleGetZ(scale));
+    SIMDMatrixDetail::RankDecompose(a, b, c, VectorDoubleGetX(scale), VectorDoubleGetY(scale), VectorDoubleGetZ(scale));
 
     if(VectorDoubleGetByIndex(scale, a) < SIMDMatrixDoubleDetail::s_DoubleMatrixDecomposeEpsilon)
         basis[a] = canonicalBasis[a];
@@ -1100,7 +1061,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
         usize bb{};
         usize cc{};
         const SIMDVectorDouble absoluteBasis = VectorDoubleAbs(basis[a]);
-        SIMDMatrixDoubleDetail::RankDecompose(
+        SIMDMatrixDetail::RankDecompose(
             aa,
             bb,
             cc,

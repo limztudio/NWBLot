@@ -28,9 +28,9 @@ SIMDVectorSingle FbxMeshBuild::ToVector(const ufbx_vec3 value, const f32 w){
 
 PositionKey FbxMeshBuild::MakePositionKey(const SIMDVectorSingle position){
     return PositionKey{
-        FloatHashBits(VectorGetX(position)),
-        FloatHashBits(VectorGetY(position)),
-        FloatHashBits(VectorGetZ(position)),
+        FloatingHashBits(VectorGetX(position)),
+        FloatingHashBits(VectorGetY(position)),
+        FloatingHashBits(VectorGetZ(position)),
     };
 }
 

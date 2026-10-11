@@ -35,7 +35,7 @@ using NWB::Impl::MeshSkinningPayload::BuildRuntimeSkinPayload;
 
 
 NWB::Impl::SkeletonJointMatrix MakeTranslationJoint(const f32 x, const f32 y, const f32 z){
-    NWB::Impl::SkeletonJointMatrix joint = Float34Identity();
+    NWB::Impl::SkeletonJointMatrix joint = MatrixIdentity<Float34>();
     joint.rows[0].w = x;
     joint.rows[1].w = y;
     joint.rows[2].w = z;
@@ -85,7 +85,7 @@ TEST(SkinningPayload, RuntimePayloadClearsWhenSkinOrPoseIsRemoved){
     instance.skin.assign(3u, MakeSkinInfluence(0u));
     instance.skeletonJointCount = 1u;
     NWB::Impl::SkeletonJointPaletteComponent palette(arena);
-    palette.joints.push_back(Float34Identity());
+    palette.joints.push_back(MatrixIdentity<Float34>());
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Impl::RuntimeSkinPayloadScratch payload(scratchArena);
@@ -207,7 +207,7 @@ TEST(SkinningPayload, RuntimeScratchAllocationDoesNotScaleWithInfluenceCount){
     instance.skeletonJointCount = s_ExpectedDualCount;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     NWB::Impl::SkeletonJointPaletteComponent palette(arena);
-    palette.joints.assign(s_ExpectedDualCount, Float34Identity());
+    palette.joints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Impl::RuntimeSkinPayloadScratch payload(scratchArena);
@@ -232,9 +232,9 @@ TEST(SkinningPayload, PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes){
     instance.skeletonJointCount = s_ExpectedDualCount;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     NWB::Impl::SkeletonJointPaletteComponent palette(arena);
-    palette.joints.assign(s_ExpectedDualCount, Float34Identity());
+    palette.joints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     NWB::Impl::SkeletonPoseComponent pose(arena);
-    pose.localJoints.assign(s_ExpectedDualCount, Float34Identity());
+    pose.localJoints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     pose.parentJoints.assign(s_ExpectedDualCount, NWB::Impl::s_SkeletonRootParent);
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
@@ -269,14 +269,14 @@ TEST(SkinningPayload, RuntimePayloadRejectsInvalidDynamicInputs){
     instance.skeletonJointCount = s_ExpectedDualCount;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     NWB::Impl::SkeletonJointPaletteComponent palette(arena);
-    palette.joints.assign(1u, Float34Identity());
+    palette.joints.assign(1u, MatrixIdentity<Float34>());
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Impl::RuntimeSkinPayloadScratch payload(scratchArena);
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
 
-    palette.joints.assign(s_ExpectedDualCount, Float34Identity());
+    palette.joints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     palette.skinningMode = Limit<u32>::s_Max;
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
@@ -286,9 +286,9 @@ TEST(SkinningPayload, RuntimePayloadRejectsInvalidDynamicInputs){
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
 
-    palette.joints.assign(s_ExpectedDualCount, Float34Identity());
+    palette.joints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     NWB::Impl::SkeletonPoseComponent pose(arena);
-    pose.localJoints.assign(s_ExpectedDualCount, Float34Identity());
+    pose.localJoints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     pose.parentJoints.assign(s_ExpectedDualCount, NWB::Impl::s_SkeletonRootParent);
     pose.parentJoints[1] = 1u;
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
@@ -299,7 +299,7 @@ TEST(SkinningPayload, RuntimePayloadRejectsInvalidDynamicInputs){
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
 
-    palette.joints.assign(s_ExpectedDualCount, Float34Identity());
+    palette.joints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ASSERT_TRUE(payload.hasActiveSkin());
     ASSERT_EQ(payload.jointMatrices.size(), s_ExpectedDualCount);
@@ -313,19 +313,19 @@ TEST(SkinningPayload, InverseBindBoundsAndPartialFailuresLeaveNoActivePayload){
     NWB::Impl::MeshSkinningRuntimeInstance instance(arena);
     instance.skeletonJointCount = s_ExpectedDualCount;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
-    instance.inverseBindMatrices.assign(s_ExpectedDualCount, Float34Identity());
+    instance.inverseBindMatrices.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     NWB::Impl::SkeletonJointPaletteComponent palette(arena);
-    palette.joints.assign(s_ExpectedDualCount, Float34Identity());
+    palette.joints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Impl::RuntimeSkinPayloadScratch payload(scratchArena);
     ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ASSERT_TRUE(payload.hasActiveSkin());
-    palette.joints.push_back(Float34Identity());
+    palette.joints.push_back(MatrixIdentity<Float34>());
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
 
-    payload.jointMatrices.assign(1u, Float34Identity());
+    payload.jointMatrices.assign(1u, MatrixIdentity<Float34>());
     EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(
         instance,
         palette.joints,
@@ -341,21 +341,21 @@ TEST(SkinningPayload, InverseBindBoundsAndPartialFailuresLeaveNoActivePayload){
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
 
-    instance.inverseBindMatrices.assign(s_ExpectedDualCount, Float34Identity());
+    instance.inverseBindMatrices.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     instance.inverseBindMatrices[1].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
 
-    instance.inverseBindMatrices[1] = Float34Identity();
+    instance.inverseBindMatrices[1] = MatrixIdentity<Float34>();
     instance.inverseBindMatrices[1].rows[0].x = 0.001f;
     instance.inverseBindMatrices[1].rows[1].y = 0.001f;
     instance.inverseBindMatrices[1].rows[2].z = 0.001f;
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ExpectEmptyRuntimePayload(payload);
 
-    instance.inverseBindMatrices.assign(s_ExpectedDualCount, Float34Identity());
+    instance.inverseBindMatrices.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     NWB::Impl::SkeletonPoseComponent pose(arena);
-    pose.localJoints.assign(s_ExpectedDualCount, Float34Identity());
+    pose.localJoints.assign(s_ExpectedDualCount, MatrixIdentity<Float34>());
     pose.parentJoints.assign(s_ExpectedDualCount, NWB::Impl::s_SkeletonRootParent);
     ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
     ASSERT_TRUE(payload.hasActiveSkin());

@@ -40,7 +40,7 @@ struct StreamSortEntry{
 };
 
 [[nodiscard]] u32 FloatSortKey(const f32 value){
-    return FloatHashBits(value);
+    return FloatingHashBits(value);
 }
 
 [[nodiscard]] bool LessF32(const f32 lhs, const f32 rhs){

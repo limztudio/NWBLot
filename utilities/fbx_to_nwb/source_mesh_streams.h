@@ -76,7 +76,7 @@ struct MeshSkinInfluenceHasher{
         for(usize i = 1u; i < s_MeshSkinInfluenceCount; ++i)
             HashCombine(seed, value.joint[i]);
         for(const f32 weight : value.weight.raw)
-            HashCombine(seed, FloatHashBits(weight));
+            HashCombine(seed, FloatingHashBits(weight));
         return seed;
     }
 };

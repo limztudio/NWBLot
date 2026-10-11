@@ -66,7 +66,7 @@ static_assert(IsTriviallyCopyable_V<ModelRuntimeComponent>, "ModelRuntimeCompone
 struct ModelObjectComponent{
     Name model = s_NameNone;
     Name object = s_NameNone;
-    SkeletonJointMatrix localTransform = ::Float34Identity();
+    SkeletonJointMatrix localTransform = ::MatrixIdentity<Float34>();
     Core::ECS::EntityID owner = Core::ECS::s_InvalidEntityId;
     u32 kind = ModelObjectKind::StaticMesh;
 };
@@ -94,7 +94,7 @@ struct ModelStaticMeshAttachmentComponent{
     Name parentJoint = s_NameNone;
     Core::ECS::EntityID parentEntity = Core::ECS::s_InvalidEntityId;
     u32 parentJointIndex = Limit<u32>::s_Max;
-    SkeletonJointMatrix localTransform = ::Float34Identity();
+    SkeletonJointMatrix localTransform = ::MatrixIdentity<Float34>();
 };
 
 static_assert(IsStandardLayout_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay layout-stable for ECS storage");

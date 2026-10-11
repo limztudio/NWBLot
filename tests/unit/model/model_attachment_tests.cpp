@@ -33,7 +33,7 @@ using namespace NWB::ModelTests;
 
 
 [[nodiscard]] static SkeletonJointMatrix Translation(const f32 x){
-    SkeletonJointMatrix matrix = Float34Identity();
+    SkeletonJointMatrix matrix = MatrixIdentity<Float34>();
     matrix._14 = x;
     return matrix;
 }

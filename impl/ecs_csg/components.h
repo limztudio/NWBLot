@@ -60,8 +60,8 @@ struct CsgCutterComponent{
     bool active = true;
 
     explicit CsgCutterComponent(Core::Alloc::GlobalArena& arena)
-        : worldToShape(::Float34Identity())
-        , shapeToWorld(::Float34Identity())
+        : worldToShape(::MatrixIdentity<Float34>())
+        , shapeToWorld(::MatrixIdentity<Float34>())
         , parameterBytes(arena)
     {}
 };

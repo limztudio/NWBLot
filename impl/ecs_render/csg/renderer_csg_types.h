@@ -50,7 +50,7 @@ struct CsgReceiverRangeGpuData{
     u32 cutterCount = 0u;
     u32 flags = 0u;
     u32 shadingModelId = 0u;
-    Float34 worldToReceiver = ::Float34Identity();
+    Float34 worldToReceiver = ::MatrixIdentity<Float34>();
     CsgBoundsGpuData localBounds;
     // Cap-fill context packs as uint4: dispatch id, byte offset, instance index.
     u32 surfaceDispatchId = Limit<u32>::s_Max;
@@ -65,7 +65,7 @@ struct CsgCutterGpuData{
     f32 worldToShapeScaleBound = 1.f;
     u32 padding0 = 0u;
     u32 padding1 = 0u;
-    Float34 worldToShape = ::Float34Identity();
+    Float34 worldToShape = ::MatrixIdentity<Float34>();
     Float4 parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
 };

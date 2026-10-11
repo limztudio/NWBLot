@@ -175,8 +175,8 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorTransformStreamImpl(
 
     const SIMDMatrix transposedMatrix = MatrixTransposeForTransform(matrix);
     for(usize i = 0u; i < vectorCount; ++i){
-        const SIMDVectorSingle value = LoadFloat(*StridePointer(inputStream, inputStride, i));
-        StoreFloat(transform(value, transposedMatrix), *StridePointer(outputStream, outputStride, i));
+        const SIMDVectorSingle value = LoadFloat(*VectorScalarDetail::StridePointer(inputStream, inputStride, i));
+        StoreFloat(transform(value, transposedMatrix), *VectorScalarDetail::StridePointer(outputStream, outputStride, i));
     }
 
     return outputStream;
@@ -345,8 +345,8 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDoubleTransformStreamImpl(
 
     const SIMDMatrixDouble transposedMatrix = MatrixDoubleTransposeForTransform(matrix);
     for(usize i = 0u; i < vectorCount; ++i){
-        const SIMDVectorDouble value = LoadDouble(*StridePointer(inputStream, inputStride, i));
-        StoreDouble(transform(value, transposedMatrix), *StridePointer(outputStream, outputStride, i));
+        const SIMDVectorDouble value = LoadDouble(*VectorScalarDetail::StridePointer(inputStream, inputStride, i));
+        StoreDouble(transform(value, transposedMatrix), *VectorScalarDetail::StridePointer(outputStream, outputStride, i));
     }
 
     return outputStream;

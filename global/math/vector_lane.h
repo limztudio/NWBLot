@@ -65,6 +65,120 @@ inline constexpr f32 s_CosQuarticCoeff = 0.5f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace VectorScalarDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+NWB_INLINE T* StridePointer(T* pointer, usize stride, usize index)noexcept{
+    using ByteT = Conditional_T<IsConst_V<T>, const u8, u8>;
+    return reinterpret_cast<T*>(reinterpret_cast<ByteT*>(pointer) + stride * index);
+}
+
+template<typename T> requires(IsIntegral_V<T>)
+NWB_INLINE T ComparisonMaskR(T mask, T activeMask)noexcept{
+    mask &= activeMask;
+    if(mask == activeMask)
+        return static_cast<T>(s_CRMASK_CR6TRUE);
+    if(mask == 0)
+        return static_cast<T>(s_CRMASK_CR6FALSE);
+    return T{ 0 };
+}
+
+template<typename T> requires(IsIntegral_V<T>)
+NWB_INLINE T BoundsMaskR(T mask, T activeMask)noexcept{
+    return (mask & activeMask) == activeMask ? static_cast<T>(s_CRMASK_CR6BOUNDS) : T{ 0 };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
+[[nodiscard]] NWB_INLINE T RoundToNearest(T value)noexcept{
+    if constexpr(IsSame_V<T, f32>){
+        f32 integer = Floor(value);
+        value -= integer;
+        if(value < s_RoundHalfBias)
+            return integer;
+        if(value > s_RoundHalfBias)
+            return integer + 1.0f;
+
+        f32 intPart{};
+        const f32 fractionalPart = ModF(integer * s_RoundHalfBias, &intPart);
+        if(fractionalPart == 0.0f)
+            return integer;
+        return integer + 1.0f;
+    }
+    else{
+        // Integer-bit rounding preserves binary64 range, signed zero, and ties independently of the floating-point rounding mode.
+        const u64 bits = BitCast<u64>(value);
+        const u64 magnitude = bits & 0x7FFFFFFFFFFFFFFFu;
+        const u64 sign = bits & 0x8000000000000000u;
+        const u64 exponent = magnitude >> 52u;
+        if(exponent == 0x7FFu && (magnitude & 0x000FFFFFFFFFFFFFu) != 0u)
+            return value + value;
+        if(exponent >= 1075u)
+            return value;
+        if(exponent < 1023u)
+            return BitCast<f64>(sign | (magnitude > 0x3FE0000000000000u ? 0x3FF0000000000000u : 0u));
+
+        const u64 unit = u64{ 1u } << (1075u - exponent);
+        const u64 fraction = magnitude & (unit - 1u);
+        u64 integer = magnitude & ~(unit - 1u);
+        const u64 halfway = unit >> 1u;
+        if(fraction > halfway || (fraction == halfway && (integer & unit) != 0u))
+            integer += unit;
+        return BitCast<f64>(sign | integer);
+    }
+}
+
+template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
+[[nodiscard]] NWB_INLINE auto TruncateBits(T value)noexcept{
+    if constexpr(IsSame_V<T, f32>){
+        union{
+            f32 f;
+            u32 u;
+        } result{};
+
+        if(IsNaN(value)){
+            result.u = 0x7FC00000u;
+        }
+        else if(Abs(value) < 8388608.0f){
+            result.f = static_cast<f32>(static_cast<i32>(value));
+        }
+        else{
+            result.f = value;
+        }
+
+        return result.u;
+    }
+    else{
+        const u64 bits = BitCast<u64>(value);
+        const u64 magnitude = bits & 0x7FFFFFFFFFFFFFFFu;
+        const u64 exponent = magnitude >> 52u;
+        if(exponent == 0x7FFu && (magnitude & 0x000FFFFFFFFFFFFFu) != 0u)
+            return BitCast<u64>(value + value);
+        if(exponent >= 1075u)
+            return bits;
+        if(exponent < 1023u)
+            return bits & 0x8000000000000000u;
+        return bits & ~((u64{ 1u } << (1075u - exponent)) - 1u);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace SIMDVectorDetail{
 
 
@@ -145,44 +259,6 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
 }
 #endif
 
-template<typename T>
-NWB_INLINE T* StridePointer(T* pointer, usize stride, usize index)noexcept{
-    return reinterpret_cast<T*>(reinterpret_cast<u8*>(pointer) + stride * index);
-}
-
-template<typename T>
-NWB_INLINE const T* StridePointer(const T* pointer, usize stride, usize index)noexcept{
-    return reinterpret_cast<const T*>(reinterpret_cast<const u8*>(pointer) + stride * index);
-}
-
-NWB_INLINE u32 ComparisonMaskR(u32 mask, u32 activeMask)noexcept{
-    mask &= activeMask;
-    if(mask == activeMask)
-        return s_CRMASK_CR6TRUE;
-    if(mask == 0)
-        return s_CRMASK_CR6FALSE;
-    return 0;
-}
-
-NWB_INLINE u32 BoundsMaskR(u32 mask, u32 activeMask)noexcept{
-    return (mask & activeMask) == activeMask ? s_CRMASK_CR6BOUNDS : 0;
-}
-
-NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
-    f32 integer = Floor(value);
-    value -= integer;
-    if(value < s_RoundHalfBias)
-        return integer;
-    if(value > s_RoundHalfBias)
-        return integer + 1.0f;
-
-    f32 intPart{};
-    const f32 fractionalPart = ModF(integer * s_RoundHalfBias, &intPart);
-    if(fractionalPart == 0.0f)
-        return integer;
-    return integer + 1.0f;
-}
-
 NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     f32 quotient = s_1DIV2PI * value;
     if(value >= 0.0f)
@@ -207,25 +283,6 @@ NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     const f32 y2 = y * y;
     outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
     outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - s_CosQuarticCoeff) * y2 + 1.0f);
-}
-
-NWB_INLINE u32 TruncateBits(f32 value)noexcept{
-    union{
-        f32 f;
-        u32 u;
-    } result{};
-
-    if(IsNaN(value)){
-        result.u = 0x7FC00000u;
-    }
-    else if(Abs(value) < 8388608.0f){
-        result.f = static_cast<f32>(static_cast<i32>(value));
-    }
-    else{
-        result.f = value;
-    }
-
-    return result.u;
 }
 
 #if defined(NWB_HAS_NEON)
@@ -329,29 +386,6 @@ using UIntVector = u64 __attribute__((ext_vector_type(4)));
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename T>
-NWB_INLINE T* StridePointer(T* pointer, usize stride, usize index)noexcept{
-    return reinterpret_cast<T*>(reinterpret_cast<u8*>(pointer) + stride * index);
-}
-
-template<typename T>
-NWB_INLINE const T* StridePointer(const T* pointer, usize stride, usize index)noexcept{
-    return reinterpret_cast<const T*>(reinterpret_cast<const u8*>(pointer) + stride * index);
-}
-
-NWB_INLINE u32 ComparisonMaskR(u32 mask, u32 activeMask)noexcept{
-    mask &= activeMask;
-    if(mask == activeMask)
-        return s_DoubleCRMASK_CR6TRUE;
-    if(mask == 0)
-        return s_DoubleCRMASK_CR6FALSE;
-    return 0;
-}
-
-NWB_INLINE u32 BoundsMaskR(u32 mask, u32 activeMask)noexcept{
-    return (mask & activeMask) == activeMask ? s_DoubleCRMASK_CR6BOUNDS : 0;
-}
 
 #if defined(NWB_HAS_NEON64) || defined(NWB_HAS_SSE2)
 template<u32 Lane>

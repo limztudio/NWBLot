@@ -123,14 +123,9 @@ constexpr u32 s_DoubleSWIZZLE_Z = 2;
 constexpr u32 s_SWIZZLE_W = 3;
 constexpr u32 s_DoubleSWIZZLE_W = 3;
 
-constexpr u32 s_CRMASK_CR6 = 0x000000F0;
-constexpr u32 s_DoubleCRMASK_CR6 = 0x000000F0;
 constexpr u32 s_CRMASK_CR6TRUE = 0x00000080;
-constexpr u32 s_DoubleCRMASK_CR6TRUE = 0x00000080;
 constexpr u32 s_CRMASK_CR6FALSE = 0x00000020;
-constexpr u32 s_DoubleCRMASK_CR6FALSE = 0x00000020;
 constexpr u32 s_CRMASK_CR6BOUNDS = s_CRMASK_CR6FALSE;
-constexpr u32 s_DoubleCRMASK_CR6BOUNDS = s_DoubleCRMASK_CR6FALSE;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

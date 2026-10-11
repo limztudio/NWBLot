@@ -389,7 +389,6 @@ struct BoundingOrientedBox{
         SIMDVectorSingle plane5
     )const noexcept;
 
-    static void CreateFromBoundingBox(BoundingOrientedBox& outBox, const BoundingBox& box)noexcept;
     static void CreateFromPoints(BoundingOrientedBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
 };
 
@@ -473,7 +472,6 @@ struct BoundingDoubleOrientedBox{
         SIMDVectorDouble plane5
     )const noexcept;
 
-    static void CreateFromBoundingBox(BoundingDoubleOrientedBox& outBox, const BoundingDoubleBox& box)noexcept;
     template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
     static void CreateFromPoints(BoundingDoubleOrientedBox& outBox, usize count, const PointT* points, usize stride)noexcept;
 };

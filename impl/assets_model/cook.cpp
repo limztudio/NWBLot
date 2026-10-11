@@ -171,7 +171,7 @@ static constexpr AStringView s_TransformField = "transform";
 ){
     const Value* fieldValue = object.findField(s_TransformField);
     if(!fieldValue)
-        return ::Float34Identity();
+        return ::MatrixIdentity<Float34>();
     return AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(
         nwbFilePath, *fieldValue, objectKind, s_TransformField
     );

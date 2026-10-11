@@ -49,7 +49,7 @@ using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
 // Cutter mirrors the GPU SDF eval; parameter0 packs the shader fields (plane: n+d; box: half extents; sphere: r; capsule: r+h).
 struct CsgDeformShape{
     Name shapeType = s_NameNone;
-    Float34 worldToShape = Float34Identity();
+    Float34 worldToShape = MatrixIdentity<Float34>();
     Float4 parameter0 = s_DefaultShapeParameter;
 };
 

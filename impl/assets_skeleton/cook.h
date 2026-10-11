@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 struct SkeletonCookJoint{
     Name name = s_NameNone;
     Name parent = s_NameNone;
-    SkeletonJointMatrix localBindPose = ::Float34Identity();
+    SkeletonJointMatrix localBindPose = ::MatrixIdentity<Float34>();
 };
 
 struct SkeletonCookEntry{

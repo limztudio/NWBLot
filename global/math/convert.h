@@ -208,7 +208,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MakeF32(f32 x, f32 y, f32 z, f32 w)noe
     result = vsetq_lane_f32(y, result, 1);
     result = vsetq_lane_f32(z, result, 2);
     return vsetq_lane_f32(w, result, 3);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_set_ps(w, z, y, x);
 #endif
 }
@@ -226,7 +226,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MakeU32(u32 x, u32 y, u32 z, u32 w)noe
     result = vsetq_lane_u32(y, result, 1);
     result = vsetq_lane_u32(z, result, 2);
     return vreinterpretq_f32_u32(vsetq_lane_u32(w, result, 3));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_castsi128_ps(_mm_set_epi32(static_cast<i32>(w), static_cast<i32>(z), static_cast<i32>(y), static_cast<i32>(x)));
 #endif
 }
@@ -239,7 +239,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreF32(f32* out, SIMDVectorSingle value)noexcept
     out[3] = value.f[3];
 #elif defined(NWB_HAS_NEON)
     vst1q_f32(out, value);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_storeu_ps(out, value);
 #endif
 }
@@ -252,20 +252,20 @@ NWB_INLINE void NWB_SIMD_CALL StoreU32(u32* out, SIMDVectorSingle value)noexcept
     out[3] = value.u[3];
 #elif defined(NWB_HAS_NEON)
     vst1q_u32(out, vreinterpretq_u32_f32(value));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm_castps_si128(value));
 #endif
 }
 
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
 NWB_INLINE void NWB_SIMD_CALL StoreInt3Bits(SIMDVectorSingle value, i32* out)noexcept{
     _mm_store_sd(reinterpret_cast<f64*>(out), _mm_castps_pd(value));
-    out[2] = _mm_extract_ps(value, 2);
+    out[2] = _mm_cvtsi128_si32(_mm_shuffle_epi32(_mm_castps_si128(value), _MM_SHUFFLE(2, 2, 2, 2)));
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreUInt3Bits(SIMDVectorSingle value, u32* out)noexcept{
     _mm_store_sd(reinterpret_cast<f64*>(out), _mm_castps_pd(value));
-    out[2] = static_cast<u32>(_mm_extract_ps(value, 2));
+    out[2] = static_cast<u32>(_mm_cvtsi128_si32(_mm_shuffle_epi32(_mm_castps_si128(value), _MM_SHUFFLE(2, 2, 2, 2))));
 }
 #endif
 
@@ -278,7 +278,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat3Components(const secondRow& 
     float32x2_t z0 = vdup_n_f32(0.0f);
     z0 = vld1_lane_f32(&src.z, z0, 0);
     return vcombine_f32(xy, z0);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128 xy = _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(&src.x)));
     __m128 z = _mm_load_ss(&src.z);
     return _mm_movelh_ps(xy, z);
@@ -295,7 +295,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat3Components(SIMDVectorSingle src, second
     float32x2_t xy = vget_low_f32(src);
     vst1_f32(&dst.x, xy);
     vst1q_lane_f32(&dst.z, src, 2);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_sd(reinterpret_cast<f64*>(&dst.x), _mm_castps_pd(src));
     _mm_store_ss(&dst.z, _mm_shuffle_ps(src, src, _MM_SHUFFLE(2, 2, 2, 2)));
 #endif
@@ -368,7 +368,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Neon(const secondRow& src)noexcep
 
 #endif
 
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
 template<bool Aligned>
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadMatrixRow4(const f32* row)noexcept{
     if constexpr(Aligned)
@@ -405,7 +405,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt4Scalar(SIMDVectorSingle src, secondRow& d
 }
 #endif
 
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
 template<bool Aligned>
 NWB_INLINE void NWB_SIMD_CALL StoreInt4Sse(SIMDVectorSingle src, i32* dst)noexcept{
     if constexpr(Aligned)
@@ -867,7 +867,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float4& src)noexcept{
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);
 #elif defined (NWB_HAS_NEON)
     return vld1q_f32(src.raw);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_load_ps(src.raw);
 #endif
 }
@@ -878,7 +878,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(f32 src)noexcept{
 #elif defined (NWB_HAS_NEON)
     uint32x4_t zero = vdupq_n_u32(0);
     return vreinterpretq_f32_u32(vld1q_lane_u32(&src, zero, 0));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_load_ss(&src);
 #endif
 }
@@ -890,7 +890,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float2U& src)noexcept{
     float32x2_t x = vld1_f32(src.raw);
     float32x2_t zero = vdup_n_f32(0);
     return vcombine_f32(x, zero);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
 }
@@ -904,7 +904,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float4U& src)noexcept{
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);
 #elif defined (NWB_HAS_NEON)
     return vld1q_f32(src.raw);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_loadu_ps(src.raw);
 #endif
 }
@@ -914,7 +914,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float34& src)noexcept{
     return SIMDConvertDetail::LoadFloat34Scalar(src);
 #elif defined (NWB_HAS_NEON)
     return SIMDConvertDetail::LoadFloat34Neon(src);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return SIMDConvertDetail::LoadFloat34Sse<true>(src);
 #endif
 }
@@ -924,7 +924,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float44& src)noexcept{
     return SIMDConvertDetail::LoadFloat44Scalar(src);
 #elif defined (NWB_HAS_NEON)
     return SIMDConvertDetail::LoadFloat44Neon(src);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return SIMDConvertDetail::LoadFloat44Sse<true>(src);
 #endif
 }
@@ -949,7 +949,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float33U& src)noexcept{
     matrix.v[2] = vcombine_f32(vget_high_f32(v1), v2);
     matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128 zero = _mm_setzero_ps();
 
     __m128 firstValues = _mm_loadu_ps(&src.m[0][0]);
@@ -964,7 +964,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float33U& src)noexcept{
 
     SIMDMatrix matrix;
     matrix.v[0] = _mm_movelh_ps(firstValues, firstHighValues);
-    matrix.v[1] = _mm_add_ps(secondRowTail, secondRowHead);
+    matrix.v[1] = _mm_or_ps(secondRowTail, secondRowHead);
     matrix.v[2] = _mm_shuffle_ps(middleValues, lastValue, _MM_SHUFFLE(1, 0, 3, 2));
     matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
@@ -976,7 +976,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float34U& src)noexcept{
     return SIMDConvertDetail::LoadFloat34Scalar(src);
 #elif defined (NWB_HAS_NEON)
     return SIMDConvertDetail::LoadFloat34Neon(src);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return SIMDConvertDetail::LoadFloat34Sse<false>(src);
 #endif
 }
@@ -986,7 +986,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float44U& src)noexcept{
     return SIMDConvertDetail::LoadFloat44Scalar(src);
 #elif defined (NWB_HAS_NEON)
     return SIMDConvertDetail::LoadFloat44Neon(src);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return SIMDConvertDetail::LoadFloat44Sse<false>(src);
 #endif
 }
@@ -1068,7 +1068,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int4& src)noexcept{
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), static_cast<u32>(src.z), static_cast<u32>(src.w));
 #elif defined (NWB_HAS_NEON)
     return vreinterpretq_f32_s32(vld1q_s32(src.raw));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128i vector = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
     return _mm_castsi128_ps(vector);
 #endif
@@ -1081,7 +1081,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(i32 src)noexcept{
     int32x4_t v = vdupq_n_s32(0);
     v = vsetq_lane_s32(src, v, 0);
     return vreinterpretq_f32_s32(v);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_castsi128_ps(_mm_cvtsi32_si128(src));
 #endif
 }
@@ -1093,7 +1093,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int2U& src)noexcept{
     int32x2_t x = vld1_s32(src.raw);
     int32x2_t zero = vdup_n_s32(0);
     return vreinterpretq_f32_s32(vcombine_s32(x, zero));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
 }
@@ -1106,7 +1106,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int3U& src)noexcept{
     int32x2_t zero = vdup_n_s32(0);
     int32x2_t y = vld1_lane_s32(src.raw + 2, zero, 0);
     return vreinterpretq_f32_s32(vcombine_s32(x, y));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128 xy = _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
     __m128 z = _mm_load_ss(reinterpret_cast<const f32*>(src.raw + 2));
     return _mm_movelh_ps(xy, z);
@@ -1118,7 +1118,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int4U& src)noexcept{
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), static_cast<u32>(src.z), static_cast<u32>(src.w));
 #elif defined (NWB_HAS_NEON)
     return vreinterpretq_f32_s32(vld1q_s32(src.raw));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128i vector = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src.raw));
     return _mm_castsi128_ps(vector);
 #endif
@@ -1129,7 +1129,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt4& src)noexcept{
     return SIMDConvertDetail::MakeU32(src.x, src.y, src.z, src.w);
 #elif defined (NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vld1q_u32(src.raw));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128i vector = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
     return _mm_castsi128_ps(vector);
 #endif
@@ -1142,7 +1142,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(u32 src)noexcept{
     uint32x4_t v = vdupq_n_u32(0);
     v = vsetq_lane_u32(src, v, 0);
     return vreinterpretq_f32_u32(v);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_castsi128_ps(_mm_cvtsi32_si128(static_cast<i32>(src)));
 #endif
 }
@@ -1154,7 +1154,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt2U& src)noexcept{
     uint32x2_t x = vld1_u32(src.raw);
     uint32x2_t zero = vdup_n_u32(0);
     return vreinterpretq_f32_u32(vcombine_u32(x, zero));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
 }
@@ -1168,7 +1168,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt3U& src)noexcept{
     uint32x2_t y = vld1_lane_u32(src.raw + 2, zero, 0);
     uint32x4_t v = vcombine_u32(x, y);
     return vreinterpretq_f32_u32(v);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128 xy = _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
     __m128 z = _mm_load_ss(reinterpret_cast<const f32*>(src.raw + 2));
     return _mm_movelh_ps(xy, z);
@@ -1180,7 +1180,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt4U& src)noexcept{
     return SIMDConvertDetail::MakeU32(src.x, src.y, src.z, src.w);
 #elif defined (NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vld1q_u32(src.raw));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     __m128i vector = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src.raw));
     return _mm_castsi128_ps(vector);
 #endif
@@ -1246,7 +1246,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float4& dst)noexc
     dst.w = src.f[3];
 #elif defined (NWB_HAS_NEON)
     vst1q_f32(dst.raw, src);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_ps(dst.raw, src);
 #endif
 }
@@ -1256,7 +1256,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, f32& dst)noexcept
     dst = src.f[0];
 #elif defined (NWB_HAS_NEON)
     vst1q_lane_f32(&dst, src, 0);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_ss(&dst, src);
 #endif
 }
@@ -1268,7 +1268,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float2U& dst)noex
 #elif defined (NWB_HAS_NEON)
     float32x2_t lowValues = vget_low_f32(src);
     vst1_f32(dst.raw, lowValues);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_sd(reinterpret_cast<f64*>(&dst), _mm_castps_pd(src));
 #endif
 }
@@ -1285,7 +1285,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float4U& dst)noex
     dst.w = src.f[3];
 #elif defined (NWB_HAS_NEON)
     vst1q_f32(dst.raw, src);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_storeu_ps(dst.raw, src);
 #endif
 }
@@ -1297,7 +1297,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
     vst1q_f32(&dst._11, src.v[0]);
     vst1q_f32(&dst._21, src.v[1]);
     vst1q_f32(&dst._31, src.v[2]);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_ps(&dst._11, src.v[0]);
     _mm_store_ps(&dst._21, src.v[1]);
     _mm_store_ps(&dst._31, src.v[2]);
@@ -1312,7 +1312,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
     vst1q_f32(&dst._21, src.v[1]);
     vst1q_f32(&dst._31, src.v[2]);
     vst1q_f32(&dst._41, src.v[3]);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_ps(&dst._11, src.v[0]);
     _mm_store_ps(&dst._21, src.v[1]);
     _mm_store_ps(&dst._31, src.v[2]);
@@ -1343,7 +1343,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
     vst1q_f32(&dst.m[1][1], packedValues);
 
     vst1q_lane_f32(&dst.m[2][2], src.v[2], 2);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     SIMDVectorSingle vTemp1 = src.v[0];
     SIMDVectorSingle vTemp2 = src.v[1];
     SIMDVectorSingle vTemp3 = src.v[2];
@@ -1364,7 +1364,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34U& dst)noexcept{
     vst1q_f32(&dst._11, src.v[0]);
     vst1q_f32(&dst._21, src.v[1]);
     vst1q_f32(&dst._31, src.v[2]);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_storeu_ps(&dst._11, src.v[0]);
     _mm_storeu_ps(&dst._21, src.v[1]);
     _mm_storeu_ps(&dst._31, src.v[2]);
@@ -1379,7 +1379,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44U& dst)noexcept{
     vst1q_f32(&dst._21, src.v[1]);
     vst1q_f32(&dst._31, src.v[2]);
     vst1q_f32(&dst._41, src.v[3]);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_storeu_ps(&dst._11, src.v[0]);
     _mm_storeu_ps(&dst._21, src.v[1]);
     _mm_storeu_ps(&dst._31, src.v[2]);
@@ -1458,7 +1458,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int4& dst)noexcept{
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
     vst1q_s32(dst.raw, vreinterpretq_s32_f32(src));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     SIMDConvertDetail::StoreInt4Sse<true>(src, dst.raw);
 #endif
 }
@@ -1468,7 +1468,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, i32& dst)noexcept{
     dst = static_cast<i32>(src.u[0]);
 #elif defined (NWB_HAS_NEON)
     vst1q_lane_s32(&dst, vreinterpretq_s32_f32(src), 0);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_ss(reinterpret_cast<f32*>(&dst), src);
 #endif
 }
@@ -1479,7 +1479,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int2U& dst)noexcept
     dst.y = static_cast<i32>(src.u[1]);
 #elif defined (NWB_HAS_NEON)
     vst1_s32(dst.raw, vget_low_s32(vreinterpretq_s32_f32(src)));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
 }
@@ -1493,7 +1493,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int3U& dst)noexcept
     int32x4_t value = vreinterpretq_s32_f32(src);
     vst1_s32(dst.raw, vget_low_s32(value));
     vst1q_lane_s32(dst.raw + 2, value, 2);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     SIMDConvertDetail::StoreInt3Bits(src, dst.raw);
 #endif
 }
@@ -1503,7 +1503,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int4U& dst)noexcept
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
     vst1q_s32(dst.raw, vreinterpretq_s32_f32(src));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     SIMDConvertDetail::StoreInt4Sse<false>(src, dst.raw);
 #endif
 }
@@ -1516,7 +1516,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt4& dst)noexcept
     dst.w = src.u[3];
 #elif defined (NWB_HAS_NEON)
     vst1q_u32(dst.raw, vreinterpretq_u32_f32(src));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_si128(reinterpret_cast<__m128i*>(dst.raw), _mm_castps_si128(src));
 #endif
 }
@@ -1526,7 +1526,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, u32& dst)noexcept{
     dst = src.u[0];
 #elif defined (NWB_HAS_NEON)
     vst1q_lane_u32(&dst, vreinterpretq_u32_f32(src), 0);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_ss(reinterpret_cast<f32*>(&dst), src);
 #endif
 }
@@ -1537,7 +1537,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt2U& dst)noexcep
     dst.y = src.u[1];
 #elif defined (NWB_HAS_NEON)
     vst1_u32(dst.raw, vget_low_u32(vreinterpretq_u32_f32(src)));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
 }
@@ -1551,7 +1551,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt3U& dst)noexcep
     uint32x4_t value = vreinterpretq_u32_f32(src);
     vst1_u32(dst.raw, vget_low_u32(value));
     vst1q_lane_u32(dst.raw + 2, value, 2);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     SIMDConvertDetail::StoreUInt3Bits(src, dst.raw);
 #endif
 }
@@ -1564,7 +1564,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt4U& dst)noexcep
     dst.w = src.u[3];
 #elif defined (NWB_HAS_NEON)
     vst1q_u32(dst.raw, vreinterpretq_u32_f32(src));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     _mm_storeu_si128(reinterpret_cast<__m128i*>(dst.raw), _mm_castps_si128(src));
 #endif
 }
@@ -1624,7 +1624,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x4U& ds
 
 
 NWB_INLINE void StreamFloatFence()noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     _mm_sfence();
 #endif
 }
@@ -1642,7 +1642,7 @@ NWB_INLINE void StreamDoubleFence()noexcept{
 
 
 NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDVectorSingle src, Float4& dst)noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     _mm_stream_ps(dst.raw, src);
 #else
     StoreFloat(src, dst);
@@ -1650,7 +1650,7 @@ NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDVectorSingle src, Float4& dst)noex
 }
 
 NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     _mm_stream_ps(&dst._11, src.v[0]);
     _mm_stream_ps(&dst._21, src.v[1]);
     _mm_stream_ps(&dst._31, src.v[2]);
@@ -1660,7 +1660,7 @@ NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
 }
 
 NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     _mm_stream_ps(&dst._11, src.v[0]);
     _mm_stream_ps(&dst._21, src.v[1]);
     _mm_stream_ps(&dst._31, src.v[2]);

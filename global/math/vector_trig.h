@@ -179,7 +179,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTan(SIMDVectorSingle value)noexc
     SIMDVectorSingle vb = VectorAbs(va);
     vc = VectorNegativeMultiplySubtract(va, c1, vc);
 
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     vb = _mm_castsi128_ps(_mm_cvttps_epi32(vb));
 #elif defined(NWB_HAS_NEON)
     vb = vreinterpretq_f32_u32(vcvtq_u32_f32(vb));

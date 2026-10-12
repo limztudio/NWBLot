@@ -11,6 +11,84 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_HAS_SSE2) && !defined(NWB_HAS_SSE4)
+namespace SIMDVectorArithmeticDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Rounding{
+enum Enum : u8{
+    Nearest,
+    Truncate,
+    Floor,
+    Ceiling
+};
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<Rounding::Enum Mode>
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL RoundFixed(SIMDVectorSingle value)noexcept{
+    const __m128i bits = _mm_castps_si128(value);
+    const __m128i magnitude = _mm_and_si128(bits, _mm_set1_epi32(0x7FFFFFFF));
+    const __m128i sign = _mm_and_si128(bits, _mm_set1_epi32(static_cast<i32>(0x80000000u)));
+    const __m128i integral = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(0x4AFFFFFF));
+    __m128i result{};
+    if constexpr(Mode == Rounding::Floor || Mode == Rounding::Ceiling){
+        // Only finite values below 2^23 need conversion, preserving precision exceptions without invalid conversions.
+        const __m128 safe = _mm_andnot_ps(_mm_castsi128_ps(integral), value);
+        __m128i integer = _mm_cvttps_epi32(safe);
+        const __m128 truncated = _mm_cvtepi32_ps(integer);
+        if constexpr(Mode == Rounding::Floor)
+            integer = _mm_add_epi32(integer, _mm_castps_si128(_mm_cmpgt_ps(truncated, safe)));
+        else
+            integer = _mm_sub_epi32(integer, _mm_castps_si128(_mm_cmplt_ps(truncated, safe)));
+        result = _mm_castps_si128(_mm_cvtepi32_ps(integer));
+    }
+    else{
+        // Integer masks preserve fixed nearest/truncate rounding and signed zero without raising precision exceptions.
+        const __m128i isSmall = _mm_cmplt_epi32(magnitude, _mm_set1_epi32(0x3F800000));
+        const __m128i exponent = _mm_srli_epi32(magnitude, 23);
+        const __m128i shift = _mm_sub_epi32(_mm_set1_epi32(150), exponent);
+        const __m128i mask = SIMDVectorDetail::MultiSllEpi32(_mm_set1_epi32(-1), shift);
+        result = _mm_andnot_si128(isSmall, _mm_and_si128(magnitude, mask));
+
+        if constexpr(Mode == Rounding::Nearest){
+            const __m128i unit = _mm_sub_epi32(_mm_setzero_si128(), mask);
+            const __m128i fraction = _mm_andnot_si128(mask, magnitude);
+            const __m128i half = _mm_srli_epi32(unit, 1);
+            const __m128i odd = _mm_cmpgt_epi32(_mm_and_si128(result, unit), _mm_setzero_si128());
+            const __m128i increment = _mm_or_si128(_mm_cmpgt_epi32(fraction, half), _mm_and_si128(_mm_cmpeq_epi32(fraction, half), odd));
+            const __m128i smallResult = _mm_and_si128(_mm_cmpgt_epi32(magnitude, _mm_set1_epi32(0x3F000000)), _mm_set1_epi32(0x3F800000));
+            result = _mm_add_epi32(result, _mm_and_si128(increment, unit));
+            result = _mm_or_si128(_mm_and_si128(isSmall, smallResult), _mm_andnot_si128(isSmall, result));
+        }
+    }
+
+    result = _mm_or_si128(_mm_and_si128(integral, magnitude), _mm_andnot_si128(integral, result));
+    result = _mm_or_si128(result, sign);
+    const __m128i isNaN = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(0x7F800000));
+    // Quiet only NaN lanes so large finite inputs cannot overflow during payload-preserving addition.
+    const __m128 nan = _mm_and_ps(_mm_castsi128_ps(isNaN), value);
+    const __m128 quietNaN = _mm_add_ps(nan, nan);
+    return _mm_or_ps(_mm_and_ps(_mm_castsi128_ps(isNaN), quietNaN), _mm_andnot_ps(_mm_castsi128_ps(isNaN), _mm_castsi128_ps(result)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace SIMDVectorDoubleDetail{
 
 
@@ -429,9 +507,12 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSum(SIMDVectorSingle value)noexc
     lo = vpadd_f32(lo, lo);
     return vcombine_f32(lo, lo);
 #endif
-#else
+#elif defined(NWB_HAS_SSE4)
     SIMDVectorSingle temp = _mm_hadd_ps(value, value);
     return _mm_hadd_ps(temp, temp);
+#else
+    const __m128 paired = _mm_add_ps(value, _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 3, 0, 1)));
+    return _mm_add_ps(_mm_shuffle_ps(paired, paired, _MM_SHUFFLE(0, 0, 0, 0)), _mm_shuffle_ps(paired, paired, _MM_SHUFFLE(2, 2, 2, 2)));
 #endif
 }
 
@@ -508,7 +589,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReciprocal(SIMDVectorSingle valu
     scale = vrecpsq_f32(reciprocal, value);
     return vmulq_f32(scale, reciprocal);
 #endif
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_div_ps(s_SIMDOne, value);
 #else
     return VectorDivide(VectorSplatOne(), value);
@@ -536,6 +617,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReciprocalEst(SIMDVectorDo
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSqrt(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(Sqrt(VectorGetX(value)), Sqrt(VectorGetY(value)), Sqrt(VectorGetZ(value)), Sqrt(VectorGetW(value)));
+#elif defined(NWB_HAS_NEON64)
+    return vsqrtq_f32(value);
 #elif defined(NWB_HAS_NEON)
     float32x4_t s0 = vrsqrteq_f32(value);
     float32x4_t p0 = vmulq_f32(value, s0);
@@ -584,7 +667,9 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSqrtEst(SIMDVectorDouble v
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReciprocalSqrt(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_NEON)
+#if defined(NWB_HAS_NEON64)
+    return vdivq_f32(vdupq_n_f32(1.0f), vsqrtq_f32(value));
+#elif defined(NWB_HAS_NEON)
     float32x4_t s0 = vrsqrteq_f32(value);
     float32x4_t p0 = vmulq_f32(value, s0);
     float32x4_t r0 = vrsqrtsq_f32(p0, s0);
@@ -592,7 +677,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReciprocalSqrt(SIMDVectorSingle 
     float32x4_t p1 = vmulq_f32(value, s1);
     float32x4_t r1 = vrsqrtsq_f32(p1, s1);
     return vmulq_f32(s1, r1);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     return _mm_div_ps(s_SIMDOne, _mm_sqrt_ps(value));
 #else
     return VectorReciprocal(VectorSqrt(value));
@@ -624,6 +709,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReciprocalSqrtEst(SIMDVect
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRound(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
     return _mm_round_ps(value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Nearest>(value);
 #elif defined(NWB_HAS_NEON)
 #if defined(NWB_HAS_NEON64)
     return vrndnq_f32(value);
@@ -655,6 +742,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleRound(SIMDVectorDouble val
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTruncate(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
     return _mm_round_ps(value, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Truncate>(value);
 #elif defined(NWB_HAS_NEON)
 #if defined(NWB_HAS_NEON64)
     return vrndq_f32(value);
@@ -684,6 +773,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTruncate(SIMDVectorDouble 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorFloor(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
     return _mm_floor_ps(value);
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Floor>(value);
 #elif defined(NWB_HAS_NEON)
 #if defined(NWB_HAS_NEON64)
     return vrndmq_f32(value);
@@ -716,6 +807,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleFloor(SIMDVectorDouble val
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCeiling(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
     return _mm_ceil_ps(value);
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Ceiling>(value);
 #elif defined(NWB_HAS_NEON)
 #if defined(NWB_HAS_NEON64)
     return vrndpq_f32(value);

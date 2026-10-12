@@ -183,8 +183,14 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Dot(SIMDVectorSingle v0, SIMDVe
     const float32x2_t product = vmul_f32(vget_low_f32(v0), vget_low_f32(v1));
     const float32x2_t result = vpadd_f32(product, product);
     return vcombine_f32(result, result);
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_dp_ps(v0, v1, 0x3F);
+#elif defined(NWB_HAS_SSE2)
+    v0 = _mm_and_ps(v0, s_SIMDMaskXY);
+    v1 = _mm_and_ps(v1, s_SIMDMaskXY);
+    const SIMDVectorSingle product = _mm_mul_ps(v0, v1);
+    SIMDVectorSingle result = _mm_add_ss(product, _mm_shuffle_ps(product, product, _MM_SHUFFLE(1, 1, 1, 1)));
+    return _mm_shuffle_ps(result, result, _MM_SHUFFLE(0, 0, 0, 0));
 #endif
 }
 

@@ -185,44 +185,52 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_SSE4)
-struct SllEpi32 final{
-    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_sll_epi32(value, count); }
-};
-
-struct SrlEpi32 final{
-    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_srl_epi32(value, count); }
-};
-
-template<typename ShiftOp>
-NWB_INLINE __m128i MultiShiftEpi32(__m128i value, __m128i count)noexcept{
+#if defined(NWB_HAS_SSE2)
+#if defined(NWB_HAS_AVX2)
+NWB_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{
     __m128i v = _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 0, 0, 0));
     __m128i c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(0, 0, 0, 0)), s_SIMDMaskX);
-    const __m128i r0 = ShiftOp::Apply(v, c);
+    const __m128i r0 = _mm_srl_epi32(v, c);
 
     v = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 1, 1, 1));
     c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(1, 1, 1, 1)), s_SIMDMaskX);
-    const __m128i r1 = ShiftOp::Apply(v, c);
+    const __m128i r1 = _mm_srl_epi32(v, c);
 
     v = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 2, 2, 2));
     c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(2, 2, 2, 2)), s_SIMDMaskX);
-    const __m128i r2 = ShiftOp::Apply(v, c);
+    const __m128i r2 = _mm_srl_epi32(v, c);
 
     v = _mm_shuffle_epi32(value, _MM_SHUFFLE(3, 3, 3, 3));
     c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(3, 3, 3, 3)), s_SIMDMaskX);
-    const __m128i r3 = ShiftOp::Apply(v, c);
+    const __m128i r3 = _mm_srl_epi32(v, c);
 
     const __m128 r01 = _mm_shuffle_ps(_mm_castsi128_ps(r0), _mm_castsi128_ps(r1), _MM_SHUFFLE(0, 0, 0, 0));
     const __m128 r23 = _mm_shuffle_ps(_mm_castsi128_ps(r2), _mm_castsi128_ps(r3), _MM_SHUFFLE(0, 0, 0, 0));
     return _mm_castps_si128(_mm_shuffle_ps(r01, r23, _MM_SHUFFLE(2, 0, 2, 0)));
 }
 
-NWB_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
-    return MultiShiftEpi32<SllEpi32>(value, count);
-}
+#endif
 
-NWB_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{
-    return MultiShiftEpi32<SrlEpi32>(value, count);
+NWB_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
+    __m128i v = _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 0, 0, 0));
+    __m128i c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(0, 0, 0, 0)), s_SIMDMaskX);
+    const __m128i r0 = _mm_sll_epi32(v, c);
+
+    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 1, 1, 1));
+    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(1, 1, 1, 1)), s_SIMDMaskX);
+    const __m128i r1 = _mm_sll_epi32(v, c);
+
+    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 2, 2, 2));
+    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(2, 2, 2, 2)), s_SIMDMaskX);
+    const __m128i r2 = _mm_sll_epi32(v, c);
+
+    v = _mm_shuffle_epi32(value, _MM_SHUFFLE(3, 3, 3, 3));
+    c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(3, 3, 3, 3)), s_SIMDMaskX);
+    const __m128i r3 = _mm_sll_epi32(v, c);
+
+    const __m128 r01 = _mm_shuffle_ps(_mm_castsi128_ps(r0), _mm_castsi128_ps(r1), _MM_SHUFFLE(0, 0, 0, 0));
+    const __m128 r23 = _mm_shuffle_ps(_mm_castsi128_ps(r2), _mm_castsi128_ps(r3), _MM_SHUFFLE(0, 0, 0, 0));
+    return _mm_castps_si128(_mm_shuffle_ps(r01, r23, _MM_SHUFFLE(2, 0, 2, 0)));
 }
 
 NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
@@ -234,24 +242,40 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     __m128i c = _mm_cmpgt_epi32(value, mask0000FFFF);
     __m128i b = _mm_srli_epi32(c, 31);
     __m128i r = _mm_slli_epi32(b, 4);
+#if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, r);
+#else
+    value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 16)), _mm_andnot_si128(c, value));
+#endif
 
     c = _mm_cmpgt_epi32(value, mask000000FF);
     b = _mm_srli_epi32(c, 31);
     __m128i s = _mm_slli_epi32(b, 3);
+#if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, s);
+#else
+    value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 8)), _mm_andnot_si128(c, value));
+#endif
     r = _mm_or_si128(r, s);
 
     c = _mm_cmpgt_epi32(value, mask0000000F);
     b = _mm_srli_epi32(c, 31);
     s = _mm_slli_epi32(b, 2);
+#if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, s);
+#else
+    value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 4)), _mm_andnot_si128(c, value));
+#endif
     r = _mm_or_si128(r, s);
 
     c = _mm_cmpgt_epi32(value, mask00000003);
     b = _mm_srli_epi32(c, 31);
     s = _mm_slli_epi32(b, 1);
+#if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, s);
+#else
+    value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 2)), _mm_andnot_si128(c, value));
+#endif
     r = _mm_or_si128(r, s);
 
     s = _mm_srli_epi32(value, 1);
@@ -266,6 +290,42 @@ NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
     uint32x4_t leading = vsubq_u32(vdupq_n_u32(31), vclzq_u32(raw));
     leading = vbslq_u32(isZero, vdupq_n_u32(0), leading);
     return vreinterpretq_s32_u32(leading);
+}
+#endif
+
+#if defined(NWB_HAS_NEON64)
+NWB_INLINE uint8x16_t PermuteByteIndices(u32 x, u32 y, u32 z, u32 w)noexcept{
+    const uint32x4_t lanes = vreinterpretq_u32_f32(SIMDConvertDetail::MakeU32(x, y, z, w));
+    return vreinterpretq_u8_u32(vaddq_u32(vmulq_n_u32(lanes, 0x04040404u), vdupq_n_u32(0x03020100u)));
+}
+#endif
+
+#if defined(NWB_HAS_SSE2)
+template<u32 Lane>
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SetLane(SIMDVectorSingle value, f32 component)noexcept{
+    static_assert(Lane < 4u);
+    if constexpr(Lane == 0u)
+        return _mm_move_ss(value, _mm_set_ss(component));
+    else{
+        constexpr int shuffle = _MM_SHUFFLE(Lane == 3u ? 0u : 3u, Lane == 2u ? 0u : 2u, Lane == 1u ? 0u : 1u, Lane);
+        const __m128 swapped = _mm_shuffle_ps(value, value, shuffle);
+        const __m128 changed = _mm_move_ss(swapped, _mm_set_ss(component));
+        return _mm_shuffle_ps(changed, changed, shuffle);
+    }
+}
+
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SwizzleLanes(SIMDVectorSingle value, __m128i control)noexcept{
+#if defined(NWB_HAS_SSE4)
+    const __m128i byteOffsets = _mm_mullo_epi32(control, _mm_set1_epi32(0x04040404));
+    const __m128i byteIndices = _mm_add_epi32(byteOffsets, _mm_set1_epi32(0x03020100));
+    return _mm_castsi128_ps(_mm_shuffle_epi8(_mm_castps_si128(value), byteIndices));
+#else
+    const __m128 x = _mm_and_ps(_mm_castsi128_ps(_mm_cmpeq_epi32(control, _mm_setzero_si128())), _mm_shuffle_ps(value, value, _MM_SHUFFLE(0, 0, 0, 0)));
+    const __m128 y = _mm_and_ps(_mm_castsi128_ps(_mm_cmpeq_epi32(control, _mm_set1_epi32(1))), _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 1, 1, 1)));
+    const __m128 z = _mm_and_ps(_mm_castsi128_ps(_mm_cmpeq_epi32(control, _mm_set1_epi32(2))), _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 2, 2, 2)));
+    const __m128 w = _mm_and_ps(_mm_castsi128_ps(_mm_cmpeq_epi32(control, _mm_set1_epi32(3))), _mm_shuffle_ps(value, value, _MM_SHUFFLE(3, 3, 3, 3)));
+    return _mm_or_ps(_mm_or_ps(x, y), _mm_or_ps(z, w));
+#endif
 }
 #endif
 
@@ -325,8 +385,13 @@ NWB_INLINE u32 NWB_SIMD_CALL GetIntLane(SIMDVectorSingle value)noexcept{
 #else
     if constexpr(Lane == 0u)
         return static_cast<u32>(_mm_cvtsi128_si32(_mm_castps_si128(value)));
-    else
+    else{
+#if defined(NWB_HAS_SSE4)
         return static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), Lane));
+#else
+        return static_cast<u32>(_mm_cvtsi128_si32(_mm_shuffle_epi32(_mm_castps_si128(value), _MM_SHUFFLE(Lane, Lane, Lane, Lane))));
+#endif
+    }
 #endif
 }
 

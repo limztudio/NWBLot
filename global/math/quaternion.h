@@ -867,8 +867,7 @@ NWB_INLINE void NWB_SIMD_CALL QuaternionToAxisAngle(SIMDVectorSingle& outAxis, f
 
 NWB_INLINE void NWB_SIMD_CALL QuaternionDoubleToAxisAngle(SIMDVectorDouble& outAxis, f64& outAngle, SIMDVectorDouble q)noexcept{
     outAxis = q;
-    const SIMDVectorDouble angle = VectorDoubleScale(VectorDoubleACos(VectorDoubleSplatW(q)), 2.0);
-    outAngle = VectorDoubleGetX(angle);
+    outAngle = ACos(VectorDoubleGetW(q)) * 2.0;
 }
 
 

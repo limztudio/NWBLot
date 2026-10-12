@@ -41,7 +41,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose4(SIMDVectorSingle r0, SIMDVe
     t1 = _mm256_insertf128_ps(t1, r3, 1);
 
     return MatrixTransposePackedRows(t0, t1);
-#elif defined(NWB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE2)
     SIMDVectorSingle temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
     SIMDVectorSingle temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
     SIMDVectorSingle temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));

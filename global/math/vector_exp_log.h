@@ -12,7 +12,7 @@
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     __m128i iTrunc = _mm_cvttps_epi32(value);
     SIMDVectorSingle fTrunc = _mm_cvtepi32_ps(iTrunc);
     SIMDVectorSingle y = VectorSubtract(value, fTrunc);
@@ -140,7 +140,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExp(SIMDVectorDouble value
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     __m128i rawBiased = _mm_and_si128(_mm_castps_si128(value), s_SIMDInfinity);
     __m128i trailing = _mm_and_si128(_mm_castps_si128(value), s_SIMDQNaNTest);
     const __m128i isExponentZero = _mm_cmpeq_epi32(s_SIMDZero, rawBiased);
@@ -266,7 +266,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog2(SIMDVectorDouble valu
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog10(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLg10, VectorLog2(value));
 #else
     return VectorSet(Log10(VectorGetX(value)), Log10(VectorGetY(value)), Log10(VectorGetZ(value)), Log10(VectorGetW(value)));
@@ -278,7 +278,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog10(SIMDVectorDouble val
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLogE(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
 #else
     return VectorSet(Log(VectorGetX(value)), Log(VectorGetY(value)), Log(VectorGetZ(value)), Log(VectorGetW(value)));

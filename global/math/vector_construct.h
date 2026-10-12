@@ -14,6 +14,10 @@
 NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return ((value.u[0] >> 31) & 1u) | (((value.u[1] >> 31) & 1u) << 1) | (((value.u[2] >> 31) & 1u) << 2) | (((value.u[3] >> 31) & 1u) << 3);
+#elif defined(NWB_HAS_NEON64)
+    const uint32x4_t bits = vshrq_n_u32(vreinterpretq_u32_f32(value), 31);
+    const int32x4_t shifts = { 0, 1, 2, 3 };
+    return vaddvq_u32(vshlq_u32(bits, shifts));
 #elif defined(NWB_HAS_NEON)
     const uint32x4_t bits = vshrq_n_u32(vreinterpretq_u32_f32(value), 31);
     return vgetq_lane_u32(bits, 0) | (vgetq_lane_u32(bits, 1) << 1) | (vgetq_lane_u32(bits, 2) << 2) | (vgetq_lane_u32(bits, 3) << 3);
@@ -354,8 +358,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetY(SIMDVectorSingle value, f32
     return value;
 #elif defined(NWB_HAS_NEON)
     return vsetq_lane_f32(y, value, 1);
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_insert_ps(value, _mm_set_ss(y), 0x10);
+#else
+    return SIMDVectorDetail::SetLane<1u>(value, y);
 #endif
 }
 
@@ -377,8 +383,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetZ(SIMDVectorSingle value, f32
     return value;
 #elif defined(NWB_HAS_NEON)
     return vsetq_lane_f32(z, value, 2);
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_insert_ps(value, _mm_set_ss(z), 0x20);
+#else
+    return SIMDVectorDetail::SetLane<2u>(value, z);
 #endif
 }
 
@@ -400,8 +408,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetW(SIMDVectorSingle value, f32
     return value;
 #elif defined(NWB_HAS_NEON)
     return vsetq_lane_f32(w, value, 3);
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_insert_ps(value, _mm_set_ss(w), 0x30);
+#else
+    return SIMDVectorDetail::SetLane<3u>(value, w);
 #endif
 }
 
@@ -476,8 +486,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntY(SIMDVectorSingle value, 
     return value;
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vsetq_lane_u32(y, vreinterpretq_u32_f32(value), 1));
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(y), 1));
+#else
+    return SIMDVectorDetail::SetLane<1u>(value, BitCast<f32>(y));
 #endif
 }
 
@@ -499,8 +511,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntZ(SIMDVectorSingle value, 
     return value;
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vsetq_lane_u32(z, vreinterpretq_u32_f32(value), 2));
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(z), 2));
+#else
+    return SIMDVectorDetail::SetLane<2u>(value, BitCast<f32>(z));
 #endif
 }
 
@@ -522,8 +536,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetIntW(SIMDVectorSingle value, 
     return value;
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vsetq_lane_u32(w, vreinterpretq_u32_f32(value), 3));
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(w), 3));
+#else
+    return SIMDVectorDetail::SetLane<3u>(value, BitCast<f32>(w));
 #endif
 }
 
@@ -615,7 +631,9 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatSignMask()noexcept{ r
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, u32 e0, u32 e1, u32 e2, u32 e3)noexcept{
     NWB_ASSERT(e0 < 4 && e1 < 4 && e2 < 4 && e3 < 4);
-#if defined(NWB_HAS_NEON)
+#if defined(NWB_HAS_NEON64)
+    return vreinterpretq_f32_u8(vqtbl1q_u8(vreinterpretq_u8_f32(value), SIMDVectorDetail::PermuteByteIndices(e0, e1, e2, e3)));
+#elif defined(NWB_HAS_NEON)
     static const u32 controlElement[4] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, };
 
     uint8x8x2_t table{};
@@ -631,8 +649,9 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, 
 #elif defined(NWB_HAS_AVX)
     const __m128i control = _mm_set_epi32(static_cast<i32>(e3), static_cast<i32>(e2), static_cast<i32>(e1), static_cast<i32>(e0));
     return _mm_permutevar_ps(value, control);
-#elif defined(NWB_HAS_SSE4)
-    return VectorSetInt(VectorGetIntByIndex(value, e0), VectorGetIntByIndex(value, e1), VectorGetIntByIndex(value, e2), VectorGetIntByIndex(value, e3));
+#elif defined(NWB_HAS_SSE2)
+    const __m128i control = _mm_set_epi32(static_cast<i32>(e3), static_cast<i32>(e2), static_cast<i32>(e1), static_cast<i32>(e0));
+    return SIMDVectorDetail::SwizzleLanes(value, control);
 #else
     return VectorSetInt(value.u[e0], value.u[e1], value.u[e2], value.u[e3]);
 #endif
@@ -791,7 +810,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSwizzle<0, 1, 2, 3>(SIMDVe
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIMDVectorSingle v1, u32 x, u32 y, u32 z, u32 w)noexcept{
     NWB_ASSERT(x < 8 && y < 8 && z < 8 && w < 8);
-#if defined(NWB_HAS_NEON)
+#if defined(NWB_HAS_NEON64)
+    const uint8x16x2_t table = { vreinterpretq_u8_f32(v0), vreinterpretq_u8_f32(v1) };
+    return vreinterpretq_f32_u8(vqtbl2q_u8(table, SIMDVectorDetail::PermuteByteIndices(x, y, z, w)));
+#elif defined(NWB_HAS_NEON)
     static const u32 controlElement[8] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, 0x13121110u, 0x17161514u, 0x1B1A1918u, 0x1F1E1D1Cu, };
 
     uint8x8x4_t table{};
@@ -813,13 +835,13 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
     const SIMDVectorSingle a = _mm_permutevar_ps(v0, swizzle);
     const SIMDVectorSingle b = _mm_permutevar_ps(v1, swizzle);
     return _mm_or_ps(_mm_andnot_ps(_mm_castsi128_ps(select), a), _mm_and_ps(_mm_castsi128_ps(select), b));
-#elif defined(NWB_HAS_SSE4)
-    return VectorSetInt(
-        x < 4u ? VectorGetIntByIndex(v0, x) : VectorGetIntByIndex(v1, x - 4u),
-        y < 4u ? VectorGetIntByIndex(v0, y) : VectorGetIntByIndex(v1, y - 4u),
-        z < 4u ? VectorGetIntByIndex(v0, z) : VectorGetIntByIndex(v1, z - 4u),
-        w < 4u ? VectorGetIntByIndex(v0, w) : VectorGetIntByIndex(v1, w - 4u)
-    );
+#elif defined(NWB_HAS_SSE2)
+    const __m128i control = _mm_set_epi32(static_cast<i32>(w), static_cast<i32>(z), static_cast<i32>(y), static_cast<i32>(x));
+    const __m128i swizzle = _mm_and_si128(control, _mm_set1_epi32(3));
+    const __m128 select = _mm_castsi128_ps(_mm_cmpgt_epi32(control, _mm_set1_epi32(3)));
+    const __m128 a = SIMDVectorDetail::SwizzleLanes(v0, swizzle);
+    const __m128 b = SIMDVectorDetail::SwizzleLanes(v1, swizzle);
+    return _mm_or_ps(_mm_andnot_ps(select, a), _mm_and_ps(select, b));
 #else
     return VectorSetInt(x < 4u ? v0.u[x] : v1.u[x - 4u], y < 4u ? v0.u[y] : v1.u[y - 4u], z < 4u ? v0.u[z] : v1.u[z - 4u], w < 4u ? v0.u[w] : v1.u[w - 4u]);
 #endif
@@ -859,7 +881,12 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
     else{
         const SIMDVectorSingle a = _mm_shuffle_ps(v0, v0, shuffle);
         const SIMDVectorSingle b = _mm_shuffle_ps(v1, v1, shuffle);
+#if defined(NWB_HAS_SSE4)
         return _mm_blend_ps(a, b, blend);
+#else
+        const __m128 select = _mm_castsi128_ps(_mm_set_epi32(W >= 4u ? -1 : 0, Z >= 4u ? -1 : 0, Y >= 4u ? -1 : 0, X >= 4u ? -1 : 0));
+        return _mm_or_ps(_mm_andnot_ps(select, a), _mm_and_ps(select, b));
+#endif
     }
 #endif
 #endif
@@ -1018,11 +1045,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 s
 #elif defined(NWB_HAS_NEON)
     const int32x2_t lo = vcreate_s32(static_cast<u64>(selectX) | (static_cast<u64>(selectY) << 32));
     const int32x2_t hi = vcreate_s32(static_cast<u64>(selectZ) | (static_cast<u64>(selectW) << 32));
-    return vreinterpretq_f32_u32(vcgtq_s32(vcombine_s32(lo, hi), vreinterpretq_s32_f32(s_SIMDZero)));
+    return vreinterpretq_f32_u32(vmvnq_u32(vceqq_s32(vcombine_s32(lo, hi), vdupq_n_s32(0))));
 #else
     __m128i value = _mm_set_epi32(static_cast<i32>(selectW), static_cast<i32>(selectZ), static_cast<i32>(selectY), static_cast<i32>(selectX));
-    value = _mm_cmpgt_epi32(value, _mm_setzero_si128());
-    return _mm_castsi128_ps(value);
+    const __m128i isZero = _mm_cmpeq_epi32(value, _mm_setzero_si128());
+    return _mm_castsi128_ps(_mm_xor_si128(isZero, _mm_set1_epi32(-1)));
 #endif
 }
 

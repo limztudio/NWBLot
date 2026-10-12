@@ -68,7 +68,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_HAS_SSE4) && !defined(NWB_HAS_FMA3) && !defined(NWB_HAS_F16C) && !defined(NWB_HAS_AVX) && !defined(NWB_HAS_AVX2) && !defined(NWB_HAS_NEON)
+#if !defined(NWB_HAS_SSE2) && !defined(NWB_HAS_NEON)
 #define NWB_HAS_SCALAR 1
 #endif
 

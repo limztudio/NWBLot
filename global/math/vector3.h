@@ -92,6 +92,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Dot(SIMDVectorSingle v0, SIMDVe
 #if defined(NWB_HAS_SCALAR)
     return VectorReplicate(VectorGetX(v0) * VectorGetX(v1) + VectorGetY(v0) * VectorGetY(v1) + VectorGetZ(v0) * VectorGetZ(v1));
 #elif defined(NWB_HAS_NEON)
+    v0 = VectorAndInt(v0, s_SIMDMask3);
+    v1 = VectorAndInt(v1, s_SIMDMask3);
     float32x4_t product = vmulq_f32(v0, v1);
     float32x2_t lo = vget_low_f32(product);
     float32x2_t hi = vget_high_f32(product);
@@ -99,8 +101,15 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Dot(SIMDVectorSingle v0, SIMDVe
     hi = vdup_lane_f32(hi, 0);
     lo = vadd_f32(lo, hi);
     return vcombine_f32(lo, lo);
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_dp_ps(v0, v1, 0x7F);
+#elif defined(NWB_HAS_SSE2)
+    v0 = _mm_and_ps(v0, s_SIMDMask3);
+    v1 = _mm_and_ps(v1, s_SIMDMask3);
+    const SIMDVectorSingle product = _mm_mul_ps(v0, v1);
+    SIMDVectorSingle result = _mm_add_ss(product, _mm_shuffle_ps(product, product, _MM_SHUFFLE(1, 1, 1, 1)));
+    result = _mm_add_ss(result, _mm_shuffle_ps(product, product, _MM_SHUFFLE(2, 2, 2, 2)));
+    return _mm_shuffle_ps(result, result, _MM_SHUFFLE(0, 0, 0, 0));
 #endif
 }
 

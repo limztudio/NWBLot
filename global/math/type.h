@@ -31,7 +31,7 @@ using EqualityPacket = Element __attribute__((ext_vector_type(16u / sizeof(Eleme
 
 [[nodiscard]] NWB_INLINE bool EqualFloatPacket(const EqualityPacket<f32> lhs, const EqualityPacket<f32> rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     return _mm_movemask_ps(_mm_cmpeq_ps(BitCast<__m128>(lhs), BitCast<__m128>(rhs))) == 0xFu;
 #elif defined(NWB_HAS_NEON)
     const uint64x2_t equal = vreinterpretq_u64_u32(vceqq_f32(BitCast<float32x4_t>(lhs), BitCast<float32x4_t>(rhs)));
@@ -43,7 +43,7 @@ using EqualityPacket = Element __attribute__((ext_vector_type(16u / sizeof(Eleme
 
 template<typename Element>
 [[nodiscard]] NWB_INLINE bool EqualIntegralPacket(const EqualityPacket<Element> lhs, const EqualityPacket<Element> rhs)noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     return _mm_movemask_epi8(_mm_cmpeq_epi8(BitCast<__m128i>(lhs), BitCast<__m128i>(rhs))) == 0xFFFF;
 #elif defined(NWB_HAS_NEON)
     const uint64x2_t equal = vreinterpretq_u64_u8(vceqq_u8(BitCast<uint8x16_t>(lhs), BitCast<uint8x16_t>(rhs)));

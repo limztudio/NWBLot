@@ -95,8 +95,14 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4Dot(SIMDVectorSingle v0, SIMDVe
     lo = vadd_f32(lo, hi);
     lo = vpadd_f32(lo, lo);
     return vcombine_f32(lo, lo);
-#else
+#elif defined(NWB_HAS_SSE4)
     return _mm_dp_ps(v0, v1, 0xFF);
+#elif defined(NWB_HAS_SSE2)
+    const SIMDVectorSingle product = _mm_mul_ps(v0, v1);
+    SIMDVectorSingle result = _mm_add_ss(product, _mm_shuffle_ps(product, product, _MM_SHUFFLE(1, 1, 1, 1)));
+    result = _mm_add_ss(result, _mm_shuffle_ps(product, product, _MM_SHUFFLE(2, 2, 2, 2)));
+    result = _mm_add_ss(result, _mm_shuffle_ps(product, product, _MM_SHUFFLE(3, 3, 3, 3)));
+    return _mm_shuffle_ps(result, result, _MM_SHUFFLE(0, 0, 0, 0));
 #endif
 }
 

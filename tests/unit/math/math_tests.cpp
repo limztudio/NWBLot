@@ -62,11 +62,12 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 
 
 TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
+    // Runtime inputs give vector and scalar paths the same contraction context on targets without FMA.
     // The first two products lose a 2^-26 residual when rounded separately; contraction retains it.
-    const f32 first[]{ 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
-    const f32 second[]{ 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
-    const f32 addend[]{ -1.0f, 1.0f, -0.0f, -0.0f };
-    const f32 difference[]{ 1.0f, -1.0f, -0.0f, 0.0f };
+    volatile f32 first[]{ 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
+    volatile f32 second[]{ 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
+    volatile f32 addend[]{ -1.0f, 1.0f, -0.0f, -0.0f };
+    volatile f32 difference[]{ 1.0f, -1.0f, -0.0f, 0.0f };
     const SIMDVectorSingle lhs = VectorSet(first[0], first[1], first[2], first[3]);
     const SIMDVectorSingle rhs = VectorSet(second[0], second[1], second[2], second[3]);
     const SIMDVectorSingle sum = VectorMultiplyAddExpression(lhs, rhs, VectorSet(addend[0], addend[1], addend[2], addend[3]));
@@ -77,6 +78,38 @@ TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
     }
 }
 
+TEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions){
+#if defined(NWB_HAS_NEON) && !defined(NWB_HAS_NEON64)
+    GTEST_SKIP() << "This case requires native vector square root and division.";
+#else
+#pragma STDC FENV_ACCESS ON
+    fenv_t originalEnvironment{};
+    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(fesetenv(&originalEnvironment) != 0)
+            NWB_ASSERT(false);
+    });
+
+    volatile u32 runtimeBits[]{ 0u, 0x80000000u, 0x7f800000u, 2u };
+    const SIMDVectorSingle input = VectorSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
+    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    const SIMDVectorSingle root = VectorSqrt(input);
+    const i32 rootInvalid = fetestexcept(FE_INVALID);
+    EXPECT_EQ(rootInvalid, 0);
+    const u32 expectedRoot[]{ 0u, 0x80000000u, 0x7f800000u, BitCast<u32>(0x1p-74f) };
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetIntByIndex(root, lane), expectedRoot[lane]) << lane;
+
+    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    const SIMDVectorSingle reciprocalRoot = VectorReciprocalSqrt(input);
+    const i32 reciprocalInvalid = fetestexcept(FE_INVALID);
+    EXPECT_EQ(reciprocalInvalid, 0);
+    const u32 expectedReciprocal[]{ 0x7f800000u, 0xff800000u, 0u, BitCast<u32>(0x1p+74f) };
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetIntByIndex(reciprocalRoot, lane), expectedReciprocal[lane]) << lane;
+#endif
+}
+
 TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
     const SIMDVectorDouble precision = SIMDVectorDouble{ 0x1p+40, 0x1p-40, -0x1p+40, -0x1p-40 } + SIMDVectorDouble{ 1., 0x1p-80, -1., -0x1p-80 };
     EXPECT_EQ(precision.x, 0x1.0000000001p+40);
@@ -85,9 +118,14 @@ TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
     EXPECT_EQ(precision.w, -0x1.0000000001p-40);
 
     // Separately rounded products lose the 2^-54 residual; expression contraction follows the scalar compiler policy.
-    const SIMDVectorDouble first{ 0x1.0000002p+0, -0x1.0000002p+0, 0.0, -0.0 };
-    const SIMDVectorDouble second{ 0x1.ffffffcp-1, 0x1.ffffffcp-1, -0.0, 1.0 };
-    const SIMDVectorDouble addend{ -1., 1., -0., -0. };
+    volatile f64 runtimeInputs[][4]{
+        { 0x1.0000002p+0, -0x1.0000002p+0, 0.0, -0.0 },
+        { 0x1.ffffffcp-1, 0x1.ffffffcp-1, -0.0, 1.0 },
+        { -1.0, 1.0, -0.0, -0.0 },
+    };
+    const SIMDVectorDouble first = VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]);
+    const SIMDVectorDouble second = VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]);
+    const SIMDVectorDouble addend = VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]);
     const SIMDVectorDouble expression = DoubleMultiplyAddExpression(first, second, addend);
     const SIMDVectorDouble separate = DoubleMultiplyThenAdd(first, second, addend);
     const SIMDVectorDouble namedExpression = VectorDoubleMultiplyAddExpression(first, second, addend);
@@ -154,6 +192,71 @@ TEST(Math, DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes){
         const SIMDVectorDouble rounded = VectorDoubleRound(inputs[index]);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(BitCast<u64>(rounded[lane]), BitCast<u64>(expected[index][lane])) << index << ':' << lane;
+    }
+}
+
+TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes){
+#pragma STDC FENV_ACCESS ON
+    fenv_t originalEnvironment{};
+    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(fesetenv(&originalEnvironment) != 0)
+            NWB_ASSERT(false);
+    });
+
+    const i32 modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    volatile f32 runtimeInputs[][4]{
+        { 0.5f, -0.5f, 1.5f, -1.5f },
+        { 0.25f, -0.25f, 2.5f, -2.5f },
+        { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+        { 0x1p-149f, -0x1p-149f, 0x1.fffffep+22f, -0x1.fffffep+22f },
+    };
+    const f32 expected[][4][4]{
+        {
+            { 0.0f, -0.0f, 2.0f, -2.0f },
+            { 0.0f, -0.0f, 2.0f, -2.0f },
+            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+            { 0.0f, -0.0f, 0x1p+23f, -0x1p+23f },
+        },
+        {
+            { 0.0f, -0.0f, 1.0f, -1.0f },
+            { 0.0f, -0.0f, 2.0f, -2.0f },
+            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+            { 0.0f, -0.0f, 0x1.fffffcp+22f, -0x1.fffffcp+22f },
+        },
+        {
+            { 0.0f, -1.0f, 1.0f, -2.0f },
+            { 0.0f, -1.0f, 2.0f, -3.0f },
+            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+            { 0.0f, -1.0f, 0x1.fffffcp+22f, -0x1p+23f },
+        },
+        {
+            { 1.0f, -0.0f, 2.0f, -1.0f },
+            { 1.0f, -0.0f, 3.0f, -2.0f },
+            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+            { 1.0f, -0.0f, 0x1p+23f, -0x1.fffffcp+22f },
+        },
+    };
+    volatile u32 specialBits[]{ 0x7f800000u, 0xff800000u, 0x7fc01234u, 0xffc05678u };
+    for(const i32 mode : modes){
+        ASSERT_EQ(fesetround(mode), 0);
+        for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
+            const SIMDVectorSingle input = VectorSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
+            const SIMDVectorSingle results[]{ VectorRound(input), VectorTruncate(input), VectorFloor(input), VectorCeiling(input) };
+            for(usize operation = 0u; operation < LengthOf(results); ++operation){
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(VectorGetIntByIndex(results[operation], lane), BitCast<u32>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
+            }
+        }
+        const SIMDVectorSingle special = VectorSetInt(specialBits[0], specialBits[1], specialBits[2], specialBits[3]);
+        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        const SIMDVectorSingle specialResults[]{ VectorRound(special), VectorTruncate(special), VectorFloor(special), VectorCeiling(special) };
+        const i32 invalid = fetestexcept(FE_INVALID);
+        EXPECT_EQ(invalid, 0) << mode;
+        for(usize operation = 0u; operation < LengthOf(specialResults); ++operation){
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(VectorGetIntByIndex(specialResults[operation], lane), specialBits[lane]) << mode << ':' << operation << ':' << lane;
+        }
     }
 }
 
@@ -257,6 +360,39 @@ TEST(Math, DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision){
     EXPECT_EQ(BitCast<u64>(cross.w), 0u);
 }
 
+TEST(Math, SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExceptions){
+#pragma STDC FENV_ACCESS ON
+    fenv_t originalEnvironment{};
+    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(fesetenv(&originalEnvironment) != 0)
+            NWB_ASSERT(false);
+    });
+
+    volatile u32 inactiveBits[][2]{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u } };
+    for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
+        const f32 inactiveLeft = BitCast<f32>(inactiveBits[index][0]);
+        const f32 inactiveRight = BitCast<f32>(inactiveBits[index][1]);
+        const SIMDVectorSingle lhs2 = VectorSet(2.0f, 3.0f, inactiveLeft, inactiveLeft);
+        const SIMDVectorSingle rhs2 = VectorSet(5.0f, 7.0f, inactiveRight, inactiveRight);
+        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        const SIMDVectorSingle dot2 = Vector2Dot(lhs2, rhs2);
+        const i32 dot2Invalid = fetestexcept(FE_INVALID);
+        EXPECT_EQ(dot2Invalid, 0) << index;
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetByIndex(dot2, lane), 31.0f) << index << ':' << lane;
+
+        const SIMDVectorSingle lhs3 = VectorSet(2.0f, 3.0f, 4.0f, inactiveLeft);
+        const SIMDVectorSingle rhs3 = VectorSet(5.0f, 7.0f, 11.0f, inactiveRight);
+        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        const SIMDVectorSingle dot3 = Vector3Dot(lhs3, rhs3);
+        const i32 dot3Invalid = fetestexcept(FE_INVALID);
+        EXPECT_EQ(dot3Invalid, 0) << index;
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetByIndex(dot3, lane), 75.0f) << index << ':' << lane;
+    }
+}
+
 TEST(Math, DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions){
 #pragma STDC FENV_ACCESS ON
     std::fenv_t originalEnvironment{};
@@ -298,6 +434,24 @@ TEST(Math, DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvali
             EXPECT_EQ(cross3[lane], cross3Expected[lane]) << index << ':' << lane;
     }
     EXPECT_EQ(std::fesetenv(&originalEnvironment), 0);
+}
+
+TEST(Math, SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains){
+    for(u32 bitIndex = 0u; bitIndex < 23u; ++bitIndex){
+        volatile u32 subnormalBits = 1u << bitIndex;
+        const SIMDVectorSingle input = VectorSetInt(subnormalBits, 0x007fffffu, 0x00800000u, 0x3f800000u);
+        const SIMDVectorSingle logarithm = VectorLog2(input);
+        EXPECT_EQ(VectorGetX(logarithm), static_cast<f32>(static_cast<i32>(bitIndex) - 149)) << bitIndex;
+        EXPECT_NEAR(VectorGetY(logarithm), -126.0f, 0.00004f) << bitIndex;
+        EXPECT_EQ(VectorGetZ(logarithm), -126.0f) << bitIndex;
+        EXPECT_EQ(VectorGetW(logarithm), 0.0f) << bitIndex;
+    }
+    volatile u32 domainBits[]{ 0x80000000u, 0x7f800000u, 0xbf800000u, 0x7fc01234u };
+    const SIMDVectorSingle special = VectorLog2(VectorSetInt(domainBits[0], domainBits[1], domainBits[2], domainBits[3]));
+    EXPECT_EQ(VectorGetIntX(special), 0xff800000u);
+    EXPECT_EQ(VectorGetIntY(special), 0x7f800000u);
+    EXPECT_TRUE(IsNaN(VectorGetZ(special)));
+    EXPECT_TRUE(IsNaN(VectorGetW(special)));
 }
 
 TEST(Math, DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZero){
@@ -983,6 +1137,74 @@ TEST(Math, DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEve
     const u32 underflowExpected[]{ 0u, 2u, 0x80000000u, 0x80000002u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(underflow, lane), underflowExpected[lane]) << lane;
+}
+
+TEST(Math, SingleRuntimePermutationsPreserveNaNPayloadsSignedZeroAndSubnormalBits){
+    const u32 bits[]{ 0xffc01234u, 0x80000000u, 1u, 0x7f800001u, 0u, 0x7fc05678u, 0x807fffffu, Limit<u32>::s_Max };
+    const SIMDVectorSingle first = VectorSetInt(bits[0], bits[1], bits[2], bits[3]);
+    const SIMDVectorSingle second = VectorSetInt(bits[4], bits[5], bits[6], bits[7]);
+    for(u32 code = 0u; code < 256u; ++code){
+        volatile u32 controls[]{ code & 3u, (code >> 2u) & 3u, (code >> 4u) & 3u, (code >> 6u) & 3u };
+        const SIMDVectorSingle result = VectorSwizzle(first, controls[0], controls[1], controls[2], controls[3]);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
+    }
+    for(u32 code = 0u; code < 4096u; ++code){
+        volatile u32 controls[]{ code & 7u, (code >> 3u) & 7u, (code >> 6u) & 7u, (code >> 9u) & 7u };
+        const SIMDVectorSingle result = VectorPermute(first, second, controls[0], controls[1], controls[2], controls[3]);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
+    }
+}
+
+TEST(Math, UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutInvalidExceptions){
+#pragma STDC FENV_ACCESS ON
+    fenv_t originalEnvironment{};
+    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(fesetenv(&originalEnvironment) != 0)
+            NWB_ASSERT(false);
+    });
+
+    struct alignas(16) MatrixRecord{
+        u32 prefix{};
+        Float33U value{};
+    } record;
+    volatile u32 runtimeBits[]{ 0x80000000u, 1u, 0x7fc01234u, 0x80000000u, 0x7f800001u, 0x807fffffu, 0xff800000u, 0u, 0xffc05678u };
+    for(usize lane = 0u; lane < 9u; ++lane)
+        record.value.raw[lane] = BitCast<f32>(runtimeBits[lane]);
+    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    const SIMDMatrix matrix = LoadFloat(record.value);
+    const i32 invalid = fetestexcept(FE_INVALID);
+    EXPECT_EQ(invalid, 0);
+    for(usize row = 0u; row < 3u; ++row){
+        for(usize lane = 0u; lane < 3u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(matrix.v[row], lane), runtimeBits[row * 3u + lane]) << row << ':' << lane;
+        EXPECT_EQ(VectorGetIntW(matrix.v[row]), 0u) << row;
+    }
+    const u32 lastRow[]{ 0u, 0u, 0u, BitCast<u32>(1.0f) };
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetIntByIndex(matrix.v[3], lane), lastRow[lane]) << lane;
+}
+
+TEST(Math, SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelectedRawBits){
+    const u32 choices[]{ 0u, 1u, 0x80000000u, Limit<u32>::s_Max };
+    const u32 left[]{ 0x80000000u, 1u, 0x7f800001u, 0xffc01234u };
+    const u32 right[]{ 0u, 0x807fffffu, 0x7fc05678u, Limit<u32>::s_Max };
+    const SIMDVectorSingle first = VectorSetInt(left[0], left[1], left[2], left[3]);
+    const SIMDVectorSingle second = VectorSetInt(right[0], right[1], right[2], right[3]);
+    for(u32 code = 0u; code < 256u; ++code){
+        volatile u32 controls[]{ choices[code & 3u], choices[(code >> 2u) & 3u], choices[(code >> 4u) & 3u], choices[(code >> 6u) & 3u] };
+        const SIMDVectorSingle control = VectorSelectControl(controls[0], controls[1], controls[2], controls[3]);
+        const SIMDVectorSingle selected = VectorSelect(first, second, control);
+        const SIMDVectorDouble doubleControl = VectorDoubleSelectControl(controls[0], controls[1], controls[2], controls[3]);
+        for(usize lane = 0u; lane < 4u; ++lane){
+            const bool enabled = controls[lane] != 0u;
+            EXPECT_EQ(VectorGetIntByIndex(control, lane), enabled ? Limit<u32>::s_Max : 0u) << code << ':' << lane;
+            EXPECT_EQ(VectorGetIntByIndex(selected, lane), enabled ? right[lane] : left[lane]) << code << ':' << lane;
+            EXPECT_EQ(VectorDoubleGetIntByIndex(doubleControl, lane), enabled ? Limit<u64>::s_Max : 0u) << code << ':' << lane;
+        }
+    }
 }
 
 TEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs){

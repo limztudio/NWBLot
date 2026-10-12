@@ -1,7 +1,7 @@
 # AVBOIT refraction
 
-Transparent materials with a surface IOR above 1.0001 participate in camera-visible
-refraction. `RendererSystem::setRefractionEnabled(false)` restores ordinary AVBOIT;
+Transparent materials with a finite surface IOR above 1.0 participate in camera-visible
+refraction (`nwbRefractionIorEligible` in `impl/assets/graphics/refraction/ior.slangi`). `RendererSystem::setRefractionEnabled(false)` restores ordinary AVBOIT;
 `setRefractionHardwareTracingEnabled(false)` selects the screen-space route without
 changing device capability reporting. Both settings default to enabled.
 

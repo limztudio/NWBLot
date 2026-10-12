@@ -110,10 +110,6 @@ NWB_INLINE void NWB_SIMD_CALL AabbDoubleTests::Expand(const SIMDVectorDouble poi
     CollisionDoubleDetail::ExpandMinMax(point, inOutMinBounds, inOutMaxBounds);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_INLINE void NWB_SIMD_CALL AabbTests::ExpandTriangle(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2, SIMDVectorSingle& inOutMinBounds, SIMDVectorSingle& inOutMaxBounds)noexcept{
     AabbTests::Expand(v0, inOutMinBounds, inOutMaxBounds);
     AabbTests::Expand(v1, inOutMinBounds, inOutMaxBounds);
@@ -150,10 +146,6 @@ NWB_INLINE void NWB_SIMD_CALL AabbDoubleTests::ExpandTriangle(const SIMDVectorDo
     return VectorDoubleSetW(VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), CollisionDoubleDetail::s_DoubleHalf), 0.0);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL AabbTests::Extents(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     return VectorSetW(VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half), 0.0f);
 }
@@ -161,10 +153,6 @@ NWB_INLINE void NWB_SIMD_CALL AabbDoubleTests::ExpandTriangle(const SIMDVectorDo
 [[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL AabbDoubleTests::Extents(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     return VectorDoubleSetW(VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), CollisionDoubleDetail::s_DoubleHalf), 0.0);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] NWB_INLINE f32 NWB_SIMD_CALL AabbTests::SurfaceArea(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     const SIMDVectorSingle extent = VectorSubtract(maxBounds, minBounds);
@@ -179,10 +167,6 @@ NWB_INLINE void NWB_SIMD_CALL AabbDoubleTests::ExpandTriangle(const SIMDVectorDo
     const SIMDVectorDouble area = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleSplatX(pairProducts), VectorDoubleSplatZ(pairProducts)), VectorDoubleSplatY(pairProducts)), 2.0);
     return VectorDoubleGetX(area);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] NWB_INLINE f32 NWB_SIMD_CALL AabbTests::Radius(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     return VectorGetX(Vector3Length(AabbTests::Extents(minBounds, maxBounds)));

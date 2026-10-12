@@ -56,6 +56,10 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble4TransformStream(OutputT* outputSt
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Transform(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVectorSingle v = _mm_or_ps(_mm_and_ps(value, s_SIMDMaskXY), s_SIMDIdentityR3);
@@ -84,6 +88,10 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble2TransformStream(OutputT* outputSt
         }
     );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2TransformCoord(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle result = Vector2Transform(value, matrix);
@@ -115,6 +123,10 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble2TransformCoordStream(OutputT* out
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2TransformNormal(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVectorSingle v = _mm_and_ps(value, s_SIMDMaskXY);
@@ -143,6 +155,10 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble2TransformNormalStream(OutputT* ou
         }
     );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Transform(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)
@@ -173,6 +189,10 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble3TransformStream(OutputT* outputSt
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3TransformCoord(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle result = Vector3Transform(value, matrix);
     return VectorSetW(VectorDivide(result, VectorSplatW(result)), 1.0f);
@@ -202,6 +222,10 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble3TransformCoordStream(OutputT* out
         }
     );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3TransformNormal(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)

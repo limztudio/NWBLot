@@ -293,6 +293,10 @@ NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
 }
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_HAS_NEON64)
 NWB_INLINE uint8x16_t PermuteByteIndices(u32 x, u32 y, u32 z, u32 w)noexcept{
     const uint32x4_t lanes = vreinterpretq_u32_f32(SIMDConvertDetail::MakeU32(x, y, z, w));
@@ -329,6 +333,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SwizzleLanes(SIMDVectorSingle value, _
 }
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     f32 quotient = s_1DIV2PI * value;
     if(value >= 0.0f)
@@ -354,6 +362,10 @@ NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
     outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - s_CosQuarticCoeff) * y2 + 1.0f);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<u32 Lane>
 NWB_INLINE f32 NWB_SIMD_CALL GetLane(SIMDVectorSingle value)noexcept{
@@ -506,6 +518,10 @@ NWB_INLINE NativeDoublePair NWB_SIMD_CALL PermutePair(SIMDVectorDouble v0, SIMDV
 }
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<u32 Lane>
 NWB_INLINE f64 NWB_SIMD_CALL GetLane(SIMDVectorDouble value)noexcept{
     static_assert(Lane < 4u);
@@ -588,6 +604,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SplatLane(SIMDVectorDouble value)noexc
     return __builtin_shufflevector(value, value, Lane, Lane, Lane, Lane);
 #endif
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #if defined(NWB_HAS_AVX2)
 // Preserve sequential reduction order and broadcast only after the final scalar-lane addition.

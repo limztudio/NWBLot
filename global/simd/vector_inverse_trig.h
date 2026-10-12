@@ -151,6 +151,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleACosEst(SIMDVectorDouble v
     return VectorDoubleACos(value);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan(SIMDVectorSingle value)noexcept{
     SIMDVectorSingle absV = VectorAbs(value);
     SIMDVectorSingle invV = VectorReciprocal(value);
@@ -204,6 +208,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATanEst(SIMDVectorSingle value)n
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATanEst(SIMDVectorDouble value)noexcept{
     return VectorDoubleATan(value);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2(SIMDVectorSingle y, SIMDVectorSingle x)noexcept{
     const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_PI * 0.75f);

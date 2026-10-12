@@ -60,6 +60,10 @@ static constexpr f64 s_DoubleFrameFallbackTangentZAxisAlignmentThreshold = 0.999
     return FrameDoubleNormalizeDirection(VectorDouble3Cross(axis, normal), VectorDoubleSet(1.0, 0.0, 0.0, 0.0));
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 [[nodiscard]] NWB_INLINE T FrameTangentHandedness(const T handedness, const T fallbackHandedness)noexcept{
     constexpr T s_HandednessEpsilon = IsSame_V<T, f32> ? static_cast<T>(s_FrameHandednessEpsilon) : static_cast<T>(s_DoubleFrameHandednessEpsilon);

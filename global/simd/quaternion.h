@@ -14,6 +14,9 @@
 namespace SIMDQuaternionDetail{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static const SIMDVectorConstF s_SIMDQuaternionControlWZYX = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionControlZWXY = { { { 1.0f, 1.0f, -1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionControlYXWZ = { { { -1.0f, 1.0f, 1.0f, -1.0f } } };
@@ -31,6 +34,9 @@ inline constexpr f32 s_QuaternionSquadControlScale = -0.25f;
 inline constexpr f32 s_QuaternionHalfAngleScale = 0.5f;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -38,6 +44,9 @@ inline constexpr f32 s_QuaternionHalfAngleScale = 0.5f;
 
 
 namespace SIMDQuaternionDoubleDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static const SIMDVectorDoubleConstF s_DoubleSIMDQuaternionControlWZYX = { { { 1.0, -1.0, 1.0, -1.0 } } };
@@ -48,6 +57,9 @@ inline constexpr f64 s_DoubleQuaternionInterpolationEpsilon = 1.0e-12;
 inline constexpr f64 s_DoubleQuaternionBarycentricVectorEpsilon = 1.0e-12;
 inline constexpr f64 s_DoubleQuaternionSquadControlScale = -0.25;
 inline constexpr f64 s_DoubleQuaternionHalfAngleScale = 0.5;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -266,6 +278,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleExp(SIMDVectorDouble q
     result = VectorDoubleSelect(result, q, VectorDoubleNearEqual(theta, VectorDoubleZero(), s_DoubleSIMDEpsilon));
     return VectorDoubleSelect(cosTheta, result, s_DoubleSIMDSelect1110);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionSlerpV(SIMDVectorSingle q0, SIMDVectorSingle q1, SIMDVectorSingle t)noexcept{
     NWB_ASSERT((VectorGetY(t) == VectorGetX(t)) && (VectorGetZ(t) == VectorGetX(t)) && (VectorGetW(t) == VectorGetX(t)));
@@ -866,6 +882,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationMatrix(const S
 
     return SIMDConvertDoubleDetail::MakeF64(x, y, z, w);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE void NWB_SIMD_CALL QuaternionToAxisAngle(SIMDVectorSingle& outAxis, f32& outAngle, SIMDVectorSingle q)noexcept{
     outAxis = q;

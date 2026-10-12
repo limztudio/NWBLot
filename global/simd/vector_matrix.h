@@ -99,6 +99,10 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 
 }
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4TransformTransposed(SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
 #if defined(NWB_HAS_SCALAR)
     const f32 x = value.f[0];
@@ -173,6 +177,10 @@ NWB_INLINE OutputT* NWB_SIMD_CALL VectorTransformStreamImpl(OutputT* outputStrea
 
     return outputStream;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #if defined(NWB_HAS_SSE4)
 template<int Mask>
@@ -256,6 +264,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranspose4(SIMDVectorDoubl
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTransposeForTransform(const SIMDMatrixDouble& matrix)noexcept{
     return MatrixDoubleTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{

@@ -415,10 +415,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleScale(SIMDVectorDouble val
     return VectorDoubleMultiply(value, VectorDoubleReplicate(scale));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Min/max select the second operand for equal or unordered lanes.
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMin(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -503,6 +499,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAbs(SIMDVectorSingle value)noexc
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleAbs(SIMDVectorDouble value)noexcept{
     return VectorDoubleAndInt(value, s_DoubleSIMDAbsMask);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSum(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SCALAR)

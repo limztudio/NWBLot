@@ -28,10 +28,6 @@ inline void AabbCorners(const SIMDVectorSingle center, const SIMDVectorSingle ex
         outCorners[i] = VectorMultiplyAdd(extents, BoxCornerOffset(i), center);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation, SIMDVectorSingle* outCorners)noexcept{
     SIMDVectorSingle axis0{};
     SIMDVectorSingle axis1{};
@@ -48,10 +44,6 @@ inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle ext
         outCorners[i] = VectorAdd(corner, center);
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 inline void FrustumCorners(const SIMDVectorSingle origin, const SIMDVectorSingle orientation, const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope, const f32 nearPlane, const f32 farPlane, SIMDVectorSingle* outCorners)noexcept{
     const SIMDVectorSingle slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
@@ -98,10 +90,6 @@ inline void AabbCorners(const SIMDVectorDouble center, const SIMDVectorDouble ex
         outCorners[i] = VectorDoubleMultiplyAdd(extents, BoxCornerOffset(i), center);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation, SIMDVectorDouble* outCorners)noexcept{
     SIMDVectorDouble axis0{};
     SIMDVectorDouble axis1{};
@@ -118,10 +106,6 @@ inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble ext
         outCorners[i] = VectorDoubleAdd(corner, center);
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble orientation, const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope, const f64 nearPlane, const f64 farPlane, SIMDVectorDouble* outCorners)noexcept{
     const SIMDVectorDouble slopes = VectorDoubleSet(rightSlope, leftSlope, bottomSlope, topSlope);
@@ -184,10 +168,6 @@ inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble
     const SIMDVectorDouble maxScaleVector = VectorDoubleMax(VectorDouble3Length(matrix.v[0]), VectorDoubleMax(VectorDouble3Length(matrix.v[1]), VectorDouble3Length(matrix.v[2])));
     return CollisionDoubleDetail::SphereCenterRadius(VectorDouble3Transform(centerVector, matrix), VectorDoubleMultiply(sphereRadius, maxScaleVector));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)noexcept{
     const SIMDVectorSingle transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);

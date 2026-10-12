@@ -28,6 +28,10 @@ inline constexpr f32 s_MatrixDecomposeEpsilon = 0.0001f;
 inline constexpr f32 s_MatrixProjectionNearEqualEpsilon = 0.00001f;
 inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjectionNearEqualEpsilon * s_MatrixTwo;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 NWB_INLINE bool ScalarNearEqual(T value0, T value1, T epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
 
@@ -187,6 +191,7 @@ NWB_INLINE void RankDecompose(usize& a, usize& b, usize& c, T x, T y, T z)noexce
     }
 }
 
+
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(const f32 viewWidth, const f32 viewHeight, const f32 nearZ, const f32 farZ, const f32 rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -339,6 +344,10 @@ inline constexpr f64 s_DoubleMatrixDecomposeEpsilon = 1.0e-12;
 inline constexpr f64 s_DoubleMatrixProjectionNearEqualEpsilon = 1.0e-12;
 inline constexpr f64 s_DoubleMatrixPerspectiveFovNearEqualEpsilon = s_DoubleMatrixProjectionNearEqualEpsilon * s_DoubleMatrixTwo;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleRowMultiply(SIMDVectorDouble row, const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble result = VectorDoubleMultiply(VectorDoubleSplatX(row), matrix.v[0]);
     result = VectorDoubleMultiplyAdd(VectorDoubleSplatY(row), matrix.v[1], result);
@@ -350,6 +359,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleRowMultiply(SIMDVectorDoub
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleNormalize(SIMDVectorDouble plane)noexcept{
     return VectorDoubleDivide(plane, VectorDouble3Length(plane));
 }
+
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(const f64 viewWidth, const f64 viewHeight, const f64 nearZ, const f64 farZ, const f64 rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
@@ -885,6 +895,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     return result;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE Expected<MatrixDecomposition> NWB_SIMD_CALL MatrixDecompose(const SIMDMatrix& matrix)noexcept{
     const SIMDVectorSingle canonicalBasis[3] = { s_SIMDIdentityR0, s_SIMDIdentityR1, s_SIMDIdentityR2 };
 
@@ -1261,6 +1275,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleScalingFromVector(SIMDVect
     return matrix;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixRotationX(f32 angle)noexcept{
     SIMDVectorSingle sinAngle{};
     SIMDVectorSingle cosAngle{};
@@ -1570,6 +1588,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationAxis(SIMDVectorDou
     return MatrixDoubleRotationNormal(VectorDouble3Normalize(axis), angle);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixAffineTransformation(SIMDVectorSingle scaling, SIMDVectorSingle rotationOrigin, SIMDVectorSingle rotationQuaternion, SIMDVectorSingle translation)noexcept{
     // T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis and one translation column.
     const SIMDVectorSingle origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
@@ -1745,6 +1767,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTransformation2D(SIMDVecto
     matrix.v[3] = s_DoubleSIMDIdentityR3;
     return matrix;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixReflect(SIMDVectorSingle reflectionPlane)noexcept{
     NWB_ASSERT(!Vector3Equal(reflectionPlane, VectorZero()));
@@ -1929,9 +1955,6 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveRH(f32 viewWidth, f32 viewH
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveRH(f64 viewWidth, f64 viewHeight, f64 nearZ, f64 farZ)noexcept{
     return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, nearZ - farZ, 1.0, -1.0);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{

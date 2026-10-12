@@ -29,6 +29,10 @@ inline constexpr bool s_NativeEqualityPackets = false;
 template<typename Element>
 using EqualityPacket = Element __attribute__((ext_vector_type(16u / sizeof(Element))));
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE bool EqualFloatPacket(const EqualityPacket<f32> lhs, const EqualityPacket<f32> rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
 #if defined(NWB_HAS_SSE2)
@@ -110,6 +114,10 @@ template<typename Value>
     __builtin_memcpy(rhsValues, &rhs, sizeof(rhsValues));
     return EqualElements<f32, 3u>(lhsValues, rhsValues) && lhs.w == rhs.w;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename Value, usize Count>
 [[nodiscard]] NWB_INLINE usize HashArray(const Value& value)noexcept{
@@ -250,10 +258,6 @@ struct alignas(16) SIMDMatrix
 #endif
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct SIMDMatrixDouble{
     SIMDVectorDouble v[4];
 };
@@ -330,6 +334,10 @@ static_assert(sizeof(Half4U) == sizeof(u32) * 2u, "Half4U must stay a packed 64-
 static_assert(alignof(Half4U) == alignof(u32), "Half4U must stay word-aligned");
 static_assert(IsStandardLayout_V<Half4U>, "Half4U must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<Half4U>, "Half4U must stay binary-serializable");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct alignas(32) Double2{
     union{
@@ -472,6 +480,10 @@ struct alignas(32) Double4{
     }
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct alignas(16) Int4{
     union{
         struct{
@@ -543,6 +555,10 @@ struct alignas(32) UInt64x4{
         u64 raw[4];
     };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct alignas(16) Float3Int{
     union{
@@ -663,6 +679,10 @@ static_assert(sizeof(Double3UInt) == sizeof(f64) * 4u, "Double3UInt must stay a 
 static_assert(alignof(Double3UInt) == alignof(Double4), "Double3UInt must stay SIMD-aligned");
 static_assert(IsStandardLayout_V<Double3UInt>, "Double3UInt must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<Double3UInt>, "Double3UInt must stay binary-serializable");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct Float2U{
     union{
@@ -837,6 +857,10 @@ struct Double4U{
     {
     }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct Int2U{
     union{
@@ -1105,6 +1129,10 @@ struct alignas(32) Double44{
         f64 raw[16];
     };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct Float33U{
     union{

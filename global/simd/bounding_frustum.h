@@ -140,10 +140,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     return ContainmentType::Contains;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingFrustum::ContainsTriangleValue(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2
 )noexcept{
@@ -195,10 +191,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
         return PlaneIntersectionType::Back;
     return PlaneIntersectionType::Intersecting;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingFrustum::IntersectsRayValue(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle rayOrigin, SIMDVectorSingle direction
@@ -306,10 +298,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     return CollisionDoubleDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingFrustum::containsBoxValues(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
@@ -332,10 +320,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, BoundingDoubleBox::s_DoubleCornerCount, planes, CollisionDoubleDetail::s_DoubleFrustumPlaneCount);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingFrustum::containsOrientedBoxValues(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
@@ -357,10 +341,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     CollisionDoubleDetail::ObbCorners(otherBoxCenter, otherBoxExtents, otherBoxOrientation, corners);
     return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, BoundingDoubleOrientedBox::s_DoubleCornerCount, planes, CollisionDoubleDetail::s_DoubleFrustumPlaneCount);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingFrustum::containsFrustumValues(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
@@ -422,10 +402,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     return CollisionDoubleDetail::FrustumPlanesIntersectSphere(planes, sphereValue);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline bool NWB_SIMD_CALL BoundingFrustum::intersectsBoxValues(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
@@ -444,10 +420,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     return CollisionDoubleDetail::FrustumPlanesIntersectAxisAlignedBox(planes, otherBoxCenter, otherBoxExtents);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline bool NWB_SIMD_CALL BoundingFrustum::intersectsOrientedBoxValues(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
@@ -465,10 +437,6 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
     return CollisionDoubleDetail::FrustumPlanesIntersectOrientedBox(planes, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] inline bool NWB_SIMD_CALL BoundingFrustum::intersectsFrustumValues(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,

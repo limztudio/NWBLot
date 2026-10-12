@@ -1638,9 +1638,6 @@ NWB_INLINE void StreamDoubleFence()noexcept{
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDVectorSingle src, Float4& dst)noexcept{
 #if defined(NWB_HAS_SSE2)
     _mm_stream_ps(dst.raw, src);

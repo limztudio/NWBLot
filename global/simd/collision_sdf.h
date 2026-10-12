@@ -71,10 +71,6 @@ namespace SdfDoubleTests{
     return PlaneDoubleTests::Distance(normalDistance, position);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SdfTests::Box(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents)noexcept{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
     const SIMDVectorSingle outside = VectorMax(q, VectorZero());
@@ -89,10 +85,6 @@ namespace SdfDoubleTests{
     return VectorDoubleAdd(VectorDouble3Length(outside), insideDistance);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SdfTests::Sphere(const SIMDVectorSingle position, const SIMDVectorSingle radius)noexcept{
     return VectorSubtract(Vector3Length(position), VectorSplatX(radius));
 }
@@ -100,10 +92,6 @@ namespace SdfDoubleTests{
 [[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SdfDoubleTests::Sphere(const SIMDVectorDouble position, const SIMDVectorDouble radius)noexcept{
     return VectorDoubleSubtract(VectorDouble3Length(position), VectorDoubleSplatX(radius));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SdfTests::CapsuleY(const SIMDVectorSingle position, const SIMDVectorSingle radiusHalfHeight)noexcept{
     const SIMDVectorSingle segmentPoint = CollisionDetail::CapsuleYSegmentPoint(position, radiusHalfHeight);
@@ -126,10 +114,6 @@ namespace SdfDoubleTests{
 [[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SdfDoubleTests::PlaneNormal(const SIMDVectorDouble normalDistance, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     return VectorDouble3NormalizeOr(VectorDoubleSetW(normalDistance, 0.0), fallback, minLengthSquared);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL SdfTests::BoxNormal(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
@@ -183,10 +167,6 @@ namespace SdfDoubleTests{
     return VectorDoubleSelect(faceNormal, outsideNormal, useOutside);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SdfTests::SphereNormal(const SIMDVectorSingle position, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     return Vector3NormalizeOr(position, fallback, minLengthSquared);
 }
@@ -194,10 +174,6 @@ namespace SdfDoubleTests{
 [[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SdfDoubleTests::SphereNormal(const SIMDVectorDouble position, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     return VectorDouble3NormalizeOr(position, fallback, minLengthSquared);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SdfTests::CapsuleYNormal(const SIMDVectorSingle position, const SIMDVectorSingle radiusHalfHeight, const f32 minLengthSquared)noexcept{
     const SIMDVectorSingle segmentPoint = CollisionDetail::CapsuleYSegmentPoint(position, radiusHalfHeight);

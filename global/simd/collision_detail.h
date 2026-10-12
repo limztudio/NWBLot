@@ -42,6 +42,10 @@ namespace FrustumPlaneIndex{
     };
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE bool Vector3AnyTrue(const SIMDVectorSingle value)noexcept{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZ) != 0u;
 }
@@ -62,6 +66,10 @@ namespace FrustumPlaneIndex{
     const SIMDVectorSingle sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, VectorGreaterOrEqual(position, VectorZero()));
     return VectorAndInt(sign, componentMask);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle CapsuleYSegmentPoint(const SIMDVectorSingle position, const SIMDVectorSingle radiusHalfHeight)noexcept{
     const SIMDVectorSingle halfHeight = VectorSplatY(radiusHalfHeight);
@@ -103,6 +111,10 @@ namespace FrustumPlaneIndex{
     return VectorSet((index & s_BoxCornerXSelectBit) ? 1.0f : -1.0f, (index & s_BoxCornerYSelectBit) ? 1.0f : -1.0f, (index & s_BoxCornerZSelectBit) ? 1.0f : -1.0f, 0.0f);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE SIMDVectorSingle PlaneNormalizeSafe(const SIMDVectorSingle plane)noexcept{
     const SIMDVectorSingle length = Vector3Length(plane);
     if(Vector4LessOrEqual(length, VectorReplicate(s_PlaneEpsilon)))
@@ -119,6 +131,10 @@ namespace FrustumPlaneIndex{
 [[nodiscard]] NWB_INLINE SIMDVectorSingle PlaneDistance(const SIMDVectorSingle plane, const SIMDVectorSingle point)noexcept{
     return VectorAdd(Vector3Dot(plane, point), VectorSplatW(plane));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline bool PointsInsideMinMax(const SIMDVectorSingle* points, const usize pointCount, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
@@ -138,6 +154,10 @@ namespace FrustumPlaneIndex{
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE void MinMaxFromCenterExtents(const SIMDVectorSingle center, const SIMDVectorSingle extents, SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept{
     outMinBounds = VectorSubtract(center, extents);
@@ -162,6 +182,10 @@ NWB_INLINE void ExpandMinMax(const SIMDVectorSingle point, SIMDVectorSingle& inO
     const SIMDVectorSingle disjoint = VectorOrInt(VectorGreater(lhsMinBounds, rhsMaxBounds), VectorGreater(rhsMinBounds, lhsMaxBounds));
     return !Vector3AnyTrue(disjoint);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE void FastIntersectSpherePlane(const SIMDVectorSingle center, const SIMDVectorSingle radius, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
     const SIMDVectorSingle distance = PlaneDistance(plane, center);
@@ -225,6 +249,10 @@ inline void FastIntersectPointsPlane(const SIMDVectorSingle* points, const usize
     outOutside = VectorLess(maxDistance, VectorZero());
     outInside = VectorGreaterOrEqual(minDistance, VectorZero());
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline Expected<f32> RayIntersectsMinMax(const SIMDVectorSingle origin, const SIMDVectorSingle direction, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), s_Half);
@@ -324,6 +352,10 @@ inline void FastIntersectPointsPlane(const SIMDVectorSingle* points, const usize
     return VectorGetX(t);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& outAxis0, SIMDVectorSingle& outAxis1, SIMDVectorSingle& outAxis2)noexcept{
     outAxis0 = Vector3Rotate(s_SIMDIdentityR0, orientation);
     outAxis1 = Vector3Rotate(s_SIMDIdentityR1, orientation);
@@ -345,6 +377,9 @@ NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& ou
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline ContainmentType::Enum ContainmentFromPlaneTests(const SIMDVectorSingle* points, const usize pointCount, const SIMDVectorSingle* planes, const usize planeCount)noexcept{
@@ -422,6 +457,10 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline bool ObbIntersectsObb(
     const SIMDVectorSingle lhsCenter,
@@ -573,6 +612,10 @@ namespace FrustumPlaneIndex{
     };
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE bool VectorDouble3AnyTrue(const SIMDVectorDouble value)noexcept{
     return (VectorDoubleMoveMask(value) & VectorDoubleComponentMask::s_DoubleXYZ) != 0u;
 }
@@ -593,6 +636,10 @@ namespace FrustumPlaneIndex{
     const SIMDVectorDouble sign = VectorDoubleSelect(s_DoubleSIMDNegativeOne, s_DoubleSIMDOne, VectorDoubleGreaterOrEqual(position, VectorDoubleZero()));
     return VectorDoubleAndInt(sign, componentMask);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble CapsuleYSegmentPoint(const SIMDVectorDouble position, const SIMDVectorDouble radiusHalfHeight)noexcept{
     const SIMDVectorDouble halfHeight = VectorDoubleSplatY(radiusHalfHeight);
@@ -634,6 +681,10 @@ namespace FrustumPlaneIndex{
     return VectorDoubleSet((index & s_DoubleBoxCornerXSelectBit) ? 1.0 : -1.0, (index & s_DoubleBoxCornerYSelectBit) ? 1.0 : -1.0, (index & s_DoubleBoxCornerZSelectBit) ? 1.0 : -1.0, 0.0);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE SIMDVectorDouble PlaneDoubleNormalizeSafe(const SIMDVectorDouble plane)noexcept{
     const SIMDVectorDouble length = VectorDouble3Length(plane);
     if(VectorDouble4LessOrEqual(length, VectorDoubleReplicate(s_DoublePlaneEpsilon)))
@@ -650,6 +701,10 @@ namespace FrustumPlaneIndex{
 [[nodiscard]] NWB_INLINE SIMDVectorDouble PlaneDoubleDistance(const SIMDVectorDouble plane, const SIMDVectorDouble point)noexcept{
     return VectorDoubleAdd(VectorDouble3Dot(plane, point), VectorDoubleSplatW(plane));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline bool PointsInsideMinMax(const SIMDVectorDouble* points, const usize pointCount, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
@@ -669,6 +724,10 @@ namespace FrustumPlaneIndex{
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE void MinMaxFromCenterExtents(const SIMDVectorDouble center, const SIMDVectorDouble extents, SIMDVectorDouble& outMinBounds, SIMDVectorDouble& outMaxBounds)noexcept{
     outMinBounds = VectorDoubleSubtract(center, extents);
@@ -693,6 +752,10 @@ NWB_INLINE void ExpandMinMax(const SIMDVectorDouble point, SIMDVectorDouble& inO
     const SIMDVectorDouble disjoint = VectorDoubleOrInt(VectorDoubleGreater(lhsMinBounds, rhsMaxBounds), VectorDoubleGreater(rhsMinBounds, lhsMaxBounds));
     return !VectorDouble3AnyTrue(disjoint);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_INLINE void FastIntersectSpherePlane(const SIMDVectorDouble center, const SIMDVectorDouble radius, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
     const SIMDVectorDouble distance = PlaneDoubleDistance(plane, center);
@@ -756,6 +819,10 @@ inline void FastIntersectPointsPlane(const SIMDVectorDouble* points, const usize
     outOutside = VectorDoubleLess(maxDistance, VectorDoubleZero());
     outInside = VectorDoubleGreaterOrEqual(minDistance, VectorDoubleZero());
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline Expected<f64> RayIntersectsMinMax(const SIMDVectorDouble origin, const SIMDVectorDouble direction, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), s_DoubleHalf);
@@ -855,6 +922,10 @@ inline void FastIntersectPointsPlane(const SIMDVectorDouble* points, const usize
     return VectorDoubleGetX(t);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& outAxis0, SIMDVectorDouble& outAxis1, SIMDVectorDouble& outAxis2)noexcept{
     outAxis0 = VectorDouble3Rotate(s_DoubleSIMDIdentityR0, orientation);
     outAxis1 = VectorDouble3Rotate(s_DoubleSIMDIdentityR1, orientation);
@@ -876,6 +947,9 @@ NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& ou
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline ContainmentType::Enum ContainmentFromPlaneTests(const SIMDVectorDouble* points, const usize pointCount, const SIMDVectorDouble* planes, const usize planeCount)noexcept{
@@ -953,6 +1027,10 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline bool ObbIntersectsObb(
     const SIMDVectorDouble lhsCenter,

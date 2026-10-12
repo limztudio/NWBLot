@@ -30,7 +30,6 @@
 
 #include <core/assets/paths.h>
 #include <tests/common/capturing_logger.h>
-#include <tests/common/meshlet_ref_test_data.h>
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
@@ -138,6 +137,8 @@ namespace Tests{
 ];
 
 )"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

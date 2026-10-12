@@ -53,14 +53,11 @@ struct PacketLifecycleTask{
     struct Payload{
         u32* acceptedCount = nullptr;
         u32* discardedCount = nullptr;
-        Graphics::QueueSubmissionToken* acceptedToken = nullptr;
     };
 
-    static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken&){
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
-        if(payload.acceptedToken)
-            *payload.acceptedToken = token;
     }
     static void Discarded(Payload& payload){
         if(payload.discardedCount)

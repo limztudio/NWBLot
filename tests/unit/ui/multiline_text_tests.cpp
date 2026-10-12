@@ -26,14 +26,13 @@ using namespace NWB::Impl::Ui;
 
 TEST(UiMultilineText, AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes){
     Tests::TestArena arena;
-    AString<Core::Alloc::GlobalArena> output("before", arena.arena);
     const AStringView cases[]{ "", "\n", "\n\n", "\nfirst\n", "first\n\nlast\n" };
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
         EXPECT_TRUE(ValidateMultilineText(text));
         auto normalized = NormalizeMultilineText(arena.arena, text, text.size());
         ASSERT_TRUE(normalized);
-        output = Move(*normalized);
+        const auto& output = *normalized;
         EXPECT_EQ(AStringView(output.data(), output.size()), text);
         EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
     }
@@ -94,13 +93,12 @@ TEST(UiMultilineText, RequiresNormalizationForTabsAndEveryNoncanonicalLineSepara
         { "\xE2\x80\xA8", "\n" }, { "\xE2\x80\xA9", "\n" }
     };
     Tests::TestArena arena;
-    AString<Core::Alloc::GlobalArena> output("before", arena.arena);
     for(const SeparatorCase& test : cases){
         SCOPED_TRACE(test.source);
         EXPECT_FALSE(ValidateMultilineText(test.source));
         auto normalized = NormalizeMultilineText(arena.arena, test.source, 1u);
         ASSERT_TRUE(normalized);
-        output = Move(*normalized);
+        const auto& output = *normalized;
         EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
         EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
     }
@@ -185,10 +183,9 @@ TEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars){
     Tests::TestArena arena;
     for(const BudgetCase& test : cases){
         SCOPED_TRACE(test.source);
-        AString<Core::Alloc::GlobalArena> output("before", arena.arena);
         auto normalized = NormalizeMultilineText(arena.arena, test.source, test.expected.size());
         ASSERT_TRUE(normalized);
-        output = Move(*normalized);
+        const auto& output = *normalized;
         EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
         EXPECT_EQ(NormalizeMultilineText(arena.arena, test.source, test.expected.size() - 1u), MakeUnexpected(EditTextStatus::TooLarge));
         EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));

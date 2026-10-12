@@ -7,11 +7,8 @@
 #include <gtest/gtest.h>
 
 #include <global/algorithm.h>
-#include <global/allocation_size.h>
 #include <global/auto_registration.h>
-#include <global/arena_base.h>
-#include <global/arena_c_allocator.h>
-#include <global/arena_object.h>
+#include <global/arena_memory.h>
 #include <global/basic_string.h>
 #include <global/binary.h>
 #include <global/compile.h>

@@ -41,7 +41,7 @@ void InputRouter::cancelDeviceInput(const u64 device){
     if(m_activePointerSource.valid() && m_activePointerSource.device == device)
         terminatePointerSource(m_activePointerSource);
     for(usize index = m_pointerSources.size(); index > 0u; --index){
-        if(m_pointerSources[index - 1u].binding.source.device == device)
+        if(m_pointerSources[index - 1u].source.device == device)
             m_pointerSources.erase(m_pointerSources.begin() + static_cast<isize>(index - 1u));
     }
     for(usize index = m_pointerBindings.size(); index > 0u; --index){

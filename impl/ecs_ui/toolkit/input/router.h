@@ -84,7 +84,8 @@ private:
     };
 
     struct PointerSource{
-        PointerBinding binding;
+        InputSource source;
+        PointerIntent::Enum intent = PointerIntent::Activate;
         bool consumed = false;
         bool inert = false;
     };

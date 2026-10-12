@@ -89,6 +89,7 @@ void PaintBuilder::begin(const DisplayMetrics& metrics, const u64 generation, co
     m_clips.push_back({ 0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight });
     m_overlayDepth = 0u;
     m_layer = 0u;
+    m_commandsOrdered = true;
     m_recording = true;
 }
 
@@ -142,9 +143,11 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
 
 DrawSnapshot PaintBuilder::freeze(){
     NWB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayDepth == 0u);
-    Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
-        return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
-    });
+    if(!m_commandsOrdered){
+        Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
+            return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
+        });
+    }
     m_recording = false;
     m_clips.clear();
     return Move(m_snapshot);
@@ -202,6 +205,9 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
             previous.indexCount += 6u;
             return;
         }
+        // Distinct commands already have increasing firstIndex; only a layer descent needs ordering at freeze.
+        if(previous.layer > m_layer)
+            m_commandsOrdered = false;
     }
     m_snapshot.m_commands.push_back({
         firstIndex, 6u, clip, material, glyphPageIndex, sdfPageIndex, sdfChannel, m_layer, textureImageIndex

@@ -279,7 +279,7 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const{
         return nullptr;
     const HitTarget* found = nullptr;
     for(const HitTarget& target : m_targets){
-        if(!isInteractive(target) || !__hidden_ui_input_router::Contains(target.rectangle, position) || !__hidden_ui_input_router::Contains(target.clip, position))
+        if(!__hidden_ui_input_router::Contains(target.rectangle, position) || !__hidden_ui_input_router::Contains(target.clip, position) || !isInteractive(target))
             continue;
         if(found == nullptr || target.layer > found->layer || (target.layer == found->layer && target.paintOrder >= found->paintOrder))
             found = &target;
@@ -334,7 +334,10 @@ void InputRouter::reconcileTargets(){
 }
 
 void InputRouter::updateHover(){
-    const HitTarget* hovered = m_pointerKnown ? findHitTarget(m_pointer) : nullptr;
+    setHoverTarget(m_pointerKnown ? findHitTarget(m_pointer) : nullptr);
+}
+
+void InputRouter::setHoverTarget(const HitTarget* hovered){
     const HitTarget* owner = hovered != nullptr && hovered->owner.valid() ? controlHost(*hovered) : hovered;
     HoverIdentity identity;
     if(owner != nullptr)

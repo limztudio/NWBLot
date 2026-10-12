@@ -50,13 +50,13 @@ bool InputRouter::wantsPointer()const noexcept{
     return hasPopup() || m_hover.valid();
 }
 
-void InputRouter::observePointer(const InputEvent& event){
+void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit){
     if(!event.hoverCapable)
         return;
     m_hoverPointerSource = event.source;
     m_pointer = event.position;
     m_pointerKnown = true;
-    updateHover();
+    setHoverTarget(hit);
 }
 
 void InputRouter::terminatePointerSource(const InputSource source){
@@ -103,9 +103,19 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         }
         return;
     }
-    observePointer(event);
     const bool press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
     const bool release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
+    // Reuse only within this event; popup dismissal and layout reconciliation still resolve hover against their new state.
+    const HitTarget* hit = event.hoverCapable ? findHitTarget(event.position) : nullptr;
+    bool hitResolved = event.hoverCapable;
+    const auto resolveHit = [this, &event, &hit, &hitResolved](){
+        if(!hitResolved){
+            hit = findHitTarget(event.position);
+            hitResolved = true;
+        }
+        return hit;
+    };
+    observePointer(event, hit);
     const PointerIntent::Enum intent = event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp ? PointerIntent::ContextMenu : PointerIntent::Activate;
     PointerSource* held = findPointerSource(event.source, intent);
     if(press){
@@ -116,7 +126,7 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         if(m_pointerSources.size() == s_InputMaxSources)
             return;
         const bool accepted = !event.repeat && acceptsPointerSource(event.source);
-        const bool consumed = !event.repeat && (m_activePointerSource == event.source ? m_primaryDown ? m_pointerSequenceConsumed : m_secondarySequenceConsumed : hasPopup() || findHitTarget(event.position) != nullptr);
+        const bool consumed = !event.repeat && (m_activePointerSource == event.source ? m_primaryDown ? m_pointerSequenceConsumed : m_secondarySequenceConsumed : hasPopup() || resolveHit() != nullptr);
         m_pointerSources.push_back({ { event.source, intent, event.hoverCapable }, consumed, !accepted });
         result.pointerConsumed |= consumed;
         if(!accepted)
@@ -125,7 +135,7 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
     }
     else if(release){
         if(held == nullptr){
-            result.pointerConsumed |= hasPopup() || findHitTarget(event.position) != nullptr;
+            result.pointerConsumed |= hasPopup() || resolveHit() != nullptr;
             return;
         }
         result.pointerConsumed |= held->consumed;
@@ -146,14 +156,16 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         if(!m_activePointerSource.valid() && !event.hoverCapable && event.type == InputEventType::PointerMove)
             return;
     }
+    if(press || release || event.type == InputEventType::PointerWheel)
+        resolveHit();
     result.pointerRouted = true;
     m_interactionPosition = event.position;
     if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
-        routeSecondary(event, result);
+        routeSecondary(event, result, hit);
     else if(event.type == InputEventType::PointerWheel)
-        routeWheel(event, result);
+        routeWheel(event, result, hit);
     else
-        routePointer(event, result);
+        routePointer(event, result, hit);
     if(release){
         const auto index = static_cast<isize>(held - m_pointerSources.data());
         m_pointerSources.erase(m_pointerSources.begin() + index);

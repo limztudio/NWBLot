@@ -169,8 +169,7 @@ void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& so
     ++m_nextActionSequence;
 }
 
-void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result){
-    const HitTarget* hit = findHitTarget(event.position);
+void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
     result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
     if((m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed) || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0))
         return;

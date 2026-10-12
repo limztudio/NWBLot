@@ -262,6 +262,37 @@ TEST_F(UiPaintOverlayTests, UnrecordedScopesAreRejectedAndBeginResetsAbandonedOv
     EXPECT_FALSE(m_builder.endOverlay());
 }
 
+TEST_F(UiPaintOverlayTests, LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches){
+    const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
+    ASSERT_TRUE(m_builder.beginOverlay(4u));
+    m_builder.fillRect(rectangle);
+    m_builder.fillRect(rectangle);
+    ASSERT_TRUE(m_builder.endOverlay());
+    m_builder.fillRect(rectangle);
+    m_builder.fillRect(rectangle);
+    const DrawSnapshot first = m_builder.freeze();
+    ASSERT_EQ(first.commands().size(), 2u);
+    EXPECT_EQ(first.commands()[0u].layer, 0u);
+    EXPECT_EQ(first.commands()[0u].firstIndex, 12u);
+    EXPECT_EQ(first.commands()[0u].indexCount, 12u);
+    EXPECT_EQ(first.commands()[1u].layer, 4u);
+    EXPECT_EQ(first.commands()[1u].firstIndex, 0u);
+    EXPECT_EQ(first.commands()[1u].indexCount, 12u);
+
+    begin(8u);
+    m_builder.fillRect(rectangle);
+    ASSERT_TRUE(m_builder.beginOverlay(4u));
+    m_builder.fillRect(rectangle);
+    ASSERT_TRUE(m_builder.endOverlay());
+    const DrawSnapshot second = m_builder.freeze();
+    ASSERT_EQ(second.commands().size(), 2u);
+    EXPECT_EQ(second.commands()[0u].layer, 0u);
+    EXPECT_EQ(second.commands()[0u].firstIndex, 0u);
+    EXPECT_EQ(second.commands()[1u].layer, 4u);
+    EXPECT_EQ(second.commands()[1u].firstIndex, 6u);
+    EXPECT_EQ(first.commands()[0u].firstIndex, 12u);
+}
+
 TEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges){
     const SharedGlyphPage coverage = makeCoverage();
     const SharedSdfAtlasPage distance = makeDistance();

@@ -192,6 +192,7 @@ private:
     OverlayFrame m_overlays[s_PaintMaxOverlayDepth];
     usize m_overlayDepth = 0u;
     u32 m_layer = 0u;
+    bool m_commandsOrdered = true;
     bool m_recording = false;
 };
 

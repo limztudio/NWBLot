@@ -14,8 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& result){
-    const HitTarget* hit = findHitTarget(event.position);
+void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
     if(event.type == InputEventType::PointerMove){
         if(m_primaryDown)
             updatePointerGesture(event.position, false);

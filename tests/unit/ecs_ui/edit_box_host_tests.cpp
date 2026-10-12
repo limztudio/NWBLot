@@ -226,6 +226,50 @@ TEST_F(UiEditBoxHostTests, CandidateGeometryCannotMoveTheNativeCaretBeforeContex
     EXPECT_EQ(m_model.anchor(), 1u);
 }
 
+TEST_F(UiEditBoxHostTests, RepeatedCandidatePublicationAcceptsOnlyTheLastGeometryAndPreservesDisplayedHits){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(activate());
+    const TextInputRect displayed = m_textInput.nativeCaret();
+    const Ui::Rect bounds{ 200.0f, 20.0f, 180.0f, 30.0f };
+    ASSERT_TRUE(prepare(m_model, {}, bounds));
+    Ui::EditBoxView replacement(m_arena);
+    ASSERT_TRUE(replacement.snapshot(m_model));
+    auto layout = m_layoutBuilder.layout({ replacement.displayText() });
+    ASSERT_TRUE(layout);
+    ASSERT_TRUE(replacement.adoptLayout(Move(*layout)));
+    const auto placement = replacement.arrange(bounds, { 10.0f, 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 500.0f, 200.0f }, {});
+    ASSERT_TRUE(placement);
+    ASSERT_TRUE(m_host.publish(m_widget, replacement, *placement, {}));
+    Ui::EditBoxView rejected(m_arena);
+    EXPECT_FALSE(m_host.publish(m_widget, rejected, *placement, {}));
+    m_host.commitFrame(m_generation);
+    EXPECT_EQ(m_textInput.nativeCaret().x, displayed.x);
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 20.0f, 25.0f } }));
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 20.0f, 25.0f } }));
+    ASSERT_TRUE(commit());
+    EXPECT_EQ(m_textInput.nativeCaret().x, 240);
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_model.caret(), 1u);
+}
+
+TEST_F(UiEditBoxHostTests, GeometryPublicationShrinksAndGrowsCaretStopsWithoutRetainingOldEndPositions){
+    const AStringView values[]{ "abcdefghi", "ab", "abcdefghijklmnopqrstuvwxyzabcdef", "", "abcdefghijklmnopqrstuvwxyzabcdef" };
+    ASSERT_TRUE(activate());
+    for(const AStringView value : values){
+        ASSERT_TRUE(m_model.setText(value));
+        ASSERT_TRUE(prepare(m_model, {}, { 10.0f, 20.0f, 600.0f, 30.0f }));
+        ASSERT_TRUE(commit());
+        ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 181.0f, 25.0f } }));
+        ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 181.0f, 25.0f } }));
+        ASSERT_TRUE(frame(m_model));
+        const usize expected = Min<usize>(value.size(), 17u);
+        EXPECT_EQ(m_model.anchor(), expected);
+        EXPECT_EQ(m_model.caret(), expected);
+        EXPECT_EQ(m_model.text(), value);
+    }
+}
+
 TEST_F(UiEditBoxHostTests, HostEventOverflowDiscardsTheBoundedBatchBeforeAnyModelMutation){
     ASSERT_TRUE(m_model.setText("base"));
     ASSERT_TRUE(activate());

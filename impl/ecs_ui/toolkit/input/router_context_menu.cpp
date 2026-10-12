@@ -74,8 +74,7 @@ bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarg
 }
 
 
-void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& result){
-    const HitTarget* hit = findHitTarget(event.position);
+void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
     if(event.type == InputEventType::SecondaryUp){
         result.pointerConsumed |= m_secondaryDown ? m_secondarySequenceConsumed : m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
         const HitTarget* anchor = hit != nullptr && !hit->contextMenu && hit->owner.valid() ? controlHost(*hit) : hit;

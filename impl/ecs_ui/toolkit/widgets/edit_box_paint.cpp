@@ -67,16 +67,20 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
     paint.pushClip(placement.clip);
     if(painted){
         const Color& selection = flags.focused && flags.enabled ? style.selection : style.inactiveSelection;
-        for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
-            auto segment = m_geometry.rangeOnLine(m_selection, line, placement.caret.width);
-            if(!segment){
-                painted = false;
-                break;
-            }
-            if(segment->width > 0.0f){
-                segment->x += placement.textOrigin.x;
-                segment->y += placement.textOrigin.y;
-                paint.fillRect(*segment, selection);
+        if(m_selection.begin == m_selection.end)
+            painted = static_cast<bool>(m_geometry.rangeOnLine(m_selection, 0u, placement.caret.width));
+        else{
+            for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
+                auto segment = m_geometry.rangeOnLine(m_selection, line, placement.caret.width);
+                if(!segment){
+                    painted = false;
+                    break;
+                }
+                if(segment->width > 0.0f){
+                    segment->x += placement.textOrigin.x;
+                    segment->y += placement.textOrigin.y;
+                    paint.fillRect(*segment, selection);
+                }
             }
         }
         painted = painted && text.paint(paint, layout(), placement.textOrigin, flags.enabled ? style.text : style.disabledText);

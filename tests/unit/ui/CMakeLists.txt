@@ -36,4 +36,4 @@ target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/input_bindings_te
     "${CMAKE_CURRENT_LIST_DIR}/text_visible_baked_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_font_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_baked_tests.cpp")
 target_link_libraries(nwb_ui_tests PRIVATE nwb_ui_gpu nwb_ui_images nwb_ui_edit nwb_ui_widgets nwb_ui nwb_ui_text nwb::harfbuzz)
 target_compile_definitions(nwb_ui_tests PRIVATE NWB_TEST_FONT_DIRECTORY="${CMAKE_SOURCE_DIR}/impl/assets/ui/fonts/default")
-target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/pointer_sources_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/native_input.h")
+target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/pointer_sources_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/pointer_hit_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/native_input.h")

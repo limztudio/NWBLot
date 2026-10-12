@@ -172,7 +172,7 @@ private:
     [[nodiscard]] PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)noexcept;
     [[nodiscard]] const PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)const noexcept;
     void routePointerSource(const InputEvent& event, InputRoutingResult& result);
-    void observePointer(const InputEvent& event);
+    void observePointer(const InputEvent& event, const HitTarget* hit);
     void terminatePointerSource(InputSource source);
     [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept;
     [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept;
@@ -195,10 +195,10 @@ private:
     void reconcileContextMenus();
     void appendContextMenu(const HitTarget& target, const Point& position, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
     [[nodiscard]] bool routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed);
-    void routeSecondary(const InputEvent& event, InputRoutingResult& result);
+    void routeSecondary(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
     void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result, f64 deltaX = 0.0);
     [[nodiscard]] bool routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, bool alreadyPressed, InputRoutingResult& result);
-    void routeWheel(const InputEvent& event, InputRoutingResult& result);
+    void routeWheel(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
     [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const;
     [[nodiscard]] bool stagePopups(const PopupScope* scopes, usize count);
@@ -209,6 +209,7 @@ private:
     void rebuildLookup();
     void reconcileTargets();
     void updateHover();
+    void setHoverTarget(const HitTarget* hovered);
     void advanceHoverActivity()noexcept;
     void clearHover()noexcept;
     void cancelInteraction();
@@ -216,7 +217,7 @@ private:
     void appendPointerGesture(const HitTarget& target, InputRoutingResult& result);
     void updatePointerGesture(const Point& position, bool completed)noexcept;
     void reconcilePointerGestures();
-    void routePointer(const InputEvent& event, InputRoutingResult& result);
+    void routePointer(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool moveFocus(bool reverse);
     [[nodiscard]] bool moveFocusForTraversal(bool reverse);

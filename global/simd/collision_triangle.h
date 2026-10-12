@@ -171,41 +171,85 @@ namespace TriangleDoubleTests{
 
 
 [[nodiscard]] inline bool NWB_SIMD_CALL TriangleTests::Intersects(const SIMDVectorSingle a0, const SIMDVectorSingle a1, const SIMDVectorSingle a2, const SIMDVectorSingle b0, const SIMDVectorSingle b1, const SIMDVectorSingle b2)noexcept{
-    const auto segmentIntersectsTriangle = [](const SIMDVectorSingle p0, const SIMDVectorSingle p1, const SIMDVectorSingle t0, const SIMDVectorSingle t1, const SIMDVectorSingle t2)noexcept{
-        const SIMDVectorSingle direction = VectorSubtract(p1, p0);
-        const auto distance = CollisionDetail::RayIntersectsTriangle(p0, direction, t0, t1, t2);
-        return distance && *distance >= 0.0f && *distance <= 1.0f;
-    };
-
-    if(segmentIntersectsTriangle(a0, a1, b0, b1, b2) || segmentIntersectsTriangle(a1, a2, b0, b1, b2) || segmentIntersectsTriangle(a2, a0, b0, b1, b2))
-        return true;
-    if(segmentIntersectsTriangle(b0, b1, a0, a1, a2) || segmentIntersectsTriangle(b1, b2, a0, a1, a2) || segmentIntersectsTriangle(b2, b0, a0, a1, a2))
-        return true;
-
-    const SIMDVectorSingle minA = VectorMin(a0, VectorMin(a1, a2));
-    const SIMDVectorSingle maxA = VectorMax(a0, VectorMax(a1, a2));
-    const SIMDVectorSingle minB = VectorMin(b0, VectorMin(b1, b2));
-    const SIMDVectorSingle maxB = VectorMax(b0, VectorMax(b1, b2));
-    return CollisionDetail::MinMaxIntersects(minA, maxA, minB, maxB);
+    // Promotion keeps the separating-axis products finite across the full binary32 coordinate range.
+    return TriangleDoubleTests::Intersects(
+        ConvertVectorSingleToDouble(VectorAndInt(a0, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(a1, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(a2, s_SIMDMask3)),
+        ConvertVectorSingleToDouble(VectorAndInt(b0, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(b1, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(b2, s_SIMDMask3))
+    );
 }
 
 [[nodiscard]] inline bool NWB_SIMD_CALL TriangleDoubleTests::Intersects(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
-    const auto segmentIntersectsTriangle = [](const SIMDVectorDouble p0, const SIMDVectorDouble p1, const SIMDVectorDouble t0, const SIMDVectorDouble t1, const SIMDVectorDouble t2)noexcept{
-        const SIMDVectorDouble direction = VectorDoubleSubtract(p1, p0);
-        const auto distance = CollisionDoubleDetail::RayIntersectsTriangle(p0, direction, t0, t1, t2);
-        return distance && *distance >= 0.0 && *distance <= 1.0;
+    const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
+    const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
+    const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
+    const SIMDVectorDouble minB = VectorDoubleMin(second0, VectorDoubleMin(second1, second2)), maxB = VectorDoubleMax(second0, VectorDoubleMax(second1, second2));
+    if(!CollisionDoubleDetail::MinMaxIntersects(minA, maxA, minB, maxB))
+        return false;
+
+    const SIMDVectorDouble zero = VectorDoubleZero();
+    const SIMDVectorDouble relativeA1 = VectorDoubleSubtract(first1, first0), relativeA2 = VectorDoubleSubtract(first2, first0);
+    const SIMDVectorDouble relativeB0 = VectorDoubleSubtract(second0, first0), relativeB1 = VectorDoubleSubtract(second1, first0), relativeB2 = VectorDoubleSubtract(second2, first0);
+    const auto differenceRoundoff = [](const SIMDVectorDouble point, const SIMDVectorDouble origin, const SIMDVectorDouble difference)noexcept{
+        // TwoDiff recovers the subtraction residual without expanding the allowance with a large common translation.
+        const SIMDVectorDouble virtualOrigin = VectorDoubleSubtract(point, difference), virtualPoint = VectorDoubleAdd(difference, virtualOrigin);
+        return VectorDoubleAdd(VectorDoubleSubtract(point, virtualPoint), VectorDoubleSubtract(virtualOrigin, origin));
     };
+    const SIMDVectorDouble roundoffA1 = differenceRoundoff(first1, first0, relativeA1), roundoffA2 = differenceRoundoff(first2, first0, relativeA2);
+    const SIMDVectorDouble roundoffB0 = differenceRoundoff(second0, first0, relativeB0), roundoffB1 = differenceRoundoff(second1, first0, relativeB1), roundoffB2 = differenceRoundoff(second2, first0, relativeB2);
+    const SIMDVectorDouble edgeA0 = relativeA1, edgeA1 = VectorDoubleSubtract(first2, first1), edgeA2 = VectorDoubleNegate(relativeA2);
+    const SIMDVectorDouble edgeB0 = VectorDoubleSubtract(second1, second0), edgeB1 = VectorDoubleSubtract(second2, second1), edgeB2 = VectorDoubleSubtract(second0, second2);
+    const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
+        // Separate products make parallel directions produce a zero axis instead of an explicit-FMA residual.
+        const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
+        const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
+        return VectorDoubleSubtract(positive, negative);
+    };
+    const auto separated = [&](const SIMDVectorDouble axis)noexcept{
+        const SIMDVectorDouble absoluteAxis = VectorDoubleAbs(axis);
+        const auto projectionInterval = [&](const SIMDVectorDouble relative, const SIMDVectorDouble roundoff)noexcept{
+            const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
+            const SIMDVectorDouble magnitude = VectorDouble3Dot(VectorDoubleAbs(relative), absoluteAxis), coordinateError = VectorDouble3Dot(VectorDoubleAbs(roundoff), absoluteAxis);
+            // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
+            const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
+            return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
+        };
+        const SIMDVectorDouble intervalA1 = projectionInterval(relativeA1, roundoffA1), intervalA2 = projectionInterval(relativeA2, roundoffA2);
+        const SIMDVectorDouble minimumA = VectorDoubleMin(zero, VectorDoubleMin(VectorDoubleSplatX(intervalA1), VectorDoubleSplatX(intervalA2)));
+        const SIMDVectorDouble maximumA = VectorDoubleMax(zero, VectorDoubleMax(VectorDoubleSplatY(intervalA1), VectorDoubleSplatY(intervalA2)));
+        const SIMDVectorDouble intervalB0 = projectionInterval(relativeB0, roundoffB0), intervalB1 = projectionInterval(relativeB1, roundoffB1), intervalB2 = projectionInterval(relativeB2, roundoffB2);
+        const SIMDVectorDouble minimumB = VectorDoubleMin(VectorDoubleSplatX(intervalB0), VectorDoubleMin(VectorDoubleSplatX(intervalB1), VectorDoubleSplatX(intervalB2)));
+        const SIMDVectorDouble maximumB = VectorDoubleMax(VectorDoubleSplatY(intervalB0), VectorDoubleMax(VectorDoubleSplatY(intervalB1), VectorDoubleSplatY(intervalB2)));
+        return VectorDouble4Less(maximumA, minimumB) || VectorDouble4Less(maximumB, minimumA);
+    };
+    const SIMDVectorDouble normalA = crossAxis(edgeA0, VectorDoubleNegate(edgeA2)), normalB = crossAxis(edgeB0, VectorDoubleNegate(edgeB2));
+    if(separated(normalA) || separated(normalB))
+        return false;
 
-    if(segmentIntersectsTriangle(a0, a1, b0, b1, b2) || segmentIntersectsTriangle(a1, a2, b0, b1, b2) || segmentIntersectsTriangle(a2, a0, b0, b1, b2))
-        return true;
-    if(segmentIntersectsTriangle(b0, b1, a0, a1, a2) || segmentIntersectsTriangle(b1, b2, a0, a1, a2) || segmentIntersectsTriangle(b2, b0, a0, a1, a2))
-        return true;
+    if(VectorDouble3Equal(normalA, zero) && VectorDouble3Equal(normalB, zero)){
+        // Closed degenerate triangles retain their point/segment hulls, including collinear endpoint contact.
+        const SIMDVectorDouble directionA = VectorDouble3Equal(edgeA0, zero) ? edgeA1 : edgeA0, directionB = VectorDouble3Equal(edgeB0, zero) ? edgeB1 : edgeB0;
+        const SIMDVectorDouble normal = crossAxis(directionA, directionB);
+        if(separated(directionA) || separated(directionB) || separated(normal) || separated(crossAxis(directionA, normal)) || separated(crossAxis(directionB, normal)))
+            return false;
+        const auto parallelSeparated = [&](const SIMDVectorDouble direction)noexcept{
+            return separated(crossAxis(direction, s_DoubleSIMDIdentityR0)) || separated(crossAxis(direction, s_DoubleSIMDIdentityR1)) || separated(crossAxis(direction, s_DoubleSIMDIdentityR2));
+        };
+        return !parallelSeparated(directionA) && !parallelSeparated(directionB);
+    }
 
-    const SIMDVectorDouble minA = VectorDoubleMin(a0, VectorDoubleMin(a1, a2));
-    const SIMDVectorDouble maxA = VectorDoubleMax(a0, VectorDoubleMax(a1, a2));
-    const SIMDVectorDouble minB = VectorDoubleMin(b0, VectorDoubleMin(b1, b2));
-    const SIMDVectorDouble maxB = VectorDoubleMax(b0, VectorDoubleMax(b1, b2));
-    return CollisionDoubleDetail::MinMaxIntersects(minA, maxA, minB, maxB);
+    const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
+        // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
+        return
+            separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB))
+            || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2))
+        ;
+    };
+    if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
+        return false;
+    const auto secondEdgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
+        return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB));
+    };
+    return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
 

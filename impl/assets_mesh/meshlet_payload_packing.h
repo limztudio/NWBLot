@@ -133,8 +133,9 @@ namespace MeshletRefDeltaWidth{
         return s_MeshletConeAxisFallback;
 
     octAxis = FoldMeshletConeOctAxis(VectorMultiply(octAxis, VectorReciprocal(lengthVector)));
+    octAxis = VectorMultiplyAddExpression(octAxis, VectorReplicate(s_MeshletOctEncodeBias), VectorReplicate(s_MeshletOctEncodeBias));
 
-    return (PackMeshletConeUnorm8(VectorGetX(octAxis) * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias) << s_MeshletConeAxisXShift) | (PackMeshletConeUnorm8(VectorGetY(octAxis) * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias) << s_MeshletConeAxisYShift);
+    return (PackMeshletConeUnorm8(VectorGetX(octAxis)) << s_MeshletConeAxisXShift) | (PackMeshletConeUnorm8(VectorGetY(octAxis)) << s_MeshletConeAxisYShift);
 }
 
 [[nodiscard]] NWB_INLINE f32 UnpackMeshletConeUnorm8(const u32 value, const u32 bitShift)noexcept{
@@ -142,12 +143,8 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle UnpackMeshletConeOct16Axis(const u32 conePacked)noexcept{
-    SIMDVectorSingle axis = VectorSet(
-        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift) * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias,
-        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift) * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias,
-        0.0f,
-        0.0f
-    );
+    SIMDVectorSingle axis = VectorSet(UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift), UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift), 0.0f, 0.0f);
+    axis = VectorAndInt(VectorMultiplyAddExpression(axis, VectorReplicate(s_MeshletOctDecodeScale), VectorReplicate(-s_MeshletOctDecodeBias)), s_SIMDMaskXY);
     axis = VectorSelect(axis, VectorSubtract(s_SIMDOne, VectorSum(VectorAbs(axis))), s_SIMDMaskZ);
     axis = FoldMeshletConeOctAxis(axis);
     return Vector3NormalizeOr(axis, VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_MeshletConeAxisLengthSquaredEpsilon);

@@ -124,8 +124,7 @@ SIMDVectorSingle CsgDeformCapBuilder::CapCenterNormalVec(SIMDVectorSingle loopNo
     return loopNormalVec;
 }
 
-Expected<Float4> CsgDeformCapBuilder::CapNormal(const CsgDeformVertexVector<ScratchArena>& vertices, const Vector<u32, ScratchArena>& loop)noexcept{
-    Float4 normal;
+Expected<SIMDVectorSingle> CsgDeformCapBuilder::CapNormal(const CsgDeformVertexVector<ScratchArena>& vertices, const Vector<u32, ScratchArena>& loop)noexcept{
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle originVec = LoadFloat(vertices[loop[0u]].position);
@@ -139,12 +138,10 @@ Expected<Float4> CsgDeformCapBuilder::CapNormal(const CsgDeformVertexVector<Scra
     if(!(areaLengthSq > s_LoopAreaEpsilonSq))
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle normalized = Vector3Normalize(areaVec);
-    const SIMDVectorSingle packed = VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW);
-    StoreFloat(packed, normal);
-    return normal;
+    return VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW);
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCapLoop(const Float4& loopNormal, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles, const Vector<u32, ScratchArena>& loop){
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles, const Vector<u32, ScratchArena>& loop){
     u32 capTriangles = 0u;
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});
@@ -160,7 +157,6 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(const Float4& loopNormal, CsgDefo
         centerUvVec = VectorAdd(centerUvVec, LoadFloat(vertex.uv0));
         centerColorVec = VectorAdd(centerColorVec, LoadFloat(vertex.color));
     }
-    const SIMDVectorSingle loopNormalVec = LoadFloat(loopNormal);
     const SIMDVectorSingle loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
     const SIMDVectorSingle centerNormalVec = CsgDeformCapBuilder::CapCenterNormalVec(loopNormalVec);
     CsgDeformVertex center;

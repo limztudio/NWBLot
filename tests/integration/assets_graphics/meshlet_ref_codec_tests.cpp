@@ -30,9 +30,28 @@ namespace __hidden_assets_graphics_meshlet_ref_codec{
 
 using TestArena = AssetsGraphicsFixture::TestArena;
 
+struct OctEncodingBoundary{
+    Float3U axis;
+    u32 packed;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] static SIMDVectorSingle ScalarOct16Reference(const u32 packed)noexcept{
+    const f32 unormX = static_cast<f32>(packed & 255u) * (1.0f / 255.0f);
+    const f32 unormY = static_cast<f32>((packed >> 8u) & 255u) * (1.0f / 255.0f);
+    f32 x = unormX * 2.0f - 1.0f;
+    f32 y = unormY * 2.0f - 1.0f;
+    const f32 z = 1.0f - (Abs(x) + Abs(y));
+    if(z < 0.0f){
+        const f32 foldedX = (1.0f - Abs(y)) * (x >= 0.0f ? 1.0f : -1.0f);
+        y = (1.0f - Abs(x)) * (y >= 0.0f ? 1.0f : -1.0f);
+        x = foldedX;
+    }
+    return Vector3NormalizeOr(VectorSet(x, y, z, 0.0f), VectorSet(0.0f, 0.0f, 1.0f, 0.0f), NWB::Impl::s_MeshletConeAxisLengthSquaredEpsilon);
+}
 
 TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
     EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(0u), NWB::Impl::MeshletRefDeltaWidth::U8);
@@ -85,6 +104,38 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
         EXPECT_EQ(decodedRef->tangent, attributeRefs[localAttributeIndex].tangent);
         EXPECT_EQ(decodedRef->uv0, attributeRefs[localAttributeIndex].uv0);
         EXPECT_EQ(decodedRef->color, attributeRefs[localAttributeIndex].color);
+    }
+}
+
+TEST(AssetsGraphics, MeshletOct16DecodePreservesQuantizationAndFoldBits){
+    // Scalar octahedral reconstruction fixes UNORM endpoint and fold rounding independently of packed lane expressions; normalization retains the shared math policy.
+    for(u32 packed = 0u; packed < 65536u; ++packed){
+        const SIMDVectorSingle reference = ScalarOct16Reference(packed);
+        const SIMDVectorSingle decoded = NWB::Impl::UnpackMeshletConeOct16Axis(packed);
+        ASSERT_EQ(VectorGetIntX(decoded), VectorGetIntX(reference)) << packed;
+        ASSERT_EQ(VectorGetIntY(decoded), VectorGetIntY(reference)) << packed;
+        ASSERT_EQ(VectorGetIntZ(decoded), VectorGetIntZ(reference)) << packed;
+        ASSERT_EQ(VectorGetIntW(decoded), VectorGetIntW(reference)) << packed;
+    }
+}
+
+TEST(AssetsGraphics, MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries){
+    const OctEncodingBoundary boundaries[] = {
+        { { -0x1p-23f, 0.0f, 0x1.fffffcp-1f }, 0x807fu },
+        { { 0.0f, 0.0f, 1.0f }, 0x8080u },
+        { { 0x1p-23f, 0.0f, 0x1.fffffcp-1f }, 0x8080u },
+        { { 0.0f, -0x1p-23f, 0x1.fffffcp-1f }, 0x7f80u },
+        { { 0.0f, 0x1p-23f, 0x1.fffffcp-1f }, 0x8080u },
+        { { -0.0f, -0.0f, -1.0f }, 0xffffu },
+        { { 1.0f, 0.0f, -1.0f }, 0xbfffu },
+        { { 0.0f, -1.0f, -1.0f }, 0x00bfu },
+        { { 1.0f, 1.0f, 0.0f }, 0xbfbfu },
+        { { 1.0f, 1.0f, -0x1p-23f }, 0xbfbfu },
+        { { 1.0f, 1.0f, 0x1p-23f }, 0xbfbfu },
+    };
+    for(const OctEncodingBoundary& boundary : boundaries){
+        volatile f32 x = boundary.axis.x, y = boundary.axis.y, z = boundary.axis.z;
+        EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorSet(x, y, z, 0.0f)), boundary.packed) << boundary.packed;
     }
 }
 

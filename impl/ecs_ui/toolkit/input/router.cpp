@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "router.h"
 
 #include "../rect_math.h"
@@ -30,12 +28,12 @@ bool ValidRectangle(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width >= 0.0f && rectangle.height >= 0.0f
-        && IsFinite(NumericSimd::Add(rectangle.x, rectangle.width)) && IsFinite(NumericSimd::Add(rectangle.y, rectangle.height))
+        && IsFinite((rectangle.x + rectangle.width)) && IsFinite((rectangle.y + rectangle.height))
     ;
 }
 
 bool Contains(const Rect& rectangle, const Point& position)noexcept{
-    return position.x >= rectangle.x && position.y >= rectangle.y && position.x < NumericSimd::Add(rectangle.x, rectangle.width) && position.y < NumericSimd::Add(rectangle.y, rectangle.height);
+    return position.x >= rectangle.x && position.y >= rectangle.y && position.x < (rectangle.x + rectangle.width) && position.y < (rectangle.y + rectangle.height);
 }
 
 

@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "service.h"
 #include "atlas.h"
 #include "glyph_visibility.h"
@@ -49,8 +47,8 @@ struct PreparedGlyph{
 
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
-    const f32 pixelScale = NumericSimd::Max(metrics.pixelScaleX, metrics.pixelScaleY);
-    const f32 physicalSize = NumericSimd::Multiply(layout.fontSize(), pixelScale);
+    const f32 pixelScale = Max(metrics.pixelScaleX, metrics.pixelScaleY);
+    const f32 physicalSize = (layout.fontSize() * pixelScale);
     const f32 rasterPpem = VectorGetX(VectorCeiling(VectorReplicate(physicalSize)));
     if(
         layout.lines().empty() || !IsFinite(layout.fontSize())
@@ -67,7 +65,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
         return true;
     const u32 pixelSize = static_cast<u32>(rasterPpem);
-    const f32 rasterScale = NumericSimd::Divide(rasterPpem, layout.fontSize());
+    const f32 rasterScale = (rasterPpem / layout.fontSize());
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);

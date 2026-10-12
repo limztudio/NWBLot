@@ -101,26 +101,19 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const f64 designMargin = glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize) / glyph.face->unitsPerEm();
     const f64 rasterMargin = Max(1.0, correction) / 64.0 + 2.0 / rasterScale + designMargin;
-    const SIMDVectorDouble marginXMarginYValue = (SIMDVectorDouble{ rasterMargin, rasterMargin } + (SIMDVectorDouble{ 0.5, 0.5 } / SIMDVectorDouble{ pixelScale.x, pixelScale.y, 1.0, 1.0 }));
-    const f64 marginX = marginXMarginYValue.x;
-    const f64 marginY = marginXMarginYValue.y;
-    const SIMDVectorDouble inkRightInkBottomValue = (SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) } + SIMDVectorDouble{ ink.width, ink.height });
-    const f64 inkRight = inkRightInkBottomValue.x;
-    const f64 inkBottom = inkRightInkBottomValue.y;
-    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(topLeft.x), static_cast<f64>(topLeft.y) } + SIMDVectorDouble{ glyph.position.x, glyph.position.y });
-    const f64 x = xYValue.x;
-    const f64 y = xYValue.y;
-    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) };
-    const SIMDVectorDouble geometryPair3Operand1 = (SIMDVectorDouble{ ink.x, ink.y } * SIMDVectorDouble{ correction, correction });
-    const SIMDVectorDouble leftTopValue = ((SIMDVectorDouble{ x, y } + ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1)) - SIMDVectorDouble{ marginX, marginY });
-    const f64 left = leftTopValue.x;
-    const f64 top = leftTopValue.y;
-    const SIMDVectorDouble geometryPair4Operand0 = SIMDVectorDouble{ inkRight, inkBottom };
-    const SIMDVectorDouble geometryPair4Operand1 = (SIMDVectorDouble{ inkRight, inkBottom } * SIMDVectorDouble{ correction, correction });
-    const SIMDVectorDouble rightBottomValue = ((SIMDVectorDouble{ x, y } + ((geometryPair4Operand0 > geometryPair4Operand1) ? geometryPair4Operand0 : geometryPair4Operand1)) + SIMDVectorDouble{ marginX, marginY });
-    const f64 right = rightBottomValue.x;
-    const f64 bottom = rightBottomValue.y;
-    return IntersectBounds(left, top, right, bottom, clip);
+    const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0);
+    const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleSet(rasterMargin, rasterMargin, 0.0, 0.0), VectorDoubleDivide(VectorDoubleSet(0.5, 0.5, 0.0, 0.0), pixelScaleVector));
+    const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
+    const SIMDVectorDouble inkEnd = VectorDoubleAdd(inkOrigin, VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
+    const SIMDVectorDouble position = VectorDoubleAdd(VectorDoubleSet(topLeft.x, topLeft.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
+    const SIMDVectorDouble correctionVector = VectorDoubleSet(correction, correction, 0.0, 0.0);
+    const SIMDVectorDouble correctedOrigin = VectorDoubleMultiply(inkOrigin, correctionVector);
+    const SIMDVectorDouble minimumOrigin = VectorDoubleSelect(correctedOrigin, inkOrigin, VectorDoubleLess(inkOrigin, correctedOrigin));
+    const SIMDVectorDouble leftTop = VectorDoubleSubtract(VectorDoubleAdd(position, minimumOrigin), margin);
+    const SIMDVectorDouble correctedEnd = VectorDoubleMultiply(inkEnd, correctionVector);
+    const SIMDVectorDouble maximumEnd = VectorDoubleSelect(correctedEnd, inkEnd, VectorDoubleGreater(inkEnd, correctedEnd));
+    const SIMDVectorDouble rightBottom = VectorDoubleAdd(VectorDoubleAdd(position, maximumEnd), margin);
+    return IntersectBounds(VectorDoubleGetX(leftTop), VectorDoubleGetY(leftTop), VectorDoubleGetX(rightBottom), VectorDoubleGetY(rightBottom), clip);
 }
 
 Expected<Rect> TextGlyphVisibility::AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
@@ -136,13 +129,16 @@ Expected<Rect> TextGlyphVisibility::AtlasRectangle(const PlacedGlyph& glyph, con
     if(!IsFinite(record->planeLeft) || !IsFinite(record->planeTop) || !IsFinite(record->planeRight) || !IsFinite(record->planeBottom) || record->planeRight <= record->planeLeft || record->planeBottom <= record->planeTop)
         return MakeUnexpected(Failure{});
     const f64 scale = static_cast<f64>(fontSize) / atlas.unitsPerEm();
-    const SIMDVectorDouble xYValue =
-        ((SIMDVectorDouble{ static_cast<f64>(topLeft.x), static_cast<f64>(topLeft.y) } + SIMDVectorDouble{ glyph.position.x, glyph.position.y }) + (SIMDVectorDouble{ record->planeLeft, record->planeTop } * SIMDVectorDouble{ scale, scale }));
-    const f64 x = xYValue.x;
-    const f64 y = xYValue.y;
-    const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(record->planeRight), static_cast<f64>(record->planeBottom) } - SIMDVectorDouble{ record->planeLeft, record->planeTop }) * SIMDVectorDouble{ scale, scale });
-    const f64 width = widthHeightValue.x;
-    const f64 height = widthHeightValue.y;
+    const SIMDVectorDouble origin = VectorDoubleAdd(VectorDoubleSet(topLeft.x, topLeft.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
+    const SIMDVectorDouble planeOrigin = VectorDoubleSet(record->planeLeft, record->planeTop, 0.0, 0.0);
+    const SIMDVectorDouble scaleVector = VectorDoubleSet(scale, scale, 0.0, 0.0);
+    const SIMDVectorDouble xYValue = VectorDoubleMultiplyAddExpression(planeOrigin, scaleVector, origin);
+    const f64 x = VectorDoubleGetX(xYValue);
+    const f64 y = VectorDoubleGetY(xYValue);
+    const SIMDVectorDouble planeEnd = VectorDoubleSet(record->planeRight, record->planeBottom, 0.0, 0.0);
+    const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(VectorDoubleSubtract(planeEnd, planeOrigin), scaleVector);
+    const f64 width = VectorDoubleGetX(widthHeightValue);
+    const f64 height = VectorDoubleGetY(widthHeightValue);
     return MakeUiRect<UiRectPrecision::BoundedEndpoints>(x, y, width, height);
 }
 
@@ -153,27 +149,25 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(const PlacedGlyph& glyph, 
     if(record.pageIndex == s_GlyphAtlasNoPage){
         return Rect{};
     }
-    const SIMDVectorDouble origin = SIMDVectorDouble{ topLeft.x, topLeft.y } + SIMDVectorDouble{ glyph.position.x, glyph.position.y };
-    const SIMDVectorDouble bearing = SIMDVectorDouble{ static_cast<f64>(record.bearingX), static_cast<f64>(record.bearingY) } / VectorDoubleReplicate(rasterScale);
-    const SIMDVectorDouble positive = origin + bearing;
-    const SIMDVectorDouble negative = origin - bearing;
-    const f64 x = positive.x;
-    const f64 y = negative.y;
+    const SIMDVectorDouble origin = VectorDoubleAdd(VectorDoubleSet(topLeft.x, topLeft.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
+    const SIMDVectorDouble bearing = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(record.bearingX), static_cast<f64>(record.bearingY), 0.0, 0.0), VectorDoubleReplicate(rasterScale));
+    const SIMDVectorDouble positive = VectorDoubleAdd(origin, bearing);
+    const SIMDVectorDouble negative = VectorDoubleSubtract(origin, bearing);
+    const SIMDVectorDouble position = VectorDoubleSelect(positive, negative, s_DoubleSIMDMaskY);
     // FreeType has already rasterized this bitmap on an integer grid; align its texel edges to physical pixels.
-    const SIMDVectorDouble geometryPair5Operand0 = ((SIMDVectorDouble{ x, y } * SIMDVectorDouble{ pixelScale.x, pixelScale.y }) + SIMDVectorDouble{ 0.5, 0.5 });
-    const SIMDVectorDouble alignedXAlignedYValue = (VectorDoubleFloor(geometryPair5Operand0) / SIMDVectorDouble{ pixelScale.x, pixelScale.y, 1.0, 1.0 });
-    const f64 alignedX = alignedXAlignedYValue.x;
-    const f64 alignedY = alignedXAlignedYValue.y;
-    const SIMDVectorDouble size = SIMDVectorDouble{ record.pixels.width, record.pixels.height } / VectorDoubleReplicate(static_cast<f64>(rasterScale));
-    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(alignedX, alignedY, size.x, size.y);
+    const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 0.0, 0.0);
+    const SIMDVectorDouble biased = VectorDoubleMultiplyAddExpression(position, pixelScaleVector, VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
+    const SIMDVectorDouble aligned = VectorDoubleDivide(VectorDoubleFloor(biased), VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0));
+    const SIMDVectorDouble size = VectorDoubleDivide(VectorDoubleSet(record.pixels.width, record.pixels.height, 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(rasterScale)));
+    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoubleGetX(aligned), VectorDoubleGetY(aligned), VectorDoubleGetX(size), VectorDoubleGetY(size));
 }
 
 TextGlyphIntersection::Enum TextGlyphVisibility::Intersect(const Rect& rectangle, const Rect& clip){
     using namespace __hidden_ui_glyph_visibility;
     if(!IsValidUiRect(rectangle) || !IsValidUiRect(clip))
         return TextGlyphIntersection::Invalid;
-    const SIMDVectorDouble end = SIMDVectorDouble{ rectangle.x, rectangle.y } + SIMDVectorDouble{ rectangle.width, rectangle.height };
-    return IntersectBounds(rectangle.x, rectangle.y, end.x, end.y, clip);
+    const SIMDVectorDouble end = VectorDoubleAdd(VectorDoubleSet(rectangle.x, rectangle.y, 0.0, 0.0), VectorDoubleSet(rectangle.width, rectangle.height, 0.0, 0.0));
+    return IntersectBounds(rectangle.x, rectangle.y, VectorDoubleGetX(end), VectorDoubleGetY(end), clip);
 }
 
 

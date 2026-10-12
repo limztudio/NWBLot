@@ -54,16 +54,14 @@ Expected<ImageMetrics> ImageLayout::Measure(const ImageOptions& options, const U
     const auto sliceExtents = LoadUiSkinSliceExtents(region);
     if(!sliceExtents)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(region.rectangle.width), static_cast<f64>(region.rectangle.height) };
+    const SIMDVectorDouble geometryPair0Operand0 = VectorDoubleSet(static_cast<f64>(region.rectangle.width), static_cast<f64>(region.rectangle.height), 0.0, 0.0);
     const SIMDVectorDouble geometryPair0Operand1 = *sliceExtents;
-    const SIMDVectorDouble pixelWidthPixelHeightValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
-    const f64 pixelWidth = pixelWidthPixelHeightValue.x;
-    const f64 pixelHeight = pixelWidthPixelHeightValue.y;
-    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
-    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ pixelWidth, pixelHeight } / VectorDoubleReplicate(density));
-    const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 width = widthHeightValue.x;
-    const f64 height = widthHeightValue.y;
+    const SIMDVectorDouble pixelWidthPixelHeightValue = VectorDoubleSelect(geometryPair0Operand1, geometryPair0Operand0, VectorDoubleGreater(geometryPair0Operand0, geometryPair0Operand1));
+    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleZero(), pixelWidthPixelHeightValue, s_DoubleSIMDMaskXY), VectorDoubleReplicate(density));
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleGreater(geometryPair1Operand0, geometryPair1Operand1));
+    const f64 width = VectorDoubleGetX(widthHeightValue);
+    const f64 height = VectorDoubleGetY(widthHeightValue);
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     const ImageMetrics candidate{ { static_cast<f32>(width), static_cast<f32>(height) } };

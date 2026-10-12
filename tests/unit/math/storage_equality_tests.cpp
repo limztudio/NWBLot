@@ -9,10 +9,6 @@
 #include <cfenv>
 #include <new>
 
-#if defined(__SSE2__) || defined(_M_X64)
-#include <xmmintrin.h>
-#endif
-
 #if defined(__linux__)
 #include <sys/mman.h>
 #include <unistd.h>
@@ -109,7 +105,7 @@ void CheckNaNComparisonFlags(){
     EXPECT_EQ(std::fesetenv(&original), 0);
 }
 
-#if defined(__SSE2__) || defined(_M_X64)
+#if defined(NWB_HAS_SSE2)
 struct EqualityEnvironmentGuard{
     std::fenv_t original{};
     unsigned originalMxcsr = _mm_getcsr();
@@ -334,7 +330,7 @@ TEST(Math, StorageEqualityFallsBackForWideIntegralArrays){
 
 TEST(Math, StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags){
     using namespace __hidden_storage_equality_tests;
-#if defined(__SSE2__) || defined(_M_X64)
+#if defined(NWB_HAS_SSE2)
     CheckRawEqualityComparisonFlags<Float4U, 4u>();
     CheckRawEqualityComparisonFlags<Float33U, 9u>();
 #else

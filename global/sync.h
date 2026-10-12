@@ -5,20 +5,10 @@
 #pragma once
 
 
-#if defined(__SSE__) || defined(_M_IX86) || defined(_M_X64)
-#include <immintrin.h>
-#endif
+#include "simd/macro.h"
 
-#if defined(_MSC_VER)
-#if defined(_M_ARM64)
+#if defined(_MSC_VER) && defined(NWB_HAS_NEON64)
 #include <intrin.h>
-#endif
-
-#if defined(_M_IX86) || defined(_M_X64)
-#pragma intrinsic(__rdtsc)
-#endif
-
-#include <float.h>
 #endif
 
 #include <tbb/spin_mutex.h>
@@ -51,17 +41,17 @@ inline void YieldThread()noexcept{ std::this_thread::yield(); }
 
 
 inline void MachinePause(i32 delay)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS) && defined(_M_ARM64)
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64)
     while(delay > 0){
         __yield();
         --delay;
     }
-#elif defined(__ARM_ARCH_7A__) || defined(__aarch64__)
+#elif defined(__ARM_ARCH_7A__) || defined(NWB_HAS_NEON64)
     while(delay > 0){
         __asm__ __volatile__("yield");
         --delay;
     }
-#elif defined(__SSE__)
+#elif defined(NWB_HAS_SSE2)
     while(delay > 0){
         _mm_pause();
         --delay;

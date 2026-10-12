@@ -81,9 +81,13 @@ private:
     const f64 target = center + (down ? displacement : -displacement);
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
-    const SIMDVectorDouble minimumMaximumValue = (SIMDVectorDouble{ static_cast<f64>(first.top), static_cast<f64>(last.top) } + (SIMDVectorDouble{ static_cast<f64>(first.height), static_cast<f64>(last.height) } * SIMDVectorDouble{ 0.5, 0.5 }));
-    const f64 minimum = minimumMaximumValue.x;
-    const f64 maximum = minimumMaximumValue.y;
+    const SIMDVectorDouble minimumMaximumValue = VectorDoubleMultiplyAddExpression(
+        VectorDoubleSet(static_cast<f64>(first.height), static_cast<f64>(last.height), 0.0, 0.0),
+        VectorDoubleSet(0.5, 0.5, 0.0, 0.0),
+        VectorDoubleSet(static_cast<f64>(first.top), static_cast<f64>(last.top), 0.0, 0.0)
+    );
+    const f64 minimum = VectorDoubleGetX(minimumMaximumValue);
+    const f64 maximum = VectorDoubleGetY(minimumMaximumValue);
     if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
         return MakeUnexpected(Failure{});
     const Point point{ preferredX, static_cast<f32>(Clamp(target, minimum, maximum)) };

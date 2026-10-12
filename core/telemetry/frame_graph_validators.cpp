@@ -25,7 +25,7 @@ namespace __hidden_frame_graph_validators{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(__SSE2__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
 [[nodiscard]] NWB_INLINE bool HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
     using DurationBits = u64 __attribute__((ext_vector_type(4)));
     const DurationBits absoluteMask{ 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull };
@@ -39,7 +39,7 @@ namespace __hidden_frame_graph_validators{
 
 template<usize Count>
 [[nodiscard]] static bool DurationsAreOrdinary(const f64(&durations)[Count])noexcept{
-#if defined(__SSE2__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
     usize index = 0u;
     for(; index + 3u < Count; index += 4u){
         SIMDVectorDouble pack;
@@ -553,7 +553,7 @@ bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)no
 }
 
 bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
-#if defined(__SSE2__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
     const f64 durations[] = {
         statistics.compile.declarationSeconds,
         statistics.compile.analysisSeconds,
@@ -629,7 +629,7 @@ bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& stati
 }
 
 bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-#if defined(__SSE2__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
     const f64 durations[] = { statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds, statistics.submission.submissionSeconds, };
     if(!__hidden_frame_graph_validators::DurationsAreOrdinary(durations))
         return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics);
@@ -740,7 +740,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
 }
 
 bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-#if defined(__SSE2__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
     const f64 durations[] = {
         ownerStatistics.compile.declarationSeconds,
         ownerStatistics.compile.analysisSeconds,

@@ -36,7 +36,7 @@ NWB_IMPL_UI_BEGIN
     }
     else
         return MakeUnexpected(Failure{});
-    return SIMDVectorDouble{ static_cast<f64>(horizontal), static_cast<f64>(vertical) };
+    return VectorDoubleSet(static_cast<f64>(horizontal), static_cast<f64>(vertical), 0.0, 0.0);
 }
 
 

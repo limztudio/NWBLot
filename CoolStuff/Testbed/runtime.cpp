@@ -423,11 +423,11 @@ bool Project::mousePosUpdate(const f64 xpos, const f64 ypos){
         return false;
     }
 
-    const SIMDVectorDouble mousePosition = { xpos, ypos };
-    const SIMDVectorDouble previousMousePosition = { m_lastMouseX, m_lastMouseY };
-    const SIMDVectorDouble deltaPosition = mousePosition - previousMousePosition;
-    const f32 deltaX = static_cast<f32>(deltaPosition.x);
-    const f32 deltaY = static_cast<f32>(deltaPosition.y);
+    const SIMDVectorDouble mousePosition = VectorDoubleSet(xpos, ypos, 0.0, 0.0);
+    const SIMDVectorDouble previousMousePosition = VectorDoubleSet(m_lastMouseX, m_lastMouseY, 0.0, 0.0);
+    const SIMDVectorDouble deltaPosition = VectorDoubleSubtract(mousePosition, previousMousePosition);
+    const f32 deltaX = static_cast<f32>(VectorDoubleGetX(deltaPosition));
+    const f32 deltaY = static_cast<f32>(VectorDoubleGetY(deltaPosition));
     const SIMDVectorSingle mouseDelta = VectorSet(deltaX, deltaY, 0.0f, 0.0f);
     const SIMDVectorSingle pendingDelta = VectorAdd(VectorSet(m_pendingMouseDeltaX, m_pendingMouseDeltaY, 0.0f, 0.0f), mouseDelta);
     if(VectorIsFinite(mouseDelta, VectorComponentMask::s_XY) && VectorIsFinite(pendingDelta, VectorComponentMask::s_XY)){

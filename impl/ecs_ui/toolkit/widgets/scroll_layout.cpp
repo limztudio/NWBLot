@@ -26,16 +26,16 @@ namespace __hidden_ui_scroll_layout{
 
 
 [[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
-    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
-    const SIMDVectorDouble xYValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
-    const f64 x = xYValue.x;
-    const f64 y = xYValue.y;
-    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
-    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
-    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 right = rightBottomValue.x;
-    const f64 bottom = rightBottomValue.y;
+    const SIMDVectorDouble geometryPair0Operand0 = VectorDoubleSet(static_cast<f64>(lhs.x), static_cast<f64>(lhs.y), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair0Operand1 = VectorDoubleSet(static_cast<f64>(rhs.x), static_cast<f64>(rhs.y), 0.0, 0.0);
+    const SIMDVectorDouble xYValue = VectorDoubleSelect(geometryPair0Operand1, geometryPair0Operand0, VectorDoubleGreater(geometryPair0Operand0, geometryPair0Operand1));
+    const f64 x = VectorDoubleGetX(xYValue);
+    const f64 y = VectorDoubleGetY(xYValue);
+    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(lhs.x), static_cast<f64>(lhs.y), 0.0, 0.0), VectorDoubleSet(lhs.width, lhs.height, 0.0, 0.0));
+    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(rhs.x), static_cast<f64>(rhs.y), 0.0, 0.0), VectorDoubleSet(rhs.width, rhs.height, 0.0, 0.0));
+    const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleLess(geometryPair1Operand0, geometryPair1Operand1));
+    const f64 right = VectorDoubleGetX(rightBottomValue);
+    const f64 bottom = VectorDoubleGetY(rightBottomValue);
     return { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(Max(0.0, right - x)), static_cast<f32>(Max(0.0, bottom - y)) };
 }
 
@@ -68,16 +68,22 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(const Rect& bounds, const Rect
         || !IsFinite(rowHeight) || rowHeight <= 0.0f || !IsFinite(offset) || offset < 0.0
     )
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ 0.0, 0.0 };
-    const SIMDVectorDouble geometryPair2Operand1 = ((SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) } - SIMDVectorDouble{ padding.left, padding.top }) - SIMDVectorDouble{ padding.right, padding.bottom });
-    const SIMDVectorDouble availableWidthAvailableHeightValue = ((geometryPair2Operand0 > geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
-    const f64 availableWidth = availableWidthAvailableHeightValue.x;
-    const f64 availableHeight = availableWidthAvailableHeightValue.y;
-    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ static_cast<f64>(padding.left), static_cast<f64>(padding.top) };
-    const SIMDVectorDouble geometryPair3Operand1 = SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) };
-    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1));
-    const f64 x = xYValue.x;
-    const f64 y = xYValue.y;
+    const SIMDVectorDouble geometryPair2Operand0 = VectorDoubleZero();
+    const SIMDVectorDouble geometryPair2Operand1 = VectorDoubleSubtract(
+        VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0), VectorDoubleSet(padding.left, padding.top, 0.0, 0.0)),
+        VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0)
+    );
+    const SIMDVectorDouble availableWidthAvailableHeightValue = VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleGreater(geometryPair2Operand0, geometryPair2Operand1));
+    const f64 availableWidth = VectorDoubleGetX(availableWidthAvailableHeightValue);
+    const f64 availableHeight = VectorDoubleGetY(availableWidthAvailableHeightValue);
+    const SIMDVectorDouble geometryPair3Operand0 = VectorDoubleSet(static_cast<f64>(padding.left), static_cast<f64>(padding.top), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair3Operand1 = VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0);
+    const SIMDVectorDouble xYValue = VectorDoubleAdd(
+        VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0),
+        VectorDoubleSelect(geometryPair3Operand1, geometryPair3Operand0, VectorDoubleLess(geometryPair3Operand0, geometryPair3Operand1))
+    );
+    const f64 x = VectorDoubleGetX(xYValue);
+    const f64 y = VectorDoubleGetY(xYValue);
     ScrollPlacement candidate;
     candidate.bounds = bounds;
     candidate.rowCount = rowCount;

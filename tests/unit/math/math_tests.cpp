@@ -78,6 +78,41 @@ TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
     }
 }
 
+TEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes){
+    volatile u32 singleBits[][4]{
+        { 0u, 0x80000000u, 0x7FC12345u, 0x40E00000u },
+        { 0x80000000u, 0u, 0x40800000u, 0x7FC56789u },
+        { 0x7FC12345u, 0xFFC12345u, 0x7F800000u, 0xFF800000u },
+        { 0x7FC56789u, 0xFFC56789u, 0x7F800000u, 0xFF800000u }
+    };
+    volatile u64 doubleBits[][4]{
+        { 0u, 0x8000000000000000u, 0x7FF8123456789ABCu, 0x401C000000000000u },
+        { 0x8000000000000000u, 0u, 0x4010000000000000u, 0x7FF8ABCDEF012345u },
+        { 0x7FF8123456789ABCu, 0xFFF8123456789ABCu, 0x7FF0000000000000u, 0xFFF0000000000000u },
+        { 0x7FF8ABCDEF012345u, 0xFFF8ABCDEF012345u, 0x7FF0000000000000u, 0xFFF0000000000000u }
+    };
+    for(usize pair = 0u; pair < LengthOf(singleBits); pair += 2u){
+        for(const bool reverse : { false, true }){
+            const usize firstRow = pair + (reverse ? 1u : 0u);
+            const usize secondRow = pair + (reverse ? 0u : 1u);
+            const SIMDVectorSingle first = VectorSetInt(singleBits[firstRow][0], singleBits[firstRow][1], singleBits[firstRow][2], singleBits[firstRow][3]);
+            const SIMDVectorSingle second = VectorSetInt(singleBits[secondRow][0], singleBits[secondRow][1], singleBits[secondRow][2], singleBits[secondRow][3]);
+            const SIMDVectorSingle minimum = VectorMin(first, second);
+            const SIMDVectorSingle maximum = VectorMax(first, second);
+            const SIMDVectorDouble firstDouble = VectorDoubleSetInt(doubleBits[firstRow][0], doubleBits[firstRow][1], doubleBits[firstRow][2], doubleBits[firstRow][3]);
+            const SIMDVectorDouble secondDouble = VectorDoubleSetInt(doubleBits[secondRow][0], doubleBits[secondRow][1], doubleBits[secondRow][2], doubleBits[secondRow][3]);
+            const SIMDVectorDouble minimumDouble = VectorDoubleMin(firstDouble, secondDouble);
+            const SIMDVectorDouble maximumDouble = VectorDoubleMax(firstDouble, secondDouble);
+            for(usize lane = 0u; lane < 4u; ++lane){
+                EXPECT_EQ(VectorGetIntByIndex(minimum, lane), singleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+                EXPECT_EQ(VectorGetIntByIndex(maximum, lane), singleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+                EXPECT_EQ(VectorDoubleGetIntByIndex(minimumDouble, lane), doubleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+                EXPECT_EQ(VectorDoubleGetIntByIndex(maximumDouble, lane), doubleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+            }
+        }
+    }
+}
+
 TEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions){
 #if defined(NWB_HAS_NEON) && !defined(NWB_HAS_NEON64)
     GTEST_SKIP() << "This case requires native vector square root and division.";

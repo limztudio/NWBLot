@@ -7,8 +7,6 @@
 
 #include "pipeline.h"
 
-#include <global/simd/vector.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -217,8 +215,7 @@ struct TimerQueryResult{
     }
     [[nodiscard]] f64 durationSeconds()const noexcept{
         const f64 ticks = static_cast<f64>(durationTicks());
-        const SIMDVectorDouble seconds = SIMDVectorDouble{ ticks, ticks } * SIMDVectorDouble{ secondsPerTick, secondsPerTick };
-        return seconds.x;
+        return ticks * secondsPerTick;
     }
     [[nodiscard]] bool hasComparableRange()const noexcept{
         return valid() && comparableAcrossSubmissions && timestampValidBits == s_FullWidthBits && physicalQueue.valid() && beginTicks <= endTicks;

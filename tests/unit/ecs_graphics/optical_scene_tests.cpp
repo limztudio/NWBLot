@@ -178,6 +178,39 @@ TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslatio
     }
 }
 
+TEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure){
+    volatile f32 inputs[] = { -0x1p+24f, 0x1.000002p+24f, 0x1p+24f, 1.0f, 0x1.fffffep-1f, };
+    Float34U transform{};
+    transform._11 = inputs[0u];
+    transform._12 = inputs[1u];
+    transform._21 = inputs[0u];
+    transform._22 = inputs[2u];
+    transform._23 = inputs[3u];
+    transform._31 = inputs[2u];
+    transform._32 = inputs[0u];
+    transform._33 = inputs[2u];
+    transform._34 = inputs[0u];
+    const Float3U point(inputs[3u], inputs[4u], inputs[3u]);
+    const auto bounds = ComputeOpticalWorldBounds(transform, point, point);
+    ASSERT_TRUE(bounds);
+
+    // X distinguishes fused cancellation, while Z loses its intermediate unit before the final translation; reassociation changes the enclosed point.
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+    constexpr f64 s_ExpectedX = 0x1.fffffcp-1;
+#else
+    constexpr f64 s_ExpectedX = 0.0;
+#endif
+    EXPECT_LT(static_cast<f64>(bounds->minimum.x), s_ExpectedX);
+    EXPECT_GT(static_cast<f64>(bounds->maximum.x), s_ExpectedX);
+    for(usize lane = 1u; lane < 3u; ++lane){
+        EXPECT_LT(bounds->minimum.raw[lane], 0.0f);
+        EXPECT_GT(bounds->maximum.raw[lane], 0.0f);
+        EXPECT_LT(Abs(bounds->minimum.raw[lane]), 0x1p-16f);
+        EXPECT_LT(Abs(bounds->maximum.raw[lane]), 0x1p-16f);
+    }
+    EXPECT_LT(bounds->maximum.x - bounds->minimum.x, 0x1p-16f);
+}
+
 TEST(OpticalScene, NonfiniteAffineBoundsNeverPublishAPartialResult){
     Float34U transform{};
     transform._11 = 1.f;

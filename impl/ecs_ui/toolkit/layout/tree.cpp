@@ -49,9 +49,12 @@ Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding)noexcept{
     const SIMDVectorSingle firstInset = VectorSelect(rectangleSize, paddingStart, VectorLess(paddingStart, rectangleSize));
     const f32 left = VectorGetX(firstInset);
     const f32 top = VectorGetY(firstInset);
-    const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(rectangle.width), static_cast<f64>(rectangle.height) } - SIMDVectorDouble{ padding.left, padding.top }) - SIMDVectorDouble{ padding.right, padding.bottom });
-    const f64 width = widthHeightValue.x;
-    const f64 height = widthHeightValue.y;
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSubtract(
+        VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(rectangle.width), static_cast<f64>(rectangle.height), 0.0, 0.0), VectorDoubleSet(padding.left, padding.top, 0.0, 0.0)),
+        VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0)
+    );
+    const f64 width = VectorDoubleGetX(widthHeightValue);
+    const f64 height = VectorDoubleGetY(widthHeightValue);
     const SIMDVectorSingle origin = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(left, top, 0.0f, 0.0f));
     return { VectorGetX(origin), VectorGetY(origin), static_cast<f32>(Max(0.0, width)), static_cast<f32>(Max(0.0, height)) };
 }

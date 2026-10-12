@@ -4,7 +4,6 @@
 
 #include "popup.h"
 
-#include <global/simd/vector.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
@@ -111,18 +110,18 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
         x -= static_cast<f64>(options.gap) + width;
         break;
     case PopupPlacementSide::Center:{
-        const SIMDVectorDouble centered = (SIMDVectorDouble{ display.logicalWidth, display.logicalHeight } - SIMDVectorDouble{ width, height }) * SIMDVectorDouble{ 0.5, 0.5 };
-        x = centered.x;
-        y = centered.y;
+        const SIMDVectorDouble centered = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0)), VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
+        x = VectorDoubleGetX(centered);
+        y = VectorDoubleGetY(centered);
         break;
     }
     }
-    const SIMDVectorDouble origin = SIMDVectorDouble{ x, y };
-    const SIMDVectorDouble maximum = SIMDVectorDouble{ display.logicalWidth, display.logicalHeight } - SIMDVectorDouble{ width, height };
-    const SIMDVectorDouble zero = { 0.0, 0.0 };
-    const SIMDVectorDouble constrained = (origin > zero) ? ((origin > maximum) ? maximum : origin) : zero;
-    x = constrained.x;
-    y = constrained.y;
+    const SIMDVectorDouble origin = VectorDoubleSet(x, y, 0.0, 0.0);
+    const SIMDVectorDouble maximum = VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0));
+    const SIMDVectorDouble zero = VectorDoubleZero();
+    const SIMDVectorDouble constrained = VectorDoubleSelect(zero, VectorDoubleSelect(origin, maximum, VectorDoubleGreater(origin, maximum)), VectorDoubleGreater(origin, zero));
+    x = VectorDoubleGetX(constrained);
+    y = VectorDoubleGetY(constrained);
     PopupPlacement candidate;
     candidate.bounds = { static_cast<f32>(x), static_cast<f32>(y), width, height };
     candidate.viewport = { 0.0f, 0.0f, display.logicalWidth, display.logicalHeight };

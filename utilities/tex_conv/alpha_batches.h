@@ -26,9 +26,9 @@ namespace AlphaBatchDetail{
 
 
 [[nodiscard]] inline bool TrapsMasked()noexcept{
-#if defined(NWB_HAS_SSE4)
+#if defined(NWB_HAS_SSE2)
     return (_mm_getcsr() & 0x1f80u) == 0x1f80u;
-#elif defined(NWB_HAS_NEON) && (defined(__aarch64__) || defined(_M_ARM64))
+#elif defined(NWB_HAS_NEON64)
     return (__builtin_arm_rsr64("fpcr") & 0x9f00u) == 0u;
 #else
     return false;

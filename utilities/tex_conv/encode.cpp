@@ -74,8 +74,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
 [[nodiscard]] static bool ApplyAlphaSource(const AlphaSource& alphaSource, ImagePlanes& inOutPlanes){
     if(alphaSource.mode == AlphaSourceMode::Original)
         return true;
@@ -248,7 +246,7 @@ private:
     const SIMDVectorSingle roundedRgb = VectorTruncate(VectorAdd(scaledRgb, VectorReplicate(s_BasisColorChannelRoundingBias)));
     const SIMDVectorSingle alphaLane = VectorSelect(VectorZero(), alphaSum, s_SIMDMaskW);
     const SIMDVectorSingle averagedAlpha = VectorDivide(VectorAdd(alphaLane, VectorSelect(VectorZero(), VectorReplicate(static_cast<f32>(count) * 0.5f), s_SIMDMaskW)), VectorReplicate(static_cast<f32>(count)));
-    return VectorSelect(VectorSet(VectorGetX(roundedRgb), VectorGetY(roundedRgb), VectorGetZ(roundedRgb), 0.0f), VectorTruncate(averagedAlpha), s_SIMDMaskW);
+    return VectorSelect(roundedRgb, VectorTruncate(averagedAlpha), s_SIMDMaskW);
 }
 
 [[nodiscard]] static Expected<ImagePlanes> GenerateNextVolumeMip(const ImagePlanes& sourcePlanes, const bool srgb){

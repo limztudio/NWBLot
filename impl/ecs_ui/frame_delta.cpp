@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "frame_delta.h"
 
 #include <global/simplemath.h>
@@ -22,7 +20,7 @@ void UiFrameDelta::add(const f32 deltaSeconds)noexcept{
     if(!IsFinite(deltaSeconds) || deltaSeconds < 0.0f)
         return;
     const f64 maximum = static_cast<f64>(Limit<f32>::s_Max);
-    m_pendingSeconds = NumericSimd::Min(maximum, NumericSimd::Add(m_pendingSeconds, static_cast<f64>(deltaSeconds)));
+    m_pendingSeconds = Min(maximum, (m_pendingSeconds + static_cast<f64>(deltaSeconds)));
 }
 
 f32 UiFrameDelta::consume()noexcept{

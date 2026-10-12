@@ -134,8 +134,8 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
         const SIMDVectorSingle p0 = LoadFloat(rebuildVertices[i0].position);
         const SIMDVectorSingle p1 = LoadFloat(rebuildVertices[i1].position);
         const SIMDVectorSingle p2 = LoadFloat(rebuildVertices[i2].position);
-        const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
-        const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
+        const SIMDVectorDouble areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
+        const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal));
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(::s_FrameDirectionEpsilon))
             continue;
 

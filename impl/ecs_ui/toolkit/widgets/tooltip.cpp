@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "tooltip.h"
 
 #include <global/simplemath.h>
@@ -91,7 +89,7 @@ bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u
     const bool activeHover = options.enabled && hovered;
     f64 elapsed = 0.0;
     if(activeHover && state.m_hovered && sameBinding && sameOptions)
-        elapsed = NumericSimd::Min(NumericSimd::Add(state.m_elapsed, static_cast<f64>(deltaSeconds)), static_cast<f64>(options.delaySeconds));
+        elapsed = Min((state.m_elapsed + static_cast<f64>(deltaSeconds)), static_cast<f64>(options.delaySeconds));
     const bool visible = activeHover && elapsed >= static_cast<f64>(options.delaySeconds);
     if(!sameBinding || !sameOptions || state.m_hovered != activeHover || state.m_elapsed != elapsed || state.m_visible != visible){
         state.advanceRevision();

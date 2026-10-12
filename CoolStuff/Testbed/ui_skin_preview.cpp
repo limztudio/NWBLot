@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "ui_skin_preview.h"
 #include "project.h"
 
@@ -112,11 +110,11 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Co
 }
 
 void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
-    const f32 x = NumericSimd::Max(__hidden_ui_skin_preview::s_Margin, NumericSimd::Subtract(NumericSimd::Subtract(context.display.logicalWidth, __hidden_ui_skin_preview::s_PanelWidth), __hidden_ui_skin_preview::s_Margin));
+    const f32 x = Max(__hidden_ui_skin_preview::s_Margin, ((context.display.logicalWidth - __hidden_ui_skin_preview::s_PanelWidth) - __hidden_ui_skin_preview::s_Margin));
     const f32 y = __hidden_ui_skin_preview::s_Margin;
     m_widgets.paint(context);
     const auto gallery = UiWidgetGallery::LayoutBounds(context.display);
-    if(gallery.y < NumericSimd::Add(NumericSimd::Add(y, __hidden_ui_skin_preview::s_PanelHeight), 12.0f) || x < 390.0f)
+    if(gallery.y < ((y + __hidden_ui_skin_preview::s_PanelHeight) + 12.0f) || x < 390.0f)
         return;
     if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, x, y)){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));

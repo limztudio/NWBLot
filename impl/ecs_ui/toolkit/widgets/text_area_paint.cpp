@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "../builder.h"
 
 #include <global/simd/vector_arithmetic.h>
@@ -27,7 +25,7 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
         return false;
     TextAreaState& state = *frame.state;
     const Rect clip = visibleClip(box.clip);
-    const f32 caretWidth = NumericSimd::Divide(1.0f, m_paint.displayMetrics().pixelScaleX);
+    const f32 caretWidth = (1.0f / m_paint.displayMetrics().pixelScaleX);
     const auto viewport = ScrollbarLayout::Calculate(box.rectangle, clip, item.padding, item.editView.layout().measure(), caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
     if(!viewport)
         return false;

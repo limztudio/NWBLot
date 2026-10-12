@@ -6,7 +6,6 @@
 
 #include <core/common/log.h>
 
-#include <global/simd/vector.h>
 #include <global/simd/vector_arithmetic.h>
 
 #include <ft2build.h>
@@ -205,13 +204,15 @@ private:
         FT_Outline_Get_CBox(&slot->outline, &box);
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
         const f64 scale = static_cast<f64>(fontSize) / m_face->units_per_EM;
-        const SIMDVectorDouble leftTopValue = ((SIMDVectorDouble{ static_cast<f64>(box.xMin), -static_cast<f64>(box.yMax) } - SIMDVectorDouble{ 1.0, 1.0 }) * SIMDVectorDouble{ scale, scale });
-        const f64 left = leftTopValue.x;
-        const f64 top = leftTopValue.y;
-        const SIMDVectorDouble widthHeightValue =
-            (((SIMDVectorDouble{ static_cast<f64>(box.xMax), static_cast<f64>(box.yMax) } - SIMDVectorDouble{ static_cast<f64>(box.xMin), static_cast<f64>(box.yMin) }) + SIMDVectorDouble{ 2.0, 2.0 }) * SIMDVectorDouble{ scale, scale });
-        const f64 width = widthHeightValue.x;
-        const f64 height = widthHeightValue.y;
+        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMin), -static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(1.0, 1.0, 0.0, 0.0)), VectorDoubleSet(scale, scale, 0.0, 0.0));
+        const f64 left = VectorDoubleGetX(leftTopValue);
+        const f64 top = VectorDoubleGetY(leftTopValue);
+        const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(
+            VectorDoubleAdd(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMax), static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMin), 0.0, 0.0)), VectorDoubleSet(2.0, 2.0, 0.0, 0.0)),
+            VectorDoubleSet(scale, scale, 0.0, 0.0)
+        );
+        const f64 width = VectorDoubleGetX(widthHeightValue);
+        const f64 height = VectorDoubleGetY(widthHeightValue);
         const f64 limit = Limit<f32>::s_Max;
         if(!IsFinite(left) || !IsFinite(top) || !IsFinite(width) || !IsFinite(height) || Abs(left) > limit || Abs(top) > limit || width < 0.0 || height < 0.0 || width > limit || height > limit || Abs(left + width) > limit || Abs(top + height) > limit)
             return {};

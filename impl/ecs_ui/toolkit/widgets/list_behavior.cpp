@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "list.h"
 
 #include <global/simplemath.h>
@@ -85,14 +83,14 @@ struct KeyResolution{
 [[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const ControlAction& action)noexcept{
     if(!IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0 || !IsFinite(action.maximum) || action.maximum < 0.0)
         return MakeUnexpected(Failure{});
-    f64 candidate = NumericSimd::Min(current, action.maximum);
+    f64 candidate = Min(current, action.maximum);
     if(action.delta > 0.0)
-        candidate = action.delta >= NumericSimd::Divide(candidate, action.step) ? 0.0 : (SIMDVectorDouble{ candidate, candidate } - SIMDVectorDouble{ action.delta, action.delta } * SIMDVectorDouble{ action.step, action.step }).x;
+        candidate = action.delta >= (candidate / action.step) ? 0.0 : (candidate - action.delta * action.step);
     else if(action.delta < 0.0){
-        const f64 remaining = NumericSimd::Subtract(action.maximum, candidate);
-        candidate = NumericSimd::Negate(action.delta) >= NumericSimd::Divide(remaining, action.step) ? action.maximum : (SIMDVectorDouble{ candidate, candidate } + -SIMDVectorDouble{ action.delta, action.delta } * SIMDVectorDouble{ action.step, action.step }).x;
+        const f64 remaining = (action.maximum - candidate);
+        candidate = (-action.delta) >= (remaining / action.step) ? action.maximum : (candidate + -action.delta * action.step);
     }
-    candidate = NumericSimd::Clamp(candidate, 0.0, action.maximum);
+    candidate = Clamp(candidate, 0.0, action.maximum);
     if(!IsFinite(candidate))
         return MakeUnexpected(Failure{});
     return candidate;
@@ -212,8 +210,8 @@ bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source,
     const auto resolved = ResolveKey(source, source.rowCount(), state.m_cursor);
     if(!resolved || !resolved->present)
         return false;
-    const f64 start = NumericSimd::Multiply(static_cast<f64>(resolved->index), static_cast<f64>(rowHeight));
-    const f64 end = NumericSimd::Add(start, static_cast<f64>(rowHeight));
+    const f64 start = (static_cast<f64>(resolved->index) * static_cast<f64>(rowHeight));
+    const f64 end = (start + static_cast<f64>(rowHeight));
     if(!IsFinite(start) || !IsFinite(end) || end <= start || !SourceMatches(source, state.m_sourceGeneration, state.m_sourceRevision) || state.m_inputGeneration != inputGeneration || !state.m_scroll.ensureVisible(start, end, viewportHeight))
         return false;
     state.m_ensureCursor = false;

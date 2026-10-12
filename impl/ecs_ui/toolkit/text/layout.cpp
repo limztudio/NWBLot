@@ -4,7 +4,6 @@
 
 #include "layout.h"
 
-#include <global/simd/vector.h>
 #include <global/simd/vector_arithmetic.h>
 
 
@@ -32,9 +31,9 @@ namespace __hidden_ui_text_layout{
 }
 
 [[nodiscard]] static Expected<Rect> TranslateInk(const Point& position, const Rect& ink)noexcept{
-    const SIMDVectorDouble leftTopValue = (SIMDVectorDouble{ static_cast<f64>(position.x), static_cast<f64>(position.y) } + SIMDVectorDouble{ ink.x, ink.y });
-    const f64 left = leftTopValue.x;
-    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble leftTopValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(position.x), static_cast<f64>(position.y), 0.0, 0.0), VectorDoubleSet(ink.x, ink.y, 0.0, 0.0));
+    const f64 left = VectorDoubleGetX(leftTopValue);
+    const f64 top = VectorDoubleGetY(leftTopValue);
     if(!FitsCoordinate(left) || !FitsCoordinate(top) || !FitsCoordinate(left + ink.width) || !FitsCoordinate(top + ink.height))
         return MakeUnexpected(Failure{});
     const Rect rectangle{ static_cast<f32>(left), static_cast<f32>(top), ink.width, ink.height };
@@ -87,16 +86,16 @@ namespace __hidden_ui_text_layout{
         hasInk = true;
         return true;
     }
-    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) };
-    const SIMDVectorDouble geometryPair1Operand1 = SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) };
-    const SIMDVectorDouble leftTopValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 left = leftTopValue.x;
-    const f64 top = leftTopValue.y;
-    const SIMDVectorDouble geometryPair2Operand0 = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + SIMDVectorDouble{ bounds.width, bounds.height });
-    const SIMDVectorDouble geometryPair2Operand1 = (SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) } + SIMDVectorDouble{ ink.width, ink.height });
-    const SIMDVectorDouble rightBottomValue = ((geometryPair2Operand0 > geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
-    const f64 right = rightBottomValue.x;
-    const f64 bottom = rightBottomValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleSet(static_cast<f64>(ink.x), static_cast<f64>(ink.y), 0.0, 0.0);
+    const SIMDVectorDouble leftTopValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleLess(geometryPair1Operand0, geometryPair1Operand1));
+    const f64 left = VectorDoubleGetX(leftTopValue);
+    const f64 top = VectorDoubleGetY(leftTopValue);
+    const SIMDVectorDouble geometryPair2Operand0 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0), VectorDoubleSet(bounds.width, bounds.height, 0.0, 0.0));
+    const SIMDVectorDouble geometryPair2Operand1 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(ink.x), static_cast<f64>(ink.y), 0.0, 0.0), VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
+    const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleGreater(geometryPair2Operand0, geometryPair2Operand1));
+    const f64 right = VectorDoubleGetX(rightBottomValue);
+    const f64 bottom = VectorDoubleGetY(rightBottomValue);
     if(!FitsCoordinate(right - left) || !FitsCoordinate(bottom - top))
         return false;
     const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(right - left), static_cast<f32>(bottom - top) };
@@ -234,9 +233,9 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         line.glyphCount = static_cast<u32>(run.glyphs.size());
         line.firstCluster = static_cast<u32>(result.m_clusters.size());
         line.top = result.m_measure.y;
-        const SIMDVectorDouble baselineHeightValue = (SIMDVectorDouble{ static_cast<f64>(line.top), (static_cast<f64>(run.metrics.ascender) + run.metrics.descender) } + SIMDVectorDouble{ run.metrics.ascender, run.metrics.lineGap });
-        const f64 baseline = baselineHeightValue.x;
-        const f64 height = baselineHeightValue.y;
+        const SIMDVectorDouble baselineHeightValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(line.top), (static_cast<f64>(run.metrics.ascender) + run.metrics.descender), 0.0, 0.0), VectorDoubleSet(run.metrics.ascender, run.metrics.lineGap, 0.0, 0.0));
+        const f64 baseline = VectorDoubleGetX(baselineHeightValue);
+        const f64 height = VectorDoubleGetY(baselineHeightValue);
         if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(line.top + height))
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.baseline = static_cast<f32>(baseline);
@@ -251,9 +250,9 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             const u32 firstGlyph = static_cast<u32>(result.m_glyphs.size());
             for(usize index = first; index < end; ++index){
                 const ShapedGlyph& glyph = run.glyphs[index];
-                const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(pen), static_cast<f64>(line.baseline) } + SIMDVectorDouble{ glyph.offset.x, glyph.offset.y });
-                const f64 x = xYValue.x;
-                const f64 y = xYValue.y;
+                const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(pen), static_cast<f64>(line.baseline), 0.0, 0.0), VectorDoubleSet(glyph.offset.x, glyph.offset.y, 0.0, 0.0));
+                const f64 x = VectorDoubleGetX(xYValue);
+                const f64 y = VectorDoubleGetY(xYValue);
                 const f64 nextPen = static_cast<f64>(pen) + glyph.advance.x;
                 if(!__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y) || !__hidden_ui_text_layout::FitsCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);

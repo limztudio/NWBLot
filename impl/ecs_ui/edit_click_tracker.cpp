@@ -22,13 +22,14 @@ UiEditClickKind::Enum UiEditClickTracker::press(const UiTextEditOwner& owner, co
         cancel();
         return UiEditClickKind::Caret;
     }
-    const SIMDVectorDouble dxDyValue = (SIMDVectorDouble{ static_cast<f64>(position.x), static_cast<f64>(position.y) } - SIMDVectorDouble{ static_cast<f64>(m_position.x), static_cast<f64>(m_position.y) });
-    const f64 dx = dxDyValue.x;
-    const f64 dy = dxDyValue.y;
+    const SIMDVectorDouble dxDyValue = VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(position.x), static_cast<f64>(position.y), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_position.x), static_cast<f64>(m_position.y), 0.0, 0.0));
+    const SIMDVectorDouble horizontal = VectorDoubleSelect(VectorDoubleZero(), dxDyValue, s_DoubleSIMDMaskX);
+    const SIMDVectorDouble vertical = VectorDoubleSwizzle<1, 2, 3, 3>(dxDyValue);
+    const SIMDVectorDouble distanceSquared = VectorDoubleMultiplyAddExpression(horizontal, horizontal, VectorDoubleMultiply(vertical, vertical));
     const bool second = m_released && m_clickCount == 1u && owner == m_owner && popup == m_popup
         && revision == m_revision && externalRevision == m_externalRevision
         && timestampMs >= m_pressTimestampMs && timestampMs - m_pressTimestampMs <= 500u
-        && dx * dx + dy * dy <= 16.0;
+        && VectorDoubleGetX(distanceSquared) <= 16.0;
     m_owner = owner;
     m_popup = popup;
     m_position = position;
@@ -48,10 +49,11 @@ void UiEditClickTracker::move(const Ui::Point position)noexcept{
         cancel();
         return;
     }
-    const SIMDVectorDouble dxDyValue = (SIMDVectorDouble{ static_cast<f64>(position.x), static_cast<f64>(position.y) } - SIMDVectorDouble{ static_cast<f64>(m_position.x), static_cast<f64>(m_position.y) });
-    const f64 dx = dxDyValue.x;
-    const f64 dy = dxDyValue.y;
-    if(dx * dx + dy * dy > 16.0)
+    const SIMDVectorDouble dxDyValue = VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(position.x), static_cast<f64>(position.y), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_position.x), static_cast<f64>(m_position.y), 0.0, 0.0));
+    const SIMDVectorDouble horizontal = VectorDoubleSelect(VectorDoubleZero(), dxDyValue, s_DoubleSIMDMaskX);
+    const SIMDVectorDouble vertical = VectorDoubleSwizzle<1, 2, 3, 3>(dxDyValue);
+    const SIMDVectorDouble distanceSquared = VectorDoubleMultiplyAddExpression(horizontal, horizontal, VectorDoubleMultiply(vertical, vertical));
+    if(VectorDoubleGetX(distanceSquared) > 16.0)
         cancel();
 }
 

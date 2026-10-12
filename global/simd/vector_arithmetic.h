@@ -409,6 +409,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleScale(SIMDVectorDouble val
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Min/max select the second operand for equal or unordered lanes.
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMin(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(
@@ -416,7 +417,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMin(SIMDVectorSingle v0, SIMDVec
         VectorGetW(v0) < VectorGetW(v1) ? VectorGetW(v0) : VectorGetW(v1)
     );
 #elif defined(NWB_HAS_NEON)
-    return vminq_f32(v0, v1);
+    return vbslq_f32(vcltq_f32(v0, v1), v0, v1);
 #else
     return _mm_min_ps(v0, v1);
 #endif
@@ -445,7 +446,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMax(SIMDVectorSingle v0, SIMDVec
         VectorGetW(v0) > VectorGetW(v1) ? VectorGetW(v0) : VectorGetW(v1)
     );
 #elif defined(NWB_HAS_NEON)
-    return vmaxq_f32(v0, v1);
+    return vbslq_f32(vcgtq_f32(v0, v1), v0, v1);
 #else
     return _mm_max_ps(v0, v1);
 #endif

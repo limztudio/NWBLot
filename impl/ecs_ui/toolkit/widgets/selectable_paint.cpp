@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "selectable_paint.h"
 #include "../builder.h"
 
@@ -37,7 +35,7 @@ bool SelectablePainter::Paint(
     bool painted = paint.drawRegion(region->name, bounds);
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
-    const f32 verticalOffset = NumericSimd::Max(0.0f, NumericSimd::Multiply(NumericSimd::Subtract(bounds.height, layout.measure().y), 0.5f));
+    const f32 verticalOffset = Max(0.0f, ((bounds.height - layout.measure().y) * 0.5f));
     const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.x, bounds.y), VectorSet(style.padding.left, verticalOffset, style.padding.left, verticalOffset));
     const Point origin{ VectorGetX(textOrigin), VectorGetY(textOrigin) };
     if(painted)

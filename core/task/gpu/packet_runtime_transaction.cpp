@@ -11,7 +11,6 @@
 #include <core/graphics/gpu_timing.h>
 #include <global/exception.h>
 #include <global/termination.h>
-#include <core/perf/timing_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -384,7 +383,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
     m_submissionStatistics.timelineWaitCount += nativeSubmissionInfo.timelineWaitCount;
     m_submissionStatistics.mergedTimelineWaitCount += nativeSubmissionInfo.mergedTimelineWaitCount;
     m_submissionStatistics.inheritedTimelineWaitElisionCount += nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
-    m_submissionStatistics.submissionSeconds = Perf::AddTimingSeconds(m_submissionStatistics.submissionSeconds, nativeSubmissionInfo.submissionSeconds);
+    m_submissionStatistics.submissionSeconds += nativeSubmissionInfo.submissionSeconds;
     if(packet.joinsAcceptedQueueFrontier)
         ++m_submissionStatistics.acceptedFrontierSubmissionCount;
     if(packet.isRecoverySubmission)

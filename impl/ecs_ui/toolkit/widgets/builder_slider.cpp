@@ -4,7 +4,6 @@
 
 #include "../builder.h"
 
-#include <global/simd/vector.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -28,15 +27,15 @@ namespace __hidden_builder_slider{
 [[nodiscard]] static Expected<Point> MinimumSize(const UiSkinRegion& region, const f32 density)noexcept{
     if(!IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble horizontalVerticalValue =
-        (SIMDVectorDouble{ static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) } / VectorDoubleReplicate(density));
-    const f64 horizontal = horizontalVerticalValue.x;
-    const f64 vertical = horizontalVerticalValue.y;
-    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
-    const SIMDVectorDouble geometryPair1Operand1 = SIMDVectorDouble{ horizontal, vertical };
-    const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 width = widthHeightValue.x;
-    const f64 height = widthHeightValue.y;
+    const SIMDVectorDouble horizontalVerticalValue = VectorDoubleDivide(
+        VectorDoubleSet(static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom), 0.0, 0.0),
+        VectorDoubleReplicate(density)
+    );
+    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleSelect(VectorDoubleZero(), horizontalVerticalValue, s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleGreater(geometryPair1Operand0, geometryPair1Operand1));
+    const f64 width = VectorDoubleGetX(widthHeightValue);
+    const f64 height = VectorDoubleGetY(widthHeightValue);
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     return Point{ static_cast<f32>(width), static_cast<f32>(height) };

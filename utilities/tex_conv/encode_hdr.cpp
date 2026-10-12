@@ -229,17 +229,15 @@ namespace EncodeBackendDetail{
                 SIMDVectorSingle sum = VectorZero();
                 for(const basisu::imagef& filteredPlane : filteredPlanes){
                     const basisu::vec4F& sourceColor = filteredPlane(x, y);
-                    const Float4 sourceTexel(sourceColor[0u], sourceColor[1u], sourceColor[2u], sourceColor[3u]);
-                    sum = VectorAdd(sum, LoadFloat(sourceTexel));
+                    sum = VectorAdd(sum, VectorSet(sourceColor[0u], sourceColor[1u], sourceColor[2u], sourceColor[3u]));
                 }
 
-                Float4 averageTexel = {};
-                StoreFloat(VectorScale(sum, 1.0f / static_cast<f32>(filteredPlaneCount)), averageTexel);
+                const SIMDVectorSingle average = VectorScale(sum, 1.0f / static_cast<f32>(filteredPlaneCount));
                 basisu::vec4F& targetColor = targetPlane(x, y);
-                targetColor[0u] = averageTexel.r;
-                targetColor[1u] = averageTexel.g;
-                targetColor[2u] = averageTexel.b;
-                targetColor[3u] = averageTexel.a;
+                targetColor[0u] = VectorGetX(average);
+                targetColor[1u] = VectorGetY(average);
+                targetColor[2u] = VectorGetZ(average);
+                targetColor[3u] = VectorGetW(average);
             }
         }
     }

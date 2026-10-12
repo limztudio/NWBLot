@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "../builder.h"
 #include "../edit/caret_clock.h"
 
@@ -97,7 +95,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { minimum.x, NumericSimd::Max(minimum.y, NumericSimd::Add(NumericSimd::Add(item.editView.layout().measure().y, item.padding.top), item.padding.bottom)) };
+    description.intrinsicSize = { minimum.x, Max(minimum.y, ((item.editView.layout().measure().y + item.padding.top) + item.padding.bottom)) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();
@@ -165,7 +163,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
 bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
     if(!numericEditMatches(item))
         return false;
-    const f32 caretWidth = NumericSimd::Divide(1.0f, m_paint.displayMetrics().pixelScaleX);
+    const f32 caretWidth = (1.0f / m_paint.displayMetrics().pixelScaleX);
     const auto arranged = item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), { item.editState->scroll, 0.0f }, caretWidth);
     if(!arranged)
         return false;

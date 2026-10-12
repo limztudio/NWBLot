@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "router.h"
 #include "../rect_math.h"
 
@@ -29,7 +27,7 @@ namespace __hidden_ui_router_popup{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width > 0.0f && rectangle.height > 0.0f
-        && IsFinite(NumericSimd::Add(rectangle.x, rectangle.width)) && IsFinite(NumericSimd::Add(rectangle.y, rectangle.height))
+        && IsFinite((rectangle.x + rectangle.width)) && IsFinite((rectangle.y + rectangle.height))
     ;
 }
 
@@ -61,8 +59,8 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
             || scope.layer == 0u || (index != 0u && scope.layer <= scopes[index - 1u].layer)
             || (scope.dismissFocusTraversal && (!scope.focusAnchor.valid() || scope.focusAnchorDeclarationGeneration == 0u))
             || scope.bounds.x < scope.viewport.x || scope.bounds.y < scope.viewport.y
-            || NumericSimd::Add(scope.bounds.x, scope.bounds.width) > NumericSimd::Add(scope.viewport.x, scope.viewport.width)
-            || NumericSimd::Add(scope.bounds.y, scope.bounds.height) > NumericSimd::Add(scope.viewport.y, scope.viewport.height)
+            || (scope.bounds.x + scope.bounds.width) > (scope.viewport.x + scope.viewport.width)
+            || (scope.bounds.y + scope.bounds.height) > (scope.viewport.y + scope.viewport.height)
         )
             return false;
         for(usize previous = 0u; previous < index; ++previous){

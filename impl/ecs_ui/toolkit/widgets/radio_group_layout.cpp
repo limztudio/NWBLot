@@ -37,9 +37,9 @@ namespace __hidden_ui_radio_group_layout{
         || !IsFinite(metrics.markInset) || metrics.markInset < 0.0f || metrics.markInset > 0.5f
     )
         return false;
-    const SIMDVectorDouble padding = SIMDVectorDouble{ metrics.padding.left, metrics.padding.top } + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom };
-    const f64 height = padding.y + static_cast<f64>(metrics.count) * metrics.rowHeight + static_cast<f64>(metrics.count == 0u ? 0u : metrics.count - 1u) * metrics.rowGap;
-    const f64 minimumWidth = padding.x + (metrics.count == 0u ? 0.0 : static_cast<f64>(metrics.indicatorExtent) + metrics.gap);
+    const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0), VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0));
+    const f64 height = VectorDoubleGetY(padding) + static_cast<f64>(metrics.count) * metrics.rowHeight + static_cast<f64>(metrics.count == 0u ? 0u : metrics.count - 1u) * metrics.rowGap;
+    const f64 minimumWidth = VectorDoubleGetX(padding) + (metrics.count == 0u ? 0.0 : static_cast<f64>(metrics.indicatorExtent) + metrics.gap);
     return height <= Limit<f32>::s_Max && metrics.contentSize.y == static_cast<f32>(height) && minimumWidth <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(minimumWidth);
 }
 
@@ -74,9 +74,9 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
     candidate.markInset = style.markInset;
     candidate.padding = style.padding;
     candidate.count = count;
-    const SIMDVectorDouble padding = SIMDVectorDouble{ style.padding.left, style.padding.top } + SIMDVectorDouble{ style.padding.right, style.padding.bottom };
-    const f64 width = padding.x + (count == 0u ? 0.0 : static_cast<f64>(style.indicatorExtent) + style.gap + maximumLabel.x);
-    const f64 height = padding.y + static_cast<f64>(count) * candidate.rowHeight + static_cast<f64>(count == 0u ? 0u : count - 1u) * style.rowGap;
+    const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(style.padding.left, style.padding.top, 0.0, 0.0), VectorDoubleSet(style.padding.right, style.padding.bottom, 0.0, 0.0));
+    const f64 width = VectorDoubleGetX(padding) + (count == 0u ? 0.0 : static_cast<f64>(style.indicatorExtent) + style.gap + maximumLabel.x);
+    const f64 height = VectorDoubleGetY(padding) + static_cast<f64>(count) * candidate.rowHeight + static_cast<f64>(count == 0u ? 0u : count - 1u) * style.rowGap;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
@@ -96,19 +96,19 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
-    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ static_cast<f64>(metrics.padding.left), static_cast<f64>(metrics.padding.top) };
-    const SIMDVectorDouble geometryPair2Operand1 = SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) };
-    const SIMDVectorDouble leftTopValue = ((geometryPair2Operand0 < geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
-    const f64 left = leftTopValue.x;
-    const f64 top = leftTopValue.y;
-    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ static_cast<f64>(metrics.padding.right), static_cast<f64>(metrics.padding.bottom) };
-    const SIMDVectorDouble geometryPair3Operand1 = (SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) } - SIMDVectorDouble{ left, top });
-    const SIMDVectorDouble rightBottomValue = ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1);
-    const f64 right = rightBottomValue.x;
-    const f64 bottom = rightBottomValue.y;
-    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + SIMDVectorDouble{ left, top });
-    const f64 x = xYValue.x;
-    const f64 y = xYValue.y;
+    const SIMDVectorDouble geometryPair2Operand0 = VectorDoubleSet(static_cast<f64>(metrics.padding.left), static_cast<f64>(metrics.padding.top), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair2Operand1 = VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0);
+    const SIMDVectorDouble leftTopValue = VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleLess(geometryPair2Operand0, geometryPair2Operand1));
+    const f64 left = VectorDoubleGetX(leftTopValue);
+    const f64 top = VectorDoubleGetY(leftTopValue);
+    const SIMDVectorDouble geometryPair3Operand0 = VectorDoubleSet(static_cast<f64>(metrics.padding.right), static_cast<f64>(metrics.padding.bottom), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair3Operand1 = VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0), VectorDoubleSelect(VectorDoubleZero(), leftTopValue, s_DoubleSIMDMaskXY));
+    const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair3Operand1, geometryPair3Operand0, VectorDoubleLess(geometryPair3Operand0, geometryPair3Operand1));
+    const f64 right = VectorDoubleGetX(rightBottomValue);
+    const f64 bottom = VectorDoubleGetY(rightBottomValue);
+    const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0), VectorDoubleSelect(VectorDoubleZero(), leftTopValue, s_DoubleSIMDMaskXY));
+    const f64 x = VectorDoubleGetX(xYValue);
+    const f64 y = VectorDoubleGetY(xYValue);
     const f64 width = static_cast<f64>(bounds.width) - left - right;
     const auto content = MakeUiRect<UiRectPrecision::PreciseExtents>(x, y, width, static_cast<f64>(bounds.height) - top - bottom);
     if(!content)

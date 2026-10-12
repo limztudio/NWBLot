@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "../builder.h"
 
 #include <global/simd/vector_arithmetic.h>
@@ -165,7 +163,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return {};
     }
-    frame.arrowExtent = NumericSimd::Max(frame.style.arrowExtent, NumericSimd::Max(arrow->minimumWidth, arrow->minimumHeight));
+    frame.arrowExtent = Max(frame.style.arrowExtent, Max(arrow->minimumWidth, arrow->minimumHeight));
     const bool selected = state.selectedKey() != 0u;
     const auto index = selected ? source.indexOf(state.selectedKey()) : Expected<u64>{ 0u };
     if(selected && (!index || *index >= frame.rowCount || source.key(*index) != state.selectedKey() || !source.enabled(*index))){
@@ -213,7 +211,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle contentSize = VectorSet(NumericSimd::Add(NumericSimd::Add(measured.x, frame.arrowExtent), frame.style.arrowGap), NumericSimd::Max(measured.y, frame.arrowExtent), 0.0f, 0.0f);
+    const SIMDVectorSingle contentSize = VectorSet(((measured.x + frame.arrowExtent) + frame.style.arrowGap), Max(measured.y, frame.arrowExtent), 0.0f, 0.0f);
     const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f)), VectorSet(item.padding.right, item.padding.bottom, 0.0f, 0.0f));
     const SIMDVectorSingle minimumSize = VectorSet(minimum.x, minimum.y, 0.0f, 0.0f);
     const SIMDVectorSingle intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));

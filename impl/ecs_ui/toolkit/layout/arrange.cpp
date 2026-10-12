@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "tree.h"
 
 #include <global/simplemath.h>
@@ -56,22 +54,23 @@ bool LayoutTree::arrangeNode(const u32 index)noexcept{
     const Rect childClip = description.clipChildren ? Intersect(work.inheritedClip, box.content) : work.inheritedClip;
     const bool row = description.direction == LayoutDirection::Row;
     const bool column = description.direction == LayoutDirection::Column;
-    SIMDVectorDouble consumedAndWeight{};
+    f64 consumed = 0.0;
+    f64 weight = 0.0;
     u32 childCount = 0u;
     for(u32 child = node.firstChild; child != s_LayoutNoParent; child = m_nodes[child].nextSibling){
         const LayoutNodeDesc& childDescription = m_nodes[child].description;
         if(row || column){
             const LayoutSize& main = row ? childDescription.width : childDescription.height;
             if(main.policy == LayoutSizePolicy::Stretch)
-                consumedAndWeight.y = NumericSimd::Add(consumedAndWeight.y, static_cast<f64>(main.value));
+                weight += static_cast<f64>(main.value);
             else
-                consumedAndWeight.x = NumericSimd::Add(consumedAndWeight.x, static_cast<f64>(row ? m_work[child].box.measuredSize.x : m_work[child].box.measuredSize.y));
+                consumed += static_cast<f64>(row ? m_work[child].box.measuredSize.x : m_work[child].box.measuredSize.y);
         }
         ++childCount;
     }
-    const f64 spacing = childCount > 1u ? NumericSimd::Multiply(static_cast<f64>(description.gap), static_cast<f64>(childCount - 1u)) : 0.0;
+    const f64 spacing = childCount > 1u ? (static_cast<f64>(description.gap) * static_cast<f64>(childCount - 1u)) : 0.0;
     const f64 mainSize = row ? box.content.width : box.content.height;
-    const f64 available = NumericSimd::Max(0.0, NumericSimd::Subtract(NumericSimd::Subtract(mainSize, consumedAndWeight.x), spacing));
+    const f64 available = Max(0.0, ((mainSize - consumed) - spacing));
     f64 cursor = row ? box.content.x : box.content.y;
     for(u32 child = node.firstChild; child != s_LayoutNoParent; child = m_nodes[child].nextSibling){
         const LayoutNodeDesc& childDescription = m_nodes[child].description;
@@ -79,10 +78,10 @@ bool LayoutTree::arrangeNode(const u32 index)noexcept{
         f32 width = measured.x;
         f32 height = measured.y;
         if(childDescription.width.policy == LayoutSizePolicy::Stretch){
-            width = row ? static_cast<f32>(NumericSimd::Multiply(available, NumericSimd::Divide(static_cast<f64>(childDescription.width.value), consumedAndWeight.y))) : box.content.width;
+            width = row ? static_cast<f32>((available * (static_cast<f64>(childDescription.width.value) / weight))) : box.content.width;
         }
         if(childDescription.height.policy == LayoutSizePolicy::Stretch){
-            height = column ? static_cast<f32>(NumericSimd::Multiply(available, NumericSimd::Divide(static_cast<f64>(childDescription.height.value), consumedAndWeight.y))) : box.content.height;
+            height = column ? static_cast<f32>((available * (static_cast<f64>(childDescription.height.value) / weight))) : box.content.height;
         }
         const f32 x = row ? static_cast<f32>(cursor) : box.content.x;
         const f32 y = column ? static_cast<f32>(cursor) : box.content.y;
@@ -92,9 +91,9 @@ bool LayoutTree::arrangeNode(const u32 index)noexcept{
         m_work[child].box.rectangle = rectangle;
         m_work[child].inheritedClip = childClip;
         if(row)
-            cursor = NumericSimd::Add(cursor, NumericSimd::Add(static_cast<f64>(width), static_cast<f64>(description.gap)));
+            cursor = (cursor + (static_cast<f64>(width) + static_cast<f64>(description.gap)));
         else if(column)
-            cursor = NumericSimd::Add(cursor, NumericSimd::Add(static_cast<f64>(height), static_cast<f64>(description.gap)));
+            cursor = (cursor + (static_cast<f64>(height) + static_cast<f64>(description.gap)));
     }
     return true;
 }

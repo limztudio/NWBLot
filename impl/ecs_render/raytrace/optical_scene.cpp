@@ -95,7 +95,7 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 
 
 Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToWorld, const Float3U& localMin, const Float3U& localMax)noexcept{
-    // SIMD lanes own the affine corner math: all eight AABB corners are transformed as one lane batch, and the enclosure margin is reduced from lane magnitudes on vector lanes.
+    // Transposed affine rows evaluate XYZ together while preserving each coordinate's multiply-add sequence and enclosure margin.
     // A float affine coordinate uses three products and three additions.
     // Gamma(8) additionally covers the final float bound conversion and margin arithmetic.
     // The tiny absolute term covers flushed subnormal intermediates.
@@ -113,6 +113,7 @@ Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToW
     const SIMDVectorSingle row2 = LoadFloat(objectToWorld.rows[2u]);
     if(!VectorIsFinite(row0, VectorComponentMask::s_XYZW) || !VectorIsFinite(row1, VectorComponentMask::s_XYZW) || !VectorIsFinite(row2, VectorComponentMask::s_XYZW))
         return MakeUnexpected(Failure{});
+    const SIMDMatrix columns = MatrixTranspose(SIMDMatrix{ .v = { row0, row1, row2, VectorZero() } });
     SIMDVectorSingle laneMin = VectorReplicate(Limit<f32>::s_Infinity);
     SIMDVectorSingle laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
     SIMDVectorSingle laneMagnitude = VectorZero();
@@ -125,19 +126,10 @@ Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToW
         const SIMDVectorSingle x = VectorSplatX(point);
         const SIMDVectorSingle y = VectorSplatY(point);
         const SIMDVectorSingle z = VectorSplatZ(point);
-        SIMDVectorSingle transformed = VectorMultiply(VectorSplatX(row0), x);
-        transformed = VectorMultiplyAdd(VectorSplatY(row0), y, transformed);
-        transformed = VectorMultiplyAdd(VectorSplatZ(row0), z, transformed);
-        SIMDVectorSingle transformed1 = VectorMultiply(VectorSplatX(row1), x);
-        transformed1 = VectorMultiplyAdd(VectorSplatY(row1), y, transformed1);
-        transformed1 = VectorMultiplyAdd(VectorSplatZ(row1), z, transformed1);
-        SIMDVectorSingle transformed2 = VectorMultiply(VectorSplatX(row2), x);
-        transformed2 = VectorMultiplyAdd(VectorSplatY(row2), y, transformed2);
-        transformed2 = VectorMultiplyAdd(VectorSplatZ(row2), z, transformed2);
-        SIMDVectorSingle cornerVec = VectorSelect(transformed, transformed1, s_SIMDMaskY);
-        cornerVec = VectorSelect(cornerVec, transformed2, s_SIMDMaskZ);
-        // Float34U rows pack translation in W lanes (_14/_24/_34); W lane itself stays zero.
-        cornerVec = VectorAdd(cornerVec, VectorSet(VectorGetW(row0), VectorGetW(row1), VectorGetW(row2), 0.0f));
+        SIMDVectorSingle cornerVec = VectorMultiply(columns.v[0], x);
+        cornerVec = VectorMultiplyAdd(columns.v[1], y, cornerVec);
+        cornerVec = VectorMultiplyAdd(columns.v[2], z, cornerVec);
+        cornerVec = VectorAdd(cornerVec, columns.v[3]);
         if(!VectorIsFinite(cornerVec, VectorComponentMask::s_XYZ))
             return MakeUnexpected(Failure{});
         laneMin = VectorMin(laneMin, cornerVec);

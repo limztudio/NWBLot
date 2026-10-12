@@ -2,11 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "../builder.h"
 
-#include <global/simd/vector.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -106,7 +103,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle preferredSize = VectorSet(120.0f, NumericSimd::Add(NumericSimd::Add(options.rowHeight, frame.padding.top), frame.padding.bottom), 0.0f, 0.0f);
+    const SIMDVectorSingle preferredSize = VectorSet(120.0f, ((options.rowHeight + frame.padding.top) + frame.padding.bottom), 0.0f, 0.0f);
     const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
     const SIMDVectorSingle intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
@@ -123,15 +120,18 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
 }
 
 bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture)noexcept{
-    const f64 travel = NumericSimd::Subtract(static_cast<f64>(gesture.referenceRectangle.height), static_cast<f64>(gesture.targetRectangle.height));
+    const f64 travel = (static_cast<f64>(gesture.referenceRectangle.height) - static_cast<f64>(gesture.targetRectangle.height));
     if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
         return false;
-    const SIMDVectorDouble startDeltaValue = (SIMDVectorDouble{ static_cast<f64>(gesture.targetRectangle.y), static_cast<f64>(gesture.position.y) } - SIMDVectorDouble{ static_cast<f64>(gesture.referenceRectangle.y), static_cast<f64>(gesture.origin.y) });
-    const f64 start = startDeltaValue.x;
-    const f64 delta = startDeltaValue.y;
-    const f64 fraction = NumericSimd::Clamp(NumericSimd::Divide(NumericSimd::Add(start, delta), travel), 0.0, 1.0);
+    const SIMDVectorDouble startDeltaValue = VectorDoubleSubtract(
+        VectorDoubleSet(static_cast<f64>(gesture.targetRectangle.y), static_cast<f64>(gesture.position.y), 0.0, 0.0),
+        VectorDoubleSet(static_cast<f64>(gesture.referenceRectangle.y), static_cast<f64>(gesture.origin.y), 0.0, 0.0)
+    );
+    const f64 start = VectorDoubleGetX(startDeltaValue);
+    const f64 delta = VectorDoubleGetY(startDeltaValue);
+    const f64 fraction = Clamp(((start + delta) / travel), 0.0, 1.0);
     state.m_ensureCursor = false;
-    return state.m_scroll.setOffset(NumericSimd::Multiply(fraction, gesture.maximum));
+    return state.m_scroll.setOffset((fraction * gesture.maximum));
 }
 
 

@@ -11,7 +11,6 @@
 #include <core/task/gpu/scheduler.h>
 #include <core/telemetry/session.h>
 #include <global/exception.h>
-#include <global/simd/vector.h>
 #include <global/termination.h>
 
 
@@ -97,9 +96,7 @@ public:
     void accumulate(const Name& scopeName, const f64 seconds, Perf::TimingSink* timing = nullptr){
         for(u32 index = 0u; index < m_phaseCount; ++index){
             if(m_phases[index].scopeName == scopeName){
-                const f64 previous = m_phases[index].seconds;
-                const SIMDVectorDouble accumulated = SIMDVectorDouble{ previous, previous } + SIMDVectorDouble{ seconds, seconds };
-                m_phases[index].seconds = accumulated.x;
+                m_phases[index].seconds += seconds;
                 return;
             }
         }

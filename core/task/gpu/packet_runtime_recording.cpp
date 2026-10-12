@@ -13,7 +13,6 @@
 #include <global/exception.h>
 #include <global/termination.h>
 #include <global/timer.h>
-#include <core/perf/timing_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -329,7 +328,7 @@ bool GpuNativePacketRecorder::recordPacket(
             recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds = Perf::AddTimingSeconds(graphBarrierRecordingSeconds, DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin));
+        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin);
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
         bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
@@ -362,7 +361,7 @@ bool GpuNativePacketRecorder::recordPacket(
             const Timer taskRecordBegin = TimerNow();
             bool recordThunkInvoked = false;
             recorded = graph.recordTask(task, *commandList, context, recordingLease, recordThunkInvoked);
-            taskRecordSeconds = Perf::AddTimingSeconds(taskRecordSeconds, DurationInSeconds<f64>(TimerNow(), taskRecordBegin));
+            taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"), StringConvert(taskView.markerLabel));
@@ -441,7 +440,7 @@ bool GpuNativePacketRecorder::recordPacket(
         barrierCount += compiledTask->epilogueBarrierCount;
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds = Perf::AddTimingSeconds(graphBarrierRecordingSeconds, DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin));
+        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin);
     }
     packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
     if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))

@@ -120,8 +120,8 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(const ufbx_
             positions[triangleCornerIndex] = BuildCornerOutputPositionVector(mesh, node, options, wantsSkinning, cornerIndices[triangleCornerIndex]);
         }
 
-        const TriangleAreaNormal64 areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
-        const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal64);
+        const SIMDVectorDouble areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
+        const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal64));
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= options.triangleAreaLengthSquaredEpsilon)
             return true;
 
@@ -285,8 +285,8 @@ bool FbxMeshBuild::AppendInstanceMesh(
             return true;
 
         if(normalMode == NormalMode::Regenerate){
-            const TriangleAreaNormal64 faceNormal64 = BuildTriangleAreaNormal64(LoadFloat(triangleCorners[0u].position), LoadFloat(triangleCorners[1u].position), LoadFloat(triangleCorners[2u].position));
-            const SIMDVectorSingle faceNormal = VectorSet(static_cast<f32>(faceNormal64.x), static_cast<f32>(faceNormal64.y), static_cast<f32>(faceNormal64.z), 0.0f);
+            const SIMDVectorDouble faceNormal64 = BuildTriangleAreaNormal64(LoadFloat(triangleCorners[0u].position), LoadFloat(triangleCorners[1u].position), LoadFloat(triangleCorners[2u].position));
+            const SIMDVectorSingle faceNormal = ConvertVectorDoubleToSingle(faceNormal64);
             const auto normalizedFaceNormal = Vector3TryNormalize(faceNormal);
             if(!normalizedFaceNormal){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));

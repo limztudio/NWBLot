@@ -209,12 +209,12 @@ bool BackendContext::createVulkanSwapChain(){
         extent = surfaceCaps.currentExtent;
     }
     else{
-        const SIMDVectorSingle requestedExtent = VectorSet(static_cast<f32>(m_swapChainState.backBufferWidth), static_cast<f32>(m_swapChainState.backBufferHeight), 0.0f, 0.0f);
-        const SIMDVectorSingle minExtent = VectorSet(static_cast<f32>(surfaceCaps.minImageExtent.width), static_cast<f32>(surfaceCaps.minImageExtent.height), 0.0f, 0.0f);
-        const SIMDVectorSingle maxExtent = VectorSet(static_cast<f32>(surfaceCaps.maxImageExtent.width), static_cast<f32>(surfaceCaps.maxImageExtent.height), 0.0f, 0.0f);
-        const SIMDVectorSingle clampedExtent = VectorClamp(requestedExtent, minExtent, maxExtent);
-        extent.width = static_cast<u32>(VectorGetX(clampedExtent));
-        extent.height = static_cast<u32>(VectorGetY(clampedExtent));
+        const SIMDVectorDouble requestedExtent = VectorDoubleSet(static_cast<f64>(m_swapChainState.backBufferWidth), static_cast<f64>(m_swapChainState.backBufferHeight), 0.0, 0.0);
+        const SIMDVectorDouble minExtent = VectorDoubleSet(static_cast<f64>(surfaceCaps.minImageExtent.width), static_cast<f64>(surfaceCaps.minImageExtent.height), 0.0, 0.0);
+        const SIMDVectorDouble maxExtent = VectorDoubleSet(static_cast<f64>(surfaceCaps.maxImageExtent.width), static_cast<f64>(surfaceCaps.maxImageExtent.height), 0.0, 0.0);
+        const SIMDVectorDouble clampedExtent = VectorDoubleClamp(requestedExtent, minExtent, maxExtent);
+        extent.width = static_cast<u32>(VectorDoubleGetX(clampedExtent));
+        extent.height = static_cast<u32>(VectorDoubleGetY(clampedExtent));
     }
     if(extent.width == 0 || extent.height == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
@@ -259,11 +259,9 @@ bool BackendContext::createVulkanSwapChain(){
         selectedPresentMode = presentModes[0];
     }
 
-    const SIMDVectorSingle imageCountBounds = VectorSet(static_cast<f32>(m_deviceParams.swapChainBufferCount), static_cast<f32>(surfaceCaps.minImageCount), static_cast<f32>(surfaceCaps.maxImageCount), 0.0f);
-    SIMDVectorSingle selectedImageCountLanes = VectorMax(VectorSplatX(imageCountBounds), VectorSplatY(imageCountBounds));
+    u32 selectedImageCount = Max(m_deviceParams.swapChainBufferCount, surfaceCaps.minImageCount);
     if(surfaceCaps.maxImageCount > 0)
-        selectedImageCountLanes = VectorMin(selectedImageCountLanes, VectorSplatZ(imageCountBounds));
-    uint32_t selectedImageCount = static_cast<uint32_t>(VectorGetX(selectedImageCountLanes));
+        selectedImageCount = Min(selectedImageCount, surfaceCaps.maxImageCount);
 
     const VkSurfaceTransformFlagBitsKHR selectedPreTransform = (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfaceCaps.currentTransform;
 

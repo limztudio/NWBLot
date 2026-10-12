@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "edit_box_host.h"
 
 #include <global/simd/vector_arithmetic.h>
@@ -22,7 +20,7 @@ NWB_IMPL_BEGIN
 Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry)const noexcept{
     const Ui::Rect& caret = geometry.placement.caret;
     const auto coordinate = [](const f32 value)noexcept{
-        return static_cast<i32>(NumericSimd::Clamp(static_cast<f64>(value), static_cast<f64>(Limit<i32>::s_Min), static_cast<f64>(Limit<i32>::s_Max)));
+        return static_cast<i32>(Clamp(static_cast<f64>(value), static_cast<f64>(Limit<i32>::s_Min), static_cast<f64>(Limit<i32>::s_Max)));
     };
     const SIMDVectorSingle physical = VectorMultiply(VectorSet(caret.x, caret.y, caret.width, caret.height), VectorSet(m_display.pixelScaleX, m_display.pixelScaleY, m_display.pixelScaleX, m_display.pixelScaleY));
     const SIMDVectorSingle origin = VectorFloor(VectorSwizzle<0, 1, 0, 1>(physical));
@@ -53,7 +51,7 @@ Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point posit
     const Ui::Point local{ VectorGetX(localPosition), VectorGetY(localPosition) };
     u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
     for(u32 index = 0u; index < geometry.lines.size(); ++index){
-        if(local.y < NumericSimd::Add(geometry.lines[index].top, geometry.lines[index].height)){
+        if(local.y < (geometry.lines[index].top + geometry.lines[index].height)){
             lineIndex = index;
             break;
         }

@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include <impl/numeric_simd.h>
-
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <core/ecs/world.h>
@@ -50,7 +48,7 @@ inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE
 
 NWB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height)noexcept{
     if(width != 0u && height != 0u)
-        return NumericSimd::Divide(static_cast<f32>(width), static_cast<f32>(height));
+        return static_cast<f32>(width) / static_cast<f32>(height);
 
     return NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio;
 }

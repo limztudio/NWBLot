@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "../builder.h"
 #include "../rect_math.h"
 
@@ -38,8 +36,8 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const Rect clip = visibleClip(anchorBox->clip);
     if(
         !anchor.enabled || clip.width <= 0.0f || clip.height <= 0.0f
-        || anchorBox->rectangle.x >= NumericSimd::Add(clip.x, clip.width) || anchorBox->rectangle.y >= NumericSimd::Add(clip.y, clip.height)
-        || NumericSimd::Add(anchorBox->rectangle.x, anchorBox->rectangle.width) <= clip.x || NumericSimd::Add(anchorBox->rectangle.y, anchorBox->rectangle.height) <= clip.y
+        || anchorBox->rectangle.x >= (clip.x + clip.width) || anchorBox->rectangle.y >= (clip.y + clip.height)
+        || (anchorBox->rectangle.x + anchorBox->rectangle.width) <= clip.x || (anchorBox->rectangle.y + anchorBox->rectangle.height) <= clip.y
     ){
         frame.state->close();
         m_context.discardPopupScope(frame.popupToken);

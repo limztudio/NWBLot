@@ -11,132 +11,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TriangleAreaNormal64{
-    f64 x = 0.0;
-    f64 y = 0.0;
-    f64 z = 0.0;
-};
-static_assert(IsTriviallyCopyable_V<TriangleAreaNormal64>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TriangleAreaDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(__AVX2__) || defined(_M_AVX2)
-[[nodiscard]] NWB_INLINE __m256d MakeVector3F64(const SIMDVectorSingle value)noexcept{
-    return _mm256_cvtps_pd(value);
+// Promote positions before subtracting so the area normal retains binary64 edge precision.
+[[nodiscard]] NWB_INLINE SIMDVectorDouble BuildTriangleAreaNormal64(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c)noexcept{
+    const SIMDVectorDouble origin = ConvertVectorSingleToDouble(VectorAndInt(a, s_SIMDMask3));
+    const SIMDVectorDouble ab = VectorDoubleSubtract(ConvertVectorSingleToDouble(VectorAndInt(b, s_SIMDMask3)), origin);
+    const SIMDVectorDouble ac = VectorDoubleSubtract(ConvertVectorSingleToDouble(VectorAndInt(c, s_SIMDMask3)), origin);
+    const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(ab), VectorDoubleSwizzle<2, 0, 1, 3>(ac));
+    const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(ab), VectorDoubleSwizzle<1, 2, 0, 3>(ac));
+    return VectorDoubleAndInt(VectorDoubleSubtract(positive, negative), s_DoubleSIMDMask3);
 }
 
-[[nodiscard]] NWB_INLINE TriangleAreaNormal64 MakeTriangleAreaNormal64(const __m256d value)noexcept{
-    const __m128d xy = _mm256_castpd256_pd128(value);
-    const __m128d z0 = _mm256_extractf128_pd(value, 1);
-    return TriangleAreaNormal64{ _mm_cvtsd_f64(xy), _mm_cvtsd_f64(_mm_unpackhi_pd(xy, xy)), _mm_cvtsd_f64(z0), };
-}
-
-[[nodiscard]] NWB_INLINE TriangleAreaNormal64 CrossVector3F64(const __m256d ab, const __m256d ac)noexcept{
-    const __m256d abYzx = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 0, 2, 1));
-    const __m256d abZxy = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 1, 0, 2));
-    const __m256d acYzx = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 0, 2, 1));
-    const __m256d acZxy = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 1, 0, 2));
-    return MakeTriangleAreaNormal64(_mm256_sub_pd(_mm256_mul_pd(abYzx, acZxy), _mm256_mul_pd(abZxy, acYzx)));
-}
+[[nodiscard]] NWB_INLINE SIMDVectorDouble TriangleAreaNormalLengthSquared(SIMDVectorDouble areaNormal)noexcept{
+#if defined(NWB_HAS_AVX2)
+    // Retain the original AVX2 reduction order: (x squared + z squared) + y squared.
+    areaNormal = VectorDoubleSwizzle<0, 2, 1, 3>(areaNormal);
 #endif
-
-[[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64FromEdges(const f64 abX, const f64 abY, const f64 abZ, const f64 acX, const f64 acY, const f64 acZ)noexcept{
-#if defined(NWB_HAS_SSE4)
-    const __m128d xy = _mm_sub_pd(_mm_mul_pd(_mm_set_pd(abZ, abY), _mm_set_pd(acX, acZ)), _mm_mul_pd(_mm_set_pd(abX, abZ), _mm_set_pd(acZ, acY)));
-    const __m128d zProducts = _mm_mul_pd(_mm_set_pd(abY, abX), _mm_set_pd(acX, acY));
-    const __m128d z = _mm_sub_sd(zProducts, _mm_unpackhi_pd(zProducts, zProducts));
-    return TriangleAreaNormal64{ _mm_cvtsd_f64(xy), _mm_cvtsd_f64(_mm_unpackhi_pd(xy, xy)), _mm_cvtsd_f64(z), };
-#elif defined(NWB_HAS_NEON)
-#if defined(__aarch64__) || defined(_M_ARM64)
-    float64x2_t abZY = vdupq_n_f64(abY);
-    abZY = vsetq_lane_f64(abZ, abZY, 1);
-    float64x2_t acZX = vdupq_n_f64(acZ);
-    acZX = vsetq_lane_f64(acX, acZX, 1);
-    float64x2_t abZB = vdupq_n_f64(abZ);
-    abZB = vsetq_lane_f64(abX, abZB, 1);
-    float64x2_t acZY = vdupq_n_f64(acY);
-    acZY = vsetq_lane_f64(acZ, acZY, 1);
-    const float64x2_t xy = vsubq_f64(vmulq_f64(abZY, acZX), vmulq_f64(abZB, acZY));
-    float64x2_t zProducts = vdupq_n_f64(abX);
-    zProducts = vsetq_lane_f64(abY, zProducts, 1);
-    float64x2_t acYX = vdupq_n_f64(acY);
-    acYX = vsetq_lane_f64(acX, acYX, 1);
-    zProducts = vmulq_f64(zProducts, acYX);
-    const f64 z = vgetq_lane_f64(zProducts, 0) - vgetq_lane_f64(zProducts, 1);
-    return TriangleAreaNormal64{ vgetq_lane_f64(xy, 0), vgetq_lane_f64(xy, 1), z, };
+#if defined(NWB_HAS_NEON64)
+    // The previous ARM64 final multiply-add followed the compiler's contraction policy.
+    const SIMDVectorDouble z = VectorDoubleSplatZ(areaNormal);
+    return VectorDoubleMultiplyAddExpression(z, z, VectorDouble2LengthSq(areaNormal));
 #else
-    return TriangleAreaNormal64{ abY * acZ - abZ * acY, abZ * acX - abX * acZ, abX * acY - abY * acX, };
-#endif
-#else
-    return TriangleAreaNormal64{ abY * acZ - abZ * acY, abZ * acX - abX * acZ, abX * acY - abY * acX, };
-#endif
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c)noexcept{
-#if defined(__AVX2__) || defined(_M_AVX2)
-    const __m256d ab = _mm256_sub_pd(TriangleAreaDetail::MakeVector3F64(b), TriangleAreaDetail::MakeVector3F64(a));
-    const __m256d ac = _mm256_sub_pd(TriangleAreaDetail::MakeVector3F64(c), TriangleAreaDetail::MakeVector3F64(a));
-    return TriangleAreaDetail::CrossVector3F64(ab, ac);
-#else
-    const SIMDVectorDouble origin{ static_cast<f64>(VectorGetX(a)), static_cast<f64>(VectorGetY(a)) };
-    const SIMDVectorDouble ab = SIMDVectorDouble{ static_cast<f64>(VectorGetX(b)), static_cast<f64>(VectorGetY(b)) } - origin;
-    const SIMDVectorDouble ac = SIMDVectorDouble{ static_cast<f64>(VectorGetX(c)), static_cast<f64>(VectorGetY(c)) } - origin;
-    const SIMDVectorDouble z = SIMDVectorDouble{ static_cast<f64>(VectorGetZ(b)), static_cast<f64>(VectorGetZ(c)) } - SIMDVectorDouble{ static_cast<f64>(VectorGetZ(a)), static_cast<f64>(VectorGetZ(a)) };
-    return TriangleAreaDetail::BuildTriangleAreaNormal64FromEdges(ab.x, ab.y, z.x, ac.x, ac.y, z.y);
-#endif
-}
-
-[[nodiscard]] NWB_INLINE f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal)noexcept{
-#if defined(__AVX2__) || defined(_M_AVX2)
-    const __m256d normal = _mm256_set_pd(0.0, areaNormal.z, areaNormal.y, areaNormal.x);
-    const __m256d squared = _mm256_mul_pd(normal, normal);
-    const __m128d xy = _mm256_castpd256_pd128(squared);
-    const __m128d z0 = _mm256_extractf128_pd(squared, 1);
-    const __m128d xzY = _mm_add_pd(xy, z0);
-    const __m128d sum = _mm_add_sd(xzY, _mm_unpackhi_pd(xzY, xzY));
-    return _mm_cvtsd_f64(sum);
-#elif defined(NWB_HAS_SSE4)
-    const __m128d xy = _mm_set_pd(areaNormal.y, areaNormal.x);
-    const __m128d xySquared = _mm_mul_pd(xy, xy);
-    const __m128d xySum = _mm_add_sd(xySquared, _mm_unpackhi_pd(xySquared, xySquared));
-    const __m128d zSquared = _mm_mul_sd(_mm_set_sd(areaNormal.z), _mm_set_sd(areaNormal.z));
-    return _mm_cvtsd_f64(_mm_add_sd(xySum, zSquared));
-#elif defined(NWB_HAS_NEON)
-#if defined(__aarch64__) || defined(_M_ARM64)
-    float64x2_t xy = vdupq_n_f64(areaNormal.x);
-    xy = vsetq_lane_f64(areaNormal.y, xy, 1);
-    xy = vmulq_f64(xy, xy);
-    const f64 xySum = vgetq_lane_f64(xy, 0) + vgetq_lane_f64(xy, 1);
-    const f64 z = areaNormal.z;
-    return xySum + z * z;
-#else
-    return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
-#endif
-#else
-    return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
+    return VectorDouble3LengthSq(areaNormal);
 #endif
 }
 
 [[nodiscard]] NWB_INLINE bool TriangleHasArea(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c, const f64 triangleAreaLengthSquaredEpsilon)noexcept{
-    return TriangleAreaNormalLengthSquared(BuildTriangleAreaNormal64(a, b, c)) > triangleAreaLengthSquaredEpsilon;
+    return VectorDoubleGetX(TriangleAreaNormalLengthSquared(BuildTriangleAreaNormal64(a, b, c))) > triangleAreaLengthSquaredEpsilon;
 }
 
 

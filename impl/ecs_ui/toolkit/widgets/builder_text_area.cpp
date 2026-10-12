@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "../builder.h"
 #include "text_area_navigation.h"
 
@@ -151,7 +149,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { minimum.x, NumericSimd::Max(minimum.y, NumericSimd::Add(NumericSimd::Add(item.editView.layout().measure().y, item.padding.top), item.padding.bottom)) };
+    description.intrinsicSize = { minimum.x, Max(minimum.y, ((item.editView.layout().measure().y + item.padding.top) + item.padding.bottom)) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();

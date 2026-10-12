@@ -4,7 +4,6 @@
 
 #include "window.h"
 
-#include <global/simd/vector.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
@@ -32,12 +31,7 @@ namespace __hidden_ui_window_behavior{
     return lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence;
 }
 
-struct PointerDisplacement{
-    f64 x;
-    f64 y;
-};
-
-[[nodiscard]] Expected<PointerDisplacement> Displacement(const PointerGesture& gesture)noexcept{
+[[nodiscard]] Expected<SIMDVectorDouble> LoadPointerDisplacement(const PointerGesture& gesture)noexcept{
     if(
         !gesture.id.valid() || !IsFinite(gesture.origin.x) || !IsFinite(gesture.origin.y)
         || !IsFinite(gesture.position.x) || !IsFinite(gesture.position.y)
@@ -45,8 +39,8 @@ struct PointerDisplacement{
         || gesture.referenceRectangle.height <= 0.0f || gesture.state > PointerGestureState::Completed
     )
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble displacement = SIMDVectorDouble{ gesture.position.x, gesture.position.y } - SIMDVectorDouble{ gesture.origin.x, gesture.origin.y };
-    return PointerDisplacement{ displacement.x, displacement.y };
+    const SIMDVectorDouble displacement = VectorDoubleSubtract(VectorDoubleSet(gesture.position.x, gesture.position.y, 0.0, 0.0), VectorDoubleSet(gesture.origin.x, gesture.origin.y, 0.0, 0.0));
+    return displacement;
 }
 
 
@@ -90,7 +84,7 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
 }
 
 bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture)noexcept{
-    const auto displacement = __hidden_ui_window_behavior::Displacement(gesture);
+    const auto displacement = __hidden_ui_window_behavior::LoadPointerDisplacement(gesture);
     if(!displacement)
         return false;
     WindowGestureState movement = state.moveGesture;
@@ -98,9 +92,9 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
         movement.id = gesture.id;
         movement.initialBounds = gesture.referenceRectangle;
     }
-    const SIMDVectorDouble leftTopValue = (SIMDVectorDouble{ static_cast<f64>(movement.initialBounds.x), static_cast<f64>(movement.initialBounds.y) } + SIMDVectorDouble{ displacement->x, displacement->y });
-    const f64 left = leftTopValue.x;
-    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble leftTopValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(movement.initialBounds.x), static_cast<f64>(movement.initialBounds.y), 0.0, 0.0), *displacement);
+    const f64 left = VectorDoubleGetX(leftTopValue);
+    const f64 top = VectorDoubleGetY(leftTopValue);
     if(Abs(left) > Limit<f32>::s_Max || Abs(top) > Limit<f32>::s_Max)
         return false;
     Rect candidate = state.bounds;
@@ -114,7 +108,7 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
 }
 
 bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize)noexcept{
-    const auto displacement = __hidden_ui_window_behavior::Displacement(gesture);
+    const auto displacement = __hidden_ui_window_behavior::LoadPointerDisplacement(gesture);
     if(!displacement || !IsFinite(minimumSize.x) || minimumSize.x <= 0.0f || !IsFinite(minimumSize.y) || minimumSize.y <= 0.0f)
         return false;
     WindowGestureState resizing = state.resizeGesture;
@@ -122,11 +116,11 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
         resizing.id = gesture.id;
         resizing.initialBounds = gesture.referenceRectangle;
     }
-    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(minimumSize.x), static_cast<f64>(minimumSize.y) };
-    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(resizing.initialBounds.width), static_cast<f64>(resizing.initialBounds.height) } + SIMDVectorDouble{ displacement->x, displacement->y });
-    const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 width = widthHeightValue.x;
-    const f64 height = widthHeightValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(minimumSize.x), static_cast<f64>(minimumSize.y), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(resizing.initialBounds.width), static_cast<f64>(resizing.initialBounds.height), 0.0, 0.0), *displacement);
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleGreater(geometryPair1Operand0, geometryPair1Operand1));
+    const f64 width = VectorDoubleGetX(widthHeightValue);
+    const f64 height = VectorDoubleGetY(widthHeightValue);
     if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
         return false;
     Rect candidate = state.bounds;

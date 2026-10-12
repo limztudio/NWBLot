@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "cook_topology.h"
 
 #include <global/simd/vector.h>
@@ -57,43 +55,30 @@ static void JoinComponents(Vector<u32, Core::Alloc::ScratchArena>& parents, Vect
         ++ranks[firstRoot];
 }
 
-[[nodiscard]] static bool DegenerateTriangle(const Float3U& a, const Float3U& b, const Float3U& c)noexcept{
-    const SIMDVectorDouble abXAbYValue = (SIMDVectorDouble{ static_cast<f64>(b.x), static_cast<f64>(b.y) } - SIMDVectorDouble{ a.x, a.y });
-    const f64 abX = abXAbYValue.x;
-    const f64 abY = abXAbYValue.y;
-    const SIMDVectorDouble abZAcXValue = (SIMDVectorDouble{ static_cast<f64>(b.z), static_cast<f64>(c.x) } - SIMDVectorDouble{ a.z, a.x });
-    const f64 abZ = abZAcXValue.x;
-    const f64 acX = abZAcXValue.y;
-    const SIMDVectorDouble acYAcZValue = (SIMDVectorDouble{ static_cast<f64>(c.y), static_cast<f64>(c.z) } - SIMDVectorDouble{ a.y, a.z });
-    const f64 acY = acYAcZValue.x;
-    const f64 acZ = acYAcZValue.y;
+[[nodiscard]] static bool DegenerateTriangle(const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c)noexcept{
+    const SIMDVectorDouble ab = VectorDoubleSubtract(b, a);
+    const SIMDVectorDouble ac = VectorDoubleSubtract(c, a);
     const auto equalProducts = [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-        const SIMDVectorDouble products = lhs * rhs;
-        return products.x == products.y;
+        const SIMDVectorDouble products = VectorDoubleMultiply(lhs, rhs);
+        return VectorDoubleGetX(products) == VectorDoubleGetY(products);
     };
     // Each pair is evaluated only after the preceding cross component matched.
-    return equalProducts(SIMDVectorDouble{ abY, abZ }, SIMDVectorDouble{ acZ, acY }) && equalProducts(SIMDVectorDouble{ abZ, abX }, SIMDVectorDouble{ acX, acZ }) && equalProducts(SIMDVectorDouble{ abX, abY }, SIMDVectorDouble{ acY, acX });
+    return
+        equalProducts(VectorDoubleSwizzle<1, 2, 3, 3>(ab), VectorDoubleSwizzle<2, 1, 3, 3>(ac))
+        && equalProducts(VectorDoubleSwizzle<2, 0, 3, 3>(ab), VectorDoubleSwizzle<0, 2, 3, 3>(ac))
+        && equalProducts(VectorDoubleSwizzle<0, 1, 3, 3>(ab), VectorDoubleSwizzle<1, 0, 3, 3>(ac))
+    ;
 }
 
-[[nodiscard]] static f64 RelativeTriangleVolume(const Float3U& a, const Float3U& b, const Float3U& c, const Float3U& origin)noexcept{
-    const SIMDVectorDouble aXAYValue = (SIMDVectorDouble{ static_cast<f64>(a.x), static_cast<f64>(a.y) } - SIMDVectorDouble{ origin.x, origin.y });
-    const f64 aX = aXAYValue.x;
-    const f64 aY = aXAYValue.y;
-    const SIMDVectorDouble aZBXValue = (SIMDVectorDouble{ static_cast<f64>(a.z), static_cast<f64>(b.x) } - SIMDVectorDouble{ origin.z, origin.x });
-    const f64 aZ = aZBXValue.x;
-    const f64 bX = aZBXValue.y;
-    const SIMDVectorDouble bYBZValue = (SIMDVectorDouble{ static_cast<f64>(b.y), static_cast<f64>(b.z) } - SIMDVectorDouble{ origin.y, origin.z });
-    const f64 bY = bYBZValue.x;
-    const f64 bZ = bYBZValue.y;
-    const SIMDVectorDouble cXCYValue = (SIMDVectorDouble{ static_cast<f64>(c.x), static_cast<f64>(c.y) } - SIMDVectorDouble{ origin.x, origin.y });
-    const f64 cX = cXCYValue.x;
-    const f64 cY = cXCYValue.y;
-    const f64 cZ = NumericSimd::Subtract(static_cast<f64>(c.z), static_cast<f64>(origin.z));
-    const SIMDVectorDouble ax{ aX, aX }, ay{ aY, aY }, az{ aZ, aZ };
-    const SIMDVectorDouble bx{ bX, bX }, by{ bY, bY }, bz{ bZ, bZ };
-    const SIMDVectorDouble cx{ cX, cX }, cy{ cY, cY }, cz{ cZ, cZ };
+[[nodiscard]] static SIMDVectorDouble RelativeTriangleVolume(const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c, const SIMDVectorDouble origin)noexcept{
+    const SIMDVectorDouble relativeA = VectorDoubleSubtract(a, origin);
+    const SIMDVectorDouble relativeB = VectorDoubleSubtract(b, origin);
+    const SIMDVectorDouble relativeC = VectorDoubleSubtract(c, origin);
+    const SIMDVectorDouble ax = VectorDoubleSplatX(relativeA), ay = VectorDoubleSplatY(relativeA), az = VectorDoubleSplatZ(relativeA);
+    const SIMDVectorDouble bx = VectorDoubleSplatX(relativeB), by = VectorDoubleSplatY(relativeB), bz = VectorDoubleSplatZ(relativeB);
+    const SIMDVectorDouble cx = VectorDoubleSplatX(relativeC), cy = VectorDoubleSplatY(relativeC), cz = VectorDoubleSplatZ(relativeC);
     // Keep the full determinant expression and left-associated sum under the caller's contraction policy.
-    return (ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx)).x;
+    return ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx);
 }
 
 
@@ -132,8 +117,15 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
         const u32 c = triangleIndices[base + 2u];
         if(a >= positions.size() || b >= positions.size() || c >= positions.size())
             return MakeUnexpected(Failure{});
-        if(a == b || b == c || c == a || DegenerateTriangle(positions[a], positions[b], positions[c]))
+        if(a == b || b == c || c == a)
             invalidTriangles[triangle] = 1u;
+        else{
+            const SIMDVectorDouble aValue = ConvertVectorSingleToDouble(LoadFloat(positions[a]));
+            const SIMDVectorDouble bValue = ConvertVectorSingleToDouble(LoadFloat(positions[b]));
+            const SIMDVectorDouble cValue = ConvertVectorSingleToDouble(LoadFloat(positions[c]));
+            if(DegenerateTriangle(aValue, bValue, cValue))
+                invalidTriangles[triangle] = 1u;
+        }
         for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
             const u32 first = triangleIndices[base + corner];
             const u32 second = triangleIndices[base + (corner + 1u) % s_MeshletTriangleIndexCount];
@@ -160,13 +152,21 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
             invalidComponents[FindComponent(parents, triangle)] = 1u;
     }
     Vector<f64, Core::Alloc::ScratchArena> componentVolumes(triangleCount, 0.0, scratchArena);
+    u32 originComponent = Limit<u32>::s_Max;
+    SIMDVectorDouble origin = VectorDoubleZero();
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         const u32 component = FindComponent(parents, triangle);
         if(invalidComponents[component] != 0u)
             continue;
         const usize base = static_cast<usize>(triangle) * s_MeshletTriangleIndexCount;
-        const Float3U& origin = positions[triangleIndices[static_cast<usize>(component) * s_MeshletTriangleIndexCount]];
-        componentVolumes[component] = NumericSimd::Add(componentVolumes[component], RelativeTriangleVolume(positions[triangleIndices[base]], positions[triangleIndices[base + 1u]], positions[triangleIndices[base + 2u]], origin));
+        if(component != originComponent){
+            origin = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[static_cast<usize>(component) * s_MeshletTriangleIndexCount]]));
+            originComponent = component;
+        }
+        const SIMDVectorDouble aValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base]]));
+        const SIMDVectorDouble bValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base + 1u]]));
+        const SIMDVectorDouble cValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base + 2u]]));
+        componentVolumes[component] += VectorDoubleGetX(RelativeTriangleVolume(aValue, bValue, cValue, origin));
     }
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         const u32 component = FindComponent(parents, triangle);

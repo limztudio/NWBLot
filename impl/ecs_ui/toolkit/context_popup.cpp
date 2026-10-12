@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/numeric_simd.h>
-
 #include "context.h"
 
 #include <global/simplemath.h>
@@ -29,11 +27,11 @@ namespace __hidden_ui_context_popup{
         IsFinite(scope.bounds.x) && IsFinite(scope.bounds.y) && IsFinite(scope.bounds.width) && IsFinite(scope.bounds.height)
         && IsFinite(scope.viewport.x) && IsFinite(scope.viewport.y) && IsFinite(scope.viewport.width) && IsFinite(scope.viewport.height)
         && scope.bounds.width > 0.0f && scope.bounds.height > 0.0f && scope.viewport.width > 0.0f && scope.viewport.height > 0.0f
-        && IsFinite(NumericSimd::Add(scope.bounds.x, scope.bounds.width)) && IsFinite(NumericSimd::Add(scope.bounds.y, scope.bounds.height))
-        && IsFinite(NumericSimd::Add(scope.viewport.x, scope.viewport.width)) && IsFinite(NumericSimd::Add(scope.viewport.y, scope.viewport.height))
+        && IsFinite((scope.bounds.x + scope.bounds.width)) && IsFinite((scope.bounds.y + scope.bounds.height))
+        && IsFinite((scope.viewport.x + scope.viewport.width)) && IsFinite((scope.viewport.y + scope.viewport.height))
         && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y
-        && NumericSimd::Add(scope.bounds.x, scope.bounds.width) <= NumericSimd::Add(scope.viewport.x, scope.viewport.width)
-        && NumericSimd::Add(scope.bounds.y, scope.bounds.height) <= NumericSimd::Add(scope.viewport.y, scope.viewport.height)
+        && (scope.bounds.x + scope.bounds.width) <= (scope.viewport.x + scope.viewport.width)
+        && (scope.bounds.y + scope.bounds.height) <= (scope.viewport.y + scope.viewport.height)
     ;
 }
 

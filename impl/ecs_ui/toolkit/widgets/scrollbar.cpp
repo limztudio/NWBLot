@@ -121,26 +121,32 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
         || !IsFinite(thickness) || thickness < 0.0f || !IsFinite(minThumb) || minThumb < 0.0f
     )
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ static_cast<f64>(padding.left), static_cast<f64>(padding.top) };
-    const SIMDVectorDouble geometryPair2Operand1 = SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) };
-    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + ((geometryPair2Operand0 < geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1));
-    const f64 x = xYValue.x;
-    const f64 y = xYValue.y;
-    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ 0.0, 0.0 };
-    const SIMDVectorDouble geometryPair3Operand1 = ((SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) } - SIMDVectorDouble{ padding.left, padding.top }) - SIMDVectorDouble{ padding.right, padding.bottom });
-    const SIMDVectorDouble widthHeightValue = ((geometryPair3Operand0 > geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1);
-    const f64 width = widthHeightValue.x;
-    const f64 height = widthHeightValue.y;
+    const SIMDVectorDouble geometryPair2Operand0 = VectorDoubleSet(static_cast<f64>(padding.left), static_cast<f64>(padding.top), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair2Operand1 = VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0);
+    const SIMDVectorDouble xYValue = VectorDoubleAdd(
+        VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0),
+        VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleLess(geometryPair2Operand0, geometryPair2Operand1))
+    );
+    const f64 x = VectorDoubleGetX(xYValue);
+    const f64 y = VectorDoubleGetY(xYValue);
+    const SIMDVectorDouble geometryPair3Operand0 = VectorDoubleZero();
+    const SIMDVectorDouble geometryPair3Operand1 = VectorDoubleSubtract(
+        VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0), VectorDoubleSet(padding.left, padding.top, 0.0, 0.0)),
+        VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0)
+    );
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair3Operand1, geometryPair3Operand0, VectorDoubleGreater(geometryPair3Operand0, geometryPair3Operand1));
+    const f64 width = VectorDoubleGetX(widthHeightValue);
+    const f64 height = VectorDoubleGetY(widthHeightValue);
     const auto padded = MakeUiRect<UiRectPrecision::RoundedEndpoints>(x, y, width, height);
     if(!padded)
         return MakeUnexpected(Failure{});
     const f64 availableWidth = padded->width;
     const f64 availableHeight = padded->height;
-    const SIMDVectorDouble geometryPair4Operand0 = SIMDVectorDouble{ static_cast<f64>(thickness), static_cast<f64>(thickness) };
-    const SIMDVectorDouble geometryPair4Operand1 = SIMDVectorDouble{ availableWidth, availableHeight };
-    const SIMDVectorDouble verticalWidthHorizontalHeightValue = ((geometryPair4Operand0 < geometryPair4Operand1) ? geometryPair4Operand0 : geometryPair4Operand1);
-    const f64 verticalWidth = verticalWidthHorizontalHeightValue.x;
-    const f64 horizontalHeight = verticalWidthHorizontalHeightValue.y;
+    const SIMDVectorDouble geometryPair4Operand0 = VectorDoubleSet(static_cast<f64>(thickness), static_cast<f64>(thickness), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair4Operand1 = VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0);
+    const SIMDVectorDouble verticalWidthHorizontalHeightValue = VectorDoubleSelect(geometryPair4Operand1, geometryPair4Operand0, VectorDoubleLess(geometryPair4Operand0, geometryPair4Operand1));
+    const f64 verticalWidth = VectorDoubleGetX(verticalWidthHorizontalHeightValue);
+    const f64 horizontalHeight = VectorDoubleGetY(verticalWidthHorizontalHeightValue);
     const f64 contentWidth = static_cast<f64>(contentMeasure.x) + caretWidth;
     const f64 contentHeight = contentMeasure.y;
     if(!IsFinite(contentWidth))

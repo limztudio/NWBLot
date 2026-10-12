@@ -127,7 +127,7 @@ TEST_F(UiRadioGroupBuilderTests, HorizontalAndVerticalKeysShareTheHostAndSkipDis
     EXPECT_EQ(m_state.selectedKey(), 50u);
 }
 
-TEST_F(UiRadioGroupBuilderTests, HeldSubmitActivatesOnceWhileAnUnchangedChoiceStaysSelected){
+TEST_F(UiRadioGroupBuilderTests, HeldSubmitWaitsForReleaseWhileAnUnchangedChoiceStaysSelected){
     ASSERT_TRUE(accept(1u));
     press(Core::Key::Tab);
     InputEvent event;
@@ -135,16 +135,51 @@ TEST_F(UiRadioGroupBuilderTests, HeldSubmitActivatesOnceWhileAnUnchangedChoiceSt
     event.key = Core::Key::Enter;
     EXPECT_TRUE(send(event).keyboardConsumed);
     ASSERT_TRUE(accept(2u));
-    EXPECT_TRUE(m_result.activated);
+    EXPECT_FALSE(m_result.activated);
     EXPECT_FALSE(m_result.selectionChanged);
     event.repeat = true;
     EXPECT_TRUE(send(event).keyboardConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_FALSE(m_result.activated);
     event.type = InputEventType::KeyUp;
+    event.repeat = false;
     EXPECT_TRUE(send(event).keyboardConsumed);
-    press(Core::Key::Space);
     ASSERT_TRUE(accept(4u));
+    EXPECT_TRUE(m_result.activated);
+    EXPECT_FALSE(m_result.selectionChanged);
+    press(Core::Key::Space);
+    ASSERT_TRUE(accept(5u));
+    EXPECT_TRUE(m_result.activated);
+    EXPECT_FALSE(m_result.selectionChanged);
+}
+
+TEST_F(UiRadioGroupBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardSubmission){
+    ASSERT_TRUE(accept(1u));
+    const Point point = choicePoint(20u);
+    EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
+    ASSERT_TRUE(accept(2u));
+    EXPECT_FALSE(m_result.activated);
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    EXPECT_FALSE(m_result.activated);
+    EXPECT_FALSE(m_result.selectionChanged);
+    press(Core::Key::Tab);
+    ASSERT_EQ(m_context.input().focus(), host());
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(4u));
+    EXPECT_FALSE(m_result.activated);
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(5u));
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    EXPECT_FALSE(m_result.activated);
+    EXPECT_FALSE(m_result.selectionChanged);
+    press(Core::Key::Tab);
+    ASSERT_EQ(m_context.input().focus(), host());
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(6u));
     EXPECT_TRUE(m_result.activated);
     EXPECT_FALSE(m_result.selectionChanged);
 }

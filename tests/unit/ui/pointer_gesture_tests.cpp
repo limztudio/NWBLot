@@ -384,6 +384,7 @@ TEST_F(UiPointerGestureTests, FocusLossCancelsActiveAndCompletedGesturesWithoutR
     EXPECT_FALSE(lost.focus.valid());
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
+    EXPECT_FALSE(send({ InputEventType::FocusGained }).pointerConsumed);
     complete();
     const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
     ASSERT_TRUE(gestureResult2);
@@ -436,7 +437,7 @@ TEST_F(UiPointerGestureTests, ActiveCaptureLossPreservesCompletedGesturesActions
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Space }).keyboardConsumed);
-    ASSERT_EQ(m_router.actions().size(), 2u);
+    ASSERT_EQ(m_router.actions().size(), 1u);
     const InputRoutingResult lost = send({ InputEventType::PointerCaptureLost, {} });
     EXPECT_TRUE(lost.pointerConsumed);
     EXPECT_FALSE(lost.capture.valid());
@@ -453,8 +454,9 @@ TEST_F(UiPointerGestureTests, ActiveCaptureLossPreservesCompletedGesturesActions
     EXPECT_FLOAT_EQ(gesture.position.x, 40.0f);
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_TRUE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Space }).keyboardConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.targets().size(), 1u);
@@ -470,6 +472,7 @@ TEST_F(UiPointerGestureTests, CaptureLossAfterOrdinaryReleaseCannotEraseAComplet
     EXPECT_FALSE(lost.pointerConsumed);
     EXPECT_EQ(lost.focus, target.id);
     EXPECT_EQ(lost.hover, target.id);
+    EXPECT_TRUE(m_router.pointerKnown());
     PointerGesture gesture;
     const auto gestureResult = m_router.consumePointerGesture(target.id, 1u);
     ASSERT_TRUE(gestureResult);

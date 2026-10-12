@@ -47,8 +47,8 @@ bool Builder::paintWindowTitle(){
     const bool focused = input.focus() == m_scope->m_window.collapseState.id;
     if(m_scope->m_window.options.collapsible){
         const Rect collapse = WindowLayout::Collapse(state, metrics);
-        if(painted && (input.hover() == m_scope->m_window.collapseState.id || input.capture() == m_scope->m_window.collapseState.id)){
-            const bool pressed = input.capture() == m_scope->m_window.collapseState.id && input.primaryDown();
+        const bool pressed = input.pressed(m_scope->m_window.collapseState.id);
+        if(painted && (input.hover() == m_scope->m_window.collapseState.id || pressed)){
             const UiSkinRegion* hover = region(pressed ? style.buttonPressed : style.buttonHover, style.windowTitle);
             painted = hover && m_paint.drawRegion(hover->name, collapse);
         }

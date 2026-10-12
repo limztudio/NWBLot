@@ -119,7 +119,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiContextMenuInputTests, SecondaryPressDoesNotActivateOrSelectEditorAndIsConsumedOnce){
+TEST_F(UiContextMenuInputTests, SecondaryReleaseTriggersOnceWithoutActivatingOrSelectingEditor){
     HitTarget target = Target();
     target.textEditable = true;
     target.pointerGesture = true;
@@ -134,12 +134,14 @@ TEST_F(UiContextMenuInputTests, SecondaryPressDoesNotActivateOrSelectEditorAndIs
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration));
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     ContextMenuAction action;
     const auto actionResult = take();
     ASSERT_TRUE(actionResult);
     action = *actionResult;
-    EXPECT_FALSE(take());
-    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_FLOAT_EQ(action.position.x, 16.0f);
+    EXPECT_FLOAT_EQ(action.position.y, 18.0f);
     EXPECT_FALSE(take());
     EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
@@ -220,21 +222,23 @@ TEST_F(UiContextMenuInputTests, HeldSecondaryConsumesMovementLeaveAndReleaseOuts
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp, { 180.0f, 180.0f })).pointerConsumed);
     EXPECT_FALSE(m_router.secondaryDown());
     EXPECT_FALSE(m_router.wantsPointer());
+    EXPECT_FALSE(take());
 }
 
 TEST_F(UiContextMenuInputTests, DuplicateSecondaryDownCannotTriggerAnotherTargetDuringTheSamePress){
     const Array<HitTarget, 2u> targets = { Target(), Target(2u, { 70.0f, 10.0f, 40.0f, 20.0f }) };
     ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
-    ContextMenuAction action;
-    const auto actionResult1 = take();
-    ASSERT_TRUE(actionResult1);
-    action = *actionResult1;
+    EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown, { 75.0f, 15.0f })).pointerConsumed);
     EXPECT_FALSE(take());
     EXPECT_FALSE(take(2u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp, { 75.0f, 15.0f })).pointerConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_FALSE(take(2u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown, { 75.0f, 15.0f })).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp, { 75.0f, 15.0f })).pointerConsumed);
+    ContextMenuAction action;
     const auto actionResult2 = take(2u);
     ASSERT_TRUE(actionResult2);
     action = *actionResult2;
@@ -253,7 +257,7 @@ TEST_F(UiContextMenuInputTests, OrdinaryAcceptedSurfaceConsumesSecondaryWithoutA
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration));
 }
 
-TEST_F(UiContextMenuInputTests, MenuAndShiftF10UseTheAcceptedKeyboardAnchorOncePerPress){
+TEST_F(UiContextMenuInputTests, MenuAndShiftF10UseTheAcceptedKeyboardAnchorOncePerRelease){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 5u));
     focus();
@@ -262,6 +266,11 @@ TEST_F(UiContextMenuInputTests, MenuAndShiftF10UseTheAcceptedKeyboardAnchorOnceP
         const bool shift = key == Core::Key::F10;
         EXPECT_TRUE(send(Key(key, shift)).keyboardConsumed);
         EXPECT_TRUE(m_router.ownsKey(key));
+        EXPECT_FALSE(take());
+        EXPECT_TRUE(send(Key(key, shift, false, false, true)).keyboardConsumed);
+        EXPECT_TRUE(send(Key(key, shift)).keyboardConsumed);
+        EXPECT_FALSE(take());
+        EXPECT_TRUE(release(key).keyboardConsumed);
         ContextMenuAction action;
         const auto actionResult = take();
         ASSERT_TRUE(actionResult);
@@ -271,10 +280,7 @@ TEST_F(UiContextMenuInputTests, MenuAndShiftF10UseTheAcceptedKeyboardAnchorOnceP
         EXPECT_FLOAT_EQ(action.position.y, target.rectangle.y + target.rectangle.height);
         EXPECT_EQ(action.control, target.control);
         EXPECT_EQ(action.id.layoutGeneration, 5u);
-        EXPECT_TRUE(send(Key(key, shift, false, false, true)).keyboardConsumed);
-        EXPECT_TRUE(send(Key(key, shift)).keyboardConsumed);
         EXPECT_FALSE(take());
-        EXPECT_TRUE(release(key).keyboardConsumed);
         EXPECT_FALSE(m_router.ownsKey(key));
     }
     EXPECT_TRUE(m_router.actions().empty());
@@ -333,10 +339,10 @@ TEST_F(UiContextMenuInputTests, SceneOwnedContextKeysCannotTransferToAnEditorTha
     ContextMenuAction action;
     EXPECT_FALSE(take());
     EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
     const auto actionResult1 = take();
     ASSERT_TRUE(actionResult1);
     action = *actionResult1;
-    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
     m_router.clearFocus();
     EXPECT_FALSE(send(Key(Core::Key::F10)).keyboardConsumed);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 3u));
@@ -344,6 +350,7 @@ TEST_F(UiContextMenuInputTests, SceneOwnedContextKeysCannotTransferToAnEditorTha
     EXPECT_FALSE(release(Core::Key::F10).keyboardConsumed);
     EXPECT_FALSE(take());
     EXPECT_TRUE(send(Key(Core::Key::F10, true)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::F10).keyboardConsumed);
     const auto actionResult2 = take();
     ASSERT_TRUE(actionResult2);
     action = *actionResult2;
@@ -357,6 +364,7 @@ TEST_F(UiContextMenuInputTests, OnlyTheTopAcceptedHitMaySupplyAContextMenu){
     const Array<HitTarget, 2u> targets = { base, cover };
     ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(take());
     EXPECT_FALSE(take(2u));
 }
@@ -434,12 +442,12 @@ TEST_F(UiContextMenuInputTests, PopupTriggersCopyTheExactScopeAndClosingItRetire
     const auto targets = PopupTargets(scope);
     ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u, &scope, 1u));
     EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
     ContextMenuAction action;
     const auto actionResult = take(101u);
     ASSERT_TRUE(actionResult);
     action = *actionResult;
     EXPECT_EQ(action.popup, scope.token);
-    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown, { 55.0f, 55.0f })).pointerConsumed);
     m_router.closePopup(scope.token);
     EXPECT_FALSE(take(101u));
@@ -459,7 +467,9 @@ TEST_F(UiContextMenuInputTests, PopupReplacementCannotReplayAContextActionOrItsH
     ContextMenuAction action;
     EXPECT_FALSE(take(101u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp, { 55.0f, 55.0f })).pointerConsumed);
+    EXPECT_FALSE(take(101u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown, { 55.0f, 55.0f })).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp, { 55.0f, 55.0f })).pointerConsumed);
     const auto actionResult = take(101u);
     ASSERT_TRUE(actionResult);
     action = *actionResult;
@@ -479,7 +489,9 @@ TEST_F(UiContextMenuInputTests, DeclarationReplacementDiscardsIntentionsButPrese
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     const auto actionResult = take();
     ASSERT_TRUE(actionResult);
     action = *actionResult;
@@ -498,7 +510,9 @@ TEST_F(UiContextMenuInputTests, ControlRebindRetiresKeyboardIntentionsEvenWhenTh
     ContextMenuAction action;
     EXPECT_FALSE(take());
     EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    EXPECT_FALSE(take());
     EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
     const auto actionResult = take();
     ASSERT_TRUE(actionResult);
     action = *actionResult;
@@ -514,27 +528,29 @@ TEST_F(UiContextMenuInputTests, DisablingOrOmittingAnAnchorRetiresItsPendingActi
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 3u));
     EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     ASSERT_TRUE(m_router.commitTargets(nullptr, 0u, 4u));
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 5u));
     EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp, { 180.0f, 180.0f })).pointerConsumed);
+    EXPECT_FALSE(take());
 }
 
 TEST_F(UiContextMenuInputTests, ExplicitTargetInvalidationAndControlFencesPruneContextActions){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     m_router.invalidateTarget(target.id);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     ControlToken changed = target.control;
     ++changed.contentRevision;
     m_router.fenceControl(target.id, target.declarationGeneration, changed);
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 3u));
     EXPECT_FALSE(take());
 }
@@ -545,22 +561,25 @@ TEST_F(UiContextMenuInputTests, ConsumptionRequiresTheExactDeclarationAndKeepsTh
     focus();
     EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
     ContextMenuAction action;
-    EXPECT_FALSE(take(1u, 0u));
-    EXPECT_FALSE(take(1u, 4u));
+    EXPECT_FALSE(take());
     target.rectangle = { 80.0f, 80.0f, 30.0f, 30.0f };
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 9u));
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    EXPECT_FALSE(take(1u, 0u));
+    EXPECT_FALSE(take(1u, 4u));
     const auto actionResult = take();
     ASSERT_TRUE(actionResult);
     action = *actionResult;
     EXPECT_FLOAT_EQ(action.position.x, 10.0f);
     EXPECT_FLOAT_EQ(action.position.y, 30.0f);
-    EXPECT_EQ(action.id.layoutGeneration, 8u);
+    EXPECT_EQ(action.id.layoutGeneration, 9u);
 }
 
 TEST_F(UiContextMenuInputTests, FailedLayoutPublicationPreservesAnAlreadyAcceptedContextTrigger){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     HitTarget invalid = target;
     invalid.rectangle.width = -1.0f;
     EXPECT_FALSE(m_router.commitTargets(&invalid, 1u, 2u));
@@ -572,7 +591,7 @@ TEST_F(UiContextMenuInputTests, FailedLayoutPublicationPreservesAnAlreadyAccepte
     EXPECT_EQ(action.id.layoutGeneration, 1u);
 }
 
-TEST_F(UiContextMenuInputTests, NativeFocusLossCancelsPendingContextActionsAndHeldOwners){
+TEST_F(UiContextMenuInputTests, NativeFocusLossTerminatesPointerAndRetainsKeyboardReleaseOwnership){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     focus();
@@ -582,66 +601,76 @@ TEST_F(UiContextMenuInputTests, NativeFocusLossCancelsPendingContextActionsAndHe
     EXPECT_FALSE(m_router.windowFocused());
     EXPECT_FALSE(m_router.secondaryDown());
     EXPECT_FALSE(m_router.pointerKnown());
-    EXPECT_FALSE(m_router.ownsKey(Core::Key::Menu));
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Menu));
     ContextMenuAction action;
     EXPECT_FALSE(take());
-    EXPECT_FALSE(release(Core::Key::Menu).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    EXPECT_FALSE(send(Pointer(InputEventType::SecondaryUp, { 180.0f, 180.0f })).pointerConsumed);
     EXPECT_FALSE(send(Pointer(InputEventType::FocusGained)).pointerConsumed);
     EXPECT_TRUE(m_router.windowFocused());
     focus();
     EXPECT_FALSE(take());
     EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
     const auto actionResult = take();
     ASSERT_TRUE(actionResult);
     action = *actionResult;
 }
 
-TEST_F(UiContextMenuInputTests, CaptureLossClearsTheSecondaryHoldAndPointerKnowledge){
+TEST_F(UiContextMenuInputTests, NativeCaptureLossCancelsSecondaryTriggerAndTerminatesPointerOwnership){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
-    ContextMenuAction action;
-    const auto actionResult = take();
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
+    EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::PointerCaptureLost)).pointerConsumed);
     EXPECT_FALSE(m_router.secondaryDown());
     EXPECT_FALSE(m_router.pointerKnown());
+    EXPECT_FALSE(m_router.wantsPointer());
     EXPECT_FALSE(send(Pointer(InputEventType::SecondaryUp, { 180.0f, 180.0f })).pointerConsumed);
     EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(take());
 }
 
 TEST_F(UiContextMenuInputTests, ResetDropsPendingTriggersAndKeepsActionSequencesMonotonic){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     ContextMenuAction first;
     const auto firstResult = take();
     ASSERT_TRUE(firstResult);
     first = *firstResult;
-    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     m_router.reset();
-    EXPECT_FALSE(m_router.secondaryDown());
+    EXPECT_TRUE(m_router.secondaryDown());
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     ContextMenuAction action;
     EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_FALSE(take());
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     const auto actionResult = take();
     ASSERT_TRUE(actionResult);
     action = *actionResult;
     EXPECT_GT(action.id.sequence, first.id.sequence);
 }
 
-TEST_F(UiContextMenuInputTests, ContextTriggerQueueIsBoundedAndReportsOverflowWithoutRepeatingThePress){
+TEST_F(UiContextMenuInputTests, ContextTriggerQueueReportsOverflowOnReleaseWithoutReplayingTheHold){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     focus();
     for(usize index = 0u; index < s_InputMaxContextMenuActions; ++index){
         EXPECT_FALSE(send(Key(Core::Key::Menu)).activationOverflow);
-        EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+        const InputRoutingResult released = release(Core::Key::Menu);
+        EXPECT_TRUE(released.keyboardConsumed);
+        EXPECT_FALSE(released.activationOverflow);
     }
-    const InputRoutingResult overflow = send(Key(Core::Key::Menu));
+    EXPECT_FALSE(send(Key(Core::Key::Menu)).activationOverflow);
+    const InputRoutingResult overflow = release(Core::Key::Menu);
     EXPECT_TRUE(overflow.keyboardConsumed);
     EXPECT_TRUE(overflow.activationOverflow);
     ContextMenuAction action;
@@ -656,8 +685,9 @@ TEST_F(UiContextMenuInputTests, ContextTriggerQueueIsBoundedAndReportsOverflowWi
     EXPECT_EQ(count, s_InputMaxContextMenuActions);
     EXPECT_FALSE(send(Key(Core::Key::Menu, false, false, false, true)).activationOverflow);
     EXPECT_FALSE(take());
-    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    EXPECT_FALSE(release(Core::Key::Menu).keyboardConsumed);
     EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
     const auto actionResult = take();
     ASSERT_TRUE(actionResult);
     action = *actionResult;
@@ -671,6 +701,62 @@ TEST_F(UiContextMenuInputTests, SecondaryInputRejectsNonfiniteCoordinatesAndNewK
     EXPECT_TRUE(m_router.queue(Key(Core::Key::Menu)));
     EXPECT_TRUE(m_router.queue(Key(Core::Key::F10, true)));
     EXPECT_FALSE(m_router.process().keyboardConsumed);
+}
+
+TEST_F(UiContextMenuInputTests, EscapeCancelsHeldPointerAndMenuIntentsWithoutLeakingTheirReleases){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    focus();
+    EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(Core::Key::Escape)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Escape).keyboardConsumed);
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Menu));
+    EXPECT_TRUE(m_router.secondaryDown());
+    EXPECT_TRUE(send(Key(Core::Key::Menu, false, false, false, true)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(m_router.controlActions().empty());
+    focus();
+    EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    const auto keyboard = take();
+    ASSERT_TRUE(keyboard);
+    EXPECT_TRUE(keyboard->keyboard);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    const auto pointer = take();
+    ASSERT_TRUE(pointer);
+    EXPECT_FALSE(pointer->keyboard);
+    EXPECT_GT(pointer->id.sequence, keyboard->id.sequence);
+    EXPECT_FALSE(take());
+}
+
+TEST_F(UiContextMenuInputTests, FocusTransferAwayAndBackCannotReviveTheOriginalHeldMenuIntent){
+    const Array<HitTarget, 2u> targets = { Target(), Target(2u, { 70.0f, 10.0f, 40.0f, 20.0f }) };
+    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
+    focus();
+    ASSERT_EQ(m_router.focus(), targets[0u].id);
+    EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(Core::Key::Tab)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Tab).keyboardConsumed);
+    EXPECT_EQ(m_router.focus(), targets[1u].id);
+    EXPECT_TRUE(send(Key(Core::Key::Tab, true)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Tab).keyboardConsumed);
+    EXPECT_EQ(m_router.focus(), targets[0u].id);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_FALSE(take(2u));
+    EXPECT_TRUE(send(Key(Core::Key::Menu)).keyboardConsumed);
+    EXPECT_TRUE(release(Core::Key::Menu).keyboardConsumed);
+    ASSERT_TRUE(take());
+    EXPECT_FALSE(take());
 }
 
 

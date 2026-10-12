@@ -228,6 +228,28 @@ TEST_F(UiTextControlLifetimeTests, NonTextScrollHostKeepsItsExistingFullFenceBeh
     EXPECT_FALSE(m_router.targets()[1u].enabled);
 }
 
+TEST_F(UiTextControlLifetimeTests, AuxiliaryTokenRestorationPreservesMainTextCaptureWithoutRevivingSubmission){
+    m_targets[0u].activatable = true;
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 10.0f, 10.0f } }).pointerConsumed);
+    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
+    EXPECT_TRUE(m_router.pressed(m_targets[0u].id));
+    const ControlToken original = m_targets[0u].control;
+    revise();
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
+    EXPECT_FALSE(m_router.pressed(m_targets[0u].id));
+    for(auto& target : m_targets)
+        target.control = original;
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 10.0f, 10.0f } }).pointerConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(m_targets[0u].id));
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 10.0f, 10.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 10.0f, 10.0f } }).pointerConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(m_targets[0u].id));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

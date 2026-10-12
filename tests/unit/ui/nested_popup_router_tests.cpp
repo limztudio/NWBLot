@@ -242,12 +242,13 @@ TEST_F(UiNestedPopupRouterTests, OutsideSecondarySequenceCannotOpenTheNewlyExpos
     ContextMenuAction action;
     EXPECT_FALSE(m_router.consumeContextMenu({ 101u }, 10u));
     EXPECT_TRUE(send({ .type = InputEventType::SecondaryDown, .position = { 35.0f, 35.0f } }).pointerConsumed);
+    EXPECT_FALSE(m_router.consumeContextMenu({ 101u }, 10u));
+    EXPECT_TRUE(send({ .type = InputEventType::SecondaryUp, .position = { 35.0f, 35.0f } }).pointerConsumed);
     const auto actionResult = m_router.consumeContextMenu({ 101u }, 10u);
     ASSERT_TRUE(actionResult);
     action = *actionResult;
     EXPECT_EQ(action.popup, parent.token);
     EXPECT_FALSE(action.keyboard);
-    EXPECT_TRUE(send({ .type = InputEventType::SecondaryUp, .position = { 35.0f, 35.0f } }).pointerConsumed);
 }
 
 TEST_F(UiNestedPopupRouterTests, ClosingAncestorPreservesUnrelatedTopChainAndItsAcceptedAction){

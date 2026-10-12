@@ -67,8 +67,10 @@ private:
         ControlKeyOwner controlOwner{};
         ContextMenuOwner contextOwner{};
         ContextMenuOwner focusOwner{};
+        Point contextPosition;
         bool consumed = false;
         bool delegated = false;
+        bool submitArmed = false;
     };
 
     struct HoverIdentity{
@@ -111,6 +113,8 @@ public:
     void clearFocus()noexcept;
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset();
+    // Native capture/focus termination may suppress releases; the host resets its native owner records at this boundary.
+    void cancelNativeInput(bool includeKeyboard);
     [[nodiscard]] bool consumeActivation(WidgetId id);
     [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration);
     [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token);
@@ -145,12 +149,22 @@ public:
     [[nodiscard]] bool ownsSource(const InputSource& source)const noexcept;
     // Held commands cannot switch editors or begin editing after their delegated owner has retired.
     [[nodiscard]] bool canEditCommand(const InputEvent& event)const;
+    // Query a queued release before process retires its physical source.
+    [[nodiscard]] bool canSubmitCommand(const InputEvent& event)const;
+    void cancelSubmitCommands(WidgetId id)noexcept;
+    [[nodiscard]] bool pressed(WidgetId id)const;
 
 
 private:
     [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event);
     [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept;
     [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept;
+    [[nodiscard]] bool currentCommandFocus(const CommandSource& source)const;
+    void releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result);
+    void cancelCommandPresses()noexcept;
+    void retireCommandFocus()noexcept;
+    void reconcileCommandPresses();
+    void cancelPointerPress();
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
     [[nodiscard]] bool validControlTargets()const;
@@ -163,7 +177,7 @@ private:
     [[nodiscard]] bool currentContextMenuOwner(const ContextMenuOwner& owner)const;
     void reconcileContextMenus();
     void appendContextMenu(const HitTarget& target, const Point& position, bool keyboard, InputRoutingResult& result);
-    [[nodiscard]] bool routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed, InputRoutingResult& result);
+    [[nodiscard]] bool routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed);
     void routeSecondary(const InputEvent& event, InputRoutingResult& result);
     void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result, f64 deltaX = 0.0);
     [[nodiscard]] bool routeControlKey(const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, bool alreadyPressed, InputRoutingResult& result);
@@ -224,9 +238,11 @@ private:
     u64 m_captureDeclaration = 0u;
     ContextMenuOwner m_secondaryOwner;
     Point m_pointer;
+    Point m_secondaryPosition;
     bool m_pointerKnown = false;
     bool m_primaryDown = false;
     bool m_pointerSequenceConsumed = false;
+    bool m_pointerSubmitArmed = false;
     bool m_secondaryDown = false;
     bool m_secondarySequenceConsumed = false;
     bool m_windowFocused = true;

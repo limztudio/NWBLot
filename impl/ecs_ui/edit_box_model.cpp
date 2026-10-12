@@ -69,9 +69,10 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
     else{
         const u64 navigationInstance = navigation ? navigation->state.instanceGeneration() : 0u;
         const bool rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr) || entry->navigationInstanceGeneration != navigationInstance;
-        const bool policyChanged = actions && (entry->enabled != options.enabled || entry->readOnly != options.readOnly);
+        const bool policyChanged = entry->enabled != options.enabled || entry->readOnly != options.readOnly;
         abandon = actions && (rebound || policyChanged);
         if(rebound || policyChanged || !entry->expected.matches(model)){
+            m_context.input().cancelSubmitCommands(widget.id);
             entry->navigationResetPending = navigation != nullptr;
             if(m_session.owner() == entry->owner || (m_clipboard.pending() && m_clipboardOwner == entry->owner) || (m_primary.pending() && m_primaryOwner == entry->owner))
                 cancelTransfers();

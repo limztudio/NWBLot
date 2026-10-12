@@ -351,6 +351,54 @@ TEST_F(UiListBuilderTests, SourceRevisionFencesHeldCaptureAndRestoresHostFocusAt
     EXPECT_EQ(m_state.selectedKey(), 0u);
 }
 
+TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmission){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    const Point point = Center(target(row(2u))->rectangle);
+    EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
+    ASSERT_TRUE(accept(2u));
+    EXPECT_FALSE(m_result.activated);
+    key(Core::Key::Escape);
+    EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_FALSE(m_result.activated);
+    EXPECT_FALSE(m_result.selectionChanged);
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_context.input().focus(), host());
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(4u));
+    EXPECT_FALSE(m_result.activated);
+    key(Core::Key::Escape);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(5u));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_FALSE(m_result.activated);
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_context.input().focus(), host());
+    key(Core::Key::Enter);
+    ASSERT_TRUE(accept(6u));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_TRUE(m_result.activated);
+}
+
+TEST_F(UiListBuilderTests, DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRelease){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    key(Core::Key::Tab);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    ++m_source.contentRevision;
+    ASSERT_TRUE(accept(2u));
+    EXPECT_FALSE(m_result.activated);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_FALSE(m_result.activated);
+    key(Core::Key::Enter);
+    ASSERT_TRUE(accept(4u));
+    EXPECT_TRUE(m_result.activated);
+}
+
 TEST_F(UiListBuilderTests, HeldNavigationCannotMutateAnAcceptedReorderedDataset){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));

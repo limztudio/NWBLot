@@ -309,6 +309,27 @@ TEST_F(UiPopupToolsBuilderTests, SecondaryTriggerUsesOnlyTheExactlyAcceptedAncho
     ASSERT_NE(menuHost(), nullptr);
 }
 
+TEST_F(UiPopupToolsBuilderTests, EscapeBeforeSecondaryReleaseCancelsThePendingContextMenu){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(moveToAnchor());
+    const Point point = m_context.input().pointerPosition();
+    EXPECT_TRUE(send({ InputEventType::SecondaryDown, point }).pointerConsumed);
+    ASSERT_TRUE(acceptTools(2u, false));
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_menuResult.opened);
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ InputEventType::SecondaryUp, point }).pointerConsumed);
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_menuResult.opened);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_anchorActivated);
+    secondaryClick(point);
+    ASSERT_TRUE(acceptTools(4u, false));
+    EXPECT_TRUE(m_menu.isOpen());
+    EXPECT_TRUE(m_menuResult.opened);
+}
+
 TEST_F(UiPopupToolsBuilderTests, OrdinaryPrimaryActivationDoesNotOpenAnAttachedContextMenu){
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(moveToAnchor());

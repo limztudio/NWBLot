@@ -37,6 +37,22 @@ bool InputRouter::ownsSource(const InputSource& source)const noexcept{
     return held && held->consumed;
 }
 
+void InputRouter::cancelNativeInput(const bool includeKeyboard){
+    cancelPointerCapture();
+    if(!includeKeyboard)
+        return;
+    clearHover();
+    m_pointerKnown = false;
+    for(usize index = m_commandSources.size(); index > 0u; --index){
+        if(m_commandSources[index - 1u].source.device == 0u)
+            m_commandSources.erase(m_commandSources.begin() + static_cast<isize>(index - 1u));
+    }
+    for(usize index = m_boundSources.size(); index > 0u; --index){
+        if(m_boundSources[index - 1u].source.device == 0u)
+            m_boundSources.erase(m_boundSources.begin() + static_cast<isize>(index - 1u));
+    }
+}
+
 bool InputRouter::canEditCommand(const InputEvent& event)const{
     if(event.type != InputEventType::CommandDown || !event.edit)
         return false;
@@ -59,11 +75,8 @@ Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
     InputEvent resolved = event;
     const bool physical = event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp;
     const bool command = event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp;
-    if(!physical && !command){
-        if(event.type == InputEventType::FocusLost)
-            m_boundSources.clear();
+    if(!physical && !command)
         return resolved;
-    }
     if(physical){
         if(!InputBindings::ValidKey(event.key))
             return MakeUnexpected(Failure{});
@@ -104,6 +117,8 @@ Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
         resolved.edit = false;
         resolved.allowText = false;
     }
+    if(resolved.type == InputEventType::CommandUp)
+        resolved.repeat = false;
     return resolved;
 }
 

@@ -659,6 +659,33 @@ TEST_F(UiControlInputTests, GestureUpdateSequenceOrdersLatestMotionAfterAnInterv
     EXPECT_EQ(completed.state, PointerGestureState::Completed);
 }
 
+TEST_F(UiControlInputTests, EscapeAndControlRebindingCancelHeldSubmitWithoutReleaseLeakage){
+    m_targets[0u].focusOnCommit = true;
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Escape)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Escape)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    const ControlToken original = m_targets[0u].control;
+    revise();
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    for(auto& target : m_targets)
+        target.control = original;
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 4u));
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    const auto action = take();
+    ASSERT_TRUE(action);
+    EXPECT_EQ(action->kind, ControlActionKind::Submit);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

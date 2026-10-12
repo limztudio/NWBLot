@@ -62,13 +62,13 @@ void InputRouter::appendContextMenu(const HitTarget& target, const Point& positi
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed, InputRoutingResult& result){
+bool InputRouter::routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed){
     const bool trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;
     if(!alreadyPressed && !event.repeat){
         source.contextOwner = { focused->id, focused->declarationGeneration, focused->popup, focused->control };
-        appendContextMenu(*focused, { focused->rectangle.x, (focused->rectangle.y + focused->rectangle.height) }, true, result);
+        source.contextPosition = { focused->rectangle.x, (focused->rectangle.y + focused->rectangle.height) };
     }
     return true;
 }
@@ -81,6 +81,9 @@ void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& re
     const HitTarget* hit = findTarget(m_hover);
     if(event.type == InputEventType::SecondaryUp){
         result.pointerConsumed |= m_secondaryDown ? m_secondarySequenceConsumed : m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
+        const HitTarget* anchor = hit != nullptr && !hit->contextMenu && hit->owner.valid() ? controlHost(*hit) : hit;
+        if(m_secondaryDown && m_secondarySequenceConsumed && anchor != nullptr && anchor->id == m_secondaryOwner.target && currentContextMenuOwner(m_secondaryOwner))
+            appendContextMenu(*anchor, m_secondaryPosition, false, result);
         m_secondaryDown = false;
         m_secondarySequenceConsumed = false;
         m_secondaryOwner = {};
@@ -106,7 +109,7 @@ void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& re
     if(anchor == nullptr || !anchor->contextMenu || !m_windowFocused)
         return;
     m_secondaryOwner = { anchor->id, anchor->declarationGeneration, anchor->popup, anchor->control };
-    appendContextMenu(*anchor, event.position, false, result);
+    m_secondaryPosition = event.position;
 }
 
 

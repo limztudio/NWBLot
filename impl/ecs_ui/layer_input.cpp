@@ -59,7 +59,7 @@ bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 
         event.control = (mods & Core::InputModifier::Control) != 0;
         event.alt = (mods & Core::InputModifier::Alt) != 0;
         event.super = (mods & Core::InputModifier::Super) != 0;
-        event.repeat = action == Core::InputAction::Repeat || held;
+        event.repeat = action != Core::InputAction::Release && (action == Core::InputAction::Repeat || held);
         routeInput(event, nullptr, action == Core::InputAction::Release ? nullptr : &m_blockCommandChars);
     }
     const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key) ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
@@ -177,6 +177,7 @@ void UiLayerSystem::windowFocusUpdate(const bool focused){
     event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
     routeInput(event);
     if(!focused){
+        m_context.input().cancelNativeInput(true);
         m_pressedButtons = 0u;
         m_pointerOwner = __hidden_layer_input::s_Scene;
         m_blockNativeChars = false;
@@ -230,8 +231,9 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
         m_blockCommandChars = false;
         return;
     }
+    const bool submit = m_editHost.prepareSubmit(*normalized);
     const Ui::InputRoutingResult result = m_context.input().process();
-    m_editHost.input(*normalized, previousCapture);
+    m_editHost.input(*normalized, previousCapture, submit);
     m_editHost.synchronizeFocus();
     if(consumed)
         *consumed = result.keyboardConsumed;

@@ -252,6 +252,25 @@ TEST_F(UiKeyboardOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitia
     action = *actionResult;
 }
 
+TEST_F(UiKeyboardOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease){
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    focus();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    bind(m_targets[2u]);
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    bind(m_targets[1u]);
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_FALSE(take(2u));
+    press(Core::Key::Enter);
+    const auto submitted = take();
+    ASSERT_TRUE(submitted);
+    EXPECT_EQ(submitted->kind, ControlActionKind::Submit);
+    EXPECT_FALSE(take(2u));
+}
+
 TEST_F(UiKeyboardOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
@@ -343,14 +362,16 @@ TEST_F(UiKeyboardOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).keyboardConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
     ControlAction action;
     const auto actionResult1 = take();
     ASSERT_TRUE(actionResult1);
     action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Submit);
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).keyboardConsumed);
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
     press(Core::Key::Enter);
     const auto actionResult2 = take();
     ASSERT_TRUE(actionResult2);

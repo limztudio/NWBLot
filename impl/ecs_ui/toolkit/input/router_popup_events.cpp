@@ -124,6 +124,7 @@ void InputRouter::retirePopup(const WidgetId id){
     }
     rebuildLookup();
     if(top){
+        retireCommandFocus();
         const HitTarget* target = findTarget(restore.restoreFocus, restore.restoreDeclaration);
         if(m_windowFocused && target && target->popup == restore.restorePopup && target->focusable && isInteractive(*target)){
             m_focus = target->id;

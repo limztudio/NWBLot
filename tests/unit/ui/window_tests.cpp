@@ -220,18 +220,24 @@ TEST_F(UiWindowTests, KeyboardCollapseUsesTabFocusAndSuppressesRepeat){
     repeat.repeat = true;
     EXPECT_TRUE(send(repeat).keyboardConsumed);
     ASSERT_TRUE(begin(2u));
-    EXPECT_FALSE(m_builder.beginWindow("window", "Keyboard", state));
+    EXPECT_TRUE(m_builder.beginWindow("window", "Keyboard", state));
+    EXPECT_FALSE(state.collapsed);
+    EXPECT_FALSE(m_builder.button("apply", "Apply"));
     ASSERT_TRUE(finishWindow());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_TRUE(state.collapsed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(begin(3u));
+    EXPECT_FALSE(m_builder.beginWindow("window", "Keyboard", state));
+    ASSERT_TRUE(finishWindow());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_TRUE(state.collapsed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Space }).keyboardConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Space }).keyboardConsumed);
-    ASSERT_TRUE(begin(3u));
+    ASSERT_TRUE(begin(4u));
     EXPECT_TRUE(m_builder.beginWindow("window", "Keyboard", state));
     EXPECT_FALSE(state.collapsed);
     ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(3u));
+    ASSERT_TRUE(m_context.commitFrame(4u));
 }
 
 TEST_F(UiWindowTests, DisablingChromeCancelsPendingGesturesAndRestoresContent){

@@ -113,6 +113,7 @@ InputRoutingResult InputRouter::process(){
             result.keyboardConsumed |= wantsKeyboard();
             cancelPopupFocus();
             cancelInteraction();
+            cancelPointerCapture();
         }
         else if(event.type == InputEventType::FocusGained)
             m_windowFocused = true;
@@ -238,6 +239,7 @@ void InputRouter::rebuildLookup(){
 }
 
 void InputRouter::clearFocus()noexcept{
+    retireCommandFocus();
     m_focus = {};
     m_focusDeclaration = 0u;
     m_focusControl = {};
@@ -245,7 +247,6 @@ void InputRouter::clearFocus()noexcept{
 
 void InputRouter::reset(){
     m_events.clear();
-    m_boundSources.clear();
     m_targets.clear();
     m_stagedTargets.clear();
     m_lookup.clear();
@@ -309,11 +310,8 @@ bool InputRouter::isInteractive(const HitTarget& target)const{
 void InputRouter::reconcileTargets(){
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
     const bool focusedText = focused != nullptr && focused->textEditable && !focused->owner.valid();
-    if(focused == nullptr || !isInteractive(*focused) || !focused->focusable || (!focusedText && focused->control != m_focusControl)){
-        m_focus = {};
-        m_focusDeclaration = 0u;
-        m_focusControl = {};
-    }
+    if(focused == nullptr || !isInteractive(*focused) || !focused->focusable || (!focusedText && focused->control != m_focusControl))
+        clearFocus();
     else
         m_focusControl = focused->control;
     const HitTarget* captured = findTarget(m_capture, m_captureDeclaration);
@@ -323,9 +321,14 @@ void InputRouter::reconcileTargets(){
         m_capturePopup = {};
         m_captureDeclaration = 0u;
         m_captureControl = {};
+        m_pointerSubmitArmed = false;
     }
-    else
+    else{
+        // Auxiliary editor controls can change while its main text-selection capture remains current.
+        if(captured->control != m_captureControl || !captured->activatable)
+            m_pointerSubmitArmed = false;
         m_captureControl = captured->control;
+    }
     for(usize index = 0u; index < m_actions.size();){
         const InputActionId& action = m_actions[index].id;
         const HitTarget* target = findTarget(action.target, action.declarationGeneration);
@@ -337,6 +340,7 @@ void InputRouter::reconcileTargets(){
     reconcilePointerGestures();
     reconcileControlActions();
     reconcileContextMenus();
+    reconcileCommandPresses();
     updateHover();
 }
 
@@ -363,19 +367,9 @@ void InputRouter::clearHover()noexcept{
     m_hoverIdentity = {};
 }
 
-void InputRouter::cancelPointerCapture(){
-    advanceHoverActivity();
-    const bool secondaryHeld = m_secondaryDown;
-    m_secondaryDown = false;
-    m_secondarySequenceConsumed = false;
+void InputRouter::cancelPointerPress(){
+    m_pointerSubmitArmed = false;
     m_secondaryOwner = {};
-    if(!m_primaryDown){
-        if(secondaryHeld){
-            m_pointerKnown = false;
-            clearHover();
-        }
-        return;
-    }
     for(usize index = 0u; index < m_pointerGestures.size(); ++index){
         if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
             m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
@@ -383,14 +377,24 @@ void InputRouter::cancelPointerCapture(){
         }
     }
     m_activeGestureSequence = 0u;
-    clearHover();
     m_capture = {};
     m_capturePopup = {};
     m_captureDeclaration = 0u;
     m_captureControl = {};
+}
+
+void InputRouter::cancelPointerCapture(){
+    advanceHoverActivity();
+    // Releasing native capture after an ordinary Up does not invalidate the known pointer position.
+    if(!m_primaryDown && !m_secondaryDown)
+        return;
+    cancelPointerPress();
+    clearHover();
     m_pointerKnown = false;
     m_primaryDown = false;
     m_pointerSequenceConsumed = false;
+    m_secondaryDown = false;
+    m_secondarySequenceConsumed = false;
 }
 
 void InputRouter::cancelInteraction(){
@@ -409,12 +413,10 @@ void InputRouter::cancelInteraction(){
     m_focusDeclaration = 0u;
     m_captureDeclaration = 0u;
     m_pointerKnown = false;
-    m_primaryDown = false;
-    m_pointerSequenceConsumed = false;
-    m_secondaryDown = false;
-    m_secondarySequenceConsumed = false;
     m_secondaryOwner = {};
-    m_commandSources.clear();
+    m_pointerSubmitArmed = false;
+    // Cancel delivery while retaining physical sequence ownership through its matching release.
+    retireCommandFocus();
 }
 
 void InputRouter::appendActivation(const HitTarget& target, const InputActionSource::Enum source, InputRoutingResult& result){

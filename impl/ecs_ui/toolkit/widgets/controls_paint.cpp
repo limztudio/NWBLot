@@ -77,7 +77,7 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         return paintImage(item, box);
     const InputRouter& input = m_context.input();
     const bool hover = input.hover() == item.state.id;
-    const bool captured = input.capture() == item.state.id && input.primaryDown();
+    const bool pressed = input.pressed(item.state.id);
     const bool focused = input.focus() == item.state.id;
     const bool interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
     m_paint.pushClip(visibleClip(box.clip));
@@ -90,7 +90,7 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         return painted && popped;
     }
     if(item.state.kind == WidgetKind::Button){
-        const Name& preferred = !item.enabled ? item.style.buttonDisabled : captured && hover ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
+        const Name& preferred = !item.enabled ? item.style.buttonDisabled : pressed ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
         const UiSkinRegion* skinRegion = region(preferred, item.style.button);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, box.rectangle);
         const SIMDVectorSingle content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));

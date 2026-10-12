@@ -590,7 +590,7 @@ TEST_F(UiPopupRouterTests, InvalidatingPopupOwnerRetiresItsScopeActionsAndHeldCa
     click({ 55.0f, 55.0f });
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 55.0f, 55.0f } }).pointerConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Space }).keyboardConsumed);
-    ASSERT_EQ(m_router.actions().size(), 2u);
+    ASSERT_EQ(m_router.actions().size(), 1u);
     m_router.invalidateTarget(scope.token.widget);
     EXPECT_FALSE(m_router.hasPopup());
     EXPECT_EQ(m_router.layoutGeneration(), 7u);

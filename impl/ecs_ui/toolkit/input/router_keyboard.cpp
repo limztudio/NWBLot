@@ -22,6 +22,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     if(event.type == InputEventType::CommandUp){
         if(source){
             result.keyboardConsumed |= source->consumed;
+            releaseCommand(event, *source, result);
             m_commandSources.erase(m_commandSources.begin() + (source - m_commandSources.data()));
         }
         return;
@@ -32,44 +33,40 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
             result.activationOverflow = true;
             return;
         }
-        m_commandSources.push_back({ event.source });
+        CommandSource admitted;
+        admitted.source = event.source;
+        m_commandSources.push_back(admitted);
         source = &m_commandSources.back();
         const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-        if(m_windowFocused && !event.repeat && focused && focused->textEditable)
+        if(m_windowFocused && !event.repeat && focused && isInteractive(*focused))
             source->focusOwner = { focused->id, focused->declarationGeneration, focused->popup, focused->control };
     }
     // Blurred and orphan repeat sequences remain inert until released and pressed again.
+    result.keyboardConsumed |= source->consumed;
     if(!m_windowFocused || (!alreadyPressed && event.repeat))
         return;
     bool consumed = source->consumed;
     if(alreadyPressed && !consumed)
         return;
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    if(routeContextMenuKey(event, focused, *source, alreadyPressed, result))
+    if(routeContextMenuKey(event, focused, *source, alreadyPressed))
         consumed = true;
     else if(event.command == InputCommand::FocusNext || event.command == InputCommand::FocusPrevious)
         consumed |= moveFocusForTraversal(event.command == InputCommand::FocusPrevious) || hasPopup();
-    else if(event.command == InputCommand::Cancel && !(focused && focused->textEditable)){
-        if(hasPopup()){
+    else if(event.command == InputCommand::Cancel){
+        consumed |= wantsKeyboard() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
+        if(!event.repeat && !alreadyPressed){
+            cancelCommandPresses();
+            cancelPointerPress();
+        }
+        if(hasPopup() && !(focused && focused->textEditable)){
             const bool dismissed = !event.repeat && !alreadyPressed && dismissPopup(PopupDismissReason::Cancel);
             if(dismissed)
                 updateHover();
             consumed = true;
         }
-        else if(!event.repeat && !alreadyPressed){
-            consumed |= m_focus.valid() || m_capture.valid() || m_pointerSequenceConsumed;
-            for(usize index = 0u; index < m_pointerGestures.size(); ++index){
-                if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
-                    m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
-                    break;
-                }
-            }
-            m_activeGestureSequence = 0u;
+        else if(!event.repeat && !alreadyPressed && !(focused && focused->textEditable)){
             clearFocus();
-            m_capture = {};
-            m_capturePopup = {};
-            m_captureDeclaration = 0u;
-            m_captureControl = {};
         }
     }
     else{
@@ -81,8 +78,8 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
         const HitTarget* control = keyboardOwner != nullptr ? keyboardOwner : focused;
         const bool controlHandled = control != nullptr && focused != nullptr && control->navigable && routeControlKey(event, *control, *focused, source->controlOwner, alreadyPressed, result);
         source->delegated |= controlHandled && keyboardOwner != nullptr;
-        if(!controlHandled && focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed && (event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate))
-            appendActivation(*focused, event.source.device == 0u ? InputActionSource::Keyboard : InputActionSource::Command, result);
+        if(focused != nullptr && !event.repeat && !alreadyPressed && (controlHandled || focused->activatable || focused->textEditable) && (event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate))
+            source->submitArmed = true;
     }
     if(consumed){
         source->consumed = true;
@@ -108,6 +105,8 @@ bool InputRouter::moveFocus(const bool reverse){
             candidate = candidate >= m_targets.size() - 1u ? 0u : candidate + 1u;
         const HitTarget& target = m_targets[candidate];
         if(target.focusable && isInteractive(target)){
+            if(m_focus != target.id || m_focusDeclaration != target.declarationGeneration || m_focusControl != target.control)
+                retireCommandFocus();
             m_focus = target.id;
             m_focusDeclaration = target.declarationGeneration;
             m_focusControl = target.control;
@@ -136,6 +135,8 @@ bool InputRouter::moveFocusForTraversal(const bool reverse){
             const HitTarget& target = m_targets[index - 1u];
             if(target.popup != token || !target.focusable || !isInteractive(target))
                 continue;
+            if(m_focus != target.id || m_focusDeclaration != target.declarationGeneration || m_focusControl != target.control)
+                retireCommandFocus();
             m_focus = target.id;
             m_focusDeclaration = target.declarationGeneration;
             m_focusControl = target.control;
@@ -147,6 +148,8 @@ bool InputRouter::moveFocusForTraversal(const bool reverse){
             const HitTarget& target = m_targets[index];
             if(target.popup != token || !target.focusable || !isInteractive(target))
                 continue;
+            if(m_focus != target.id || m_focusDeclaration != target.declarationGeneration || m_focusControl != target.control)
+                retireCommandFocus();
             m_focus = target.id;
             m_focusDeclaration = target.declarationGeneration;
             m_focusControl = target.control;

@@ -46,7 +46,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const bool enabled = frame.m_options.enabled && row.enabled;
         const bool checked = frame.m_snapshot.selectedKey == row.key;
         const bool hover = input.hover() == part;
-        const bool pressed = input.capture() == part && input.primaryDown() && hover;
+        const bool pressed = input.pressed(part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
         const Name& preferred = checked ? frame.m_style.checked : !enabled ? frame.m_style.disabled : pressed ? frame.m_style.pressed : hover ? frame.m_style.hover : frame.m_style.normal;
         const Name& fallback = checked ? frame.m_style.checkedFallback : frame.m_style.normal;
         const UiSkinRegion* indicator = region(preferred, fallback);

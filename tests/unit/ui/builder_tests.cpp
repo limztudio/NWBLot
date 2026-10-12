@@ -359,6 +359,78 @@ TEST_F(UiBuilderTests, PreparedFrameTargetsStayInaccessibleUntilExactCommit){
     EXPECT_FALSE(m_context.input().hitTest({ 15.0f, 15.0f }).valid());
 }
 
+TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmission){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const Rect rectangle = target(id("apply"))->rectangle;
+    const Point point{ rectangle.x + rectangle.width * 0.5f, rectangle.y + rectangle.height * 0.5f };
+    u64 generation = 1u;
+    for(const i32 key : { Core::Key::Unknown, Core::Key::Enter, Core::Key::Space }){
+        if(!m_context.input().focus().valid()){
+            EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).keyboardConsumed);
+            EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).keyboardConsumed);
+        }
+        ASSERT_EQ(m_context.input().focus(), id("apply"));
+        const bool pointer = key == Core::Key::Unknown;
+        const InputEvent down{ .type = pointer ? InputEventType::PrimaryDown : InputEventType::KeyDown, .position = point, .key = key };
+        const InputEvent up{ .type = pointer ? InputEventType::PrimaryUp : InputEventType::KeyUp, .position = point, .key = key };
+        const InputRoutingResult held = send(down);
+        EXPECT_TRUE(pointer ? held.pointerConsumed : held.keyboardConsumed);
+        ASSERT_TRUE(begin(++generation));
+        EXPECT_FALSE(m_builder.button("apply", "Apply"));
+        ASSERT_TRUE(finish());
+        ASSERT_TRUE(m_context.commitFrame(generation));
+        EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Escape }).keyboardConsumed);
+        EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Escape }).keyboardConsumed);
+        const InputRoutingResult released = send(up);
+        EXPECT_TRUE(pointer ? released.pointerConsumed : released.keyboardConsumed);
+        ASSERT_TRUE(begin(++generation));
+        EXPECT_FALSE(m_builder.button("apply", "Apply"));
+        ASSERT_TRUE(finish());
+        ASSERT_TRUE(m_context.commitFrame(generation));
+        EXPECT_TRUE(m_context.input().actions().empty());
+    }
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).keyboardConsumed);
+    ASSERT_EQ(m_context.input().focus(), id("apply"));
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(begin(++generation));
+    EXPECT_TRUE(m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(generation));
+}
+
+TEST_F(UiBuilderTests, FocusTransferWhileButtonSubmitIsHeldCannotActivateEitherButton){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button("first", "First"));
+    EXPECT_FALSE(m_builder.button("second", "Second"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).keyboardConsumed);
+    ASSERT_EQ(m_context.input().focus(), id("first"));
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).keyboardConsumed);
+    ASSERT_EQ(m_context.input().focus(), id("second"));
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(begin(2u));
+    EXPECT_FALSE(m_builder.button("first", "First"));
+    EXPECT_FALSE(m_builder.button("second", "Second"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(begin(3u));
+    EXPECT_FALSE(m_builder.button("first", "First"));
+    EXPECT_TRUE(m_builder.button("second", "Second"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+}
+
 TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBuilderReuse){
     bool checked = true;
     AString<Core::Alloc::GlobalArena> caption("A", m_arena);

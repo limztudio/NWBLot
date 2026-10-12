@@ -133,10 +133,13 @@ void InputRouter::reconcileControlActions(){
     }
     // Losing an initial-down owner is terminal for that held key even if its token later returns.
     for(auto& source : m_commandSources){
-        if(!currentControlKeyOwner(source.controlOwner))
+        if(!currentControlKeyOwner(source.controlOwner)){
+            if(source.controlOwner.host.valid())
+                source.submitArmed = false;
             source.controlOwner = {};
+        }
         const HitTarget* focused = findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration);
-        if(!focused || !focused->textEditable || !isInteractive(*focused) || focused->popup != source.focusOwner.popup || focused->control != source.focusOwner.control)
+        if(!focused || !isInteractive(*focused) || focused->popup != source.focusOwner.popup || focused->control != source.focusOwner.control)
             source.focusOwner = {};
     }
 }
@@ -214,7 +217,7 @@ bool InputRouter::routeControlKey(const InputEvent& event, const HitTarget& host
         && owner.popup == host.popup && owner.control == host.control
         && owner.source == source.id && owner.sourceDeclarationGeneration == source.declarationGeneration
         && owner.sourceControl == source.control
-        && (kind != ControlActionKind::Submit || (!alreadyPressed && !event.repeat))
+        && kind != ControlActionKind::Submit
     )
         appendControlAction(host, source, kind, 0.0, result);
     return true;

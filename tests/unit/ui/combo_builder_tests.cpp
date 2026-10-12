@@ -157,7 +157,7 @@ TEST_F(UiComboBuilderTests, OutsideDismissalConsumesTheWholePointerSequence){
     EXPECT_FALSE(m_state.isOpen());
 }
 
-TEST_F(UiComboBuilderTests, OpeningSubmitHeldAcrossFocusTransferCannotCommitItsRepeat){
+TEST_F(UiComboBuilderTests, HeldOpeningSubmitWaitsForReleaseBeforeTransferringFocus){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     press(Core::Key::Tab);
@@ -166,23 +166,67 @@ TEST_F(UiComboBuilderTests, OpeningSubmitHeldAcrossFocusTransferCannotCommitItsR
     event.key = Core::Key::Enter;
     EXPECT_TRUE(send(event).keyboardConsumed);
     ASSERT_TRUE(accept(2u));
-    ASSERT_TRUE(m_state.isOpen());
-    EXPECT_EQ(m_context.input().focus(), list());
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.opened);
+    EXPECT_EQ(m_context.input().focus(), host());
     event.repeat = true;
     EXPECT_TRUE(send(event).keyboardConsumed);
     ASSERT_TRUE(prepare(3u));
-    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_FALSE(m_state.isOpen());
     EXPECT_FALSE(m_result.committed);
     EXPECT_EQ(m_state.selectedKey(), 1u);
     ASSERT_TRUE(m_context.commitFrame(3u));
     event.type = InputEventType::KeyUp;
     event.repeat = false;
     EXPECT_TRUE(send(event).keyboardConsumed);
-    press(Core::Key::Enter);
     ASSERT_TRUE(accept(4u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_TRUE(m_result.opened);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_context.input().focus(), list());
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(5u));
     EXPECT_TRUE(m_result.committed);
     EXPECT_FALSE(m_result.selectionChanged);
     EXPECT_FALSE(m_state.isOpen());
+}
+
+TEST_F(UiComboBuilderTests, EscapeBeforeReleaseCancelsFieldOpeningAndPopupSubmission){
+    m_source.count = 4u;
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    press(Core::Key::Tab);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(2u));
+    EXPECT_FALSE(m_state.isOpen());
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.opened);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    press(Core::Key::Tab);
+    ASSERT_EQ(m_context.input().focus(), host());
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(4u));
+    ASSERT_TRUE(m_state.isOpen());
+    press(Core::Key::Down);
+    ASSERT_TRUE(accept(5u));
+    ASSERT_EQ(m_state.listState().cursorKey(), 2u);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(6u));
+    EXPECT_FALSE(m_result.committed);
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    ASSERT_TRUE(accept(7u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(8u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_FALSE(m_result.committed);
 }
 
 TEST_F(UiComboBuilderTests, DisabledFieldFencesQueuedOpeningAndHasNoTabStop){

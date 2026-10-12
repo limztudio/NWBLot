@@ -122,7 +122,8 @@ public:
     void finishFrame();
     void commitFrame(u64 generation);
     void collectNative();
-    void input(const Ui::InputEvent& event, Ui::WidgetId previousCapture);
+    [[nodiscard]] bool prepareSubmit(const Ui::InputEvent& event);
+    void input(const Ui::InputEvent& event, Ui::WidgetId previousCapture, bool submit);
     [[nodiscard]] bool character(u32 unicode);
     [[nodiscard]] bool pastePrimary(Ui::Point position);
     [[nodiscard]] bool hasTextFocus()const;
@@ -136,6 +137,7 @@ private:
     [[nodiscard]] Entry* find(Ui::WidgetId widget)noexcept;
     [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
     [[nodiscard]] bool append(Event&& event);
+    [[nodiscard]] bool compositionActive(const Entry& entry)const;
     void discard(const UiTextEditOwner& owner);
     [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
     [[nodiscard]] bool apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);

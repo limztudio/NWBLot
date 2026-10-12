@@ -46,12 +46,14 @@ void UiEditBoxHost::collectNative(){
         event.geometryExternalRevision = m_nativePublished.m_expectedExternalRevision;
         event.surroundingAnchor = m_nativePublished.m_expectedAnchor;
         event.surroundingCaret = m_nativePublished.m_expectedCaret;
+        if(event.native.kind == Core::TextInputEventKind::Preedit && !event.native.text.empty())
+            m_context.input().cancelSubmitCommands(event.owner.widget);
         if(!append(Move(event)))
             return;
     }
 }
 
-void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture){
+void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture, const bool submit){
     if(rejectBorrowedMutation())
         return;
     if(input.type == Ui::InputEventType::FocusLost){
@@ -73,16 +75,24 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         }
         return;
     }
-    if(input.type == Ui::InputEventType::CommandDown){
+    if(input.type == Ui::InputEventType::CommandDown || input.type == Ui::InputEventType::CommandUp){
         m_clickTracker.cancel();
         Entry* entry = find(m_context.input().focus());
-        if(!input.edit || !entry || !hasTextFocus() || !m_context.input().canEditCommand(input))
+        const bool released = input.type == Ui::InputEventType::CommandUp;
+        if(!input.edit || !entry || !hasTextFocus() || (released ? !submit : !m_context.input().canEditCommand(input)))
             return;
         Event event(m_arena);
         event.owner = entry->owner;
         event.focusGeneration = entry->focusGeneration;
         const Ui::InputCommandIntent intent{ input.command, input.extend, input.edit };
         event.command = Ui::TranslateEditCommand(intent, input.repeat, entry->displayed.textMode);
+        if(!released && event.command.command == Ui::EditCommand::Submit){
+            if(compositionActive(*entry))
+                m_context.input().cancelSubmitCommands(entry->widget.id);
+            return;
+        }
+        if(released && event.command.command != Ui::EditCommand::Submit)
+            return;
         const auto navigation = Ui::TranslateEditNavigation(intent);
         event.navigation = navigation.has_value();
         if(navigation){

@@ -32,6 +32,7 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
         }
         advanceHoverActivity();
         m_primaryDown = true;
+        m_pointerSubmitArmed = false;
         m_pointerSequenceConsumed = m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
         result.pointerConsumed |= m_pointerSequenceConsumed;
         if(!m_pointerSequenceConsumed){
@@ -52,7 +53,11 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
         m_captureDeclaration = hit == nullptr ? 0u : hit->declarationGeneration;
         m_capturePopup = hit == nullptr ? PopupToken{} : hit->popup;
         m_captureControl = hit == nullptr ? ControlToken{} : hit->control;
+        m_pointerSubmitArmed = hit != nullptr && hit->activatable;
         const HitTarget* focused = hit != nullptr && hit->owner.valid() ? controlHost(*hit) : hit;
+        const WidgetId nextFocus = focused != nullptr && focused->focusable ? focused->id : WidgetId{};
+        if(m_focus != nextFocus || (nextFocus.valid() && (m_focusDeclaration != focused->declarationGeneration || m_focusControl != focused->control)))
+            retireCommandFocus();
         m_focus = focused != nullptr && focused->focusable ? focused->id : WidgetId{};
         m_focusDeclaration = m_focus.valid() ? focused->declarationGeneration : 0u;
         m_focusControl = m_focus.valid() ? focused->control : ControlToken{};
@@ -61,7 +66,7 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
         return;
     }
     result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hit != nullptr;
-    if(m_primaryDown && m_pointerSequenceConsumed && hit != nullptr && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable && hit->popup == m_capturePopup && hit->control == m_captureControl){
+    if(m_primaryDown && m_pointerSequenceConsumed && m_pointerSubmitArmed && hit != nullptr && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable && hit->popup == m_capturePopup && hit->control == m_captureControl){
         const HitTarget* host = hit->owner.valid() ? controlHost(*hit) : nullptr;
         if(host != nullptr)
             appendControlAction(*host, *hit, ControlActionKind::Activate, 0.0, result);
@@ -71,6 +76,7 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
     if(m_primaryDown)
         updatePointerGesture(event.position, true);
     m_primaryDown = false;
+    m_pointerSubmitArmed = false;
     m_pointerSequenceConsumed = false;
     m_capture = {};
     m_capturePopup = {};

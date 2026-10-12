@@ -183,7 +183,7 @@ Fixed-height virtualized lists and selectable rows now use these popup/input con
 
 ## Single-line edit boxes
 
-`Builder::editBox(key, EditModel&, EditBoxState&, EditBoxOptions)` declares a selectable single-line editor. The application owns the persistent model and state in its UI arena. Keep both alive through the matching `endPanel()`, `endWindow()` or `endPopup()`. `EditBoxOptions` supplies fixed/content/stretch sizing, `enabled`, and `readOnly`. `EditBoxResult` reports admission, committed-text or selection changes, submit/cancel intent, focus, and native preedit caret visibility. Enter reports submit intent. Escape cancels active preedit first while keeping the editor/popup open; a subsequent editor cancel asks the host to dismiss its accepted popup or releases ordinary editor focus. Restoring an application value after cancellation belongs to the application.
+`Builder::editBox(key, EditModel&, EditBoxState&, EditBoxOptions)` declares a selectable single-line editor. The application owns the persistent model and state in its UI arena. Keep both alive through the matching `endPanel()`, `endWindow()` or `endPopup()`. `EditBoxOptions` supplies fixed/content/stretch sizing, `enabled`, and `readOnly`. `EditBoxResult` reports admission, committed-text or selection changes, submit/cancel intent, focus, and native preedit caret visibility. Enter arms on press and reports submit intent on its matching release; Escape cancels a held submit. Escape cancels active preedit first while keeping the editor/popup open; a subsequent editor cancel asks the host to dismiss its accepted popup or releases ordinary editor focus. Restoring an application value after cancellation belongs to the application.
 
 Construct the model and state once, then use them inside an existing panel/window callback:
 
@@ -235,12 +235,13 @@ clamped/flipped overlay has no hit target or focus scope, so an editor can keep
 receiving native text while help is visible. `TooltipStyle` resolves `tooltip.normal`
 with an explicit `panel.normal` fallback in the selected skin.
 
-A context menu opens at an accepted secondary-button press, Menu key or Shift+F10.
-The trigger copies anchor declaration, popup/control lifetimes and client position;
-secondary presses never activate the primary control. Menu commands reuse stable-key
+A context menu opens on the matching release of an accepted secondary-button,
+Menu or Shift+F10 press. The press copies anchor declaration, popup/control lifetimes
+and client position; Escape cancels a held trigger. Secondary presses never activate
+the primary control. Menu commands reuse stable-key
 virtualized lists, enabled-row navigation, scrollbars and popup focus/dismissal.
 `ContextMenuResult` reports opening/closing and the activated command key. Enter,
-Space or a row click activates one enabled command and closes; Escape, outside
+Space or a row click activates one enabled command on release and closes; Escape, outside
 press and focus loss dismiss. Source revision changes retire old input and reset
 preview/scroll; source replacement closes the menu. Disabled/hidden anchors cannot
 open or retain it.

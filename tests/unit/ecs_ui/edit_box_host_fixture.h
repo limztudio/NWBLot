@@ -207,8 +207,9 @@ protected:
         const auto normalized = m_context.input().queue(event);
         if(!normalized)
             return false;
+        const bool submit = m_host.prepareSubmit(*normalized);
         const Ui::InputRoutingResult result = m_context.input().process();
-        m_host.input(*normalized, previousCapture);
+        m_host.input(*normalized, previousCapture, submit);
         m_host.synchronizeFocus();
         return !result.activationOverflow && !result.gestureOverflow;
     }

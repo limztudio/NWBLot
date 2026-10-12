@@ -127,7 +127,7 @@ TEST(NoexceptFailureTests, FancyPointerDereferenceAndRawConversionFailuresPreser
     static_assert(!noexcept(*stored));
     static_assert(!noexcept(stored = &target));
 
-    EXPECT_THROW(EXPECT_EQ(&*stored, &target), u32);
+    EXPECT_THROW(static_cast<void>(*stored), u32);
     EXPECT_THROW(stored = &target, u32);
     EXPECT_EQ(stored.get().target, &target);
 }
@@ -149,7 +149,7 @@ TEST(NoexceptFailureTests, PlacementAllocationFailurePropagatesThroughCaptureCon
     static_assert(!noexcept(Storage(callable)));
     static_assert(!noexcept(DeclVal<Storage&>() = callable));
 
-    EXPECT_THROW(EXPECT_TRUE(Storage(callable)), u32);
+    EXPECT_THROW(static_cast<void>(Storage(callable)), u32);
 
     u32 previousInvocations = 0u;
     Storage stored([&previousInvocations]()noexcept{ ++previousInvocations; });
@@ -164,7 +164,7 @@ TEST(NoexceptFailureTests, ThrowingByteGetterPreservesReadOffset){
     usize offset = 0u;
     static_assert(!noexcept(ReadPOD<u32>(source, offset)));
 
-    EXPECT_THROW(EXPECT_FALSE(ReadPOD<u32>(source, offset)), u32);
+    EXPECT_THROW(static_cast<void>(ReadPOD<u32>(source, offset)), u32);
     EXPECT_EQ(offset, 0u);
 }
 

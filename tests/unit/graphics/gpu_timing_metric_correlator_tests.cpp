@@ -263,7 +263,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, PublishesNoPartialFrameWhenOutputRegistrati
     const auto prepare = [&](){
         return correlator.preparePacketEnvelopeMetrics(73u, MakeNotNull(&scopes[0u]), LengthOf(scopes), overlapScope, MakeNotNull(&outputs[0u]), LengthOf(outputs));
     };
-    EXPECT_THROW(EXPECT_TRUE(prepare()), RegistrationSentinel);
+    EXPECT_THROW(static_cast<void>(prepare()), RegistrationSentinel);
     EXPECT_TRUE(correlator.hasOutputRole(overlapScope));
     EXPECT_TRUE(correlator.hasOutputRole(outputs[0u].internalIdleScopeName));
     EXPECT_FALSE(correlator.hasOutputRole(outputs[1u].internalIdleScopeName));

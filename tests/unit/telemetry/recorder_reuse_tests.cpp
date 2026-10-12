@@ -239,7 +239,7 @@ TEST(Telemetry, RecorderFailedAndThrowingBuildersRecycleWithoutAllocations){
     const ArenaMemoryStats warmed = testArena.arena.memoryStats();
     EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){ payload.resize(128u, 31u); return false; }
     ));
-    EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)->bool{
+    EXPECT_THROW(static_cast<void>(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)->bool{
                 payload.resize(128u, 47u);
                 throw PayloadBuildFailure{};
             }
@@ -419,7 +419,7 @@ TEST(Telemetry, RecorderExplicitForeignBuilderStorageIsCopiedOrReleasedOnEveryEx
                         return outcome != 1u;
                     };
                     if(outcome == s_ExpectedDualCount){
-                        EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, buildPayload)), PayloadBuildFailure);
+                        EXPECT_THROW(static_cast<void>(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, buildPayload)), PayloadBuildFailure);
                     }
                     else{
                         EXPECT_EQ(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, buildPayload), outcome == 0u);

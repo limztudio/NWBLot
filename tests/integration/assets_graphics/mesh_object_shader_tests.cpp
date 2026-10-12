@@ -71,7 +71,6 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         { "mesh_shader", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false },
     };
     Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::ShaderEntry entry(testArena.arena);
     for(const MetadataCase& testCase : s_Cases){
         SCOPED_TRACE(testCase.shaderAssetType);
         SCOPED_TRACE(testCase.fields);

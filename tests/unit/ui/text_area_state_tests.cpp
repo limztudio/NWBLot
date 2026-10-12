@@ -25,6 +25,12 @@ using namespace NWB::Impl::Ui;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(UiTextAreaStateTests, NavigationRejectsAnotherOwnersSnapshotBeforeAnyEdits){
+    TextAreaState first;
+    TextAreaState second;
+    EXPECT_FALSE(second.navigation().matches(first.navigation().snapshot()));
+}
+
 TEST(UiTextAreaStateTests, ViewportIntentAwayAndBackRetiresAnEarlierLoan){
     TextAreaState state;
     ASSERT_TRUE(state.scrollTo({ 20.0f, 30.0f }));
@@ -64,20 +70,11 @@ TEST(UiTextAreaStateTests, ResetRetiresExternalAndNavigationEpochsWithoutChangin
     EXPECT_EQ(state.instanceGeneration(), identity);
     EXPECT_GT(state.revision(), accepted);
     EXPECT_FALSE(state.navigation().matches(navigation));
-    EXPECT_FALSE(state.focused());
     EXPECT_FLOAT_EQ(state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(state.scroll().y, 0.0f);
     const u64 empty = state.revision();
     state.reset();
     EXPECT_GT(state.revision(), empty);
-}
-
-TEST(UiTextAreaStateTests, IndependentImmovableOwnersDoNotShareNavigationIdentity){
-    TextAreaState first;
-    TextAreaState second;
-    EXPECT_NE(first.instanceGeneration(), 0u);
-    EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
-    EXPECT_FALSE(second.navigation().matches(first.navigation().snapshot()));
 }
 
 

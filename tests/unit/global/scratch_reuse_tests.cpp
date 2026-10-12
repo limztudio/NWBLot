@@ -172,8 +172,8 @@ TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     sentinel[0u] = 71u;
     const ArenaMemoryStats before = arena.memoryStats();
 #if defined(NWB_DEBUG)
-    EXPECT_DEATH_IF_SUPPORTED({ EXPECT_EQ(arena.allocate(3u, 32u), nullptr); }, "");
-    EXPECT_DEATH_IF_SUPPORTED({ EXPECT_EQ(arena.reallocate(sentinel, 3u, 64u), nullptr); }, "");
+    EXPECT_DEATH_IF_SUPPORTED(static_cast<void>(arena.allocate(3u, 32u)), "");
+    EXPECT_DEATH_IF_SUPPORTED(static_cast<void>(arena.reallocate(sentinel, 3u, 64u)), "");
     EXPECT_DEATH_IF_SUPPORTED({ arena.deallocate(sentinel, 3u, 32u); }, "");
 #else
     EXPECT_EQ(arena.allocate(3u, 32u), nullptr);
@@ -185,7 +185,7 @@ TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     EXPECT_EQ(arena.memoryStats().allocationCount, before.allocationCount);
     EXPECT_EQ(arena.memoryStats().reallocationCount, before.reallocationCount);
     EXPECT_EQ(arena.memoryStats().deallocationCount, before.deallocationCount);
-    EXPECT_THROW({ EXPECT_EQ(arena.allocate(256u, Limit<usize>::s_Max), nullptr); }, AllocationSizeException);
+    EXPECT_THROW(static_cast<void>(arena.allocate(256u, Limit<usize>::s_Max)), AllocationSizeException);
     EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
     arena.deallocate(sentinel, s_ExpectedDualCount, 32u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);

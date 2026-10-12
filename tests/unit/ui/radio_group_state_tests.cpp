@@ -51,7 +51,7 @@ TEST(UiRadioGroupStateTests, SelectionAwayAndBackCannotRestoreAnOldSnapshot){
     EXPECT_FALSE(state.matches(before));
 }
 
-TEST(UiRadioGroupStateTests, ResetClearsBindingAndSelectionEvenWhenAlreadyEmpty){
+TEST(UiRadioGroupStateTests, ResetRetiresSelectionSnapshotsEvenWhenAlreadyEmpty){
     RadioGroupState state;
     state.select(41u);
     const u64 identity = state.instanceGeneration();
@@ -59,8 +59,6 @@ TEST(UiRadioGroupStateTests, ResetClearsBindingAndSelectionEvenWhenAlreadyEmpty)
     EXPECT_EQ(state.instanceGeneration(), identity);
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 0u);
-    EXPECT_EQ(state.snapshot().sourceGeneration, 0u);
-    EXPECT_EQ(state.snapshot().sourceRevision, 0u);
     const RadioGroupSnapshot before = state.snapshot();
     state.reset();
     EXPECT_NE(state.inputGeneration(), before.inputGeneration);

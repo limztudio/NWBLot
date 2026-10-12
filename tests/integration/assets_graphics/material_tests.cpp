@@ -145,10 +145,8 @@ TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
 
-    NWB::Impl::Material transparentMaterial(testArena.arena);
     EXPECT_FALSE(BuildMaterialFromBindAndMeta(AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_TransparentMaterialMeta, "material_cook_missing_avboit_transparent", testArena, scratchArena));
 
-    NWB::Impl::Material refractiveMaterial(testArena.arena);
     EXPECT_FALSE(BuildMaterialFromBindAndMeta(AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_RefractiveMaterialMeta, "material_cook_missing_avboit_refractive", testArena, scratchArena));
 
     EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
@@ -178,7 +176,6 @@ asset.shaders = {
 
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
-    NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingShaderVariantMaterialMeta, testArena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required")));
 #endif
@@ -206,7 +203,6 @@ asset.shader_variant = "default";
 
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
-    NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingRefractiveMaterialMeta, testArena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'refractive' is required and must be 0 or 1")));
 #endif
@@ -220,7 +216,6 @@ TEST(AssetsGraphics, MaterialMetadataRejectsExplicitOpticalStages){
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     const auto expectRejected = [&](const AStringView metaText){
-        NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
         EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("explicit 'shaders' cannot be used with transparent/refractive materials")));
     };
@@ -298,7 +293,6 @@ asset.shader_variant = "default";
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     const auto expectRejected = [&](const AStringView metaText, const TStringView expectedError){
-        NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
         EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(expectedError));
     };

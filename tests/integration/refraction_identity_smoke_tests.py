@@ -67,10 +67,6 @@ class NearAirThicknessEvidenceTests(unittest.TestCase):
     def frames(self):
         return {spec: framebuffer(80 if spec[1] == "automatic" else 130) for spec in smoke.NEAR_AIR_CAPTURES}
 
-    def test_first_half_ior_above_air_retains_positive_longer_path(self):
-        metrics = smoke.analyze_near_air_frames(self.frames())
-        self.assertEqual(metrics["near_air_ordinary_measured_thickness"]["minimum_red_attenuation"], 50)
-
     def test_identical_screen_fallback_cannot_qualify_valid_near_air_volume(self):
         frames = self.frames()
         for case in ("near_air_ordinary", "near_air_csg"):

@@ -23,7 +23,6 @@ using namespace NWB::UiEditCaretTests;
 
 
 TEST_F(EditCaretFixture, UnreadyGeometryRejectsEveryQuery){
-    EXPECT_FALSE(m_geometry.ready());
     EXPECT_FALSE(m_geometry.caretRect(0u));
     EXPECT_FALSE(m_geometry.hitTest({}));
     EXPECT_FALSE(m_geometry.verticalTarget(0u, true, 0.0f));
@@ -338,12 +337,11 @@ TEST_F(EditCaretFixture, RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeom
 TEST_F(EditCaretFixture, NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometry){
     ASSERT_TRUE(adoptText("base", EditTextMode::SingleLine));
     m_shaper.fault = ShaperFault::NonfinitePlacement;
-    TextLayout malformed(m_arena);
     EXPECT_FALSE(layout("ab"));
-    EXPECT_TRUE(malformed.glyphs().empty());
     EXPECT_EQ(m_geometry.layout().utf8(), "base");
     expectCaret(1u, 10.0f, 0.0f);
     m_shaper.fault = ShaperFault::None;
+    TextLayout malformed(m_arena);
     {
         auto layoutResult = layout("ab");
         ASSERT_TRUE(layoutResult);

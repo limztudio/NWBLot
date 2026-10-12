@@ -135,12 +135,7 @@ void VerifyConstructionFailure(Arena& arena, const usize failAt, Factory factory
     ConstructionState state{ .failAt = failAt };
     ActiveConstruction<Arena> active(arena, state);
     const ArenaMemoryStats before = arena.memoryStats();
-    EXPECT_THROW({
-            auto object = factory(state);
-            EXPECT_TRUE(object);
-        },
-        ConstructionFailure
-    );
+    EXPECT_THROW(static_cast<void>(factory(state)), ConstructionFailure);
     const ArenaMemoryStats after = arena.memoryStats();
     EXPECT_EQ(state.constructors, failAt);
     EXPECT_EQ(state.completed, failAt - 1u);
@@ -215,12 +210,7 @@ TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructi
     ConstructionState state;
     bool outerDestroyed = false;
     const ArenaMemoryStats before = arena.memoryStats();
-    EXPECT_THROW({
-            auto object = MakeGlobalUnique<NestedConstruction>(arena, arena, state, outerDestroyed);
-            EXPECT_TRUE(object);
-        },
-        ConstructionFailure
-    );
+    EXPECT_THROW(static_cast<void>(MakeGlobalUnique<NestedConstruction>(arena, arena, state, outerDestroyed)), ConstructionFailure);
     const ArenaMemoryStats after = arena.memoryStats();
     EXPECT_FALSE(outerDestroyed);
     EXPECT_EQ(state.constructors, 1u);

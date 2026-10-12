@@ -30,13 +30,6 @@ namespace __hidden_task_graph_import_scaling_tests{
 
 using namespace TaskGraphTestUtils;
 
-namespace ImportScenario{
-    enum Enum : u8{
-        MetadataPipeline,
-        ExternalCompletion,
-    };
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

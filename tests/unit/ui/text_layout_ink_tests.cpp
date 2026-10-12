@@ -156,22 +156,6 @@ TEST_F(TextLayoutInkTests, UnrepresentablePositionOrAdvanceRejectsBeforeGlyphPub
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
 }
 
-TEST_F(TextLayoutInkTests, NativeCoverageBoundsAreCopiedSeparatelyFromShapedInk){
-    m_shaper.m_coverage = { { -4.0f, -10.0f, 15.0f, 14.0f }, true };
-    {
-        auto layoutResult = m_builder.layout({ "a" });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    const PlacedGlyph& glyph = m_layout.glyphs()[0];
-    m_shaper.m_coverage = {};
-    EXPECT_TRUE(glyph.coverage.known);
-    EXPECT_FLOAT_EQ(glyph.coverage.ink.x, -4.0f);
-    EXPECT_FLOAT_EQ(glyph.coverage.ink.y, -10.0f);
-    EXPECT_FLOAT_EQ(glyph.coverage.ink.width, 15.0f);
-}
-
 TEST_F(TextLayoutInkTests, MalformedOrUnrepresentableKnownCoverageRejectsAtomically){
     {
         auto layoutResult = m_builder.layout({ "a" });

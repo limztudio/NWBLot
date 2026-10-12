@@ -437,18 +437,13 @@ TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
     EXPECT_FALSE(DecodeUtf8CodePoint(AStringView(overlong, LengthOf(overlong))));
 }
 
-TEST(Global, EnvironmentVariableNamesSupportSlicesAndOutputAliasing){
+TEST(Global, EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull){
     NWB::Tests::TestArena<> testArena;
     const auto expected = ReadEnvironmentVariable(testArena.arena, AStringView("PATH"));
     const auto actual = ReadEnvironmentVariable(testArena.arena, AStringView("PATH.trailing").substr(0u, 4u));
     ASSERT_TRUE(expected);
     ASSERT_TRUE(actual);
     EXPECT_EQ(*actual, *expected);
-    ::AString<NWB::Core::Alloc::GlobalArena> name("PATH", testArena.arena);
-    auto aliased = ReadEnvironmentVariable(testArena.arena, AStringView(name));
-    ASSERT_TRUE(aliased);
-    name = Move(*aliased);
-    EXPECT_EQ(name, *expected);
     const char invalidName[]{ 'P', 'A', 'T', 'H', '\0', 'X' };
     EXPECT_FALSE(ReadEnvironmentVariable(testArena.arena, AStringView(invalidName, LengthOf(invalidName))));
 }

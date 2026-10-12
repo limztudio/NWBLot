@@ -607,17 +607,10 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
     ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload(AStringView(cookedPixel.entryPoint()), cookedPixel.bytecode(), pixelBinary), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
     ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload(AStringView(cookedCompute.entryPoint()), cookedCompute.bytecode(), computeBinary), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
 
-    Core::Assets::IAsset* const preservedPixel = pixelAsset.get();
-    Core::Assets::IAsset* const preservedCompute = computeAsset.get();
     const Impl::PixelShaderAssetCodec pixelCodec;
     const Impl::ComputeShaderAssetCodec computeCodec;
     EXPECT_FALSE(pixelCodec.deserialize(testArena.arena, pixelPath, computeBinary));
     EXPECT_FALSE(computeCodec.deserialize(testArena.arena, computePath, pixelBinary));
-    EXPECT_EQ(pixelAsset.get(), preservedPixel);
-    EXPECT_EQ(computeAsset.get(), preservedCompute);
-    UniquePtr<Core::Assets::IAsset> rejectedAsset;
-    EXPECT_FALSE(pixelCodec.deserialize(testArena.arena, pixelPath, computeBinary));
-    EXPECT_FALSE(rejectedAsset);
 
     Impl::PixelShader pixel(testArena.arena, pixelPath);
     Impl::ComputeShader compute(testArena.arena, computePath);

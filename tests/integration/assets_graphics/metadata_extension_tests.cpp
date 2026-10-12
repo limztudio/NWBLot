@@ -276,8 +276,7 @@ TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedM
         const Name name("tests/metadata_extension/constructor_unwind");
         const u64 baseline = arena.memoryStats().usedBytes;
         EXPECT_THROW({
-            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state, true);
-            EXPECT_EQ(created.identity, 1u);
+            static_cast<void>(RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state, true));
         }, ConstructionFailure);
         EXPECT_TRUE(metadata.extensions.empty());
         EXPECT_EQ(state.constructions, 1u);
@@ -332,7 +331,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
         fail = true;
         EXPECT_THROW({
             ParsedMetadataExtension pending = MakeParsedMetadataExtension<AlignedExtension>(ownerArena, ownerArena, state);
-            EXPECT_TRUE(values.try_emplace(Name("tests/metadata_extension/insertion_unwind"), Move(pending)).second);
+            static_cast<void>(values.try_emplace(Name("tests/metadata_extension/insertion_unwind"), Move(pending)));
         }, InsertionFailure);
         fail = false;
         EXPECT_TRUE(values.empty());

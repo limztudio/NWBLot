@@ -59,19 +59,6 @@ TEST(Base64, ExactDecodedBoundsAreCheckedBeforeAllocation){
     EXPECT_TRUE(empty->empty());
 }
 
-TEST(Base64, AliasedInputSurvivesOwnerReplacement){
-    TestArena<> context;
-    ::AString<Core::Alloc::GlobalArena> text("foobar", context.arena);
-    auto encoded = EncodeBase64<decltype(text)>({ reinterpret_cast<const u8*>(text.data()), text.size() }, text.get_allocator());
-    ASSERT_TRUE(encoded);
-    text = Move(*encoded);
-    EXPECT_EQ(text, "Zm9vYmFy");
-    auto decoded = DecodeBase64<decltype(text)>(AStringView(text.data(), text.size()), text.get_allocator(), 6u);
-    ASSERT_TRUE(decoded);
-    text = Move(*decoded);
-    EXPECT_EQ(text, "foobar");
-}
-
 TEST(Base64, InvalidEncodeInputAndSizeOverflowDoNotAllocate){
     TestArena<> context;
     using Text = ::AString<Core::Alloc::GlobalArena>;

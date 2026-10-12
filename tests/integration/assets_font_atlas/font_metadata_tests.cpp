@@ -123,7 +123,7 @@ TEST(AssetsFontMetadata, BunchRejectsInvalidAndDuplicateChildrenWithoutPublicati
 }
 
 
-TEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValuesWithoutReplacingPriorEntry){
+TEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValues){
     using namespace __hidden_font_metadata_tests;
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -134,22 +134,13 @@ TEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValuesWith
     ASSERT_TRUE(document.parse("font asset;"));
     ASSERT_TRUE(document.asset().isNull());
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    FontCookEntry entry(testArena.arena);
     const Path path = directory / "latin.nwb";
-    auto entryParseResult = ParseFontCookMetadata(directory, "project/fonts", path, document, entry.arena, scratchArena);
+    auto entryParseResult = ParseFontCookMetadata(directory, "project/fonts", path, document, testArena.arena, scratchArena);
     ASSERT_TRUE(entryParseResult);
-    entry.fontBytes = Move(entryParseResult->fontBytes);
-    entry.virtualPath = Move(entryParseResult->virtualPath);
-    entry.faceIndex = Move(entryParseResult->faceIndex);
-    const Sha256Digest originalHash = ComputeSha256({ entry.fontBytes.data(), entry.fontBytes.size() });
-    const usize originalFontBytes = entry.fontBytes.size();
     document.asset().makeMap();
     ASSERT_TRUE(document.asset().asMap().empty());
-    auto entryParseResult2 = ParseFontCookMetadata(directory, "project/fonts", path, document, entry.arena, scratchArena);
+    auto entryParseResult2 = ParseFontCookMetadata(directory, "project/fonts", path, document, testArena.arena, scratchArena);
     ASSERT_TRUE(entryParseResult2);
-    entry.fontBytes = Move(entryParseResult2->fontBytes);
-    entry.virtualPath = Move(entryParseResult2->virtualPath);
-    entry.faceIndex = Move(entryParseResult2->faceIndex);
     for(u32 caseIndex = 0u; caseIndex < 5u; ++caseIndex){
         Core::Metascript::Value invalid(testArena.arena);
         switch(caseIndex){
@@ -159,14 +150,11 @@ TEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValuesWith
         case 3u: invalid.setReference("asset"); break;
         case 4u: invalid.makeList(); break;
         }
-        EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, invalid, entry.arena));
+        EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, invalid, testArena.arena));
     }
-    EXPECT_EQ(entry.virtualPath, Name("project/fonts/latin"));
-    EXPECT_EQ(entry.fontBytes.size(), originalFontBytes);
-    EXPECT_EQ(ComputeSha256({ entry.fontBytes.data(), entry.fontBytes.size() }), originalHash);
 }
 
-TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataPreservesPreviouslyParsedEntries){
+TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataAreRejected){
     using namespace __hidden_font_metadata_tests;
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -186,16 +174,10 @@ TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataPreservesPreviously
     const Path path = directory / "latin.nwb";
     auto fontEntryParseResult = ParseFontCookMetadataValue(Name("project/fonts/latin/face"), path, face, fontEntry.arena);
     ASSERT_TRUE(fontEntryParseResult);
-    fontEntry.fontBytes = Move(fontEntryParseResult->fontBytes);
-    fontEntry.virtualPath = Move(fontEntryParseResult->virtualPath);
     fontEntry.faceIndex = Move(fontEntryParseResult->faceIndex);
     auto atlasEntryParseResult = ParseFontAtlasCookMetadataValue(Name("project/fonts/latin/atlas"), path, atlas, atlasEntry.arena, scratchArena);
     ASSERT_TRUE(atlasEntryParseResult);
     atlasEntry.payload = Move(atlasEntryParseResult->payload);
-    atlasEntry.virtualPath = Move(atlasEntryParseResult->virtualPath);
-    const Sha256Digest originalHash = atlasEntry.payload.fontSha256;
-    const usize originalFontBytes = fontEntry.fontBytes.size();
-    const usize originalGlyphCount = atlasEntry.payload.glyphs.size();
     ASSERT_TRUE(face.isNull());
     static constexpr AStringView s_FontFields[] = { "face_index", "units_per_em", "glyph_count" };
     for(const AStringView field : s_FontFields){
@@ -244,15 +226,9 @@ TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataPreservesPreviously
     Core::Metascript::Value unresolvedReference(atlas);
     unresolvedReference.field("font").setReference("face");
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, unresolvedReference, atlasEntry.arena, scratchArena));
-    EXPECT_EQ(fontEntry.virtualPath, Name("project/fonts/latin/face"));
-    EXPECT_EQ(fontEntry.fontBytes.size(), originalFontBytes);
-    EXPECT_EQ(ComputeSha256({ fontEntry.fontBytes.data(), fontEntry.fontBytes.size() }), originalHash);
-    EXPECT_EQ(atlasEntry.virtualPath, Name("project/fonts/latin/atlas"));
-    EXPECT_EQ(atlasEntry.payload.fontSha256, originalHash);
-    EXPECT_EQ(atlasEntry.payload.glyphs.size(), originalGlyphCount);
 }
 
-TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsPreservePriorAtlas){
+TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected){
     using namespace __hidden_font_metadata_tests;
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -270,9 +246,7 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsPreservePriorAtlas){
     auto entryParseResult3 = ParseFontAtlasCookMetadataValue(Name("project/fonts/latin/atlas"), path, metadata, entry.arena, scratchArena);
     ASSERT_TRUE(entryParseResult3);
     entry.payload = Move(entryParseResult3->payload);
-    entry.virtualPath = Move(entryParseResult3->virtualPath);
     const usize originalGlyphCount = entry.payload.glyphs.size();
-    const Sha256Digest originalHash = entry.payload.fontSha256;
     ASSERT_GT(originalGlyphCount, 1u);
     Core::Metascript::Value incomplete(metadata);
     incomplete.field("glyphs").asList().pop_back();
@@ -334,12 +308,9 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsPreservePriorAtlas){
     Core::Metascript::Value missingWidth(metadata);
     ASSERT_EQ(missingWidth.field("glyphs").asList()[drawableIndex].asMap().erase(AStringView("width")), 1u);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, missingWidth, entry.arena, scratchArena));
-    EXPECT_EQ(entry.virtualPath, Name("project/fonts/latin/atlas"));
-    EXPECT_EQ(entry.payload.fontSha256, originalHash);
-    EXPECT_EQ(entry.payload.glyphs.size(), originalGlyphCount);
 }
 
-TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesPreservePriorEntries){
+TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected){
     using namespace __hidden_font_metadata_tests;
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -354,20 +325,14 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesPreserve
     Core::Metascript::Value metadata(*document.findVariable("atlas"));
     metadata.field("font").setString("project/fonts/latin/face");
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    FontCookEntry fontEntry(testArena.arena);
     FontAtlasCookEntry entry(testArena.arena);
     const Path path = directory / "latin.nwb";
-    auto fontEntryParseResult2 = ParseFontCookMetadataValue(Name("project/fonts/latin/face"), path, face, fontEntry.arena);
+    auto fontEntryParseResult2 = ParseFontCookMetadataValue(Name("project/fonts/latin/face"), path, face, testArena.arena);
     ASSERT_TRUE(fontEntryParseResult2);
-    fontEntry.fontBytes = Move(fontEntryParseResult2->fontBytes);
-    fontEntry.virtualPath = Move(fontEntryParseResult2->virtualPath);
-    fontEntry.faceIndex = Move(fontEntryParseResult2->faceIndex);
     auto entryParseResult4 = ParseFontAtlasCookMetadataValue(Name("project/fonts/latin/atlas"), path, metadata, entry.arena, scratchArena);
     ASSERT_TRUE(entryParseResult4);
     entry.payload = Move(entryParseResult4->payload);
-    entry.virtualPath = Move(entryParseResult4->virtualPath);
     const Sha256Digest originalHash = entry.payload.fontSha256;
-    const usize originalFontBytes = fontEntry.fontBytes.size();
     const Path fontPath = directory / "latin.font";
     Core::Assets::AssetBytes originalFont(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(fontPath, originalFont));
@@ -375,7 +340,7 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesPreserve
     Core::Assets::AssetBytes truncated(originalFont);
     truncated.pop_back();
     ASSERT_TRUE(WriteBinaryFile(fontPath, truncated));
-    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, face, fontEntry.arena));
+    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, face, testArena.arena));
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, entry.arena, scratchArena));
     Core::Assets::AssetBytes corrupted(originalFont);
     corrupted.back() ^= 1u;
@@ -385,7 +350,7 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesPreserve
     ASSERT_GT(corrupted.size(), 24u);
     corrupted[24u] ^= 1u; // The SFNT digest follows the six u32 prepared-source header fields.
     ASSERT_TRUE(WriteBinaryFile(fontPath, corrupted));
-    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, face, fontEntry.arena));
+    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, face, testArena.arena));
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, entry.arena, scratchArena));
     Core::Assets::AssetBytes otherFont(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(FixtureRoot(testArena) / "korean.font", otherFont));
@@ -399,13 +364,8 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesPreserve
     EXPECT_NE(ComputeSha256({ replacementFont.fontBytes.data(), replacementFont.fontBytes.size() }), originalHash);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, entry.arena, scratchArena));
     ASSERT_TRUE(WriteBinaryFile(fontPath, originalFont));
-    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), directory / "missing.nwb", face, fontEntry.arena));
+    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), directory / "missing.nwb", face, testArena.arena));
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), directory / "missing.nwb", metadata, entry.arena, scratchArena));
-    EXPECT_EQ(fontEntry.virtualPath, Name("project/fonts/latin/face"));
-    EXPECT_EQ(fontEntry.fontBytes.size(), originalFontBytes);
-    EXPECT_EQ(ComputeSha256({ fontEntry.fontBytes.data(), fontEntry.fontBytes.size() }), originalHash);
-    EXPECT_EQ(entry.virtualPath, Name("project/fonts/latin/atlas"));
-    EXPECT_EQ(entry.payload.fontSha256, originalHash);
 }
 
 

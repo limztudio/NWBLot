@@ -5,14 +5,14 @@
 #pragma once
 
 
-#include "math/type.h"
-#include "math/constant.h"
-#include "math/convert.h"
-#include "math/vector.h"
-#include "math/quaternion.h"
-#include "math/matrix.h"
-#include "math/collision.h"
-#include "math/frame.h"
+#include "simd/type.h"
+#include "simd/constant.h"
+#include "simd/convert.h"
+#include "simd/vector.h"
+#include "simd/quaternion.h"
+#include "simd/matrix.h"
+#include "simd/collision.h"
+#include "simd/frame.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

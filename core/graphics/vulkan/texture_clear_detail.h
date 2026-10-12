@@ -8,7 +8,7 @@
 #include "texture_clear_contract.h"
 #include "arena_names.h"
 
-#include <global/math/convert.h>
+#include <global/simd/convert.h>
 #include <global/simdmath.h>
 
 

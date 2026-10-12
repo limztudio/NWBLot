@@ -24,16 +24,16 @@
 20. In the ECS renderer mesh pass, once material/framebuffer render-path selection is cached, bucket draw work by path first and run path-specific submission loops; do not keep branching on render path inside the hot per-draw submission section.
 21. `Core::Filesystem::IFilesystem::writeFileDeferred()` copies payload bytes before returning; caller-local temporary buffers only need to stay alive for the duration of the call, so reuse/scratch-backed staging payload buffers are valid there.
 22. The public math API in `global/` lives at global scope, not under `NWB::Math`. `SIMDMatrix` stores row vectors in `v[0..3]`, translation lives in the fourth column (`v[0..2].w`), and `Vector*Transform` evaluates `result = M * v`; do not mix row-vector formulas into this layer without an explicit transpose/convention bridge.
-23. The math subsystem lives under `global/`, with SIMD component headers under `global/math/`; keep math in the `global/` utility domain instead of a separate top-level `math/` tree.
-24. `global/simplemath.h` owns scalar helper wrappers, `global/simdmath.h` is the aggregate SIMD include, and the implementation lives in `global/math/{type,constant,convert,vector,quaternion,matrix}.h`.
-25. The public math layer in `global/` must not depend on an external upstream math checkout at include time; use the checked-in `global/math/` implementation directly.
+23. The math subsystem lives under `global/`, with SIMD component headers under `global/simd/`; keep math in the `global/` utility domain instead of a separate top-level `math/` tree.
+24. `global/simplemath.h` owns scalar helper wrappers, `global/simdmath.h` is the aggregate SIMD include, and the implementation lives in `global/simd/{type,constant,convert,vector,quaternion,matrix}.h`.
+25. The public math layer in `global/` must not depend on an external upstream math checkout at include time; use the checked-in `global/simd/` implementation directly.
 26. Keep the math surface naming free of `XM*`/`_XM_*` identifiers so upstream branding does not leak into project APIs.
 27. Keep math headers domain-split inside `global/`, and expose the public math API at global scope. Do not reintroduce `global/math.h`, `global/matrix_math.h`, `global/sh_math.h`, `compat_math.h`, shim forwarding headers, or the old `Float4x3` / `LoadFloat4x3*` / `StoreFloat4x3*` compatibility surface. Current matrix storage types are `Float34`, `Float44`, and their unaligned forms such as `Float34U`.
 28. In the math layer, keep lane extraction, dot helpers, and 4x4 transpose operations backend-local; do not spill SIMD registers to temporary stack arrays unless the API is explicitly storing into caller-provided memory.
-29. The current `global/math/` implementation already includes SSE/AVX/FMA and scalar specialization paths; when optimizing this layer, check what is already merged before copying extension code a second time.
+29. The current `global/simd/` implementation already includes SSE/AVX/FMA and scalar specialization paths; when optimizing this layer, check what is already merged before copying extension code a second time.
 30. There is no active core SH module in the current tree. If spherical harmonics support returns, keep it in the math domain as CPU/core routines only; do not reintroduce `global/sh_math.h` or API-specific cubemap projection helpers to core math until a graphics-domain integration is intentionally designed.
-31. In `global/math/matrix.h`, do not add extra transposes to `MatrixTranslation*`, axis-rotation builders, or the projection builders just because the matrix rows contain translation in `w`. `Vector3TransformCoord` / `Vector4Transform` evaluate `result = M * v`, and those builders already place translation/basis data in the correct row-storage layout.
-32. In `global/math/vector.h`, stream transform helpers receive row-stored `SIMDMatrix` values and build transposed temporaries only as a backend optimization. Keep naming/commentary aligned with that convention so future ports do not accidentally reintroduce row-vector API semantics.
+31. In `global/simd/matrix.h`, do not add extra transposes to `MatrixTranslation*`, axis-rotation builders, or the projection builders just because the matrix rows contain translation in `w`. `Vector3TransformCoord` / `Vector4Transform` evaluate `result = M * v`, and those builders already place translation/basis data in the correct row-storage layout.
+32. In `global/simd/vector.h`, stream transform helpers receive row-stored `SIMDMatrix` values and build transposed temporaries only as a backend optimization. Keep naming/commentary aligned with that convention so future ports do not accidentally reintroduce row-vector API semantics.
 33. ECS mesh rendering gets projection terms from `CameraComponent` through the renderer-owned mesh view buffer. Do not hard-code near/far depth mapping inside material mesh shaders.
 34. ECS mesh rendering gets camera view/projection from `TransformComponent + CameraComponent` through the renderer-owned mesh view buffer. Do not couple renderer camera state to input/controller components such as `FpsCameraControllerComponent`.
 35. Input controller state such as fly-camera yaw, pitch, speed, and sensitivity is project/runtime state, not a core ECS rendering component. Keep core camera data limited to renderable camera properties.
@@ -179,10 +179,10 @@ The CSG shadow tail is conditional on a ready light-space snapshot with CSG enab
 
 ## Math Matrix Layout
 
-1. In `global/math/matrix.h`, `SIMDMatrix::v[0..3]` stores rows.
+1. In `global/simd/matrix.h`, `SIMDMatrix::v[0..3]` stores rows.
 2. Translation lives in the fourth column (`v[0].w`, `v[1].w`, `v[2].w`); `MatrixTranslation*` and `MatrixLookTo*` already produce the storage layout consumed by `Vector*Transform`.
 3. `Vector*Transform` evaluates `result = M * v`; if a helper needs row-vector semantics, make the conversion explicit instead of changing the public math convention.
-4. Stream transforms in `global/math/vector.h` build transposed temporaries for backend efficiency only; those transposes are implementation details, not a different API convention.
+4. Stream transforms in `global/simd/vector.h` build transposed temporaries for backend efficiency only; those transposes are implementation details, not a different API convention.
 5. Compact affine matrix boundaries are convention-sensitive: `Float34` / `Float34U` are the current 3x4 storage snapshots. Do not add an extra transpose in `LoadFloat` / `StoreFloat` for those types, or translation/basis data will round-trip incorrectly.
 
 ## GPU Timing / Perf Measurement

@@ -9,7 +9,7 @@
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/assert.h>
-#include <global/math/frame.h>
+#include <global/simd/frame.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>

@@ -8,7 +8,7 @@
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/perf/report.h>
-#include <global/math/frame.h>
+#include <global/simd/frame.h>
 #include <global/simdmath.h>
 #include <global/timer.h>
 #include <impl/ecs_csg/module.h>

@@ -14,7 +14,7 @@
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/rhi/device.h>
 #include <global/sync.h>
-#include <global/math/vector.h>
+#include <global/simd/vector.h>
 #include <global/termination.h>
 
 

@@ -35,9 +35,9 @@
 #endif
 #include <core/graphics/runtime/runtime.h>
 
-#include <global/math/frame.h>
-#include <global/math/constant.h>
-#include <global/math/quaternion.h>
+#include <global/simd/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/quaternion.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

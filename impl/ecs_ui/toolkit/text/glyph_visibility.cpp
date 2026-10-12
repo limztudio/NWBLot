@@ -8,7 +8,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
-#include <global/math/vector.h>
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 

@@ -1,6 +1,8 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <global/math/type.h>
+
+#include <global/simd/type.h>
 #include <global/limit.h>
 #include <gtest/gtest.h>
 
@@ -18,7 +20,15 @@
 
 #pragma STDC FENV_ACCESS ON
 
-namespace{
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_storage_equality_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename Element, usize Count>
 struct RawEqualityStorage{
@@ -57,7 +67,7 @@ NWB_NOINLINE bool LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
     return true;
 }
 
-// The HEAD EqualArray expression must also be tested in its original default compiler context.
+// Compare the scalar reference under its original default floating-point environment.
 #pragma STDC FENV_ACCESS OFF
 template<typename Value, usize Count>
 NWB_NOINLINE bool DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noexcept{
@@ -192,9 +202,19 @@ void CheckPageBoundary(){
 }
 #endif
 
-}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 TEST(Math, StorageEqualityChecksEveryFloatIntegerAndHalfLane){
+    using namespace __hidden_storage_equality_tests;
     CheckArrayEquality<Half2U, 2u>();
     CheckArrayEquality<Half4U, 4u>();
     CheckArrayEquality<Float4, 4u>();
@@ -242,11 +262,13 @@ TEST(Math, StorageEqualityUsesNumericFloatsAndIntegerMixedPayloads){
 }
 
 TEST(Math, StorageEqualityPreservesNaNShortCircuitExceptionFlags){
+    using namespace __hidden_storage_equality_tests;
     CheckNaNComparisonFlags<Float4U, 4u>();
     CheckNaNComparisonFlags<Float33U, 9u>();
 }
 
 TEST(Math, StorageEqualityDoesNotReadBeyondUnalignedShortValues){
+    using namespace __hidden_storage_equality_tests;
 #if defined(__linux__)
     CheckPageBoundary<RawEqualityStorage<bool, 1u>, 1u>();
     CheckPageBoundary<RawEqualityStorage<bool, 16u>, 16u>();
@@ -268,6 +290,7 @@ TEST(Math, StorageEqualityDoesNotReadBeyondUnalignedShortValues){
 
 
 TEST(Math, StorageEqualityFallsBackForBooleanArrays){
+    using namespace __hidden_storage_equality_tests;
     const auto verify = []<usize Count>(){
         RawEqualityStorage<bool, Count> lhs{}, rhs{};
         for(usize lane = 0u; lane < Count; ++lane)
@@ -290,6 +313,7 @@ TEST(Math, StorageEqualityFallsBackForBooleanArrays){
 }
 
 TEST(Math, StorageEqualityFallsBackForWideIntegralArrays){
+    using namespace __hidden_storage_equality_tests;
 #if defined(__SIZEOF_INT128__)
     using WideInteger = __int128;
     const WideInteger high = static_cast<WideInteger>(1) << 100u;
@@ -309,6 +333,7 @@ TEST(Math, StorageEqualityFallsBackForWideIntegralArrays){
 
 
 TEST(Math, StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags){
+    using namespace __hidden_storage_equality_tests;
 #if defined(__SSE2__) || defined(_M_X64)
     CheckRawEqualityComparisonFlags<Float4U, 4u>();
     CheckRawEqualityComparisonFlags<Float33U, 9u>();
@@ -316,3 +341,7 @@ TEST(Math, StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags){
     GTEST_SKIP() << "Raw MXCSR equality flags are specific to x86 SSE targets";
 #endif
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

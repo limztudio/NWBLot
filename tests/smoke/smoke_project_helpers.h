@@ -15,7 +15,7 @@
 #include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/algorithm.h>
-#include <global/math/frame.h>
+#include <global/simd/frame.h>
 #include <global/simplemath.h>
 #include <impl/ecs_scene/module.h>
 

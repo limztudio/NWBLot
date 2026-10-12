@@ -7,7 +7,7 @@
 
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
-#include <global/math/frame.h>
+#include <global/simd/frame.h>
 #include <impl/ecs_csg/components.h>
 
 

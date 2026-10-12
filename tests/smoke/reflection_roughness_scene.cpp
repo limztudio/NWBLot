@@ -9,9 +9,9 @@
 #include <core/common/log.h>
 #include <core/assets/manager.h>
 #include <global/assert.h>
-#include <global/math/constant.h>
-#include <global/math/convert.h>
-#include <global/math/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
 #include <impl/assets_skeleton/asset.h>
 
 

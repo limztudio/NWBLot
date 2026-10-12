@@ -68,26 +68,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_HAS_SSE2) && !defined(NWB_HAS_NEON)
-#define NWB_HAS_SCALAR 1
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(_M_HYBRID_X86_ARM64) && !defined(_M_ARM64EC) && (!_MANAGED) && (!_M_CEE) && (!defined(_M_IX86_FP) || (_M_IX86_FP > 1)) && !defined(NWB_NO_INTRINSICS) && !defined(NWB_NO_VECTORCALL)
-#define NWB_SIMD_CALL __vectorcall
-#elif defined(__GNUC__)
-#define NWB_SIMD_CALL
-#else
-#define NWB_SIMD_CALL __fastcall
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #if defined(NWB_HAS_SSE2)
 #include <xmmintrin.h>
 #include <emmintrin.h>
@@ -103,6 +83,26 @@
 
 #if defined(NWB_HAS_NEON)
 #include <arm_neon.h>
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if !defined(NWB_HAS_SSE2) && !defined(NWB_HAS_NEON)
+#define NWB_HAS_SCALAR 1
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(_M_HYBRID_X86_ARM64) && !defined(_M_ARM64EC) && (!_MANAGED) && (!_M_CEE) && (!defined(_M_IX86_FP) || (_M_IX86_FP > 1)) && !defined(NWB_NO_INTRINSICS) && !defined(NWB_NO_VECTORCALL)
+#define NWB_SIMD_CALL __vectorcall
+#elif defined(__GNUC__)
+#define NWB_SIMD_CALL
+#else
+#define NWB_SIMD_CALL __fastcall
 #endif
 
 

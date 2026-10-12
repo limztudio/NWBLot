@@ -39,7 +39,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - Wrong: `namespace foobar{ ... }`
 - Do not use unnamed/anonymous namespace blocks (`namespace { ... }`) or nameless namespace variants.
   - Use `__hidden_<module>` namespaces for translation-unit-local implementation details instead.
-- Exception: the global math headers (`global/simplemath.h`, `global/simdmath.h`, and headers under `global/math/`) intentionally live at global scope.
+- Exception: the global math headers (`global/simplemath.h`, `global/simdmath.h`, and headers under `global/simd/`) intentionally live at global scope.
   - Do not wrap those headers with `NWB_BEGIN`/`NWB_END`.
   - Keep their public math entry points in global scope.
   - Use narrow raw namespaces there only when they are part of the math API shape or implementation-detail grouping.
@@ -300,6 +300,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - Preserve the owning arena, move-only ownership, borrowed lifetimes, failure-atomic publication, and complete conditional `noexcept` contract. Borrowed results must outlive their use; never return a view or reference into a local owning container. Unexpected exceptions continue to unwind to the application-entry boundary.
   - When repeatedly replacing arena-owned results, preserve the arena's reclamation order. Destroy a prior scratch/stack-arena result before producing its replacement when the prior value is no longer needed; clearing its container retains storage. Moving a fresh result over a still-live allocation can retain non-LIFO storage. Keep explicit reusable-buffer state when production needs capacity reuse.
 - Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
+- Use `NWB_SIMD_MEMCPY` from `global/simd/memory.h` for audited contiguous copies between non-overlapping existing byte buffers or live trivially copyable object representations in ordinary host memory when both addresses have proven 16-byte alignment. Both sizes are bytes; the byte count may include a partial vector tail, and zero length performs no access or alignment checks. Preserve the CRT path for arbitrary alignment or typed-object lifetime creation, and preserve overlap-aware moves and device-specific memory operations at their owning boundaries. Large copies may delegate to the tuned CRT after admission. Shared SIMD capability detection, intrinsic includes, and math-specific calling and storage macros belong in `global/simd/macro.h`.
 - For console I/O, prefer project stream macros from `global/compile.h` (`NWB_COUT`, `NWB_CERR`, `NWB_TCOUT`, `NWB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
 - For standalone command-line utilities that own logger setup, initialize `NWB::Log::ClientStandalone` in the entry point and route non-interactive status, validation, failure, and listing output through `NWB_LOGGER_*` macros. Keep direct stream output only for interactive prompts, CLI help/error routing, terminal pause prompts, and logger-initialization fallback messages.
 - Do not use raw/fixed-buffer environment-variable probes for production, runtime, or cooker feature/configuration control.

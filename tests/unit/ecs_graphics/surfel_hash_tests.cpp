@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include <global/math/type.h>
+#include <global/simd/type.h>
 #include <global/simdmath.h>
 #include <global/simplemath.h>
 

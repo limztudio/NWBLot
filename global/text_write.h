@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "math/type.h"
+#include "simd/type.h"
 #include "simplemath.h"
 
 

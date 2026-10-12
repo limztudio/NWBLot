@@ -23,7 +23,7 @@
 #include <core/metascript/parser.h>
 #include <global/hash_utils.h>
 #include <global/text_utils.h>
-#include <global/math/convert.h>
+#include <global/simd/convert.h>
 #include <core/common/log.h>
 
 

@@ -26,8 +26,8 @@
 #include <global/fixed_buffer.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
-#include <global/math/type.h>
-#include <global/math/vector.h>
+#include <global/simd/type.h>
+#include <global/simd/vector.h>
 #include <global/mesh/triangle_area.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>

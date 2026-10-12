@@ -11,6 +11,7 @@
 #include "algorithm.h"
 #include "limit.h"
 #include "type.h"
+#include "simd/memory.h"
 
 #include <functional>
 #include <optional>
@@ -256,7 +257,10 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
 
     if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
         destination.resize(sourceSize);
-        NWB_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+        if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
+            NWB_SIMD_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+        else
+            NWB_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
     }
     else{
         ContainerDetail::ReserveGrowingCapacity(destination, sourceSize);
@@ -287,7 +291,10 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
         ContainerDetail::ReserveGrowingCapacity(destination, requiredSize);
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){
             destination.resize(requiredSize);
-            NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
+            if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
+                NWB_SIMD_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
+            else
+                NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
         }
         else{
             for(usize i = 0u; i < sourceSize; ++i)
@@ -299,7 +306,10 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     ContainerDetail::ReserveGrowingCapacity(destination, destinationSize + sourceSize);
     if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
         destination.resize(destinationSize + sourceSize);
-        NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+        if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
+            NWB_SIMD_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+        else
+            NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
     }
     else if constexpr(requires(DestinationVector& d, const SourceVector& s){ d.insert(d.end(), s.begin(), s.end()); }){
         destination.insert(destination.end(), source.begin(), source.end());

@@ -10,7 +10,7 @@
 #include "skin.h"
 
 #include <core/common/log.h>
-#include <global/math/frame.h>
+#include <global/simd/frame.h>
 #include <global/mesh/triangle_area.h>
 
 

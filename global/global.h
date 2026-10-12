@@ -8,6 +8,7 @@
 #include "assert.h"
 #include "diagnostics.h"
 #include "compile.h"
+#include "simd/memory.h"
 #include "platform.h"
 #include "type.h"
 #include "expected.h"

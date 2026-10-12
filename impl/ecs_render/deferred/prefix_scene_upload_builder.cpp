@@ -12,6 +12,8 @@
 
 #include <core/graphics/backend_selection/backend.h>
 
+#include <global/simd/memory.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -159,7 +161,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     Core::GpuTaskDesc sceneShadingSetupDesc;
     sceneShadingSetupDesc.setIdentity(Name("render.graphics_prefix.scene_shading_setup")).setMarkerLabel("Scene Shading Setup").setScheduling(sceneShadingSetupScheduling).setDependencies(&sceneUploadTask, 1u);
     ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload{ .deferredSystem = m_deferredSystem, .timingTicket = *inputs.sceneShadingSetupTimingTicket, .ready = *inputs.sceneShadingSetupReady, .sceneShadingState = sceneShadingState, };
-    NWB_MEMCPY(sceneShadingSetupPayload.lightData, sizeof(sceneShadingSetupPayload.lightData), sceneLightData, sizeof(sceneLightData));
+    NWB_SIMD_MEMCPY(sceneShadingSetupPayload.lightData, sizeof(sceneShadingSetupPayload.lightData), sceneLightData, sizeof(sceneLightData));
     sceneShadingSetupPayload.lightCount = sceneLightCount;
     sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;
     sceneShadingSetupPayload.sceneShadingUploadRequired = sceneShadingUploadRequired;
@@ -168,7 +170,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
         return MakeUnexpected(Failure{});
     result.tailTask = result.sceneShadingSetupTask;
     result.lightingClassification = rayTracingLightingClassification;
-    NWB_MEMCPY(result.lightData, sizeof(result.lightData), sceneLightData, sizeof(sceneLightData));
+    NWB_SIMD_MEMCPY(result.lightData, sizeof(result.lightData), sceneLightData, sizeof(sceneLightData));
     result.lightCount = sceneLightCount;
     return result;
 }

@@ -9,7 +9,7 @@
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
-#include <global/math/vector_arithmetic.h>
+#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 

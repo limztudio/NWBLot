@@ -8,9 +8,9 @@
 #include "csg_smoke_helpers.h"
 
 #include <global/expected.h>
-#include <global/math/constant.h>
-#include <global/math/convert.h>
-#include <global/math/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
 #include <impl/ecs_csg/shape_registry.h>
 
 

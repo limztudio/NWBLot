@@ -6,8 +6,8 @@
 
 #include <gtest/gtest.h>
 
-#include <global/math/type.h>
-#include <global/math/vector.h>
+#include <global/simd/type.h>
+#include <global/simd/vector.h>
 #include <global/mesh/tangent_frame_rebuild.h>
 #include <global/simdmath.h>
 

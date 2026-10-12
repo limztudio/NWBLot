@@ -51,7 +51,7 @@
 #include <global/cpu_topology.h>
 #include <global/filesystem.h>
 #include <global/hash_utils.h>
-#include <global/math/convert.h>
+#include <global/simd/convert.h>
 #include <global/simdmath.h>
 
 

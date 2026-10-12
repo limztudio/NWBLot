@@ -11,7 +11,7 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <global/assert.h>
-#include <global/math/frame.h>
+#include <global/simd/frame.h>
 #include <global/timer.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/assets_model/asset.h>

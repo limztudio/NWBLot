@@ -10,9 +10,9 @@
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/telemetry/frame_graph_contributor.h>
-#include <global/math/constant.h>
-#include <global/math/convert.h>
-#include <global/math/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
 #include <impl/assets/graphics/reflection/depth_constants.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/kernel/timing_names.h>

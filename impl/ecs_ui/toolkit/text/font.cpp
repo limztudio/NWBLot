@@ -6,8 +6,8 @@
 
 #include <core/common/log.h>
 
-#include <global/math/vector.h>
-#include <global/math/vector_arithmetic.h>
+#include <global/simd/vector.h>
+#include <global/simd/vector_arithmetic.h>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H

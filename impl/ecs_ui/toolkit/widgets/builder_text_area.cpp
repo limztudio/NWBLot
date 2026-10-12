@@ -7,7 +7,7 @@
 #include "../builder.h"
 #include "text_area_navigation.h"
 
-#include <global/math/vector_arithmetic.h>
+#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 

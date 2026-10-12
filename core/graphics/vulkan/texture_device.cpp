@@ -8,7 +8,7 @@
 #include "native_sharing_validation.h"
 
 #include <core/graphics/rhi/queue_sharing.h>
-#include <global/math/vector_arithmetic.h>
+#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 #include "selectable_paint.h"
 #include "../builder.h"
 
-#include <global/math/vector_arithmetic.h>
+#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 

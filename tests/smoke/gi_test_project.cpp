@@ -7,9 +7,9 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
-#include <global/math/frame.h>
-#include <global/math/constant.h>
-#include <global/math/quaternion.h>
+#include <global/simd/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/quaternion.h>
 #include <global/simdmath.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>

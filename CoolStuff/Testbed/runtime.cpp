@@ -5,8 +5,8 @@
 #include "project.h"
 
 #include <core/common/log.h>
-#include <global/math/frame.h>
-#include <global/math/vector.h>
+#include <global/simd/frame.h>
+#include <global/simd/vector.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/simplemath.h>
 #include <impl/assets_model/asset.h>

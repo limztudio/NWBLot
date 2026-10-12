@@ -7,7 +7,7 @@
 #include "../builder.h"
 #include "../edit/caret_clock.h"
 
-#include <global/math/vector_arithmetic.h>
+#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 

@@ -32,8 +32,8 @@
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
 
-#include <global/math/frame.h>
-#include <global/math/constant.h>
+#include <global/simd/frame.h>
+#include <global/simd/constant.h>
 #include <global/simdmath.h>
 #include <global/simplemath.h>
 

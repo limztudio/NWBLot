@@ -58,7 +58,7 @@ Split policy applied per file: SPLIT only if the file mixes unrelated concern ow
 | 3 | 94524 | 1676 | impl/ecs_render/renderer_frame_pipeline_graphics_prefix.cpp | render pipeline / graphics-prefix phase | NO-SPLIT — single graphics-prefix phase owner; already split out from execute/graph. |
 | 4 | 89874 | 1941 | core/telemetry/frame_graph.cpp | telemetry / frame-graph impl | NO-SPLIT — implementation half of #1, same single owner (accumulators + export). |
 | 5 | 86987 | 1551 | impl/ecs_render/renderer_frame_pipeline_graph.cpp | render pipeline / graph build | NO-SPLIT — single graph-construction owner; shadow/surfel/caustics sub-phases live in their own files. |
-| 6 | 83759 | 1825 | global/math/bounding_volumes.h | math / bounding volumes | NO-SPLIT — cohesive math API (Box/OBB/Frustum/Sphere + CollisionDetail); global-scope math per §2 exception. |
+| 6 | 83759 | 1825 | global/simd/bounding_volumes.h | math / bounding volumes | NO-SPLIT — cohesive math API (Box/OBB/Frustum/Sphere + CollisionDetail); global-scope math per §2 exception. |
 | 7 | 73270 | 1320 | impl/ecs_render/renderer_frame_pipeline_graph_shadow_visibility.cpp | render pipeline / shadow visibility | NO-SPLIT — already the §18-prescribed per-feature slice (shadow visibility extracted from graph). |
 | 8 | 70999 | 1305 | impl/ecs_render/raytrace/raytracing_system.h | raytrace / system contract | NO-SPLIT — single RendererRayTracingSystem owner + closely-related task details; raytrace-owned slice. |
 | 9 | 61803 | 1356 | core/task/gpu/task_graph.h | task/gpu / graph declaration | NO-SPLIT — single declaration-domain owner; compiler/runtime/storage live in sibling files. |
@@ -66,7 +66,7 @@ Split policy applied per file: SPLIT only if the file mixes unrelated concern ow
 | 11 | 58091 | 1509 | impl/assets_shader/cook.cpp | assets / shader cook | NO-SPLIT — single shader-cooker owner (Slang + include/metascript stages of one pipeline). |
 | 12 | 56091 | 1433 | impl/assets_mesh/cook_meshlets.h | assets / meshlet cook | NO-SPLIT — single meshlet-cook owner (frontier/score/precompute of one algorithm). |
 | 13 | 54812 | 1145 | impl/ecs_mesh/skinning/system.cpp | mesh / skinning system | NO-SPLIT — one MeshSkinningSystem owner. |
-| 14 | 54428 | 1248 | global/math/matrix.h | math / matrix | NO-SPLIT — cohesive matrix API + SIMDMatrixDetail; global-scope math per §2. |
+| 14 | 54428 | 1248 | global/simd/matrix.h | math / matrix | NO-SPLIT — cohesive matrix API + SIMDMatrixDetail; global-scope math per §2. |
 | 15 | 53223 | 1303 | impl/assets_material/bind_typed_layout.cpp | material / typed bind | NO-SPLIT — single MaterialBindDetail owner. |
 | 16 | 53218 | 1035 | impl/ecs_render/renderer_frame_pipeline_graph_shadow_prepare.cpp | render pipeline / shadow prepare | NO-SPLIT — already the per-feature slice for shadow prepare. |
 | 17 | 52683 | 1028 | impl/ecs_render/raytrace/raytracing_system.cpp | raytrace / system impl | NO-SPLIT — impl half of #8, same owner. |
@@ -76,7 +76,7 @@ Split policy applied per file: SPLIT only if the file mixes unrelated concern ow
 | 21 | 45161 | 772 | impl/ecs_render/renderer_frame_pipeline_telemetry.cpp | render pipeline / telemetry | NO-SPLIT — already the extracted telemetry slice (frame-graph export + timing). |
 | 22 | 44716 | 1093 | core/task/gpu/packet_runtime_recorded_graph.cpp | task/gpu / recorded graph | NO-SPLIT — single GpuRecordedGraph owner. |
 | 23 | 43087 | 1235 | core/metascript/parser.cpp | metascript / parser | NO-SPLIT — single Parser owner. |
-| 24 | 42105 | 1168 | global/math/convert.h | math / conversion | NO-SPLIT — cohesive half/SIMD/unsigned-float convert API; global-scope math per §2. |
+| 24 | 42105 | 1168 | global/simd/convert.h | math / conversion | NO-SPLIT — cohesive half/SIMD/unsigned-float convert API; global-scope math per §2. |
 | 25 | 41469 | 718 | core/graphics/api.cpp | graphics / api | NO-SPLIT — single graphics-API owner, `__hidden_graphics_api` only. |
 | 26 | 41056 | 867 | impl/ecs_render/raytrace/rt_swbvh_bvh_infra.cpp | raytrace / swbvh infra | NO-SPLIT — single BVH-infra owner. |
 | 27 | 40192 | 775 | core/graphics/vulkan/backend_context_device.cpp | vulkan / context+device | NO-SPLIT — single device-creation owner. |
@@ -91,7 +91,7 @@ Split policy applied per file: SPLIT only if the file mixes unrelated concern ow
 | 36 | 36457 | 690 | impl/ecs_render/avboit/accumulation_record_builder.cpp | avboit / accumulation | NO-SPLIT — single record-builder owner; occupancy/extinction are siblings. |
 | 37 | 35797 | 834 | impl/ecs_render/raytrace/rt_shadow_tasks.h | raytrace / shadow tasks | NO-SPLIT — cohesive shadow task family of one feature (opaque/transparent variants). |
 | 38 | 35695 | 745 | core/task/gpu/compiler.cpp | task/gpu / compiler entry | NO-SPLIT — single compiler-entry owner; analysis/finalization/resource-state are siblings. |
-| 39 | 35296 | 759 | global/math/vector_construct.h | math / vector construct | NO-SPLIT — cohesive vector-construction API; global-scope math per §2. |
+| 39 | 35296 | 759 | global/simd/vector_construct.h | math / vector construct | NO-SPLIT — cohesive vector-construction API; global-scope math per §2. |
 | 40 | 35087 | 725 | impl/ecs_render/renderer_frame_pipeline_graph_caustics.cpp | render pipeline / caustics | NO-SPLIT — already the per-feature caustics slice. |
 | 41 | 34786 | 683 | core/graphics/vulkan/device.cpp | vulkan / device | NO-SPLIT — single device owner. |
 | 42 | 34649 | 665 | impl/ecs_render/avboit/occupancy_record_builder.cpp | avboit / occupancy | NO-SPLIT — single record-builder owner. |

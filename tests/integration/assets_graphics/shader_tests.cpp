@@ -111,10 +111,7 @@ TEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected){
 
 TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches){
     TestArena testArena;
-    constexpr u32 s_Words[] = {
-        0x07230203u, 0x00010500u, 0u, 16u, 0u,
-        (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u,
-    };
+    constexpr u32 s_Words[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
     constexpr char s_RequestedName[] = { 'm', 'a', 'i', 'n', 'X' };
     const AStringView requestedName(s_RequestedName, 4u);
     NWB::Core::GraphicsVector<u32> copiedWords(testArena.arena);

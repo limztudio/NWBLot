@@ -111,10 +111,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVe
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
         // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
-        return
-            separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB))
-            || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2))
-        ;
+        return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
         return false;
@@ -185,10 +182,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, c
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
         // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
-        return
-            separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB))
-            || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2))
-        ;
+        return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
         return false;
@@ -261,10 +255,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVe
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
         // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
-        return
-            separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB))
-            || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2))
-        ;
+        return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
         return false;
@@ -340,10 +331,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMD
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
         // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
-        return
-            separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB))
-            || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2))
-        ;
+        return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
         return false;
@@ -415,9 +403,7 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
                 const u32* secondIndices = reverse ? firstOrder : secondOrder;
                 const bool baseline = Baseline(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
                 const bool candidate = ZeroAxis(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                const bool production = TriangleDoubleTests::Intersects(
-                    first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]
-                );
+                const bool production = TriangleDoubleTests::Intersects(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
                 const bool hoisted = AbsHoisted(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
                 if(baseline != expected || candidate != baseline || production != baseline || hoisted != baseline)
                     return false;

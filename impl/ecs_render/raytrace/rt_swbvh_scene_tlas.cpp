@@ -178,8 +178,8 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
 
         const bool transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
         instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
+        const SIMDMatrix objectToWorld = LoadFloat(instanceDesc.transform);
         if(m_lightSpaceShadow.m_csg.gathering){
-            const SIMDMatrix objectToWorld = LoadFloat(instanceDesc.transform);
             SIMDVectorSingle determinant;
             const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
             AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, transparent, objectToWorld, worldToObject, meshResult->meshResources);
@@ -207,26 +207,25 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             if(meshResult->meshResources.swBvhNodeBuffer)
                 m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.swBvhNodeBuffer);
         }
-        Float3U opticalLocalMin{};
-        Float3U opticalLocalMax{};
-        StoreFloat(LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds), opticalLocalMin);
-        StoreFloat(LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds), opticalLocalMax);
-        Float34U opticalWorld{};
-        StoreFloat(LoadFloat(instanceDesc.transform), opticalWorld);
+        const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
+        const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
         Float3U opticalMin{};
         Float3U opticalMax{};
         bool opticalBoundsValid = false;
         if(transparent && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()){
-            const auto bounds = ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax);
+            const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
             if(bounds){
-                opticalMin = bounds->minimum;
-                opticalMax = bounds->maximum;
+                StoreFloat(bounds->minimum, opticalMin);
+                StoreFloat(bounds->maximum, opticalMax);
                 opticalBoundsValid = true;
             }
         }
         const bool runtimeOpticalBounds = transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid();
-        if(runtimeOpticalBounds)
+        if(runtimeOpticalBounds){
+            Float34U opticalWorld{};
+            StoreFloat(objectToWorld, opticalWorld);
             opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
+        }
         else
             opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
 

@@ -35,11 +35,7 @@ bool InputRouter::validCommandOwners()const{
         if(begin == m_stagedLookup.size() || m_stagedLookup[begin].value != source.commandOwner.value)
             return false;
         const HitTarget& host = m_stagedTargets[m_stagedLookup[begin].index];
-        if(
-            !host.enabled || !host.focusable || !host.navigable || host.owner.valid()
-            || host.declarationGeneration != source.commandOwnerDeclarationGeneration
-            || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer
-        )
+        if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.declarationGeneration != source.commandOwnerDeclarationGeneration || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer)
             return false;
     }
     return true;

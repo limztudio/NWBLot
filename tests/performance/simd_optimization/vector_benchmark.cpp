@@ -398,10 +398,7 @@ int main(const int argc, const char* const* argv){
     if(argc == 2 && StringView(argv[1]) == "--verify")
         return Verify() == 0u ? 0 : 1;
     if(argc != 6 || StringView(argv[1]) != "--measure"){
-        NWB_CERR << "usage: vector_benchmark --verify\n"
-            << "  --measure dot2|dot3|dot4|sum baseline|candidate iterations throughput|latency\n"
-            << "  --measure rotation_x|perspective_fov|quaternion_normal baseline|candidate iterations throughput\n"
-        ;
+        NWB_CERR << "usage: vector_benchmark --verify\n" << "  --measure dot2|dot3|dot4|sum baseline|candidate iterations throughput|latency\n" << "  --measure rotation_x|perspective_fov|quaternion_normal baseline|candidate iterations throughput\n";
         return 2;
     }
     const bool candidate = StringView(argv[3]) == "candidate";

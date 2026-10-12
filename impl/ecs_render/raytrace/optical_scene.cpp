@@ -94,7 +94,7 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToWorld, const Float3U& localMin, const Float3U& localMax)noexcept{
+Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax)noexcept{
     // Transposed affine rows evaluate XYZ together while preserving each coordinate's multiply-add sequence and enclosure margin.
     // A float affine coordinate uses three products and three additions.
     // Gamma(8) additionally covers the final float bound conversion and margin arithmetic.
@@ -102,15 +102,15 @@ Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToW
     constexpr f64 s_UnitRoundoff = 0x1p-24;
     constexpr f64 s_TransformError = (8.0 * s_UnitRoundoff) / (1.0 - 8.0 * s_UnitRoundoff);
     constexpr f64 s_UnderflowMargin = 8.0 * 0x1p-126;
-    const SIMDVectorSingle localMinVec = LoadFloat(localMin);
-    const SIMDVectorSingle localMaxVec = LoadFloat(localMax);
+    const SIMDVectorSingle localMinVec = VectorAndInt(localMin, s_SIMDMask3);
+    const SIMDVectorSingle localMaxVec = VectorAndInt(localMax, s_SIMDMask3);
     if(!VectorIsFinite(localMinVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(localMaxVec, VectorComponentMask::s_XYZ))
         return MakeUnexpected(Failure{});
     if(!Vector3LessOrEqual(localMinVec, localMaxVec))
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle row0 = LoadFloat(objectToWorld.rows[0u]);
-    const SIMDVectorSingle row1 = LoadFloat(objectToWorld.rows[1u]);
-    const SIMDVectorSingle row2 = LoadFloat(objectToWorld.rows[2u]);
+    const SIMDVectorSingle row0 = objectToWorld.v[0u];
+    const SIMDVectorSingle row1 = objectToWorld.v[1u];
+    const SIMDVectorSingle row2 = objectToWorld.v[2u];
     if(!VectorIsFinite(row0, VectorComponentMask::s_XYZW) || !VectorIsFinite(row1, VectorComponentMask::s_XYZW) || !VectorIsFinite(row2, VectorComponentMask::s_XYZW))
         return MakeUnexpected(Failure{});
     const SIMDMatrix columns = MatrixTranspose(SIMDMatrix{ .v = { row0, row1, row2, VectorZero() } });
@@ -142,10 +142,7 @@ Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToW
     const SIMDVectorSingle maximum = VectorAdd(laneMax, marginVec);
     if(!VectorIsFinite(minimum, VectorComponentMask::s_XYZ) || !VectorIsFinite(maximum, VectorComponentMask::s_XYZ))
         return MakeUnexpected(Failure{});
-    OpticalWorldBounds result;
-    StoreFloat(minimum, result.minimum);
-    StoreFloat(maximum, result.maximum);
-    return result;
+    return OpticalWorldBounds{ VectorAndInt(minimum, s_SIMDMask3), VectorAndInt(maximum, s_SIMDMask3) };
 }
 
 

@@ -79,13 +79,13 @@ struct RayTracingOpticalSceneGather{
 };
 
 struct OpticalWorldBounds{
-    Float3U minimum;
-    Float3U maximum;
+    SIMDVectorSingle minimum;
+    SIMDVectorSingle maximum;
 };
 
 
 // Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.
-[[nodiscard]] Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToWorld, const Float3U& localMin, const Float3U& localMax)noexcept;
+[[nodiscard]] Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, SIMDVectorSingle localMin, SIMDVectorSingle localMax)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

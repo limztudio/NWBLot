@@ -208,13 +208,9 @@ TEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesSmallRealGaps
 
     constexpr f64 s_DoubleGap = 0x1p-40;
     const SIMDVectorDouble firstDouble[] = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 0.0, 0.0), VectorDoubleSet(0.0, 2.0, 0.0, 0.0) };
-    const SIMDVectorDouble outsideDouble[] = {
-        VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0)
-    };
+    const SIMDVectorDouble outsideDouble[] = { VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0) };
     const SIMDVectorDouble slopedDouble[] = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 2.0, 0.0), VectorDoubleSet(0.0, 2.0, -2.0, 0.0) };
-    const SIMDVectorDouble displacedDouble[] = {
-        VectorDoubleSet(0.0, 0.0, s_DoubleGap, 0.0), VectorDoubleSet(2.0, 0.0, 2.0 + s_DoubleGap, 0.0), VectorDoubleSet(0.0, 2.0, -2.0 + s_DoubleGap, 0.0)
-    };
+    const SIMDVectorDouble displacedDouble[] = { VectorDoubleSet(0.0, 0.0, s_DoubleGap, 0.0), VectorDoubleSet(2.0, 0.0, 2.0 + s_DoubleGap, 0.0), VectorDoubleSet(0.0, 2.0, -2.0 + s_DoubleGap, 0.0) };
     CheckWindingAndOperandOrder(firstDouble, outsideDouble, false);
     CheckWindingAndOperandOrder(slopedDouble, displacedDouble, false);
 }
@@ -227,9 +223,7 @@ TEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesTranslatedOne
     CheckBothPrecisions(first, outside, false);
 
     constexpr f64 s_DoubleBase = 0x1p+40, s_DoubleGap = 0x1p-12;
-    const SIMDVectorDouble firstDouble[] = {
-        VectorDoubleSet(s_DoubleBase, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase + 2.0, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase, s_DoubleBase + 2.0, 0.0, 0.0)
-    };
+    const SIMDVectorDouble firstDouble[] = { VectorDoubleSet(s_DoubleBase, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase + 2.0, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase, s_DoubleBase + 2.0, 0.0, 0.0) };
     const SIMDVectorDouble outsideDouble[] = {
         VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0),
         VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0),

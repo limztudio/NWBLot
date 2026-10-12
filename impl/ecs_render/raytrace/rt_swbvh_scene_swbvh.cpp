@@ -232,20 +232,14 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         bvhPrimitive.centroid = VectorScale(VectorAdd(worldMin, worldMax), s_BoundsMidpointWeight);
         bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
 
-        Float3U opticalLocalMin{};
-        Float3U opticalLocalMax{};
-        StoreFloat(localMin, opticalLocalMin);
-        StoreFloat(localMax, opticalLocalMax);
-        Float34U opticalWorld{};
-        StoreFloat(objectToWorld, opticalWorld);
         Float3U opticalMin{};
         Float3U opticalMax{};
         bool opticalBoundsValid = false;
         if(bvhPrimitive.transparentOccluder && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh){
-            const auto bounds = ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax);
+            const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
             if(bounds){
-                opticalMin = bounds->minimum;
-                opticalMax = bounds->maximum;
+                StoreFloat(bounds->minimum, opticalMin);
+                StoreFloat(bounds->maximum, opticalMax);
                 opticalBoundsValid = true;
             }
         }
@@ -253,6 +247,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             bvhPrimitive.transparentOccluder && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
             && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
         ;
+        Float34U opticalWorld{};
+        StoreFloat(objectToWorld, opticalWorld);
         if(runtimeOpticalBounds)
             opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
         else

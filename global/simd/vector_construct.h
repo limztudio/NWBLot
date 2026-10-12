@@ -28,9 +28,10 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVectorSingle value)noexcept{
 
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleMoveMask(SIMDVectorDouble value)noexcept{
 #if defined(NWB_HAS_NEON64)
-    const uint64x2_t low = vshrq_n_u64(SIMDVectorDoubleDetail::GetLowBits(value), 63u);
-    const uint64x2_t high = vshrq_n_u64(SIMDVectorDoubleDetail::GetHighBits(value), 63u);
-    return static_cast<u32>(vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u));
+    const uint32x4_t highWords = vuzp2q_u32(BitCast<uint32x4_t>(SIMDVectorDoubleDetail::GetLowBits(value)), BitCast<uint32x4_t>(SIMDVectorDoubleDetail::GetHighBits(value)));
+    const uint32x4_t bits = vshrq_n_u32(highWords, 31u);
+    const int32x4_t shifts = { 0, 1, 2, 3 };
+    return vaddvq_u32(vshlq_u32(bits, shifts));
 #elif defined(NWB_HAS_AVX)
     return static_cast<u32>(_mm256_movemask_pd(BitCast<__m256d>(value)));
 #elif defined(NWB_HAS_SSE2)

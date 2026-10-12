@@ -73,15 +73,8 @@ def measure(options):
     options.output.mkdir(parents=True, exist_ok=True)
     executables = {"baseline": options.baseline, "candidate": options.candidate}
     hashes = {variant: file_hash(path) for variant, path in executables.items()}
-    runtime_hashes = {
-        str(path): file_hash(path)
-        for directory in options.runtime_directory
-        for path in sorted(directory.glob("*.dll"))
-    }
-    metadata = {
-        "baseline": source_metadata(options.baseline_source_hash, options.baseline_source_manifest),
-        "candidate": source_metadata(options.candidate_source_hash, options.candidate_source_manifest),
-    }
+    runtime_hashes = { str(path): file_hash(path) for directory in options.runtime_directory for path in sorted(directory.glob("*.dll")) }
+    metadata = { "baseline": source_metadata(options.baseline_source_hash, options.baseline_source_manifest), "candidate": source_metadata(options.candidate_source_hash, options.candidate_source_manifest), }
     reference = None
     trials = []
     for pair in range(options.pairs):
@@ -94,20 +87,14 @@ def measure(options):
             paths = [executable.parent, *options.runtime_directory]
             environment["PATH"] = os.pathsep.join(map(str, paths)) + os.pathsep + environment.get("PATH", "")
             started = time.monotonic()
-            result = subprocess.run(
-                [str(executable)], cwd=options.working_directory, env=environment,
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=options.timeout,
-            )
+            result = subprocess.run([str(executable)], cwd=options.working_directory, env=environment, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=options.timeout,)
             prefix = options.output / f"pair_{pair:02}_{variant}"
             prefix.with_suffix(".stdout.log").write_text(result.stdout, encoding="utf-8")
             prefix.with_suffix(".stderr.log").write_text(result.stderr, encoding="utf-8")
             if result.returncode:
                 raise RuntimeError(f"{variant} exited {result.returncode}; see {prefix}.stdout.log and {prefix}.stderr.log")
             cases = parse_cases(result.stdout)
-            checks = {
-                name: {"setupChecksum": case["setupChecksum"], "behaviorChecksum": case["behaviorChecksum"]}
-                for name, case in cases.items()
-            }
+            checks = { name: {"setupChecksum": case["setupChecksum"], "behaviorChecksum": case["behaviorChecksum"]} for name, case in cases.items() }
             if reference is None:
                 reference = checks
             elif checks != reference:
@@ -122,25 +109,13 @@ def measure(options):
             raise RuntimeError(f"Runtime library changed during measurement: {filename}")
     summary = []
     for name in sorted(reference):
-        values = {
-            variant: [trial["cases"][name]["medianNsPerOperation"] for trial in trials if trial["variant"] == variant]
-            for variant in executables
-        }
+        values = { variant: [trial["cases"][name]["medianNsPerOperation"] for trial in trials if trial["variant"] == variant] for variant in executables }
         baseline = statistics.median(values["baseline"])
         candidate = statistics.median(values["candidate"])
-        summary.append({
-            "name": name, "baselineMedianNsPerOperation": baseline, "candidateMedianNsPerOperation": candidate,
-            "reductionPercent": 100.0 * (1.0 - candidate / baseline),
-            "baselineProcessMedians": values["baseline"], "candidateProcessMedians": values["candidate"],
-            **reference[name],
-        })
-    report = {
-        "host": {"platform": platform.platform(), "machine": platform.machine(), "python": platform.python_version()},
-        "pairs": options.pairs, "order": "Alternating AB and BA process pairs",
-        "workingDirectory": str(options.working_directory),
-        "executables": {variant: {"path": str(path), "sha256": hashes[variant], **metadata[variant]} for variant, path in executables.items()},
-        "runtimeDllSha256": runtime_hashes, "summary": summary, "trials": trials,
-    }
+        summary.append({ "name": name, "baselineMedianNsPerOperation": baseline, "candidateMedianNsPerOperation": candidate, "reductionPercent": 100.0 * (1.0 - candidate / baseline),
+            "baselineProcessMedians": values["baseline"], "candidateProcessMedians": values["candidate"], **reference[name], })
+    report = { "host": {"platform": platform.platform(), "machine": platform.machine(), "python": platform.python_version()}, "pairs": options.pairs, "order": "Alternating AB and BA process pairs", "workingDirectory": str(options.working_directory),
+        "executables": {variant: {"path": str(path), "sha256": hashes[variant], **metadata[variant]} for variant, path in executables.items()}, "runtimeDllSha256": runtime_hashes, "summary": summary, "trials": trials, }
     output = options.output / "report.json"
     output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Matched measurement report: {output}", flush=True)

@@ -33,10 +33,7 @@ inline constexpr usize s_Alignment = 64u;
 inline constexpr usize s_StreamingBytes = 64u * 1024u * 1024u;
 inline constexpr u8 s_Poison = 0xA5u;
 inline constexpr int s_AbortExit = 81;
-inline constexpr usize s_QualifyLengths[]{
-    0u, 1u, 2u, 3u, 7u, 8u, 9u, 15u, 16u, 17u, 31u, 32u, 33u, 47u, 48u, 49u, 63u, 64u, 65u,
-    127u, 128u, 129u, 255u, 256u, 257u, 511u, 512u, 513u, 4095u, 4096u, 4097u, 5120u, 8191u, 8192u, 8193u, 16384u,
-};
+inline constexpr usize s_QualifyLengths[]{ 0u, 1u, 2u, 3u, 7u, 8u, 9u, 15u, 16u, 17u, 31u, 32u, 33u, 47u, 48u, 49u, 63u, 64u, 65u, 127u, 128u, 129u, 255u, 256u, 257u, 511u, 512u, 513u, 4095u, 4096u, 4097u, 5120u, 8191u, 8192u, 8193u, 16384u, };
 inline constexpr usize s_BenchLengths[]{ 16u, 31u, 32u, 33u, 64u, 128u, 129u, 256u, 512u, 1024u, 2048u, 4096u, 5120u, 8191u, 8192u };
 volatile u64 g_Checksum = 0u;
 

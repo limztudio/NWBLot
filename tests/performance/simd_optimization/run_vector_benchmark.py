@@ -27,13 +27,8 @@ def main():
     parser.add_argument("--iterations", type=int, default=500000)
     args = parser.parse_args()
     profiles = args.profiles or (["avx2_o3"] if args.wide else ["avx2_o3", "sse2_o3", "sse4_o3"])
-    cases = [(name, workload, 10000000) for name in ("dot3", "dot4", "sum") for workload in ("throughput", "latency")] if args.wide else [
-        ("dot2", "throughput", 10000000),
-        ("dot2", "latency", 10000000),
-        ("rotation_x", "throughput", 2000000),
-        ("perspective_fov", "throughput", 2000000),
-        ("quaternion_normal", "throughput", 2000000),
-    ]
+    cases = [(name, workload, 10000000) for name in ("dot3", "dot4", "sum") for workload in ("throughput", "latency")] if args.wide else [("dot2", "throughput", 10000000), ("dot2", "latency", 10000000), ("rotation_x", "throughput", 2000000),
+        ("perspective_fov", "throughput", 2000000), ("quaternion_normal", "throughput", 2000000),]
     if args.operations:
         cases = [(name, "throughput", args.iterations) for name in args.operations]
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -60,18 +55,8 @@ def main():
                         raise RuntimeError(f"checksum mismatch: {profile} {operation} {workload}")
                 baseline = statistics.median(samples["baseline"])
                 candidate = statistics.median(samples["candidate"])
-                summary = {
-                    "profile": profile,
-                    "operation": operation,
-                    "workload": workload,
-                    "cpu": args.cpu,
-                    "samples": args.samples,
-                    "baseline_ns": baseline,
-                    "candidate_ns": candidate,
-                    "speedup": baseline / candidate,
-                    "baseline_samples": samples["baseline"],
-                    "candidate_samples": samples["candidate"],
-                }
+                summary = { "profile": profile, "operation": operation, "workload": workload, "cpu": args.cpu, "samples": args.samples, "baseline_ns": baseline, "candidate_ns": candidate, "speedup": baseline / candidate,
+                    "baseline_samples": samples["baseline"], "candidate_samples": samples["candidate"], }
                 summaries.append(summary)
                 print(f"{profile} {operation} {workload}: {baseline:.3f} -> {candidate:.3f} ns ({baseline / candidate:.3f}x)", flush=True)
     args.output.write_text(json.dumps(summaries, indent=2) + "\n")

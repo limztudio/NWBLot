@@ -261,10 +261,7 @@ namespace TriangleDoubleTests{
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
         // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
-        return
-            separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB))
-            || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2))
-        ;
+        return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
         return false;

@@ -9,7 +9,8 @@ Run the following from the repository root on Linux x64, with the normal project
 ```bash
 set -euo pipefail
 cmake --preset linux-clang-x64 -DNWB_BUILD_SIMD_BENCHMARKS=ON
-cmake --build --preset linux-clang-opt --target nwb_math_tests nwb_simd_vector_benchmark nwb_simd_geometry_benchmark nwb_simd_memory_storage_benchmark nwb_simd_replicated_benchmark
+cmake --build --preset linux-clang-opt --target nwb_math_tests nwb_simd_vector_benchmark nwb_simd_geometry_benchmark nwb_simd_memory_storage_benchmark nwb_simd_replicated_benchmark \
+    nwb_simd_mask_benchmark nwb_simd_box_normal_benchmark
 
 simd_cpu=4
 simd_bin_dir=__exec/linux/x64/full/opt
@@ -21,6 +22,8 @@ taskset -c "$simd_cpu" "$simd_bin_dir/simd_vector_benchmark" --verify > "$simd_r
 taskset -c "$simd_cpu" "$simd_bin_dir/simd_replicated_benchmark" --verify > "$simd_result_dir/replicated_qualify.log" 2>&1
 taskset -c "$simd_cpu" "$simd_bin_dir/simd_geometry_benchmark" validate > "$simd_result_dir/geometry_qualify.log" 2>&1
 taskset -c "$simd_cpu" "$simd_bin_dir/simd_memory_storage_benchmark" --qualify > "$simd_result_dir/memory_qualify.log" 2>&1
+taskset -c "$simd_cpu" "$simd_bin_dir/simd_mask_benchmark" --verify > "$simd_result_dir/mask_qualify.log" 2>&1
+taskset -c "$simd_cpu" "$simd_bin_dir/simd_box_normal_benchmark" verify > "$simd_result_dir/box_normal_qualify.log" 2>&1
 ```
 
 Choose an allowed logical CPU and keep it fixed for the whole comparison. The x64 preset enables AVX2, FMA, F16C and SSE4.2; run its binaries on a CPU supporting those features. Benchmarks remain disabled when `NWB_BUILD_SIMD_BENCHMARKS` is omitted or `OFF`.
@@ -35,6 +38,8 @@ The math suite covers ordered cancellation, distinct NaN payloads, inactive sign
 | `simd_replicated_benchmark` | Preserved composition with ordinary four-lane primitives | `candidate` calls promoted public consumers; rejected native length and controlled-length prototypes remain local experiments. |
 | `simd_geometry_benchmark` | Depends on the selected mode below | Default compares the public production API; isolated guard/absolute-value experiments are validated against it. |
 | `simd_memory_storage_benchmark` | Current `SIMDMemoryCopy` and storage equality helpers | Local AVX copy and wide integer equality experiments. |
+| `simd_mask_benchmark` | Frozen Double sign extraction and comparison-mask reductions | Current public mask and predicate APIs. |
+| `simd_box_normal_benchmark` | Frozen Single/Double box-normal formulas with two length reductions | Current public box-normal APIs. |
 
 Keep copied reference formulas unchanged when promoting a candidate. They still share lower-level production primitives: a later change to one of those primitives also needs a preserved reference for that operation. Rebuild and requalify after each source change. Reusing an old binary or relabeling an experimental result as a production measurement invalidates the comparison.
 
@@ -66,7 +71,7 @@ simd_replicated_benchmark --measure OPERATION baseline|candidate ITERATIONS thro
 
 Operations are `ln`, `exp`, `normals2`, `normals3`, `normals4`, `vectors2`, `vectors3`, `vectors4`, `slerp`, `length2`, `length3`, `length4`, `reciprocal2`, `reciprocal3`, `reciprocal4`, `normalize2`, `normalize3`, `normalize4`, `clamp2`, `clamp3`, and `clamp4`. This probe accepts throughput only. `candidate` selects the current public API for Ln, Exp, normal/vector angles, Slerp and reciprocal lengths; `length2`/`length3`/`length4` retain rejected local scalar-sqrt experiments. The `normalize*` and `clamp*` cases retain a rejected shared-helper experiment, substituting scalar reciprocal sqrt only on non-AVX SSE2 profiles. Its isolated gains did not justify regressions across other dimensions/profiles. Verification compares production results, flags and `errno` against the preserved formulas as well as checking the local prototypes.
 
-Production profile guards remain active inside those public calls. Replicated Ln/angle/Slerp primitives apply across the supported math backends; Exp and quaternion rotation-normal SinCos are AVX2-only. Reciprocal lengths in 2D/3D use native scalar sqrt/divide on x64 SSE2 and newer; 4D uses that path only on non-AVX SSE2/SSE4. Perspective FOV uses replicated SinCos on all qualified profiles. Plain length, `NormalizeOr` and clamping APIs retain their existing implementation. Weighted Slerp sine arguments remain nonuniform and retain the ordinary vector path.
+Production profile guards remain active inside those public calls. Replicated Ln/angle/Slerp primitives apply across the supported math backends; quaternion Exp and rotation-normal SinCos use the replicated helper on AVX2 and NEON64. Reciprocal lengths in 2D/3D use native scalar sqrt/divide on x64 SSE2 and newer; 4D uses that path only on non-AVX SSE2/SSE4. Perspective FOV uses replicated SinCos on all qualified profiles. Plain length, `NormalizeOr` and clamping APIs retain their existing implementation. Weighted Slerp sine arguments remain nonuniform and retain the ordinary vector path.
 
 The following driver runs warmed, alternating pairs serially and rejects checksum differences. Retain the raw records before calculating summaries.
 
@@ -146,4 +151,48 @@ Run all timed work serially, including benchmarks on other cores, builds and qua
 
 The CMake `opt` build uses `-O2`, `NDEBUG`, `NWB_OPTIMIZE`, and the engine's normal code-generation settings. `O3` probes and strict floating-point profiles are additional qualification evidence, not substitutes for matching `opt`. For standalone SSE2, SSE4.1, AVX or AVX2 profiles, derive commands from the actual `opt` entry in `compile_commands.json`, change only the intended ISA switches, and record those commands. Requalify each profile. Linux x64 results do not establish performance on Windows, ARM64, other CPUs, or unmeasured cache/input distributions.
 
-Reject a candidate if result bits or required booleans differ, paired checksums differ, flags/`errno`/first enabled exception categories differ, inactive signaling lanes are evaluated, exact bounds/admission checks fail, or emitted code removes intended work. Reject changes with repeatable material regressions in relevant latency, nondegenerate geometry, early-mismatch or cache/offset controls. Repeat an inconclusive measurement when run-order or system variation is comparable to the apparent gain. Preserve sequential reductions and packed active-lane exception priority; a smaller instruction count alone does not establish an improvement.
+Reject a candidate if result bits or required booleans differ, paired checksums differ, flags/`errno`/first enabled exception categories differ, inactive signaling lanes suppressed by the qualified original path are evaluated, exact bounds/admission checks fail, or emitted code removes intended work. Reject changes with repeatable material regressions in relevant latency, nondegenerate geometry, early-mismatch or cache/offset controls. Repeat an inconclusive measurement when run-order or system variation is comparable to the apparent gain. Preserve sequential reductions and packed active-lane exception priority; a smaller instruction count alone does not establish an improvement.
+
+## Native mask and box-normal modes
+
+```text
+simd_mask_benchmark --verify
+simd_mask_benchmark --measure move|equal_float|equal_double|equal_double3 baseline|candidate ITERATIONS throughput|latency
+simd_box_normal_benchmark verify
+simd_box_normal_benchmark measure single|double original|candidate throughput|latency ITERATIONS
+```
+
+Mask verification includes arbitrary binary64 sign bits, canonical comparison masks, exceptional floating inputs, inactive W and directed rounding. Comparison predicates preserve the original comparison expression before reducing integer masks. Partial-predicate flag checks use the frozen baseline because compilers can omit discarded W comparisons; optimized ARM64 self-comparisons and x64/debug builds differ in whether an inactive signaling W raises invalid. Box-normal verification compares result bits, flags and `errno` in all four rounding modes, including overflow, subnormal and nonfinite inputs. Both benchmark families consume checksums and provide independent throughput and dependent latency workloads.
+
+On Windows ARM64, configure `windows-clang-arm64` with `NWB_BUILD_SIMD_BENCHMARKS=ON`, then build these targets with `--config opt` in `__cmake/build/windows-clang-arm64`. Executables are under `__exec/windows/arm64/full/opt` and have the `.exe` suffix. Pin the orchestrating process before launching children, for example with `[System.Diagnostics.Process]::GetCurrentProcess().ProcessorAffinity = [IntPtr]256` in PowerShell when logical CPU 8 is allowed. Run warm-ups followed by at least seven alternating reference/candidate pairs serially; check paired checksums before calculating candidate/reference time ratios.
+
+The 2026-10-13 review used Clang 23.1.3, normal engine `opt` flags, and a Snapdragon X2 Elite Extreme X2E94100 Oryon CPU pinned to logical CPU 8. Mask and box-normal candidates were first qualified against frozen formulas, then measured with identical inputs and compiler settings. The accepted box-normal length reuse is restricted to NEON64. Quaternion Exp and rotation-normal now also use the existing replicated SinCos helper on NEON64. Each general wrapper reduces eight libm call sites to two; in the measured finite loops, Clang already eliminates unused results, so the hot path changes from four calls to two. The timed loop retains its per-iteration angle load, libm work and observed accumulator. The corresponding baseline SSE2 Single experiment changed exception flags because Clang emitted packed additions in discarded lanes, so that path retains its original formula. A packed glyph-extent experiment was also rejected because it removed existing inexact exceptions in discarded lanes. No x64 hardware speed claim follows from emulated x64 qualification.
+
+Box-normal exception probes on native Windows ARM64 delivered real floating-point traps, but the OS reported the same generic exception code for invalid and overflow. They establish trap/no-trap equivalence for those fixtures; masked flag checks and preservation of arithmetic order supply the additional numerical evidence. The x64 emulator did not deliver enabled floating-point traps, including explicit controls, so its qualification establishes result bits, flags and `errno` rather than mixed-category trap priority.
+
+## Final native measurements (2026-10-13)
+
+Fresh CMake `opt` binaries were measured serially on logical CPU 8 of the Snapdragon X2 Elite Extreme X2E94100 with Clang 23.1.3 and the engine's normal `-O2` settings.
+Each row uses warm-ups and seven alternating reference/candidate pairs with matching checksums.
+Ratios are candidate time divided by reference time; values below one indicate less time.
+
+| Workload | Throughput ratio | Dependent latency ratio |
+| --- | ---: | ---: |
+| Binary64 sign-mask extraction | 0.566 | 0.955 |
+| Float4 equality predicate | 1.002 | 0.964 |
+| Double4 equality predicate | 0.640 | 0.904 |
+| Double3 equality predicate | 0.817 | 1.000 |
+| Single box normal | 0.938 | 0.995 |
+| Double box normal | 0.951 | 1.001 |
+| Double quaternion rotation-normal | 0.452 | — |
+| Double quaternion exponential | 0.442 | — |
+
+Mask samples initially used 4,000,000 iterations, box samples 1,000,000, rotation-normal samples 2,000,000, and exponential samples 500,000 (four operations per loop).
+Two isolated scheduling outliers in Double4 latency and Double box throughput prompted longer seven-pair repetitions at 20,000,000 and 5,000,000 iterations respectively; the table uses those follow-up medians.
+Float4 throughput was also repeated at 20,000,000 iterations and remained effectively unchanged.
+Both initial and follow-up raw samples are retained under `__cmake/Testing/simd_optimization/final_native_20261013`, together with compile commands, final COFF disassembly and source/object hashes.
+
+The final public APIs passed masked result-bit, flag and `errno` qualification on ARM64, ARM64EC, SSE2, SSE4.1, AVX, AVX with FMA and AVX2 with FMA.
+Native enabled-exception quaternion probes preserve the tested first exception, including inexact before later invalid arithmetic.
+The focused partial-mask regression also compares the preserved original formula at `O0` and `O2`; discarded-W exception behavior varies with compiler optimization and ISA, and both implementations match in those contexts.
+These measurements describe the listed CPU kernels and inputs; they do not establish frame-rate gains or x64 hardware performance.

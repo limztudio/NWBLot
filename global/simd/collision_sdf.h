@@ -135,8 +135,14 @@ namespace SdfDoubleTests{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
     const SIMDVectorSingle outside = VectorMax(q, VectorZero());
     const SIMDVectorSingle signedOutside = VectorSelect(VectorNegate(outside), outside, VectorGreaterOrEqual(position, VectorZero()));
+#if defined(NWB_HAS_NEON64)
+    const SIMDVectorSingle lengthSquared = Vector3LengthSq(signedOutside);
+    const SIMDVectorSingle outsideNormal = SIMDVectorDetail::NormalizeOrV(signedOutside, fallback, lengthSquared, minLengthSquared, s_SIMDMask3);
+    const SIMDVectorSingle useOutside = VectorGreater(lengthSquared, VectorReplicate(minLengthSquared));
+#else
     const SIMDVectorSingle outsideNormal = Vector3NormalizeOr(signedOutside, fallback, minLengthSquared);
     const SIMDVectorSingle useOutside = VectorGreater(Vector3LengthSq(outside), VectorReplicate(minLengthSquared));
+#endif
 
     const SIMDVectorSingle qX = VectorSplatX(q);
     const SIMDVectorSingle qY = VectorSplatY(q);
@@ -155,8 +161,14 @@ namespace SdfDoubleTests{
     const SIMDVectorDouble q = VectorDoubleSubtract(VectorDoubleAbs(position), halfExtents);
     const SIMDVectorDouble outside = VectorDoubleMax(q, VectorDoubleZero());
     const SIMDVectorDouble signedOutside = VectorDoubleSelect(VectorDoubleNegate(outside), outside, VectorDoubleGreaterOrEqual(position, VectorDoubleZero()));
+#if defined(NWB_HAS_NEON64)
+    const SIMDVectorDouble lengthSquared = VectorDouble3LengthSq(signedOutside);
+    const SIMDVectorDouble outsideNormal = SIMDVectorDoubleDetail::NormalizeOrV(signedOutside, fallback, lengthSquared, minLengthSquared, s_DoubleSIMDMask3);
+    const SIMDVectorDouble useOutside = VectorDoubleGreater(lengthSquared, VectorDoubleReplicate(minLengthSquared));
+#else
     const SIMDVectorDouble outsideNormal = VectorDouble3NormalizeOr(signedOutside, fallback, minLengthSquared);
     const SIMDVectorDouble useOutside = VectorDoubleGreater(VectorDouble3LengthSq(outside), VectorDoubleReplicate(minLengthSquared));
+#endif
 
     const SIMDVectorDouble qX = VectorDoubleSplatX(q);
     const SIMDVectorDouble qY = VectorDoubleSplatY(q);

@@ -11,19 +11,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_SSE2)
-namespace SIMDVectorDoubleDetail{
+namespace SIMDVectorDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE NativeUIntPair EqualBitsPair(NativeUIntPair v0, NativeUIntPair v1)noexcept{
-#if defined(NWB_HAS_SSE4)
-    return _mm_cmpeq_epi64(v0, v1);
+// Comparison masks contain canonical all-zero or all-one lanes.
+NWB_INLINE bool NWB_SIMD_CALL AllComparisonMask(SIMDVectorSingle value)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return vminvq_u32(vreinterpretq_u32_f32(value)) != 0u;
 #else
-    const __m128i words = _mm_cmpeq_epi32(v0, v1);
-    return _mm_and_si128(words, _mm_shuffle_epi32(words, _MM_SHUFFLE(2, 3, 0, 1)));
+    return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW;
 #endif
 }
 
@@ -32,7 +31,47 @@ NWB_INLINE NativeUIntPair EqualBitsPair(NativeUIntPair v0, NativeUIntPair v1)noe
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace SIMDVectorDoubleDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_HAS_SSE2)
+NWB_INLINE NativeUIntPair EqualBitsPair(NativeUIntPair v0, NativeUIntPair v1)noexcept{
+#if defined(NWB_HAS_SSE4)
+    return _mm_cmpeq_epi64(v0, v1);
+#else
+    const __m128i words = _mm_cmpeq_epi32(v0, v1);
+    return _mm_and_si128(words, _mm_shuffle_epi32(words, _MM_SHUFFLE(2, 3, 0, 1)));
 #endif
+}
+#endif
+
+// Comparison masks contain canonical all-zero or all-one lanes; inactive lanes are neutralized only after the comparison.
+template<u32 ActiveMask>
+NWB_INLINE bool NWB_SIMD_CALL AllComparisonMask(SIMDVectorDouble value)noexcept{
+    static_assert(ActiveMask == VectorDoubleComponentMask::s_DoubleXYZ || ActiveMask == VectorDoubleComponentMask::s_DoubleXYZW);
+#if defined(NWB_HAS_NEON64)
+    NativeUIntPair high = GetHighBits(value);
+    if constexpr(ActiveMask == VectorDoubleComponentMask::s_DoubleXYZ)
+        high = vsetq_lane_u64(0xFFFFFFFFFFFFFFFFu, high, 1);
+    return vminvq_u32(BitCast<uint32x4_t>(vandq_u64(GetLowBits(value), high))) != 0u;
+#else
+    return (VectorDoubleMoveMask(value) & ActiveMask) == ActiveMask;
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

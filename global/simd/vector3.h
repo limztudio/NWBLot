@@ -123,6 +123,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3Dot(SIMDVectorDouble v0, 
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Cross(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+    v0 = VectorAndInt(v0, s_SIMDMask3);
+    v1 = VectorAndInt(v1, s_SIMDMask3);
     SIMDVectorSingle temp0 = VectorSwizzle<1, 2, 0, 3>(v0);
     SIMDVectorSingle temp1 = VectorSwizzle<2, 0, 1, 3>(v1);
     SIMDVectorSingle result = VectorMultiply(temp0, temp1);

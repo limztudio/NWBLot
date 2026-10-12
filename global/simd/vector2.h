@@ -212,7 +212,9 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Cross(SIMDVectorSingle v0, SIMD
     result = vpadd_f32(result, result);
     return vcombine_f32(result, result);
 #else
-    SIMDVectorSingle result = VectorSwizzle<1, 0, 1, 0>(v1);
+    v0 = VectorAndInt(v0, s_SIMDMaskXY);
+    v1 = VectorAndInt(v1, s_SIMDMaskXY);
+    SIMDVectorSingle result = VectorSwizzle<1, 0, 2, 3>(v1);
     result = VectorMultiply(result, v0);
     const SIMDVectorSingle temp = VectorSplatY(result);
     result = _mm_sub_ss(result, temp);

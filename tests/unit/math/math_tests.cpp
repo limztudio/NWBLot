@@ -428,6 +428,49 @@ TEST(Math, SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExcept
     }
 }
 
+TEST(Math, SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes){
+#pragma STDC FENV_ACCESS ON
+    fenv_t originalEnvironment{};
+    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(fesetenv(&originalEnvironment) != 0)
+            NWB_ASSERT(false);
+    });
+
+    volatile u32 inactiveBits[][2]{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u }, { 0u, 0x7f800001u }, { 0x7f7fffffu, 0x7f7fffffu } };
+    for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
+        const SIMDVectorSingle lhs2 = VectorSetInt(0x40000000u, 0x40400000u, inactiveBits[index][0], inactiveBits[index][0]);
+        const SIMDVectorSingle rhs2 = VectorSetInt(0x40a00000u, 0x40e00000u, inactiveBits[index][1], inactiveBits[index][1]);
+        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        const SIMDVectorSingle cross2 = Vector2Cross(lhs2, rhs2);
+        const i32 cross2Exceptions = fetestexcept(FE_INVALID | FE_OVERFLOW);
+        EXPECT_EQ(cross2Exceptions, 0) << index;
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetByIndex(cross2, lane), -1.0f) << index << ':' << lane;
+
+        const SIMDVectorSingle lhs3 = VectorSetInt(0x40000000u, 0x40400000u, 0x40800000u, inactiveBits[index][0]);
+        const SIMDVectorSingle rhs3 = VectorSetInt(0x40a00000u, 0x40e00000u, 0x41300000u, inactiveBits[index][1]);
+        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        const SIMDVectorSingle cross3 = Vector3Cross(lhs3, rhs3);
+        const i32 cross3Exceptions = fetestexcept(FE_INVALID | FE_OVERFLOW);
+        EXPECT_EQ(cross3Exceptions, 0) << index;
+        const f32 cross3Expected[]{ 5.0f, -2.0f, -1.0f };
+        for(usize lane = 0u; lane < 3u; ++lane)
+            EXPECT_EQ(VectorGetByIndex(cross3, lane), cross3Expected[lane]) << index << ':' << lane;
+        EXPECT_EQ(VectorGetIntW(cross3), 0u) << index;
+    }
+
+    // An active infinite component must not leak into the zeroed inactive product lanes through the XY swap.
+    const SIMDVectorSingle lhs = VectorSet(2.0f, 3.0f, 0.0f, 0.0f);
+    const SIMDVectorSingle rhs = VectorSet(Limit<f32>::s_Infinity, 7.0f, 0.0f, 0.0f);
+    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    const SIMDVectorSingle cross = Vector2Cross(lhs, rhs);
+    const i32 crossExceptions = fetestexcept(FE_INVALID | FE_OVERFLOW);
+    EXPECT_EQ(crossExceptions, 0);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetByIndex(cross, lane), -Limit<f32>::s_Infinity) << lane;
+}
+
 TEST(Math, DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions){
 #pragma STDC FENV_ACCESS ON
     std::fenv_t originalEnvironment{};

@@ -95,6 +95,16 @@ namespace SIMDVectorDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_HAS_SSE2)
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ReciprocalSqrtReplicated(SIMDVectorDouble value)noexcept{
+    const __m128d input = GetLow(value);
+    const __m128d root = _mm_sqrt_sd(input, input);
+    const __m128d reciprocal = _mm_div_sd(_mm_set_sd(1.0), root);
+    const __m128d result = _mm_unpacklo_pd(reciprocal, reciprocal);
+    return FromPairs(result, result);
+}
+#endif
+
 [[nodiscard]] NWB_INLINE f64 FloorRemainder(const f64 numerator, const f64 denominator)noexcept{
     const f64 remainder = FMod(numerator, denominator);
     if(remainder == 0.0)
@@ -518,9 +528,13 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSum(SIMDVectorSingle value)noexc
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSum(SIMDVectorDouble value)noexcept{
+#if defined(NWB_HAS_AVX2)
+    return SIMDVectorDoubleDetail::Reduce4(value);
+#else
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(value), VectorDoubleSplatY(value));
     const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(value));
     return VectorDoubleAdd(xyz, VectorDoubleSplatW(value));
+#endif
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMergeX(SIMDVectorSingle x, SIMDVectorSingle y, SIMDVectorSingle z, SIMDVectorSingle w)noexcept{

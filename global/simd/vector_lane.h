@@ -589,6 +589,26 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SplatLane(SIMDVectorDouble value)noexc
 #endif
 }
 
+#if defined(NWB_HAS_AVX2)
+// Preserve sequential reduction order and broadcast only after the final scalar-lane addition.
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Reduce3(SIMDVectorDouble value)noexcept{
+    const __m128d low = GetLow(value), high = GetHigh(value);
+    const __m128d xy = _mm_add_sd(low, _mm_unpackhi_pd(low, low));
+    const __m128d xyz = _mm_add_sd(xy, high);
+    const __m128d replicated = _mm_unpacklo_pd(xyz, xyz);
+    return FromPairs(replicated, replicated);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Reduce4(SIMDVectorDouble value)noexcept{
+    const __m128d low = GetLow(value), high = GetHigh(value);
+    const __m128d xy = _mm_add_sd(low, _mm_unpackhi_pd(low, low));
+    const __m128d xyz = _mm_add_sd(xy, high);
+    const __m128d xyzw = _mm_add_sd(xyz, _mm_unpackhi_pd(high, high));
+    const __m128d replicated = _mm_unpacklo_pd(xyzw, xyzw);
+    return FromPairs(replicated, replicated);
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -232,8 +232,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLn(SIMDVectorDouble q)
     const SIMDVectorDouble qw = VectorDoubleSplatW(q);
     const SIMDVectorDouble q0 = VectorDoubleAndInt(q, s_DoubleSIMDMask3);
     const SIMDVectorDouble controlW = VectorDoubleInBounds(qw, oneMinusEpsilon);
-    const SIMDVectorDouble theta = VectorDoubleACos(qw);
-    const SIMDVectorDouble sinTheta = VectorDoubleSin(theta);
+    const SIMDVectorDouble theta = SIMDVectorDoubleDetail::ACosReplicated(qw);
+    const SIMDVectorDouble sinTheta = SIMDVectorDoubleDetail::SinReplicated(theta);
     const SIMDVectorDouble scale = VectorDoubleDivide(theta, sinTheta);
     const SIMDVectorDouble result = VectorDoubleMultiply(q0, scale);
     return VectorDoubleSelect(q0, result, controlW);
@@ -255,7 +255,11 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleExp(SIMDVectorDouble q
     const SIMDVectorDouble theta = VectorDouble3Length(q);
     SIMDVectorDouble sinTheta{};
     SIMDVectorDouble cosTheta{};
+#if defined(NWB_HAS_AVX2)
+    SIMDVectorDoubleDetail::SinCosReplicated(sinTheta, cosTheta, theta);
+#else
     VectorDoubleSinCos(sinTheta, cosTheta, theta);
+#endif
 
     const SIMDVectorDouble scale = VectorDoubleDivide(sinTheta, theta);
     SIMDVectorDouble result = VectorDoubleMultiply(q, scale);
@@ -358,7 +362,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleSlerpV(SIMDVectorDoubl
     SIMDVectorDouble sinOmega = VectorDoubleNegativeMultiplySubtract(cosOmega, cosOmega, s_DoubleSIMDOne);
     sinOmega = VectorDoubleSqrt(sinOmega);
 
-    const SIMDVectorDouble omega = VectorDoubleATan2(sinOmega, cosOmega);
+    const SIMDVectorDouble omega = SIMDVectorDoubleDetail::ATan2Replicated(sinOmega, cosOmega);
     SIMDVectorDouble signMask = VectorDoubleSplatSignMask();
     SIMDVectorDouble v01 = VectorDoubleShiftLeft(t, VectorDoubleZero(), 2);
     signMask = VectorDoubleShiftLeft(signMask, VectorDoubleZero(), 3);
@@ -571,7 +575,11 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationNormal(SIMDVec
     const SIMDVectorDouble n = VectorDoubleSelect(s_DoubleSIMDIdentityR3, normalAxis, s_DoubleSIMDSelect1110);
     SIMDVectorDouble sinAngle{};
     SIMDVectorDouble cosAngle{};
+#if defined(NWB_HAS_AVX2)
+    SIMDVectorDoubleDetail::SinCosReplicated(sinAngle, cosAngle, VectorDoubleScale(VectorDoubleReplicate(angle), SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale));
+#else
     VectorDoubleSinCos(sinAngle, cosAngle, VectorDoubleScale(VectorDoubleReplicate(angle), SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale));
+#endif
     const SIMDVectorDouble scale = VectorDoubleSelect(cosAngle, sinAngle, s_DoubleSIMDSelect1110);
     return VectorDoubleMultiply(n, scale);
 }

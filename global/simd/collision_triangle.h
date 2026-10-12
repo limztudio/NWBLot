@@ -196,6 +196,12 @@ namespace TriangleDoubleTests{
     };
     const SIMDVectorDouble roundoffA1 = differenceRoundoff(first1, first0, relativeA1), roundoffA2 = differenceRoundoff(first2, first0, relativeA2);
     const SIMDVectorDouble roundoffB0 = differenceRoundoff(second0, first0, relativeB0), roundoffB1 = differenceRoundoff(second1, first0, relativeB1), roundoffB2 = differenceRoundoff(second2, first0, relativeB2);
+#if defined(NWB_HAS_AVX2)
+    const SIMDVectorDouble absoluteA1 = VectorDoubleAbs(relativeA1), absoluteA2 = VectorDoubleAbs(relativeA2);
+    const SIMDVectorDouble absoluteB0 = VectorDoubleAbs(relativeB0), absoluteB1 = VectorDoubleAbs(relativeB1), absoluteB2 = VectorDoubleAbs(relativeB2);
+    const SIMDVectorDouble absoluteRoundoffA1 = VectorDoubleAbs(roundoffA1), absoluteRoundoffA2 = VectorDoubleAbs(roundoffA2);
+    const SIMDVectorDouble absoluteRoundoffB0 = VectorDoubleAbs(roundoffB0), absoluteRoundoffB1 = VectorDoubleAbs(roundoffB1), absoluteRoundoffB2 = VectorDoubleAbs(roundoffB2);
+#endif
     const SIMDVectorDouble edgeA0 = relativeA1, edgeA1 = VectorDoubleSubtract(first2, first1), edgeA2 = VectorDoubleNegate(relativeA2);
     const SIMDVectorDouble edgeB0 = VectorDoubleSubtract(second1, second0), edgeB1 = VectorDoubleSubtract(second2, second1), edgeB2 = VectorDoubleSubtract(second0, second2);
     const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
@@ -205,18 +211,34 @@ namespace TriangleDoubleTests{
         return VectorDoubleSubtract(positive, negative);
     };
     const auto separated = [&](const SIMDVectorDouble axis)noexcept{
+        if(VectorDouble3Equal(axis, zero))
+            return false;
         const SIMDVectorDouble absoluteAxis = VectorDoubleAbs(axis);
+#if defined(NWB_HAS_AVX2)
+        const auto projectionInterval = [&](const SIMDVectorDouble relative, const SIMDVectorDouble absoluteRelative, const SIMDVectorDouble absoluteRoundoff)noexcept{
+            const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
+            const SIMDVectorDouble magnitude = VectorDouble3Dot(absoluteRelative, absoluteAxis), coordinateError = VectorDouble3Dot(absoluteRoundoff, absoluteAxis);
+#else
         const auto projectionInterval = [&](const SIMDVectorDouble relative, const SIMDVectorDouble roundoff)noexcept{
             const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
             const SIMDVectorDouble magnitude = VectorDouble3Dot(VectorDoubleAbs(relative), absoluteAxis), coordinateError = VectorDouble3Dot(VectorDoubleAbs(roundoff), absoluteAxis);
+#endif
             // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
             const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
         };
+#if defined(NWB_HAS_AVX2)
+        const SIMDVectorDouble intervalA1 = projectionInterval(relativeA1, absoluteA1, absoluteRoundoffA1), intervalA2 = projectionInterval(relativeA2, absoluteA2, absoluteRoundoffA2);
+#else
         const SIMDVectorDouble intervalA1 = projectionInterval(relativeA1, roundoffA1), intervalA2 = projectionInterval(relativeA2, roundoffA2);
+#endif
         const SIMDVectorDouble minimumA = VectorDoubleMin(zero, VectorDoubleMin(VectorDoubleSplatX(intervalA1), VectorDoubleSplatX(intervalA2)));
         const SIMDVectorDouble maximumA = VectorDoubleMax(zero, VectorDoubleMax(VectorDoubleSplatY(intervalA1), VectorDoubleSplatY(intervalA2)));
+#if defined(NWB_HAS_AVX2)
+        const SIMDVectorDouble intervalB0 = projectionInterval(relativeB0, absoluteB0, absoluteRoundoffB0), intervalB1 = projectionInterval(relativeB1, absoluteB1, absoluteRoundoffB1), intervalB2 = projectionInterval(relativeB2, absoluteB2, absoluteRoundoffB2);
+#else
         const SIMDVectorDouble intervalB0 = projectionInterval(relativeB0, roundoffB0), intervalB1 = projectionInterval(relativeB1, roundoffB1), intervalB2 = projectionInterval(relativeB2, roundoffB2);
+#endif
         const SIMDVectorDouble minimumB = VectorDoubleMin(VectorDoubleSplatX(intervalB0), VectorDoubleMin(VectorDoubleSplatX(intervalB1), VectorDoubleSplatX(intervalB2)));
         const SIMDVectorDouble maximumB = VectorDoubleMax(VectorDoubleSplatY(intervalB0), VectorDoubleMax(VectorDoubleSplatY(intervalB1), VectorDoubleSplatY(intervalB2)));
         return VectorDouble4Less(maximumA, minimumB) || VectorDouble4Less(maximumB, minimumA);

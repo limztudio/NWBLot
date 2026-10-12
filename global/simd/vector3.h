@@ -114,12 +114,21 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Dot(SIMDVectorSingle v0, SIMDVe
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3Dot(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_AVX2)
+#pragma STDC FENV_ACCESS ON
+    // Keep the original packed multiply so simultaneous active-lane exceptions retain their trap priority.
+    v0 = VectorDoubleAndInt(v0, s_DoubleSIMDMask3);
+    v1 = VectorDoubleAndInt(v1, s_DoubleSIMDMask3);
+    const SIMDVectorDouble product = v0 * v1;
+    return SIMDVectorDoubleDetail::Reduce3(product);
+#else
     v0 = VectorDoubleAndInt(v0, s_DoubleSIMDMask3);
     v1 = VectorDoubleAndInt(v1, s_DoubleSIMDMask3);
     const SIMDVectorDouble product = VectorDoubleMultiply(v0, v1);
     SIMDVectorDouble result = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
     result = VectorDoubleAdd(result, VectorDoubleSplatZ(product));
     return result;
+#endif
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Cross(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
@@ -167,7 +176,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3ReciprocalLength(SIMDVectorSing
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3ReciprocalLength(SIMDVectorDouble value)noexcept{
+#if defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::ReciprocalSqrtReplicated(VectorDouble3LengthSq(value));
+#else
     return VectorDoubleReciprocalSqrt(VectorDouble3LengthSq(value));
+#endif
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3ReciprocalLengthEst(SIMDVectorSingle value)noexcept{
@@ -179,7 +192,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3ReciprocalLengthEst(SIMDVectorS
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3ReciprocalLengthEst(SIMDVectorDouble value)noexcept{
+#if defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::ReciprocalSqrtReplicated(VectorDouble3LengthSq(value));
+#else
     return VectorDoubleReciprocalSqrtEst(VectorDouble3LengthSq(value));
+#endif
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Length(SIMDVectorSingle value)noexcept{
@@ -381,11 +398,11 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3Orthogonal(SIMDVectorDoub
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3AngleBetweenNormals(SIMDVectorSingle n0, SIMDVectorSingle n1)noexcept{ return VectorACos(VectorClamp(Vector3Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne)); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3AngleBetweenNormals(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return VectorDoubleACos(VectorDoubleClamp(VectorDouble3Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3AngleBetweenNormals(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble3Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3AngleBetweenNormalsEst(SIMDVectorSingle n0, SIMDVectorSingle n1)noexcept{ return VectorACosEst(VectorClamp(Vector3Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne)); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3AngleBetweenNormalsEst(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return VectorDoubleACosEst(VectorDoubleClamp(VectorDouble3Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3AngleBetweenNormalsEst(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble3Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3AngleBetweenVectors(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
     const SIMDVectorSingle reciprocalLength0 = Vector3ReciprocalLength(v0);
@@ -400,7 +417,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3AngleBetweenVectors(SIMDV
     const SIMDVectorDouble reciprocalLength1 = VectorDouble3ReciprocalLength(v1);
     SIMDVectorDouble cosAngle = VectorDoubleMultiply(VectorDouble3Dot(v0, v1), VectorDoubleMultiply(reciprocalLength0, reciprocalLength1));
     cosAngle = VectorDoubleClamp(cosAngle, s_DoubleSIMDNegativeOne, s_DoubleSIMDOne);
-    return VectorDoubleACos(cosAngle);
+    return SIMDVectorDoubleDetail::ACosReplicated(cosAngle);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3LinePointDistance(SIMDVectorSingle linePoint0, SIMDVectorSingle linePoint1, SIMDVectorSingle point)noexcept{

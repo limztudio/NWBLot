@@ -77,6 +77,32 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorArcEstPolynomial(SIMDVectorSingl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace SIMDVectorDoubleDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SinReplicated(SIMDVectorDouble value)noexcept{
+    return VectorDoubleReplicate(Sin(VectorDoubleGetX(value)));
+}
+
+// Uniform consumers evaluate each binary64 primitive once before broadcasting its result.
+NWB_INLINE void NWB_SIMD_CALL SinCosReplicated(SIMDVectorDouble& outSin, SIMDVectorDouble& outCos, SIMDVectorDouble value)noexcept{
+    outSin = VectorDoubleReplicate(Sin(VectorDoubleGetX(value)));
+    outCos = VectorDoubleReplicate(Cos(VectorDoubleGetX(value)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSin(SIMDVectorSingle value)noexcept{
     SIMDVectorSingle cosSignSelect;
     SIMDVectorSingle x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);

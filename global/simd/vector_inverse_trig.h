@@ -75,6 +75,30 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2SelectResult(SIMDVectorSing
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace SIMDVectorDoubleDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ACosReplicated(SIMDVectorDouble value)noexcept{
+    return VectorDoubleReplicate(ACos(VectorDoubleGetX(value)));
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ATan2Replicated(SIMDVectorDouble y, SIMDVectorDouble x)noexcept{
+    return VectorDoubleReplicate(ATan2(VectorDoubleGetX(y), VectorDoubleGetX(x)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorASin(SIMDVectorSingle value)noexcept{
     const SIMDVectorSingle nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
     SIMDVectorSingle t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);

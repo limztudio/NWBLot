@@ -370,7 +370,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f
 
     SIMDVectorDouble sinFov{};
     SIMDVectorDouble cosFov{};
-    VectorDoubleSinCos(sinFov, cosFov, VectorDoubleScale(VectorDoubleReplicate(fovAngleY), s_DoubleMatrixHalf));
+    SIMDVectorDoubleDetail::SinCosReplicated(sinFov, cosFov, VectorDoubleScale(VectorDoubleReplicate(fovAngleY), s_DoubleMatrixHalf));
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble height = VectorDoubleDivide(cosFov, sinFov);
     const SIMDVectorDouble width = VectorDoubleDivide(height, VectorDoubleReplicate(aspectRatio));

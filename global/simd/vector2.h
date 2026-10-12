@@ -195,11 +195,18 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Dot(SIMDVectorSingle v0, SIMDVe
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2Dot(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#if defined(NWB_HAS_AVX2)
+    const __m128d product = _mm_mul_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1));
+    const __m128d sum = _mm_add_sd(product, _mm_unpackhi_pd(product, product));
+    const __m128d replicated = _mm_unpacklo_pd(sum, sum);
+    return SIMDVectorDoubleDetail::FromPairs(replicated, replicated);
+#else
     v0 = VectorDoubleAndInt(v0, s_DoubleSIMDMaskXY);
     v1 = VectorDoubleAndInt(v1, s_DoubleSIMDMaskXY);
     const SIMDVectorDouble product = VectorDoubleMultiply(v0, v1);
     SIMDVectorDouble result = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
     return result;
+#endif
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Cross(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
@@ -252,7 +259,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2ReciprocalLength(SIMDVectorSing
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2ReciprocalLength(SIMDVectorDouble value)noexcept{
+#if defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::ReciprocalSqrtReplicated(VectorDouble2LengthSq(value));
+#else
     return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
+#endif
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2ReciprocalLengthEst(SIMDVectorSingle value)noexcept{
@@ -264,7 +275,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2ReciprocalLengthEst(SIMDVectorS
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2ReciprocalLengthEst(SIMDVectorDouble value)noexcept{
+#if defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::ReciprocalSqrtReplicated(VectorDouble2LengthSq(value));
+#else
     return VectorDoubleReciprocalSqrtEst(VectorDouble2LengthSq(value));
+#endif
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Length(SIMDVectorSingle value)noexcept{
@@ -419,12 +434,12 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2AngleBetweenNormals(SIMDVectorS
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2AngleBetweenNormals(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{
-    return VectorDoubleACos(VectorDoubleClamp(VectorDouble2Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne));
+    return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble2Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne));
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2AngleBetweenNormalsEst(SIMDVectorSingle n0, SIMDVectorSingle n1)noexcept{ return VectorACosEst(VectorClamp(Vector2Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne)); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2AngleBetweenNormalsEst(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return VectorDoubleACosEst(VectorDoubleClamp(VectorDouble2Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2AngleBetweenNormalsEst(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble2Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2AngleBetweenVectors(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
     const SIMDVectorSingle reciprocalLength0 = Vector2ReciprocalLength(v0);
@@ -439,7 +454,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2AngleBetweenVectors(SIMDV
     const SIMDVectorDouble reciprocalLength1 = VectorDouble2ReciprocalLength(v1);
     SIMDVectorDouble cosAngle = VectorDoubleMultiply(VectorDouble2Dot(v0, v1), VectorDoubleMultiply(reciprocalLength0, reciprocalLength1));
     cosAngle = VectorDoubleClamp(cosAngle, s_DoubleSIMDNegativeOne, s_DoubleSIMDOne);
-    return VectorDoubleACos(cosAngle);
+    return SIMDVectorDoubleDetail::ACosReplicated(cosAngle);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2LinePointDistance(SIMDVectorSingle linePoint0, SIMDVectorSingle linePoint1, SIMDVectorSingle point)noexcept{

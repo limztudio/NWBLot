@@ -6,3 +6,9 @@ if(NWB_BUILD_UI_INPUT_BENCHMARK)
         "${CMAKE_CURRENT_LIST_DIR}/ui_input/pointer.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_input/paint.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_input/editor.cpp")
     target_link_libraries(nwb_ui_input_benchmark PRIVATE nwb_ui_widgets nwb_ecs_ui nwb_ui nwb_common nwb_alloc)
 endif()
+
+option(NWB_BUILD_SIMD_BENCHMARKS "Build opt-in SIMD microbenchmarks" OFF)
+
+if(NWB_BUILD_SIMD_BENCHMARKS)
+    add_subdirectory(simd_optimization)
+endif()

@@ -15,6 +15,7 @@
 
 
 using AllocationSizeException = std::bad_array_new_length;
+using AlignValT = std::align_val_t;
 
 
 template<usize size>

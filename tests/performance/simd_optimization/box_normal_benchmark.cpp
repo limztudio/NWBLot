@@ -17,6 +17,9 @@
 namespace __hidden_box_normal_benchmark{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename Scalar>
 struct Case{
     Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle> position;
@@ -212,6 +215,9 @@ template<typename Scalar>
     NWB_COUT << "{\"precision\":" << sizeof(Scalar) << ",\"candidate\":" << candidate << ",\"latency\":" << latency << ",\"iterations\":" << iterations << ",\"seconds\":" << seconds << ",\"checksum\":" << checksum << "}\n";
     return 0;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

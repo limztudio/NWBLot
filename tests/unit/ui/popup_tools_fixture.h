@@ -193,9 +193,9 @@ protected:
         event.type = InputEventType::KeyDown;
         event.key = key;
         event.shift = shift;
-        EXPECT_TRUE(send(event).keyboardConsumed);
+        EXPECT_TRUE(send(event).commandConsumed);
         event.type = InputEventType::KeyUp;
-        EXPECT_TRUE(send(event).keyboardConsumed);
+        EXPECT_TRUE(send(event).commandConsumed);
     }
 
     void secondaryClick(const Point& point){

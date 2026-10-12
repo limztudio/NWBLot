@@ -64,8 +64,8 @@ TEST_F(UiSearchComboBuilderTests, ReverseTabFromQueryCancelsPreeditAndKeepsTheCo
     ASSERT_TRUE(m_search.query().composition().active);
     const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab, .shift = true };
     const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab, .shift = true };
-    EXPECT_TRUE(send(reverseDown).keyboardConsumed);
-    EXPECT_TRUE(send(reverseUp).keyboardConsumed);
+    EXPECT_TRUE(send(reverseDown).commandConsumed);
+    EXPECT_TRUE(send(reverseUp).commandConsumed);
     ASSERT_TRUE(acceptSearch(3u));
     EXPECT_TRUE(m_searchResult.combo.closed);
     EXPECT_FALSE(m_searchResult.combo.committed);
@@ -192,8 +192,8 @@ TEST_F(UiSearchComboBuilderTests, PreeditDisablesDelegationAndCannotCommitQueued
     ASSERT_TRUE(acceptSearch(3u));
     EXPECT_TRUE(m_search.query().composition().active);
     EXPECT_TRUE(m_host.publishedComposing);
-    EXPECT_FALSE(target(query())->keyboardOwner.valid());
-    EXPECT_TRUE(target(query())->keyboardControl.empty());
+    EXPECT_FALSE(target(query())->commandOwner.valid());
+    EXPECT_TRUE(target(query())->commandControl.empty());
     EXPECT_FALSE(m_searchResult.combo.committed);
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(m_search.combo().listState().cursorKey(), 1u);

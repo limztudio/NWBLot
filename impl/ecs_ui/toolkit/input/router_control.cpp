@@ -77,7 +77,7 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
         if(action.source == host->id)
             return true;
         const HitTarget* source = findTarget(action.source, action.sourceDeclarationGeneration);
-        return source != nullptr && isInteractive(*source) && source->control == action.sourceControl && keyboardHost(*source) == host;
+        return source != nullptr && isInteractive(*source) && source->control == action.sourceControl && commandHost(*source) == host;
     }
     const HitTarget* source = findTarget(action.source, action.sourceDeclarationGeneration);
     return
@@ -133,7 +133,7 @@ void InputRouter::reconcileControlActions(){
     }
     // Losing an initial-down owner is terminal for that held key even if its token later returns.
     for(auto& source : m_commandSources){
-        if(!currentControlKeyOwner(source)){
+        if(!currentControlCommandOwner(source)){
             if(source.controlOwner.host.valid())
                 source.submitArmed = false;
             source.controlOwner = {};
@@ -170,11 +170,8 @@ void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& so
 }
 
 void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result){
-    m_pointer = event.position;
-    m_pointerKnown = true;
-    updateHover();
-    const HitTarget* hit = findTarget(m_hover);
-    result.pointerConsumed |= wantsPointer();
+    const HitTarget* hit = findHitTarget(event.position);
+    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
     if((m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed) || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0))
         return;
     const HitTarget* host = controlHost(*hit);
@@ -207,7 +204,7 @@ bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarge
     case InputCommand::End: kind = ControlActionKind::End; break;
     default: return false;
     }
-    ControlKeyOwner& owner = held.controlOwner;
+    ControlCommandOwner& owner = held.controlOwner;
     if(!alreadyPressed && !event.repeat)
         owner = { host.id, host.declarationGeneration, host.popup, host.control, kind == ControlActionKind::Left || kind == ControlActionKind::Right };
     if(

@@ -196,10 +196,10 @@ protected:
         event.type = InputEventType::KeyDown;
         event.key = value;
         event.repeat = repeat;
-        EXPECT_TRUE(send(event).keyboardConsumed);
+        EXPECT_TRUE(send(event).commandConsumed);
         if(!repeat){
             event.type = InputEventType::KeyUp;
-            EXPECT_TRUE(send(event).keyboardConsumed);
+            EXPECT_TRUE(send(event).commandConsumed);
         }
     }
 
@@ -366,11 +366,11 @@ TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmissi
     EXPECT_FALSE(m_result.selectionChanged);
     key(Core::Key::Tab);
     ASSERT_EQ(m_context.input().focus(), host());
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
     ASSERT_TRUE(accept(4u));
     EXPECT_FALSE(m_result.activated);
     key(Core::Key::Escape);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
     ASSERT_TRUE(accept(5u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.activated);
@@ -386,11 +386,11 @@ TEST_F(UiListBuilderTests, DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRele
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     key(Core::Key::Tab);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
     ++m_source.contentRevision;
     ASSERT_TRUE(accept(2u));
     EXPECT_FALSE(m_result.activated);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.activated);
@@ -406,20 +406,20 @@ TEST_F(UiListBuilderTests, HeldNavigationCannotMutateAnAcceptedReorderedDataset)
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = Core::Key::Down;
-    EXPECT_TRUE(send(event).keyboardConsumed);
+    EXPECT_TRUE(send(event).commandConsumed);
     m_source.reverse = true;
     ++m_source.contentRevision;
     ASSERT_TRUE(prepare(2u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     ASSERT_TRUE(m_context.commitFrame(2u));
     event.repeat = true;
-    EXPECT_TRUE(send(event).keyboardConsumed);
+    EXPECT_TRUE(send(event).commandConsumed);
     ASSERT_TRUE(prepare(3u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.selectionChanged);
     ASSERT_TRUE(m_context.commitFrame(3u));
     event.type = InputEventType::KeyUp;
-    EXPECT_TRUE(send(event).keyboardConsumed);
+    EXPECT_TRUE(send(event).commandConsumed);
 }
 
 TEST_F(UiListBuilderTests, ReplacementSourceResetsSelectionAndScroll){

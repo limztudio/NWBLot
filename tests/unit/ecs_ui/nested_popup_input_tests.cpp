@@ -102,7 +102,7 @@ TEST_F(UiPopupInputTests, NestedFocusLossCancelsTheWholeFamilyWithoutRestoringAn
     ASSERT_TRUE(nestedFrame());
     const TextInputSessionToken childSession = m_textInput.activeSession();
     ASSERT_TRUE(m_textInput.setFocused(false));
-    EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::FocusLost, .position = {} }).keyboardConsumed);
+    EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::FocusLost, .position = {} }).commandConsumed);
     EXPECT_FALSE(m_textInput.activeSession().valid());
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_EQ(m_textInput.commit(childSession, "late"), TextInputAdmission::InvalidSession);

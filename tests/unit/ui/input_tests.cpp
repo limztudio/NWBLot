@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -51,7 +53,7 @@ public:
 
 protected:
     InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_router.queue(event));
+        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
         return m_router.process();
     }
 
@@ -61,8 +63,8 @@ protected:
     }
 
     void tab(const bool reverse = false){
-        EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Tab, reverse)).keyboardConsumed);
-        EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Tab, reverse)).keyboardConsumed);
+        EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Tab, reverse)).commandConsumed);
+        EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Tab, reverse)).commandConsumed);
     }
 
 
@@ -193,14 +195,14 @@ TEST_F(UiInputTests, TransientHoverDepartureAndReentryAdvanceActivityBeforeTheNe
     EXPECT_FALSE(m_router.commitTargets(nullptr, 1u, 3u));
     EXPECT_EQ(m_router.hoverActivityGeneration(), stable);
 
-    ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PointerMove, { 45.0f, 15.0f })));
-    ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PointerMove)));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove, { 45.0f, 15.0f }))));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove))));
     EXPECT_EQ(m_router.process().hover, targets[0].id);
     const u64 returned = m_router.hoverActivityGeneration();
     EXPECT_GT(returned, stable);
 
-    ASSERT_TRUE(m_router.queue({ InputEventType::PointerLeave, {} }));
-    ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PointerMove)));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ InputEventType::PointerLeave, {} })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove))));
     EXPECT_EQ(m_router.process().hover, targets[0].id);
     EXPECT_GT(m_router.hoverActivityGeneration(), returned);
 }
@@ -255,10 +257,14 @@ TEST_F(UiInputTests, PressCaptureLossFocusLossAndResetFenceHoverActivity){
     ASSERT_TRUE(send(PointerEvent(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_EQ(m_router.hoverActivityGeneration(), previous);
 
+    ASSERT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
     send({ InputEventType::PointerCaptureLost, {} });
     EXPECT_GT(m_router.hoverActivityGeneration(), previous);
     previous = m_router.hoverActivityGeneration();
     send({ InputEventType::FocusLost, {} });
+    m_router.cancelDeviceInput(0u);
     EXPECT_GT(m_router.hoverActivityGeneration(), previous);
     previous = m_router.hoverActivityGeneration();
     m_router.reset();
@@ -339,7 +345,7 @@ TEST_F(UiInputTests, InvalidatedDeclarationPrunesActionsAndCaptureWithoutAdvanci
     click();
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
     m_router.invalidateTarget(targets[0].id);
     EXPECT_EQ(m_router.layoutGeneration(), 7u);
     ASSERT_EQ(m_router.targets().size(), 1u);
@@ -350,7 +356,7 @@ TEST_F(UiInputTests, InvalidatedDeclarationPrunesActionsAndCaptureWithoutAdvanci
     EXPECT_FALSE(m_router.hitTest({ 15.0f, 15.0f }).valid());
     EXPECT_EQ(m_router.hitTest({ 45.0f, 15.0f }).value, 2u);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
     m_router.invalidateTarget({ 999u });
     EXPECT_EQ(m_router.layoutGeneration(), 7u);
     EXPECT_EQ(m_router.targets().size(), 1u);
@@ -370,8 +376,8 @@ TEST_F(UiInputTests, PanelBlocksPointerAndClearsKeyboardFocusWithoutActivating){
     EXPECT_EQ(panel.capture.value, 2u);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 45.0f, 15.0f })).pointerConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
 }
 
 TEST_F(UiInputTests, TabOrderWrapsInBothDirectionsAndSkipsDisabledOrInvisibleTargets){
@@ -392,41 +398,41 @@ TEST_F(UiInputTests, TabOrderWrapsInBothDirectionsAndSkipsDisabledOrInvisibleTar
     EXPECT_EQ(m_router.focus().value, 5u);
     tab(true);
     EXPECT_EQ(m_router.focus().value, 1u);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Escape)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Escape)).commandConsumed);
     EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Escape)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Escape)).commandConsumed);
     tab(true);
     EXPECT_EQ(m_router.focus().value, 5u);
     ASSERT_TRUE(m_router.commitTargets(nullptr, 0u, 2u));
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Tab)).keyboardConsumed);
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Tab)).keyboardConsumed);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Tab)).commandConsumed);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Tab)).commandConsumed);
 }
 
 TEST_F(UiInputTests, KeyboardActivationIgnoresNativeRepeatsAndDuplicateDowns){
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     tab();
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_TRUE(m_router.pressed(target.id));
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter, false, true)).keyboardConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter, false, true)).commandConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_FALSE(m_router.process().keyboardConsumed);
+    EXPECT_FALSE(m_router.process().commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     ASSERT_EQ(m_router.actions().size(), 1u);
-    EXPECT_EQ(m_router.actions()[0].source, InputActionSource::Keyboard);
+    EXPECT_EQ(m_router.actions()[0].origin, InputActionSource::Command);
     EXPECT_FALSE(m_router.pressed(target.id));
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_EQ(m_router.actions().size(), 1u);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
     EXPECT_EQ(m_router.actions().size(), 3u);
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space, false, true)).keyboardConsumed);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space, false, true)).commandConsumed);
     EXPECT_EQ(m_router.actions().size(), 3u);
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).keyboardConsumed);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(nullptr, 0u, 2u));
     EXPECT_TRUE(m_router.actions().empty());
 }
@@ -435,18 +441,18 @@ TEST_F(UiInputTests, HeldUiKeysKeepReleaseOwnershipAfterFocusedTargetRemoval){
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     tab();
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(nullptr, 0u, 2u));
     EXPECT_FALSE(m_router.focus().valid());
     EXPECT_TRUE(m_router.actions().empty());
     const InputRoutingResult repeated = send(KeyEvent(InputEventType::KeyDown, Core::Key::Space, false, true));
-    EXPECT_TRUE(repeated.keyboardConsumed);
-    EXPECT_TRUE(repeated.wantsKeyboard);
+    EXPECT_TRUE(repeated.commandConsumed);
+    EXPECT_TRUE(repeated.wantsCommands);
     EXPECT_TRUE(m_router.actions().empty());
     const InputRoutingResult released = send(KeyEvent(InputEventType::KeyUp, Core::Key::Space));
-    EXPECT_TRUE(released.keyboardConsumed);
-    EXPECT_FALSE(released.wantsKeyboard);
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(released.commandConsumed);
+    EXPECT_FALSE(released.wantsCommands);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
 }
 
 TEST_F(UiInputTests, ClearingKeyboardFocusPreservesAcceptedActionsCaptureAndHeldReleaseOwnership){
@@ -454,7 +460,7 @@ TEST_F(UiInputTests, ClearingKeyboardFocusPreservesAcceptedActionsCaptureAndHeld
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     click();
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
     EXPECT_FALSE(m_router.ownsKey(Core::Key::Unknown));
@@ -465,7 +471,7 @@ TEST_F(UiInputTests, ClearingKeyboardFocusPreservesAcceptedActionsCaptureAndHeld
     EXPECT_EQ(m_router.capture().value, 1u);
     EXPECT_TRUE(m_router.primaryDown());
     EXPECT_EQ(m_router.actions().size(), 1u);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
     EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
     ASSERT_EQ(m_router.actions().size(), 2u);
@@ -474,34 +480,41 @@ TEST_F(UiInputTests, ClearingKeyboardFocusPreservesAcceptedActionsCaptureAndHeld
     EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
 
-TEST_F(UiInputTests, NativeFocusLossTerminatesPointerAndResetDoesNotReuseActionSequences){
+TEST_F(UiInputTests, NativeFocusTerminationAndResetDoNotReuseActionSequences){
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     click();
     ASSERT_EQ(m_router.actions().size(), 1u);
     const u64 firstSequence = m_router.actions()[0].id.sequence;
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
     const InputRoutingResult lost = send({ InputEventType::FocusLost, {} });
     EXPECT_TRUE(lost.pointerConsumed);
-    EXPECT_TRUE(lost.keyboardConsumed);
-    EXPECT_FALSE(lost.wantsPointer);
-    EXPECT_TRUE(lost.wantsKeyboard);
+    EXPECT_TRUE(lost.commandConsumed);
+    EXPECT_TRUE(lost.wantsPointer);
+    EXPECT_TRUE(lost.wantsCommands);
     EXPECT_FALSE(lost.hover.valid());
     EXPECT_FALSE(lost.focus.valid());
     EXPECT_FALSE(lost.capture.valid());
-    EXPECT_FALSE(m_router.primaryDown());
+    EXPECT_TRUE(m_router.primaryDown());
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).keyboardConsumed);
-    EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
+    m_router.cancelDeviceInput(0u);
+    EXPECT_FALSE(m_router.primaryDown());
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_FALSE(m_router.wantsPointer());
+    EXPECT_FALSE(m_router.wantsCommands());
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+    EXPECT_FALSE(send(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 90.0f })).pointerConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PrimaryDown)));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PrimaryDown))));
     m_router.reset();
     EXPECT_EQ(m_router.layoutGeneration(), 0u);
     EXPECT_TRUE(m_router.targets().empty());
     EXPECT_FALSE(m_router.process().pointerConsumed);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    EXPECT_FALSE(send(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 90.0f })).pointerConsumed);
+    send({ InputEventType::FocusGained, {} });
     click();
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_GT(m_router.actions()[0].id.sequence, firstSequence);
@@ -566,13 +579,13 @@ TEST_F(UiInputTests, TargetAndEventLimitsRejectOverflowAndAllowSubsequentProcess
     EXPECT_FALSE(m_router.commitTargets(targets.data(), targets.size() + 1u, 2u));
     EXPECT_EQ(m_router.targets().size(), s_InputMaxTargets);
     for(usize index = 0u; index < s_InputMaxEvents; ++index)
-        ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PointerMove)));
-    EXPECT_FALSE(m_router.queue(PointerEvent(InputEventType::PointerMove)));
+        ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove))));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove))));
     EXPECT_TRUE(m_router.process().pointerConsumed);
     EXPECT_EQ(m_router.hover().value, s_InputMaxTargets);
-    EXPECT_FALSE(m_router.queue(PointerEvent(InputEventType::PointerMove, { Limit<f32>::s_QuietNaN, 1.0f })));
-    EXPECT_FALSE(m_router.queue({ static_cast<InputEventType::Enum>(255u), {} }));
-    EXPECT_FALSE(m_router.queue(KeyEvent(InputEventType::KeyDown, Core::Key::Unknown)));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove, { Limit<f32>::s_QuietNaN, 1.0f }))));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput({ static_cast<InputEventType::Enum>(255u), {} })));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(KeyEvent(InputEventType::KeyDown, Core::Key::Unknown))));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove)).pointerConsumed);
 }
 
@@ -582,23 +595,23 @@ TEST_F(UiInputTests, ActionLimitReportsOverflowWithoutReplayingDroppedInput){
     tab();
     for(usize index = 0u; index < s_InputMaxActions; ++index){
         const InputRoutingResult activated = send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter));
-        EXPECT_TRUE(activated.keyboardConsumed);
+        EXPECT_TRUE(activated.commandConsumed);
         EXPECT_FALSE(activated.activationOverflow);
-        EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+        EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     }
     ASSERT_EQ(m_router.actions().size(), s_InputMaxActions);
     EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).activationOverflow);
     const InputRoutingResult overflow = send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter));
-    EXPECT_TRUE(overflow.keyboardConsumed);
+    EXPECT_TRUE(overflow.commandConsumed);
     EXPECT_TRUE(overflow.activationOverflow);
     EXPECT_EQ(m_router.actions().size(), s_InputMaxActions);
-    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_FALSE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_FALSE(m_router.process().activationOverflow);
     EXPECT_EQ(m_router.actions().size(), s_InputMaxActions - 1u);
     EXPECT_FALSE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Enter)).activationOverflow);
     EXPECT_EQ(m_router.actions().size(), s_InputMaxActions - 1u);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     EXPECT_EQ(m_router.actions().size(), s_InputMaxActions);
 }
 
@@ -608,7 +621,7 @@ TEST_F(UiInputTests, EscapeCancelsPointerPressEvenWhenATextEditorKeepsFocus){
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(m_router.pressed(target.id));
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Escape)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Escape)).commandConsumed);
     EXPECT_EQ(m_router.focus(), target.id);
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_FALSE(m_router.pressed(target.id));
@@ -616,7 +629,7 @@ TEST_F(UiInputTests, EscapeCancelsPointerPressEvenWhenATextEditorKeepsFocus){
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, { 90.0f, 90.0f })).pointerConsumed);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Escape)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Escape)).commandConsumed);
     click();
     EXPECT_TRUE(m_router.consumeActivation(target.id));
 }
@@ -639,7 +652,7 @@ TEST_F(UiInputTests, NativeCaptureTerminationAdmitsFreshClicksWithoutCancellingC
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     click();
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerCaptureLost }).pointerConsumed);
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.secondaryDown());
@@ -648,7 +661,7 @@ TEST_F(UiInputTests, NativeCaptureTerminationAdmitsFreshClicksWithoutCancellingC
     EXPECT_FALSE(m_router.consumeActivation(target.id));
     click();
     EXPECT_TRUE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
@@ -657,14 +670,14 @@ TEST_F(UiInputTests, NativeFocusTerminationDropsMissingNativeReleasesButPreserve
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
     InputEvent controller;
     controller.type = InputEventType::CommandDown;
     controller.source = { 7u, 3u };
     controller.command = InputCommand::Activate;
-    EXPECT_TRUE(send(controller).keyboardConsumed);
-    EXPECT_TRUE(send({ InputEventType::FocusLost }).keyboardConsumed);
-    m_router.cancelNativeInput();
+    EXPECT_TRUE(send(controller).commandConsumed);
+    EXPECT_TRUE(send({ InputEventType::FocusLost }).commandConsumed);
+    m_router.cancelDeviceInput(0u);
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
     EXPECT_TRUE(m_router.ownsSource(controller.source));
@@ -672,13 +685,13 @@ TEST_F(UiInputTests, NativeFocusTerminationDropsMissingNativeReleasesButPreserve
     send({ InputEventType::FocusGained });
     click();
     EXPECT_TRUE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).keyboardConsumed);
+    EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     controller.type = InputEventType::CommandUp;
     controller.command = InputCommand::None;
-    EXPECT_TRUE(send(controller).keyboardConsumed);
+    EXPECT_TRUE(send(controller).commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
     EXPECT_FALSE(m_router.ownsSource(controller.source));
 }

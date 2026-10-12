@@ -1,0 +1,51 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_ui/toolkit/input/input.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiTestSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Existing fixtures exercise the native cursor adapter; neutral providers use queuePointer directly.
+[[nodiscard]] inline NWB::Impl::Ui::InputEvent NativeInput(const NWB::Impl::Ui::InputEvent& event){
+    using namespace NWB::Impl::Ui;
+    InputEvent resolved = event;
+    switch(event.type){
+    case InputEventType::PointerMove:
+    case InputEventType::PrimaryDown:
+    case InputEventType::PrimaryUp:
+    case InputEventType::SecondaryDown:
+    case InputEventType::SecondaryUp:
+    case InputEventType::PointerWheel:
+    case InputEventType::PointerLeave:
+    case InputEventType::PointerCaptureLost:
+        resolved.source = { 0u, 1u };
+        resolved.hoverCapable = true;
+        resolved.extend = event.shift;
+        break;
+    default:
+        break;
+    }
+    return resolved;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

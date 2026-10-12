@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/edit_box_host.h>
 
 #include <core/os/clipboard_service.h>
@@ -204,12 +206,24 @@ protected:
     [[nodiscard]] bool dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
-        const auto normalized = m_context.input().queue(event);
+        const auto normalized = m_context.input().queue(UiTestSupport::NativeInput(event));
         if(!normalized)
             return false;
         const bool submit = m_host.prepareSubmit(*normalized);
         const Ui::InputRoutingResult result = m_context.input().process();
         m_host.input(*normalized, previousCapture, submit);
+        return !result.activationOverflow && !result.gestureOverflow;
+    }
+
+    [[nodiscard]] bool dispatchPointer(const Ui::PointerInput& input){
+        m_host.collectNative();
+        const Ui::WidgetId previousCapture = m_context.input().capture();
+        const auto normalized = m_context.input().queuePointer(input);
+        if(!normalized)
+            return false;
+        const Ui::InputRoutingResult result = m_context.input().process();
+        if(result.pointerRouted)
+            m_host.input(*normalized, previousCapture, false);
         return !result.activationOverflow && !result.gestureOverflow;
     }
 

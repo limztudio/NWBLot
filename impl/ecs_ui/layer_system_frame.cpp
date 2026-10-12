@@ -55,7 +55,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), m_skinSelection.selected(), *skin);
     m_paint.reserve(256u);
     m_ui.setDeltaSeconds(frameDelta);
-    m_ui.setPointerBusy(m_pressedButtons != 0u);
+    m_ui.setPointerBusy(m_pressedButtons != 0u || m_context.input().primaryDown() || m_context.input().secondaryDown());
     UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
     Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const LiveRoot& lhs, const LiveRoot& rhs)noexcept{
         return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.entity.id < rhs.entity.id;

@@ -21,7 +21,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     CommandSource* source = findCommandSource(event.source);
     if(event.type == InputEventType::CommandUp){
         if(source){
-            result.keyboardConsumed |= source->consumed;
+            result.commandConsumed |= source->consumed;
             releaseCommand(event, *source, result);
             m_commandSources.erase(m_commandSources.begin() + (source - m_commandSources.data()));
         }
@@ -42,19 +42,19 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
             source->focusOwner = { focused->id, focused->declarationGeneration, focused->popup, focused->control };
     }
     // Blurred and orphan repeat sequences remain inert until released and pressed again.
-    result.keyboardConsumed |= source->consumed;
+    result.commandConsumed |= source->consumed;
     if(!m_windowFocused || (!alreadyPressed && event.repeat))
         return;
     bool consumed = source->consumed;
     if(alreadyPressed && !consumed)
         return;
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    if(routeContextMenuKey(event, focused, *source, alreadyPressed))
+    if(routeContextMenuCommand(event, focused, *source, alreadyPressed))
         consumed = true;
     else if(event.command == InputCommand::FocusNext || event.command == InputCommand::FocusPrevious)
         consumed |= moveFocusForTraversal(event.command == InputCommand::FocusPrevious) || hasPopup();
     else if(event.command == InputCommand::Cancel){
-        consumed |= wantsKeyboard() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
+        consumed |= wantsCommands() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed || (!m_pointerSources.empty() && wantsPointer());
         if(!event.repeat && !alreadyPressed){
             cancelCommandPresses();
             cancelPointerPress();
@@ -74,8 +74,8 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
         const bool delegatedCommand = event.command == InputCommand::Up || event.command == InputCommand::Down
             || event.command == InputCommand::PageUp || event.command == InputCommand::PageDown
             || event.command == InputCommand::Accept || event.command == InputCommand::Submit;
-        const HitTarget* keyboardOwner = focused != nullptr && delegatedCommand ? keyboardHost(*focused) : nullptr;
-        const HitTarget* control = keyboardOwner != nullptr ? keyboardOwner : focused;
+        const HitTarget* commandOwner = focused != nullptr && delegatedCommand ? commandHost(*focused) : nullptr;
+        const HitTarget* control = commandOwner != nullptr ? commandOwner : focused;
         const bool submitCommand = event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate;
         bool controlHandled = false;
         if(control != nullptr && focused != nullptr && control->navigable){
@@ -87,13 +87,13 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
             else
                 controlHandled = routeControlNavigation(event, *control, *focused, *source, alreadyPressed, result);
         }
-        source->delegated |= controlHandled && keyboardOwner != nullptr;
+        source->delegated |= controlHandled && commandOwner != nullptr;
         if(submitCommand && focused != nullptr && !event.repeat && !alreadyPressed && (controlHandled || focused->activatable || focused->textEditable))
             source->submitArmed = true;
     }
     if(consumed){
         source->consumed = true;
-        result.keyboardConsumed = true;
+        result.commandConsumed = true;
     }
 }
 

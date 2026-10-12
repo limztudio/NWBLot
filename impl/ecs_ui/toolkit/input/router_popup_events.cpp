@@ -56,7 +56,7 @@ void InputRouter::fencePopup(const PopupToken& token){
 
 void InputRouter::cancelPopupFocus(){
     for(auto& record : m_popups){
-        // Native focus loss must not restore keyboard focus into an unfocused window.
+        // Window focus loss must not restore command focus into an unfocused window.
         record.restoreFocus = {};
         record.restoreDeclaration = 0u;
         record.restorePopup = {};

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -56,7 +58,7 @@ public:
 
 protected:
     [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_router.queue(event));
+        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
         return m_router.process();
     }
 

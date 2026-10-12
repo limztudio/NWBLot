@@ -41,7 +41,7 @@ TEST_F(UiPopupToolsNavigationTests, SourceRevisionRestoresRowsFocusAtAcceptanceA
     InputEvent heldNavigation;
     heldNavigation.type = InputEventType::KeyDown;
     heldNavigation.key = Core::Key::Down;
-    EXPECT_TRUE(send(heldNavigation).keyboardConsumed);
+    EXPECT_TRUE(send(heldNavigation).commandConsumed);
     ASSERT_FALSE(m_context.input().controlActions().empty());
     m_source.count = 4u;
     ++m_source.contentRevision;
@@ -67,14 +67,14 @@ TEST_F(UiPopupToolsNavigationTests, SourceRevisionRestoresRowsFocusAtAcceptanceA
     EXPECT_EQ(menuHost()->control.contentRevision, m_source.contentRevision);
     EXPECT_EQ(menuHost()->control.instanceGeneration, m_menu.listState().inputGeneration());
     heldNavigation.repeat = true;
-    EXPECT_TRUE(send(heldNavigation).keyboardConsumed);
+    EXPECT_TRUE(send(heldNavigation).commandConsumed);
     ASSERT_TRUE(acceptTools(5u, false));
     EXPECT_EQ(m_menu.cursorKey(), 1u);
     EXPECT_FALSE(m_menuResult.activated);
     EXPECT_TRUE(m_menu.isOpen());
     heldNavigation.type = InputEventType::KeyUp;
     heldNavigation.repeat = false;
-    EXPECT_TRUE(send(heldNavigation).keyboardConsumed);
+    EXPECT_TRUE(send(heldNavigation).commandConsumed);
 
     press(Core::Key::End);
     ASSERT_TRUE(acceptTools(6u, false));

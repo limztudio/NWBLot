@@ -4,6 +4,7 @@
 
 #include "edit_box_host.h"
 
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -56,23 +57,36 @@ void UiEditBoxHost::collectNative(){
 void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture, const bool submit){
     if(rejectBorrowedMutation())
         return;
+    const bool selectionRelease = input.type == Ui::InputEventType::PrimaryUp && input.source == m_selectionSource;
+    ScopeExit finishSelection([this, selectionRelease]()noexcept{
+        if(selectionRelease){
+            m_activeSelectionSequence = 0u;
+            m_selectionSource = {};
+        }
+    });
+
     if(input.type == Ui::InputEventType::FocusLost){
         reset();
         return;
     }
     synchronizeFocus();
-    if(input.type == Ui::InputEventType::PointerMove)
+    if(input.type == Ui::InputEventType::PointerMove && m_activeSelectionSequence != 0u && input.source == m_selectionSource)
         m_clickTracker.move(input.position);
     if(input.type == Ui::InputEventType::PointerCaptureLost){
+        if(m_activeSelectionSequence == 0u || input.source != m_selectionSource)
+            return;
         m_clickTracker.cancel();
-        for(auto& entry : m_entries)
+        for(auto& entry : m_entries){
             entry.dragging = false;
-        for(auto& entry : m_entries)
             entry.wordDragging = false;
+        }
         for(usize index = m_events.size(); index > 0u; --index){
-            if(m_events[index - 1u].kind == UiEditBoxEventKind::Selection)
+            const Event& event = m_events[index - 1u];
+            if(event.kind == UiEditBoxEventKind::Selection && event.selectionSequence == m_activeSelectionSequence && event.selectionSource == input.source)
                 m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
         }
+        m_activeSelectionSequence = 0u;
+        m_selectionSource = {};
         return;
     }
     if(input.type == Ui::InputEventType::CommandDown || input.type == Ui::InputEventType::CommandUp){
@@ -108,7 +122,15 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         if(!append(Move(event)))
             return;
     }
-    else if(input.type <= Ui::InputEventType::PrimaryUp && (input.type != Ui::InputEventType::PointerMove || previousCapture.valid())){
+    else if((input.type == Ui::InputEventType::PrimaryDown || input.type == Ui::InputEventType::PrimaryUp || input.type == Ui::InputEventType::PointerMove) && (input.type != Ui::InputEventType::PointerMove || previousCapture.valid())){
+        if(input.type == Ui::InputEventType::PrimaryDown){
+            if(m_selectionSequence == Limit<u64>::s_Max)
+                TerminateInvariant();
+            m_activeSelectionSequence = ++m_selectionSequence;
+            m_selectionSource = input.source;
+        }
+        else if(m_activeSelectionSequence == 0u || input.source != m_selectionSource)
+            return;
         const Ui::WidgetId target = input.type == Ui::InputEventType::PrimaryDown ? m_context.input().focus() : previousCapture;
         if(input.type == Ui::InputEventType::PrimaryDown && m_context.input().capture() != target){
             m_clickTracker.cancel();
@@ -133,15 +155,18 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         event.owner = entry->owner;
         event.focusGeneration = entry->focusGeneration;
         event.kind = UiEditBoxEventKind::Selection;
+        event.selectionSequence = m_activeSelectionSequence;
+        event.selectionSource = m_selectionSource;
         event.position = *byte;
         event.wordPosition = *wordByte;
         event.geometryRevision = entry->displayed.revision;
         event.geometryExternalRevision = entry->displayed.externalRevision;
-        event.extend = input.shift;
+        event.extend = input.extend;
         event.dragging = input.type != Ui::InputEventType::PrimaryDown;
         event.completed = input.type == Ui::InputEventType::PrimaryUp;
         if(input.type == Ui::InputEventType::PrimaryDown){
-            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, input.timestampMs, input.shift) == UiEditClickKind::Word;
+            const u64 clickTimestampMs = input.hoverCapable ? input.timestampMs : 0u;
+            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, clickTimestampMs, input.extend) == UiEditClickKind::Word;
         }
         else if(input.type == Ui::InputEventType::PrimaryUp)
             m_clickTracker.release(entry->owner);

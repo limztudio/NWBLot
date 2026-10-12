@@ -86,6 +86,8 @@ private:
         usize position = 0u;
         usize wordPosition = 0u;
         u64 geometryRevision = 0u;
+        u64 selectionSequence = 0u;
+        Ui::InputSource selectionSource;
         u64 focusGeneration = 0u;
         u64 geometryExternalRevision = 0u;
         u64 surroundingRevision = 0u;
@@ -172,6 +174,9 @@ private:
     u64 m_generation = 0u;
     u64 m_lastNativeSequence = 0u;
     u64 m_focusGeneration = 0u;
+    u64 m_selectionSequence = 0u;
+    u64 m_activeSelectionSequence = 0u;
+    Ui::InputSource m_selectionSource;
     usize m_queuedTextBytes = 0u;
     bool m_clipboardFailure = false;
     bool m_borrowed = false;

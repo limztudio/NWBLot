@@ -50,19 +50,19 @@ void InputRouter::reconcileContextMenus(){
     }
 }
 
-void InputRouter::appendContextMenu(const HitTarget& target, const Point& position, const bool keyboard, InputRoutingResult& result){
+void InputRouter::appendContextMenu(const HitTarget& target, const Point& position, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
     if(m_contextMenuActions.size() == s_InputMaxContextMenuActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
     }
     m_contextMenuActions.push_back({
         { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence },
-        target.popup, target.control, position, keyboard
+        target.popup, target.control, position, origin, inputSource
     });
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed){
+bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed){
     const bool trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;
@@ -75,15 +75,12 @@ bool InputRouter::routeContextMenuKey(const InputEvent& event, const HitTarget* 
 
 
 void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& result){
-    m_pointer = event.position;
-    m_pointerKnown = true;
-    updateHover();
-    const HitTarget* hit = findTarget(m_hover);
+    const HitTarget* hit = findHitTarget(event.position);
     if(event.type == InputEventType::SecondaryUp){
         result.pointerConsumed |= m_secondaryDown ? m_secondarySequenceConsumed : m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
         const HitTarget* anchor = hit != nullptr && !hit->contextMenu && hit->owner.valid() ? controlHost(*hit) : hit;
         if(m_secondaryDown && m_secondarySequenceConsumed && anchor != nullptr && anchor->id == m_secondaryOwner.target && currentContextMenuOwner(m_secondaryOwner))
-            appendContextMenu(*anchor, m_secondaryPosition, false, result);
+            appendContextMenu(*anchor, m_secondaryPosition, InputActionSource::Pointer, event.source, result);
         m_secondaryDown = false;
         m_secondarySequenceConsumed = false;
         m_secondaryOwner = {};

@@ -173,6 +173,8 @@ void UiEditBoxHost::reset(){
         return;
     cancelTransfers();
     m_clickTracker.cancel();
+    m_activeSelectionSequence = 0u;
+    m_selectionSource = {};
     m_entries.clear();
     m_events.clear();
     m_queuedTextBytes = 0u;

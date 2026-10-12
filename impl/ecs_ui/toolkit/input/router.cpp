@@ -50,6 +50,8 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     : m_bindings(arena)
     , m_boundSources(arena)
     , m_commandSources(arena)
+    , m_pointerBindings(arena)
+    , m_pointerSources(arena)
     , m_targets(arena)
     , m_stagedTargets(arena)
     , m_lookup(arena)
@@ -65,6 +67,8 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
 {
     m_boundSources.reserve(16u);
     m_commandSources.reserve(16u);
+    m_pointerBindings.reserve(16u);
+    m_pointerSources.reserve(16u);
     m_targets.reserve(s_InputMaxTargets);
     m_stagedTargets.reserve(s_InputMaxTargets);
     m_lookup.reserve(s_InputMaxTargets);
@@ -82,11 +86,10 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
 Expected<InputEvent> InputRouter::queue(const InputEvent& event){
     if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::CommandUp)
         return MakeUnexpected(Failure{});
-    if((event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel || event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp) && (!IsFinite(event.position.x) || !IsFinite(event.position.y)))
+    const auto pointer = resolvePointerEvent(event);
+    if(!pointer)
         return MakeUnexpected(Failure{});
-    if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
-        return MakeUnexpected(Failure{});
-    const auto candidate = resolveSourceEvent(event);
+    const auto candidate = resolveSourceEvent(*pointer);
     if(!candidate)
         return MakeUnexpected(Failure{});
     m_events.push_back(*candidate);
@@ -96,12 +99,8 @@ Expected<InputEvent> InputRouter::queue(const InputEvent& event){
 InputRoutingResult InputRouter::process(){
     InputRoutingResult result;
     for(const InputEvent& event : m_events){
-        if(event.type <= InputEventType::PrimaryUp)
-            routePointer(event, result);
-        else if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
-            routeSecondary(event, result);
-        else if(event.type == InputEventType::PointerWheel)
-            routeWheel(event, result);
+        if(IsPointerEvent(event.type))
+            routePointerSource(event, result);
         else if(event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp)
             routeCommand(event, result);
         else if(event.type == InputEventType::FocusLost){
@@ -110,27 +109,16 @@ InputRoutingResult InputRouter::process(){
             ++m_focusLossGeneration;
             m_windowFocused = false;
             result.pointerConsumed |= hasPopup() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
-            result.keyboardConsumed |= wantsKeyboard();
+            result.commandConsumed |= wantsCommands();
             cancelPopupFocus();
             cancelInteraction();
-            cancelPointerCapture();
         }
         else if(event.type == InputEventType::FocusGained)
             m_windowFocused = true;
-        else if(event.type == InputEventType::PointerCaptureLost){
-            result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
-            cancelPointerCapture();
-        }
-        else{
-            result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
-            advanceHoverActivity();
-            m_pointerKnown = false;
-            clearHover();
-        }
     }
     m_events.clear();
     result.wantsPointer = wantsPointer();
-    result.wantsKeyboard = wantsKeyboard();
+    result.wantsCommands = wantsCommands();
     result.hover = m_hover;
     result.focus = m_focus;
     result.capture = m_capture;
@@ -165,7 +153,7 @@ bool InputRouter::commitTargets(const HitTarget* targets, const usize count, con
         if(m_stagedLookup[index - 1u].value == m_stagedLookup[index].value)
             return false;
     }
-    if(!validControlTargets() || !validKeyboardOwners())
+    if(!validControlTargets() || !validCommandOwners())
         return false;
     for(const auto& popup : m_stagedPopups){
         bool owner = false;
@@ -246,6 +234,7 @@ void InputRouter::clearFocus()noexcept{
 }
 
 void InputRouter::reset(){
+    retireQueuedReleases();
     m_events.clear();
     m_targets.clear();
     m_stagedTargets.clear();
@@ -383,20 +372,6 @@ void InputRouter::cancelPointerPress(){
     m_captureControl = {};
 }
 
-void InputRouter::cancelPointerCapture(){
-    advanceHoverActivity();
-    // Releasing native capture after an ordinary Up does not invalidate the known pointer position.
-    if(!m_primaryDown && !m_secondaryDown)
-        return;
-    cancelPointerPress();
-    clearHover();
-    m_pointerKnown = false;
-    m_primaryDown = false;
-    m_pointerSequenceConsumed = false;
-    m_secondaryDown = false;
-    m_secondarySequenceConsumed = false;
-}
-
 void InputRouter::cancelInteraction(){
     advanceHoverActivity();
     m_actions.clear();
@@ -419,13 +394,13 @@ void InputRouter::cancelInteraction(){
     retireCommandFocus();
 }
 
-void InputRouter::appendActivation(const HitTarget& target, const InputActionSource::Enum source, InputRoutingResult& result){
+void InputRouter::appendActivation(const HitTarget& target, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
     if(m_actions.size() == s_InputMaxActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
     }
     m_actions.push_back({
-        { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence }, source, target.popup, target.control
+        { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence }, origin, target.popup, target.control, inputSource
     });
     ++m_nextActionSequence;
 }

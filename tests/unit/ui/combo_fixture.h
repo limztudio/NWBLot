@@ -167,10 +167,10 @@ protected:
         event.type = InputEventType::KeyDown;
         event.key = value;
         event.repeat = repeat;
-        EXPECT_TRUE(send(event).keyboardConsumed);
+        EXPECT_TRUE(send(event).commandConsumed);
         if(!repeat){
             event.type = InputEventType::KeyUp;
-            EXPECT_TRUE(send(event).keyboardConsumed);
+            EXPECT_TRUE(send(event).commandConsumed);
         }
     }
 

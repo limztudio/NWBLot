@@ -196,7 +196,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     list.focusOnCommit = frame.listFocusOnCommit;
     list.rowCount = frame.resultCount;
     if(frame.editor != s_LayoutNoParent)
-        list.keyboardFocus = m_scope->m_comboEditors[frame.editor].state.id;
+        list.commandFocus = m_scope->m_comboEditors[frame.editor].state.id;
     list.padding = list.style.padding;
     const UiSkinRegion* background = region(list.style.background, list.style.backgroundFallback);
     if(!background){

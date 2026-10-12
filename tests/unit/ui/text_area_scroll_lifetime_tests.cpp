@@ -364,12 +364,12 @@ TEST_F(UiTextAreaScrollLifetimeTests, NativeFocusLossCancelsCopiedWheelAndAnActi
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(id("area", "panel")));
-    EXPECT_FALSE(send({ InputEventType::FocusLost }).wantsKeyboard);
+    EXPECT_FALSE(send({ InputEventType::FocusLost }).wantsCommands);
     ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     expectModel(m_model, model);
-    EXPECT_FALSE(send({ InputEventType::FocusGained }).wantsKeyboard);
+    EXPECT_FALSE(send({ InputEventType::FocusGained }).wantsCommands);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_GT(m_state.scroll().y, 0.0f);

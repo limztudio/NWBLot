@@ -15,14 +15,11 @@ NWB_IMPL_UI_BEGIN
 
 
 void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& result){
-    m_pointer = event.position;
-    m_pointerKnown = true;
-    updateHover();
-    const HitTarget* hit = findTarget(m_hover);
+    const HitTarget* hit = findHitTarget(event.position);
     if(event.type == InputEventType::PointerMove){
         if(m_primaryDown)
             updatePointerGesture(event.position, false);
-        result.pointerConsumed |= wantsPointer();
+        result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
         return;
     }
     if(event.type == InputEventType::PrimaryDown){
@@ -71,7 +68,7 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
         if(host != nullptr)
             appendControlAction(*host, *hit, ControlActionKind::Activate, 0.0, result);
         else
-            appendActivation(*hit, InputActionSource::Pointer, result);
+            appendActivation(*hit, InputActionSource::Pointer, event.source, result);
     }
     if(m_primaryDown)
         updatePointerGesture(event.position, true);

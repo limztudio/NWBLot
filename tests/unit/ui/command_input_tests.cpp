@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -80,7 +82,7 @@ public:
 
 protected:
     [[nodiscard]] RoutedInput send(const InputEvent& event){
-        const auto resolved = m_router.queue(event);
+        const auto resolved = m_router.queue(UiTestSupport::NativeInput(event));
         EXPECT_TRUE(resolved);
         if(!resolved)
             return {};
@@ -106,8 +108,8 @@ TEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameComma
     ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
     const InputSource first{ 1u, 5u };
     const InputSource second{ 2u, 5u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Down)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Down)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Down)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Down)).routing.commandConsumed);
     ControlAction action;
     const auto actionResult1 = take(host);
     ASSERT_TRUE(actionResult1);
@@ -119,12 +121,12 @@ TEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameComma
     action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Down);
     EXPECT_GT(action.id.sequence, firstSequence);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, first, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, first, InputCommand::None)).routing.commandConsumed);
     EXPECT_FALSE(m_router.ownsSource(first));
     EXPECT_TRUE(m_router.ownsSource(second));
     InputEvent resolved;
     const auto dispatchResult = send(Command(InputEventType::CommandDown, second, InputCommand::Right));
-    EXPECT_TRUE(dispatchResult.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult.routing.commandConsumed);
     resolved = dispatchResult.event;
     EXPECT_EQ(resolved.command, InputCommand::Down);
     EXPECT_TRUE(resolved.repeat);
@@ -132,7 +134,7 @@ TEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameComma
     ASSERT_TRUE(actionResult3);
     action = *actionResult3;
     EXPECT_EQ(action.kind, ControlActionKind::Down);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
     EXPECT_FALSE(m_router.ownsSource(second));
     EXPECT_FALSE(take(host));
 }
@@ -144,7 +146,7 @@ TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissio
     ASSERT_TRUE(m_router.setBindings(&initial, 1u));
     InputEvent resolved;
     const auto dispatchResult1 = send(Key(InputEventType::KeyDown, true));
-    EXPECT_TRUE(dispatchResult1.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     resolved = dispatchResult1.event;
     EXPECT_EQ(resolved.command, InputCommand::Down);
     EXPECT_TRUE(resolved.extend);
@@ -154,7 +156,7 @@ TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissio
     ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
     m_router.restoreDefaultBindings();
     const auto dispatchResult2 = send(Key(InputEventType::KeyDown));
-    EXPECT_TRUE(dispatchResult2.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
     resolved = dispatchResult2.event;
     EXPECT_EQ(resolved.command, InputCommand::Down);
     EXPECT_TRUE(resolved.repeat);
@@ -163,7 +165,7 @@ TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissio
     EXPECT_TRUE(resolved.allowText);
     EXPECT_TRUE(m_router.ownsKey(Core::Key::W));
     const auto dispatchResult3 = send(Key(InputEventType::KeyUp));
-    EXPECT_TRUE(dispatchResult3.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
     resolved = dispatchResult3.event;
     EXPECT_EQ(resolved.command, InputCommand::Down);
     EXPECT_TRUE(resolved.allowText);
@@ -179,7 +181,7 @@ TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissio
     EXPECT_EQ(action.kind, ControlActionKind::Down);
     ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
     const auto dispatchResult4 = send(Key(InputEventType::KeyDown));
-    EXPECT_TRUE(dispatchResult4.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
     resolved = dispatchResult4.event;
     EXPECT_EQ(resolved.command, InputCommand::Up);
     EXPECT_FALSE(resolved.extend);
@@ -193,18 +195,18 @@ TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissio
 
 TEST_F(UiCommandInputTests, AnUnconsumedInitialPressCannotClaimUiAfterFocusAppears){
     const InputSource source{ 1u, 1u };
-    EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.commandConsumed);
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
-    EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.commandConsumed);
     EXPECT_FALSE(m_router.ownsSource(source));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
     ASSERT_EQ(m_router.actions().size(), 1u);
-    EXPECT_EQ(m_router.actions()[0u].source, InputActionSource::Command);
+    EXPECT_EQ(m_router.actions()[0u].origin, InputActionSource::Command);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
 }
 
@@ -212,17 +214,17 @@ TEST_F(UiCommandInputTests, RetiredControlOwnerCannotReviveWhenTheExactOldTarget
     const HitTarget host = Control();
     ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
     const InputSource source{ 3u, 9u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
     ControlAction action;
     const auto actionResult1 = take(host);
     ASSERT_TRUE(actionResult1);
     action = *actionResult1;
     m_router.invalidateTarget(host.id);
     ASSERT_TRUE(m_router.commitTargets(&host, 1u, 2u));
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down, true)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down, true)).routing.commandConsumed);
     EXPECT_FALSE(take(host));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
     const auto actionResult2 = take(host);
     ASSERT_TRUE(actionResult2);
     action = *actionResult2;
@@ -235,18 +237,18 @@ TEST_F(UiCommandInputTests, RetiredEditorCannotBorrowAHeldCommandAfterReturningW
     const InputSource source{ 3u, 9u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, source, InputCommand::Left));
-    EXPECT_TRUE(dispatchResult1.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     resolved = dispatchResult1.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     m_router.invalidateTarget(editor.id);
     ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 2u));
     const auto dispatchResult2 = send(Command(InputEventType::CommandDown, source, InputCommand::Left, true));
-    EXPECT_TRUE(dispatchResult2.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
     resolved = dispatchResult2.event;
     EXPECT_FALSE(m_router.canEditCommand(resolved));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
     const auto dispatchResult3 = send(Command(InputEventType::CommandDown, source, InputCommand::Left));
-    EXPECT_TRUE(dispatchResult3.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
     resolved = dispatchResult3.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
 }
@@ -263,20 +265,20 @@ TEST_F(UiCommandInputTests, HeldEditingCommandCannotMoveToAnotherFocusedEditor){
     const InputSource edit{ 3u, 1u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
-    EXPECT_TRUE(dispatchResult1.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     resolved = dispatchResult1.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     const InputSource traverse{ 3u, 2u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), second.id);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
     const auto dispatchResult2 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left, true));
-    EXPECT_TRUE(dispatchResult2.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
     resolved = dispatchResult2.event;
     EXPECT_FALSE(m_router.canEditCommand(resolved));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, edit, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, edit, InputCommand::None)).routing.commandConsumed);
     const auto dispatchResult3 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
-    EXPECT_TRUE(dispatchResult3.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
     resolved = dispatchResult3.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
 }
@@ -287,46 +289,46 @@ TEST_F(UiCommandInputTests, DelegatedAcceptStillReachesEditorSubmissionWhileVert
     HitTarget host = Control(2u);
     host.focusOnCommit = false;
     host.rectangle.x = 100.0f;
-    editor.keyboardOwner = host.id;
-    editor.keyboardOwnerDeclarationGeneration = host.declarationGeneration;
-    editor.keyboardControl = host.control;
+    editor.commandOwner = host.id;
+    editor.commandOwnerDeclarationGeneration = host.declarationGeneration;
+    editor.commandControl = host.control;
     const HitTarget targets[]{ editor, host };
     ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
     const InputSource submit{ 4u, 1u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept));
-    EXPECT_TRUE(dispatchResult1.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     resolved = dispatchResult1.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     EXPECT_FALSE(take(host));
-    const auto submitRelease = m_router.queue(Command(InputEventType::CommandUp, submit, InputCommand::None));
+    const auto submitRelease = m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, submit, InputCommand::None)));
     ASSERT_TRUE(submitRelease);
     EXPECT_TRUE(m_router.canSubmitCommand(*submitRelease));
-    EXPECT_TRUE(m_router.process().keyboardConsumed);
+    EXPECT_TRUE(m_router.process().commandConsumed);
     ControlAction action;
     const auto actionResult1 = take(host);
     ASSERT_TRUE(actionResult1);
     action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Submit);
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, submit, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, submit, InputCommand::None)).routing.commandConsumed);
     const InputSource navigate{ 4u, 2u };
     const auto dispatchResult2 = send(Command(InputEventType::CommandDown, navigate, InputCommand::Down));
-    EXPECT_TRUE(dispatchResult2.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
     resolved = dispatchResult2.event;
     EXPECT_FALSE(m_router.canEditCommand(resolved));
     const auto actionResult2 = take(host);
     ASSERT_TRUE(actionResult2);
     action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Down);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, navigate, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, navigate, InputCommand::None)).routing.commandConsumed);
     const auto dispatchResult3 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept));
-    EXPECT_TRUE(dispatchResult3.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
     resolved = dispatchResult3.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     m_router.invalidateTarget(host.id);
     ASSERT_TRUE(m_router.commitTargets(targets, 2u, 2u));
     const auto dispatchResult4 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept, true));
-    EXPECT_TRUE(dispatchResult4.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
     resolved = dispatchResult4.event;
     EXPECT_FALSE(m_router.canEditCommand(resolved));
     EXPECT_FALSE(take(host));
@@ -336,27 +338,27 @@ TEST_F(UiCommandInputTests, ClearFocusAndNativeLossRetainReleaseOwnershipButCanc
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     const InputSource held{ 5u, 1u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
     m_router.clearFocus();
     EXPECT_TRUE(m_router.ownsSource(held));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.keyboardConsumed);
-    EXPECT_TRUE(send({ InputEventType::FocusLost }).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send({ InputEventType::FocusLost }).routing.commandConsumed);
     EXPECT_TRUE(m_router.ownsSource(held));
-    EXPECT_TRUE(m_router.wantsKeyboard());
+    EXPECT_TRUE(m_router.wantsCommands());
     const InputSource traverse{ 5u, 2u };
-    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
     EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_FALSE(send({ InputEventType::FocusGained }).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_FALSE(send({ InputEventType::FocusGained }).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.commandConsumed);
     EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), target.id);
 }
 
@@ -368,21 +370,21 @@ TEST_F(UiCommandInputTests, QueuedReleaseSeparatesOldAndNewBindingSnapshotsBefor
     InputEvent first;
     InputEvent release;
     InputEvent second;
-    const auto firstResult = m_router.queue(Key(InputEventType::KeyDown));
+    const auto firstResult = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyDown)));
     ASSERT_TRUE(firstResult);
     first = *firstResult;
     const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::Right };
     ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
-    const auto releaseResult = m_router.queue(Key(InputEventType::KeyUp));
+    const auto releaseResult = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyUp)));
     ASSERT_TRUE(releaseResult);
     release = *releaseResult;
-    const auto secondResult = m_router.queue(Key(InputEventType::KeyDown));
+    const auto secondResult = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyDown)));
     ASSERT_TRUE(secondResult);
     second = *secondResult;
     EXPECT_EQ(first.command, InputCommand::Left);
     EXPECT_EQ(release.command, InputCommand::Left);
     EXPECT_EQ(second.command, InputCommand::Right);
-    EXPECT_TRUE(m_router.process().keyboardConsumed);
+    EXPECT_TRUE(m_router.process().commandConsumed);
     ControlAction action;
     const auto actionResult1 = take(host);
     ASSERT_TRUE(actionResult1);
@@ -404,25 +406,25 @@ TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBefor
     const InputSource edit{ 7u, 1u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
-    EXPECT_TRUE(dispatchResult1.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     resolved = dispatchResult1.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
-    EXPECT_TRUE(send({ InputEventType::FocusLost }).routing.keyboardConsumed);
-    EXPECT_FALSE(send({ InputEventType::FocusGained }).routing.keyboardConsumed);
+    EXPECT_TRUE(send({ InputEventType::FocusLost }).routing.commandConsumed);
+    EXPECT_FALSE(send({ InputEventType::FocusGained }).routing.commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 2u));
     EXPECT_TRUE(m_router.focus().valid());
     const auto dispatchResult2 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left, true));
-    EXPECT_TRUE(dispatchResult2.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
     resolved = dispatchResult2.event;
     EXPECT_FALSE(m_router.canEditCommand(resolved));
     EXPECT_TRUE(m_router.ownsSource(edit));
     const auto dispatchResult3 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
-    EXPECT_TRUE(dispatchResult3.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
     resolved = dispatchResult3.event;
     EXPECT_FALSE(m_router.canEditCommand(resolved));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, edit, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, edit, InputCommand::None)).routing.commandConsumed);
     const auto dispatchResult4 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
-    EXPECT_TRUE(dispatchResult4.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
     resolved = dispatchResult4.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     m_router.reset();
@@ -432,18 +434,18 @@ TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBefor
     const HitTarget targets[]{ editor, button };
     ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
     const InputSource traverse{ 7u, 2u };
-    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), editor.id);
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), button.id);
     const InputSource activate{ 7u, 3u };
-    EXPECT_FALSE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate, true)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate, true)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(button.id));
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(button.id));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(button.id));
 }
 
@@ -451,63 +453,93 @@ TEST_F(UiCommandInputTests, MalformedCommandSourcesRejectWithoutChangingExisting
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     InputEvent output;
-    const InputSource invalidSources[]{ {}, { 0u, 1u }, { 1u, 0u } };
+    const InputSource invalidSources[]{ {}, { 1u, 0u } };
     for(const InputSource source : invalidSources){
-        EXPECT_FALSE(m_router.queue(Command(InputEventType::CommandDown, source, InputCommand::Activate)));
+        EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandDown, source, InputCommand::Activate))));
     }
-    EXPECT_FALSE(m_router.queue(Command(InputEventType::CommandDown, { 1u, 1u }, static_cast<InputCommand::Enum>(255u))));
-    EXPECT_FALSE(m_router.process().keyboardConsumed);
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandDown, { 1u, 1u }, static_cast<InputCommand::Enum>(255u)))));
+    EXPECT_FALSE(m_router.process().commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
     InputEvent strayRelease = Command(InputEventType::CommandUp, { 2u, 2u }, InputCommand::None);
     strayRelease.allowText = true;
-    const auto outputResult = m_router.queue(strayRelease);
+    const auto outputResult = m_router.queue(UiTestSupport::NativeInput(strayRelease));
     ASSERT_TRUE(outputResult);
     output = *outputResult;
     EXPECT_FALSE(output.allowText);
-    EXPECT_FALSE(m_router.process().keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 1u, 1u }, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_FALSE(m_router.process().commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 1u, 1u }, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, 1u }, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, 1u }, InputCommand::None)).routing.commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiCommandInputTests, DeviceIdentityDoesNotChooseCommandBehaviorOrActivationOrigin){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    const InputSource source{ 0u, 777u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0u].origin, InputActionSource::Command);
+    EXPECT_EQ(m_router.actions()[0u].inputSource, source);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiCommandInputTests, ExplicitDeviceTerminationPreservesAnotherProvidersHeldSubmit){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    const InputSource first{ 31u, 7u };
+    const InputSource second{ 32u, 7u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Activate)).routing.commandConsumed);
+    m_router.cancelDeviceInput(first.device);
+    EXPECT_FALSE(m_router.ownsSource(first));
+    EXPECT_TRUE(m_router.ownsSource(second));
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, first, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0u].inputSource, second);
 }
 
 TEST_F(UiCommandInputTests, ExactSourceCapacityRejectsOverflowWithoutLosingReleaseOrRebindingState){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     for(usize index = 0u; index < s_InputMaxSources; ++index){
-        EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 1u, index + 1u }, InputCommand::Left)).routing.keyboardConsumed);
+        EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 1u, index + 1u }, InputCommand::Left)).routing.commandConsumed);
     }
     const InputSource overflow{ 1u, s_InputMaxSources + 1u };
-    EXPECT_FALSE(m_router.queue(Command(InputEventType::CommandDown, overflow, InputCommand::Right)));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandDown, overflow, InputCommand::Right))));
     EXPECT_TRUE(m_router.ownsSource({ 1u, 1u }));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, 1u }, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, overflow, InputCommand::Right)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, 1u }, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, overflow, InputCommand::Right)).routing.commandConsumed);
     EXPECT_TRUE(m_router.ownsSource(overflow));
     m_router.reset();
     EXPECT_TRUE(m_router.ownsSource(overflow));
-    EXPECT_TRUE(m_router.wantsKeyboard());
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, overflow, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(m_router.wantsCommands());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, overflow, InputCommand::None)).routing.commandConsumed);
     for(usize index = 1u; index < s_InputMaxSources; ++index)
-        EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, index + 1u }, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_FALSE(m_router.wantsKeyboard());
+        EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, index + 1u }, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.wantsCommands());
 }
 
 TEST_F(UiCommandInputTests, FullEventQueueCannotReleaseOrChangeAnAlreadyAdmittedSource){
     const HitTarget host = Control();
     ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
     const InputSource source{ 8u, 8u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
     for(usize index = 0u; index < s_InputMaxEvents; ++index)
-        ASSERT_TRUE(m_router.queue({ InputEventType::PointerMove }));
+        ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ InputEventType::PointerMove })));
     InputEvent output;
-    EXPECT_FALSE(m_router.queue(Command(InputEventType::CommandUp, source, InputCommand::None)));
-    EXPECT_FALSE(m_router.process().keyboardConsumed);
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, source, InputCommand::None))));
+    EXPECT_FALSE(m_router.process().commandConsumed);
     EXPECT_TRUE(m_router.ownsSource(source));
     const auto dispatchResult = send(Command(InputEventType::CommandDown, source, InputCommand::Up, true));
-    EXPECT_TRUE(dispatchResult.routing.keyboardConsumed);
+    EXPECT_TRUE(dispatchResult.routing.commandConsumed);
     output = dispatchResult.event;
     EXPECT_EQ(output.command, InputCommand::Down);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
 }
 
 TEST_F(UiCommandInputTests, DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesNotRepeatOrActivate){
@@ -515,20 +547,20 @@ TEST_F(UiCommandInputTests, DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesN
     target.contextMenu = true;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     const InputSource source{ 9u, 9u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::ContextMenu)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::ContextMenu)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeContextMenu(target.id, target.declarationGeneration));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
     ContextMenuAction action;
     const auto actionResult = m_router.consumeContextMenu(target.id, target.declarationGeneration);
     ASSERT_TRUE(actionResult);
     action = *actionResult;
-    EXPECT_TRUE(action.keyboard);
+    EXPECT_EQ(action.origin, InputActionSource::Command);
     EXPECT_FLOAT_EQ(action.position.x, target.rectangle.x);
     EXPECT_FLOAT_EQ(action.position.y, target.rectangle.y + target.rectangle.height);
     EXPECT_FALSE(m_router.consumeContextMenu(target.id, target.declarationGeneration));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
 }
 
 TEST_F(UiCommandInputTests, IndependentControllerSubmitReleasesDoNotTransferOrRepeat){
@@ -536,20 +568,20 @@ TEST_F(UiCommandInputTests, IndependentControllerSubmitReleasesDoNotTransferOrRe
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     const InputSource first{ 1u, 8u };
     const InputSource second{ 2u, 8u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Activate)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, { 3u, 8u }, InputCommand::Activate)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, { 3u, 8u }, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, first, InputCommand::None, true)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, first, InputCommand::None, true)).routing.commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_TRUE(m_router.pressed(target.id));
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Submit, true)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Submit, true)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_FALSE(m_router.pressed(target.id));
-    EXPECT_FALSE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
 
@@ -562,13 +594,13 @@ TEST_F(UiCommandInputTests, SubmitCannotReviveWhenFocusReturnsToTheOriginalDecla
     ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
     const InputSource activate{ 5u, 5u };
     const InputSource traverse{ 5u, 6u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), second.id);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusPrevious)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusPrevious)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), first.id);
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(first.id));
     EXPECT_FALSE(m_router.consumeActivation(second.id));
 }
@@ -581,27 +613,27 @@ TEST_F(UiCommandInputTests, EditorCancelRetiresAllSubmitSourcesButKeepsTheirRele
     const InputSource first{ 2u, 1u };
     const InputSource second{ 3u, 1u };
     const InputSource cancel{ 2u, 2u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Submit)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Accept)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Submit)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Accept)).routing.commandConsumed);
     EXPECT_TRUE(m_router.pressed(editor.id));
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, cancel, InputCommand::Cancel)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, cancel, InputCommand::Cancel)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), editor.id);
     EXPECT_FALSE(m_router.pressed(editor.id));
     for(const InputSource source : { first, second }){
-        const auto release = m_router.queue(Command(InputEventType::CommandUp, source, InputCommand::None));
+        const auto release = m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, source, InputCommand::None)));
         ASSERT_TRUE(release);
         EXPECT_FALSE(m_router.canSubmitCommand(*release));
-        EXPECT_TRUE(m_router.process().keyboardConsumed);
+        EXPECT_TRUE(m_router.process().commandConsumed);
     }
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, cancel, InputCommand::None)).routing.keyboardConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Submit)).routing.keyboardConsumed);
-    const auto release = m_router.queue(Command(InputEventType::CommandUp, first, InputCommand::None, true));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, cancel, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Submit)).routing.commandConsumed);
+    const auto release = m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, first, InputCommand::None, true)));
     ASSERT_TRUE(release);
     EXPECT_FALSE(release->repeat);
     EXPECT_TRUE(m_router.canSubmitCommand(*release));
     m_router.cancelSubmitCommands(editor.id);
     EXPECT_FALSE(m_router.canSubmitCommand(*release));
-    EXPECT_TRUE(m_router.process().keyboardConsumed);
+    EXPECT_TRUE(m_router.process().commandConsumed);
 }
 
 TEST_F(UiCommandInputTests, CustomSubmitBindingPinsItsReleaseAcrossModifierAndProfileChanges){
@@ -609,15 +641,40 @@ TEST_F(UiCommandInputTests, CustomSubmitBindingPinsItsReleaseAcrossModifierAndPr
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     const InputKeyBinding initial{ Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Activate };
     ASSERT_TRUE(m_router.setBindings(&initial, 1u));
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, true)).routing.keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, true)).routing.commandConsumed);
     const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::FocusNext };
     ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    const auto release = m_router.queue(Key(InputEventType::KeyUp));
+    const auto release = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyUp)));
     ASSERT_TRUE(release);
     EXPECT_EQ(release->command, InputCommand::Activate);
-    EXPECT_TRUE(m_router.process().keyboardConsumed);
+    EXPECT_TRUE(m_router.process().commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiCommandInputTests, QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedCommand){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    const InputSource released{ 41u, 1u };
+    const InputSource held{ 41u, 2u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, released, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
+    ASSERT_TRUE(m_router.queue(Command(InputEventType::CommandUp, released, InputCommand::None)));
+    m_router.reset();
+    EXPECT_FALSE(m_router.ownsSource(released));
+    EXPECT_TRUE(m_router.ownsSource(held));
+    EXPECT_TRUE(m_router.actions().empty());
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    EXPECT_FALSE(m_router.pressed(target.id));
+    const auto fresh = send(Command(InputEventType::CommandDown, released, InputCommand::Activate));
+    EXPECT_FALSE(fresh.event.repeat);
+    EXPECT_TRUE(fresh.routing.commandConsumed);
+    EXPECT_TRUE(m_router.pressed(target.id));
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, released, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
 
 

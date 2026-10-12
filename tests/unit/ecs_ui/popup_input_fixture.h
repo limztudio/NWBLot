@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/edit_box_host.h>
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
 
@@ -374,7 +376,7 @@ protected:
     [[nodiscard]] Ui::InputRoutingResult dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
-        const auto normalized = m_context.input().queue(event);
+        const auto normalized = m_context.input().queue(UiTestSupport::NativeInput(event));
         EXPECT_TRUE(normalized);
         if(!normalized)
             return {};
@@ -385,8 +387,8 @@ protected:
     }
 
     void key(const Core::Key::Enum value, const bool control = false){
-        EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyDown, .position = {}, .key = value, .control = control }).keyboardConsumed);
-        EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyUp, .position = {}, .key = value, .control = control }).keyboardConsumed);
+        EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyDown, .position = {}, .key = value, .control = control }).commandConsumed);
+        EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyUp, .position = {}, .key = value, .control = control }).commandConsumed);
     }
 
     void focusBase(){

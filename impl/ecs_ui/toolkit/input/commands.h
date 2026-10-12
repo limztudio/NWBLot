@@ -25,7 +25,11 @@ namespace InputCommand{
     };
 };
 
-// Device zero identifies native keyboard controls; adapters supply their own nonzero device identity.
+namespace InputPhase{
+    enum Enum : u8{ Press, Release, Repeat };
+};
+
+// Adapters assign device and control identities; control zero is invalid.
 struct InputSource{
     u64 device = 0u;
     u64 control = 0u;

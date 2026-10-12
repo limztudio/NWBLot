@@ -6,5 +6,5 @@ target_sources(nwb_ecs_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/configurable_
     "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/clipboard_publication_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_host_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_word_selection_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_host_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/edit_action_host_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/edit_action_order_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_action_lifetime_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/popup_input_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/popup_input_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/nested_popup_input_tests.cpp")
-target_sources(nwb_ecs_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/edit_submit_tests.cpp")
+target_sources(nwb_ecs_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/edit_submit_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_pointer_source_tests.cpp")
 target_link_libraries(nwb_ecs_ui_tests PRIVATE nwb_ecs_ui nwb_ui_edit)

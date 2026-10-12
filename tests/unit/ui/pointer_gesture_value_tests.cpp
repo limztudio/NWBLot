@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <global/bit.h>
@@ -75,7 +77,7 @@ UiPointerGestureValueTests::UiPointerGestureValueTests()
 }
 
 InputRoutingResult UiPointerGestureValueTests::send(const InputEvent& event){
-    EXPECT_TRUE(m_router.queue(event));
+    EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
     return m_router.process();
 }
 
@@ -244,16 +246,16 @@ TEST_F(UiPointerGestureValueTests, SeveralCompletedPressesRetainTheirOwnPublishe
 TEST_F(UiPointerGestureValueTests, CoalescedMoveUsesItsUpdateSequenceAmongOrderedControlActions){
     ASSERT_TRUE(publish());
     focusHost();
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyDown, .key = Core::Key::Right }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyUp, .key = Core::Key::Right }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::PointerMove, .position = { 50.0f, 30.0f } }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyDown, .key = Core::Key::Left }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyUp, .key = Core::Key::Left }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::PointerMove, .position = { 80.0f, 30.0f } }));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyDown, .key = Core::Key::Right })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyUp, .key = Core::Key::Right })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerMove, .position = { 50.0f, 30.0f } })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyDown, .key = Core::Key::Left })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyUp, .key = Core::Key::Left })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerMove, .position = { 80.0f, 30.0f } })));
     const InputRoutingResult result = m_router.process();
     EXPECT_TRUE(result.pointerConsumed);
-    EXPECT_TRUE(result.keyboardConsumed);
+    EXPECT_TRUE(result.commandConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 2u);
     ControlAction right;
     ControlAction left;

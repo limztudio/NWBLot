@@ -39,7 +39,7 @@ private:
         bool closing = false;
     };
 
-    struct ControlKeyOwner{
+    struct ControlCommandOwner{
         WidgetId host;
         u64 declarationGeneration = 0u;
         PopupToken popup;
@@ -61,7 +61,7 @@ private:
 
     struct CommandSource{
         InputSource source;
-        ControlKeyOwner controlOwner{};
+        ControlCommandOwner controlOwner{};
         TargetOwner focusOwner{};
         Point contextPosition;
         bool consumed = false;
@@ -77,6 +77,18 @@ private:
         ControlToken control;
     };
 
+    struct PointerBinding{
+        InputSource source;
+        PointerIntent::Enum intent = PointerIntent::Activate;
+        bool hoverCapable = false;
+    };
+
+    struct PointerSource{
+        PointerBinding binding;
+        bool consumed = false;
+        bool inert = false;
+    };
+
 
 public:
     explicit InputRouter(Core::Alloc::GlobalArena& arena);
@@ -85,6 +97,7 @@ public:
 public:
     // Return the resolved intent admitted with this queued event.
     [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event);
+    [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input);
     [[nodiscard]] bool setBindings(const InputKeyBinding* bindings, usize count);
     void restoreDefaultBindings();
     [[nodiscard]] const InputBindings& bindings()const noexcept{ return m_bindings; }
@@ -106,12 +119,12 @@ public:
     [[nodiscard]] u64 focusLossGeneration()const noexcept{ return m_focusLossGeneration; }
     // Remove a hidden/deleted declaration immediately while a prior GPU frame remains pending.
     void invalidateTarget(WidgetId id);
-    // Transfer keyboard focus to another input owner without cancelling already accepted UI actions.
+    // Transfer command focus to another input owner without cancelling already accepted UI actions.
     void clearFocus()noexcept;
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset();
-    // Native capture/focus termination may suppress releases; the host resets its native owner records at this boundary.
-    void cancelNativeInput();
+    // Device termination may suppress releases; only this device's pending sources are removed.
+    void cancelDeviceInput(u64 device);
     [[nodiscard]] bool consumeActivation(WidgetId id);
     [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration);
     [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token);
@@ -129,19 +142,18 @@ public:
     [[nodiscard]] u64 hoverActivityGeneration()const noexcept{ return m_hoverActivityGeneration; }
     [[nodiscard]] WidgetId focus()const noexcept{ return m_focus; }
     [[nodiscard]] WidgetId capture()const noexcept{ return m_capture; }
+    // One spatial source can own activation and context-menu roles concurrently; other held contacts remain inert.
+    [[nodiscard]] InputSource activePointerSource()const noexcept{ return m_activePointerSource; }
+    [[nodiscard]] bool acceptsPointerSource(const InputSource& source)const noexcept;
+    [[nodiscard]] bool ownsPointerSource(const InputSource& source, PointerIntent::Enum intent = PointerIntent::Activate)const noexcept;
     [[nodiscard]] bool primaryDown()const noexcept{ return m_primaryDown; }
     [[nodiscard]] bool secondaryDown()const noexcept{ return m_secondaryDown; }
     [[nodiscard]] bool pointerKnown()const noexcept{ return m_pointerKnown; }
+    // Only an explicitly hover-capable source supplies cursor geometry; contact gestures keep their own position.
     [[nodiscard]] const Point& pointerPosition()const noexcept{ return m_pointer; }
     [[nodiscard]] bool windowFocused()const noexcept{ return m_windowFocused; }
-    [[nodiscard]] bool wantsPointer()const noexcept{
-        if(m_primaryDown)
-            return m_pointerSequenceConsumed;
-        if(m_secondaryDown)
-            return m_secondarySequenceConsumed;
-        return hasPopup() || m_hover.valid();
-    }
-    [[nodiscard]] bool wantsKeyboard()const noexcept;
+    [[nodiscard]] bool wantsPointer()const noexcept;
+    [[nodiscard]] bool wantsCommands()const noexcept;
     [[nodiscard]] bool ownsKey(i32 key)const noexcept;
     [[nodiscard]] bool ownsSource(const InputSource& source)const noexcept;
     // Held commands cannot switch editors or begin editing after their delegated owner has retired.
@@ -153,7 +165,15 @@ public:
 
 
 private:
+    [[nodiscard]] static bool IsPointerEvent(InputEventType::Enum type)noexcept;
     [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event);
+    [[nodiscard]] Expected<InputEvent> resolvePointerEvent(const InputEvent& event);
+    void retireQueuedReleases();
+    [[nodiscard]] PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)noexcept;
+    [[nodiscard]] const PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)const noexcept;
+    void routePointerSource(const InputEvent& event, InputRoutingResult& result);
+    void observePointer(const InputEvent& event);
+    void terminatePointerSource(InputSource source);
     [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept;
     [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept;
     [[nodiscard]] bool currentCommandFocus(const CommandSource& source)const;
@@ -165,16 +185,16 @@ private:
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
     [[nodiscard]] bool validControlTargets()const;
-    [[nodiscard]] bool validKeyboardOwners()const;
-    [[nodiscard]] const HitTarget* keyboardHost(const HitTarget& source)const;
-    [[nodiscard]] bool currentControlKeyOwner(const CommandSource& source)const;
+    [[nodiscard]] bool validCommandOwners()const;
+    [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const;
+    [[nodiscard]] bool currentControlCommandOwner(const CommandSource& source)const;
     [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const;
     [[nodiscard]] bool currentControlAction(const ControlAction& action)const;
     void reconcileControlActions();
     [[nodiscard]] bool currentContextMenuOwner(const TargetOwner& owner)const;
     void reconcileContextMenus();
-    void appendContextMenu(const HitTarget& target, const Point& position, bool keyboard, InputRoutingResult& result);
-    [[nodiscard]] bool routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed);
+    void appendContextMenu(const HitTarget& target, const Point& position, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
+    [[nodiscard]] bool routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed);
     void routeSecondary(const InputEvent& event, InputRoutingResult& result);
     void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result, f64 deltaX = 0.0);
     [[nodiscard]] bool routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, bool alreadyPressed, InputRoutingResult& result);
@@ -191,9 +211,8 @@ private:
     void updateHover();
     void advanceHoverActivity()noexcept;
     void clearHover()noexcept;
-    void cancelPointerCapture();
     void cancelInteraction();
-    void appendActivation(const HitTarget& target, InputActionSource::Enum source, InputRoutingResult& result);
+    void appendActivation(const HitTarget& target, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
     void appendPointerGesture(const HitTarget& target, InputRoutingResult& result);
     void updatePointerGesture(const Point& position, bool completed)noexcept;
     void reconcilePointerGestures();
@@ -207,6 +226,8 @@ private:
     InputBindings m_bindings;
     InputVector<BoundSource> m_boundSources;
     InputVector<CommandSource> m_commandSources;
+    InputVector<PointerBinding> m_pointerBindings;
+    InputVector<PointerSource> m_pointerSources;
     InputVector<HitTarget> m_targets;
     InputVector<HitTarget> m_stagedTargets;
     InputVector<TargetLookup> m_lookup;
@@ -235,7 +256,10 @@ private:
     u64 m_captureDeclaration = 0u;
     TargetOwner m_secondaryOwner;
     Point m_pointer;
+    Point m_interactionPosition;
     Point m_secondaryPosition;
+    InputSource m_hoverPointerSource;
+    InputSource m_activePointerSource;
     bool m_pointerKnown = false;
     bool m_primaryDown = false;
     bool m_pointerSequenceConsumed = false;

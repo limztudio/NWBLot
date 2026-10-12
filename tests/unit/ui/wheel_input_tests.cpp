@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -73,7 +75,7 @@ protected:
         event.position = position;
         event.scrollX = deltaX;
         event.scrollY = deltaY;
-        EXPECT_TRUE(m_router.queue(event));
+        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
         return m_router.process();
     }
 
@@ -141,7 +143,7 @@ TEST_F(UiWheelInputTests, VerticalOnlyListDiagonalStillDeliversItsExactVerticalS
 
 TEST_F(UiWheelInputTests, DiagonalWheelOccupiesOnePositionBetweenGestureUpdates){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::PrimaryDown, .position = { 95.0f, 25.0f } }));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryDown, .position = { 95.0f, 25.0f } })));
     EXPECT_TRUE(m_router.process().pointerConsumed);
     PointerGesture first;
     const auto firstResult = m_router.consumePointerGesture(m_targets[1u].id, 7u);
@@ -154,7 +156,7 @@ TEST_F(UiWheelInputTests, DiagonalWheelOccupiesOnePositionBetweenGestureUpdates)
     ASSERT_TRUE(actionResult);
     action = *actionResult;
     EXPECT_EQ(action.id.sequence, first.updateSequence + 1u);
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::PointerMove, .position = { 95.0f, 60.0f } }));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerMove, .position = { 95.0f, 60.0f } })));
     EXPECT_TRUE(m_router.process().pointerConsumed);
     PointerGesture moved;
     const auto movedResult = m_router.consumePointerGesture(m_targets[1u].id, 7u);
@@ -189,11 +191,11 @@ TEST_F(UiWheelInputTests, InvalidHorizontalMetadataRejectsPublicationAndPreserve
 
 TEST_F(UiWheelInputTests, SceneOwnedPressCannotAcquireEitherWheelAxisOverAHost){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::PrimaryDown, .position = { 250.0f, 180.0f } }));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryDown, .position = { 250.0f, 180.0f } })));
     EXPECT_FALSE(m_router.process().pointerConsumed);
     EXPECT_FALSE(wheel(1.0, -1.0).pointerConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::PrimaryUp, .position = { 10.0f, 10.0f } }));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryUp, .position = { 10.0f, 10.0f } })));
     EXPECT_FALSE(m_router.process().pointerConsumed);
     EXPECT_TRUE(wheel(1.0, -1.0).pointerConsumed);
     EXPECT_EQ(m_router.controlActions().size(), 1u);

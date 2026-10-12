@@ -22,7 +22,7 @@ void InputRouter::restoreDefaultBindings(){
     m_bindings.restoreDefaults();
 }
 
-bool InputRouter::wantsKeyboard()const noexcept{
+bool InputRouter::wantsCommands()const noexcept{
     return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{
         return source.consumed;
     }) != m_commandSources.end();
@@ -37,17 +37,35 @@ bool InputRouter::ownsSource(const InputSource& source)const noexcept{
     return held && held->consumed;
 }
 
-void InputRouter::cancelNativeInput(){
-    cancelPointerCapture();
-    clearHover();
-    m_pointerKnown = false;
+void InputRouter::cancelDeviceInput(const u64 device){
+    if(m_activePointerSource.valid() && m_activePointerSource.device == device)
+        terminatePointerSource(m_activePointerSource);
+    for(usize index = m_pointerSources.size(); index > 0u; --index){
+        if(m_pointerSources[index - 1u].binding.source.device == device)
+            m_pointerSources.erase(m_pointerSources.begin() + static_cast<isize>(index - 1u));
+    }
+    for(usize index = m_pointerBindings.size(); index > 0u; --index){
+        if(m_pointerBindings[index - 1u].source.device == device)
+            m_pointerBindings.erase(m_pointerBindings.begin() + static_cast<isize>(index - 1u));
+    }
+    if(m_hoverPointerSource.valid() && m_hoverPointerSource.device == device){
+        advanceHoverActivity();
+        clearHover();
+        m_pointerKnown = false;
+        m_hoverPointerSource = {};
+    }
     for(usize index = m_commandSources.size(); index > 0u; --index){
-        if(m_commandSources[index - 1u].source.device == 0u)
+        if(m_commandSources[index - 1u].source.device == device)
             m_commandSources.erase(m_commandSources.begin() + static_cast<isize>(index - 1u));
     }
     for(usize index = m_boundSources.size(); index > 0u; --index){
-        if(m_boundSources[index - 1u].source.device == 0u)
+        if(m_boundSources[index - 1u].source.device == device)
             m_boundSources.erase(m_boundSources.begin() + static_cast<isize>(index - 1u));
+    }
+    for(usize index = m_events.size(); index > 0u; --index){
+        const InputEvent& event = m_events[index - 1u];
+        if(event.source.valid() && event.source.device == device)
+            m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
     }
 }
 
@@ -60,7 +78,7 @@ bool InputRouter::canEditCommand(const InputEvent& event)const{
     const HitTarget* focused = findTarget(source->focusOwner.target, source->focusOwner.declarationGeneration);
     if(!focused->textEditable)
         return false;
-    return !source->delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && currentControlKeyOwner(*source));
+    return !source->delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && currentControlCommandOwner(*source));
 }
 
 
@@ -79,7 +97,7 @@ Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
         resolved.type = event.type == InputEventType::KeyDown ? InputEventType::CommandDown : InputEventType::CommandUp;
         resolved.source = { 0u, static_cast<u64>(event.key) + 1u };
     }
-    else if(!event.source.valid() || event.source.device == 0u || event.command > InputCommand::ContextMenu)
+    else if(!event.source.valid() || event.command > InputCommand::ContextMenu)
         return MakeUnexpected(Failure{});
     auto held = FindIf(m_boundSources.begin(), m_boundSources.end(), [&resolved](const BoundSource& source)noexcept{
         return source.source == resolved.source;

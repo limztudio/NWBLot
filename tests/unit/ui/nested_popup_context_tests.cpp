@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/context.h>
 
 #include <gtest/gtest.h>
@@ -80,7 +82,7 @@ protected:
     }
 
     [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_context.input().queue(event));
+        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput(event)));
         return m_context.input().process();
     }
 

@@ -23,12 +23,12 @@ namespace UiHorizontalNavigationTests{
 TEST_F(HorizontalNavigationFixture, HeldHorizontalNavigationRepeatsWhileSubmitIsOneShotInSequence){
     ASSERT_TRUE(publish());
     focusTarget();
-    EXPECT_TRUE(keyDown(Core::Key::Left).keyboardConsumed);
-    EXPECT_TRUE(keyDown(Core::Key::Left, true).keyboardConsumed);
-    EXPECT_TRUE(keyDown(Core::Key::Enter).keyboardConsumed);
-    EXPECT_TRUE(keyDown(Core::Key::Enter, true).keyboardConsumed);
-    EXPECT_TRUE(keyUp(Core::Key::Enter).keyboardConsumed);
-    EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Left).commandConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Left, true).commandConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Enter).commandConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Enter, true).commandConsumed);
+    EXPECT_TRUE(keyUp(Core::Key::Enter).commandConsumed);
+    EXPECT_TRUE(keyUp(Core::Key::Left).commandConsumed);
     const Array<ControlActionKind::Enum, 3u> kinds{ ControlActionKind::Left, ControlActionKind::Left, ControlActionKind::Submit };
     ASSERT_EQ(m_router.controlActions().size(), kinds.size());
     u64 previous = 0u;
@@ -108,11 +108,11 @@ TEST_F(HorizontalNavigationFixture, DelegatedEditorKeepsCaretKeysLocalToAvoidMov
         press(key);
         EXPECT_TRUE(m_router.controlActions().empty());
     }
-    EXPECT_TRUE(keyDown(Core::Key::Left).keyboardConsumed);
-    EXPECT_TRUE(keyDown(Core::Key::Left, true).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Left).commandConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Left, true).commandConsumed);
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Left));
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
+    EXPECT_TRUE(keyUp(Core::Key::Left).commandConsumed);
     press(Core::Key::Down);
     ControlAction action;
     const auto actionResult = take();
@@ -128,7 +128,7 @@ TEST_F(HorizontalNavigationFixture, DelegatedEditorKeepsCaretKeysLocalToAvoidMov
 TEST_F(HorizontalNavigationFixture, InvalidHorizontalHostPublicationPreservesAcceptedFocusAndHeldAction){
     ASSERT_TRUE(publish());
     focusTarget();
-    EXPECT_TRUE(keyDown(Core::Key::Right).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Right).commandConsumed);
     const HitTarget accepted = m_targets[0u];
     for(usize variant = 0u; variant < 4u; ++variant){
         m_targets[0u] = accepted;
@@ -155,12 +155,12 @@ TEST_F(HorizontalNavigationFixture, InvalidHorizontalHostPublicationPreservesAcc
     action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.control, accepted.control);
-    EXPECT_TRUE(keyDown(Core::Key::Right, true).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Right, true).commandConsumed);
     const auto actionResult2 = take();
     ASSERT_TRUE(actionResult2);
     action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
-    EXPECT_TRUE(keyUp(Core::Key::Right).keyboardConsumed);
+    EXPECT_TRUE(keyUp(Core::Key::Right).commandConsumed);
 }
 
 TEST_F(HorizontalNavigationFixture, OwnedPartsRejectHorizontalCapabilityWithoutReplacingAcceptedActions){

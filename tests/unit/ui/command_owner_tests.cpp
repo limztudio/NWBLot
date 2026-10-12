@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -10,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_keyboard_owner_tests{
+namespace __hidden_ui_command_owner_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,9 +58,9 @@ using namespace NWB::Impl::Ui;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiKeyboardOwnerTests : public testing::Test{
+class UiCommandOwnerTests : public testing::Test{
 public:
-    UiKeyboardOwnerTests()
+    UiCommandOwnerTests()
         : m_arena(Name("tests/ui/keyboard_owner"))
         , m_router(m_arena)
     {
@@ -70,25 +72,25 @@ public:
 
 protected:
     void bind(const HitTarget& owner){
-        m_targets[0u].keyboardOwner = owner.id;
-        m_targets[0u].keyboardOwnerDeclarationGeneration = owner.declarationGeneration;
-        m_targets[0u].keyboardControl = owner.control;
+        m_targets[0u].commandOwner = owner.id;
+        m_targets[0u].commandOwnerDeclarationGeneration = owner.declarationGeneration;
+        m_targets[0u].commandControl = owner.control;
     }
 
     void clearBinding(){
-        m_targets[0u].keyboardOwner = {};
-        m_targets[0u].keyboardOwnerDeclarationGeneration = 0u;
-        m_targets[0u].keyboardControl = {};
+        m_targets[0u].commandOwner = {};
+        m_targets[0u].commandOwnerDeclarationGeneration = 0u;
+        m_targets[0u].commandControl = {};
     }
 
     [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_router.queue(event));
+        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
         return m_router.process();
     }
 
     void press(const Core::Key::Enum key){
-        EXPECT_TRUE(send(Key(InputEventType::KeyDown, key)).keyboardConsumed);
-        EXPECT_TRUE(send(Key(InputEventType::KeyUp, key)).keyboardConsumed);
+        EXPECT_TRUE(send(Key(InputEventType::KeyDown, key)).commandConsumed);
+        EXPECT_TRUE(send(Key(InputEventType::KeyUp, key)).commandConsumed);
     }
 
     void focus(){
@@ -126,7 +128,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActivation){
+TEST_F(UiCommandOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActivation){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
     press(Core::Key::Down);
@@ -153,7 +155,7 @@ TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActi
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
 }
 
-TEST_F(UiKeyboardOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandidateIsCommitted){
+TEST_F(UiCommandOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandidateIsCommitted){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
     m_targets[1u].pageRows = 17u;
@@ -173,7 +175,7 @@ TEST_F(UiKeyboardOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandi
     EXPECT_EQ(action.id.layoutGeneration, 2u);
 }
 
-TEST_F(UiKeyboardOwnerTests, MissingDisabledAndNonNavigableOwnersRejectCandidateAcceptance){
+TEST_F(UiCommandOwnerTests, MissingDisabledAndNonNavigableOwnersRejectCandidateAcceptance){
     EXPECT_FALSE(m_router.commitTargets(&m_targets[0u], 1u, 1u));
     m_targets[1u].enabled = false;
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
@@ -186,18 +188,18 @@ TEST_F(UiKeyboardOwnerTests, MissingDisabledAndNonNavigableOwnersRejectCandidate
     EXPECT_TRUE(m_router.targets().empty());
 }
 
-TEST_F(UiKeyboardOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwallowingEditorKeys){
+TEST_F(UiCommandOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwallowingEditorKeys){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    ++m_targets[0u].keyboardOwnerDeclarationGeneration;
+    ++m_targets[0u].commandOwnerDeclarationGeneration;
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     bind(m_targets[1u]);
-    ++m_targets[0u].keyboardControl.contentRevision;
+    ++m_targets[0u].commandControl.contentRevision;
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     bind(m_targets[1u]);
-    m_targets[0u].keyboardOwner = {};
+    m_targets[0u].commandOwner = {};
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     press(Core::Key::Down);
     ControlAction action;
@@ -207,7 +209,7 @@ TEST_F(UiKeyboardOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwa
     EXPECT_EQ(action.id.layoutGeneration, 1u);
 }
 
-TEST_F(UiKeyboardOwnerTests, NonEditableDisabledAndPartSourcesCannotBorrowNavigation){
+TEST_F(UiCommandOwnerTests, NonEditableDisabledAndPartSourcesCannotBorrowNavigation){
     m_targets[0u].textEditable = false;
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     m_targets[0u].textEditable = true;
@@ -222,29 +224,29 @@ TEST_F(UiKeyboardOwnerTests, NonEditableDisabledAndPartSourcesCannotBorrowNaviga
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
 }
 
-TEST_F(UiKeyboardOwnerTests, SelfDelegationAndCompetingNavigationHostsAreRejected){
-    m_targets[0u].keyboardOwner = m_targets[0u].id;
-    m_targets[0u].keyboardOwnerDeclarationGeneration = m_targets[0u].declarationGeneration;
-    m_targets[0u].keyboardControl = m_targets[0u].control;
+TEST_F(UiCommandOwnerTests, SelfDelegationAndCompetingNavigationHostsAreRejected){
+    m_targets[0u].commandOwner = m_targets[0u].id;
+    m_targets[0u].commandOwnerDeclarationGeneration = m_targets[0u].declarationGeneration;
+    m_targets[0u].commandControl = m_targets[0u].control;
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     bind(m_targets[1u]);
     m_targets[0u].navigable = true;
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
 }
 
-TEST_F(UiKeyboardOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently){
+TEST_F(UiCommandOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     bind(m_targets[2u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     bind(m_targets[1u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
     press(Core::Key::Down);
     ControlAction action;
     const auto actionResult = take();
@@ -252,16 +254,16 @@ TEST_F(UiKeyboardOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitia
     action = *actionResult;
 }
 
-TEST_F(UiKeyboardOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease){
+TEST_F(UiCommandOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     bind(m_targets[2u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     bind(m_targets[1u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     EXPECT_FALSE(take());
     EXPECT_FALSE(take(2u));
     press(Core::Key::Enter);
@@ -271,24 +273,24 @@ TEST_F(UiKeyboardOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrRev
     EXPECT_FALSE(take(2u));
 }
 
-TEST_F(UiKeyboardOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives){
+TEST_F(UiCommandOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(&m_targets[1u], 2u, 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     m_targets[1u].focusOnCommit = true;
     ASSERT_TRUE(m_router.commitTargets(&m_targets[1u], 2u, 3u));
     EXPECT_EQ(m_router.focus(), m_targets[1u].id);
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
 }
 
-TEST_F(UiKeyboardOwnerTests, RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues){
+TEST_F(UiCommandOwnerTests, RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     clearBinding();
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
@@ -296,12 +298,12 @@ TEST_F(UiKeyboardOwnerTests, RemovingTheBindingFencesHeldNavigationWhileOrdinary
     press(Core::Key::Left);
     bind(m_targets[1u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
 }
 
-TEST_F(UiKeyboardOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions){
+TEST_F(UiCommandOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
     press(Core::Key::Down);
@@ -315,21 +317,21 @@ TEST_F(UiKeyboardOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedA
     EXPECT_TRUE(m_router.controlActions().empty());
 }
 
-TEST_F(UiKeyboardOwnerTests, FenceControlRetiresTheDelegateWithoutStealingEditorFocus){
+TEST_F(UiCommandOwnerTests, FenceControlRetiresTheDelegateWithoutStealingEditorFocus){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     ControlToken replacement = m_targets[1u].control;
     ++replacement.contentRevision;
     m_router.fenceControl(m_targets[1u].id, m_targets[1u].declarationGeneration, replacement);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
 }
 
-TEST_F(UiKeyboardOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCrossLayers){
+TEST_F(UiCommandOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCrossLayers){
     PopupScope scope = popup();
     for(auto& target : m_targets){
         target.popup = scope.token;
@@ -358,14 +360,14 @@ TEST_F(UiKeyboardOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCros
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
 }
 
-TEST_F(UiKeyboardOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
+TEST_F(UiCommandOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).commandConsumed);
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     ControlAction action;
     const auto actionResult1 = take();
     ASSERT_TRUE(actionResult1);

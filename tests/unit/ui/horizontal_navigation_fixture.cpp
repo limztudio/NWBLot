@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include "horizontal_navigation_fixture.h"
 
 
@@ -77,7 +79,7 @@ HorizontalNavigationFixture::HorizontalNavigationFixture()
 }
 
 InputRoutingResult HorizontalNavigationFixture::send(const InputEvent& event){
-    EXPECT_TRUE(m_router.queue(event));
+    EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
     return m_router.process();
 }
 
@@ -90,8 +92,8 @@ InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key)
 }
 
 void HorizontalNavigationFixture::press(const Core::Key::Enum key){
-    EXPECT_TRUE(keyDown(key).keyboardConsumed);
-    EXPECT_TRUE(keyUp(key).keyboardConsumed);
+    EXPECT_TRUE(keyDown(key).commandConsumed);
+    EXPECT_TRUE(keyUp(key).commandConsumed);
 }
 
 void HorizontalNavigationFixture::focusTarget(const usize index){
@@ -118,9 +120,9 @@ Expected<ControlAction> HorizontalNavigationFixture::take(const usize index){
 void HorizontalNavigationFixture::bindEditor(const usize hostIndex){
     const HitTarget& host = m_targets[hostIndex];
     HitTarget& editor = m_targets[2u];
-    editor.keyboardOwner = host.id;
-    editor.keyboardOwnerDeclarationGeneration = host.declarationGeneration;
-    editor.keyboardControl = host.control;
+    editor.commandOwner = host.id;
+    editor.commandOwnerDeclarationGeneration = host.declarationGeneration;
+    editor.commandControl = host.control;
     editor.popup = host.popup;
     editor.layer = host.layer;
 }

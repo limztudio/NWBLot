@@ -129,7 +129,7 @@ void UiLayerSystem::invalidateResources(){
     m_editHost.reset();
     m_context.abandonFrame();
     m_ui.reset();
-    m_context.input().cancelNativeInput();
+    m_context.input().cancelDeviceInput(0u);
     m_nativeKeyOwners.fill(0u);
     m_blockNativeChars = false;
     m_pressedButtons = 0u;

@@ -87,7 +87,7 @@ protected:
         InputEvent held;
         held.type = InputEventType::KeyDown;
         held.key = Core::Key::Right;
-        ASSERT_TRUE(send(held).keyboardConsumed);
+        ASSERT_TRUE(send(held).commandConsumed);
         const RadioGroupSnapshot before = m_state.snapshot();
         m_source.resetCounters();
         m_source.armClose(m_parent, site);
@@ -108,13 +108,13 @@ protected:
         m_parent.open();
         ASSERT_TRUE(acceptParent(3u));
         held.repeat = true;
-        ASSERT_TRUE(send(held).keyboardConsumed);
+        ASSERT_TRUE(send(held).commandConsumed);
         ASSERT_TRUE(acceptParent(4u));
         EXPECT_EQ(m_state.selectedKey(), 10u);
         EXPECT_FALSE(m_result.selectionChanged);
         EXPECT_FALSE(m_result.activated);
         held.type = InputEventType::KeyUp;
-        ASSERT_TRUE(send(held).keyboardConsumed);
+        ASSERT_TRUE(send(held).commandConsumed);
     }
 
 

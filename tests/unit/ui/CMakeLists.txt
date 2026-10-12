@@ -21,7 +21,7 @@ target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/input_bindings_te
     "${CMAKE_CURRENT_LIST_DIR}/integer_model_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/float_model_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_model_lifetime_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_builder_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_loan_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_model_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_command_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_single_line_text_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_layout_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_grapheme_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_history_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/edit_composition_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/input_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/control_input_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/keyboard_owner_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_composition_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/input_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/control_input_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/command_owner_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/context_menu_input_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/tooltip_behavior_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/popup_tools_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/popup_tools_builder_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/popup_tools_loan_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/popup_tools_navigation_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/scroll_layout_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/combo_behavior_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/search_combo_behavior_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/search_combo_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/search_combo_builder_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/combo_builder_tests.cpp"
@@ -36,3 +36,4 @@ target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/input_bindings_te
     "${CMAKE_CURRENT_LIST_DIR}/text_visible_baked_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_font_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_baked_tests.cpp")
 target_link_libraries(nwb_ui_tests PRIVATE nwb_ui_gpu nwb_ui_images nwb_ui_edit nwb_ui_widgets nwb_ui nwb_ui_text nwb::harfbuzz)
 target_compile_definitions(nwb_ui_tests PRIVATE NWB_TEST_FONT_DIRECTORY="${CMAKE_SOURCE_DIR}/impl/assets/ui/fonts/default")
+target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/pointer_sources_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/native_input.h")

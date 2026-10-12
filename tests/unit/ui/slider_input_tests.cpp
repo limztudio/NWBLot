@@ -41,15 +41,15 @@ TEST_F(UiSliderInputTests, AcceptedKeyRepeatsRemainAddressedToTheSurvivingContro
     InputEvent key;
     key.type = InputEventType::KeyDown;
     key.key = Core::Key::Right;
-    EXPECT_TRUE(send(key).keyboardConsumed);
+    EXPECT_TRUE(send(key).commandConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     key.repeat = true;
-    EXPECT_TRUE(send(key).keyboardConsumed);
+    EXPECT_TRUE(send(key).commandConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     key.type = InputEventType::KeyUp;
-    EXPECT_TRUE(send(key).keyboardConsumed);
+    EXPECT_TRUE(send(key).commandConsumed);
 }
 
 TEST_F(UiSliderInputTests, TrackPressSeeksDuringFinalPaintAndReleaseOutsideAppliesTheFinalEndpoint){

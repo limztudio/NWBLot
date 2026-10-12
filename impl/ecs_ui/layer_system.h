@@ -10,6 +10,8 @@
 #include "frame_delta.h"
 #include "skin_selection.h"
 
+#include <impl/ecs_ui/toolkit/input/pointer.h>
+
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
 #include <core/ecs/system.h>
@@ -95,8 +97,11 @@ public:
     // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
     [[nodiscard]] bool setInputBindings(const Ui::InputKeyBinding* bindings, usize count);
     void restoreDefaultInputBindings();
-    // Projects map device controls to UI commands; each nonzero device/control pair identifies one held sequence.
-    [[nodiscard]] bool commandInput(Ui::InputSource source, Ui::InputCommand::Enum command, i32 phase, bool extend = false);
+    // Main-thread ingress uses semantic commands and identified pointer sequences; device zero belongs to the native adapter.
+    [[nodiscard]] bool commandInput(Ui::InputSource source, Ui::InputCommand::Enum command, Ui::InputPhase::Enum phase, bool extend = false);
+    [[nodiscard]] bool pointerInput(const Ui::PointerInput& input);
+    // Main-thread provider termination cancels its active contact and retires its remaining held sources.
+    void cancelDeviceInput(u64 device);
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     [[nodiscard]] virtual bool blocksKeyboardText()const noexcept override{ return m_blockCommandChars; }
     virtual bool keyboardCharInput(u32 unicode, i32 mods)override;
@@ -115,6 +120,7 @@ private:
     [[nodiscard]] bool collectRoots();
     void synchronizeInput();
     void routeInput(const Ui::InputEvent& event, bool* consumed = nullptr, bool* blockText = nullptr);
+    [[nodiscard]] bool routePointerInput(const Ui::PointerInput& input);
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
 

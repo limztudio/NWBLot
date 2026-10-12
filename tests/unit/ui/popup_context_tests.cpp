@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/context.h>
 
 #include <gtest/gtest.h>
@@ -111,7 +113,7 @@ protected:
     }
 
     [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_context.input().queue(event));
+        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput(event)));
         return m_context.input().process();
     }
 
@@ -148,8 +150,8 @@ protected:
     [[nodiscard]] PopupFrame focusBase(){
         const PopupFrame frame = prepare(1u);
         EXPECT_TRUE(m_context.commitFrame(1u));
-        EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
+        EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).commandConsumed);
+        EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).commandConsumed);
         EXPECT_EQ(m_context.input().focus(), frame.base.id);
         return frame;
     }
@@ -453,9 +455,9 @@ TEST_F(UiPopupContextTests, AutofocusDisabledChangesFocusOnlyAtAcceptanceAndTabE
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_TRUE(m_context.input().hasPopup());
     EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_TRUE(m_context.input().wantsKeyboard());
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
+    EXPECT_TRUE(m_context.input().wantsCommands());
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).commandConsumed);
     EXPECT_EQ(m_context.input().focus(), candidate.child.id);
 }
 
@@ -486,7 +488,7 @@ TEST_F(UiPopupContextTests, FocusLossFencesPreparedOpenBeforeItsFirstAcceptance)
     const PopupFrame candidate = prepare(2u, true);
     EXPECT_EQ(m_context.input().focus(), base.base.id);
     EXPECT_FALSE(m_context.input().hasPopup());
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 2u);
@@ -510,7 +512,7 @@ TEST_F(UiPopupContextTests, FocusLossFencesPreparedHigherPopupAboveAcceptedLower
     const PopupStack candidate = prepareStack(2u);
     EXPECT_TRUE(candidate.lower.scope.token == original.scope.token);
     EXPECT_EQ(m_context.input().focus(), original.child.id);
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_FALSE(m_context.input().hitTest({ 115.0f, 55.0f }).valid());
@@ -534,7 +536,7 @@ TEST_F(UiPopupContextTests, NativeFocusGainCannotReviveCandidatePreparedBeforeFo
     const PopupFrame base = focusBase();
     const PopupFrame candidate = prepare(2u, true);
     EXPECT_EQ(m_context.input().focus(), base.base.id);
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
     EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FALSE(m_context.input().focus().valid());
@@ -549,7 +551,7 @@ TEST_F(UiPopupContextTests, NativeFocusGainCannotReviveCandidatePreparedBeforeFo
 
 TEST_F(UiPopupContextTests, FreshPopupPreparedAfterNativeFocusGainMayAutofocus){
     const PopupFrame base = focusBase();
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
     EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
     const PopupFrame fresh = prepare(2u, true);
     EXPECT_EQ(fresh.base.id, base.base.id);
@@ -567,7 +569,7 @@ TEST_F(UiPopupContextTests, NativeFocusGainNeverRestoresAlreadyClosingScopes){
     const PopupFrame original = prepare(2u, true);
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_EQ(m_context.input().focus(), original.child.id);
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
     EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
     EXPECT_FALSE(m_context.input().hitTest({ 115.0f, 55.0f }).valid());
     const PopupFrame retained = prepare(3u, true);

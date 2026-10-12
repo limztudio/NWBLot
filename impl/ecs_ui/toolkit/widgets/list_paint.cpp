@@ -93,7 +93,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
 
 bool Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
     const WidgetId rows = MakeWidgetId(item.state.id, "rows");
-    const bool focused = m_context.input().focus() == item.state.id || (frame.keyboardFocus.valid() && m_context.input().focus() == frame.keyboardFocus);
+    const bool focused = m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_context.input().focus() == frame.commandFocus);
     for(u64 index = placement.firstRow; index < placement.endRow; ++index){
         if(!listStateMatches(frame))
             return false;

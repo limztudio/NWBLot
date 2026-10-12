@@ -148,7 +148,7 @@ private:
         Insets padding;
         u64 rowCount = 0u;
         bool focusOnCommit = false;
-        WidgetId keyboardFocus;
+        WidgetId commandFocus;
     };
 
     struct ComboFrame{

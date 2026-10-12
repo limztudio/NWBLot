@@ -30,7 +30,7 @@ bool InputRouter::canSubmitCommand(const InputEvent& event)const{
     if(source == nullptr || !source->submitArmed || !currentCommandFocus(*source))
         return false;
     const HitTarget* focused = findTarget(source->focusOwner.target, source->focusOwner.declarationGeneration);
-    return focused->textEditable && (!source->delegated || currentControlKeyOwner(*source));
+    return focused->textEditable && (!source->delegated || currentControlCommandOwner(*source));
 }
 
 void InputRouter::cancelSubmitCommands(const WidgetId id)noexcept{
@@ -41,7 +41,7 @@ void InputRouter::cancelSubmitCommands(const WidgetId id)noexcept{
 }
 
 bool InputRouter::pressed(const WidgetId id)const{
-    if(m_primaryDown && m_pointerSubmitArmed && m_capture == id && m_hover == id)
+    if(m_primaryDown && m_pointerSubmitArmed && m_capture == id && hitTest(m_interactionPosition) == id)
         return true;
     for(const CommandSource& source : m_commandSources){
         if(source.submitArmed && source.focusOwner.target == id && currentCommandFocus(source))
@@ -55,20 +55,20 @@ void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& s
         return;
     if(source.contextArmed && event.command == InputCommand::ContextMenu && currentContextMenuOwner(source.focusOwner)){
         const HitTarget* target = findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration);
-        appendContextMenu(*target, source.contextPosition, true, result);
+        appendContextMenu(*target, source.contextPosition, InputActionSource::Command, event.source, result);
         return;
     }
     if(!source.submitArmed || (event.command != InputCommand::Accept && event.command != InputCommand::Submit && event.command != InputCommand::Activate))
         return;
     const HitTarget* focused = findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration);
     if(source.controlOwner.host.valid()){
-        if(currentControlKeyOwner(source)){
+        if(currentControlCommandOwner(source)){
             const HitTarget* host = findTarget(source.controlOwner.host, source.controlOwner.declarationGeneration);
             appendControlAction(*host, *focused, ControlActionKind::Submit, 0.0, result);
         }
     }
     else if(focused->activatable)
-        appendActivation(*focused, event.source.device == 0u ? InputActionSource::Keyboard : InputActionSource::Command, result);
+        appendActivation(*focused, InputActionSource::Command, event.source, result);
 }
 
 void InputRouter::cancelCommandPresses()noexcept{

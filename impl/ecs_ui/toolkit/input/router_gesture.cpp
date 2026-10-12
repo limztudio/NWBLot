@@ -42,8 +42,9 @@ void InputRouter::appendPointerGesture(const HitTarget& target, InputRoutingResu
     }
     PointerGesture gesture;
     gesture.id = { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence };
-    gesture.origin = m_pointer;
-    gesture.position = m_pointer;
+    gesture.inputSource = m_activePointerSource;
+    gesture.origin = m_interactionPosition;
+    gesture.position = m_interactionPosition;
     gesture.targetRectangle = target.rectangle;
     gesture.referenceRectangle = target.gestureReference.width > 0.0f ? target.gestureReference : target.rectangle;
     gesture.popup = target.popup;

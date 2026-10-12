@@ -104,9 +104,9 @@ bool Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     box.rectangle.height = Min(Max(frame.queryHeight, measured), content.rectangle.height);
     HitTarget navigation;
     if(frame.options.enabled && !item.editView.composing()){
-        navigation.keyboardOwner = frame.rows.id;
-        navigation.keyboardOwnerDeclarationGeneration = frame.rows.declarationGeneration;
-        navigation.keyboardControl = frame.listToken;
+        navigation.commandOwner = frame.rows.id;
+        navigation.commandOwnerDeclarationGeneration = frame.rows.declarationGeneration;
+        navigation.commandControl = frame.listToken;
     }
     if(!paintEditBox(item, box, &navigation))
         return false;

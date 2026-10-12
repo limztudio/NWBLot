@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/builder.h>
 
 #include <tests/common/font_fixture.h>
@@ -133,7 +135,7 @@ protected:
     }
 
     [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        if(!m_context.input().queue(event)){
+        if(!m_context.input().queue(UiTestSupport::NativeInput(event))){
             ADD_FAILURE() << "input admission failed";
             return {};
         }

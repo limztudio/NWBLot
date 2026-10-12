@@ -28,6 +28,7 @@ namespace __hidden_layer_input{
 
 inline constexpr u8 s_Scene = 0u;
 inline constexpr u8 s_Custom = 1u;
+inline constexpr Ui::InputSource s_NativePointerSource{ 0u, 1u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,71 +88,66 @@ bool UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
         return false;
     synchronizeNativeInput();
     m_pointer = { static_cast<f32>(xpos), static_cast<f32>(ypos) };
+    Ui::PointerInput event;
+    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.position = m_pointer;
+    event.hoverCapable = true;
     if(m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene){
-        Ui::InputEvent leave;
-        leave.type = Ui::InputEventType::PointerLeave;
-        routeInput(leave);
+        event.phase = Ui::PointerPhase::Leave;
+        static_cast<void>(routePointerInput(event));
         return false;
     }
-    Ui::InputEvent event;
-    event.type = Ui::InputEventType::PointerMove;
-    event.position = m_pointer;
-    routeInput(event);
-    const bool consumed = m_context.input().wantsPointer() || (m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Custom);
-    return consumed;
+    event.phase = Ui::PointerPhase::Move;
+    const bool consumed = routePointerInput(event);
+    return consumed || (m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Custom);
 }
 
 bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
-    if(button < Core::MouseButton::Left || button > Core::MouseButton::Button8)
+    if(button < Core::MouseButton::Left || button > Core::MouseButton::Button8 || (action != Core::InputAction::Press && action != Core::InputAction::Release))
         return false;
     synchronizeNativeInput();
     const u32 bit = 1u << static_cast<u32>(button);
-    const bool firstPress = action != Core::InputAction::Release && (m_pressedButtons & bit) == 0u;
-    if(action != Core::InputAction::Release && m_pressedButtons == 0u){
-        m_pointerOwner = m_context.input().wouldConsumePointer(m_pointer) ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
-        if(m_pointerOwner != __hidden_layer_input::s_Custom)
+    const bool firstPress = action == Core::InputAction::Press && (m_pressedButtons & bit) == 0u;
+    if(action == Core::InputAction::Press && m_pressedButtons == 0u){
+        const bool acceptsSource = m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource);
+        const bool nativeActive = m_context.input().activePointerSource() == __hidden_layer_input::s_NativePointerSource;
+        const bool consumed = nativeActive ? m_context.input().wouldConsumePointer(m_pointer) : m_context.input().hasPopup() || m_context.input().hitTest(m_pointer).valid();
+        m_pointerOwner = consumed ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
+        if(acceptsSource && m_pointerOwner != __hidden_layer_input::s_Custom)
             m_context.input().clearFocus();
     }
-    if(action != Core::InputAction::Release)
+    if(action == Core::InputAction::Press)
         m_pressedButtons |= bit;
     const u8 owner = m_pointerOwner;
-    if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Left){
-        Ui::InputEvent event;
-        event.type = action == Core::InputAction::Release ? Ui::InputEventType::PrimaryUp : Ui::InputEventType::PrimaryDown;
-        event.position = m_pointer;
-        event.shift = (mods & Core::InputModifier::Shift) != 0;
-        if(event.type == Ui::InputEventType::PrimaryDown)
+    Ui::PointerInput event;
+    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.position = m_pointer;
+    event.extend = (mods & Core::InputModifier::Shift) != 0;
+    event.hoverCapable = true;
+    if(owner == __hidden_layer_input::s_Custom && (button == Core::MouseButton::Left || button == Core::MouseButton::Right)){
+        event.phase = action == Core::InputAction::Release ? Ui::PointerPhase::Release : Ui::PointerPhase::Press;
+        event.intent = button == Core::MouseButton::Left ? Ui::PointerIntent::Activate : Ui::PointerIntent::ContextMenu;
+        if(event.phase == Ui::PointerPhase::Press && event.intent == Ui::PointerIntent::Activate)
             event.timestampMs = Max<u64>(1u, DurationInMS<u64>(TimerNow()));
-        routeInput(event);
+        static_cast<void>(routePointerInput(event));
     }
-    if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Right){
-        Ui::InputEvent event;
-        event.type = action == Core::InputAction::Release ? Ui::InputEventType::SecondaryUp : Ui::InputEventType::SecondaryDown;
-        event.position = m_pointer;
-        event.shift = (mods & Core::InputModifier::Shift) != 0;
-        event.control = (mods & Core::InputModifier::Control) != 0;
-        event.alt = (mods & Core::InputModifier::Alt) != 0;
-        routeInput(event);
-    }
-    if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Middle && action != Core::InputAction::Release){
+    if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Middle && action == Core::InputAction::Press && m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource)){
         m_editHost.collectNative();
         const bool pasted = m_editHost.pastePrimary(m_pointer);
         if(!pasted)
             m_editHost.synchronizeFocus();
     }
     if(firstPress && (owner == __hidden_layer_input::s_Scene || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))){
-        Ui::InputEvent leave;
-        leave.type = Ui::InputEventType::PointerLeave;
-        routeInput(leave);
+        event.phase = Ui::PointerPhase::Leave;
+        static_cast<void>(routePointerInput(event));
     }
     if(action == Core::InputAction::Release){
         m_pressedButtons &= ~bit;
         if(m_pressedButtons == 0u){
             m_pointerOwner = __hidden_layer_input::s_Scene;
-            Ui::InputEvent event;
-            event.type = Ui::InputEventType::PointerMove;
-            event.position = m_pointer;
-            routeInput(event);
+            event.phase = Ui::PointerPhase::Move;
+            event.timestampMs = 0u;
+            static_cast<void>(routePointerInput(event));
         }
     }
     return owner != __hidden_layer_input::s_Scene;
@@ -163,13 +159,15 @@ bool UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     synchronizeNativeInput();
     if(m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene)
         return false;
-    Ui::InputEvent event;
-    event.type = Ui::InputEventType::PointerWheel;
+    Ui::PointerInput event;
+    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.phase = Ui::PointerPhase::Scroll;
     event.position = m_pointer;
     event.scrollX = xoffset;
     event.scrollY = yoffset;
-    routeInput(event);
-    return m_pointerOwner == __hidden_layer_input::s_Custom || m_context.input().wouldConsumePointer(m_pointer);
+    event.hoverCapable = true;
+    const bool consumed = routePointerInput(event);
+    return consumed || m_pointerOwner == __hidden_layer_input::s_Custom;
 }
 
 void UiLayerSystem::windowFocusUpdate(const bool focused){
@@ -177,7 +175,7 @@ void UiLayerSystem::windowFocusUpdate(const bool focused){
     event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
     routeInput(event);
     if(!focused){
-        m_context.input().cancelNativeInput();
+        m_context.input().cancelDeviceInput(0u);
         m_pressedButtons = 0u;
         m_pointerOwner = __hidden_layer_input::s_Scene;
         m_blockNativeChars = false;
@@ -187,23 +185,29 @@ void UiLayerSystem::windowFocusUpdate(const bool focused){
 }
 
 void UiLayerSystem::pointerLeave(){
-    Ui::InputEvent event;
-    event.type = Ui::InputEventType::PointerLeave;
-    routeInput(event);
+    Ui::PointerInput event;
+    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.phase = Ui::PointerPhase::Leave;
+    event.position = m_pointer;
+    event.hoverCapable = true;
+    static_cast<void>(routePointerInput(event));
 }
 
 void UiLayerSystem::pointerCaptureLost(){
     if(m_pressedButtons == 0u)
         return;
-    Ui::InputEvent event;
-    event.type = Ui::InputEventType::PointerCaptureLost;
-    routeInput(event);
+    Ui::PointerInput event;
+    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.phase = Ui::PointerPhase::Cancel;
+    event.position = m_pointer;
+    event.hoverCapable = true;
+    static_cast<void>(routePointerInput(event));
     m_pressedButtons = 0u;
     m_pointerOwner = __hidden_layer_input::s_Scene;
 }
 
 bool UiLayerSystem::wantsKeyboard()const{
-    return m_resourcesReady && m_context.input().wantsKeyboard();
+    return m_resourcesReady && m_context.input().wantsCommands();
 }
 
 bool UiLayerSystem::wantsPointer()const{
@@ -235,7 +239,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
     const Ui::InputRoutingResult result = m_context.input().process();
     m_editHost.input(*normalized, previousCapture, submit);
     if(consumed)
-        *consumed = result.keyboardConsumed;
+        *consumed = result.commandConsumed;
     if(blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
         *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;

@@ -6,6 +6,7 @@
 
 
 #include "commands.h"
+#include "pointer.h"
 #include "../id.h"
 #include "../paint.h"
 #include "popup.h"
@@ -31,7 +32,7 @@ namespace InputEventType{
 };
 
 namespace InputActionSource{
-    enum Enum : u8{ Pointer, Keyboard, Command };
+    enum Enum : u8{ Pointer, Command };
 };
 
 namespace PointerGestureState{
@@ -56,6 +57,7 @@ struct InputEvent{
     bool edit = true;
     bool super = false;
     bool allowText = false;
+    bool hoverCapable = false;
 };
 
 // Rectangle and clip use the same logical coordinates as painting; publication order provides the default focus traversal order.
@@ -71,9 +73,9 @@ struct HitTarget{
     f64 scrollStep = 0.0;
     u64 pageRows = 1u;
     f64 gestureMaximum = 0.0;
-    WidgetId keyboardOwner;
-    u64 keyboardOwnerDeclarationGeneration = 0u;
-    ControlToken keyboardControl;
+    WidgetId commandOwner;
+    u64 commandOwnerDeclarationGeneration = 0u;
+    ControlToken commandControl;
     f64 scrollStepX = 0.0;
     f64 gestureMaximumX = 0.0;
     Rect rectangle;
@@ -90,7 +92,7 @@ struct HitTarget{
     bool navigable = false;
     bool scrollable = false;
     bool focusOnCommit = false;
-    // A focused editor may borrow vertical navigation and an Enter intention from another accepted control lifetime.
+    // A focused editor may borrow vertical navigation and submission from another accepted control lifetime.
     bool contextMenu = false;
     bool horizontalNavigation = false;
 };
@@ -109,9 +111,10 @@ struct InputActionId{
 
 struct InputAction{
     InputActionId id;
-    InputActionSource::Enum source = InputActionSource::Pointer;
+    InputActionSource::Enum origin = InputActionSource::Pointer;
     PopupToken popup;
     ControlToken control;
+    InputSource inputSource;
 };
 
 // Context-menu triggers retain the accepted anchor and lifetime without borrowing the declaration.
@@ -120,7 +123,8 @@ struct ContextMenuAction{
     PopupToken popup;
     ControlToken control;
     Point position;
-    bool keyboard = false;
+    InputActionSource::Enum origin = InputActionSource::Pointer;
+    InputSource inputSource;
 };
 
 // Ordered copied input addressed to a focusable host, including stable values selected by its parts.
@@ -147,6 +151,7 @@ struct ControlAction{
 // One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.
 struct PointerGesture{
     InputActionId id;
+    InputSource inputSource;
     Point origin;
     Point position;
     Rect targetRectangle;
@@ -162,9 +167,10 @@ struct PointerGesture{
 
 struct InputRoutingResult{
     bool pointerConsumed = false;
-    bool keyboardConsumed = false;
+    bool commandConsumed = false;
     bool wantsPointer = false;
-    bool wantsKeyboard = false;
+    bool wantsCommands = false;
+    bool pointerRouted = false;
     bool activationOverflow = false;
     bool gestureOverflow = false;
     WidgetId hover;

@@ -181,10 +181,10 @@ void SliderFixture::press(const Core::Key::Enum key, const bool repeat){
     event.type = InputEventType::KeyDown;
     event.key = key;
     event.repeat = repeat;
-    EXPECT_TRUE(send(event).keyboardConsumed);
+    EXPECT_TRUE(send(event).commandConsumed);
     if(!repeat){
         event.type = InputEventType::KeyUp;
-        EXPECT_TRUE(send(event).keyboardConsumed);
+        EXPECT_TRUE(send(event).commandConsumed);
     }
 }
 

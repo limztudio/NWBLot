@@ -42,12 +42,7 @@ LIT_MAIN = "__main__"
 
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "renderer_baseline" / "run.py"
-REQUIRED_DEFINES = {
-    "NWB_BUILD_LOADER": LIT_ON,
-    "NWB_BUILD_LOGSERVER": LIT_ON,
-    "NWB_BUILD_PIPELINE": LIT_ON,
-    "NWB_BUILD_TESTS": LIT_ON,
-}
+REQUIRED_DEFINES = { "NWB_BUILD_LOADER": LIT_ON, "NWB_BUILD_LOGSERVER": LIT_ON, "NWB_BUILD_PIPELINE": LIT_ON, "NWB_BUILD_TESTS": LIT_ON, }
 
 
 @dataclass(frozen=True)
@@ -64,19 +59,9 @@ def default_output_directory(root: Path, profile_name: str) -> Path:
 
 def resolve_paths(args: argparse.Namespace, settings) -> BaselinePaths:
     profile = get_profile(args.profile)
-    executable = ROOT_LAUNCHER.resolve_executable_path(
-        settings, profile.target, args.executable, None, args.dry_run
-    )
-    runtime_directory = (
-        ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir)
-        if args.runtime_dir is not None
-        else settings.build_dir / profile.runtime_directory / settings.config
-    )
-    output_directory = (
-        ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir)
-        if args.output_dir is not None
-        else default_output_directory(settings.root, args.profile)
-    )
+    executable = ROOT_LAUNCHER.resolve_executable_path(settings, profile.target, args.executable, None, args.dry_run)
+    runtime_directory = (ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / profile.runtime_directory / settings.config)
+    output_directory = (ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir) if args.output_dir is not None else default_output_directory(settings.root, args.profile))
     return BaselinePaths(executable, runtime_directory, output_directory)
 
 
@@ -86,18 +71,7 @@ def build_target(args: argparse.Namespace, settings, environment) -> None:
 
 
 def runner_command(args: argparse.Namespace, paths: BaselinePaths) -> List[object]:
-    command: List[object] = [
-        sys.executable,
-        REPO / RUNNER_SCRIPT,
-        LIT_PROFILE,
-        args.profile,
-        LIT_EXECUTABLE,
-        paths.executable,
-        LIT_RUNTIME_DIR,
-        paths.runtime_directory,
-        LIT_OUTPUT_DIR,
-        paths.output_directory,
-    ]
+    command: List[object] = [sys.executable, REPO / RUNNER_SCRIPT, LIT_PROFILE, args.profile, LIT_EXECUTABLE, paths.executable, LIT_RUNTIME_DIR, paths.runtime_directory, LIT_OUTPUT_DIR, paths.output_directory,]
     if args.gpu_validation:
         command.append(LIT_GPU_VALIDATION)
     if args.no_logserver:
@@ -118,12 +92,8 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
     parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
-    validation_group.add_argument(
-        LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable GPU validation for this capture."
-    )
-    validation_group.add_argument(
-        "--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg."
-    )
+    validation_group.add_argument(LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable GPU validation for this capture.")
+    validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg.")
     parser.set_defaults(gpu_validation=True)
     return parser
 

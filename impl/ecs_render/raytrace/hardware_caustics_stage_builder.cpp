@@ -25,10 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererRayTracingSystem& raytracingSystem
-)
+HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)
     : m_graph(graph)
     , m_raytracingSystem(raytracingSystem){
 }
@@ -37,9 +34,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(
-    const HardwareCausticsStageInputs& inputs
-){
+[[nodiscard]] Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
     HardwareCausticsStageResult result{};
     if(!inputs.declaresHardwareCaustics)
@@ -73,36 +68,12 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_graph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-        const Core::GpuGraphResourceId causticAccumulator = importTexture(
-            inputs.targets->causticAccumulator,
-            Name("render.hardware_caustics.accumulator"),
-            "Caustic Accumulator"
-        );
-        const Core::GpuGraphResourceId causticHistory = importTexture(
-            inputs.targets->causticHistory,
-            Name("render.hardware_caustics.history"),
-            "Caustic History"
-        );
-        const Core::GpuGraphResourceId causticResolveHalf = importTexture(
-            inputs.targets->causticResolveHalf,
-            Name("render.hardware_caustics.resolve_half"),
-            "Caustic Resolve Half"
-        );
-        const Core::GpuGraphResourceId causticResolveGeometry = importTexture(
-            inputs.targets->causticResolveGeometry,
-            Name("render.hardware_caustics.resolve_geometry"),
-            "Caustic Resolve Geometry"
-        );
-        const Core::GpuGraphResourceId sceneGeometryDomain = m_graph.importHazardDomain(
-            HazardDomainDesc(Name("render.hardware_caustics.scene_geometry"), "Scene Acceleration and Geometry")
-        );
-        if(
-            !causticAccumulator.valid()
-            || !causticHistory.valid()
-            || !causticResolveHalf.valid()
-            || !causticResolveGeometry.valid()
-            || !sceneGeometryDomain.valid()
-        ){
+        const Core::GpuGraphResourceId causticAccumulator = importTexture(inputs.targets->causticAccumulator, Name("render.hardware_caustics.accumulator"), "Caustic Accumulator");
+        const Core::GpuGraphResourceId causticHistory = importTexture(inputs.targets->causticHistory, Name("render.hardware_caustics.history"), "Caustic History");
+        const Core::GpuGraphResourceId causticResolveHalf = importTexture(inputs.targets->causticResolveHalf, Name("render.hardware_caustics.resolve_half"), "Caustic Resolve Half");
+        const Core::GpuGraphResourceId causticResolveGeometry = importTexture(inputs.targets->causticResolveGeometry, Name("render.hardware_caustics.resolve_geometry"), "Caustic Resolve Geometry");
+        const Core::GpuGraphResourceId sceneGeometryDomain = m_graph.importHazardDomain(HazardDomainDesc(Name("render.hardware_caustics.scene_geometry"), "Scene Acceleration and Geometry"));
+        if(!causticAccumulator.valid() || !causticHistory.valid() || !causticResolveHalf.valid() || !causticResolveGeometry.valid() || !sceneGeometryDomain.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware-caustics graph resources"));
             return MakeUnexpected(Failure{});
         }
@@ -118,18 +89,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFifthWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveUpsampleResourceUses{ hardwareCausticsScratchArena };
         const bool hardwareTraceAttributeStatesGraphOwned = inputs.hardwareTraceAttributeSet.valid();
-        const Core::GpuTaskResourceSetUse hardwareTraceAttributeSetUse{
-            .resourceSet = inputs.hardwareTraceAttributeSet,
-            .range = {},
-            .requiredState = Core::ResourceStates::ShaderResource,
-            .access = Core::GpuTaskResourceAccess::Read,
-        };
-        const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{
-            .resourceSet = inputs.traceMaterialSampledTextureSet,
-            .range = {},
-            .requiredState = Core::ResourceStates::ShaderResource,
-            .access = Core::GpuTaskResourceAccess::Read,
-        };
+        const Core::GpuTaskResourceSetUse hardwareTraceAttributeSetUse{ .resourceSet = inputs.hardwareTraceAttributeSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+        const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
         Core::GpuTaskResourceSetUse hardwarePhotonResourceSetUses[2u] = {};
         usize hardwarePhotonResourceSetUseCount = 0u;
         if(hardwareTraceAttributeStatesGraphOwned){
@@ -141,9 +102,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
         hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity
             + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u)
-            + inputs.rayTracingResources->csgTraceBoundsBufferCount + (
-            hardwareTraceAttributeStatesGraphOwned ? 0u : inputs.hardwareTraceAttributeResourceCount
-        ));
+            + inputs.rayTracingResources->csgTraceBoundsBufferCount + (hardwareTraceAttributeStatesGraphOwned ? 0u : inputs.hardwareTraceAttributeResourceCount));
         hardwareGeometryResourceUses.reserve(3u);
         hardwareResolvePrepareResourceUses.reserve(3u);
         hardwareResolveWaveletResourceUses.reserve(3u);
@@ -152,234 +111,63 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         hardwareResolveFourthWaveletResourceUses.reserve(3u);
         hardwareResolveFifthWaveletResourceUses.reserve(3u);
         hardwareResolveUpsampleResourceUses.reserve(5u);
-        hardwarePhotonResourceUses.push_back(ReadTextureUse(
-            inputs.worldPosition,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwarePhotonResourceUses.push_back(ReadTextureUse(
-            inputs.depth,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwarePhotonResourceUses.push_back(ReadUse(
-            inputs.currentBindlessSlots,
-            Core::ResourceStates::ConstantBuffer
-        ));
-        hardwarePhotonResourceUses.push_back(ReadUse(
-            inputs.sceneShading,
-            Core::ResourceStates::ConstantBuffer
-        ));
+        hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        hardwarePhotonResourceUses.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.lights, Core::ResourceStates::ShaderResource));
         hardwarePhotonResourceUses.push_back(ReadUse(sceneGeometryDomain));
-        hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(
-            causticAccumulator,
-            ECSRenderDetail::s_CausticAccumulatorSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
+        hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
 
         // Geometry downsample feeds the wavelet cache; compiler owns the UAV-to-SRV handoff.
-        hardwareGeometryResourceUses.push_back(ReadTextureUse(
-            inputs.worldPosition,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareGeometryResourceUses.push_back(ReadTextureUse(
-            inputs.depth,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareGeometryResourceUses.push_back(WriteTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
+        hardwareGeometryResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareGeometryResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareGeometryResourceUses.push_back(WriteTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
 
         // Prepare writes the parity-selected ping-pong target; wavelets own the alternating sequence.
         constexpr bool s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
-        hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
-            causticAccumulator,
-            ECSRenderDetail::s_CausticAccumulatorSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
+        hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
         if(s_HardwareCausticResolvePrepareWritesHalf){
-            hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveWaveletResourceUses.push_back(WriteTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveSecondWaveletResourceUses.push_back(WriteTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveFourthWaveletResourceUses.push_back(WriteTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
+            hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveSecondWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveFourthWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
         }
         else{
-            hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveWaveletResourceUses.push_back(WriteTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveSecondWaveletResourceUses.push_back(WriteTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveFourthWaveletResourceUses.push_back(WriteTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
-            hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
+            hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveSecondWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveFourthWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+            hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+            hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
         }
 
         // Upsample takes the final graph handoff; timing-close carries no resource use.
-        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(
-            inputs.worldPosition,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(
-            inputs.depth,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(
-            causticResolveHalf,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(
-            causticResolveGeometry,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
-        hardwareResolveUpsampleResourceUses.push_back(WriteTextureUse(
-            inputs.currentCausticIrradiance,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
+        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+        hardwareResolveUpsampleResourceUses.push_back(WriteTextureUse(inputs.currentCausticIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
 
-        const auto appendOptionalReadBuffer = [&](
-            const Core::BufferHandle& buffer,
-            const Name& identity,
-            const AStringView label,
-            const Core::ResourceStates::Mask state
-        ){
+        const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
             if(!buffer)
                 return true;
             const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
@@ -389,12 +177,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             return true;
         };
         bool optionalResourcesImported =
-            appendOptionalReadBuffer(
-                (*inputs.meshViewSnapshot).buffer,
-                Name("render.deferred.mesh_view"),
-                "Mesh View",
-                Core::ResourceStates::ConstantBuffer
-            )
+            appendOptionalReadBuffer((*inputs.meshViewSnapshot).buffer, Name("render.deferred.mesh_view"), "Mesh View", Core::ResourceStates::ConstantBuffer)
             && appendOptionalReadBuffer(
                 inputs.rayTracingResources->shadowInstanceMaterialBuffer,
                 Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
@@ -407,24 +190,11 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
                 RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel,
                 Core::ResourceStates::ShaderResource
             )
-            && appendOptionalReadBuffer(
-                inputs.rayTracingResources->shadowInstanceBuffer,
-                Name(RendererFramePipelineDetail::s_SceneShadowInstancesName),
-                RendererFramePipelineDetail::s_SceneShadowInstancesLabel,
-                Core::ResourceStates::ShaderResource
-            )
-            && appendOptionalReadBuffer(
-                inputs.rayTracingResources->causticEmissionTargetBuffer,
-                Name("render.hardware_caustics.emission_targets"),
-                "Caustic Emission Targets",
-                Core::ResourceStates::ShaderResource
-            )
+            && appendOptionalReadBuffer(inputs.rayTracingResources->shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel, Core::ResourceStates::ShaderResource)
+            && appendOptionalReadBuffer(inputs.rayTracingResources->causticEmissionTargetBuffer, Name("render.hardware_caustics.emission_targets"), "Caustic Emission Targets", Core::ResourceStates::ShaderResource)
         ;
         if(inputs.materialContextSlots.valid()){
-            hardwarePhotonResourceUses.push_back(ReadUse(
-                inputs.materialContextSlots,
-                Core::ResourceStates::ConstantBuffer
-            ));
+            hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
         }
         // Declare retained attribute handles here for the Prefix -> Caustics SRV handoff.
         for(usize resourceIndex = 0u; resourceIndex < inputs.hardwareTraceAttributeResourceCount; ++resourceIndex){
@@ -458,10 +228,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         }
 
         const Core::GpuTaskId hardwareDependencies[] = { inputs.graphicsPrefixTask };
-        const Core::GpuExternalCompletionId* const hardwareExternalDependencies = inputs.features->laggedLightingHistoryWriterWaitPending
-            ? &(*inputs.historyWriterDrainCompletion)
-            : nullptr
-        ;
+        const Core::GpuExternalCompletionId* const hardwareExternalDependencies = inputs.features->laggedLightingHistoryWriterWaitPending ? &(*inputs.historyWriterDrainCompletion) : nullptr;
         const usize hardwareExternalDependencyCount = inputs.features->laggedLightingHistoryWriterWaitPending ? 1u : 0u;
         Core::GpuTaskSchedulingHint hardwareScheduling;
         hardwareScheduling.cost = Core::GpuTaskCostHint::Large;
@@ -469,15 +236,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         hardwareScheduling.allowPacketMerge = false;
         EnableSameFamilyComputeEffectRouting(hardwareScheduling);
         EnableCrossFamilyComputeEffectRouting(hardwareScheduling);
-        const Core::GpuTaskExternalStateSource accumulatorStateSources[] = {
-            Core::GpuTaskExternalStateSource{
-                .states = (*inputs.accumulatorPersistentState).source(),
-            },
-        };
-        const usize accumulatorStateSourceCount = (*inputs.accumulatorPersistentState).valid()
-            ? LengthOf(accumulatorStateSources)
-            : 0u
-        ;
+        const Core::GpuTaskExternalStateSource accumulatorStateSources[] = { Core::GpuTaskExternalStateSource{ .states = (*inputs.accumulatorPersistentState).source(), }, };
+        const usize accumulatorStateSourceCount = (*inputs.accumulatorPersistentState).valid() ? LengthOf(accumulatorStateSources) : 0u;
 
         // Lagged-history completion must protect the first writer; fresh accumulator clears between them.
         Core::GpuTaskSchedulingHint irradianceClearScheduling;
@@ -501,10 +261,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         irradianceClear.subresources = ECSRenderDetail::s_FramebufferSubresources;
         irradianceClear.valueType = Core::GpuClearTextureTaskValueType::Float;
         irradianceClear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
-        const Core::GpuTaskId irradianceClearTask = m_graph.addClearTextureTask(
-            irradianceClearDesc,
-            irradianceClear
-        );
+        const Core::GpuTaskId irradianceClearTask = m_graph.addClearTextureTask(irradianceClearDesc, irradianceClear);
         if(!irradianceClearTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics irradiance clear"));
             return MakeUnexpected(Failure{});
@@ -532,10 +289,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             accumulatorNonTemporalClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
             accumulatorNonTemporalClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
             accumulatorNonTemporalClear.uintValue = Core::UIntColor(0u);
-            const Core::GpuTaskId accumulatorNonTemporalClearTask = m_graph.addClearTextureTask(
-                accumulatorNonTemporalClearDesc,
-                accumulatorNonTemporalClear
-            );
+            const Core::GpuTaskId accumulatorNonTemporalClearTask = m_graph.addClearTextureTask(accumulatorNonTemporalClearDesc, accumulatorNonTemporalClear);
             if(!accumulatorNonTemporalClearTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics non-temporal accumulator clear"));
                 return MakeUnexpected(Failure{});
@@ -543,10 +297,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             result.causticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
             causticsDependency = accumulatorNonTemporalClearTask;
         }
-        const bool graphOwnsAccumulatorBootstrapClear =
-            !inputs.rayTracingResources->causticAccumulatorInitialized
-            && inputs.rayTracingResources->causticTemporalDecay > 0.f
-        ;
+        const bool graphOwnsAccumulatorBootstrapClear = !inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
         if(graphOwnsAccumulatorBootstrapClear){
             Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
             accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -569,10 +320,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             accumulatorBootstrapClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
             accumulatorBootstrapClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
             accumulatorBootstrapClear.uintValue = Core::UIntColor(0u);
-            const Core::GpuTaskId accumulatorBootstrapClearTask = m_graph.addClearTextureTask(
-                accumulatorBootstrapClearDesc,
-                accumulatorBootstrapClear
-            );
+            const Core::GpuTaskId accumulatorBootstrapClearTask = m_graph.addClearTextureTask(accumulatorBootstrapClearDesc, accumulatorBootstrapClear);
             if(!accumulatorBootstrapClearTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator bootstrap clear"));
                 return MakeUnexpected(Failure{});
@@ -581,10 +329,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             causticsDependency = accumulatorBootstrapClearTask;
         }
 
-        const bool graphOwnsAccumulatorDecay =
-            inputs.rayTracingResources->causticAccumulatorInitialized
-            && inputs.rayTracingResources->causticTemporalDecay > 0.f
-        ;
+        const bool graphOwnsAccumulatorDecay = inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
         if(graphOwnsAccumulatorDecay){
             Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
             accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -594,13 +339,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;
             EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
             EnableCrossFamilyComputeEffectRouting(accumulatorDecayScheduling);
-            const Core::GpuTaskResourceUse accumulatorDecayUses[] = {
-                ReadWriteTextureUse(
-                    causticAccumulator,
-                    ECSRenderDetail::s_CausticAccumulatorSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ),
-            };
+            const Core::GpuTaskResourceUse accumulatorDecayUses[] = { ReadWriteTextureUse(causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess), };
             Core::GpuTaskDesc accumulatorDecayDesc;
             accumulatorDecayDesc
                 .setIdentity(Name("render.hardware_caustics.accumulator_decay"))
@@ -642,10 +381,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             .setScheduling(hardwareCausticsScheduling)
             .setDependencies(&causticsDependency, 1u)
             .setResourceUses(hardwarePhotonResourceUses.data(), hardwarePhotonResourceUses.size())
-            .setResourceSetUses(
-                hardwarePhotonResourceSetUseCount != 0u ? hardwarePhotonResourceSetUses : nullptr,
-                hardwarePhotonResourceSetUseCount
-            )
+            .setResourceSetUses(hardwarePhotonResourceSetUseCount != 0u ? hardwarePhotonResourceSetUses : nullptr, hardwarePhotonResourceSetUseCount)
         ;
         result.causticPhotonTask = m_raytracingSystem.declareHardwareCausticsTask(
             m_graph,
@@ -675,14 +411,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             .setDependencies(&result.causticPhotonTask, 1u)
             .setResourceUses(hardwareGeometryResourceUses.data(), hardwareGeometryResourceUses.size())
         ;
-        result.causticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(
-            m_graph,
-            hardwareGeometryDesc,
-            (*inputs.targets),
-            (*inputs.timingTicket),
-            *inputs.producerDispatched,
-            *inputs.resolveTiming
-        );
+        result.causticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_graph, hardwareGeometryDesc, (*inputs.targets), (*inputs.timingTicket), *inputs.producerDispatched, *inputs.resolveTiming);
         if(!result.causticGeometryTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));
             return MakeUnexpected(Failure{});

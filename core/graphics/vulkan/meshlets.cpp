@@ -38,11 +38,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create meshlet pipelines."));
         return nullptr;
     }
-    if(
-        !m_context.extensions.extMeshShader
-        || m_context.meshShaderFeatures.meshShader != VK_TRUE
-        || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
-    ){
+    if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader feature and entry point are required for meshlet pipelines."));
         return nullptr;
     }
@@ -51,9 +47,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
     if(desc.renderState.rasterState.depthBiasClamp != 0.0f){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Meshlet pipeline depthBiasClamp requires an unsupported logical-device feature.")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline depthBiasClamp requires an unsupported logical-device feature."));
         return nullptr;
     }
     if(desc.renderState.singlePassStereo.enabled){
@@ -94,29 +88,17 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
-    if(
-        desc.amplificationShader
-        && (
-            desc.amplificationShader->m_shaderModule == VK_NULL_HANDLE
-            || desc.amplificationShader->m_desc.shaderType != ShaderType::Amplification
-        )
-    ){
+    if(desc.amplificationShader && (desc.amplificationShader->m_shaderModule == VK_NULL_HANDLE || desc.amplificationShader->m_desc.shaderType != ShaderType::Amplification)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline task shader has the wrong shader stage."));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
-    if(
-        desc.meshShader
-        && (desc.meshShader->m_shaderModule == VK_NULL_HANDLE || desc.meshShader->m_desc.shaderType != ShaderType::Mesh)
-    ){
+    if(desc.meshShader && (desc.meshShader->m_shaderModule == VK_NULL_HANDLE || desc.meshShader->m_desc.shaderType != ShaderType::Mesh)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline mesh shader has the wrong shader stage."));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
-    if(
-        desc.pixelShader
-        && (desc.pixelShader->m_shaderModule == VK_NULL_HANDLE || desc.pixelShader->m_desc.shaderType != ShaderType::Pixel)
-    ){
+    if(desc.pixelShader && (desc.pixelShader->m_shaderModule == VK_NULL_HANDLE || desc.pixelShader->m_desc.shaderType != ShaderType::Pixel)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline fragment shader has the wrong shader stage."));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
@@ -136,26 +118,12 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(desc.pixelShader)
         appendPipelineShaderStage(*desc.pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
-    if(!configurePipelineBindingsOrDestroy(
-        desc.bindingLayouts,
-        NWB_TEXT("meshlet pipeline"),
-        *pso,
-        scratchArena
-    ))
+    if(!configurePipelineBindingsOrDestroy(desc.bindingLayouts, NWB_TEXT("meshlet pipeline"), *pso, scratchArena))
         return nullptr;
 
-    auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(
-        desc.renderState.rasterState,
-        VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode),
-        desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE
-    );
+    auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
 
-    const VkDynamicState dynamicStates[] = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR,
-        VK_DYNAMIC_STATE_BLEND_CONSTANTS,
-        VK_DYNAMIC_STATE_STENCIL_REFERENCE,
-    };
+    const VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_BLEND_CONSTANTS, VK_DYNAMIC_STATE_STENCIL_REFERENCE, };
     const auto fixedState = buildGraphicsPipelineFixedStateOrDestroy(
         fbinfo,
         desc.renderState,
@@ -217,24 +185,12 @@ void CommandList::setMeshletState(const MeshletState& state){
         m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
         retainResource(pipeline);
 
-        const f32 blendConstants[] = {
-            state.blendConstantColor.r,
-            state.blendConstantColor.g,
-            state.blendConstantColor.b,
-            state.blendConstantColor.a,
-        };
+        const f32 blendConstants[] = { state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a, };
         m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants);
 
         const DepthStencilState& depthStencilState = pipeline->m_desc.renderState.depthStencilState;
-        const u8 stencilReference = depthStencilState.dynamicStencilRef
-            ? state.dynamicStencilRefValue
-            : depthStencilState.stencilRefValue
-        ;
-        m_context.deviceDispatch.vkCmdSetStencilReference(
-            m_currentCmdBuf->m_cmdBuf,
-            VK_STENCIL_FACE_FRONT_AND_BACK,
-            stencilReference
-        );
+        const u8 stencilReference = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
+        m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, stencilReference);
     }
 
     setViewportState(state.viewport);
@@ -248,49 +204,21 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         return;
 
     MeshletPipeline* const pipeline = m_currentMeshletState.pipeline;
-    if(
-        !m_renderPassActive
-        || !m_renderPassFramebuffer
-        || !pipeline
-        || pipeline->m_pipeline == VK_NULL_HANDLE
-        || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo
-    ){
-        rejectCommandRecording(
-            VulkanArenaScope::s_DispatchMeshCommandLabel,
-            NWB_TEXT("no compatible meshlet pipeline and render pass are active")
-        );
+    if(!m_renderPassActive || !m_renderPassFramebuffer || !pipeline || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
+        rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, NWB_TEXT("no compatible meshlet pipeline and render pass are active"));
         return;
     }
-    if(
-        m_currentMeshletState.viewport.viewports.size() != 1u
-        || m_currentMeshletState.viewport.scissorRects.size() > 1u
-    ){
-        rejectCommandRecording(
-            VulkanArenaScope::s_DispatchMeshCommandLabel,
-            NWB_TEXT("mesh dispatch requires one viewport and at most one explicit scissor")
-        );
+    if(m_currentMeshletState.viewport.viewports.size() != 1u || m_currentMeshletState.viewport.scissorRects.size() > 1u){
+        rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, NWB_TEXT("mesh dispatch requires one viewport and at most one explicit scissor"));
         return;
     }
-    if(
-        !m_context.extensions.extMeshShader
-        || m_context.meshShaderFeatures.meshShader != VK_TRUE
-        || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
-    ){
+    if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
         rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, NWB_TEXT("mesh shader feature or entry point is unavailable"));
         return;
     }
 
-    const VulkanDetail::MeshDispatchLimits dispatchLimits = VulkanDetail::GetMeshDispatchLimits(
-        m_context.meshShaderProperties,
-        pipeline->m_desc.amplificationShader != nullptr
-    );
-    if(!VulkanDetail::AreMeshDispatchGroupCountsValid(
-        groupsX,
-        groupsY,
-        groupsZ,
-        dispatchLimits.maximumGroupCounts,
-        dispatchLimits.maximumTotalGroupCount
-    )){
+    const VulkanDetail::MeshDispatchLimits dispatchLimits = VulkanDetail::GetMeshDispatchLimits(m_context.meshShaderProperties, pipeline->m_desc.amplificationShader != nullptr);
+    if(!VulkanDetail::AreMeshDispatchGroupCountsValid(groupsX, groupsY, groupsZ, dispatchLimits.maximumGroupCounts, dispatchLimits.maximumTotalGroupCount)){
         rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, NWB_TEXT("mesh dispatch group counts exceed device limits"));
         return;
     }

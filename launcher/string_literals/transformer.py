@@ -161,16 +161,8 @@ def _record(api: LlvmApi, context: int, module: int, target_data: int, candidate
     record_type = api.LLVMStructTypeInContext(context, fields, len(fields), 1)
     if api.LLVMABISizeOfType(target_data, record_type) != stride:
         raise RuntimeError("Packed LLVM record layout differs from its declared stride")
-    values = (REF * 8)(
-        api.LLVMConstInt(i32, RECORD_MAGIC, 0),
-        api.LLVMConstInt(i32, len(raw), 0),
-        api.LLVMConstInt(i32, payload_offset, 0),
-        api.LLVMConstInt(i32, stride, 0),
-        api.LLVMConstInt(i64, seed, 0),
-        api.LLVMConstNull(prefix_type),
-        api.LLVMConstDataArray(candidate["element_type"], host_encoded, len(host_encoded)),
-        api.LLVMConstNull(tail_type),
-    )
+    values = (REF * 8)(api.LLVMConstInt(i32, RECORD_MAGIC, 0), api.LLVMConstInt(i32, len(raw), 0), api.LLVMConstInt(i32, payload_offset, 0), api.LLVMConstInt(i32, stride, 0), api.LLVMConstInt(i64, seed, 0), api.LLVMConstNull(prefix_type),
+        api.LLVMConstDataArray(candidate["element_type"], host_encoded, len(host_encoded)), api.LLVMConstNull(tail_type),)
     record = api.LLVMAddGlobal(module, record_type, name.encode("ascii"))
     api.LLVMSetInitializer(record, api.LLVMConstStructInContext(context, values, len(values), 1))
     api.LLVMSetGlobalConstant(record, 0)
@@ -247,19 +239,8 @@ def transform_bitcode(input_path: Path, output_path: Path, llvm_library: Path, e
             raise OSError(f"LLVM cannot write transformed bitcode {output_path}")
         os.replace(temporary_path, output_path)
         temporary_path = None
-        return {
-            "llvm_version": api.version,
-            "target": triple,
-            "format": image_format,
-            "section": section.decode("ascii"),
-            "byte_order": target_order,
-            "transformed_globals": transformed,
-            "pooled_records": len(records),
-            "raw_literal_bytes": raw_bytes,
-            "record_bytes": sum(record["record_stride"] for record in records),
-            "skipped_globals": dict(sorted(skipped.items())),
-            "records": records,
-        }
+        return { "llvm_version": api.version, "target": triple, "format": image_format, "section": section.decode("ascii"), "byte_order": target_order, "transformed_globals": transformed, "pooled_records": len(records), "raw_literal_bytes": raw_bytes,
+            "record_bytes": sum(record["record_stride"] for record in records), "skipped_globals": dict(sorted(skipped.items())), "records": records, }
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)

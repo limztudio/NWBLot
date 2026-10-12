@@ -28,35 +28,12 @@ namespace __hidden_assets_skeleton_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<SkeletonCookEntry> ParseSkeletonDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseSkeletonCookMetadata(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        doc,
-        context.cookArena,
-        context.scratchArena
-    );
+static Expected<SkeletonCookEntry> ParseSkeletonDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+    return ParseSkeletonCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static Expected<SkeletonCookEntry> ParseSkeletonValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseSkeletonCookMetadata(
-        virtualPath,
-        nwbFilePath,
-        asset,
-        context.cookArena
-    );
+static Expected<SkeletonCookEntry> ParseSkeletonValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena);
 }
 
 static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){

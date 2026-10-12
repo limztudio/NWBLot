@@ -36,10 +36,7 @@ namespace __hidden_ui_scrollbar{
     )
         return false;
     if(!bar.visible){
-        return
-            bar.track.x == 0.0f && bar.track.y == 0.0f && bar.track.width == 0.0f && bar.track.height == 0.0f
-            && bar.thumb.x == 0.0f && bar.thumb.y == 0.0f && bar.thumb.width == 0.0f && bar.thumb.height == 0.0f
-        ;
+        return bar.track.x == 0.0f && bar.track.y == 0.0f && bar.track.width == 0.0f && bar.track.height == 0.0f && bar.thumb.x == 0.0f && bar.thumb.y == 0.0f && bar.thumb.width == 0.0f && bar.thumb.height == 0.0f;
     }
     if(bar.maximum <= 0.0 || bar.track.width <= 0.0f || bar.track.height <= 0.0f)
         return false;
@@ -79,14 +76,7 @@ namespace __hidden_ui_scrollbar{
     return ValidBar(bar, axis);
 }
 
-[[nodiscard]] static Expected<ScrollbarPlacement> BuildBar(
-    const f64 contentExtent,
-    const f64 viewportExtent,
-    const Rect& track,
-    const f32 minThumb,
-    const f64 offset,
-    const ScrollAxis::Enum axis
-)noexcept{
+[[nodiscard]] static Expected<ScrollbarPlacement> BuildBar(const f64 contentExtent, const f64 viewportExtent, const Rect& track, const f32 minThumb, const f64 offset, const ScrollAxis::Enum axis)noexcept{
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
@@ -122,16 +112,7 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(
-    const Rect& bounds,
-    const Rect& clip,
-    const Insets& padding,
-    const Point& contentMeasure,
-    const f32 caretWidth,
-    const Point& previousScroll,
-    const f32 thickness,
-    const f32 minThumb
-)noexcept{
+Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds, const Rect& clip, const Insets& padding, const Point& contentMeasure, const f32 caretWidth, const Point& previousScroll, const f32 thickness, const f32 minThumb)noexcept{
     using namespace __hidden_ui_scrollbar;
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)
@@ -207,9 +188,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(
         verticalTrack = *track;
     }
     if(barWidth > 0.0 && barHeight > 0.0){
-        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(
-            static_cast<f64>(padded->x) + viewportWidth, static_cast<f64>(padded->y) + viewportHeight, barWidth, barHeight
-        );
+        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(static_cast<f64>(padded->x) + viewportWidth, static_cast<f64>(padded->y) + viewportHeight, barWidth, barHeight);
         if(!corner)
             return MakeUnexpected(Failure{});
         candidate.corner = *corner;

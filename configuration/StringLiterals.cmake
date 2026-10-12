@@ -19,28 +19,18 @@ function(nwb_configure_string_literals)
     find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
     set(Python3_EXECUTABLE "${Python3_EXECUTABLE}" PARENT_SCOPE)
     set(_nwb_literal_directory "${PROJECT_SOURCE_DIR}/launcher/string_literals")
-    set(_nwb_probe_arguments
-        --compiler "${CMAKE_CXX_COMPILER}"
-        --c-compiler "${CMAKE_C_COMPILER}"
-    )
+    set(_nwb_probe_arguments --compiler "${CMAKE_CXX_COMPILER}" --c-compiler "${CMAKE_C_COMPILER}")
     if(NWB_LLVM_C_LIBRARY)
         list(APPEND _nwb_probe_arguments --library "${NWB_LLVM_C_LIBRARY}")
     endif()
-    execute_process(
-        COMMAND "${Python3_EXECUTABLE}" "${_nwb_literal_directory}/configure.py" ${_nwb_probe_arguments}
-        RESULT_VARIABLE _nwb_probe_result
-        OUTPUT_VARIABLE _nwb_probe_json
-        ERROR_VARIABLE _nwb_probe_error
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
+    execute_process(COMMAND "${Python3_EXECUTABLE}" "${_nwb_literal_directory}/configure.py" ${_nwb_probe_arguments} RESULT_VARIABLE _nwb_probe_result OUTPUT_VARIABLE _nwb_probe_json ERROR_VARIABLE _nwb_probe_error OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(NOT _nwb_probe_result EQUAL 0)
         message(FATAL_ERROR "${_nwb_probe_error}")
     endif()
     string(JSON _nwb_literal_library GET "${_nwb_probe_json}" library)
     string(JSON _nwb_literal_version GET "${_nwb_probe_json}" version)
     set(NWB_STRING_LITERAL_LLVM_VERSION "${_nwb_literal_version}" PARENT_SCOPE)
-    set(NWB_LLVM_C_LIBRARY "${_nwb_literal_library}" CACHE FILEPATH
-        "Matching compiler-host LLVM C API shared library for string obfuscation." FORCE)
+    set(NWB_LLVM_C_LIBRARY "${_nwb_literal_library}" CACHE FILEPATH "Matching compiler-host LLVM C API shared library for string obfuscation." FORCE)
 
     # Include the policy contents in compile commands so editing any stage invalidates existing objects.
     file(GLOB _nwb_literal_scripts CONFIGURE_DEPENDS "${_nwb_literal_directory}/*.py")
@@ -52,12 +42,7 @@ function(nwb_configure_string_literals)
         string(APPEND _nwb_policy_hashes "${_nwb_literal_hash}")
     endforeach()
     string(SHA256 _nwb_policy_hash "${_nwb_policy_hashes}")
-    set(_nwb_literal_launcher
-        "${Python3_EXECUTABLE}" "${_nwb_literal_directory}/compiler.py"
-        --llvm-library "${_nwb_literal_library}"
-        --llvm-version "${_nwb_literal_version}"
-        --policy-hash "${_nwb_policy_hash}" --
-    )
+    set(_nwb_literal_launcher "${Python3_EXECUTABLE}" "${_nwb_literal_directory}/compiler.py" --llvm-library "${_nwb_literal_library}" --llvm-version "${_nwb_literal_version}" --policy-hash "${_nwb_policy_hash}" --)
     if(CMAKE_C_COMPILER_LAUNCHER OR CMAKE_CXX_COMPILER_LAUNCHER)
         message(FATAL_ERROR "String obfuscation owns the compiler launcher. Remove the competing C/C++ compiler launcher.")
     endif()
@@ -79,10 +64,7 @@ function(nwb_attach_string_literal_runtime directory)
             endforeach()
             target_sources("${_nwb_literal_target}" PRIVATE $<TARGET_OBJECTS:nwb_string_literal_runtime>)
             # Mach-O constructors follow link-input order. Put the one decoder before all consumer objects.
-            set(_nwb_literal_link_launcher
-                "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/launcher/string_literals/linker.py"
-                --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime> --
-            )
+            set(_nwb_literal_link_launcher "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/launcher/string_literals/linker.py" --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime> --)
             set_property(TARGET "${_nwb_literal_target}" PROPERTY C_LINKER_LAUNCHER "${_nwb_literal_link_launcher}")
             set_property(TARGET "${_nwb_literal_target}" PROPERTY CXX_LINKER_LAUNCHER "${_nwb_literal_link_launcher}")
         endif()

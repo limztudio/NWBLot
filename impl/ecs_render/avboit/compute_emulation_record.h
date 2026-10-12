@@ -67,11 +67,7 @@ struct AvboitComputeEmulationRecordInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(
-    const AvboitComputeEmulationRecordInputs& inputs,
-    Core::CommandList& commandList,
-    const AvboitComputeEmulationRecordTrait& trait
-);
+[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,20 +109,10 @@ struct AvboitSharedComputeEmulationRecordTrait{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(
-    const AvboitSharedComputeEmulationRecordInputs& inputs,
-    Core::CommandList& commandList,
-    const AvboitSharedComputeEmulationRecordTrait& trait
-);
+[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
 
 template<typename PayloadT>
-[[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(
-    const PayloadT& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context,
-    Optional<Core::GpuTimingMeasure>* timing,
-    const AvboitComputeEmulationRecordTrait& trait
-){
+[[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, Optional<Core::GpuTimingMeasure>* timing, const AvboitComputeEmulationRecordTrait& trait){
     static_cast<void>(context);
     const AvboitComputeEmulationRecordInputs inputs{
         &payload.graphics,
@@ -162,10 +148,7 @@ template<typename PayloadT, typename DispatchFn>
     DispatchFn&& dispatch
 ){
     static_cast<void>(context);
-    if(
-        ((payload.*emuOutputStatesMember || payload.*csgEmuOutputStatesMember)
-            && !payload.generatedGeometryReused && !timing)
-    )
+    if(((payload.*emuOutputStatesMember || payload.*csgEmuOutputStatesMember) && !payload.generatedGeometryReused && !timing))
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -182,13 +165,7 @@ template<typename PayloadT, typename DispatchFn>
         preparedMaterialTypedByteCount = (payload.*snapshotMember).materialTypedByteCount;
     }
     if(payload.hasTransparentRenderers){
-        dispatch(
-            commandList,
-            drawItems,
-            csgFrameData,
-            preparedInstanceCount,
-            preparedMaterialTypedByteCount
-        );
+        dispatch(commandList, drawItems, csgFrameData, preparedInstanceCount, preparedMaterialTypedByteCount);
     }
     return true;
 }
@@ -219,9 +196,7 @@ template<typename PayloadT>
         payload.materialGeometryStatesGraphOwned,
         payload.beginTiming,
         payload.finishTiming,
-        isRasterPhase
-            ? AvboitSharedComputeEmulationPhase::Raster
-            : AvboitSharedComputeEmulationPhase::Generate,
+        isRasterPhase ? AvboitSharedComputeEmulationPhase::Raster : AvboitSharedComputeEmulationPhase::Generate,
     };
     return RecordAvboitSharedComputeEmulation(inputs, commandList, trait);
 }

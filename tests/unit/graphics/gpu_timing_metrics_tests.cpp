@@ -39,63 +39,18 @@ TEST(GpuPacketEnvelopeMetrics, UnionsSameQueueRangesAndOrdersEveryQueue){
     Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/union"));
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     const Array<Core::GpuComparableTimestampRange, 8u> ranges{{
-        {
-            .beginTicks = 40u,
-            .endTicks = 50u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
-        },
-        {
-            .beginTicks = 100u,
-            .endTicks = 100u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = 1u, .deviceGeneration = 7u },
-        },
-        {
-            .beginTicks = 8u,
-            .endTicks = 20u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
-        },
-        {
-            .beginTicks = 5u,
-            .endTicks = 15u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = 0u, .deviceGeneration = 7u },
-        },
-        {
-            .beginTicks = 0u,
-            .endTicks = 10u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
-        },
-        {
-            .beginTicks = 20u,
-            .endTicks = 30u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
-        },
-        {
-            .beginTicks = 42u,
-            .endTicks = 45u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
-        },
-        {
-            .beginTicks = 0u,
-            .endTicks = 10u,
-            .secondsPerTick = 0.25,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
-        },
+        { .beginTicks = 40u, .endTicks = 50u, .secondsPerTick = 0.25, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u }, },
+        { .beginTicks = 100u, .endTicks = 100u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, },
+        { .beginTicks = 8u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u }, },
+        { .beginTicks = 5u, .endTicks = 15u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, },
+        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 0.25, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u }, },
+        { .beginTicks = 20u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u }, },
+        { .beginTicks = 42u, .endTicks = 45u, .secondsPerTick = 0.25, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u }, },
+        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 0.25, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u }, },
     }};
     Expected<Core::GpuPacketEnvelopeMetrics> metrics = MakeUnexpected(Failure{});
 
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(
-        ranges.data(),
-        ranges.size(),
-        queueMetrics,
-        scratchArena
-    )));
+    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(ranges.data(), ranges.size(), queueMetrics, scratchArena)));
     EXPECT_DOUBLE_EQ(metrics->secondsPerTick, 0.25);
     EXPECT_EQ(metrics->queueOverlapTicks, 10u);
     ASSERT_EQ(queueMetrics.size(), 3u);
@@ -111,33 +66,13 @@ TEST(GpuPacketEnvelopeMetrics, CountsConcurrentQueueUnionOnceAtTripleOverlap){
     Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/triple"));
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     const Array<Core::GpuComparableTimestampRange, 3u> ranges{{
-        {
-            .beginTicks = 0u,
-            .endTicks = 100u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 0u, .deviceGeneration = s_ExpectedDualCount },
-        },
-        {
-            .beginTicks = 10u,
-            .endTicks = 90u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 1u, .deviceGeneration = s_ExpectedDualCount },
-        },
-        {
-            .beginTicks = 20u,
-            .endTicks = 80u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = s_ExpectedDualCount },
-        },
+        { .beginTicks = 0u, .endTicks = 100u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = s_ExpectedDualCount }, },
+        { .beginTicks = 10u, .endTicks = 90u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = s_ExpectedDualCount }, },
+        { .beginTicks = 20u, .endTicks = 80u, .secondsPerTick = 1.0, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = s_ExpectedDualCount }, },
     }};
     Expected<Core::GpuPacketEnvelopeMetrics> metrics = MakeUnexpected(Failure{});
 
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(
-        ranges.data(),
-        ranges.size(),
-        queueMetrics,
-        scratchArena
-    )));
+    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(ranges.data(), ranges.size(), queueMetrics, scratchArena)));
     EXPECT_EQ(metrics->queueOverlapTicks, 80u);
     ASSERT_EQ(queueMetrics.size(), 3u);
     EXPECT_EQ(queueMetrics[0u].internalIdleTicks, 0u);
@@ -150,57 +85,22 @@ TEST(GpuPacketEnvelopeMetrics, PreservesLargeAndNearLimitTickPrecision){
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     static constexpr u64 s_LargeTick = 9007199254740993u;
     const Array<Core::GpuComparableTimestampRange, 3u> largeRanges{{
-        {
-            .beginTicks = s_LargeTick,
-            .endTicks = s_LargeTick + 20u,
-            .secondsPerTick = 0.5,
-            .physicalQueue = { .index = 5u, .deviceGeneration = 9u },
-        },
-        {
-            .beginTicks = s_LargeTick + 30u,
-            .endTicks = s_LargeTick + 40u,
-            .secondsPerTick = 0.5,
-            .physicalQueue = { .index = 5u, .deviceGeneration = 9u },
-        },
-        {
-            .beginTicks = s_LargeTick + 5u,
-            .endTicks = s_LargeTick + 35u,
-            .secondsPerTick = 0.5,
-            .physicalQueue = { .index = 6u, .deviceGeneration = 9u },
-        },
+        { .beginTicks = s_LargeTick, .endTicks = s_LargeTick + 20u, .secondsPerTick = 0.5, .physicalQueue = { .index = 5u, .deviceGeneration = 9u }, },
+        { .beginTicks = s_LargeTick + 30u, .endTicks = s_LargeTick + 40u, .secondsPerTick = 0.5, .physicalQueue = { .index = 5u, .deviceGeneration = 9u }, },
+        { .beginTicks = s_LargeTick + 5u, .endTicks = s_LargeTick + 35u, .secondsPerTick = 0.5, .physicalQueue = { .index = 6u, .deviceGeneration = 9u }, },
     }};
     Expected<Core::GpuPacketEnvelopeMetrics> metrics = MakeUnexpected(Failure{});
 
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(
-        largeRanges.data(),
-        largeRanges.size(),
-        queueMetrics,
-        scratchArena
-    )));
+    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(largeRanges.data(), largeRanges.size(), queueMetrics, scratchArena)));
     EXPECT_EQ(metrics->queueOverlapTicks, 20u);
     ASSERT_EQ(queueMetrics.size(), s_ExpectedDualCount);
     EXPECT_EQ(queueMetrics[0u].internalIdleTicks, 10u);
 
     const Array<Core::GpuComparableTimestampRange, s_ExpectedDualCount> nearLimitRanges{{
-        {
-            .beginTicks = Limit<u64>::s_Max - 20u,
-            .endTicks = Limit<u64>::s_Max - 10u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 1u, .deviceGeneration = 4u },
-        },
-        {
-            .beginTicks = Limit<u64>::s_Max - 15u,
-            .endTicks = Limit<u64>::s_Max - 5u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 4u },
-        },
+        { .beginTicks = Limit<u64>::s_Max - 20u, .endTicks = Limit<u64>::s_Max - 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 4u }, },
+        { .beginTicks = Limit<u64>::s_Max - 15u, .endTicks = Limit<u64>::s_Max - 5u, .secondsPerTick = 1.0, .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 4u }, },
     }};
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(
-        nearLimitRanges.data(),
-        nearLimitRanges.size(),
-        queueMetrics,
-        scratchArena
-    )));
+    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(nearLimitRanges.data(), nearLimitRanges.size(), queueMetrics, scratchArena)));
     EXPECT_EQ(metrics->queueOverlapTicks, 5u);
 }
 
@@ -208,50 +108,20 @@ TEST(GpuPacketEnvelopeMetrics, AcceptsCompleteZeroOverlapInputs){
     Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/zero"));
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     const Array<Core::GpuComparableTimestampRange, s_ExpectedDualCount> touchingRanges{{
-        {
-            .beginTicks = 0u,
-            .endTicks = 10u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 0u, .deviceGeneration = 6u },
-        },
-        {
-            .beginTicks = 10u,
-            .endTicks = 20u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 1u, .deviceGeneration = 6u },
-        },
+        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 6u }, },
+        { .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 6u }, },
     }};
     Expected<Core::GpuPacketEnvelopeMetrics> metrics = MakeUnexpected(Failure{});
 
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(
-        touchingRanges.data(),
-        touchingRanges.size(),
-        queueMetrics,
-        scratchArena
-    )));
+    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(touchingRanges.data(), touchingRanges.size(), queueMetrics, scratchArena)));
     EXPECT_EQ(metrics->queueOverlapTicks, 0u);
     ASSERT_EQ(queueMetrics.size(), s_ExpectedDualCount);
 
     const Array<Core::GpuComparableTimestampRange, s_ExpectedDualCount> zeroLengthRanges{{
-        {
-            .beginTicks = 25u,
-            .endTicks = 25u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 3u, .deviceGeneration = 6u },
-        },
-        {
-            .beginTicks = 75u,
-            .endTicks = 75u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 1u, .deviceGeneration = 6u },
-        },
+        { .beginTicks = 25u, .endTicks = 25u, .secondsPerTick = 1.0, .physicalQueue = { .index = 3u, .deviceGeneration = 6u }, },
+        { .beginTicks = 75u, .endTicks = 75u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 6u }, },
     }};
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(
-        zeroLengthRanges.data(),
-        zeroLengthRanges.size(),
-        queueMetrics,
-        scratchArena
-    )));
+    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(zeroLengthRanges.data(), zeroLengthRanges.size(), queueMetrics, scratchArena)));
     EXPECT_EQ(metrics->queueOverlapTicks, 0u);
     ASSERT_EQ(queueMetrics.size(), s_ExpectedDualCount);
     EXPECT_EQ(queueMetrics[0u].physicalQueue.index, 1u);
@@ -265,30 +135,12 @@ TEST(GpuPacketEnvelopeMetrics, RejectsInvalidOrIncomparableInputAndClearsOutputs
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     Expected<Core::GpuPacketEnvelopeMetrics> metrics = MakeUnexpected(Failure{});
     const Array<Core::GpuComparableTimestampRange, s_ExpectedDualCount> validRanges{{
-        {
-            .beginTicks = 0u,
-            .endTicks = 10u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 0u, .deviceGeneration = 3u },
-        },
-        {
-            .beginTicks = 5u,
-            .endTicks = 15u,
-            .secondsPerTick = 1.0,
-            .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
-        },
+        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, },
+        { .beginTicks = 5u, .endTicks = 15u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, },
     }};
     const auto expectRejected = [&](const Core::GpuComparableTimestampRange* const ranges, const usize rangeCount){
-        queueMetrics.push_back(Core::GpuQueuePacketEnvelopeMetrics{
-            .physicalQueue = { .index = 4u, .deviceGeneration = 8u },
-            .internalIdleTicks = 13u,
-        });
-        EXPECT_FALSE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(
-            ranges,
-            rangeCount,
-                queueMetrics,
-            scratchArena
-        )));
+        queueMetrics.push_back(Core::GpuQueuePacketEnvelopeMetrics{ .physicalQueue = { .index = 4u, .deviceGeneration = 8u }, .internalIdleTicks = 13u, });
+        EXPECT_FALSE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(ranges, rangeCount, queueMetrics, scratchArena)));
         EXPECT_TRUE(queueMetrics.empty());
     };
 
@@ -324,8 +176,7 @@ TEST(GpuPacketEnvelopeMetrics, RejectsInvalidOrIncomparableInputAndClearsOutputs
     invalidRanges[1u].physicalQueue.deviceGeneration = 4u;
     expectRejected(invalidRanges.data(), invalidRanges.size());
 
-    const Core::GpuComparableTimestampRange* const inaccessibleRanges =
-        reinterpret_cast<const Core::GpuComparableTimestampRange*>(usize{ 1u });
+    const Core::GpuComparableTimestampRange* const inaccessibleRanges = reinterpret_cast<const Core::GpuComparableTimestampRange*>(usize{ 1u });
     expectRejected(inaccessibleRanges, Limit<usize>::s_Max);
 }
 

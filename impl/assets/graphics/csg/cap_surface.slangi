@@ -24,8 +24,7 @@ struct NwbCsgCapFillPushConstants{
     uint4 frameHeapSlots;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbCsgCapFillPushConstants> g_NwbCsgCapFillPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbCsgCapFillPushConstants> g_NwbCsgCapFillPushConstants;
 
 #define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgCapFillPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX])
 #define NWB_CSG_MESH_INSTANCE_INDEX 0u

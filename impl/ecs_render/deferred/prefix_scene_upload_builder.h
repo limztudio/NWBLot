@@ -64,18 +64,11 @@ struct PrefixSceneUploadResult{
 
 class PrefixSceneUploadBuilder final : NoCopy{
 public:
-    PrefixSceneUploadBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererDeferredSystem& deferredSystem,
-        RendererMeshSystem& meshSystem,
-        Core::GraphicsRuntime& graphics
-    );
+    PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem, RendererMeshSystem& meshSystem, Core::GraphicsRuntime& graphics);
 
 
 public:
-    [[nodiscard]] Expected<PrefixSceneUploadResult> declare(
-        const PrefixSceneUploadInputs& inputs
-    );
+    [[nodiscard]] Expected<PrefixSceneUploadResult> declare(const PrefixSceneUploadInputs& inputs);
 
 
 private:

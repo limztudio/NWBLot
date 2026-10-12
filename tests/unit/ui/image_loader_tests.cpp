@@ -39,9 +39,7 @@ using namespace NWB::Impl::Ui;
     header.height = 1u;
     header.depth = 1u;
     header.mipCount = 2u;
-    header.alphaInfo = static_cast<u32>(TextureAlphaMode::EmbeddedLdr)
-        | (255u << TextureBinaryPayload::s_AlphaInfoConstantShift)
-    ;
+    header.alphaInfo = static_cast<u32>(TextureAlphaMode::EmbeddedLdr) | (255u << TextureBinaryPayload::s_AlphaInfoConstantShift);
     header.payloadFormat = static_cast<u32>(TexturePayloadFormat::UastcLdr4x4);
     header.payloadByteCount = 32u;
 
@@ -110,11 +108,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(
-        AssetArena& arena,
-        const Name& virtualPath,
-        const AssetBytes& binary
-    )const override{
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const override{
         if(m_wrongType){
             return UniquePtr<IAsset>(MakeUnique<UiSkin>(arena, virtualPath));
         }

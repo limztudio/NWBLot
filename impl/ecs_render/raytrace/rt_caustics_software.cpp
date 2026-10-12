@@ -19,11 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const u32 passIndex
-){
+void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandList& commandList, DeferredFrameTargets& targets, const u32 passIndex){
     NWB_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
@@ -41,24 +37,11 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
     const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
     const bool inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
-    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{
-        targets.causticHistory.get(),
-        targets.bindless.causticHistory.slot(),
-        targets.bindless.causticHistoryStorage.slot()
-    };
-    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{
-        targets.causticResolveHalf.get(),
-        targets.bindless.causticResolveHalf.slot(),
-        targets.bindless.causticResolveHalfStorage.slot()
-    };
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{ targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
     const u32 stepWidth = 1u << passIndex;
     const CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
-    const CausticResolveStageState& wavelet = stepWidth == 1u
-        ? resolve.m_waveletStepOne
-        : stepWidth == 2u
-            ? resolve.m_waveletStepTwo
-            : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect : resolve.m_wavelet
-    ;
+    const CausticResolveStageState& wavelet = stepWidth == 1u ? resolve.m_waveletStepOne : stepWidth == 2u ? resolve.m_waveletStepTwo : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect : resolve.m_wavelet;
     NWB_ASSERT(wavelet.m_pipeline);
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,
@@ -77,10 +60,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
 }
 
 
-void RendererRayTracingSystem::dispatchCausticResolveUpsample(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets
-){
+void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
@@ -99,16 +79,8 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(
     const f32 temporalDecay = causticTemporalDecay();
     const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
 
-    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{
-        targets.causticResolveHalf.get(),
-        targets.bindless.causticResolveHalf.slot(),
-        targets.bindless.causticResolveHalfStorage.slot()
-    };
-    const RayTracingCausticsTaskDetail::CausticResolvePassResources irradiance{
-        targets.causticIrradiance.get(),
-        targets.bindless.causticIrradiance.slot(),
-        targets.bindless.causticIrradianceStorage.slot()
-    };
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources irradiance{ targets.causticIrradiance.get(), targets.bindless.causticIrradiance.slot(), targets.bindless.causticIrradianceStorage.slot() };
     // Edge-aware upsample into deferred-lighting irradiance.
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,
@@ -126,16 +98,8 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(
     );
 }
 
-bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const f32 decayFactor
-){
-    if(
-        !targets.causticAccumulator
-        || !targets.bindless.causticAccumulatorStorage.valid()
-        || !m_rayTracingState.m_causticAccumulatorDecayPipeline
-    )
+bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, const f32 decayFactor){
+    if(!targets.causticAccumulator || !targets.bindless.causticAccumulatorStorage.valid() || !m_rayTracingState.m_causticAccumulatorDecayPipeline)
         return false;
 
     // The task declares the accumulator write and the photon producer dependency.
@@ -154,20 +118,13 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
     NWB_ASSERT(heap.isInitialized());
     heap.bindCompute(commandList, *m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
     commandList.setPushConstants(&decayPush, sizeof(decayPush));
-    commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-        DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-        1u
-    );
+    commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), 1u);
     return true;
 }
 
 bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     // Software photons require a caustic light, refractor, and software scene BVH.
-    const bool hardwareShadowSupported =
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
-    ;
+    const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
     return
         !hardwareShadowSupported
         && m_rayTracingState.m_causticLightCount > 0u
@@ -188,12 +145,7 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
     // Prepare heap-only software pipelines once geometry and emission targets exist.
     if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery))
         return true;
-    if(
-        m_rayTracingState.m_causticRefractiveInstanceCount == 0u
-        || m_rayTracingState.m_sceneBvhInstanceCount == 0u
-        || m_rayTracingState.m_swShadowMeshCount == 0u
-        || !m_rayTracingState.m_causticEmissionTargetBuffer
-    )
+    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || m_rayTracingState.m_sceneBvhInstanceCount == 0u || m_rayTracingState.m_swShadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargetBuffer)
         return true;
     const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return prepareCausticResources(meshView, targets, false);

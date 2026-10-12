@@ -69,9 +69,7 @@ private:
     bool m_displayChanged = false;
 };
 
-using SharedUiPopupSmokeScene = RefCountPtr<
-    RefCounter<UiPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiPopupSmokeScene = RefCountPtr< RefCounter<UiPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerPopupSmokeEnabled();
 [[nodiscard]] bool IsUiLayerPopupSkinSmokeEnabled();

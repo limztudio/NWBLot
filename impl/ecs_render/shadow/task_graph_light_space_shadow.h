@@ -75,11 +75,7 @@ struct LightSpaceShadowGraph{
     }
 };
 
-[[nodiscard]] Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(
-    Core::GpuTaskGraph& graph,
-    const LightSpaceShadowGraphInputs& inputs,
-    Core::GpuGraphResourceId context
-);
+[[nodiscard]] Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Core::GpuGraphResourceId context);
 
 // Capture and reuse import the same map generation; accepted state sources and frame ordering preserve availability.
 [[nodiscard]] LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs);

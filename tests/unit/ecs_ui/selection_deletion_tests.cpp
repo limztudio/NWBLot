@@ -58,9 +58,7 @@ bool UiSelectionDeletionTests::mutate(const DeletionMutation::Enum mutation){
     }
 }
 
-void UiSelectionDeletionTests::expectBaseline(
-    const u64 revision, const u64 externalRevision, const u64 selectionGeneration
-)const{
+void UiSelectionDeletionTests::expectBaseline(const u64 revision, const u64 externalRevision, const u64 selectionGeneration)const{
     EXPECT_EQ(m_model.text(), "abcDEFghi");
     EXPECT_EQ(m_model.anchor(), 3u);
     EXPECT_EQ(m_model.caret(), 6u);
@@ -106,10 +104,7 @@ void UiSelectionDeletionTests::sessionRejected(const DeletionMutation::Enum muta
     UiTextEditSession session(m_arena, m_textInput);
     ASSERT_EQ(session.begin(owner(), m_model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);
     const TextInputSessionToken token = session.token();
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
     ASSERT_TRUE(mutate(mutation));
     const u64 revision = m_model.revision();
@@ -136,10 +131,7 @@ void UiSelectionDeletionTests::hostRejected(const DeletionMutation::Enum mutatio
     ASSERT_TRUE(seed());
     ASSERT_TRUE(activate());
     const TextInputSessionToken token = m_textInput.activeSession();
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
     m_host.collectNative();
     ASSERT_TRUE(mutate(mutation));
@@ -215,10 +207,7 @@ TEST_F(UiSelectionDeletionTests, CaretDeletionStillRejectsANonemptySelectionAndD
     ASSERT_TRUE(seed());
     UiTextEditSession session(m_arena, m_textInput);
     ASSERT_EQ(session.begin(owner(), m_model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Caret),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("X"), TextInputAdmission::Accepted);
     const UiTextEditResult result = session.drain(owner(), m_model);
     EXPECT_EQ(result.status, UiTextEditStatus::ModelRejected);
@@ -242,10 +231,7 @@ TEST_F(UiSelectionDeletionTests, ANewNativePublicationCannotReviveTheSessionsOld
     const u64 selectionGeneration = m_model.selectionGeneration();
     ASSERT_EQ(m_textInput.updateSurrounding(session.token(), m_model.text(), 3u, 6u), TextInputAdmission::Accepted);
     ASSERT_GT(m_textInput.surroundingRevision(session.token()), surrounding);
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
     const UiTextEditResult result = session.drain(owner(), m_model);
     EXPECT_EQ(result.status, UiTextEditStatus::StaleSurrounding);
@@ -262,10 +248,7 @@ TEST_F(UiSelectionDeletionTests, AnEarlierUnpublishedCommitMakesTheQueuedSelecti
     UiTextEditSession session(m_arena, m_textInput);
     ASSERT_EQ(session.begin(owner(), m_model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("X"), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
     const UiTextEditResult result = session.drain(owner(), m_model);
     EXPECT_EQ(result.status, UiTextEditStatus::StaleSurrounding);
@@ -303,10 +286,7 @@ TEST_F(UiSelectionDeletionTests, OrderedHostCopiesSelectionBasisAndPreservesBoth
         ASSERT_TRUE(frame(m_model));
         ASSERT_TRUE(m_model.composition().active);
         ASSERT_EQ(m_textInput.preedit({}, 0u, 0u), TextInputAdmission::Accepted);
-        ASSERT_EQ(
-            m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-            TextInputAdmission::Accepted
-        );
+        ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
         ASSERT_EQ(m_textInput.commit("X"), TextInputAdmission::Accepted);
         m_host.collectNative();
         EXPECT_EQ(m_model.text(), "abcDEFghi");
@@ -332,10 +312,7 @@ TEST_F(UiSelectionDeletionTests, ReadOnlyPolicyRetiresCollectedSelectionDeletion
     const u64 revision = m_model.revision();
     const u64 externalRevision = m_model.externalRevision();
     const u64 selectionGeneration = m_model.selectionGeneration();
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("X"), TextInputAdmission::Accepted);
     m_host.collectNative();
     Ui::EditBoxOptions options;
@@ -350,8 +327,7 @@ TEST_F(UiSelectionDeletionTests, ReadOnlyPolicyRetiresCollectedSelectionDeletion
 }
 
 TEST_F(UiSelectionDeletionTests, OrderedHostFencesApplicationTextSelectionAndExternalOwnershipEpochs){
-    const DeletionMutation::Enum mutations[]{ DeletionMutation::SelectionRoundTrip,
-        DeletionMutation::TextUndoRoundTrip, DeletionMutation::ExternalReset };
+    const DeletionMutation::Enum mutations[]{ DeletionMutation::SelectionRoundTrip, DeletionMutation::TextUndoRoundTrip, DeletionMutation::ExternalReset };
     for(const DeletionMutation::Enum mutation : mutations){
         SCOPED_TRACE(mutation);
         hostRejected(mutation);
@@ -369,10 +345,7 @@ TEST_F(UiSelectionDeletionTests, RejectedCommitPreservesStandaloneDeletionPrefix
     ASSERT_EQ(m_textInput.preedit("IME", 0u, 3u), TextInputAdmission::Accepted);
     ASSERT_EQ(session.drain(owner, model).status, UiTextEditStatus::Applied);
     ASSERT_EQ(m_textInput.preedit({}, 0u, 0u), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("abcdefg"), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("Z"), TextInputAdmission::Accepted);
     const UiTextEditResult result = session.drain(owner, model);
@@ -404,10 +377,7 @@ TEST_F(UiSelectionDeletionTests, RejectedCommitPreservesHostDeletionPrefixAndRet
     AString<Alloc::GlobalArena> oversized(m_arena);
     oversized.assign(m_model.limits().maxBytes + 1u, 'x');
     ASSERT_EQ(m_textInput.preedit({}, 0u, 0u), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(m_textInput.erase(1u, 1u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit(oversized), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("Z"), TextInputAdmission::Accepted);
     m_host.collectNative();

@@ -94,11 +94,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline bool IsNameHashTokenChar(const CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
-        || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f'))
-        || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F'))
-        || ch == static_cast<CharT>('_')
-    ;
+    return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')) || ch == static_cast<CharT>('_');
 }
 
 template<typename CharT>
@@ -312,10 +308,7 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
 }
 
 template<typename CharT>
-inline void RecordNameSymbolText(
-    const NameHash& hash,
-    const BasicStringView<CharT> text
-){
+inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<CharT> text){
     if(IsZeroHash(hash))
         return;
 
@@ -356,10 +349,7 @@ inline void RecordNameSymbolText(
 inline constexpr usize HashValue(const NameHash& hash)noexcept{
     usize seed = static_cast<usize>(hash.qwords[0]);
     for(u32 i = 1; i < s_HashLaneCount; ++i){
-        seed ^= static_cast<usize>(hash.qwords[i])
-            + s_NameHashCombineGoldenRatio
-            + (seed << s_NameHashCombineLeftShiftBits)
-            + (seed >> s_NameHashCombineRightShiftBits);
+        seed ^= static_cast<usize>(hash.qwords[i]) + s_NameHashCombineGoldenRatio + (seed << s_NameHashCombineLeftShiftBits) + (seed >> s_NameHashCombineRightShiftBits);
     }
     return seed;
 }
@@ -414,11 +404,7 @@ inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst
 #endif
 
 #if defined(NWB_BUILD_SYMBOLS)
-inline void RecordStoredNameSymbolText(
-    const NameHash& hash,
-    const AStringView text,
-    const bool hasText
-){
+inline void RecordStoredNameSymbolText(const NameHash& hash, const AStringView text, const bool hasText){
     if(!hasText || text.empty() || IsZeroHash(hash))
         return;
 

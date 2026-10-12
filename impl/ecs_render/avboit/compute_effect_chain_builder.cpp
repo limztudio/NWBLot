@@ -25,10 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererAvboitSystem& avboitSystem
-)
+AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)
     : m_graph(graph)
     , m_avboitSystem(avboitSystem){
 }
@@ -37,9 +34,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDepthWarp(
-    const AvboitDepthWarpStageInputs& inputs
-){
+[[nodiscard]] Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDepthWarp(const AvboitDepthWarpStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
     AvboitDepthWarpStageResult result{};
     if(!inputs.targets)
@@ -63,9 +58,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     // Accepted samples use the queue class and exact transport chosen by this compile.
     avboitComputeScheduling.allowTimingFeedbackRouting = true;
     avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
-    const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
-        AvboitComputeStageTimingMetadata(*inputs.targets)
-    ;
+    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(*inputs.targets);
     Core::GpuTaskId completionTask = inputs.occupancyTask;
     if(inputs.hasTransparentRenderers){
         if(!inputs.coverage.valid() || !inputs.depthWarp.valid() || !inputs.control.valid())
@@ -90,13 +83,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
         ;
         m_avboitSystem.taskGraphStage().m_depthWarpTask = m_graph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
-            AvboitDepthWarpGraphTask::Payload{
-                .avboitSystem = m_avboitSystem,
-                .targets = *inputs.targets,
-                .timingTicket = *inputs.depthWarpTimingTicket,
-                .timingFeedback = inputs.timingFeedback,
-                .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp,
-            }
+            AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = *inputs.targets, .timingTicket = *inputs.depthWarpTimingTicket, .timingFeedback = inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, }
         );
         if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
@@ -113,9 +100,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitIntegrationStageResult> AvboitComputeEffectChainBuilder::declareIntegration(
-    const AvboitIntegrationStageInputs& inputs
-){
+[[nodiscard]] Expected<AvboitIntegrationStageResult> AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
     AvboitIntegrationStageResult result{};
     if(!inputs.targets)
@@ -143,9 +128,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     // Accepted samples use the queue class and exact transport chosen by this compile.
     avboitComputeScheduling.allowTimingFeedbackRouting = true;
     avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
-    const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
-        AvboitComputeStageTimingMetadata(*inputs.targets)
-    ;
+    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(*inputs.targets);
     // Integration retains packet affinity; the compiler lowers its queue and resource states.
     const Core::GpuTaskResourceUse integrationResourceUses[] = {
         ReadUse(inputs.extinction),
@@ -166,13 +149,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     ;
     m_avboitSystem.taskGraphStage().m_integrationTask = m_graph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,
-        AvboitIntegrationGraphTask::Payload{
-            .avboitSystem = m_avboitSystem,
-            .targets = *inputs.targets,
-            .timingTicket = *inputs.integrationTimingTicket,
-            .timingFeedback = inputs.timingFeedback,
-            .timingScope = &RendererGpuTimingScope::s_AvboitIntegration,
-        }
+        AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = *inputs.targets, .timingTicket = *inputs.integrationTimingTicket, .timingFeedback = inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, }
     );
     if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));

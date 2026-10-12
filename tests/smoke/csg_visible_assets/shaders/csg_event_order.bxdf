@@ -34,8 +34,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     if(any(uint2(pixel) >= uint2(peelWidth, peelHeight)))
         return half3(half(spanState), 0.0h, 0.0h);
     uint selectedPeelId = 0u;
-    [unroll]
-    for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
+    [unroll] for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
         if(layer >= peelLayers)
             break;
         selectedPeelId = nwbHeapStorageImage2DArrayUint(peelIdSlot).Load(int3(pixel, int(layer)));
@@ -52,8 +51,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const bool firstBack = firstEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_BACK;
     const bool secondFront = secondEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_FRONT;
     const bool secondBack = secondEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_BACK;
-    const bool matchingPair = firstEvent.x == receiverIndex && secondEvent.x == receiverIndex
-        && ((firstFront && secondBack) || (firstBack && secondFront));
+    const bool matchingPair = firstEvent.x == receiverIndex && secondEvent.x == receiverIndex && ((firstFront && secondBack) || (firstBack && secondFront));
     const float frontDepth = asfloat(firstFront ? firstEvent.z : secondEvent.z);
     const float backDepth = asfloat(firstFront ? secondEvent.z : firstEvent.z);
     const bool validatedPair = matchingPair && isfinite(frontDepth) && isfinite(backDepth) && backDepth > frontDepth;

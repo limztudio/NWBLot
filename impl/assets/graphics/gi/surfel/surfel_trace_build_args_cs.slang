@@ -20,12 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(
-    NWB_SURFEL_TRACE_BUILD_ARGS_GROUP_SIZE_X,
-    NWB_SURFEL_TRACE_BUILD_ARGS_GROUP_SIZE_Y,
-    NWB_SURFEL_TRACE_BUILD_ARGS_GROUP_SIZE_Z
-)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+[numthreads(NWB_SURFEL_TRACE_BUILD_ARGS_GROUP_SIZE_X, NWB_SURFEL_TRACE_BUILD_ARGS_GROUP_SIZE_Y, NWB_SURFEL_TRACE_BUILD_ARGS_GROUP_SIZE_Z)] void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(dispatchThreadID.x != 0u)
         return;
     const uint bumpTop = g_NwbSurfelBuildArgsCounter[NWB_SURFEL_COUNTER_BUMP_TOP];

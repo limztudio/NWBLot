@@ -116,8 +116,8 @@ TEST(AllocationOwners, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
     pointer = replacement;
     EXPECT_EQ(arena.memoryStats().usedBytes, CoreMsize(pointer));
     const ArenaMemoryStats beforeFailure = arena.memoryStats();
-    // Match the backend's caller-visible error contract. The Windows dbg executable and allocator DLL
-    // can use distinct CRT errno domains even though the backend rejects invalid alignment with EINVAL.
+    // Match the backend's caller-visible error contract.
+    // The Windows dbg executable and allocator DLL can use distinct CRT errno domains even though the backend rejects invalid alignment with EINVAL.
     errno = ERANGE;
     void* backendInvalidAlignment = scalable_aligned_realloc(pointer, 0u, 3u);
     const i32 backendInvalidAlignmentError = errno;

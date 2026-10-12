@@ -91,8 +91,7 @@ TEST_F(UiEditModelTests, InvalidUtf8AndMultilineValuesPreserveAllCommittedState)
     ASSERT_TRUE(m_model.replaceSelection("c"));
     ASSERT_TRUE(m_model.setSelection(1u, 2u));
     const u64 revision = m_model.revision();
-    const AStringView invalid[] = { "\xED\xA0\x80", "\xC0\xAF", "\xF4\x90\x80\x80", "\xE2\x82",
-        "x\ny", "x\ry", "\xE2\x80\xA8", "\xE2\x80\xA9", AStringView("a\0b", 3u) };
+    const AStringView invalid[] = { "\xED\xA0\x80", "\xC0\xAF", "\xF4\x90\x80\x80", "\xE2\x82", "x\ny", "x\ry", "\xE2\x80\xA8", "\xE2\x80\xA9", AStringView("a\0b", 3u) };
     for(const AStringView value : invalid){
         EXPECT_FALSE(m_model.setText(value));
         EXPECT_FALSE(m_model.replaceSelection(value));

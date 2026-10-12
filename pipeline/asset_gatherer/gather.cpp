@@ -123,14 +123,9 @@ bool GatherAssets(const AssetGatherOptions& options){
         if(!inserted.second){
             auto& existing = manifest.entries[inserted.first.value()];
             const usize payloadSize = bytes.size() - payloadOffset;
-            const bool identical = existing.payloadBytes.size() == payloadSize
-                && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0
-            ;
+            const bool identical = existing.payloadBytes.size() == payloadSize && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0;
             if(!identical){
-                if(
-                    !options.mergePayloads
-                    || !options.mergePayloads(virtualPath, existing.payloadBytes, bytes.data() + payloadOffset, payloadSize)
-                ){
+                if(!options.mergePayloads || !options.mergePayloads(virtualPath, existing.payloadBytes, bytes.data() + payloadOffset, payloadSize)){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), StringConvert(virtualPath.resolvedText()));
                     return false;
                 }

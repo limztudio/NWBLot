@@ -30,9 +30,7 @@ def generate_cases(data):
         cases.append(f'    {{ "{encoded}", "{positions}", {len(text)}u }},')
     for index, start in enumerate(range(0, len(cases), 500)):
         content = "\n".join(cases[start:start + 500])
-        write_cpp(HERE / f"edit_grapheme_cases_{index}.inc",
-                  f"// limztudio@gmail.com\n{SEP}\n\n\n"
-                  f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ecs_ui/toolkit/edit/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
+        write_cpp(HERE / f"edit_grapheme_cases_{index}.inc", f"// limztudio@gmail.com\n{SEP}\n\n\n" f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ecs_ui/toolkit/edit/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
     return len(cases)
 
 

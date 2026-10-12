@@ -63,11 +63,7 @@ void AppendPerfCsvHeader(AString<TelemetryArena>& out){
     out += "source,scope,publish_frame,seconds,min_seconds,max_seconds,last_seconds,sample_count,first_sample_frame,last_sample_frame\n";
 }
 
-void AppendPerfCsvRow(
-    AString<TelemetryArena>& out,
-    const Telemetry::PerfTimingSource::Enum source,
-    const Telemetry::PerfTimingPayload& payload
-){
+void AppendPerfCsvRow(AString<TelemetryArena>& out, const Telemetry::PerfTimingSource::Enum source, const Telemetry::PerfTimingPayload& payload){
     out += PerfTimingSourceText(source);
     out += ',';
     AppendCsvCell(out, payload.scopeText);
@@ -170,12 +166,7 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
     report.summary.eventCount = events.eventCount();
     AString<TelemetryArena> memoryRecords(arena);
 
-    TelemetryReportDetail::GraphTimingMap timingByFrameAndScope(
-        0,
-        TelemetryReportDetail::GraphTimingKeyHasher(),
-        EqualTo<TelemetryReportDetail::GraphTimingKey>(),
-        arena
-    );
+    TelemetryReportDetail::GraphTimingMap timingByFrameAndScope(0, TelemetryReportDetail::GraphTimingKeyHasher(), EqualTo<TelemetryReportDetail::GraphTimingKey>(), arena);
     timingByFrameAndScope.reserve(events.eventCount());
     TelemetryReportDetail::FrameGraphReportRecords frameGraphs(arena);
     frameGraphs.reserve(events.eventCount());
@@ -211,16 +202,10 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
             }
             TelemetryReportDetail::AddTiming(report.summary, *payload);
             TelemetryReportDetail::AppendPerfCsvRow(report.perfCsv, payload->source, *payload);
-            // first/last are arrival endpoints, so only one sample proves an exact source-frame association when
-            // different queues complete out of order. Aggregated windows remain available in the Perf CSV.
-            if(
-                payload->stats.sampleCount == 1u
-                && payload->stats.firstSampleFrameIndex == payload->stats.lastSampleFrameIndex
-            ){
-                timingByFrameAndScope.insert_or_assign(
-                    TelemetryReportDetail::GraphTimingKey{ payload->stats.firstSampleFrameIndex, payload->scopeName },
-                    payload->stats.seconds
-                );
+            // first/last are arrival endpoints, so only one sample proves an exact source-frame association when different queues complete out of order.
+            // Aggregated windows remain available in the Perf CSV.
+            if(payload->stats.sampleCount == 1u && payload->stats.firstSampleFrameIndex == payload->stats.lastSampleFrameIndex){
+                timingByFrameAndScope.insert_or_assign(TelemetryReportDetail::GraphTimingKey{ payload->stats.firstSampleFrameIndex, payload->scopeName }, payload->stats.seconds);
             }
             break;
         }

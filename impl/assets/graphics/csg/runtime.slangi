@@ -56,10 +56,8 @@ struct NwbCsgSample{
 // Receiver ranges and cutters are persistent CSG context buffers. Their slots are uniform for a draw/dispatch, so these typed StorageBuffer aliases deliberately use ordinary indexing rather than NonUniformResourceIndex().
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed views of the global StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbHeapCsgReceiverRangeBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbHeapCsgCutterBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbHeapCsgReceiverRangeBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbHeapCsgCutterBuffers[];
 #pragma warning(pop)
 
 StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> nwbHeapCsgReceiverRanges(const uint slot){
@@ -80,8 +78,7 @@ struct NwbCsgMeshPushConstants{
 #endif
 
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
-[[vk::push_constant]]
-ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
 #endif
 
 uint nwbCsgMeshInstanceIndex(){
@@ -130,29 +127,17 @@ NwbCsgSample nwbInvalidCsgShapeSample(){
 
 float3 nwbCsgTransformWorldToShape(const float3 worldPosition, const NwbCsgCutter cutter){
     const float4 p = float4(worldPosition, 1.0);
-    return float3(
-        dot(cutter.worldToShapeRow0, p),
-        dot(cutter.worldToShapeRow1, p),
-        dot(cutter.worldToShapeRow2, p)
-    );
+    return float3(dot(cutter.worldToShapeRow0, p), dot(cutter.worldToShapeRow1, p), dot(cutter.worldToShapeRow2, p));
 }
 
 float3 nwbCsgTransformShapeNormalToWorld(const float3 shapeNormal, const NwbCsgCutter cutter, const float3 fallback){
-    float3 worldNormal =
-        cutter.worldToShapeRow0.xyz * shapeNormal.x
-        + cutter.worldToShapeRow1.xyz * shapeNormal.y
-        + cutter.worldToShapeRow2.xyz * shapeNormal.z
-    ;
+    float3 worldNormal = cutter.worldToShapeRow0.xyz * shapeNormal.x + cutter.worldToShapeRow1.xyz * shapeNormal.y + cutter.worldToShapeRow2.xyz * shapeNormal.z;
     return nwbCsgNormalizeOr(worldNormal, fallback);
 }
 
 float3 nwbCsgTransformWorldToReceiverLocal(const float3 worldPosition, const NwbCsgReceiverRange receiverRange){
     const float4 p = float4(worldPosition, 1.0);
-    return float3(
-        dot(receiverRange.worldToReceiverRow0, p),
-        dot(receiverRange.worldToReceiverRow1, p),
-        dot(receiverRange.worldToReceiverRow2, p)
-    );
+    return float3(dot(receiverRange.worldToReceiverRow0, p), dot(receiverRange.worldToReceiverRow1, p), dot(receiverRange.worldToReceiverRow2, p));
 }
 
 bool nwbCsgBoundsValid(const NwbCsgBounds bounds){
@@ -167,12 +152,7 @@ bool nwbCsgBoundsFinite(const NwbCsgBounds bounds){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbTryEvalEmptyCsgShape(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    out NwbCsgSample outSample
-){
+bool nwbTryEvalEmptyCsgShape(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter, out NwbCsgSample outSample){
     outSample = nwbInvalidCsgShapeSample();
     return false;
 }
@@ -197,12 +177,7 @@ NwbCsgSample nwbEvalProjectCsgShape(const uint shapeType, const float3 shapePosi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbTryEvalProjectCsgShape(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    out NwbCsgSample outSample
-){
+bool nwbTryEvalProjectCsgShape(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter, out NwbCsgSample outSample){
     outSample = nwbEvalProjectCsgShape(shapeType, shapePosition, cutter);
     return true;
 }
@@ -221,12 +196,7 @@ bool nwbTryEvalProjectCsgShape(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbTryEvalProjectCsgShapeFallback(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    out NwbCsgSample outSample
-){
+bool nwbTryEvalProjectCsgShapeFallback(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter, out NwbCsgSample outSample){
     if(NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample))
         return true;
     return nwbTryEvalProjectCsgShape(shapeType, shapePosition, cutter, outSample);
@@ -269,11 +239,7 @@ float3 nwbCsgFlippedCutterWorldNormal(const float3 worldPosition, const NwbCsgCu
     return -nwbCsgTransformShapeNormalToWorld(sample.normal, cutter, fallback);
 }
 
-bool nwbCsgReceiverPixelDiscardWithWorldTolerance(
-    const uint receiverIndex,
-    const float3 worldPosition,
-    const float worldDistanceTolerance
-){
+bool nwbCsgReceiverPixelDiscardWithWorldTolerance(const uint receiverIndex, const float3 worldPosition, const float worldDistanceTolerance){
     const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
     const float safeWorldDistanceTolerance = max(worldDistanceTolerance, 0.0);
     for(uint cutterIndex = 0u; cutterIndex < receiverRange.rangeInfo.y; ++cutterIndex){

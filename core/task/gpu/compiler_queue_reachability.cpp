@@ -50,11 +50,7 @@ static void TransposeTaskRelationTile(Array<u64, s_BitsPerWord>& tile)noexcept{
     }
 }
 
-static void SymmetrizeTaskRelations(
-    Vector<u64, Alloc::ScratchArena>& words,
-    const usize taskCount,
-    const usize wordsPerRow
-){
+static void SymmetrizeTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const usize taskCount, const usize wordsPerRow){
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
         const usize rowBase = rowBlock * s_BitsPerWord;
         const usize rowCount = Min(s_BitsPerWord, taskCount - rowBase);
@@ -97,19 +93,10 @@ static void SymmetrizeTaskRelations(
 
 
 template<typename RowRanges>
-static void SymmetrizeCompactTaskRelations(
-    Vector<u64, Alloc::ScratchArena>& words,
-    const Vector<usize, Alloc::ScratchArena>& offsets,
-    const RowRanges& ranges,
-    const usize taskCount,
-    const usize wordsPerRow
-){
+static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const Vector<usize, Alloc::ScratchArena>& offsets, const RowRanges& ranges, const usize taskCount, const usize wordsPerRow){
     const auto readWord = [&](const usize task, const usize word){
         const auto& range = ranges[task];
-        return word < range.m_begin || word >= range.m_end
-            ? static_cast<u64>(0u)
-            : words[offsets[task] + word - range.m_begin]
-        ;
+        return word < range.m_begin || word >= range.m_end ? static_cast<u64>(0u) : words[offsets[task] + word - range.m_begin];
     };
     const auto appendWord = [&](const usize task, const usize word, const u64 bits){
         if(bits == 0u)
@@ -178,22 +165,10 @@ GpuTaskSchedulingReachability::GpuTaskSchedulingReachability(Alloc::ScratchArena
     , m_rowOffsets(scratchArena)
 {}
 
-bool GpuTaskSchedulingReachability::reaches(
-    const GpuTaskId& source,
-    const GpuTaskId& destination
-)const noexcept{
+bool GpuTaskSchedulingReachability::reaches(const GpuTaskId& source, const GpuTaskId& destination)const noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
-    if(
-        !m_valid
-        || !source.valid()
-        || !destination.valid()
-        || source.generation != m_graphGeneration
-        || destination.generation != m_graphGeneration
-        || source.index >= m_taskCount
-        || destination.index >= m_taskCount
-        || source == destination
-    )
+    if(!m_valid || !source.valid() || !destination.valid() || source.generation != m_graphGeneration || destination.generation != m_graphGeneration || source.index >= m_taskCount || destination.index >= m_taskCount || source == destination)
         return false;
     if(m_totalOrder)
         return m_topologicalRanks[source.index] < m_topologicalRanks[destination.index];
@@ -203,29 +178,15 @@ bool GpuTaskSchedulingReachability::reaches(
     const auto& range = m_relatedWordRanges[source.index];
     if(destinationWord < range.m_begin || destinationWord >= range.m_end)
         return false;
-    const usize wordIndex = m_rowOffsets.empty()
-        ? source.index * m_wordsPerRow + destinationWord
-        : m_rowOffsets[source.index] + destinationWord - range.m_begin;
+    const usize wordIndex = m_rowOffsets.empty() ? source.index * m_wordsPerRow + destinationWord : m_rowOffsets[source.index] + destinationWord - range.m_begin;
     const u64 mask = static_cast<u64>(1u) << (destination.index % s_BitsPerWord);
     return (m_words[wordIndex] & mask) != 0u;
 }
 
-bool GpuTaskSchedulingReachability::transitivelyIndependent(
-    const GpuTaskId& lhs,
-    const GpuTaskId& rhs
-)const noexcept{
+bool GpuTaskSchedulingReachability::transitivelyIndependent(const GpuTaskId& lhs, const GpuTaskId& rhs)const noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
-    if(
-        !m_valid
-        || !lhs.valid()
-        || !rhs.valid()
-        || lhs.generation != m_graphGeneration
-        || rhs.generation != m_graphGeneration
-        || lhs.index >= m_taskCount
-        || rhs.index >= m_taskCount
-        || lhs == rhs
-    )
+    if(!m_valid || !lhs.valid() || !rhs.valid() || lhs.generation != m_graphGeneration || rhs.generation != m_graphGeneration || lhs.index >= m_taskCount || rhs.index >= m_taskCount || lhs == rhs)
         return false;
     if(m_totalOrder)
         return false;
@@ -235,9 +196,7 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(
     const auto& range = m_relatedWordRanges[lhs.index];
     if(destinationWord < range.m_begin || destinationWord >= range.m_end)
         return true;
-    const usize wordIndex = m_rowOffsets.empty()
-        ? lhs.index * m_wordsPerRow + destinationWord
-        : m_rowOffsets[lhs.index] + destinationWord - range.m_begin;
+    const usize wordIndex = m_rowOffsets.empty() ? lhs.index * m_wordsPerRow + destinationWord : m_rowOffsets[lhs.index] + destinationWord - range.m_begin;
     const u64 mask = static_cast<u64>(1u) << (rhs.index % s_BitsPerWord);
     return (m_words[wordIndex] & mask) == 0u;
 }
@@ -246,11 +205,7 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildGpuTaskSchedulingReachability(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    GpuTaskSchedulingReachability& outReachability
-){
+bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability){
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     outReachability.m_words.clear();
@@ -319,10 +274,7 @@ bool BuildGpuTaskSchedulingReachability(
     if(!totalWordCountResult)
         return fail();
     const usize totalWordCount = *totalWordCountResult;
-    if(
-        totalWordCount > Limit<usize>::s_Max / sizeof(u64)
-        || totalWordCount > outReachability.m_words.max_size()
-    )
+    if(totalWordCount > Limit<usize>::s_Max / sizeof(u64) || totalWordCount > outReachability.m_words.max_size())
         return fail();
 
     outReachability.m_graphGeneration = graph.generation();
@@ -331,10 +283,7 @@ bool BuildGpuTaskSchedulingReachability(
     constexpr usize s_SmallDenseWordCount = 4u;
     if(wordsPerRow > s_SmallDenseWordCount){
         outReachability.m_relatedWordRanges.resize(taskCount);
-        Vector<GpuTaskSchedulingReachability::WordRange, Alloc::ScratchArena> descendantRanges(
-            taskCount,
-            outReachability.m_relatedWordRanges.get_allocator()
-        );
+        Vector<GpuTaskSchedulingReachability::WordRange, Alloc::ScratchArena> descendantRanges(taskCount, outReachability.m_relatedWordRanges.get_allocator());
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
             const usize selfWord = taskIndex / s_BitsPerWord;
             descendantRanges[taskIndex] = { .m_begin = selfWord, .m_end = selfWord + 1u };
@@ -379,11 +328,7 @@ bool BuildGpuTaskSchedulingReachability(
         const usize compactBudget = (totalWordCount - totalWordCount / 4u) * sizeof(u64);
         const usize compactBytes = compactWordCount * sizeof(u64);
         const auto metadataBytes = TryMultiply<usize>(taskCount, sizeof(usize) + sizeof(GpuTaskSchedulingReachability::WordRange));
-        const bool compactRows =
-            metadataBytes
-            && compactBytes <= compactBudget
-            && *metadataBytes <= compactBudget - compactBytes
-        ;
+        const bool compactRows = metadataBytes && compactBytes <= compactBudget && *metadataBytes <= compactBudget - compactBytes;
         // Retaining the bounds costs at most 1/32 of a dense matrix at this width; smaller dense rows release them.
         constexpr usize s_MinDenseBoundsReuseWordsPerRow = 64u;
         if(compactRows || wordsPerRow >= s_MinDenseBoundsReuseWordsPerRow){
@@ -397,8 +342,7 @@ bool BuildGpuTaskSchedulingReachability(
                 const usize firstWord = compactRows ? range.m_begin : 0u;
                 if(compactRows)
                     outReachability.m_rowOffsets[taskIndex] = rowOffset;
-                outReachability.m_words[rowOffset + taskIndex / s_BitsPerWord - firstWord] |=
-                    static_cast<u64>(1u) << (taskIndex % s_BitsPerWord);
+                outReachability.m_words[rowOffset + taskIndex / s_BitsPerWord - firstWord] |= static_cast<u64>(1u) << (taskIndex % s_BitsPerWord);
                 rowOffset += compactRows ? range.m_end - range.m_begin : wordsPerRow;
             }
             for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
@@ -421,13 +365,7 @@ bool BuildGpuTaskSchedulingReachability(
                 }
             }
             if(compactRows){
-                __hidden_gpu_task_queue_reachability::SymmetrizeCompactTaskRelations(
-                    outReachability.m_words,
-                    outReachability.m_rowOffsets,
-                    outReachability.m_relatedWordRanges,
-                    taskCount,
-                    wordsPerRow
-                );
+                __hidden_gpu_task_queue_reachability::SymmetrizeCompactTaskRelations(outReachability.m_words, outReachability.m_rowOffsets, outReachability.m_relatedWordRanges, taskCount, wordsPerRow);
             }
             else
                 __hidden_gpu_task_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
@@ -442,11 +380,7 @@ bool BuildGpuTaskSchedulingReachability(
         range = { .m_begin = wordsPerRow, .m_end = 0u };
     for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
         const GpuTaskId source = analysis.topologicalOrder()[orderIndex - 1u];
-        if(
-            !source.valid()
-            || source.generation != graph.generation()
-            || source.index >= taskCount
-        )
+        if(!source.valid() || source.generation != graph.generation() || source.index >= taskCount)
             return fail();
 
         const usize sourceRowOffset = source.index * wordsPerRow;
@@ -458,9 +392,7 @@ bool BuildGpuTaskSchedulingReachability(
             const usize consumerRowOffset = consumerIndex * wordsPerRow;
             const auto& consumerRange = outReachability.m_relatedWordRanges[consumerIndex];
             for(usize wordIndex = consumerRange.m_begin; wordIndex < consumerRange.m_end; ++wordIndex){
-                outReachability.m_words[sourceRowOffset + wordIndex] |=
-                    outReachability.m_words[consumerRowOffset + wordIndex]
-                ;
+                outReachability.m_words[sourceRowOffset + wordIndex] |= outReachability.m_words[consumerRowOffset + wordIndex];
             }
             const usize consumerWordIndex = consumerIndex / s_BitsPerWord;
             const usize consumerWord = sourceRowOffset + consumerWordIndex;

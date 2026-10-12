@@ -120,11 +120,7 @@ struct ReflectionFrameSnapshot{
     [[nodiscard]] bool hasHardwareWork()const noexcept{ return parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u; }
 
     [[nodiscard]] bool valid()const noexcept{
-        return
-            parameters.width > 0u && parameters.height > 0u && opaqueRadiance && glassRadiance
-            && queue && counters && indirectArgs && frameParameters && classifyPipeline && buildArgsPipeline
-            && depthPyramid.valid()
-        ;
+        return parameters.width > 0u && parameters.height > 0u && opaqueRadiance && glassRadiance && queue && counters && indirectArgs && frameParameters && classifyPipeline && buildArgsPipeline && depthPyramid.valid();
     }
 };
 
@@ -138,9 +134,7 @@ struct ReflectionCsgDispatchState{
     {}
 };
 using ReflectionCsgDispatchControl = RefCounter<ReflectionCsgDispatchState>;
-using ReflectionCsgDispatchHandle = RefCountPtr<
-    ReflectionCsgDispatchControl, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>
->;
+using ReflectionCsgDispatchHandle = RefCountPtr< ReflectionCsgDispatchControl, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena> >;
 
 class RendererReflectionSystem final : NoCopy{
 public:

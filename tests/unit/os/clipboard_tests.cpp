@@ -34,12 +34,7 @@ public:
 
 
 protected:
-    virtual void startNativeRequest(
-        const ClipboardRequestToken token,
-        const ClipboardOperation::Enum operation,
-        const ClipboardChannel::Enum,
-        const AStringView input
-    )override{
+    virtual void startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum, const AStringView input)override{
         m_nativeToken = token;
         if(operation == ClipboardOperation::ReadText){
             ++readCount;

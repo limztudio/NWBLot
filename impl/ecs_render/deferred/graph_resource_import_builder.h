@@ -119,9 +119,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<DeferredGraphResourceImportResult> declare(
-        const DeferredGraphResourceImportInputs& inputs
-    )const;
+    [[nodiscard]] Expected<DeferredGraphResourceImportResult> declare(const DeferredGraphResourceImportInputs& inputs)const;
 
 private:
     Core::GpuTaskGraph& m_graph;

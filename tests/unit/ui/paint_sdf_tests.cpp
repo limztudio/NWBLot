@@ -66,14 +66,7 @@ protected:
     [[nodiscard]] SharedGlyphPage makeCoverage(const u64 atlasIdentity, const u64 generation = 1u){
         GlyphPage::Pixels pixels(m_arena);
         pixels.resize(4u, 128u);
-        const GlyphPageBinding binding{
-            .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
-            .fontGeneration = 9u,
-            .atlasIdentity = atlasIdentity,
-            .generation = generation,
-            .width = 2u,
-            .height = 2u,
-        };
+        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .width = 2u, .height = 2u, };
         return CreateGlyphPage(m_arena, binding, Move(pixels));
     }
 

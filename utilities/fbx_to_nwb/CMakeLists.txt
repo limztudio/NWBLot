@@ -1,36 +1,9 @@
 nwb_declare_executable(nwb_fbx_to_nwb)
-target_sources(nwb_fbx_to_nwb PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/command_line.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/import.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/scene.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/skin.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/common.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_parse.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_parse.h"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_text.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_text.h"
-    "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/asset_writer.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/asset_writer_skeleton.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/asset_writer_skeleton.h"
-    "${CMAKE_CURRENT_LIST_DIR}/module.h"
-    "${CMAKE_CURRENT_LIST_DIR}/source_mesh_streams.h"
-    "${CMAKE_CURRENT_LIST_DIR}/source_mesh_streams.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh_build.h"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh_build.cpp"
-    "${PROJECT_SOURCE_DIR}/global/text_write.h"
-    "${CMAKE_CURRENT_LIST_DIR}/skin.h"
-    "${CMAKE_CURRENT_LIST_DIR}/global.h"
-)
-target_link_libraries(nwb_fbx_to_nwb PRIVATE
-    nwb_common
-    nwb_alloc
-    nwb_cpu_task
-    nwb_metascript
-    nwb_logclient
-    nwb::ufbx
-    nwb::cli11_headers
-)
+target_sources(nwb_fbx_to_nwb PRIVATE "${CMAKE_CURRENT_LIST_DIR}/command_line.cpp" "${CMAKE_CURRENT_LIST_DIR}/import.cpp" "${CMAKE_CURRENT_LIST_DIR}/scene.cpp" "${CMAKE_CURRENT_LIST_DIR}/skin.cpp" "${CMAKE_CURRENT_LIST_DIR}/common.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh.cpp" "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_parse.cpp" "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_parse.h" "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_text.cpp" "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_text.h"
+    "${CMAKE_CURRENT_LIST_DIR}/main.cpp" "${CMAKE_CURRENT_LIST_DIR}/asset_writer.cpp" "${CMAKE_CURRENT_LIST_DIR}/asset_writer_skeleton.cpp" "${CMAKE_CURRENT_LIST_DIR}/asset_writer_skeleton.h" "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/source_mesh_streams.h" "${CMAKE_CURRENT_LIST_DIR}/source_mesh_streams.cpp" "${CMAKE_CURRENT_LIST_DIR}/mesh_build.h" "${CMAKE_CURRENT_LIST_DIR}/mesh_build.cpp" "${PROJECT_SOURCE_DIR}/global/text_write.h"
+    "${CMAKE_CURRENT_LIST_DIR}/skin.h" "${CMAKE_CURRENT_LIST_DIR}/global.h")
+target_link_libraries(nwb_fbx_to_nwb PRIVATE nwb_common nwb_alloc nwb_cpu_task nwb_metascript nwb_logclient nwb::ufbx nwb::cli11_headers)
 target_compile_definitions(nwb_fbx_to_nwb PRIVATE __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)
 

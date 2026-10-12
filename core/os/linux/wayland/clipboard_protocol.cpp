@@ -17,9 +17,7 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_wayland_clipboard{
-static constexpr Array<AStringView, 4u> s_Utf8Mimes{
-    "text/plain;charset=utf-8", "text/plain;charset=UTF-8", "UTF8_STRING", "text/plain"
-};
+static constexpr Array<AStringView, 4u> s_Utf8Mimes{ "text/plain;charset=utf-8", "text/plain;charset=UTF-8", "UTF8_STRING", "text/plain" };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,13 +69,7 @@ void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlob
 #endif
 }
 
-void WaylandClipboardService::OnRegistryGlobal(
-    void* const data,
-    wl_registry* const registry,
-    const u32 name,
-    const char* const interfaceName,
-    const u32 version
-){
+void WaylandClipboardService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
     auto& service = *static_cast<WaylandClipboardService*>(data);
     if(AStringView(interfaceName) == wl_data_device_manager_interface.name && !service.m_manager){
         service.m_manager = static_cast<wl_data_device_manager*>(wl_registry_bind(registry, name, &wl_data_device_manager_interface, Min(version, 3u)));

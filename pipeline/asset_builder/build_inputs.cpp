@@ -37,11 +37,7 @@ struct PathSelectionIndex{
     Vector<IndexedPath, Assets::ScratchArena> m_entries;
     Optional<Vector<Assets::ScratchString, Assets::ScratchArena>> m_ownedPaths;
 
-    PathSelectionIndex(
-        const Assets::DiscoveredNwbFileVector& files,
-        Assets::ScratchArena& scratchArena,
-        const bool preserveCase
-    )
+    PathSelectionIndex(const Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena, const bool preserveCase)
         : m_entries(scratchArena){
         m_entries.reserve(files.size());
         if(preserveCase){
@@ -53,22 +49,14 @@ struct PathSelectionIndex{
                 m_ownedPaths->emplace_back(PathToString(scratchArena, files[i].filePath.lexicallyNormal()));
                 m_entries.push_back({ AStringView(m_ownedPaths->back()), i });
             }
-            else
-                m_entries.push_back({ AStringView(files[i].normalizedPathText), i });
+            else m_entries.push_back({ AStringView(files[i].normalizedPathText), i });
         }
         Sort(m_entries.begin(), m_entries.end(), [](const IndexedPath& lhs, const IndexedPath& rhs){ return lhs.text < rhs.text; });
     }
 };
 
-[[nodiscard]] static bool SelectPathRange(
-    const PathSelectionIndex& index,
-    const AStringView path,
-    const bool prefix,
-    Vector<u8, Assets::ScratchArena>& selected
-){
-    auto entry = LowerBound(
-        index.m_entries.begin(), index.m_entries.end(), path,
-        [](const IndexedPath& candidate, const AStringView value){ return candidate.text < value; }
+[[nodiscard]] static bool SelectPathRange(const PathSelectionIndex& index, const AStringView path, const bool prefix, Vector<u8, Assets::ScratchArena>& selected){
+    auto entry = LowerBound(index.m_entries.begin(), index.m_entries.end(), path, [](const IndexedPath& candidate, const AStringView value){ return candidate.text < value; }
     );
     bool matched = false;
     for(; entry != index.m_entries.end(); ++entry){
@@ -90,12 +78,7 @@ struct PathSelectionIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SelectBuildInputs(
-    const AssetBuildOptions& options,
-    const Assets::ResolvedCookPaths& paths,
-    Assets::DiscoveredNwbFileVector& files,
-    Assets::ScratchArena& scratchArena
-){
+bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena){
     if(options.inputs.empty()){
         files.clear();
         return true;

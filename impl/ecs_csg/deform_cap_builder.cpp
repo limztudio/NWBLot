@@ -21,11 +21,7 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CsgDeformCapBuilder::CollectBoundaryEdges(
-    ScratchArena& scratchArena,
-    const CsgDeformTriangleVector<ScratchArena>& triangles,
-    Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges
-){
+void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const CsgDeformTriangleVector<ScratchArena>& triangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges){
     outEdges.clear();
     if(triangles.empty())
         return;
@@ -61,11 +57,7 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(
     // Deterministic boundary order: traversal input matches emitted triangle order.
 }
 
-bool CsgDeformCapBuilder::OrderBoundaryLoop(
-    ScratchArena& scratchArena,
-    const Vector<CsgDeformCutLoopEdge, ScratchArena>& edges,
-    Vector<u32, ScratchArena>& outLoop
-){
+bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Vector<CsgDeformCutLoopEdge, ScratchArena>& edges, Vector<u32, ScratchArena>& outLoop){
     outLoop.clear();
     if(edges.empty())
         return true;
@@ -84,10 +76,7 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(
     outLoop.reserve(edges.size());
     outLoop.push_back(cursor);
     {
-        const auto seed = ::FindIf(
-            remaining.begin(),
-            remaining.end(),
-            [cursor](const CsgDeformCutLoopEdge& edge){ return edge.first == cursor || edge.second == cursor; }
+        const auto seed = ::FindIf(remaining.begin(), remaining.end(), [cursor](const CsgDeformCutLoopEdge& edge){ return edge.first == cursor || edge.second == cursor; }
         );
         if(seed == remaining.end())
             return false;
@@ -135,10 +124,7 @@ SIMDVectorSingle CsgDeformCapBuilder::CapCenterNormalVec(SIMDVectorSingle loopNo
     return loopNormalVec;
 }
 
-Expected<Float4> CsgDeformCapBuilder::CapNormal(
-    const CsgDeformVertexVector<ScratchArena>& vertices,
-    const Vector<u32, ScratchArena>& loop
-)noexcept{
+Expected<Float4> CsgDeformCapBuilder::CapNormal(const CsgDeformVertexVector<ScratchArena>& vertices, const Vector<u32, ScratchArena>& loop)noexcept{
     Float4 normal;
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});
@@ -158,12 +144,7 @@ Expected<Float4> CsgDeformCapBuilder::CapNormal(
     return normal;
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCapLoop(
-    const Float4& loopNormal,
-    CsgDeformVertexVector<ScratchArena>& inOutVertices,
-    CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
-    const Vector<u32, ScratchArena>& loop
-){
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(const Float4& loopNormal, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles, const Vector<u32, ScratchArena>& loop){
     u32 capTriangles = 0u;
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});
@@ -205,12 +186,7 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(
     return capTriangles;
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCutCaps(
-    ScratchArena& scratchArena,
-    CsgDeformVertexVector<ScratchArena>& inOutVertices,
-    CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
-    Vector<CsgDeformCutLoopEdge, ScratchArena>& scratchEdges
-){
+Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& scratchEdges){
     u32 capTriangles = 0u;
     CsgDeformCapBuilder::CollectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
     if(scratchEdges.empty())

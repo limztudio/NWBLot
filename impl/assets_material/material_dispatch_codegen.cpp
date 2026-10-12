@@ -41,10 +41,7 @@ static constexpr u32 s_NoSurfaceDispatchId = Limit<u32>::s_Max;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssignMaterialShadingModelIdsImpl(
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-){
+bool AssignMaterialShadingModelIdsImpl(CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
     for(const MaterialCookEntry& entry : materialEntries){
         if(entry.bxdfSource.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), StringConvert(AStringView(entry.virtualPath)));
@@ -74,8 +71,7 @@ bool AssignMaterialShadingModelIdsImpl(
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
     }
 
-    // Surface dispatch id per unique `.surface`; explicit-`shaders` opaque takes the no-surface sentinel (not 0) so GI
-    // hits the neutral fallback, never an unrelated hook.
+    // Surface dispatch id per unique `.surface`; explicit-`shaders` opaque takes the no-surface sentinel (not 0) so GI hits the neutral fallback, never an unrelated hook.
     Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
     uniqueSurfaces.reserve(materialEntries.size());
     for(const MaterialCookEntry& entry : materialEntries){
@@ -111,10 +107,7 @@ bool AssignMaterialShadingModelIdsImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Path BuildDeferredBxdfIncludeRoot(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName
-){
+static Path BuildDeferredBxdfIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
     return cacheDirectory / configurationSafeName / "deferred_modules";
 }
 
@@ -122,12 +115,7 @@ static Path BuildDeferredBxdfIncludeRoot(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitDeferredBxdfDispatchModuleImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-){
+Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
     Path includeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Deferred bxdf dispatch"))
         return MakeUnexpected(Failure{});
@@ -206,16 +194,11 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(
     ErrorCode errorCode;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}")
-            , PathToString<tchar>(outputPath.parentPath())
-            , StringConvert(ensureDirectoriesResult.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'")
-            , PathToString<tchar>(outputPath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
         return MakeUnexpected(Failure{});
     }
     return includeRoot;
@@ -229,9 +212,8 @@ static constexpr AStringView s_ShadowSurfaceFunctionMacro = "nwbMaterialSurface"
 static constexpr AStringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel";
 static constexpr AStringView s_ShadowSurfaceWrapperPrefix = "nwbShadowSurfaceWrapper";
 
-// Per-interface Slang namespace that isolates each material `.bind` file-scope symbol in the dispatch module (the
-// one TU that concatenates multiple `.bind` files). The project-owned `.surface` fragment stays global so its guarded
-// helper includes retain their normal global ownership; generated aliases expose exactly that surface's bind API.
+// Per-interface Slang namespace that isolates each material `.bind` file-scope symbol in the dispatch module (the one TU that concatenates multiple `.bind` files).
+// The project-owned `.surface` fragment stays global so its guarded helper includes retain their normal global ownership; generated aliases expose exactly that surface's bind API.
 static constexpr AStringView s_ShadowSurfaceBindNamespacePrefix = "nwbShadowBindModel";
 
 static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/surface_dispatch.slangi";
@@ -240,10 +222,7 @@ static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/su
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Path BuildShadowSurfaceIncludeRoot(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName
-){
+static Path BuildShadowSurfaceIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
     return cacheDirectory / configurationSafeName / "shadow_modules";
 }
 
@@ -261,14 +240,7 @@ using ShadowSurfaceBindAliasVector = Vector<ScratchString, ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendShadowSurfaceBindAlias(
-    const AStringView symbol,
-    const AStringView bindNamespace,
-    ScratchHashSet<ScratchString>& inOutSeenSymbols,
-    ShadowSurfaceBindAliasVector& outAliasSymbols,
-    CookString& inOutSource,
-    ScratchArena& scratchArena
-){
+static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AStringView bindNamespace, ScratchHashSet<ScratchString>& inOutSeenSymbols, ShadowSurfaceBindAliasVector& outAliasSymbols, CookString& inOutSource, ScratchArena& scratchArena){
     ScratchString seenSymbol(symbol, scratchArena);
     if(!inOutSeenSymbols.insert(Move(seenSymbol)).second)
         return;
@@ -295,137 +267,60 @@ static bool AppendShadowSurfaceBindAliases(
 ){
     inOutSeenSymbols.clear();
     outAliasSymbols.clear();
-    outAliasSymbols.reserve(
-        static_cast<usize>(NameDetail::s_HashLaneCount) + 7u + bindEntry.structs.size() + bindEntry.instances.size() * 4u
-    );
+    outAliasSymbols.reserve(static_cast<usize>(NameDetail::s_HashLaneCount) + 7u + bindEntry.structs.size() + bindEntry.instances.size() * 4u);
 
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         char laneDigits[TextDetail::s_DecimalTextBufferBytes] = {};
         ScratchString suffix("INTERFACE_HASH_", scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
-        AppendShadowSurfaceBindAlias(
-            AStringView(symbol),
-            bindNamespace,
-            inOutSeenSymbols,
-            outAliasSymbols,
-            inOutSource,
-            scratchArena
-        );
+        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
     }
 
-    const AStringView layoutSymbols[] = {
-        "LAYOUT_HASH",
-        "BLOCK_COUNT",
-        "FIELD_COUNT",
-        "STORAGE_CONSTANT",
-        "STORAGE_MUTABLE",
-        "CONSTANT_BYTE_SIZE",
-        "MUTABLE_BYTE_SIZE"
-    };
+    const AStringView layoutSymbols[] = { "LAYOUT_HASH", "BLOCK_COUNT", "FIELD_COUNT", "STORAGE_CONSTANT", "STORAGE_MUTABLE", "CONSTANT_BYTE_SIZE", "MUTABLE_BYTE_SIZE" };
     for(const AStringView suffix : layoutSymbols){
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, suffix);
-        AppendShadowSurfaceBindAlias(
-            AStringView(symbol),
-            bindNamespace,
-            inOutSeenSymbols,
-            outAliasSymbols,
-            inOutSource,
-            scratchArena
-        );
+        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
     }
 
     for(const MaterialBindStruct& bindStruct : bindEntry.structs){
-        AppendShadowSurfaceBindAlias(
-            AStringView(bindStruct.name),
-            bindNamespace,
-            inOutSeenSymbols,
-            outAliasSymbols,
-            inOutSource,
-            scratchArena
-        );
+        AppendShadowSurfaceBindAlias(AStringView(bindStruct.name), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
     }
 
     for(const MaterialBindInstance& instance : bindEntry.instances){
         const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance.type));
         if(!bindStruct){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: interface '{}' instance '{}' has unknown type '{}'")
-                , StringConvert(bindEntry.virtualPath)
-                , StringConvert(instance.name)
-                , StringConvert(instance.type)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: interface '{}' instance '{}' has unknown type '{}'"), StringConvert(bindEntry.virtualPath), StringConvert(instance.name), StringConvert(instance.type));
             return false;
         }
 
         const AStringView instanceName(instance.name);
         const AStringView blockSuffixes[] = { "_STORAGE", "_BYTE_OFFSET", "_BYTE_SIZE" };
         for(const AStringView suffix : blockSuffixes){
-            const ScratchString symbol = BuildMaterialBindGeneratedSymbol(
-                scratchArena,
-                { instanceName },
-                suffix
-            );
-            AppendShadowSurfaceBindAlias(
-                AStringView(symbol),
-                bindNamespace,
-                inOutSeenSymbols,
-                outAliasSymbols,
-                inOutSource,
-                scratchArena
-            );
+            const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName }, suffix);
+            AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
         }
 
         const ScratchString blockAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName });
-        AppendShadowSurfaceBindAlias(
-            AStringView(blockAccessor),
-            bindNamespace,
-            inOutSeenSymbols,
-            outAliasSymbols,
-            inOutSource,
-            scratchArena
-        );
+        AppendShadowSurfaceBindAlias(AStringView(blockAccessor), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
 
         for(const MaterialBindField& field : bindStruct->fields){
             const AStringView fieldName(field.name);
             const AStringView fieldSuffixes[] = { "_BYTE_OFFSET", "_KEY", "_DEFAULT" };
             for(const AStringView suffix : fieldSuffixes){
-                const ScratchString symbol = BuildMaterialBindGeneratedSymbol(
-                    scratchArena,
-                    { instanceName, fieldName },
-                    suffix
-                );
-                AppendShadowSurfaceBindAlias(
-                    AStringView(symbol),
-                    bindNamespace,
-                    inOutSeenSymbols,
-                    outAliasSymbols,
-                    inOutSource,
-                    scratchArena
-                );
+                const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName, fieldName }, suffix);
+                AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
             }
 
-            const ScratchString fieldAccessor = BuildMaterialBindAccessorName(
-                scratchArena,
-                { instanceName, fieldName }
-            );
-            AppendShadowSurfaceBindAlias(
-                AStringView(fieldAccessor),
-                bindNamespace,
-                inOutSeenSymbols,
-                outAliasSymbols,
-                inOutSource,
-                scratchArena
-            );
+            const ScratchString fieldAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName, fieldName });
+            AppendShadowSurfaceBindAlias(AStringView(fieldAccessor), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
         }
     }
 
     return true;
 }
 
-static void AppendShadowSurfaceBindAliasUndefines(
-    const ShadowSurfaceBindAliasVector& aliasSymbols,
-    CookString& inOutSource
-){
+static void AppendShadowSurfaceBindAliasUndefines(const ShadowSurfaceBindAliasVector& aliasSymbols, CookString& inOutSource){
     for(usize index = aliasSymbols.size(); index > 0u; ){
         --index;
         const ScratchString& symbol = aliasSymbols[index];
@@ -435,18 +330,13 @@ static void AppendShadowSurfaceBindAliasUndefines(
     }
 }
 
-static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    ScratchArena& arena
-){
+static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& arena){
     ShadowSurfaceBindEntryLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), arena);
     lookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
         const Name interfaceName(AStringView(bindEntry.virtualPath));
         if(!interfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid")
-                , StringConvert(bindEntry.virtualPath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid"), StringConvert(bindEntry.virtualPath));
             return MakeUnexpected(Failure{});
         }
         if(!lookup.emplace(interfaceName, &bindEntry).second){
@@ -462,19 +352,12 @@ static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    const CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-){
+Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
     Path includeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Shadow surface dispatch"))
         return MakeUnexpected(Failure{});
 
-    // Each surface id maps to one source and .bind interface; shared surfaces require the same interface
-    // because their hooks use fixed accessor names.
+    // Each surface id maps to one source and .bind interface; shared surfaces require the same interface because their hooks use fixed accessor names.
     u32 maxId = 0u;
     bool anySurface = false;
     for(const MaterialCookEntry& entry : materialEntries){
@@ -523,12 +406,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
         bindNamespaceIdById.resize(surfaceById.size());
     }
 
-    ShadowSurfaceBindNamespaceLookup bindNamespaceLookup(
-        0,
-        Hasher<Name>(),
-        EqualTo<Name>(),
-        scratchArena
-    );
+    ShadowSurfaceBindNamespaceLookup bindNamespaceLookup(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
     bindNamespaceLookup.reserve(materialBindEntries.size());
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
@@ -537,10 +415,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
         const Name interfaceName(interfaceById[id]);
         const auto bindEntryIt = bindEntryLookup->find(interfaceName);
         if(bindEntryIt == bindEntryLookup->end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'")
-                , id
-                , StringConvert(interfaceById[id])
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, StringConvert(interfaceById[id]));
             return MakeUnexpected(Failure{});
         }
         bindEntryById[id] = bindEntryIt.value();
@@ -560,17 +435,10 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
     source += "#ifndef NWB_GRAPHICS_SHADOW_GENERATED_SURFACE_DISPATCH_SLANGI\n";
     source += "#define NWB_GRAPHICS_SHADOW_GENERATED_SURFACE_DISPATCH_SLANGI\n\n";
 
-    // Context (NwbShadowHit + accessors + surface contract) comes from the includer's shadow_surface.slangi; emitting
-    // it here would force an unresolvable virtual engine/ include path.
+    // Context (NwbShadowHit + accessors + surface contract) comes from the includer's shadow_surface.slangi; emitting it here would force an unresolvable virtual engine/ include path.
 
-    // Per-id hook: each unique `.bind` emitted once in a private namespace with scoped aliases (no global `using`:
-    // later interfaces may collide; namespacing the surface would relocate its guarded includes).
-    ScratchHashSet<ScratchString> bindAliasSeenSymbols{
-        0,
-        Hasher<ScratchString>(),
-        EqualTo<ScratchString>(),
-        scratchArena
-    };
+    // Per-id hook: each unique `.bind` emitted once in a private namespace with scoped aliases (no global `using`: later interfaces may collide; namespacing the surface would relocate its guarded includes).
+    ScratchHashSet<ScratchString> bindAliasSeenSymbols{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
     ShadowSurfaceBindAliasVector bindAliasSymbols(scratchArena);
     ScratchString bindNamespace(scratchArena);
     for(usize id = 0u; id < surfaceById.size(); ++id){
@@ -592,14 +460,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
             source += interfaceById[id];
             source += ".bind\"\n}\n";
         }
-        if(!AppendShadowSurfaceBindAliases(
-            *bindEntryById[id],
-            AStringView(bindNamespace),
-            bindAliasSeenSymbols,
-            bindAliasSymbols,
-            source,
-            scratchArena
-        ))
+        if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), bindAliasSeenSymbols, bindAliasSymbols, source, scratchArena))
             return MakeUnexpected(Failure{});
         source += "#define ";
         source += s_ShadowSurfaceFunctionMacro;
@@ -641,9 +502,8 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
         source += idView;
         source += "(hit);\n";
     }
-    // Unknown id: no material surface is available (for example, an explicit opaque-stage material). Shadow consumes
-    // only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface
-    // fallback rather than an inferred project-material albedo.
+    // Unknown id: no material surface is available (for example, an explicit opaque-stage material).
+    // Shadow consumes only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface fallback rather than an inferred project-material albedo.
     source += "    default: return nwbMakeMeshSurface(half3(0.5h, 0.5h, 0.5h), hit.worldNormal, half(0.0), half(0.0));\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
@@ -652,16 +512,11 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
     ErrorCode errorCode;
     auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult2){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}")
-            , PathToString<tchar>(outputPath.parentPath())
-            , StringConvert(ensureDirectoriesResult2.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult2.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to write generated include '{}'")
-            , PathToString<tchar>(outputPath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
         return MakeUnexpected(Failure{});
     }
     return includeRoot;

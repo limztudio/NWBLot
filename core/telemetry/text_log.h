@@ -55,13 +55,7 @@ struct TextLogPayload{
 [[nodiscard]] bool IsValidTextLogType(Common::LogType::Enum type)noexcept;
 [[nodiscard]] bool BuildTextLogPayload(TelemetryArena& arena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordTextLog(
-    Recorder& recorder,
-    Common::LogType::Enum type,
-    TStringView message,
-    u64 frameIndex = 0u,
-    u32 streamId = 0u
-);
+[[nodiscard]] bool RecordTextLog(Recorder& recorder, Common::LogType::Enum type, TStringView message, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class TextLogCaptureLogger final : public Common::ILogger{
 public:

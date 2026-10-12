@@ -52,13 +52,7 @@ static void CanonicalizeRootIdentity(ScratchString& identity, const AssetRootDup
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(
-    const Path& repoRoot,
-    const Span<const CookString> sources,
-    const bool inferFromInputs,
-    const AssetRootDuplicatePolicy::Enum duplicatePolicy,
-    ScratchArena& scratchArena
-){
+Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(const Path& repoRoot, const Span<const CookString> sources, const bool inferFromInputs, const AssetRootDuplicatePolicy::Enum duplicatePolicy, ScratchArena& scratchArena){
     CookArena& arena = repoRoot.arena();
     CookVector<ResolvedAssetRoot> roots(arena);
     roots.reserve(sources.size());
@@ -66,23 +60,13 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
         const AStringView source(sources[sourceIndex]);
         auto resolved = ResolveAbsolutePath(arena, repoRoot, source);
         if(!resolved){
-            return MakeUnexpected(AssetRootResolutionError{
-                .inputPath = Path(arena, source),
-                .sourceIndex = sourceIndex,
-                .reason = AssetRootResolutionFailure::ResolvePath,
-                .error = resolved.error(),
-            });
+            return MakeUnexpected(AssetRootResolutionError{ .inputPath = Path(arena, source), .sourceIndex = sourceIndex, .reason = AssetRootResolutionFailure::ResolvePath, .error = resolved.error(), });
         }
         Path path = Move(*resolved);
         if(inferFromInputs){
             const auto directory = IsDirectory(path);
             if(!directory){
-                return MakeUnexpected(AssetRootResolutionError{
-                    .inputPath = Move(path),
-                    .sourceIndex = sourceIndex,
-                    .reason = AssetRootResolutionFailure::InspectInput,
-                    .error = directory.error(),
-                });
+                return MakeUnexpected(AssetRootResolutionError{ .inputPath = Move(path), .sourceIndex = sourceIndex, .reason = AssetRootResolutionFailure::InspectInput, .error = directory.error(), });
             }
             if(!*directory)
                 path = path.parentPath();
@@ -117,9 +101,7 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
 
         ScratchString parentName = PathToString(scratchArena, path.parentPath().filename());
         CanonicalizeTextInPlace(parentName);
-        const AStringView virtualRoot = parentName == __hidden_cook_paths::s_ImplDirectoryName
-            ? s_EngineVirtualRoot : s_ProjectVirtualRoot
-        ;
+        const AStringView virtualRoot = parentName == __hidden_cook_paths::s_ImplDirectoryName ? s_EngineVirtualRoot : s_ProjectVirtualRoot;
         roots.emplace_back(Move(path), ACompactString(virtualRoot));
     }
     return roots;

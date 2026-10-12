@@ -25,11 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(
-    Core::GpuTaskGraph& graph,
-    RendererMaterialSystem& materialSystem,
-    RendererCsgSystem& csgSystem
-)
+FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem){
@@ -104,8 +100,7 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
 #if defined(NWB_DEBUG)
             extinctionMaterialTypedRanges,
 #endif
-            extinctionMaterialTypedBytes
-        );
+            extinctionMaterialTypedBytes);
         if(!extinctionUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
             return MakeUnexpected(Failure{});
@@ -118,21 +113,10 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
         }
         if(extinctionUploadResult->hasDrawItems){
 
-            const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = {
-                &extinctionDrawItems.regular,
-                &extinctionDrawItems.csg,
-            };
-            AvboitGeometryPreparationBuilder extinctionGeometryPreparationBuilder(
-                m_graph,
-                m_materialSystem,
-                extinctionMaterialGeometryScratch
-            );
+            const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = { &extinctionDrawItems.regular, &extinctionDrawItems.csg, };
+            AvboitGeometryPreparationBuilder extinctionGeometryPreparationBuilder(m_graph, m_materialSystem, extinctionMaterialGeometryScratch);
             auto extinctionGeometryPreparationResult = extinctionGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{
-                    .drawItemSets = extinctionMaterialGeometryDrawSets,
-                    .drawItemSetCount = LengthOf(extinctionMaterialGeometryDrawSets),
-                    .phase = AvboitGeometryPhase::Extinction,
-                }
+                AvboitGeometryPreparationInputs{ .drawItemSets = extinctionMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(extinctionMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Extinction, }
             );
             if(!extinctionGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
@@ -152,16 +136,10 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
                 return MakeUnexpected(Failure{});
             }
             NWB_ASSERT(extinctionInstanceData.size() == extinctionMaterialTypedRanges.size());
-            ECSRenderDetail::AssertMaterialTypedUploadRanges(
-                extinctionMaterialTypedRanges,
-                extinctionMaterialTypedBytes
-            );
+            ECSRenderDetail::AssertMaterialTypedUploadRanges(extinctionMaterialTypedRanges, extinctionMaterialTypedBytes);
 #endif
 
-            AvboitMaterialUploadBuilder extinctionMaterialUploadBuilder(
-                m_graph,
-                m_csgSystem
-            );
+            AvboitMaterialUploadBuilder extinctionMaterialUploadBuilder(m_graph, m_csgSystem);
             auto extinctionCsgStreamsUploadedResult = extinctionMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
                     .targets = &deferredTargets,
@@ -187,12 +165,7 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
             }
             extinctionCsgStreamsUploaded = *extinctionCsgStreamsUploadedResult;
 
-            avboitExtinctionPayload.extinctionSnapshot.capture(
-                extinctionDrawItems,
-                extinctionCsgFrameData,
-                extinctionInstanceData.size(),
-                extinctionMaterialTypedBytes.size()
-            );
+            avboitExtinctionPayload.extinctionSnapshot.capture(extinctionDrawItems, extinctionCsgFrameData, extinctionInstanceData.size(), extinctionMaterialTypedBytes.size());
             avboitExtinctionPayload.extinctionPhasePrepared = true;
             extinctionStreamsUploaded = true;
             // Mixed work keeps local interleaving; one handoff cannot preserve per-draw order.
@@ -220,25 +193,16 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
             extinctionSharedComputeEmulationPlan = extinctionComputeEmulationCaptureResult->sharedPlan;
             extinctionSharedComputeEmulationInstanceCount = extinctionComputeEmulationCaptureResult->sharedInstanceCount;
             extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionComputeEmulationCaptureResult->sharedMaterialTypedByteCount;
-            if(extinctionRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
-                extinctionDrawItems, extinctionInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitExtinction
-            ))
+            if(extinctionRegularComputeEmulationPlanCaptured && generatedGeometry.matches(extinctionDrawItems, extinctionInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitExtinction))
                 extinctionReusedGeometryProducer = generatedGeometry.producerTask();
             else{
                 generatedGeometry.reset();
-                extinctionProducesReusableGeometry = extinctionRegularComputeEmulationPlanCaptured && generatedGeometry.capture(
-                    extinctionDrawItems, extinctionInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitExtinction
-                );
+                extinctionProducesReusableGeometry = extinctionRegularComputeEmulationPlanCaptured && generatedGeometry.capture(extinctionDrawItems, extinctionInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitExtinction);
             }
         }
         else{
             // Keep graph ownership for empty phases; skip native re-gather of mutable state.
-            avboitExtinctionPayload.extinctionSnapshot.capture(
-                extinctionDrawItems,
-                extinctionCsgFrameData,
-                extinctionInstanceData.size(),
-                extinctionMaterialTypedBytes.size()
-            );
+            avboitExtinctionPayload.extinctionSnapshot.capture(extinctionDrawItems, extinctionCsgFrameData, extinctionInstanceData.size(), extinctionMaterialTypedBytes.size());
             avboitExtinctionPayload.extinctionPhasePrepared = true;
         }
     }

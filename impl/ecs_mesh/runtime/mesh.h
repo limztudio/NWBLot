@@ -130,15 +130,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     bool dynamicMeshletConesFresh = false;
 
     [[nodiscard]] bool valid()const noexcept{
-        return
-            entity.valid()
-            && meshKey != s_NameNone
-            && buffersValid()
-            && meshletCount > 0u
-            && meshletPrimitiveIndexCount > 0u
-            && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / 3u + 31u) / 32u
-            && localBounds.valid()
-        ;
+        return entity.valid() && meshKey != s_NameNone && buffersValid() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / 3u + 31u) / 32u && localBounds.valid();
     }
 };
 
@@ -170,10 +162,7 @@ struct RenderableMeshDesc{
     bool runtime = false;
 
     [[nodiscard]] bool valid()const noexcept{
-        return runtime
-            ? runtimeMesh.valid()
-            : mesh.valid()
-        ;
+        return runtime ? runtimeMesh.valid() : mesh.valid();
     }
 };
 

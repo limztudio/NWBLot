@@ -80,11 +80,7 @@ struct FrameGraphAvboitExtinctionUploadResult{
 
 class FrameGraphAvboitExtinctionUploadChain final : NoCopy{
 public:
-    FrameGraphAvboitExtinctionUploadChain(
-        Core::GpuTaskGraph& graph,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem
-    );
+    FrameGraphAvboitExtinctionUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
 
 
 public:

@@ -36,20 +36,9 @@ public:
     [[nodiscard]] static SIMDVectorSingle AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept;
     [[nodiscard]] static SIMDVectorSingle ScaleCenterVec(SIMDVectorSingle sumVec, SIMDVectorSingle loopSizeVec)noexcept;
     [[nodiscard]] static SIMDVectorSingle CapCenterNormalVec(SIMDVectorSingle loopNormalVec)noexcept;
-    static void CollectBoundaryEdges(
-        Core::Alloc::ScratchArena& scratchArena,
-        const CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles,
-        Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges
-    );
-    [[nodiscard]] static bool OrderBoundaryLoop(
-        Core::Alloc::ScratchArena& scratchArena,
-        const Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& edges,
-        Vector<u32, Core::Alloc::ScratchArena>& outLoop
-    );
-    [[nodiscard]] static Expected<Float4> CapNormal(
-        const CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices,
-        const Vector<u32, Core::Alloc::ScratchArena>& loop
-    )noexcept;
+    static void CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, const CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges);
+    [[nodiscard]] static bool OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, const Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
+    [[nodiscard]] static Expected<Float4> CapNormal(const CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, const Vector<u32, Core::Alloc::ScratchArena>& loop)noexcept;
     [[nodiscard]] static Expected<u32> FillCapLoop(
         const Float4& loopNormal,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,

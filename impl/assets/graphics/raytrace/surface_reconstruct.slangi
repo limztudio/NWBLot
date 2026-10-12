@@ -27,7 +27,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller supplies mesh-frame material accessors for its frozen ray material context. The explicit instance material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path decisions belong in this geometric hit reconstruction helper.
+// The caller supplies mesh-frame material accessors for its frozen ray material context.
+// The explicit instance material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path decisions belong in this geometric hit reconstruction helper.
 // Closest geometric identity is independent of material reconstruction and caller admission policy.
 struct NwbRayTraceGeometryHit{
     bool hit;
@@ -76,16 +77,7 @@ float3 nwbRayTraceTransformSurfaceNormal(const float3x4 worldToObject, const flo
     ), float3(0.0, 0.0, 1.0));
 }
 
-NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
-    const uint instanceMaterialHeapSlot,
-    const float3 origin,
-    const float3 direction,
-    const float distance,
-    const uint instance,
-    const uint primitive,
-    const float2 bary,
-    const float3x4 worldToObject
-){
+NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float distance, const uint instance, const uint primitive, const float2 bary, const float3x4 worldToObject){
     NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
     hit.hit = true;
     hit.instance = instance;
@@ -107,10 +99,7 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
     surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
     surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
     surfaceHit.worldPosition = hit.position;
-    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(
-        worldToObject,
-        float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z
-    );
+    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(worldToObject, float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z);
     surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
     surfaceHit.rayDirection = direction;
 #if NWB_RT_CSG_ENABLED
@@ -121,12 +110,7 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
     return hit;
 }
 
-NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
-    const uint instanceMaterialHeapSlot,
-    const float3 origin,
-    const float3 direction,
-    const NwbRayTraceGeometryHit geometry
-){
+NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const NwbRayTraceGeometryHit geometry){
     if(!geometry.hit){
         NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
 #if NWB_RT_CSG_ENABLED
@@ -175,10 +159,7 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
         return hit;
     }
 #endif
-    NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(
-        instanceMaterialHeapSlot, origin, direction, geometry.distance, geometry.instance, geometry.primitive,
-        geometry.barycentrics, geometry.worldToObject
-    );
+    NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry.distance, geometry.instance, geometry.primitive, geometry.barycentrics, geometry.worldToObject);
 #if NWB_RT_CSG_ENABLED
     hit.queryBudgetUnits = geometry.queryBudgetUnits;
     hit.physicalQueries = geometry.physicalQueries;

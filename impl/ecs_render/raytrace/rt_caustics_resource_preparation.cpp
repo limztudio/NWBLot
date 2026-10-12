@@ -17,23 +17,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareCausticResources(
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
-    DeferredFrameTargets& targets,
-    const bool hardware
-){
-    if(
-        !targets.causticAccumulator
-        || !targets.causticIrradiance
-        || !meshView.buffer
-        || !meshView.heapHandle.valid()
-        || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-    )
+bool RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, const bool hardware){
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !meshView.buffer || !meshView.heapHandle.valid() || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid())
         return true;
-    if(
-        meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
-        || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    ){
+    if(meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
         return false;
     }
@@ -45,19 +32,10 @@ bool RendererRayTracingSystem::prepareCausticResources(
         return false;
     }
 
-    const bool producerReady =
-        ensureRayTraceMaterialContextSlotsHeapHandle()
-        && (hardware ? ensureCausticRtPipeline() : ensureSwCausticPipeline())
-    ;
+    const bool producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? ensureCausticRtPipeline() : ensureSwCausticPipeline());
     // Prepare shared resolve and temporal resources even when the producer is unavailable.
-    const bool resolveReady =
-        ensureCausticGeometryDownsamplePipeline()
-        && ensureCausticResolvePipeline()
-    ;
-    const bool temporalReady =
-        causticTemporalDecay() <= 0.f
-        || ensureCausticAccumulatorDecayPipeline()
-    ;
+    const bool resolveReady = ensureCausticGeometryDownsamplePipeline() && ensureCausticResolvePipeline();
+    const bool temporalReady = causticTemporalDecay() <= 0.f || ensureCausticAccumulatorDecayPipeline();
     return producerReady && resolveReady && temporalReady;
 }
 

@@ -41,16 +41,16 @@ namespace ObjectTypes{
 class Device;
 typedef Handle<Device> DeviceHandle;
 
-// Canonical native queue construction identity. Enumerate every VkDeviceQueueCreateInfo queue exactly once,
-// including presentation-only queues; scheduler-visible queues reference these states by index.
+// Canonical native queue construction identity.
+// Enumerate every VkDeviceQueueCreateInfo queue exactly once, including presentation-only queues; scheduler-visible queues reference these states by index.
 struct VulkanNativeQueueDesc{
     VkQueue queue = VK_NULL_HANDLE;
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = Limit<u32>::s_Max;
 };
 
-// One canonical native queue for the RHI scheduler. `primaryForClass` selects the class-based CommandQueue route;
-// graph packets use the Device-assigned physical ID.
+// One canonical native queue for the RHI scheduler.
+// `primaryForClass` selects the class-based CommandQueue route; graph packets use the Device-assigned physical ID.
 struct VulkanPhysicalQueueDesc{
     u32 nativeQueueIndex = Limit<u32>::s_Max;
     u32 timestampValidBits = 0u;
@@ -68,8 +68,8 @@ struct DeviceDesc{
     VolkInstanceTable instanceDispatch = {};
     VolkDeviceTable deviceDispatch = {};
 
-    // Required canonical registry inputs, synchronously consumed by CreateDevice. The native table includes queues
-    // that are intentionally absent from physical task-graph topology, such as a distinct present-only queue.
+    // Required canonical registry inputs, synchronously consumed by CreateDevice.
+    // The native table includes queues that are intentionally absent from physical task-graph topology, such as a distinct present-only queue.
     const VulkanNativeQueueDesc* nativeQueues = nullptr;
     usize nativeQueueCount = 0u;
     const VulkanPhysicalQueueDesc* physicalQueues = nullptr;
@@ -103,8 +103,8 @@ struct DeviceDesc{
     bool multiDrawIndirectFeatureEnabled = false;
     bool drawIndirectFirstInstanceFeatureEnabled = false;
     bool meshShaderFeatureEnabled = false;
-    // Enabled feature-chain state for optional ray-tracing capabilities.  Keep this distinct from extension-name
-    // presence so runtime feature queries do not advertise an extension whose required feature bit was not enabled.
+    // Enabled feature-chain state for optional ray-tracing capabilities.
+    // Keep this distinct from extension-name presence so runtime feature queries do not advertise an extension whose required feature bit was not enabled.
     bool accelerationStructureFeatureEnabled = false;
     bool rayTracingPipelineFeatureEnabled = false;
     bool rayQueryFeatureEnabled = false;

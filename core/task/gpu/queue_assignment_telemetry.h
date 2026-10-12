@@ -63,11 +63,7 @@ public:
         Alloc::ScratchArena& scratchArena
     );
 
-    [[nodiscard]] bool validFor(
-        const GpuTaskGraph::DeclarationReadView& declarations,
-        const GpuTaskGraphQueueAssignments& assignments,
-        const GpuCompiledGraph::ReadView& compiledPlan
-    )const;
+    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const;
     [[nodiscard]] const GpuTaskQueueAssignmentTelemetry* find(GpuTaskId task)const noexcept;
 
 

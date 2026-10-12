@@ -37,8 +37,7 @@ protected:
         return down(byte, timestampMs, shift) && up(byte);
     }
     [[nodiscard]] bool clickAt(const Ui::Point point, const u64 timestampMs){
-        return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = point, .timestampMs = timestampMs })
-            && dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = point });
+        return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = point, .timestampMs = timestampMs }) && dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = point });
     }
 };
 

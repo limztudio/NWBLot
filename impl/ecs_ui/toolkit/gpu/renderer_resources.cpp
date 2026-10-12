@@ -34,11 +34,7 @@ struct TargetReadyTask{
         Core::GpuGraphResourceId color;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commands,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
         return context.declarations.textureForResource(payload.color) == payload.target->m_color.get() && !commands.commandRecordingFailed();
     }
 };
@@ -55,20 +51,12 @@ struct TargetReadyTask{
         return {};
     const Core::GpuTaskId clear = graph.addClearTextureTask(
         Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_clear")).setMarkerLabel("UI Target Initialization Clear"),
-        Core::GpuClearTextureTaskDesc{
-            .destination = color,
-            .valueType = Core::GpuClearTextureTaskValueType::Float,
-            .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f),
-        }
+        Core::GpuClearTextureTaskDesc{ .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
     );
     if(!clear.valid())
         return {};
     const Core::GpuTaskResourceUse use{ color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read };
-    return graph.addTask<TargetReadyTask>(
-        Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_ready")).setMarkerLabel("UI Target Ready")
-            .setDependencies(&clear, 1u).setResourceUses(&use, 1u),
-        TargetReadyTask::Payload{ target, color }
-    );
+    return graph.addTask<TargetReadyTask>(Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_ready")).setMarkerLabel("UI Target Ready").setDependencies(&clear, 1u).setResourceUses(&use, 1u), TargetReadyTask::Payload{ target, color });
 }
 
 [[nodiscard]] static Core::RenderState PaintRenderState(){
@@ -88,15 +76,8 @@ struct TargetReadyTask{
 }
 
 template<typename TShader>
-[[nodiscard]] static bool LoadShader(
-    GpuRendererState& state,
-    Core::ShaderHandle& shader,
-    const Name& identity
-){
-    return ShaderAssetLoader::Load<TShader>(
-        shader, identity, Core::ShaderArchive::s_DefaultVariant, identity,
-        state.m_graphics, state.m_assets, state.m_resolver, NWB_TEXT("GpuRenderer")
-    );
+[[nodiscard]] static bool LoadShader(GpuRendererState& state, Core::ShaderHandle& shader, const Name& identity){
+    return ShaderAssetLoader::Load<TShader>(shader, identity, Core::ShaderArchive::s_DefaultVariant, identity, state.m_graphics, state.m_assets, state.m_resolver, NWB_TEXT("GpuRenderer"));
 }
 
 
@@ -109,10 +90,7 @@ template<typename TShader>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::MatchesAcquired(
-    const Core::AcquiredPresentationFrame& first,
-    const Core::AcquiredPresentationFrame& second
-){
+bool GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second){
     const Core::QueueSubmissionToken& a = first.backBuffer.availabilityCompletion;
     const Core::QueueSubmissionToken& b = second.backBuffer.availabilityCompletion;
     return
@@ -142,18 +120,9 @@ bool GpuRendererState::createResources(){
     )
         return false;
     Core::VertexAttributeDesc attributes[NWB_UI_VERTEX_ATTRIBUTE_COUNT];
-    attributes[NWB_UI_VERTEX_POSITION_LOCATION]
-        .setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX)
-        .setOffset(NWB_UI_VERTEX_POSITION_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("POSITION"))
-    ;
-    attributes[NWB_UI_VERTEX_UV_LOCATION]
-        .setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX)
-        .setOffset(NWB_UI_VERTEX_UV_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("TEXCOORD"))
-    ;
-    attributes[NWB_UI_VERTEX_COLOR_LOCATION]
-        .setFormat(Core::Format::RGBA32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX)
-        .setOffset(NWB_UI_VERTEX_COLOR_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("COLOR"))
-    ;
+    attributes[NWB_UI_VERTEX_POSITION_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_POSITION_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("POSITION"));
+    attributes[NWB_UI_VERTEX_UV_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_UV_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("TEXCOORD"));
+    attributes[NWB_UI_VERTEX_COLOR_LOCATION].setFormat(Core::Format::RGBA32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_COLOR_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("COLOR"));
     resources->m_inputLayout = device.createInputLayout(attributes, NWB_UI_VERTEX_ATTRIBUTE_COUNT, resources->m_vertexShader.get());
     if(!resources->m_inputLayout)
         return false;
@@ -169,10 +138,7 @@ bool GpuRendererState::createResources(){
     if(!resources->m_layout || !resources->m_outputLayout || !resources->m_sampler)
         return false;
     resources->m_samplerDescriptor = heap.allocate(Core::GpuDescriptorClass::Sampler);
-    if(
-        !resources->m_samplerDescriptor.valid()
-        || !heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::Sampler(0u, resources->m_sampler.get()))
-    )
+    if(!resources->m_samplerDescriptor.valid() || !heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::Sampler(0u, resources->m_sampler.get())))
         return false;
     Core::GraphicsPipelineDesc pipeline;
     pipeline
@@ -216,9 +182,7 @@ GpuVersion<GpuTargetVersion> GpuRendererState::createTarget(const u32 width, con
     // A creation descriptor does not transition a fresh native image. Initialize before publishing its bindless view.
     if(!queue.valid())
         return {};
-    const auto submission = m_graphics.submitStandaloneTaskGraph(
-        &target, __hidden_ui_gpu_resources::DeclareTargetInitialization, queue
-    );
+    const auto submission = m_graphics.submitStandaloneTaskGraph(&target, __hidden_ui_gpu_resources::DeclareTargetInitialization, queue);
     if(!submission)
         return {};
     target->m_readinessToken = *submission;
@@ -226,9 +190,7 @@ GpuVersion<GpuTargetVersion> GpuRendererState::createTarget(const u32 width, con
         return {};
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     target->m_sampledImage = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    const Core::DescriptorWriteItem view = Core::DescriptorWriteItem::TextureSrv(
-        0u, target->m_color.get(), Core::Format::RGBA16_FLOAT, Core::s_AllSubresources, Core::TextureDimension::Texture2D
-    );
+    const Core::DescriptorWriteItem view = Core::DescriptorWriteItem::TextureSrv(0u, target->m_color.get(), Core::Format::RGBA16_FLOAT, Core::s_AllSubresources, Core::TextureDimension::Texture2D);
     if(!target->m_sampledImage.valid() || !heap.write(target->m_sampledImage, view))
         return {};
     return target;
@@ -239,10 +201,7 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
     const usize indexCount = snapshot.indices().size();
     if(vertexCount == 0u && indexCount == 0u)
         return true;
-    if(
-        vertexCount == 0u || indexCount == 0u || vertexCount > Limit<usize>::s_Max / sizeof(Vertex)
-        || indexCount > Limit<usize>::s_Max / sizeof(u32)
-    )
+    if(vertexCount == 0u || indexCount == 0u || vertexCount > Limit<usize>::s_Max / sizeof(Vertex) || indexCount > Limit<usize>::s_Max / sizeof(u32))
         return false;
     Core::Device& device = m_graphics.getDevice();
     if(slot.vertexCapacity < vertexCount){
@@ -334,10 +293,7 @@ bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
     for(auto& slot : m_slots){
         if(slot.inFlight)
             continue;
-        if(
-            !prepareGlyphPages(*m_pending) || !prepareSdfPages(*m_pending) || !prepareTextureImages(*m_pending)
-            || !prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired)
-        )
+        if(!prepareGlyphPages(*m_pending) || !prepareSdfPages(*m_pending) || !prepareTextureImages(*m_pending) || !prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired))
             return false;
         m_pending->m_target = slot.target;
         m_pending->m_resources = m_resources;

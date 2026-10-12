@@ -39,70 +39,53 @@ struct NwbBindlessHeapUint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-Texture2D<float4> g_NwbHeapSampledImages[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Texture2D<float4> g_NwbHeapSampledImages[];
 
 // Texture2DArray requires a distinct shader declaration from Texture2D even though both are Vulkan sampled-image descriptors. It therefore owns a separate binding/class while sharing the resource-slot namespace.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-Texture2DArray<float4> g_NwbHeapSampledImage2DArrays[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Texture2DArray<float4> g_NwbHeapSampledImage2DArrays[];
 
 // Texture3D needs another sampled-image binding because Slang's resource type determines the SPIR-V image view dimension. It shares the global resource-slot namespace with the other non-sampler classes.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-Texture3D<float4> g_NwbHeapSampledImage3Ds[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Texture3D<float4> g_NwbHeapSampledImage3Ds[];
 
 // TextureCube likewise needs its own declaration and descriptor binding: a cube image view cannot be addressed through the Texture2D table even though both are sampled-image descriptors in Vulkan.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-TextureCube<float4> g_NwbHeapSampledImageCubes[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] TextureCube<float4> g_NwbHeapSampledImageCubes[];
 
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWTexture2D<float4> g_NwbHeapStorageImages[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2D<float4> g_NwbHeapStorageImages[];
 
 // Scalar uint and 3D float writable views share the StorageImage descriptor table through typed aliases.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the StorageImage descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWTexture2D<uint> g_NwbHeapStorageImageUints[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWTexture3D<float> g_NwbHeapStorageImage3DFloats[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2D<uint> g_NwbHeapStorageImageUints[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture3D<float> g_NwbHeapStorageImage3DFloats[];
 #pragma warning(pop)
 
 // Storage-image descriptors carry dimension+format, so one table exposes typed 2D-array aliases (CSG transients).
 // Shared binding 1 avoids a new heap ABI class per format.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the StorageImage descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWTexture2DArray<float4> g_NwbHeapStorageImage2DArrayFloat4s[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWTexture2DArray<uint> g_NwbHeapStorageImage2DArrayUints[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWTexture2DArray<uint2> g_NwbHeapStorageImage2DArrayUint2s[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWTexture2DArray<uint4> g_NwbHeapStorageImage2DArrayUint4s[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2DArray<float4> g_NwbHeapStorageImage2DArrayFloat4s[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2DArray<uint> g_NwbHeapStorageImage2DArrayUints[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2DArray<uint2> g_NwbHeapStorageImage2DArrayUint2s[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2DArray<uint4> g_NwbHeapStorageImage2DArrayUint4s[];
 #pragma warning(pop)
 
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-Buffer<uint> g_NwbHeapSampledBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Buffer<uint> g_NwbHeapSampledBuffers[];
 
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWByteAddressBuffer g_NwbHeapStorageBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWByteAddressBuffer g_NwbHeapStorageBuffers[];
 
 // Read-only raw alias over the same StorageBuffer binding (SRV/UAV is SPIR-V access decoration, not a new descriptor).
 // Keeps write capability out of geometry fetches.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate read-only view of the storage-buffer descriptor table above.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ByteAddressBuffer g_NwbHeapRawBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ByteAddressBuffer g_NwbHeapRawBuffers[];
 #pragma warning(pop)
 
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbBindlessHeapUint> g_NwbHeapUniformBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbBindlessHeapUint> g_NwbHeapUniformBuffers[];
 
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLER, NWB_BINDLESS_HEAP_SAMPLER_SET)]]
-SamplerState g_NwbHeapSamplers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLER, NWB_BINDLESS_HEAP_SAMPLER_SET)]] SamplerState g_NwbHeapSamplers[];
 
 #if NWB_BINDLESS_TLAS
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT, NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET)]]
-RaytracingAccelerationStructure g_NwbHeapAccelStruct;
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT, NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET)]] RaytracingAccelerationStructure g_NwbHeapAccelStruct;
 #endif
 
 

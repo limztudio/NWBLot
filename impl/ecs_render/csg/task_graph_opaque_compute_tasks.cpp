@@ -46,21 +46,14 @@ OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(
 {}
 
 
-bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
-        payload.meshViewSetupReady,
-        payload.sceneShadingSetupReady
-    );
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady)
         return true;
 
@@ -72,30 +65,13 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(
     if(!payload.plan.matches(scratchArena))
         return false;
 
-    const bool deferredResourcesReady =
-        payload.materialDrawBuffersUploaded
-        && payload.frameBindings.frameReady(
-            payload.instanceCount,
-            payload.materialTypedByteCount
-        )
-    ;
-    const bool csgResourcesReady =
-        deferredResourcesReady
-        && payload.csgFrameBuffersUploaded
-        && csgFrameData.hasWork()
-        && payload.csgResources.frameReady(csgFrameData)
-    ;
-    if(
-        !csgResourcesReady
-        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
-    )
+    const bool deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
+    const bool csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
+    if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return true;
 
     Core::ViewportState csgViewportState;
-    csgViewportState
-        .addViewport(payload.targets.framebuffer->getFramebufferInfo().getViewport())
-        .addScissorRect(csgFrameData.workRegion.resolveRect(payload.targets.width, payload.targets.height))
-    ;
+    csgViewportState.addViewport(payload.targets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(csgFrameData.workRegion.resolveRect(payload.targets.width, payload.targets.height));
     const MaterialPassDrawContext drawContext{
         commandList,
         payload.targets.framebuffer.get(),
@@ -134,11 +110,7 @@ OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(
 {}
 
 
-bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
@@ -146,10 +118,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(
     Core::GraphicsRuntime& graphics = payload.graphics;
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
-        payload.meshViewSetupReady,
-        payload.sceneShadingSetupReady
-    );
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady)
         return true;
 
@@ -161,37 +130,16 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(
     if(!payload.plan.matches())
         return false;
 
-    const bool deferredResourcesReady =
-        payload.materialDrawBuffersUploaded
-        && payload.frameBindings.frameReady(
-            payload.instanceCount,
-            payload.materialTypedByteCount
-        )
-    ;
-    const bool csgResourcesReady =
-        deferredResourcesReady
-        && payload.csgFrameBuffersUploaded
-        && csgFrameData.hasWork()
-        && payload.csgResources.frameReady(csgFrameData)
-    ;
-    if(
-        !csgResourcesReady
-        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
-    )
+    const bool deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
+    const bool csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
+    if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return true;
     if(payload.opaqueCsgTiming.has_value())
         return false;
 
     Core::ViewportState deferredViewportState;
-    deferredViewportState.addViewportAndScissorRect(
-        payload.targets.framebuffer->getFramebufferInfo().getViewport()
-    );
-    payload.opaqueCsgTiming.emplace(
-        graphics.gpuTiming(),
-        RendererGpuTimingScope::s_OpaqueCsg,
-        graphics.getDevice(),
-        commandList
-    );
+    deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
+    payload.opaqueCsgTiming.emplace(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, graphics.getDevice(), commandList);
     // Close the marker here; the sample callback owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(&payload.opaqueCsgTiming))
         return false;

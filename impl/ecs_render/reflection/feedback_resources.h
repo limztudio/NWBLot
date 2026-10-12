@@ -79,12 +79,7 @@ public:
 public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, const ReflectionSettings& settings, bool enabled);
-    [[nodiscard]] ReflectionFeedbackSnapshot snapshot(
-        const ReflectionSceneContentStamp& stamp,
-        const ReflectionSettings& settings,
-        bool enabled,
-        u64 graphicsFrameIndex
-    )const;
+    [[nodiscard]] ReflectionFeedbackSnapshot snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, bool enabled, u64 graphicsFrameIndex)const;
 
 private:
     void releaseBuffers();

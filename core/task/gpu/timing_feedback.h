@@ -17,8 +17,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Queue routing remains a compiler policy choice.  This diagnostic keeps the scoring terms independently visible so
-// timing feedback can be inspected without becoming part of graph correctness or synchronization planning.
+// Queue routing remains a compiler policy choice.
+// This diagnostic keeps the scoring terms independently visible so timing feedback can be inspected without becoming part of graph correctness or synchronization planning.
 struct GpuQueueAssignmentScore{
     i32 overlap = 0;
     i32 queueLoad = 0;
@@ -30,8 +30,8 @@ struct GpuQueueAssignmentScore{
 };
 
 
-// Accepted assignment and dwell state follow semantic work across queue-class changes. Duration histories remain
-// route-specific below, but a Graphics -> Compute -> Graphics sequence must update one shared switch timeline.
+// Accepted assignment and dwell state follow semantic work across queue-class changes.
+// Duration histories remain route-specific below, but a Graphics -> Compute -> Graphics sequence must update one shared switch timeline.
 struct GpuTaskTimingAssignmentKey{
     Name task = s_NameNone;
     u32 variant = 0u;
@@ -40,18 +40,15 @@ struct GpuTaskTimingAssignmentKey{
     [[nodiscard]] constexpr bool valid()const noexcept{ return static_cast<bool>(task); }
 };
 inline constexpr bool operator==(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
-    return lhs.task == rhs.task
-        && lhs.variant == rhs.variant
-        && lhs.resolutionClass == rhs.resolutionClass
-    ;
+    return lhs.task == rhs.task && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass;
 }
 inline constexpr bool operator!=(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
     return !(lhs == rhs);
 }
 
 
-// Stable route key for measured task work. The broad queue class belongs in the history key, while the exact
-// physical queue is retained separately so devices with several same-class queues do not blend samples.
+// Stable route key for measured task work.
+// The broad queue class belongs in the history key, while the exact physical queue is retained separately so devices with several same-class queues do not blend samples.
 struct GpuTaskTimingKey{
     Name task = s_NameNone;
     u32 variant = 0u;
@@ -61,24 +58,14 @@ struct GpuTaskTimingKey{
     [[nodiscard]] constexpr bool valid()const noexcept{ return task && queue < CommandQueue::kCount; }
 };
 inline constexpr bool operator==(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
-    return lhs.task == rhs.task
-        && lhs.variant == rhs.variant
-        && lhs.resolutionClass == rhs.resolutionClass
-        && lhs.queue == rhs.queue
-    ;
+    return lhs.task == rhs.task && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass && lhs.queue == rhs.queue;
 }
 inline constexpr bool operator!=(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
     return !(lhs == rhs);
 }
 
-[[nodiscard]] inline constexpr GpuTaskTimingAssignmentKey GpuTaskTimingAssignmentKeyFromHistoryKey(
-    const GpuTaskTimingKey& key
-)noexcept{
-    return GpuTaskTimingAssignmentKey{
-        .task = key.task,
-        .variant = key.variant,
-        .resolutionClass = key.resolutionClass,
-    };
+[[nodiscard]] inline constexpr GpuTaskTimingAssignmentKey GpuTaskTimingAssignmentKeyFromHistoryKey(const GpuTaskTimingKey& key)noexcept{
+    return GpuTaskTimingAssignmentKey{ .task = key.task, .variant = key.variant, .resolutionClass = key.resolutionClass, };
 }
 
 
@@ -126,12 +113,7 @@ struct RouteEqual{
         return lhs == rhs;
     }
     [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteLookup& rhs)const noexcept{
-        return lhs.task == rhs.key.task.identityHash()
-            && lhs.variant == rhs.key.variant
-            && lhs.resolutionClass == rhs.key.resolutionClass
-            && lhs.queue == rhs.key.queue
-            && lhs.physicalQueue == rhs.physicalQueue
-        ;
+        return lhs.task == rhs.key.task.identityHash() && lhs.variant == rhs.key.variant && lhs.resolutionClass == rhs.key.resolutionClass && lhs.queue == rhs.key.queue && lhs.physicalQueue == rhs.physicalQueue;
     }
 };
 
@@ -183,8 +165,8 @@ struct GpuTaskTimingHistoryEntry{
     }
 };
 
-// This state is intentionally separate from duration statistics.  It lets a compiler damp assignment changes even
-// when the timing query that established the last accepted route completes several frames later.
+// This state is intentionally separate from duration statistics.
+// It lets a compiler damp assignment changes even when the timing query that established the last accepted route completes several frames later.
 struct GpuTaskTimingAssignmentState{
     GpuTaskTimingAssignmentKey key;
     u64 lastAcceptedFrameIndex = 0u;
@@ -193,11 +175,7 @@ struct GpuTaskTimingAssignmentState{
     bool hasAcceptedAssignment = false;
 
     [[nodiscard]] bool valid()const noexcept{
-        return key.valid()
-            && hasAcceptedAssignment
-            && lastAcceptedQueue.valid()
-            && lastSwitchFrameIndex <= lastAcceptedFrameIndex
-        ;
+        return key.valid() && hasAcceptedAssignment && lastAcceptedQueue.valid() && lastSwitchFrameIndex <= lastAcceptedFrameIndex;
     }
 };
 
@@ -208,17 +186,18 @@ inline constexpr u32 s_MinSwitchSamples = 8u;
 };
 
 
-// Disabled by default.  A caller supplies this policy and one immutable history snapshot to the compiler; neither
-// missing timing nor an invalid/empty snapshot may change the ordinary deterministic queue assignment.
+// Disabled by default.
+// A caller supplies this policy and one immutable history snapshot to the compiler; neither missing timing nor an invalid/empty snapshot may change the ordinary deterministic queue assignment.
 struct GpuTaskTimingFeedbackPolicy{
     f64 minimumAbsoluteBenefitSeconds = 0.0;
     f64 minimumRelativeBenefit = 0.0;
     u64 minimumFramesBetweenSwitches = GpuTaskTimingFeedbackPolicyDetail::s_MinFramesBetweenSwitches;
     u32 minimumSampleCount = GpuTaskTimingFeedbackPolicyDetail::s_MinSwitchSamples;
     u32 calibrationIntervalFrames = 1u;
-    // While a legal candidate lacks enough samples, one opted-in route is selected every N frames. Every
-    // cross-family probe requires the family-routing opt-in, and cross-class probes also require the cross-class
-    // timing opt-in. Zero disables calibration. Probes stop after every legal route reaches minimumSampleCount.
+    // While a legal candidate lacks enough samples, one opted-in route is selected every N frames.
+    // Every cross-family probe requires the family-routing opt-in, and cross-class probes also require the cross-class timing opt-in.
+    // Zero disables calibration.
+    // Probes stop after every legal route reaches minimumSampleCount.
     bool enabled = false;
 
     [[nodiscard]] bool valid()const noexcept;
@@ -244,33 +223,14 @@ namespace GpuTaskDiagnosticTimingQueueOverrideStatus{
     };
 };
 
-// Validates only identity and device-generation safety.  The compiler remains responsible for capability, queue
-// class, resource-ownership, and task-level eligibility checks before honoring a debug force override.
-[[nodiscard]] GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(
-    const GpuTaskDiagnosticTimingQueueOverride* overrides,
-    usize overrideCount,
-    u16 deviceGeneration
-)noexcept;
-[[nodiscard]] const GpuTaskDiagnosticTimingQueueOverride* FindGpuTaskDiagnosticTimingQueueOverride(
-    const GpuTaskDiagnosticTimingQueueOverride* overrides,
-    usize overrideCount,
-    const GpuTaskTimingKey& key
-)noexcept;
+// Validates only identity and device-generation safety.
+// The compiler remains responsible for capability, queue class, resource-ownership, and task-level eligibility checks before honoring a debug force override.
+[[nodiscard]] GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(const GpuTaskDiagnosticTimingQueueOverride* overrides, usize overrideCount, u16 deviceGeneration)noexcept;
+[[nodiscard]] const GpuTaskDiagnosticTimingQueueOverride* FindGpuTaskDiagnosticTimingQueueOverride(const GpuTaskDiagnosticTimingQueueOverride* overrides, usize overrideCount, const GpuTaskTimingKey& key)noexcept;
 
-[[nodiscard]] bool GpuTaskTimingHistoryMeetsMinimumSamples(
-    const GpuTaskTimingHistory& history,
-    const GpuTaskTimingFeedbackPolicy& policy
-)noexcept;
-[[nodiscard]] bool GpuTaskTimingBenefitExceedsHysteresis(
-    const GpuTaskTimingHistory& incumbent,
-    const GpuTaskTimingHistory& candidate,
-    const GpuTaskTimingFeedbackPolicy& policy
-)noexcept;
-[[nodiscard]] bool GpuTaskTimingSwitchDwellElapsed(
-    const GpuTaskTimingAssignmentState& assignment,
-    u64 frameIndex,
-    const GpuTaskTimingFeedbackPolicy& policy
-)noexcept;
+[[nodiscard]] bool GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+[[nodiscard]] bool GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+[[nodiscard]] bool GpuTaskTimingSwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
 [[nodiscard]] bool GpuTaskTimingFeedbackCanSwitch(
     const GpuTaskTimingHistory& incumbent,
     const GpuTaskTimingHistory& candidate,
@@ -284,8 +244,8 @@ namespace GpuTaskDiagnosticTimingQueueOverrideStatus{
 
 class GpuTaskTimingHistoryStore;
 
-// A snapshot is writeable only by its owning history store.  Compilation consumes these plain values and therefore
-// cannot observe query completion or mutable frame state while it makes a deterministic queue decision.
+// A snapshot is writeable only by its owning history store.
+// Compilation consumes these plain values and therefore cannot observe query completion or mutable frame state while it makes a deterministic queue decision.
 class GpuTaskTimingHistorySnapshot final : NoCopy{
     friend class GpuTaskTimingHistoryStore;
 
@@ -299,13 +259,8 @@ public:
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
-    [[nodiscard]] const GpuTaskTimingHistory* find(
-        const GpuTaskTimingKey& key,
-        const GpuPhysicalQueueId& physicalQueue
-    )const noexcept;
-    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(
-        const GpuTaskTimingAssignmentKey& key
-    )const noexcept;
+    [[nodiscard]] const GpuTaskTimingHistory* find(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept;
+    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingAssignmentKey& key)const noexcept;
 
 
 private:
@@ -324,8 +279,8 @@ private:
 
 inline constexpr u32 s_DefaultGpuTaskTimingHistorySampleCount = 32u;
 
-// Owns bounded rolling samples for one current logical-device generation.  Query collection may call recordSample()
-// before a later compiler snapshot; none of the mutation APIs participate in graph validation, barriers, or waits.
+// Owns bounded rolling samples for one current logical-device generation.
+// Query collection may call recordSample() before a later compiler snapshot; none of the mutation APIs participate in graph validation, barriers, or waits.
 class GpuTaskTimingHistoryStore final : NoCopy{
 private:
     struct HistoryRecord{
@@ -339,65 +294,34 @@ private:
 
 
 public:
-    explicit GpuTaskTimingHistoryStore(
-        GraphicsArena& arena,
-        u32 maximumSamplesPerHistory = s_DefaultGpuTaskTimingHistorySampleCount
-    );
+    explicit GpuTaskTimingHistoryStore(GraphicsArena& arena, u32 maximumSamplesPerHistory = s_DefaultGpuTaskTimingHistorySampleCount);
 
 
 public:
     void reset()noexcept;
     void reset(GpuTaskTimingHistorySnapshot& outSnapshot)noexcept;
     void resetForDeviceGeneration(u16 deviceGeneration)noexcept;
-    // A successfully collected query represents accepted GPU work.  The source frame updates route dwell state only
-    // when it is newer than the previous observation, so late completion can never move that state backwards.
-    [[nodiscard]] bool recordSample(
-        const GpuTaskTimingKey& key,
-        const GpuPhysicalQueueId& physicalQueue,
-        f64 durationSeconds,
-        u64 sourceFrameIndex
-    );
-    // Adds duration statistics without changing adaptive assignment state. This records both bounded calibration
-    // observations and accepted samples whose assignment was committed separately at submission resolution.
-    [[nodiscard]] bool recordNonCommittingSample(
-        const GpuTaskTimingKey& key,
-        const GpuPhysicalQueueId& physicalQueue,
-        f64 durationSeconds
-    );
+    // A successfully collected query represents accepted GPU work.
+    // The source frame updates route dwell state only when it is newer than the previous observation, so late completion can never move that state backwards.
+    [[nodiscard]] bool recordSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds, u64 sourceFrameIndex);
+    // Adds duration statistics without changing adaptive assignment state.
+    // This records both bounded calibration observations and accepted samples whose assignment was committed separately at submission resolution.
+    [[nodiscard]] bool recordNonCommittingSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds);
     // Packet acceptance reports the selected route even when timestamp capacity was unavailable.
-    [[nodiscard]] bool noteAcceptedAssignment(
-        const GpuTaskTimingKey& key,
-        const GpuPhysicalQueueId& physicalQueue,
-        u64 sourceFrameIndex
-    );
+    [[nodiscard]] bool noteAcceptedAssignment(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, u64 sourceFrameIndex);
     void snapshot(GpuTaskTimingHistorySnapshot& outSnapshot)const;
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] usize historyCount()const noexcept{ return m_histories.size(); }
-    [[nodiscard]] const GpuTaskTimingHistory* find(
-        const GpuTaskTimingKey& key,
-        const GpuPhysicalQueueId& physicalQueue
-    )const noexcept;
-    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(
-        const GpuTaskTimingAssignmentKey& key
-    )const noexcept;
+    [[nodiscard]] const GpuTaskTimingHistory* find(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept;
+    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingAssignmentKey& key)const noexcept;
 
 
 private:
-    [[nodiscard]] HistoryRecord* findHistoryRecord(
-        const GpuTaskTimingKey& key,
-        const GpuPhysicalQueueId& physicalQueue
-    )noexcept;
-    [[nodiscard]] const HistoryRecord* findHistoryRecord(
-        const GpuTaskTimingKey& key,
-        const GpuPhysicalQueueId& physicalQueue
-    )const noexcept;
-    [[nodiscard]] GpuTaskTimingAssignmentState* findAssignmentState(
-        const GpuTaskTimingAssignmentKey& key
-    )noexcept;
-    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignmentState(
-        const GpuTaskTimingAssignmentKey& key
-    )const noexcept;
+    [[nodiscard]] HistoryRecord* findHistoryRecord(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)noexcept;
+    [[nodiscard]] const HistoryRecord* findHistoryRecord(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept;
+    [[nodiscard]] GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingAssignmentKey& key)noexcept;
+    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingAssignmentKey& key)const noexcept;
     void rebuildHistory(HistoryRecord& record)noexcept;
     void promoteHistoryIndex();
     void promoteAssignmentIndex();

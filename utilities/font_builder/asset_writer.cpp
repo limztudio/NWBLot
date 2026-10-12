@@ -135,10 +135,7 @@ private:
 }
 
 [[nodiscard]] static bool CheckWorkPaths(const OutputPaths& paths){
-    const Path* files[] = {
-        &paths.metadataTemporary, &paths.fontTemporary,
-        &paths.metadataBackup, &paths.fontBackup,
-    };
+    const Path* files[] = { &paths.metadataTemporary, &paths.fontTemporary, &paths.metadataBackup, &paths.fontBackup, };
     for(const Path* file : files){
         const auto exists = FileExists(*file);
         if(!exists || *exists)
@@ -214,8 +211,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     BuildFontMetadata(payload, metadata);
 
     const __hidden_font_builder_writer::OutputPaths paths(options.output);
-    if(!__hidden_font_builder_writer::CheckOutputs(paths, options.overwrite)
-        || !__hidden_font_builder_writer::CheckWorkPaths(paths)){
+    if(!__hidden_font_builder_writer::CheckOutputs(paths, options.overwrite) || !__hidden_font_builder_writer::CheckWorkPaths(paths)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files"));
         return false;
     }
@@ -226,12 +222,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     __hidden_font_builder_writer::TemporaryFile stagedFont(paths.fontTemporary);
     __hidden_font_builder_writer::TemporaryFile stagedMetadata(paths.metadataTemporary);
     const u8* metadataBytes = reinterpret_cast<const u8*>(metadata.data());
-    if(
-        !stagedFont.stage(fontBinary->data(), fontBinary->size())
-        || !stagedMetadata.stage(metadataBytes, metadata.size())
-        || !stagedFont.verify(fontBinary->data(), fontBinary->size())
-        || !stagedMetadata.verify(metadataBytes, metadata.size())
-    ){
+    if(!stagedFont.stage(fontBinary->data(), fontBinary->size()) || !stagedMetadata.stage(metadataBytes, metadata.size()) || !stagedFont.verify(fontBinary->data(), fontBinary->size()) || !stagedMetadata.verify(metadataBytes, metadata.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }

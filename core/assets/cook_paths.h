@@ -66,31 +66,17 @@ struct ResolvedCookPaths{
 
 
 // Retains first-occurrence order and original path spelling; callers select their duplicate identity contract.
-[[nodiscard]] Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(
-    const Path& repoRoot,
-    Span<const CookString> sources,
-    bool inferFromInputs,
-    AssetRootDuplicatePolicy::Enum duplicatePolicy,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(const Path& repoRoot, Span<const CookString> sources, bool inferFromInputs, AssetRootDuplicatePolicy::Enum duplicatePolicy, ScratchArena& scratchArena);
 [[nodiscard]] inline bool PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
     const auto removed = RemoveAllIfExists(includeRoot);
     if(!removed){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}")
-            , StringConvert(generatorName)
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(removed.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}"), StringConvert(generatorName), PathToString<tchar>(includeRoot), StringConvert(removed.error().message()));
         return false;
     }
 
     const auto ensured = EnsureDirectories(includeRoot);
     if(!ensured){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}")
-            , StringConvert(generatorName)
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(ensured.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}"), StringConvert(generatorName), PathToString<tchar>(includeRoot), StringConvert(ensured.error().message()));
         return false;
     }
     return true;

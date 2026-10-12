@@ -22,15 +22,11 @@ struct NwbOpticalBootstrapEvent{
     uint entering;
 };
 
-// The transparent union is conservative, including unspecified transparent materials. Outside it, air is proven without a ray.
-// Inside it, replay one complete exterior-to-origin crossing list; neither opaque scene occluders nor arbitrary traversal order can establish containment. Candidate collection never commits hits.
-bool nwbOpticalBootstrap(
-    const NwbOpticalTraceConfig config,
-    const float3 origin,
-    const float3 direction,
-    out NwbOpticalMedia media,
-    inout NwbOpticalTraceResult result
-){
+// The transparent union is conservative, including unspecified transparent materials.
+// Outside it, air is proven without a ray.
+// Inside it, replay one complete exterior-to-origin crossing list; neither opaque scene occluders nor arbitrary traversal order can establish containment.
+// Candidate collection never commits hits.
+bool nwbOpticalBootstrap(const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, out NwbOpticalMedia media, inout NwbOpticalTraceResult result){
     media = (NwbOpticalMedia)0;
     const uint headerFlags = nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
     if((headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) == 0u){
@@ -76,8 +72,7 @@ bool nwbOpticalBootstrap(
     uint eventCount = 0u;
 #endif
     bool complete = false;
-    [loop]
-    for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
+    [loop] for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
         if(!query.Proceed()){
             complete = true;
             break;
@@ -173,9 +168,7 @@ bool nwbOpticalBootstrap(
             result.physicalQueries += geometry.physicalQueries;
             if(geometry.failure != 0u){
                 result.transparentPath = true;
-                result.termination = (geometry.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u
-                    ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED
-                ;
+                result.termination = (geometry.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED;
                 return false;
             }
             if(!geometry.hit){
@@ -225,15 +218,10 @@ bool nwbOpticalBootstrap(
 
 #if NWB_OPTICAL_CLOSED_MEDIA
     // Candidate records stay immutable. Sort scalar indices instead of retaining an array-backed struct while shifting that same array; every crossing keeps its original distance, primitive and orientation together.
-    uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = {
-        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
-        16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
-    };
-    [loop]
-    for(uint index = 1u; index < eventCount; ++index){
+    uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, };
+    [loop] for(uint index = 1u; index < eventCount; ++index){
         uint insertion = index;
-        [loop]
-        while(insertion != 0u){
+        [loop] while(insertion != 0u){
             if(events[eventOrder[insertion - 1u]].distance <= events[index].distance)
                 break;
             eventOrder[insertion] = eventOrder[insertion - 1u];
@@ -242,8 +230,7 @@ bool nwbOpticalBootstrap(
         eventOrder[insertion] = index;
     }
     uint duplicateEvents = 0u;
-    [loop]
-    for(uint index = 1u; index < eventCount; ++index){
+    [loop] for(uint index = 1u; index < eventCount; ++index){
         const NwbOpticalBootstrapEvent event = events[eventOrder[index]];
         const NwbOpticalBootstrapEvent previous = events[eventOrder[index - 1u]];
         if(event.distance - previous.distance <= tolerance){
@@ -265,14 +252,12 @@ bool nwbOpticalBootstrap(
     uint activeEntryIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeWindings[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeMode = NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
-    [loop]
-    for(uint index = 0u; index < eventCount; ++index){
+    [loop] for(uint index = 0u; index < eventCount; ++index){
         const NwbOpticalBootstrapEvent event = events[eventOrder[index]];
         if((duplicateEvents & (1u << index)) != 0u)
             continue;
         bool firstOccurrence = true;
-        [loop]
-        for(uint previous = 0u; previous < index; ++previous){
+        [loop] for(uint previous = 0u; previous < index; ++previous){
             if(events[eventOrder[previous]].instance == event.instance)
                 firstOccurrence = false;
         }
@@ -280,8 +265,7 @@ bool nwbOpticalBootstrap(
             continue;
         int winding = 0;
         uint activeEntry = index;
-        [loop]
-        for(uint crossing = index; crossing < eventCount; ++crossing){
+        [loop] for(uint crossing = index; crossing < eventCount; ++crossing){
             const NwbOpticalBootstrapEvent candidate = events[eventOrder[crossing]];
             if(candidate.instance != event.instance || (duplicateEvents & (1u << crossing)) != 0u)
                 continue;
@@ -312,8 +296,7 @@ bool nwbOpticalBootstrap(
         }
         activeMode = optical.mode;
         uint insertion = media.count;
-        [unroll]
-        for(uint shift = 0u; shift < NWB_OPTICAL_MAX_MEDIA; ++shift){
+        [unroll] for(uint shift = 0u; shift < NWB_OPTICAL_MAX_MEDIA; ++shift){
             if(insertion == 0u)
                 break;
             if(activeEntryIndices[insertion - 1u] < activeEntry)
@@ -329,8 +312,7 @@ bool nwbOpticalBootstrap(
         ++media.count;
     }
     // Assemble each ordered medium once, after all scalar-index insertion is finished. No medium struct is moved through its own backing array, and at most four homogeneous material evaluations remain necessary.
-    [unroll]
-    for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
+    [unroll] for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
         if(index < media.count){
             NwbOpticalInstance optical;
             const uint instance = events[activeEventIndices[index]].instance;

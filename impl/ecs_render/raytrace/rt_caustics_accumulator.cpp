@@ -28,10 +28,7 @@ void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear()noexcept
     m_rayTracingState.m_causticAccumulatorInitialized = true;
 }
 
-void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets
-){
+void RendererRayTracingSystem::dispatchCausticGeometryDownsample(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
@@ -62,10 +59,7 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
 }
 
 
-void RendererRayTracingSystem::dispatchCausticResolvePrepare(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets
-){
+void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
@@ -83,16 +77,8 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     const f32 temporalDecay = causticTemporalDecay();
     const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
     const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
-    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{
-        targets.causticHistory.get(),
-        targets.bindless.causticHistory.slot(),
-        targets.bindless.causticHistoryStorage.slot()
-    };
-    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{
-        targets.causticResolveHalf.get(),
-        targets.bindless.causticResolveHalf.slot(),
-        targets.bindless.causticResolveHalfStorage.slot()
-    };
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{ targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,
         heap,

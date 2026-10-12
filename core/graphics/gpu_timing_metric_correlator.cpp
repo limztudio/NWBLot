@@ -20,8 +20,7 @@ namespace __hidden_gpu_timing_metric_correlator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Retain enough rejected-frame endpoints to pair an asynchronously arriving timestamp without allowing the
-// correlation caches to grow unbounded.
+// Retain enough rejected-frame endpoints to pair an asynchronously arriving timestamp without allowing the correlation caches to grow unbounded.
 inline constexpr u64 s_PendingMetricRetentionFrames = static_cast<u64>(s_MaxFramesInFlight) * 8u;
 
 
@@ -46,27 +45,12 @@ GpuTimingMetricCorrelator::GpuTimingMetricCorrelator(Alloc::GlobalArena& arena, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTimingMetricCorrelator::prepareOverlapMetric(
-    const Name& firstScope,
-    const Name& secondScope,
-    const Name& outputScope
-){
-    if(
-        !firstScope
-        || !secondScope
-        || !outputScope
-        || firstScope == secondScope
-        || outputScope == firstScope
-        || outputScope == secondScope
-    )
+bool GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope){
+    if(!firstScope || !secondScope || !outputScope || firstScope == secondScope || outputScope == firstScope || outputScope == secondScope)
         return false;
 
     for(const PacketEnvelopeMetricOutputRoleRecord& packetEnvelopeOutput : m_packetEnvelopeMetricOutputRoles){
-        if(
-            firstScope == packetEnvelopeOutput.scopeName
-            || secondScope == packetEnvelopeOutput.scopeName
-            || outputScope == packetEnvelopeOutput.scopeName
-        )
+        if(firstScope == packetEnvelopeOutput.scopeName || secondScope == packetEnvelopeOutput.scopeName || outputScope == packetEnvelopeOutput.scopeName)
             return false;
     }
 
@@ -111,20 +95,11 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
 ){
     const GpuPacketEnvelopeMetricScope* const scopes = scopeInputs.get();
     const GpuPacketEnvelopeMetricQueueOutput* const queueOutputs = queueOutputInputs.get();
-    if(
-        scopeCount == 0u
-        || !queueOverlapScope
-        || queueOutputCount == 0u
-        || queueOutputCount > scopeCount
-    )
+    if(scopeCount == 0u || !queueOverlapScope || queueOutputCount == 0u || queueOutputCount > scopeCount)
         return false;
 
     for(auto it = m_pendingPacketEnvelopeMetrics.begin(); it != m_pendingPacketEnvelopeMetrics.end(); ){
-        if(
-            sourceFrameIndex > it->sourceFrameIndex
-            && sourceFrameIndex - it->sourceFrameIndex
-                > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames
-        )
+        if(sourceFrameIndex > it->sourceFrameIndex && sourceFrameIndex - it->sourceFrameIndex > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames)
             it = m_pendingPacketEnvelopeMetrics.erase(it);
         else
             ++it;
@@ -136,12 +111,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     const u16 deviceGeneration = scopes[0u].physicalQueue.deviceGeneration;
     for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
         const GpuPacketEnvelopeMetricScope& scope = scopes[scopeIndex];
-        if(
-            !scope.scopeName
-            || !scope.physicalQueue.valid()
-            || scope.physicalQueue.deviceGeneration != deviceGeneration
-            || scope.scopeName == queueOverlapScope
-        )
+        if(!scope.scopeName || !scope.physicalQueue.valid() || scope.physicalQueue.deviceGeneration != deviceGeneration || scope.scopeName == queueOverlapScope)
             return false;
         if(!candidate.scopeIndices.try_emplace(scope.scopeName, scopeIndex).second)
             return false;
@@ -158,19 +128,11 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
 
     for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
         const GpuPacketEnvelopeMetricQueueOutput& output = queueOutputs[outputIndex];
-        if(
-            !output.physicalQueue.valid()
-            || output.physicalQueue.deviceGeneration != deviceGeneration
-            || !output.internalIdleScopeName
-            || output.internalIdleScopeName == queueOverlapScope
-        )
+        if(!output.physicalQueue.valid() || output.physicalQueue.deviceGeneration != deviceGeneration || !output.internalIdleScopeName || output.internalIdleScopeName == queueOverlapScope)
             return false;
         for(usize previousOutputIndex = 0u; previousOutputIndex < outputIndex; ++previousOutputIndex){
             const GpuPacketEnvelopeMetricQueueOutput& previousOutput = queueOutputs[previousOutputIndex];
-            if(
-                previousOutput.physicalQueue == output.physicalQueue
-                || previousOutput.internalIdleScopeName == output.internalIdleScopeName
-            )
+            if(previousOutput.physicalQueue == output.physicalQueue || previousOutput.internalIdleScopeName == output.internalIdleScopeName)
                 return false;
         }
 
@@ -202,19 +164,11 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
             if(scopes[scopeIndex].scopeName == overlap.outputScopeName)
                 return false;
         }
-        if(
-            queueOverlapScope == overlap.firstScope
-            || queueOverlapScope == overlap.secondScope
-            || queueOverlapScope == overlap.outputScopeName
-        )
+        if(queueOverlapScope == overlap.firstScope || queueOverlapScope == overlap.secondScope || queueOverlapScope == overlap.outputScopeName)
             return false;
         for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
             const Name& outputName = queueOutputs[outputIndex].internalIdleScopeName;
-            if(
-                outputName == overlap.firstScope
-                || outputName == overlap.secondScope
-                || outputName == overlap.outputScopeName
-            )
+            if(outputName == overlap.firstScope || outputName == overlap.secondScope || outputName == overlap.outputScopeName)
                 return false;
         }
     }
@@ -242,9 +196,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
         bool sharesOutput = pending.queueOverlapScopeName == queueOverlapScope;
         for(const PacketEnvelopeMetricQueueOutputRecord& pendingOutput : pending.queueOutputs){
             for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
-                sharesOutput = sharesOutput
-                    || pendingOutput.internalIdleScopeName == queueOutputs[outputIndex].internalIdleScopeName
-                ;
+                sharesOutput = sharesOutput || pendingOutput.internalIdleScopeName == queueOutputs[outputIndex].internalIdleScopeName;
             }
         }
         if(!sharesOutput)
@@ -254,17 +206,11 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
         if(pending.scopes.size() != scopeCount || pending.queueOutputs.size() != queueOutputCount)
             return false;
         for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
-            if(
-                pending.scopes[scopeIndex].scopeName != scopes[scopeIndex].scopeName
-                || pending.scopes[scopeIndex].physicalQueue != scopes[scopeIndex].physicalQueue
-            )
+            if(pending.scopes[scopeIndex].scopeName != scopes[scopeIndex].scopeName || pending.scopes[scopeIndex].physicalQueue != scopes[scopeIndex].physicalQueue)
                 return false;
         }
         for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
-            if(
-                pending.queueOutputs[outputIndex].physicalQueue != queueOutputs[outputIndex].physicalQueue
-                || pending.queueOutputs[outputIndex].internalIdleScopeName != queueOutputs[outputIndex].internalIdleScopeName
-            )
+            if(pending.queueOutputs[outputIndex].physicalQueue != queueOutputs[outputIndex].physicalQueue || pending.queueOutputs[outputIndex].internalIdleScopeName != queueOutputs[outputIndex].internalIdleScopeName)
                 return false;
         }
         return true;
@@ -282,12 +228,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     candidate.queueOutputs.reserve(queueOutputCount);
     candidate.remainingScopeCount = scopeCount;
     for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
-        candidate.scopes.push_back(PacketEnvelopeMetricScopeRecord{
-            .range = {},
-            .scopeName = scopes[scopeIndex].scopeName,
-            .physicalQueue = scopes[scopeIndex].physicalQueue,
-            .received = false,
-        });
+        candidate.scopes.push_back(PacketEnvelopeMetricScopeRecord{ .range = {}, .scopeName = scopes[scopeIndex].scopeName, .physicalQueue = scopes[scopeIndex].physicalQueue, .received = false, });
     }
     for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
         const GpuPacketEnvelopeMetricQueueOutput& output = queueOutputs[outputIndex];
@@ -295,11 +236,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
         if(!idleOutput.valid())
             return false;
         rememberMetricOutput(output.internalIdleScopeName, output.physicalQueue, true);
-        candidate.queueOutputs.push_back(PacketEnvelopeMetricQueueOutputRecord{
-            .physicalQueue = output.physicalQueue,
-            .internalIdleScopeName = output.internalIdleScopeName,
-            .internalIdleScope = idleOutput,
-        });
+        candidate.queueOutputs.push_back(PacketEnvelopeMetricQueueOutputRecord{ .physicalQueue = output.physicalQueue, .internalIdleScopeName = output.internalIdleScopeName, .internalIdleScope = idleOutput, });
     }
 
     // Publish only a complete frame; candidate cleanup preserves output roles already recorded above.
@@ -307,22 +244,13 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     return true;
 }
 
-void GpuTimingMetricCorrelator::recordTimestampRange(
-    const Name& scopeName,
-    const u64 frameIndex,
-    const GpuComparableTimestampRange& range,
-    GpuTimingSinkSampleVector& performanceSamples,
-    Alloc::ScratchArena& scratchArena
-){
+void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, const u64 frameIndex, const GpuComparableTimestampRange& range, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena){
     for(OverlapRecord& record : m_overlapRecords){
         if(scopeName != record.firstScope && scopeName != record.secondScope)
             continue;
 
         for(auto it = record.pendingFrames.begin(); it != record.pendingFrames.end(); ){
-            if(
-                frameIndex > it->frameIndex
-                && frameIndex - it->frameIndex > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames
-            )
+            if(frameIndex > it->frameIndex && frameIndex - it->frameIndex > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames)
                 it = record.pendingFrames.erase(it);
             else
                 ++it;
@@ -356,11 +284,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
         if(const auto overlapTicks = TryComputeGpuTimestampOverlap(frame->first, frame->second)){
             const f64 overlapSeconds = static_cast<f64>(*overlapTicks) * frame->first.secondsPerTick;
             performanceSamples.reserve(performanceSamples.size() + 1u);
-            performanceSamples.push_back(GpuTimingSinkSample{
-                .scope = record.outputScope,
-                .durationSeconds = overlapSeconds,
-                .sourceFrameIndex = frameIndex,
-            });
+            performanceSamples.push_back(GpuTimingSinkSample{ .scope = record.outputScope, .durationSeconds = overlapSeconds, .sourceFrameIndex = frameIndex, });
         }
         for(auto it = record.pendingFrames.begin(); it != record.pendingFrames.end(); ++it){
             if(&*it == frame){
@@ -371,11 +295,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
     }
 
     for(auto it = m_pendingPacketEnvelopeMetrics.begin(); it != m_pendingPacketEnvelopeMetrics.end(); ){
-        if(
-            frameIndex > it->sourceFrameIndex
-            && frameIndex - it->sourceFrameIndex
-                > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames
-        ){
+        if(frameIndex > it->sourceFrameIndex && frameIndex - it->sourceFrameIndex > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames){
             it = m_pendingPacketEnvelopeMetrics.erase(it);
             continue;
         }
@@ -409,12 +329,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
             packetRanges.push_back(scope.range);
 
         GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-        const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(
-            packetRanges.data(),
-            packetRanges.size(),
-            queueMetrics,
-            scratchArena
-        );
+        const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(packetRanges.data(), packetRanges.size(), queueMetrics, scratchArena);
         bool aggregated = envelopeMetrics && queueMetrics.size() == it->queueOutputs.size();
         for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
             bool hasOutput = false;
@@ -426,21 +341,13 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
         if(aggregated){
             const f64 secondsPerTick = envelopeMetrics->secondsPerTick;
             const f64 overlapSeconds = static_cast<f64>(envelopeMetrics->queueOverlapTicks) * secondsPerTick;
-            performanceSamples.push_back(GpuTimingSinkSample{
-                .scope = it->queueOverlapScope,
-                .durationSeconds = overlapSeconds,
-                .sourceFrameIndex = it->sourceFrameIndex,
-            });
+            performanceSamples.push_back(GpuTimingSinkSample{ .scope = it->queueOverlapScope, .durationSeconds = overlapSeconds, .sourceFrameIndex = it->sourceFrameIndex, });
             for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
                 for(const PacketEnvelopeMetricQueueOutputRecord& output : it->queueOutputs){
                     if(output.physicalQueue != queueMetric.physicalQueue)
                         continue;
                     const f64 idleSeconds = static_cast<f64>(queueMetric.internalIdleTicks) * secondsPerTick;
-                    performanceSamples.push_back(GpuTimingSinkSample{
-                        .scope = output.internalIdleScope,
-                        .durationSeconds = idleSeconds,
-                        .sourceFrameIndex = it->sourceFrameIndex,
-                    });
+                    performanceSamples.push_back(GpuTimingSinkSample{ .scope = output.internalIdleScope, .durationSeconds = idleSeconds, .sourceFrameIndex = it->sourceFrameIndex, });
                     break;
                 }
             }
@@ -477,11 +384,7 @@ void GpuTimingMetricCorrelator::reset()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuTimingMetricCorrelator::rememberMetricOutput(
-    const Name& name,
-    const GpuPhysicalQueueId& queue,
-    const bool internalIdle
-){
+void GpuTimingMetricCorrelator::rememberMetricOutput(const Name& name, const GpuPhysicalQueueId& queue, const bool internalIdle){
     for(const PacketEnvelopeMetricOutputRoleRecord& outputRole : m_packetEnvelopeMetricOutputRoles){
         if(outputRole.scopeName != name)
             continue;
@@ -489,11 +392,7 @@ void GpuTimingMetricCorrelator::rememberMetricOutput(
         NWB_ASSERT(outputRole.queueInternalIdle == internalIdle);
         return;
     }
-    m_packetEnvelopeMetricOutputRoles.push_back(PacketEnvelopeMetricOutputRoleRecord{
-        .scopeName = name,
-        .physicalQueue = queue,
-        .queueInternalIdle = internalIdle,
-    });
+    m_packetEnvelopeMetricOutputRoles.push_back(PacketEnvelopeMetricOutputRoleRecord{ .scopeName = name, .physicalQueue = queue, .queueInternalIdle = internalIdle, });
 }
 
 

@@ -201,32 +201,12 @@ struct MaterialBindTypedLayoutCache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(
-    const Path& bindFilePath,
-    MaterialCookArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<ACompactString> BuildMaterialBindParameterKey(AStringView instanceName, AStringView fieldName);
 [[nodiscard]] u64 ComputeMaterialBindParameterKeyHash(AStringView parameterKey);
-[[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(
-    const MaterialBindEntry& bindEntry,
-    const Name& contextName,
-    MaterialCookArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-);
-[[nodiscard]] Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayout(
-    const Name& materialInterface,
-    const MaterialBindEntry& bindEntry,
-    MaterialBindTypedLayoutCache& inOutCache,
-    Core::Alloc::ScratchArena& scratchArena
-);
-void CopyMaterialBindTypedLayoutDefaults(
-    const MaterialBindTypedLayout& layout,
-    u64& outLayoutHash,
-    Material::TypedLayoutBlockVector& outBlocks,
-    Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes
-);
+[[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, Core::Alloc::ScratchArena& scratchArena);
+void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes);
 [[nodiscard]] bool ApplyMaterialBindTypedLayoutParameters(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,

@@ -33,21 +33,18 @@ class CsgOpenShadowTests(unittest.TestCase):
 
     def log(self, case="retained", route="hardware"):
         first, second = COUNTS[case]
-        lines = ["FramebufferCapture: capture ready", "FramebufferCapture: graphics source frame 119",
-            "CsgShadowSmokeProject: shutdown",
+        lines = ["FramebufferCapture: capture ready", "FramebufferCapture: graphics source frame 119", "CsgShadowSmokeProject: shutdown",
             f"CsgShadowSmokeProject: open_case={case} retained_events={first},{second} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1",
             f"CsgShadowSmokeProject: atlas arm=1 light=directional hardware={int(route == 'hardware')}",
             "SoftwareShadowSmoke: requested backend=0 directional_resolution=512 point_resolution=256 budget_bytes=268435456 coverage=0 blocker_search=0 capture_cadence=0"]
         if route == "software":
             lines.append("Loader: hardware ray tracing disabled before device creation")
         if case in ("reference", "clipped_reference"):
-            lines.append("RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware"
-                else "RendererSystem: dispatched light-space shadow maps")
+            lines.append("RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware" else "RendererSystem: dispatched light-space shadow maps")
         else:
             lines.append(f"RendererSystem: dispatched CSG light-space shadows (hardware_compose={int(route == 'hardware')}, views=1)")
         if case == "terminal65":
-            lines.extend(("00:00:01.250 [WARNING]:", "", OPEN_CAPACITY_MESSAGE, "",
-                "00:00:01.251 [INFO]:", "", "later ordinary diagnostic"))
+            lines.extend(("00:00:01.250 [WARNING]:", "", OPEN_CAPACITY_MESSAGE, "", "00:00:01.251 [INFO]:", "", "later ordinary diagnostic"))
         return "\n".join(lines)
 
     def test_fifth_event_black_fallback_is_rejected(self):
@@ -93,20 +90,15 @@ class CsgOpenShadowTests(unittest.TestCase):
 
     def test_open_terminal_requires_exact_flag_and_rejects_other_capacity(self):
         self.assertEqual(validate_runtime(self.log("terminal65"), "terminal65", "hardware", 120)["diagnostic_flags"], 16)
-        for log in (self.log("terminal65").replace("flags=16", "flags=2"),
-            self.log("terminal65") + "\n[WARNING]: unrelated", self.log("terminal65").replace("[WARNING]", "[ERROR]")):
+        for log in (self.log("terminal65").replace("flags=16", "flags=2"), self.log("terminal65") + "\n[WARNING]: unrelated", self.log("terminal65").replace("[WARNING]", "[ERROR]")):
             with self.assertRaises(SmokeFailure):
                 validate_runtime(log, "terminal65", "hardware", 120)
 
     def test_multiline_warning_cannot_waive_prefix_suffix_or_detached_message(self):
         self.assertEqual(validate_runtime(self.log("terminal65"), "terminal65", "hardware", 120)["diagnostic_flags"], 16)
-        for changed in (
-            self.log("terminal65").replace("00:00:01.250 [WARNING]:", "unknown 00:00:01.250 [WARNING]:"),
-            self.log("terminal65").replace(OPEN_CAPACITY_MESSAGE, "prefix " + OPEN_CAPACITY_MESSAGE),
-            self.log("terminal65").replace(OPEN_CAPACITY_MESSAGE, OPEN_CAPACITY_MESSAGE + " suffix"),
-            self.log("terminal65").replace(OPEN_CAPACITY_MESSAGE, "unrelated warning") + "\n" + OPEN_CAPACITY_MESSAGE,
-            self.log("terminal65").replace("00:00:01.250 [WARNING]:\n\n", "[WARNING]: ")
-        ):
+        for changed in (self.log("terminal65").replace("00:00:01.250 [WARNING]:", "unknown 00:00:01.250 [WARNING]:"), self.log("terminal65").replace(OPEN_CAPACITY_MESSAGE, "prefix " + OPEN_CAPACITY_MESSAGE),
+            self.log("terminal65").replace(OPEN_CAPACITY_MESSAGE, OPEN_CAPACITY_MESSAGE + " suffix"), self.log("terminal65").replace(OPEN_CAPACITY_MESSAGE, "unrelated warning") + "\n" + OPEN_CAPACITY_MESSAGE,
+            self.log("terminal65").replace("00:00:01.250 [WARNING]:\n\n", "[WARNING]: ")):
             with self.assertRaises(SmokeFailure):
                 validate_runtime(changed, "terminal65", "hardware", 120)
 
@@ -119,8 +111,7 @@ class CsgOpenShadowTests(unittest.TestCase):
 
     def test_missing_stale_or_repeated_completed_source_is_rejected(self):
         log = self.log()
-        for changed in (log.replace("frame 119", "frame 118"), log + "\nFramebufferCapture: graphics source frame 120",
-            log.replace("FramebufferCapture: graphics source frame 119", "")):
+        for changed in (log.replace("frame 119", "frame 118"), log + "\nFramebufferCapture: graphics source frame 120", log.replace("FramebufferCapture: graphics source frame 119", "")):
             with self.assertRaises(SmokeFailure):
                 validate_runtime(changed, "retained", "hardware", 120)
 

@@ -71,12 +71,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixRowMultiply(SIMDVectorSingle row
 }
 
 #if defined(NWB_HAS_AVX) && defined(NWB_HAS_FMA3)
-NWB_INLINE void NWB_SIMD_CALL MatrixMultiplyPackedRowsFMA(
-    const SIMDMatrix& m0,
-    const SIMDMatrix& m1,
-    __m256& outRows01,
-    __m256& outRows23
-)noexcept{
+NWB_INLINE void NWB_SIMD_CALL MatrixMultiplyPackedRowsFMA(const SIMDMatrix& m0, const SIMDMatrix& m1, __m256& outRows01, __m256& outRows23)noexcept{
     __m256 t0 = _mm256_castps128_ps256(m0.v[0]);
     t0 = _mm256_insertf128_ps(t0, m0.v[1], 1);
     __m256 t1 = _mm256_castps128_ps256(m0.v[2]);
@@ -189,15 +184,7 @@ NWB_INLINE void RankDecompose(usize& a, usize& b, usize& c, T x, T y, T z)noexce
     }
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(
-    const f32 viewWidth,
-    const f32 viewHeight,
-    const f32 nearZ,
-    const f32 farZ,
-    const f32 rangeDenominator,
-    const f32 rangeNearScale,
-    const f32 forwardZ
-)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(const f32 viewWidth, const f32 viewHeight, const f32 nearZ, const f32 farZ, const f32 rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -217,15 +204,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(
-    const f32 fovAngleY,
-    const f32 aspectRatio,
-    const f32 nearZ,
-    const f32 farZ,
-    const f32 rangeDenominator,
-    const f32 rangeNearScale,
-    const f32 forwardZ
-)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY, const f32 aspectRatio, const f32 nearZ, const f32 farZ, const f32 rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, s_MatrixPerspectiveFovNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -238,10 +217,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(
     const SIMDVectorSingle height = VectorDivide(cosFov, sinFov);
     const SIMDVectorSingle width = VectorDivide(height, VectorReplicate(aspectRatio));
     const SIMDVectorSingle range = VectorDivide(VectorReplicate(farZ), VectorReplicate(rangeDenominator));
-    const SIMDVectorSingle rangeNear = VectorMultiply(
-        VectorMultiply(VectorReplicate(rangeNearScale), range),
-        VectorReplicate(nearZ)
-    );
+    const SIMDVectorSingle rangeNear = VectorMultiply(VectorMultiply(VectorReplicate(rangeNearScale), range), VectorReplicate(nearZ));
 
     SIMDMatrix matrix{};
     matrix.v[0] = VectorMergeX(width, zero, zero, zero);
@@ -290,13 +266,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveOffCenterImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicImpl(
-    const f32 viewWidth,
-    const f32 viewHeight,
-    const f32 nearZ,
-    const f32 rangeDenominator,
-    const f32 rangeNearScale
-)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicImpl(const f32 viewWidth, const f32 viewHeight, const f32 nearZ, const f32 rangeDenominator, const f32 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -314,15 +284,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(
-    const f32 viewLeft,
-    const f32 viewRight,
-    const f32 viewBottom,
-    const f32 viewTop,
-    const f32 nearZ,
-    const f32 rangeDenominator,
-    const f32 rangeNearScale
-)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 viewLeft, const f32 viewRight, const f32 viewBottom, const f32 viewTop, const f32 nearZ, const f32 rangeDenominator, const f32 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -380,15 +342,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleNormalize(SIMDVectorDouble 
     return VectorDoubleDivide(plane, VectorDouble3Length(plane));
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(
-    const f64 viewWidth,
-    const f64 viewHeight,
-    const f64 nearZ,
-    const f64 farZ,
-    const f64 rangeDenominator,
-    const f64 rangeNearScale,
-    const f64 forwardZ
-)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(const f64 viewWidth, const f64 viewHeight, const f64 nearZ, const f64 farZ, const f64 rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
@@ -408,15 +362,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(
-    const f64 fovAngleY,
-    const f64 aspectRatio,
-    const f64 nearZ,
-    const f64 farZ,
-    const f64 rangeDenominator,
-    const f64 rangeNearScale,
-    const f64 forwardZ
-)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f64 fovAngleY, const f64 aspectRatio, const f64 nearZ, const f64 farZ, const f64 rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0, s_DoubleMatrixPerspectiveFovNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
@@ -429,10 +375,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(
     const SIMDVectorDouble height = VectorDoubleDivide(cosFov, sinFov);
     const SIMDVectorDouble width = VectorDoubleDivide(height, VectorDoubleReplicate(aspectRatio));
     const SIMDVectorDouble range = VectorDoubleDivide(VectorDoubleReplicate(farZ), VectorDoubleReplicate(rangeDenominator));
-    const SIMDVectorDouble rangeNear = VectorDoubleMultiply(
-        VectorDoubleMultiply(VectorDoubleReplicate(rangeNearScale), range),
-        VectorDoubleReplicate(nearZ)
-    );
+    const SIMDVectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleReplicate(rangeNearScale), range), VectorDoubleReplicate(nearZ));
 
     SIMDMatrixDouble matrix{};
     matrix.v[0] = VectorDoubleMergeX(width, zero, zero, zero);
@@ -481,13 +424,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveOffCenterImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicImpl(
-    const f64 viewWidth,
-    const f64 viewHeight,
-    const f64 nearZ,
-    const f64 rangeDenominator,
-    const f64 rangeNearScale
-)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicImpl(const f64 viewWidth, const f64 viewHeight, const f64 nearZ, const f64 rangeDenominator, const f64 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
@@ -505,15 +442,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(
-    const f64 viewLeft,
-    const f64 viewRight,
-    const f64 viewBottom,
-    const f64 viewTop,
-    const f64 nearZ,
-    const f64 rangeDenominator,
-    const f64 rangeNearScale
-)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(const f64 viewLeft, const f64 viewRight, const f64 viewBottom, const f64 viewTop, const f64 nearZ, const f64 rangeDenominator, const f64 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
@@ -945,26 +874,13 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
 }
 
 [[nodiscard]] NWB_INLINE Expected<MatrixDecomposition> NWB_SIMD_CALL MatrixDecompose(const SIMDMatrix& matrix)noexcept{
-    const SIMDVectorSingle canonicalBasis[3] = {
-        s_SIMDIdentityR0,
-        s_SIMDIdentityR1,
-        s_SIMDIdentityR2
-    };
+    const SIMDVectorSingle canonicalBasis[3] = { s_SIMDIdentityR0, s_SIMDIdentityR1, s_SIMDIdentityR2 };
 
     SIMDMatrix transposed = MatrixTranspose(matrix);
 
-    SIMDVectorSingle basis[3] = {
-        VectorAndInt(transposed.v[0], s_SIMDMask3),
-        VectorAndInt(transposed.v[1], s_SIMDMask3),
-        VectorAndInt(transposed.v[2], s_SIMDMask3)
-    };
+    SIMDVectorSingle basis[3] = { VectorAndInt(transposed.v[0], s_SIMDMask3), VectorAndInt(transposed.v[1], s_SIMDMask3), VectorAndInt(transposed.v[2], s_SIMDMask3) };
 
-    SIMDVectorSingle scale = VectorMergeX(
-        Vector3Length(basis[0]),
-        Vector3Length(basis[1]),
-        Vector3Length(basis[2]),
-        VectorZero()
-    );
+    SIMDVectorSingle scale = VectorMergeX(Vector3Length(basis[0]), Vector3Length(basis[1]), Vector3Length(basis[2]), VectorZero());
 
     usize a{};
     usize b{};
@@ -980,14 +896,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
         usize bb{};
         usize cc{};
         const SIMDVectorSingle absoluteBasis = VectorAbs(basis[a]);
-        SIMDMatrixDetail::RankDecompose(
-            aa,
-            bb,
-            cc,
-            VectorGetX(absoluteBasis),
-            VectorGetY(absoluteBasis),
-            VectorGetZ(absoluteBasis)
-        );
+        SIMDMatrixDetail::RankDecompose(aa, bb, cc, VectorGetX(absoluteBasis), VectorGetY(absoluteBasis), VectorGetZ(absoluteBasis));
         basis[b] = Vector3Cross(basis[a], canonicalBasis[cc]);
     }
     basis[b] = Vector3Normalize(basis[b]);
@@ -1016,36 +925,20 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     }
 
     const SIMDVectorSingle determinantError = VectorSubtract(determinant, s_SIMDOne);
-    if(Vector4Greater(
-        VectorMultiply(determinantError, determinantError),
-        VectorReplicate(SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
-    ))
+    if(Vector4Greater(VectorMultiply(determinantError, determinantError), VectorReplicate(SIMDMatrixDetail::s_MatrixDecomposeEpsilon)))
         return MakeUnexpected(Failure{});
 
     return MatrixDecomposition{ scale, QuaternionRotationMatrix(rotationMatrix), transposed.v[3] };
 }
 
 [[nodiscard]] NWB_INLINE Expected<MatrixDoubleDecomposition> NWB_SIMD_CALL MatrixDoubleDecompose(const SIMDMatrixDouble& matrix)noexcept{
-    const SIMDVectorDouble canonicalBasis[3] = {
-        s_DoubleSIMDIdentityR0,
-        s_DoubleSIMDIdentityR1,
-        s_DoubleSIMDIdentityR2
-    };
+    const SIMDVectorDouble canonicalBasis[3] = { s_DoubleSIMDIdentityR0, s_DoubleSIMDIdentityR1, s_DoubleSIMDIdentityR2 };
 
     SIMDMatrixDouble transposed = MatrixDoubleTranspose(matrix);
 
-    SIMDVectorDouble basis[3] = {
-        VectorDoubleAndInt(transposed.v[0], s_DoubleSIMDMask3),
-        VectorDoubleAndInt(transposed.v[1], s_DoubleSIMDMask3),
-        VectorDoubleAndInt(transposed.v[2], s_DoubleSIMDMask3)
-    };
+    SIMDVectorDouble basis[3] = { VectorDoubleAndInt(transposed.v[0], s_DoubleSIMDMask3), VectorDoubleAndInt(transposed.v[1], s_DoubleSIMDMask3), VectorDoubleAndInt(transposed.v[2], s_DoubleSIMDMask3) };
 
-    SIMDVectorDouble scale = VectorDoubleMergeX(
-        VectorDouble3Length(basis[0]),
-        VectorDouble3Length(basis[1]),
-        VectorDouble3Length(basis[2]),
-        VectorDoubleZero()
-    );
+    SIMDVectorDouble scale = VectorDoubleMergeX(VectorDouble3Length(basis[0]), VectorDouble3Length(basis[1]), VectorDouble3Length(basis[2]), VectorDoubleZero());
 
     usize a{};
     usize b{};
@@ -1061,14 +954,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
         usize bb{};
         usize cc{};
         const SIMDVectorDouble absoluteBasis = VectorDoubleAbs(basis[a]);
-        SIMDMatrixDetail::RankDecompose(
-            aa,
-            bb,
-            cc,
-            VectorDoubleGetX(absoluteBasis),
-            VectorDoubleGetY(absoluteBasis),
-            VectorDoubleGetZ(absoluteBasis)
-        );
+        SIMDMatrixDetail::RankDecompose(aa, bb, cc, VectorDoubleGetX(absoluteBasis), VectorDoubleGetY(absoluteBasis), VectorDoubleGetZ(absoluteBasis));
         basis[b] = VectorDouble3Cross(basis[a], canonicalBasis[cc]);
     }
     basis[b] = VectorDouble3Normalize(basis[b]);
@@ -1097,10 +983,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     }
 
     const SIMDVectorDouble determinantError = VectorDoubleSubtract(determinant, s_DoubleSIMDOne);
-    if(VectorDouble4Greater(
-        VectorDoubleMultiply(determinantError, determinantError),
-        VectorDoubleReplicate(SIMDMatrixDoubleDetail::s_DoubleMatrixDecomposeEpsilon)
-    ))
+    if(VectorDouble4Greater(VectorDoubleMultiply(determinantError, determinantError), VectorDoubleReplicate(SIMDMatrixDoubleDetail::s_DoubleMatrixDecomposeEpsilon)))
         return MakeUnexpected(Failure{});
 
     return MatrixDoubleDecomposition{ scale, QuaternionDoubleRotationMatrix(rotationMatrix), transposed.v[3] };
@@ -1152,55 +1035,31 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     return VectorDoubleGetX(MatrixDoubleLinearDeterminantV(matrix));
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsInvertibleAffine(
-    const SIMDMatrix& matrix,
-    const f32 affineEpsilon,
-    const f32 determinantEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsInvertibleAffine(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 determinantEpsilon)noexcept{
     if(!MatrixIsAffine(matrix, affineEpsilon))
         return false;
 
     const SIMDVectorSingle determinant = MatrixLinearDeterminantV(matrix);
-    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW)
-        && Vector4Greater(VectorAbs(determinant), VectorReplicate(determinantEpsilon));
+    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorReplicate(determinantEpsilon));
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsInvertibleAffine(
-    const SIMDMatrixDouble& matrix,
-    const f64 affineEpsilon,
-    const f64 determinantEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsInvertibleAffine(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 determinantEpsilon)noexcept{
     if(!MatrixDoubleIsAffine(matrix, affineEpsilon))
         return false;
 
     const SIMDVectorDouble determinant = MatrixDoubleLinearDeterminantV(matrix);
-    return VectorDoubleIsFinite(determinant, VectorDoubleComponentMask::s_DoubleXYZW)
-        && VectorDouble4Greater(VectorDoubleAbs(determinant), VectorDoubleReplicate(determinantEpsilon));
+    return VectorDoubleIsFinite(determinant, VectorDoubleComponentMask::s_DoubleXYZW) && VectorDouble4Greater(VectorDoubleAbs(determinant), VectorDoubleReplicate(determinantEpsilon));
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsRigidAffine(
-    const SIMDMatrix& matrix,
-    const f32 affineEpsilon,
-    const f32 rigidEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsRigidAffine(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
     if(!MatrixIsAffine(matrix, affineEpsilon))
         return false;
 
     const SIMDVectorSingle row0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVectorSingle row1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVectorSingle row2 = VectorSetW(matrix.v[2], 0.0f);
-    const SIMDVectorSingle lengthSq = VectorMergeX(
-        Vector3LengthSq(row0),
-        Vector3LengthSq(row1),
-        Vector3LengthSq(row2),
-        s_SIMDOne
-    );
-    const SIMDVectorSingle dotAndDeterminant = VectorMergeX(
-        Vector3Dot(row0, row1),
-        Vector3Dot(row0, row2),
-        Vector3Dot(row1, row2),
-        Vector3Dot(row0, Vector3Cross(row1, row2))
-    );
+    const SIMDVectorSingle lengthSq = VectorMergeX(Vector3LengthSq(row0), Vector3LengthSq(row1), Vector3LengthSq(row2), s_SIMDOne);
+    const SIMDVectorSingle dotAndDeterminant = VectorMergeX(Vector3Dot(row0, row1), Vector3Dot(row0, row2), Vector3Dot(row1, row2), Vector3Dot(row0, Vector3Cross(row1, row2)));
     const SIMDVectorSingle epsilon = VectorReplicate(rigidEpsilon);
     return
         VectorIsFinite(lengthSq, VectorComponentMask::s_XYZ)
@@ -1210,29 +1069,15 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     ;
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsRigidAffine(
-    const SIMDMatrixDouble& matrix,
-    const f64 affineEpsilon,
-    const f64 rigidEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsRigidAffine(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
     if(!MatrixDoubleIsAffine(matrix, affineEpsilon))
         return false;
 
     const SIMDVectorDouble row0 = VectorDoubleSetW(matrix.v[0], 0.0);
     const SIMDVectorDouble row1 = VectorDoubleSetW(matrix.v[1], 0.0);
     const SIMDVectorDouble row2 = VectorDoubleSetW(matrix.v[2], 0.0);
-    const SIMDVectorDouble lengthSq = VectorDoubleMergeX(
-        VectorDouble3LengthSq(row0),
-        VectorDouble3LengthSq(row1),
-        VectorDouble3LengthSq(row2),
-        s_DoubleSIMDOne
-    );
-    const SIMDVectorDouble dotAndDeterminant = VectorDoubleMergeX(
-        VectorDouble3Dot(row0, row1),
-        VectorDouble3Dot(row0, row2),
-        VectorDouble3Dot(row1, row2),
-        VectorDouble3Dot(row0, VectorDouble3Cross(row1, row2))
-    );
+    const SIMDVectorDouble lengthSq = VectorDoubleMergeX(VectorDouble3LengthSq(row0), VectorDouble3LengthSq(row1), VectorDouble3LengthSq(row2), s_DoubleSIMDOne);
+    const SIMDVectorDouble dotAndDeterminant = VectorDoubleMergeX(VectorDouble3Dot(row0, row1), VectorDouble3Dot(row0, row2), VectorDouble3Dot(row1, row2), VectorDouble3Dot(row0, VectorDouble3Cross(row1, row2)));
     const SIMDVectorDouble epsilon = VectorDoubleReplicate(rigidEpsilon);
     return
         VectorDoubleIsFinite(lengthSq, VectorDoubleComponentMask::s_DoubleXYZ)
@@ -1242,11 +1087,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     ;
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDVectorSingle> NWB_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(
-    const SIMDMatrix& matrix,
-    const f32 affineEpsilon,
-    const f32 rigidEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDVectorSingle> NWB_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
     if(!MatrixIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
         return MakeUnexpected(Failure{});
 
@@ -1256,11 +1097,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     return quaternion;
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDVectorDouble> NWB_SIMD_CALL MatrixDoubleTryBuildRigidRotationQuaternion(
-    const SIMDMatrixDouble& matrix,
-    const f64 affineEpsilon,
-    const f64 rigidEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDVectorDouble> NWB_SIMD_CALL MatrixDoubleTryBuildRigidRotationQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
     if(!MatrixDoubleIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
         return MakeUnexpected(Failure{});
 
@@ -1270,42 +1107,24 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     return quaternion;
 }
 
-[[nodiscard]] NWB_INLINE Expected<RigidDualQuaternion> NWB_SIMD_CALL MatrixTryBuildRigidDualQuaternion(
-    const SIMDMatrix& matrix,
-    const f32 affineEpsilon,
-    const f32 rigidEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE Expected<RigidDualQuaternion> NWB_SIMD_CALL MatrixTryBuildRigidDualQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
     const auto real = MatrixTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon);
     if(!real)
         return MakeUnexpected(real.error());
 
-    const SIMDVectorSingle translation = VectorMergeX(
-        VectorSplatW(matrix.v[0]),
-        VectorSplatW(matrix.v[1]),
-        VectorSplatW(matrix.v[2]),
-        VectorZero()
-    );
+    const SIMDVectorSingle translation = VectorMergeX(VectorSplatW(matrix.v[0]), VectorSplatW(matrix.v[1]), VectorSplatW(matrix.v[2]), VectorZero());
     const SIMDVectorSingle dual = VectorScale(QuaternionMultiply(translation, *real), SIMDMatrixDetail::s_MatrixHalf);
     if(!VectorIsFinite(dual, VectorComponentMask::s_XYZW))
         return MakeUnexpected(Failure{});
     return RigidDualQuaternion{ *real, dual };
 }
 
-[[nodiscard]] NWB_INLINE Expected<RigidDualQuaternionDouble> NWB_SIMD_CALL MatrixDoubleTryBuildRigidDualQuaternion(
-    const SIMDMatrixDouble& matrix,
-    const f64 affineEpsilon,
-    const f64 rigidEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE Expected<RigidDualQuaternionDouble> NWB_SIMD_CALL MatrixDoubleTryBuildRigidDualQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
     const auto real = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon);
     if(!real)
         return MakeUnexpected(real.error());
 
-    const SIMDVectorDouble translation = VectorDoubleMergeX(
-        VectorDoubleSplatW(matrix.v[0]),
-        VectorDoubleSplatW(matrix.v[1]),
-        VectorDoubleSplatW(matrix.v[2]),
-        VectorDoubleZero()
-    );
+    const SIMDVectorDouble translation = VectorDoubleMergeX(VectorDoubleSplatW(matrix.v[0]), VectorDoubleSplatW(matrix.v[1]), VectorDoubleSplatW(matrix.v[2]), VectorDoubleZero());
     const SIMDVectorDouble dual = VectorDoubleScale(QuaternionDoubleMultiply(translation, *real), SIMDMatrixDoubleDetail::s_DoubleMatrixHalf);
     if(!VectorDoubleIsFinite(dual, VectorDoubleComponentMask::s_DoubleXYZW))
         return MakeUnexpected(Failure{});
@@ -1797,12 +1616,14 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleAffineTransformation2D(SIM
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransformation(SIMDVectorSingle scalingOrigin, SIMDVectorSingle scalingOrientationQuaternion, SIMDVectorSingle scaling, SIMDVectorSingle rotationOrigin, SIMDVectorSingle rotationQuaternion, SIMDVectorSingle translation)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransformation(
+    SIMDVectorSingle scalingOrigin, SIMDVectorSingle scalingOrientationQuaternion, SIMDVectorSingle scaling, SIMDVectorSingle rotationOrigin, SIMDVectorSingle rotationQuaternion, SIMDVectorSingle translation
+)noexcept{
     const SIMDVectorSingle vScalingOrigin = VectorSelect(VectorZero(), scalingOrigin, s_SIMDSelect1110);
     const SIMDVectorSingle vRotationOrigin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
 
-    // Oriented scaling Sso = Rso * diag(scaling) * Rso^T, then the linear part is Rr * Sso. The five
-    // translation matrices of the original chain collapse into a single translation column.
+    // Oriented scaling Sso = Rso * diag(scaling) * Rso^T, then the linear part is Rr * Sso.
+    // The five translation matrices of the original chain collapse into a single translation column.
     const SIMDMatrix scalingOrientation = MatrixRotationQuaternion(scalingOrientationQuaternion);
     SIMDMatrix scaledOrientation;
     scaledOrientation.v[0] = VectorMultiply(scalingOrientation.v[0], scaling);
@@ -1825,12 +1646,14 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransformation(SIMDVectorSingle scalin
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTransformation(SIMDVectorDouble scalingOrigin, SIMDVectorDouble scalingOrientationQuaternion, SIMDVectorDouble scaling, SIMDVectorDouble rotationOrigin, SIMDVectorDouble rotationQuaternion, SIMDVectorDouble translation)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTransformation(
+    SIMDVectorDouble scalingOrigin, SIMDVectorDouble scalingOrientationQuaternion, SIMDVectorDouble scaling, SIMDVectorDouble rotationOrigin, SIMDVectorDouble rotationQuaternion, SIMDVectorDouble translation
+)noexcept{
     const SIMDVectorDouble vScalingOrigin = VectorDoubleSelect(VectorDoubleZero(), scalingOrigin, s_DoubleSIMDSelect1110);
     const SIMDVectorDouble vRotationOrigin = VectorDoubleSelect(VectorDoubleZero(), rotationOrigin, s_DoubleSIMDSelect1110);
 
-    // Oriented scaling Sso = Rso * diag(scaling) * Rso^T, then the linear part is Rr * Sso. The five
-    // translation matrices of the original chain collapse into a single translation column.
+    // Oriented scaling Sso = Rso * diag(scaling) * Rso^T, then the linear part is Rr * Sso.
+    // The five translation matrices of the original chain collapse into a single translation column.
     const SIMDMatrixDouble scalingOrientation = MatrixDoubleRotationQuaternion(scalingOrientationQuaternion);
     SIMDMatrixDouble scaledOrientation;
     scaledOrientation.v[0] = VectorDoubleMultiply(scalingOrientation.v[0], scaling);

@@ -46,18 +46,8 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
             return false;
         }
         const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
-        if(
-            depthAttachment.valid()
-            && depthAttachment.isReadOnly
-            && !VulkanDetail::IsDepthStencilReadOnlyCompatible(
-                state.pipeline->m_desc.renderState.depthStencilState,
-                depthAttachment.texture->m_aspectMask
-            )
-        ){
-            rejectCommandRecording(
-                s_OperationName,
-                NWB_TEXT("graphics pipeline writes a read-only depth/stencil attachment")
-            );
+        if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline writes a read-only depth/stencil attachment"));
             return false;
         }
     }
@@ -88,10 +78,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
         if(
             indexBinding.buffer->m_buffer == VK_NULL_HANDLE
             || !indexBinding.buffer->m_creationDesc.isIndexBuffer
-            || !VulkanDetail::IsIndexFormatSupported(
-                indexBinding.format,
-                m_context.fullDrawIndexUint32FeatureEnabled
-            )
+            || !VulkanDetail::IsIndexFormatSupported(indexBinding.format, m_context.fullDrawIndexUint32FeatureEnabled)
             || (indexBinding.offset % indexBytes) != 0u
             || indexBinding.offset >= indexBinding.buffer->m_creationDesc.byteSize
         ){
@@ -104,14 +91,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
         return false;
     }
 
-    if(
-        state.indirectParams
-        && (
-            state.indirectParams->m_buffer == VK_NULL_HANDLE
-            || !state.indirectParams->m_creationDesc.isDrawIndirectArgs
-            || state.indirectParams->m_creationDesc.byteSize == 0u
-        )
-    ){
+    if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs || state.indirectParams->m_creationDesc.byteSize == 0u)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("indirect-argument buffer is invalid"));
         return false;
     }
@@ -123,10 +103,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
     BufferStateEntry requiredBufferStates[s_MaxVertexAttributes + 2u]{};
     u32 requiredBufferStateCount = 0u;
 
-    const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](
-        Buffer* const buffer,
-        const ResourceStates::Mask requiredState
-    )noexcept -> bool{
+    const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> bool{
         if(!buffer)
             return true;
         for(u32 stateIndex = 0u; stateIndex < requiredBufferStateCount; ++stateIndex){
@@ -151,10 +128,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
             return false;
         }
     }
-    if(
-        !addRequiredBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer)
-        || !addRequiredBufferState(state.indirectParams, ResourceStates::IndirectArgument)
-    ){
+    if(!addRequiredBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer) || !addRequiredBufferState(state.indirectParams, ResourceStates::IndirectArgument)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
         return false;
     }
@@ -183,11 +157,7 @@ bool CommandList::validateMeshletState(const MeshletState& state){
         return false;
 
     if(state.pipeline){
-        if(
-            !m_context.extensions.extMeshShader
-            || m_context.meshShaderFeatures.meshShader != VK_TRUE
-            || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
-        ){
+        if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
             rejectCommandRecording(s_OperationName, NWB_TEXT("mesh shader feature or entry point is unavailable"));
             return false;
         }
@@ -204,64 +174,28 @@ bool CommandList::validateMeshletState(const MeshletState& state){
             return false;
         }
         const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
-        if(
-            depthAttachment.valid()
-            && depthAttachment.isReadOnly
-            && !VulkanDetail::IsDepthStencilReadOnlyCompatible(
-                state.pipeline->m_desc.renderState.depthStencilState,
-                depthAttachment.texture->m_aspectMask
-            )
-        ){
-            rejectCommandRecording(
-                s_OperationName,
-                NWB_TEXT("meshlet pipeline writes a read-only depth/stencil attachment")
-            );
+        if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
             return false;
         }
     }
 
-    if(
-        state.indirectParams
-        && (
-            state.indirectParams->m_buffer == VK_NULL_HANDLE
-            || !state.indirectParams->m_creationDesc.isDrawIndirectArgs
-            || state.indirectParams->m_creationDesc.byteSize == 0u
-        )
-    ){
+    if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs || state.indirectParams->m_creationDesc.byteSize == 0u)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("mesh indirect-argument buffer is invalid"));
         return false;
     }
-    if(
-        state.indirectParams
-        && !validateBufferForGpuState(
-            state.indirectParams,
-            ResourceStates::IndirectArgument,
-            s_OperationName
-        )
-    )
+    if(state.indirectParams && !validateBufferForGpuState(state.indirectParams, ResourceStates::IndirectArgument, s_OperationName))
         return false;
     return true;
 }
 
-bool CommandList::validateGraphicsDrawState(
-    const TStringView operationName,
-    const bool indexed
-){
+bool CommandList::validateGraphicsDrawState(const TStringView operationName, const bool indexed){
     GraphicsPipeline* const pipeline = m_currentGraphicsState.pipeline;
-    if(
-        !m_renderPassActive
-        || !m_renderPassFramebuffer
-        || !pipeline
-        || pipeline->m_pipeline == VK_NULL_HANDLE
-        || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo
-    ){
+    if(!m_renderPassActive || !m_renderPassFramebuffer || !pipeline || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
         rejectCommandRecording(operationName, NWB_TEXT("no compatible graphics pipeline and render pass are active"));
         return false;
     }
-    if(
-        m_currentGraphicsState.viewport.viewports.size() != 1u
-        || m_currentGraphicsState.viewport.scissorRects.size() > 1u
-    ){
+    if(m_currentGraphicsState.viewport.viewports.size() != 1u || m_currentGraphicsState.viewport.scissorRects.size() > 1u){
         rejectCommandRecording(operationName, NWB_TEXT("draw requires one viewport and at most one explicit scissor"));
         return false;
     }
@@ -289,11 +223,7 @@ bool CommandList::validateGraphicsDrawState(
     return true;
 }
 
-bool CommandList::validateGraphicsDrawArguments(
-    const DrawArguments& arguments,
-    const bool indexed,
-    const TStringView operationName
-){
+bool CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, const bool indexed, const TStringView operationName){
     if(!validateGraphicsDrawState(operationName, indexed))
         return false;
 
@@ -304,13 +234,7 @@ bool CommandList::validateGraphicsDrawArguments(
         }
         const IndexBufferBinding& indexBinding = m_currentGraphicsState.indexBuffer;
         const u32 indexBytes = VulkanDetail::GetIndexElementByteSize(indexBinding.format);
-        if(!VulkanDetail::IsIndexDrawRangeValid(
-            indexBinding.buffer->m_creationDesc,
-            indexBinding.offset,
-            arguments.startIndexLocation,
-            arguments.vertexCount,
-            indexBytes
-        )){
+        if(!VulkanDetail::IsIndexDrawRangeValid(indexBinding.buffer->m_creationDesc, indexBinding.offset, arguments.startIndexLocation, arguments.vertexCount, indexBytes)){
             rejectCommandRecording(operationName, NWB_TEXT("indexed draw range exceeds the index buffer"));
             return false;
         }
@@ -335,23 +259,14 @@ bool CommandList::validateGraphicsDrawArguments(
         for(const VertexAttributeDesc& attribute : inputLayout->m_attributes){
             if(attribute.bufferIndex != requiredBinding.binding)
                 continue;
-            const u64 attributeBytes = static_cast<u64>(GetFormatInfo(attribute.format).bytesPerBlock)
-                * attribute.arraySize
-            ;
+            const u64 attributeBytes = static_cast<u64>(GetFormatInfo(attribute.format).bytesPerBlock) * attribute.arraySize;
             const u64 attributeEnd = static_cast<u64>(attribute.offset) + attributeBytes;
             requiredElementBytes = Max(requiredElementBytes, static_cast<u32>(attributeEnd));
         }
 
         const u32 firstElement = instanceRate ? arguments.startInstanceLocation : arguments.startVertexLocation;
         const u32 elementCount = instanceRate ? arguments.instanceCount : arguments.vertexCount;
-        if(!VulkanDetail::IsStridedBufferRangeValid(
-            boundBuffer->buffer->m_creationDesc,
-            boundBuffer->offset,
-            firstElement,
-            elementCount,
-            requiredBinding.stride,
-            requiredElementBytes
-        )){
+        if(!VulkanDetail::IsStridedBufferRangeValid(boundBuffer->buffer->m_creationDesc, boundBuffer->offset, firstElement, elementCount, requiredBinding.stride, requiredElementBytes)){
             rejectCommandRecording(operationName, NWB_TEXT("draw range exceeds a vertex buffer"));
             return false;
         }
@@ -359,13 +274,7 @@ bool CommandList::validateGraphicsDrawArguments(
     return true;
 }
 
-bool CommandList::validateIndirectBuffer(
-    Buffer* const buffer,
-    const u64 offsetBytes,
-    const u64 commandSizeBytes,
-    const u32 commandCount,
-    const TStringView commandName
-){
+bool CommandList::validateIndirectBuffer(Buffer* const buffer, const u64 offsetBytes, const u64 commandSizeBytes, const u32 commandCount, const TStringView commandName){
     if(!buffer){
         rejectCommandRecording(commandName, NWB_TEXT("no indirect-argument buffer is bound"));
         return false;
@@ -378,26 +287,14 @@ bool CommandList::validateIndirectBuffer(
         rejectCommandRecording(commandName, NWB_TEXT("buffer lacks indirect-argument usage"));
         return false;
     }
-    if(!VulkanDetail::IsIndirectCommandRangeValid(
-        buffer->m_creationDesc,
-        offsetBytes,
-        commandSizeBytes,
-        commandCount
-    )){
+    if(!VulkanDetail::IsIndirectCommandRangeValid(buffer->m_creationDesc, offsetBytes, commandSizeBytes, commandCount)){
         rejectCommandRecording(commandName, NWB_TEXT("indirect-argument range is invalid"));
         return false;
     }
     return true;
 }
 
-Expected<Buffer*> CommandList::prepareDrawIndirect(
-    const u32 offsetBytes,
-    const u32 drawCount,
-    const u64 commandSizeBytes,
-    const TStringView operationLabel,
-    const TStringView commandName,
-    const VulkanDetail::IndirectDrawIndexMode::Enum indexMode
-){
+Expected<Buffer*> CommandList::prepareDrawIndirect(const u32 offsetBytes, const u32 drawCount, const u64 commandSizeBytes, const TStringView operationLabel, const TStringView commandName, const VulkanDetail::IndirectDrawIndexMode::Enum indexMode){
     if(drawCount == 0u)
         return MakeUnexpected(Failure{});
 
@@ -408,21 +305,11 @@ Expected<Buffer*> CommandList::prepareDrawIndirect(
         rejectCommandRecording(operationLabel, NWB_TEXT("drawIndirectFirstInstance was not enabled"));
         return MakeUnexpected(Failure{});
     }
-    if(!VulkanDetail::IsIndirectDrawCountValid(
-        drawCount,
-        m_context.physicalDeviceProperties.limits.maxDrawIndirectCount,
-        m_context.multiDrawIndirectFeatureEnabled
-    )){
+    if(!VulkanDetail::IsIndirectDrawCountValid(drawCount, m_context.physicalDeviceProperties.limits.maxDrawIndirectCount, m_context.multiDrawIndirectFeatureEnabled)){
         rejectCommandRecording(operationLabel, NWB_TEXT("indirect draw count is unsupported or exceeds the device limit"));
         return MakeUnexpected(Failure{});
     }
-    if(!validateIndirectBuffer(
-        m_currentGraphicsState.indirectParams,
-        offsetBytes,
-        commandSizeBytes,
-        drawCount,
-        commandName
-    ))
+    if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, commandSizeBytes, drawCount, commandName))
         return MakeUnexpected(Failure{});
 
     return m_currentGraphicsState.indirectParams;

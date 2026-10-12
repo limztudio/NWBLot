@@ -57,14 +57,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
 
     auto createCsgTexture = [&](const Core::Format::Enum format, const Name& name, const u32 layerCount, const bool renderTarget){
         Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(layerCount)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        ;
+        desc.setWidth(targets.width).setHeight(targets.height).setArraySize(layerCount).setFormat(format).setDimension(Core::TextureDimension::Texture2DArray).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
         if(renderTarget)
             desc.setInRenderTarget(true);
         desc.setInUAV(true).setName(name);
@@ -110,73 +103,49 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         return false;
     }
 
-    targets.csgReceiverEventData = createReceiverEventTexture(
-        targets.csgReceiverEventDataFormat,
-        Name("engine/deferred/csg_receiver_event_data")
-    );
+    targets.csgReceiverEventData = createReceiverEventTexture(targets.csgReceiverEventDataFormat, Name("engine/deferred/csg_receiver_event_data"));
     if(!targets.csgReceiverEventData){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event data target"));
         return false;
     }
 
-    targets.csgReceiverEventCount = createReceiverEventCounterTexture(
-        targets.csgReceiverEventCountFormat,
-        Name("engine/deferred/csg_receiver_event_count")
-    );
+    targets.csgReceiverEventCount = createReceiverEventCounterTexture(targets.csgReceiverEventCountFormat, Name("engine/deferred/csg_receiver_event_count"));
     if(!targets.csgReceiverEventCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event count target"));
         return false;
     }
 
-    targets.csgReceiverSpanData = createReceiverSpanTexture(
-        targets.csgReceiverSpanDataFormat,
-        Name("engine/deferred/csg_receiver_span_data")
-    );
+    targets.csgReceiverSpanData = createReceiverSpanTexture(targets.csgReceiverSpanDataFormat, Name("engine/deferred/csg_receiver_span_data"));
     if(!targets.csgReceiverSpanData){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span data target"));
         return false;
     }
 
-    targets.csgReceiverSpanCount = createReceiverSpanCounterTexture(
-        targets.csgReceiverSpanCountFormat,
-        Name("engine/deferred/csg_receiver_span_count")
-    );
+    targets.csgReceiverSpanCount = createReceiverSpanCounterTexture(targets.csgReceiverSpanCountFormat, Name("engine/deferred/csg_receiver_span_count"));
     if(!targets.csgReceiverSpanCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span count target"));
         return false;
     }
 
-    targets.csgRemovedIntervalDepth = createRemovedIntervalTexture(
-        targets.csgRemovedIntervalDepthFormat,
-        Name("engine/deferred/csg_removed_interval_depth")
-    );
+    targets.csgRemovedIntervalDepth = createRemovedIntervalTexture(targets.csgRemovedIntervalDepthFormat, Name("engine/deferred/csg_removed_interval_depth"));
     if(!targets.csgRemovedIntervalDepth){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval depth target"));
         return false;
     }
 
-    targets.csgRemovedIntervalCapNormal = createRemovedIntervalTexture(
-        targets.csgRemovedIntervalCapNormalFormat,
-        Name("engine/deferred/csg_removed_interval_cap_normal")
-    );
+    targets.csgRemovedIntervalCapNormal = createRemovedIntervalTexture(targets.csgRemovedIntervalCapNormalFormat, Name("engine/deferred/csg_removed_interval_cap_normal"));
     if(!targets.csgRemovedIntervalCapNormal){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval cap-normal target"));
         return false;
     }
 
-    targets.csgRemovedIntervalData = createRemovedIntervalTexture(
-        targets.csgRemovedIntervalDataFormat,
-        Name("engine/deferred/csg_removed_interval_data")
-    );
+    targets.csgRemovedIntervalData = createRemovedIntervalTexture(targets.csgRemovedIntervalDataFormat, Name("engine/deferred/csg_removed_interval_data"));
     if(!targets.csgRemovedIntervalData){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval data target"));
         return false;
     }
 
-    targets.csgRemovedIntervalCount = createRemovedIntervalCounterTexture(
-        targets.csgRemovedIntervalCountFormat,
-        Name("engine/deferred/csg_removed_interval_count")
-    );
+    targets.csgRemovedIntervalCount = createRemovedIntervalCounterTexture(targets.csgRemovedIntervalCountFormat, Name("engine/deferred/csg_removed_interval_count"));
     if(!targets.csgRemovedIntervalCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval count target"));
         return false;

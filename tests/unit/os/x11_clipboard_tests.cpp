@@ -91,10 +91,7 @@ protected:
     [[nodiscard]] bool writeText(const usize index, const ClipboardChannel::Enum channel, const AStringView text){
         ClipboardCompletion completion(m_arena.arena);
         const ClipboardRequestResult request = m_services[index]->requestWriteText(channel, text);
-        return
-            request.token.valid() && awaitCompletion(*m_services[index], request.token, completion)
-            && completion.status == ClipboardStatus::Success
-        ;
+        return request.token.valid() && awaitCompletion(*m_services[index], request.token, completion) && completion.status == ClipboardStatus::Success;
     }
 
 

@@ -114,9 +114,7 @@ namespace RendererTaskGraphDetail{
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
     sourceBuffers.reserve(sourceBufferCapacity);
     {
-        HashSet<Core::Buffer*, Core::Alloc::ScratchArena, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>> sourceBufferIdentities(
-            AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena
-        );
+        HashSet<Core::Buffer*, Core::Alloc::ScratchArena, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>> sourceBufferIdentities(AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena);
         for(const MeshSourceRef& mesh : uniqueMeshes){
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
                 if(sourceBufferIdentities.insert(buffer.get()).second)
@@ -171,23 +169,14 @@ namespace RendererTaskGraphDetail{
     for(const Core::GpuTaskResourceUse& use : *resourceUses)
         members.push_back(use.resource);
 
-    resource = graph.importResourceSet(
-        Core::GpuGraphResourceSetDesc{}
-            .setIdentity(identity)
-            .setMarkerLabel(label)
-            .setMembers(members.data(), members.size())
-    );
+    resource = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
     if(!resource.valid())
         return MakeUnexpected(Failure{});
     return resource;
 }
 
 
-[[nodiscard]] inline Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(
-    Core::GpuTaskGraph& graph,
-    const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan,
-    const AStringView label
-){
+[[nodiscard]] inline Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(Core::GpuTaskGraph& graph, const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan, const AStringView label){
     Core::GpuGraphResourceId resource{};
     if(!plan.captured || !plan.outputBuffer)
         return MakeUnexpected(Failure{});
@@ -224,20 +213,13 @@ namespace RendererTaskGraphDetail{
     if(!sampledTextures)
         return MakeUnexpected(Failure{});
 
-    const auto members = ImportMaterialSampledTextureResources(
-        graph, sampledTextures->data(), sampledTextures->size(), "Prepared Material Sampled Texture", scratchArena
-    );
+    const auto members = ImportMaterialSampledTextureResources(graph, sampledTextures->data(), sampledTextures->size(), "Prepared Material Sampled Texture", scratchArena);
     if(!members)
         return MakeUnexpected(Failure{});
     if(members->empty())
         return resource;
 
-    resource = graph.importResourceSet(
-        Core::GpuGraphResourceSetDesc{}
-            .setIdentity(identity)
-            .setMarkerLabel(label)
-            .setMembers(members->data(), members->size())
-    );
+    resource = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members->data(), members->size()));
     if(!resource.valid())
         return MakeUnexpected(Failure{});
     return resource;

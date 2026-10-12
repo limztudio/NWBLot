@@ -27,20 +27,13 @@ namespace __hidden_ui_gpu_command_ir{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ReplayCaptured(
-    const GpuFrame& frame,
-    const Core::GpuTaskRecordContext& context,
-    Core::CommandList& commands,
-    const Core::GpuCommandIrCapture& capture
-){
+[[nodiscard]] static bool ReplayCaptured(const GpuFrame& frame, const Core::GpuTaskRecordContext& context, Core::CommandList& commands, const Core::GpuCommandIrCapture& capture){
     if(capture.recordCount() == 0u)
         return !commands.commandRecordingFailed();
     const auto stream = capture.exportOwned(frame->m_arena);
     if(!stream)
         return false;
-    const Core::GpuCommandIrReplayResult replay = Core::ReplayGpuCommandIrPacket(
-        *stream, context.declarations, context.compiledPlan, context.packet, commands
-    );
+    const Core::GpuCommandIrReplayResult replay = Core::ReplayGpuCommandIrPacket(*stream, context.declarations, context.compiledPlan, context.packet, commands);
     return replay.valid() && !commands.commandRecordingFailed();
 }
 
@@ -68,10 +61,7 @@ namespace __hidden_ui_gpu_command_ir{
     state.indexFormat = Core::Format::R32_UINT;
     if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
         return false;
-    return capture.captureBindGraphicsHeap(
-        context.task, context.packet, context.queue, payload.pipeline,
-        frame->m_resources->m_pipeline, heap, frame->m_arena, descriptorOwner
-    );
+    return capture.captureBindGraphicsHeap(context.task, context.packet, context.queue, payload.pipeline, frame->m_resources->m_pipeline, heap, frame->m_arena, descriptorOwner);
 }
 
 [[nodiscard]] static bool CaptureOutputState(
@@ -90,10 +80,7 @@ namespace __hidden_ui_gpu_command_ir{
     state.viewport = viewport;
     if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
         return false;
-    return capture.captureBindGraphicsHeap(
-        context.task, context.packet, context.queue, payload.graphPipeline,
-        payload.pipeline, heap, payload.frame->m_arena, descriptorOwner
-    );
+    return capture.captureBindGraphicsHeap(context.task, context.packet, context.queue, payload.graphPipeline, payload.pipeline, heap, payload.frame->m_arena, descriptorOwner);
 }
 
 
@@ -106,11 +93,7 @@ namespace __hidden_ui_gpu_command_ir{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RecordRasterCommandIr(
-    const GpuRasterTask::Payload& payload,
-    Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context
-){
+bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     // A task-local stream must not silently disappear from a caller's separate packet capture.
     if(context.commandIrCapture)
         return false;
@@ -137,8 +120,7 @@ bool RecordRasterCommandIr(
     GpuPaintPushConstants push;
     const SIMDVectorSingle pixelScale = VectorSet(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
     const SIMDVectorSingle projection = VectorMultiply(VectorSet(2.0f, -2.0f, 2.0f, -2.0f), pixelScale);
-    const SIMDVectorSingle targetSize = VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height),
-        static_cast<f32>(target.width), static_cast<f32>(target.height));
+    const SIMDVectorSingle targetSize = VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height), static_cast<f32>(target.width), static_cast<f32>(target.height));
     const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
     push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
     push.translate = { -1.0f, 1.0f };
@@ -165,23 +147,16 @@ bool RecordRasterCommandIr(
         const f32 maxY = VectorGetY(maximum);
         if(maxX <= minX || maxY <= minY || draw.indexCount == 0u)
             continue;
-        const Core::Rect scissor(
-            static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY)
-        );
+        const Core::Rect scissor(static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY));
         if(!hasRasterState || scissor != boundScissor){
-            if(!__hidden_ui_gpu_command_ir::CaptureRasterState(
-                payload, context, capture, heap, descriptorOwner, viewport, scissor
-            ))
+            if(!__hidden_ui_gpu_command_ir::CaptureRasterState(payload, context, capture, heap, descriptorOwner, viewport, scissor))
                 return false;
             boundScissor = scissor;
             hasRasterState = true;
         }
         if(!ResolvePaintPushConstants(*frame, draw, push))
             return false;
-        if(!capture.capturePushConstants(
-            context.task, context.packet, context.queue,
-            BinaryByteView{ reinterpret_cast<const u8*>(&push), sizeof(push) }
-        ))
+        if(!capture.capturePushConstants(context.task, context.packet, context.queue, BinaryByteView{ reinterpret_cast<const u8*>(&push), sizeof(push) }))
             return false;
         Core::DrawArguments arguments;
         arguments.setVertexCount(draw.indexCount).setStartIndexLocation(draw.firstIndex);
@@ -198,18 +173,11 @@ bool RecordRasterCommandIr(
     return true;
 }
 
-bool RecordOutputCommandIr(
-    const GpuOutputTask::Payload& payload,
-    Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context
-){
+bool RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     if(context.commandIrCapture)
         return false;
     const GpuFrame& frame = payload.frame;
-    if(
-        !frame || !frame->m_target || !frame->m_resources || !payload.graphPipeline.valid()
-        || context.declarations.graphicsPipelineFor(payload.graphPipeline) != payload.pipeline.get()
-    )
+    if(!frame || !frame->m_target || !frame->m_resources || !payload.graphPipeline.valid() || context.declarations.graphicsPipelineFor(payload.graphPipeline) != payload.pipeline.get())
         return false;
     Core::GpuCommandIrCapture capture(frame->m_arena);
     if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
@@ -224,15 +192,9 @@ bool RecordOutputCommandIr(
     push.textureSlot = frame->m_target->m_sampledImage.slot();
     push.samplerSlot = frame->m_resources->m_samplerDescriptor.slot();
     push.presentationMode = payload.presentationMode;
-    if(!capture.capturePushConstants(
-        context.task, context.packet, context.queue,
-        BinaryByteView{ reinterpret_cast<const u8*>(&push), sizeof(push) }
-    ))
+    if(!capture.capturePushConstants(context.task, context.packet, context.queue, BinaryByteView{ reinterpret_cast<const u8*>(&push), sizeof(push) }))
         return false;
-    if(
-        !capture.captureDraw(context.task, context.packet, context.queue, Core::DrawArguments().setVertexCount(3u), false)
-        || !capture.captureEndRenderPass(context.task, context.packet, context.queue)
-    )
+    if(!capture.captureDraw(context.task, context.packet, context.queue, Core::DrawArguments().setVertexCount(3u), false) || !capture.captureEndRenderPass(context.task, context.packet, context.queue))
         return false;
     return __hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, commands, capture);
 }

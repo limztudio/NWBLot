@@ -105,10 +105,7 @@ namespace __hidden_task_graph_deferred_lighting{
         const Name packetScopeName = Core::GpuTaskPacketTimingScopeName(graph.taskAt(packetView.tasks[0u].index).identity);
         if(!packetScopeName)
             return false;
-        packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{
-            .scopeName = packetScopeName,
-            .physicalQueue = packetView.plan->queue,
-        });
+        packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{ .scopeName = packetScopeName, .physicalQueue = packetView.plan->queue, });
 
         bool hasQueueOutput = false;
         for(const Core::GpuPacketEnvelopeMetricQueueOutput& output : queueOutputs)
@@ -119,10 +116,7 @@ namespace __hidden_task_graph_deferred_lighting{
         const Name internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena);
         if(!internalIdleScopeName)
             return false;
-        queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{
-            .physicalQueue = packetView.plan->queue,
-            .internalIdleScopeName = internalIdleScopeName,
-        });
+        queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = packetView.plan->queue, .internalIdleScopeName = internalIdleScopeName, });
     }
 
     return timingRecorder.preparePacketEnvelopeMetrics(
@@ -145,18 +139,8 @@ namespace __hidden_task_graph_deferred_lighting{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(
-    const Core::GpuTaskGraph::DeclarationReadView& graph,
-    const Core::GpuCompiledGraph::ReadView& compiledGraph,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    return __hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(
-        graph,
-        compiledGraph,
-        m_graphics.gpuTiming(),
-        m_graphics.getFrameIndex(),
-        scratchArena
-    );
+[[nodiscard]] bool RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(const Core::GpuTaskGraph::DeclarationReadView& graph, const Core::GpuCompiledGraph::ReadView& compiledGraph, Core::Alloc::ScratchArena& scratchArena){
+    return __hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(graph, compiledGraph, m_graphics.gpuTiming(), m_graphics.getFrameIndex(), scratchArena);
 }
 
 

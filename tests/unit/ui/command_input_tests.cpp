@@ -39,9 +39,7 @@ HitTarget Control(const u64 id = 1u){
     return target;
 }
 
-InputEvent Command(
-    const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const bool repeat = false
-){
+InputEvent Command(const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const bool repeat = false){
     InputEvent event;
     event.type = type;
     event.source = source;
@@ -142,9 +140,7 @@ TEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameComma
 TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissionAcrossProfileReplacement){
     const HitTarget host = Control();
     ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
-    const InputKeyBinding initial{
-        Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Down, InputSelectionPolicy::Shift, true, true
-    };
+    const InputKeyBinding initial{ Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Down, InputSelectionPolicy::Shift, true, true };
     ASSERT_TRUE(m_router.setBindings(&initial, 1u));
     InputEvent resolved;
     const auto dispatchResult1 = send(Key(InputEventType::KeyDown, true));

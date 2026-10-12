@@ -4,14 +4,7 @@ from __future__ import annotations
 from popup_tools_native import PopupToolsNativeInput
 
 
-COMMAND_KEYS = {
-    "reverse": "F4",
-    "remove_selected": "F5",
-    "replace_source": "F6",
-    "select_disabled": "F7",
-    "toggle_enabled": "F8",
-    "close_parent": "F9",
-}
+COMMAND_KEYS = { "reverse": "F4", "remove_selected": "F5", "replace_source": "F6", "select_disabled": "F7", "toggle_enabled": "F8", "close_parent": "F9", }
 
 
 class RadioGroupNativeInput(PopupToolsNativeInput):

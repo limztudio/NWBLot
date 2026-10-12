@@ -29,10 +29,7 @@ CommandList::GraphPublicationReadOwnership::GraphPublicationReadOwnership(const 
             return;
         }
         if(publicationState == s_GraphPublicationRecording){
-            m_readable = GraphRecordingOwnership::HasCapability(
-                m_commandList,
-                m_commandList.m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
-            );
+            m_readable = GraphRecordingOwnership::HasCapability(m_commandList, m_commandList.m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire));
             return;
         }
         if(publicationState == s_GraphPublicationReading){
@@ -43,12 +40,7 @@ CommandList::GraphPublicationReadOwnership::GraphPublicationReadOwnership(const 
             return;
 
         u8 expectedState = s_GraphPublicationRecorded;
-        if(m_commandList.m_graphPublicationState.compare_exchange_strong(
-            expectedState,
-            s_GraphPublicationReading,
-            MemoryOrder::acq_rel,
-            MemoryOrder::acquire
-        )){
+        if(m_commandList.m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationReading, MemoryOrder::acq_rel, MemoryOrder::acquire)){
             m_readable = true;
             m_acquired = true;
             return;
@@ -59,9 +51,7 @@ CommandList::GraphPublicationReadOwnership::~GraphPublicationReadOwnership()noex
     if(!m_acquired)
         return;
 
-    const bool ownershipMatches = m_commandList.m_graphPublicationState.load(MemoryOrder::acquire)
-        == s_GraphPublicationReading
-    ;
+    const bool ownershipMatches = m_commandList.m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationReading;
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "command-list diagnostic read lost its exact publication capability");
     if(!ownershipMatches)
         TerminateInvariant();
@@ -77,24 +67,15 @@ CommandList::GraphRecordingOwnership::Capability*& CommandList::GraphRecordingOw
     return capability;
 }
 
-bool CommandList::GraphRecordingOwnership::HasCapability(
-    const CommandList& commandList,
-    const u64 recordingLeaseSerial
-)noexcept{
+bool CommandList::GraphRecordingOwnership::HasCapability(const CommandList& commandList, const u64 recordingLeaseSerial)noexcept{
     for(const Capability* capability = CurrentCapability(); capability; capability = capability->previous){
-        if(
-            capability->commandList == &commandList
-            && capability->recordingLeaseSerial == recordingLeaseSerial
-        )
+        if(capability->commandList == &commandList && capability->recordingLeaseSerial == recordingLeaseSerial)
             return true;
     }
     return false;
 }
 
-CommandList::GraphRecordingOwnership::GraphRecordingOwnership(
-    CommandList& commandList,
-    const u64 recordingLeaseSerial
-)
+CommandList::GraphRecordingOwnership::GraphRecordingOwnership(CommandList& commandList, const u64 recordingLeaseSerial)
     : m_commandList(commandList)
     , m_recordingLeaseSerial(recordingLeaseSerial)
     , m_acquired(commandList.beginGraphRecordingOwnership(recordingLeaseSerial))
@@ -106,10 +87,7 @@ CommandList::GraphRecordingOwnership::~GraphRecordingOwnership()noexcept{
     release();
 }
 
-bool CommandList::GraphRecordingOwnership::finish(
-    const bool semanticSuccess,
-    CommandListResourceStateHandoff* const finalStates
-){
+bool CommandList::GraphRecordingOwnership::finish(const bool semanticSuccess, CommandListResourceStateHandoff* const finalStates){
     if(!m_acquired || !semanticSuccess){
         if(finalStates)
             finalStates->reset();
@@ -117,11 +95,7 @@ bool CommandList::GraphRecordingOwnership::finish(
         return false;
     }
     m_commandList.closeInternal(finalStates);
-    if(
-        m_commandList.commandRecordingFailedUnchecked()
-        || m_commandList.isRecordingUnchecked()
-        || !m_commandList.hasCommandBufferUnchecked()
-    ){
+    if(m_commandList.commandRecordingFailedUnchecked() || m_commandList.isRecordingUnchecked() || !m_commandList.hasCommandBufferUnchecked()){
         if(finalStates)
             finalStates->reset();
         release();

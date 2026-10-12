@@ -82,10 +82,7 @@ inline constexpr StringView s_DiagnosticEventCategoryAssert = "logger_Assert";
 inline constexpr StringView s_DiagnosticEventCategoryError = "logger_Error";
 inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 
-[[nodiscard]] inline constexpr bool ShouldBreak(
-    const LoggerBreakPolicy::Enum breakPolicy,
-    const LogType::Enum type
-)noexcept{
+[[nodiscard]] inline constexpr bool ShouldBreak(const LoggerBreakPolicy::Enum breakPolicy, const LogType::Enum type)noexcept{
     switch(breakPolicy){
     case LoggerBreakPolicy::ReportOnly:
         return false;
@@ -150,58 +147,20 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, WFormatStr
     logger.enqueue(StringFormat(logger.arena(), fmt, Forward<ARGS>(args)...), type);
 }
 
-inline void EnqueuePreparedMessageAndCapture(
-    ILogger& logger,
-    const LogType::Enum type,
-    const StringView diagnosticCategory,
-    const StringView file,
-    const u32 line,
-    LogString&& message
-){
+inline void EnqueuePreparedMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, LogString&& message){
     const DiagnosticEventText diagnosticMessage = MakeDiagnosticEventText(message);
-    CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .event = DiagnosticEventNameFromLogType(type),
-        .category = diagnosticCategory,
-        .message = diagnosticMessage.view(),
-        .file = file,
-        .line = line,
-    });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventNameFromLogType(type), .category = diagnosticCategory, .message = diagnosticMessage.view(), .file = file, .line = line, });
     logger.enqueue(Move(message), type);
 }
 
-inline void EnqueuePreparedMessageAndCapture(
-    ILogger& logger,
-    const LogType::Enum type,
-    const StringView diagnosticCategory,
-    const StringView file,
-    const u32 line,
-    const LogString& message
-){
+inline void EnqueuePreparedMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const LogString& message){
     const DiagnosticEventText diagnosticMessage = MakeDiagnosticEventText(message);
-    CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .event = DiagnosticEventNameFromLogType(type),
-        .category = diagnosticCategory,
-        .message = diagnosticMessage.view(),
-        .file = file,
-        .line = line,
-    });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventNameFromLogType(type), .category = diagnosticCategory, .message = diagnosticMessage.view(), .file = file, .line = line, });
     logger.enqueue(message, type);
 }
 
-inline void CaptureMessageDiagnostic(
-    const LogType::Enum type,
-    const StringView diagnosticCategory,
-    const StringView file,
-    const u32 line,
-    const DiagnosticEventText& diagnosticMessage
-){
-    CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .event = DiagnosticEventNameFromLogType(type),
-        .category = diagnosticCategory,
-        .message = diagnosticMessage.view(),
-        .file = file,
-        .line = line,
-    });
+inline void CaptureMessageDiagnostic(const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const DiagnosticEventText& diagnosticMessage){
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventNameFromLogType(type), .category = diagnosticCategory, .message = diagnosticMessage.view(), .file = file, .line = line, });
 }
 
 template<typename In>

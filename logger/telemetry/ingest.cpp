@@ -103,12 +103,7 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TelemetryIngestResult ProcessTelemetryUpload(
-    LogArena& arena,
-    const void* const bytes,
-    const usize byteCount,
-    const TelemetryIngestConfig& config
-){
+TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const bytes, const usize byteCount, const TelemetryIngestConfig& config){
     TelemetryIngestResult result(arena);
     if(!bytes || byteCount == 0u){
         __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload is empty", Core::Common::LogType::Error);
@@ -140,18 +135,9 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     Telemetry::Recorder recorder(arena);
     const auto decoded = Telemetry::DecodeEventStream(arena, bytes, byteCount, recorder);
-    result.decode = decoded
-        ? Telemetry::DecodeResult{ *decoded, Telemetry::DecodeStatus::Ok }
-        : decoded.error()
-    ;
+    result.decode = decoded ? Telemetry::DecodeResult{ *decoded, Telemetry::DecodeStatus::Ok } : decoded.error();
     if(!result.decode.ok()){
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Telemetry upload stored but decode failed: raw='{}' bytes_read={} status={}"),
-            PathToString<tchar>(result.rawPath),
-            result.decode.bytesRead,
-            static_cast<u32>(result.decode.status)
-        );
+        result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but decode failed: raw='{}' bytes_read={} status={}"), PathToString<tchar>(result.rawPath), result.decode.bytesRead, static_cast<u32>(result.decode.status));
         result.type = Core::Common::LogType::Error;
         return result;
     }
@@ -169,13 +155,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
     if(!report->graph.empty())
         result.wroteGraph = WriteTextFile(result.graphPath, AStringView(report->graph.data(), report->graph.size()));
     if(!result.wroteJson || !result.wrotePerfCsv){
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Telemetry upload decoded but report write failed: raw='{}' json='{}' csv='{}'"),
-            PathToString<tchar>(result.rawPath),
-            PathToString<tchar>(result.jsonPath),
-            PathToString<tchar>(result.perfCsvPath)
-        );
+        result.message = StringFormat(arena, NWB_TEXT("Telemetry upload decoded but report write failed: raw='{}' json='{}' csv='{}'"), PathToString<tchar>(result.rawPath), PathToString<tchar>(result.jsonPath), PathToString<tchar>(result.perfCsvPath));
         result.type = Core::Common::LogType::Error;
         return result;
     }

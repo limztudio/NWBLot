@@ -161,10 +161,7 @@ Expected<Path> ShaderSourceDependencies::ResolveIncludeFile(const AStringView in
             return localCandidate;
         }
         if(!localCandidateQueryResult && !IsMissingPathError(localCandidateQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
-                , PathToString<tchar>(localCandidate)
-                , StringConvert(localCandidateQueryResult.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(localCandidate), StringConvert(localCandidateQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }
@@ -176,10 +173,7 @@ Expected<Path> ShaderSourceDependencies::ResolveIncludeFile(const AStringView in
             return includeCandidate;
         }
         if(!includeCandidateQueryResult && !IsMissingPathError(includeCandidateQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
-                , PathToString<tchar>(includeCandidate)
-                , StringConvert(includeCandidateQueryResult.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(includeCandidate), StringConvert(includeCandidateQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }

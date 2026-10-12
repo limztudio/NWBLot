@@ -41,8 +41,8 @@ struct FramebufferCaptureOptions{
     bool quitWhenReady = true;
 };
 
-// One-shot framebuffer observer for unattended smoke acceptance. Completion state is ref-counted independently so
-// graph rejection/teardown can resolve an old payload after the owning project has stopped the observer.
+// One-shot framebuffer observer for unattended smoke acceptance.
+// Completion state is ref-counted independently so graph rejection/teardown can resolve an old payload after the owning project has stopped the observer.
 class FramebufferCapture final
     : public Core::IRenderPass
     , public Core::IGpuTaskGraphPresentationContributor
@@ -82,12 +82,7 @@ public:
 public:
     [[nodiscard]] virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const override;
-    [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(
-        Core::GpuTaskGraph& graph,
-        const Core::AcquiredPresentationFrame& frame,
-        Core::GpuGraphResourceId backbuffer,
-        Core::GpuTaskId previousTask
-    )override;
+    [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, Core::GpuGraphResourceId backbuffer, Core::GpuTaskId previousTask)override;
 
 
 private:
@@ -96,11 +91,7 @@ private:
     void resetPendingReadback();
     [[nodiscard]] bool stagingMatches(const Core::TextureDesc& description)const;
     [[nodiscard]] bool prepareReadback(const Core::TextureDesc& description);
-    [[nodiscard]] bool writeCapture(
-        const u8* sourceBytes,
-        usize sourceRowPitch,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] bool writeCapture(const u8* sourceBytes, usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:
@@ -130,12 +121,7 @@ private:
 
 
 // Missing capture configuration is a successful null result; a configured result owns a started observer.
-[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
-    ProjectRuntimeContext& context,
-    const TStringView projectName,
-    const u32 defaultFrameCount,
-    const FramebufferCaptureOptions& options = {}
-){
+[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(ProjectRuntimeContext& context, const TStringView projectName, const u32 defaultFrameCount, const FramebufferCaptureOptions& options = {}){
     const auto outputPath = ReadSmokeEnvironmentText(context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
     if(!outputPath)
         return UniquePtr<FramebufferCapture>{};
@@ -144,20 +130,14 @@ private:
     const auto frameCountText = ReadSmokeEnvironmentText(context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
     if(frameCountText){
         const auto parsedFrameCount = ParseU64(AStringView(frameCountText->data(), frameCountText->size()));
-        if(
-            !parsedFrameCount
-            || *parsedFrameCount == 0u
-            || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
-        ){
+        if(!parsedFrameCount || *parsedFrameCount == 0u || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: capture frame count must be a positive u32"), projectName);
             return MakeUnexpected(Failure{});
         }
         captureFrameCount = static_cast<u32>(*parsedFrameCount);
     }
 
-    auto capture = MakeUnique<FramebufferCapture>(
-        context, AStringView(outputPath->data(), outputPath->size()), captureFrameCount, options
-    );
+    auto capture = MakeUnique<FramebufferCapture>(context, AStringView(outputPath->data(), outputPath->size()), captureFrameCount, options);
     if(!capture || !capture->start())
         return MakeUnexpected(Failure{});
     return capture;

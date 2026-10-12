@@ -48,8 +48,7 @@ class InputBindingsRun(EditRun):
             self.physical_text_key("x", "x")
             return
         user32 = self.backend.user32
-        keys = [(KEYS[name], 1 | (int(user32.MapVirtualKeyW(KEYS[name], 0)) << 16), character)
-            for name, character in (("w", "w"), ("x", "x"))]
+        keys = [(KEYS[name], 1 | (int(user32.MapVirtualKeyW(KEYS[name], 0)) << 16), character) for name, character in (("w", "w"), ("x", "x"))]
         for virtual_key, flags, _ in keys:
             user32.SendMessageW(self.handle, 0x0100, virtual_key, flags)
         for virtual_key, flags, _ in keys:

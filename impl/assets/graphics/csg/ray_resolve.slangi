@@ -39,17 +39,12 @@ float nwbCsgRayCollapsedOpticalBoundary(
         if(first - groupBegin <= 1u)
             continue;
         // Distinct FP32 parameters inside one uncertainty group do not prove the order of its solid transitions.
-        if(
-            initialGroupWinding + negativeDelta > 0 || initialGroupWinding + positiveDelta < 0
-            || ((initialGroupWinding == 0 || winding == 0) && (negativeDelta == 0 || positiveDelta == 0))
-        )
+        if(initialGroupWinding + negativeDelta > 0 || initialGroupWinding + positiveDelta < 0 || ((initialGroupWinding == 0 || winding == 0) && (negativeDelta == 0 || positiveDelta == 0)))
             continue;
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
         bool tangent = true;
         for(uint index = groupBegin + 1u; index < first; ++index){
-            if(!nwbRayTraceIncidentBoundary(material, crossings[groupBegin].primitive, crossings[groupBegin].barycentrics,
-                crossings[index].primitive, crossings[index].barycentrics
-            )){
+            if(!nwbRayTraceIncidentBoundary(material, crossings[groupBegin].primitive, crossings[groupBegin].barycentrics, crossings[index].primitive, crossings[index].barycentrics)){
                 tangent = false;
                 break;
             }
@@ -57,10 +52,7 @@ float nwbCsgRayCollapsedOpticalBoundary(
         if(tangent)
             continue;
         const float2 segment = float2(max(distance, minimum), min(crossings[first - 1u].distance, maximum));
-        if(
-            segment.y <= segment.x
-            && (crossings[first - 1u].distance != distance || distance <= minimum || distance >= maximum)
-        )
+        if(segment.y <= segment.x && (crossings[first - 1u].distance != distance || distance <= minimum || distance >= maximum))
             continue;
         // A nonzero unresolved span must be certified completely removed, including cutter gaps and cropped ray intervals.
         const float margin = 8.0 * 1.1920928955078125e-7 * max(max(abs(segment.x), abs(segment.y)), 1e-4);
@@ -173,9 +165,7 @@ NwbCsgRayClosedWindows nwbCsgRayResolveClosedWindows(
     if(result.window.failure != 0u)
         return result;
     const int initialWinding = iterator.winding;
-    const float collapsedBoundary = nwbCsgRayCollapsedOpticalBoundary(
-        crossings, crossingCount, materialSlot, instanceIndex, initialWinding, minimum, maximum, cuts, cutCount
-    );
+    const float collapsedBoundary = nwbCsgRayCollapsedOpticalBoundary(crossings, crossingCount, materialSlot, instanceIndex, initialWinding, minimum, maximum, cuts, cutCount);
     float nextCollapsedBoundary = maximum;
     NwbCsgRayBoundary nearBoundary;
     NwbCsgRayBoundary farBoundary;
@@ -192,10 +182,7 @@ NwbCsgRayClosedWindows nwbCsgRayResolveClosedWindows(
                 result.next = noOpenBoundary;
                 if(nwbCsgRayReceiverSegmentRemoved(instance, root, origin, direction, result.window.distance, maximum, cuts, cutCount))
                     return result;
-                nextCollapsedBoundary = nwbCsgRayCollapsedOpticalBoundary(
-                    crossings, crossingCount, materialSlot, instanceIndex, initialWinding,
-                    result.window.distance, maximum, cuts, cutCount
-                );
+                nextCollapsedBoundary = nwbCsgRayCollapsedOpticalBoundary(crossings, crossingCount, materialSlot, instanceIndex, initialWinding, result.window.distance, maximum, cuts, cutCount);
             }
             // The first window may select this pair's entry; its exit must still compete at the strict second minimum.
             if(result.window.hit && nwbCsgRaySelectSpanBoundary(retainedNear, retainedFar, result.window.distance, maximum, result.next)){
@@ -265,29 +252,20 @@ NwbCsgRayResolution nwbCsgRayResolveBoundary(
     openVisitor.materialSlot = materialSlot;
     openVisitor.instanceIndex = instanceIndex;
 #endif
-    const NwbCsgRayCollection collection = nwbCsgRayCollectCrossings(
-        contextSlot, materialSlot, instanceIndex, range.w, origin, direction, minimum, maximum,
-        cuts, cutCount, crossings, crossingCount, openVisitor
-    );
+    const NwbCsgRayCollection collection = nwbCsgRayCollectCrossings(contextSlot, materialSlot, instanceIndex, range.w, origin, direction, minimum, maximum, cuts, cutCount, crossings, crossingCount, openVisitor);
     result.physicalQueries = collection.physicalQueries;
     result.boundary.failure = collection.failure;
     if(result.boundary.failure != 0u)
         return result;
     result.boundary = nwbCsgRayResolveCollectedBoundary(materialSlot, instanceIndex, root, localOrigin, minimum, maximum, cuts, cutCount, crossings, crossingCount, openVisitor.boundary);
 #if NWB_CSG_RAY_OPTICAL_REUSE
-    if(
-        requestCertificate && result.boundary.hit && result.boundary.failure == 0u && !openVisitor.hasPositiveOpenEvent
-        && (nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex].flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u
-    ){
+    if(requestCertificate && result.boundary.hit && result.boundary.failure == 0u && !openVisitor.hasPositiveOpenEvent && (nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex].flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u){
         const float3 position = origin + direction * result.boundary.distance;
         const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(position));
         const float windowMinimum = max(0.0, result.boundary.distance - tolerance);
         const float windowMaximum = result.boundary.distance + tolerance;
         result.reusable = true;
-        const NwbCsgRayClosedWindows windows = nwbCsgRayResolveClosedWindows(
-            materialSlot, instanceIndex, instance, root, localOrigin, origin, direction,
-            windowMinimum, windowMaximum, cuts, cutCount, crossings, crossingCount
-        );
+        const NwbCsgRayClosedWindows windows = nwbCsgRayResolveClosedWindows(materialSlot, instanceIndex, instance, root, localOrigin, origin, direction, windowMinimum, windowMaximum, cuts, cutCount, crossings, crossingCount);
         result.window = windows.window;
         result.next = windows.next;
     }

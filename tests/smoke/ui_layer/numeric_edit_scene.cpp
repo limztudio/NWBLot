@@ -76,11 +76,7 @@ bool UiNumericEditSmokeScene::paint(Impl::UiPaintContext& context){
     edit.readOnly = false;
     if(!ui.editBox("clipboard", m_clipboard, m_states[2u], edit).valid)
         return false;
-    if(
-        !ui.label("policy", m_clamp ? "Range policy: clamp" : "Range policy: reject", caption)
-        || !ui.label("hint", "Enter: commit / Escape: restore", caption)
-        || !ui.endPanel()
-    )
+    if(!ui.label("policy", m_clamp ? "Range policy: clamp" : "Range policy: reject", caption) || !ui.label("hint", "Enter: commit / Escape: restore", caption) || !ui.endPanel())
         return false;
     observeState(context.display, context.text);
     paintMarkers(context);
@@ -142,11 +138,7 @@ bool IsUiLayerNumericEditSkinSmokeEnabled(){
 }
 
 SharedUiNumericEditSmokeScene CreateUiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiNumericEditSmokeScene(
-        NewArenaObject<RefCounter<UiNumericEditSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiNumericEditSmokeScene(NewArenaObject<RefCounter<UiNumericEditSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

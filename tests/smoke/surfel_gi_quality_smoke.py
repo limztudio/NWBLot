@@ -11,13 +11,11 @@ LIT_HALF = "half"
 RESOLUTIONS = {LIT_HALF: 2, "quarter": 4}
 SETTING_MARKER = "SurfelGiQualitySmoke: requested resolve_factor="
 DISPATCH_MARKER = "RendererSystem: dispatched surfel GI resolve "
-DISPATCH_PATTERN = re.compile(re.escape(DISPATCH_MARKER) +
-    r"\(factor=([24]), source=(\d+)x(\d+), resolve=(\d+)x(\d+)\)")
+DISPATCH_PATTERN = re.compile(re.escape(DISPATCH_MARKER) + r"\(factor=([24]), source=(\d+)x(\d+), resolve=(\d+)x(\d+)\)")
 
 
 def add_arguments(parser):
-    parser.add_argument("--surfel-gi-resolve-resolution", choices=tuple(RESOLUTIONS), default=LIT_HALF,
-        help="Quarter resolves one sixteenth of full-resolution pixels; tracing and bilateral full-resolution upsample stay unchanged.")
+    parser.add_argument("--surfel-gi-resolve-resolution", choices=tuple(RESOLUTIONS), default=LIT_HALF, help="Quarter resolves one sixteenth of full-resolution pixels; tracing and bilateral full-resolution upsample stay unchanged.")
 
 
 def verify_settings(text, resolution, expected_extent=None):
@@ -42,6 +40,5 @@ def verify_settings(text, resolution, expected_extent=None):
             raise SmokeFailure("surfel GI source extent disagrees with the measured frame extent")
         if reduced_width != (width + factor - 1) // factor or reduced_height != (height + factor - 1) // factor:
             raise SmokeFailure("surfel GI reduced dispatch does not cover the source extent at the requested factor")
-        dispatches.append(dict(factor=factor, width=width, height=height,
-            reduced_width=reduced_width, reduced_height=reduced_height))
+        dispatches.append(dict(factor=factor, width=width, height=height, reduced_width=reduced_width, reduced_height=reduced_height))
     return dict(resolve_resolution=resolution, resolve_factor=factor, verified=True, dispatches=dispatches)

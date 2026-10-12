@@ -108,10 +108,7 @@ void UiPointerGestureValueTests::focusHost(){
 
 
 TEST_F(UiPointerGestureValueTests, InitialPressCopiesAcceptedOpaqueBitsWithoutNumericInterpretation){
-    const Array<u64, 6u> values{
-        0u, BitCast<u64>(-0.0), BitCast<u64>(Limit<f64>::s_Max),
-        0xfedcba9876543210u, 0x7ff8000000000042u, Limit<u64>::s_Max
-    };
+    const Array<u64, 6u> values{ 0u, BitCast<u64>(-0.0), BitCast<u64>(Limit<f64>::s_Max), 0xfedcba9876543210u, 0x7ff8000000000042u, Limit<u64>::s_Max };
     for(const u64 value : values){
         SCOPED_TRACE(value);
         m_targets[1u].value = value;

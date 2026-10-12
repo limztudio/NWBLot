@@ -71,12 +71,7 @@ struct TransparentCsgIntervalProducerResult{
 
 class TransparentCsgIntervalBuilder final : NoCopy{
 public:
-    TransparentCsgIntervalBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem,
-        RendererAvboitSystem& avboitSystem
-    );
+    TransparentCsgIntervalBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem, RendererAvboitSystem& avboitSystem);
 
 
 public:

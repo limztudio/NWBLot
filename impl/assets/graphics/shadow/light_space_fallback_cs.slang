@@ -76,8 +76,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 #else
             const uint salt = 0u;
 #endif
-            const float2 jitter = nwbShadowLowDiscrepancy2D(pixel,
-                g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
+            const float2 jitter = nwbShadowLowDiscrepancy2D(pixel, g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
 #if NWB_LIGHT_SPACE_CSG_ENABLED
             half3 visibility = half3(1.0h);
             float3 direction;

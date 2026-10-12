@@ -99,8 +99,7 @@ namespace __hidden_ui_text_layout{
     const f64 bottom = rightBottomValue.y;
     if(!FitsCoordinate(right - left) || !FitsCoordinate(bottom - top))
         return false;
-    const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(right - left),
-        static_cast<f32>(bottom - top) };
+    const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(right - left), static_cast<f32>(bottom - top) };
     if(!IsFinite(combined.x + combined.width) || !IsFinite(combined.y + combined.height))
         return false;
     bounds = combined;
@@ -144,8 +143,7 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
     f32 nearest = Limit<f32>::s_Max;
     for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
         const TextCluster& cluster = m_clusters[index];
-        const SIMDVectorSingle difference = VectorSubtract(VectorReplicate(point.x),
-            VectorSet(cluster.leadingX, cluster.trailingX, cluster.leadingX, cluster.trailingX));
+        const SIMDVectorSingle difference = VectorSubtract(VectorReplicate(point.x), VectorSet(cluster.leadingX, cluster.trailingX, cluster.leadingX, cluster.trailingX));
         const SIMDVectorSingle magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
         const f32 leadingDistance = VectorGetX(magnitude);
         const f32 trailingDistance = VectorGetY(magnitude);
@@ -257,10 +255,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
                 const f64 x = xYValue.x;
                 const f64 y = xYValue.y;
                 const f64 nextPen = static_cast<f64>(pen) + glyph.advance.x;
-                if(
-                    !__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y)
-                    || !__hidden_ui_text_layout::FitsCoordinate(nextPen)
-                )
+                if(!__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y) || !__hidden_ui_text_layout::FitsCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
                 const auto ink = __hidden_ui_text_layout::TranslateInk(position, glyph.ink);

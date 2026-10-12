@@ -47,19 +47,8 @@ struct FrameGraphPassMetadata{
 class FrameGraphBuilder final : NoCopy{
 public:
     // Statistics tables may be prepopulated, but must only be changed through this builder during its lifetime.
-    FrameGraphBuilder(
-        FrameGraphNodeDescs& nodes,
-        FrameGraphEdgeDescs& edges,
-        FrameGraphPendingNameEdges& pendingNameEdges,
-        const u64 frameIndex = 0u
-    );
-    FrameGraphBuilder(
-        FrameGraphNodeDescs& nodes,
-        FrameGraphEdgeDescs& edges,
-        FrameGraphPendingNameEdges& pendingNameEdges,
-        FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-        const u64 frameIndex = 0u
-    );
+    FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex = 0u);
+    FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, const u64 frameIndex = 0u);
     FrameGraphBuilder(
         FrameGraphNodeDescs& nodes,
         FrameGraphEdgeDescs& edges,
@@ -72,38 +61,16 @@ public:
 
 public:
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
-    [[nodiscard]] bool addPhysicalQueueRuntimeStatistics(
-        FrameGraphNodeHandle owner,
-        const FrameGraphPhysicalQueueRuntimeStatistics& statistics
-    );
-    [[nodiscard]] bool addPacketSubmissionStatistics(
-        FrameGraphNodeHandle owner,
-        const FrameGraphPacketSubmissionStatisticsRecord& statistics
-    );
+    [[nodiscard]] bool addPhysicalQueueRuntimeStatistics(FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics);
+    [[nodiscard]] bool addPacketSubmissionStatistics(FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics);
 
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
     }
-    [[nodiscard]] FrameGraphNodeHandle addPass(
-        const Name& scope,
-        const AStringView label,
-        const FrameGraphQueueAssignment& queueAssignment,
-        const u8 flags = 0u
-    ){
-        return addNode(
-            scope,
-            label,
-            FrameGraphNodeKind::Pass,
-            FrameGraphPassMetadata{ .queueAssignment = queueAssignment, .compiledTask = {}, .runtimeStatistics = {} },
-            flags
-        );
+    [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const FrameGraphQueueAssignment& queueAssignment, const u8 flags = 0u){
+        return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{ .queueAssignment = queueAssignment, .compiledTask = {}, .runtimeStatistics = {} }, flags);
     }
-    [[nodiscard]] FrameGraphNodeHandle addPass(
-        const Name& scope,
-        const AStringView label,
-        const FrameGraphPassMetadata& metadata,
-        const u8 flags = 0u
-    ){
+    [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const FrameGraphPassMetadata& metadata, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, metadata, flags);
     }
     [[nodiscard]] FrameGraphNodeHandle addResource(const Name& id, const AStringView label, const u8 flags = 0u){
@@ -117,13 +84,7 @@ public:
     void dependsOnByName(FrameGraphNodeHandle from, const Name& dependencyName, u8 flags = 0u);
 
 private:
-    [[nodiscard]] FrameGraphNodeHandle addNode(
-        const Name& name,
-        AStringView label,
-        FrameGraphNodeKind::Enum kind,
-        const FrameGraphPassMetadata& metadata,
-        u8 flags
-    );
+    [[nodiscard]] FrameGraphNodeHandle addNode(const Name& name, AStringView label, FrameGraphNodeKind::Enum kind, const FrameGraphPassMetadata& metadata, u8 flags);
 
 private:
     FrameGraphNodeDescs& m_nodes;

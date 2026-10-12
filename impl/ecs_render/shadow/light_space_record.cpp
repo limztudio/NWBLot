@@ -47,20 +47,13 @@ bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHea
         push.meshletCount = caster.meshletCount;
         commandList.setPushConstants(&push, sizeof(push));
         const u32 groups = DivideUp(drawCount, static_cast<u32>(NWB_LIGHT_SPACE_CULL_GROUP_SIZE));
-        commandList.dispatch(Min(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)), snapshot.plan.viewCount,
-            DivideUp(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)));
+        commandList.dispatch(Min(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)), snapshot.plan.viewCount, DivideUp(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)));
         push.casterDrawOffset += drawCount;
     }
     return true;
 }
 
-bool RecordLightSpaceCapture(
-    Core::CommandList& commandList,
-    Core::GpuDescriptorHeap& heap,
-    const LightSpaceShadowSnapshot& snapshot,
-    const u32 viewIndex,
-    const bool transparent
-){
+bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, const u32 viewIndex, const bool transparent){
     static_assert(sizeof(Core::DrawIndexedIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
     if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount || (snapshot.casterCount != 0u && !snapshot.casters))
         return false;
@@ -70,8 +63,7 @@ bool RecordLightSpaceCapture(
         return false;
     for(usize index = 0u; index < snapshot.casterCount; ++index){
         const auto& caster = snapshot.casters[index];
-        if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u
-            || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
+        if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
             continue;
         if(!caster.triangleIndexBuffer || !caster.triangleIndexBuffer->getCreationDescription().isIndexBuffer)
             return false;
@@ -95,8 +87,7 @@ bool RecordLightSpaceCapture(
         const u32 drawCount = LightSpaceShadowDrawCount(&caster, 1u);
         const u32 argumentOffset = drawOffset * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
         drawOffset += drawCount;
-        if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u
-            || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
+        if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
             continue;
         graphics.setIndexBuffer(Core::IndexBufferBinding{}.setBuffer(caster.triangleIndexBuffer.get()).setFormat(Core::Format::R32_UINT));
         commandList.setGraphicsState(graphics);
@@ -116,8 +107,7 @@ bool RecordLightSpaceCapture(
 }
 
 bool RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
-    const auto& pipeline = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u
-        ? snapshot.csgShadePipeline : snapshot.shadePipeline;
+    const auto& pipeline = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u ? snapshot.csgShadePipeline : snapshot.shadePipeline;
     if(!snapshot.ready || !pipeline || snapshot.plan.totalPixels == 0u)
         return false;
     LightSpaceShadowPush push = snapshot.push;
@@ -139,14 +129,9 @@ bool RecordLightSpaceResolve(
 ){
     const bool csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
     const bool hardwareCsg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
-    const auto& pipeline = csg ? (transparent ? snapshot.csgTransparentResolve : snapshot.csgOpaqueResolve)
-        : (transparent ? snapshot.transparentResolve : snapshot.opaqueResolve);
-    const auto& fallback = csg ? (transparent ? snapshot.csgTransparentFallback : snapshot.csgOpaqueFallback)
-        : (transparent ? snapshot.transparentFallback : snapshot.opaqueFallback);
-    if(
-        !snapshot.ready || !pipeline || sampleCount == 0u
-        || (hardwareCsg ? !snapshot.csgTlasDescriptor.valid() : !fallback)
-    )
+    const auto& pipeline = csg ? (transparent ? snapshot.csgTransparentResolve : snapshot.csgOpaqueResolve) : (transparent ? snapshot.transparentResolve : snapshot.opaqueResolve);
+    const auto& fallback = csg ? (transparent ? snapshot.csgTransparentFallback : snapshot.csgOpaqueFallback) : (transparent ? snapshot.transparentFallback : snapshot.opaqueFallback);
+    if(!snapshot.ready || !pipeline || sampleCount == 0u || (hardwareCsg ? !snapshot.csgTlasDescriptor.valid() : !fallback))
         return false;
     LightSpaceShadowPush push = snapshot.push;
     push.frameIndex = frameIndex;
@@ -163,8 +148,7 @@ bool RecordLightSpaceResolve(
     const u32 groupsX = DivideUp(halfWidth, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE));
     const u32 groupsY = DivideUp(halfHeight, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE));
     {
-        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowMapTransparent
-            : RendererGpuTimingScope::s_LightSpaceShadowMapOpaque;
+        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowMapTransparent : RendererGpuTimingScope::s_LightSpaceShadowMapOpaque;
         Core::GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
 
         commandList.dispatch(groupsX, groupsY, 1u);
@@ -178,8 +162,7 @@ bool RecordLightSpaceResolve(
     heap.bindCompute(commandList, *fallback);
     commandList.setPushConstants(&push, sizeof(push));
     {
-        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent
-            : RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque;
+        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent : RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque;
         Core::GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
 
         commandList.dispatch(groupsX, groupsY, 1u);

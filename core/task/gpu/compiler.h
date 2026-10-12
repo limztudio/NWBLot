@@ -122,8 +122,8 @@ namespace GpuTaskGraphPacketizationPolicy{
     };
 };
 
-// Relative work cost for one physical queue. Scheduler pressure snapshots and compile-local assignment totals
-// use the same units as task cost hints.
+// Relative work cost for one physical queue.
+// Scheduler pressure snapshots and compile-local assignment totals use the same units as task cost hints.
 struct GpuTaskQueueLoad{
     GpuPhysicalQueueId queue;
     u64 estimatedCost = 0u;
@@ -278,10 +278,7 @@ public:
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
-    [[nodiscard]] bool validFor(
-        const GpuTaskGraph::DeclarationReadView& graph,
-        const GpuCompiledGraph::ReadView& compiledPlan
-    )const noexcept;
+    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
     [[nodiscard]] const GpuTaskQueueAssignment* find(const GpuTaskId& task)const noexcept;
 

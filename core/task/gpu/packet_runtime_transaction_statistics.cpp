@@ -33,16 +33,9 @@ GpuTaskGraphSubmissionStatistics GpuGraphSubmissionTransaction::submissionStatis
     return m_submissionStatistics;
 }
 
-GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubmissionStatistics(
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId& packetID
-)const noexcept{
+GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubmissionStatistics(const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)const noexcept{
     NothrowScopedLock lock(m_mutex);
-    if(
-        !validForLocked(planAccess)
-        || !planAccess.validPacket(packetID)
-        || packetID.index >= m_packets.size()
-    )
+    if(!validForLocked(planAccess) || !planAccess.validPacket(packetID) || packetID.index >= m_packets.size())
         return {};
 
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
@@ -82,10 +75,7 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
     };
 }
 
-GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::physicalQueueSubmissionStatistics(
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuPhysicalQueueId& queue
-)const noexcept{
+GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::physicalQueueSubmissionStatistics(const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept{
     NothrowScopedLock lock(m_mutex);
     if(!validForLocked(planAccess))
         return {};

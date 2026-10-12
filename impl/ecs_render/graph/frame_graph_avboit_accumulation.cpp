@@ -25,11 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphAvboitAccumulationUploadChain::FrameGraphAvboitAccumulationUploadChain(
-    Core::GpuTaskGraph& graph,
-    RendererMaterialSystem& materialSystem,
-    RendererCsgSystem& csgSystem
-)
+FrameGraphAvboitAccumulationUploadChain::FrameGraphAvboitAccumulationUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem){
@@ -103,8 +99,7 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
 #if defined(NWB_DEBUG)
             accumulationMaterialTypedRanges,
 #endif
-            accumulationMaterialTypedBytes
-        );
+            accumulationMaterialTypedBytes);
         if(!accumulationUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
             return MakeUnexpected(Failure{});
@@ -117,21 +112,10 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
         }
         if(accumulationUploadResult->hasDrawItems){
 
-            const MaterialPassDrawItems* const accumulationMaterialGeometryDrawSets[] = {
-                &accumulationDrawItems.regular,
-                &accumulationDrawItems.csg,
-            };
-            AvboitGeometryPreparationBuilder accumulationGeometryPreparationBuilder(
-                m_graph,
-                m_materialSystem,
-                accumulationMaterialGeometryScratch
-            );
+            const MaterialPassDrawItems* const accumulationMaterialGeometryDrawSets[] = { &accumulationDrawItems.regular, &accumulationDrawItems.csg, };
+            AvboitGeometryPreparationBuilder accumulationGeometryPreparationBuilder(m_graph, m_materialSystem, accumulationMaterialGeometryScratch);
             auto accumulationGeometryPreparationResult = accumulationGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{
-                    .drawItemSets = accumulationMaterialGeometryDrawSets,
-                    .drawItemSetCount = LengthOf(accumulationMaterialGeometryDrawSets),
-                    .phase = AvboitGeometryPhase::Accumulation,
-                }
+                AvboitGeometryPreparationInputs{ .drawItemSets = accumulationMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(accumulationMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Accumulation, }
             );
             if(!accumulationGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
@@ -151,16 +135,10 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
                 return MakeUnexpected(Failure{});
             }
             NWB_ASSERT(accumulationInstanceData.size() == accumulationMaterialTypedRanges.size());
-            ECSRenderDetail::AssertMaterialTypedUploadRanges(
-                accumulationMaterialTypedRanges,
-                accumulationMaterialTypedBytes
-            );
+            ECSRenderDetail::AssertMaterialTypedUploadRanges(accumulationMaterialTypedRanges, accumulationMaterialTypedBytes);
 #endif
 
-            AvboitMaterialUploadBuilder accumulationMaterialUploadBuilder(
-                m_graph,
-                m_csgSystem
-            );
+            AvboitMaterialUploadBuilder accumulationMaterialUploadBuilder(m_graph, m_csgSystem);
             auto accumulationCsgStreamsUploadedResult = accumulationMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
                     .targets = &deferredTargets,
@@ -186,12 +164,7 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
             }
             accumulationCsgStreamsUploaded = *accumulationCsgStreamsUploadedResult;
 
-            avboitAccumulationPayload.accumulationSnapshot.capture(
-                accumulationDrawItems,
-                accumulationCsgFrameData,
-                accumulationInstanceData.size(),
-                accumulationMaterialTypedBytes.size()
-            );
+            avboitAccumulationPayload.accumulationSnapshot.capture(accumulationDrawItems, accumulationCsgFrameData, accumulationInstanceData.size(), accumulationMaterialTypedBytes.size());
             avboitAccumulationPayload.accumulationPhasePrepared = true;
             accumulationStreamsUploaded = true;
             // A phase owns one alias-free stream; mixed work keeps local interleaving.
@@ -219,32 +192,20 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
             accumulationSharedComputeEmulationPlan = accumulationComputeEmulationCaptureResult->sharedPlan;
             accumulationSharedComputeEmulationInstanceCount = accumulationComputeEmulationCaptureResult->sharedInstanceCount;
             accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationComputeEmulationCaptureResult->sharedMaterialTypedByteCount;
-            if(accumulationRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
-                accumulationDrawItems, accumulationInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitAccumulate
-            ))
+            if(accumulationRegularComputeEmulationPlanCaptured && generatedGeometry.matches(accumulationDrawItems, accumulationInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitAccumulate))
                 accumulationReusedGeometryProducer = generatedGeometry.producerTask();
             else{
                 generatedGeometry.reset();
-                accumulationProducesReusableGeometry = accumulationRegularComputeEmulationPlanCaptured && generatedGeometry.capture(
-                    accumulationDrawItems, accumulationInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitAccumulate
-                );
+                accumulationProducesReusableGeometry = accumulationRegularComputeEmulationPlanCaptured && generatedGeometry.capture(accumulationDrawItems, accumulationInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitAccumulate);
             }
-            if(
-                accumulationRegularComputeEmulationPlanCaptured
-                || accumulationCsgComputeEmulationPlanCaptured
-            ){
+            if(accumulationRegularComputeEmulationPlanCaptured || accumulationCsgComputeEmulationPlanCaptured){
                 avboitAccumulationComputeEmulationPayload.instanceCount = accumulationInstanceData.size();
                 avboitAccumulationComputeEmulationPayload.materialTypedByteCount = accumulationMaterialTypedBytes.size();
             }
         }
         else{
             // An empty captured phase stays authoritative; recording must not re-gather state.
-            avboitAccumulationPayload.accumulationSnapshot.capture(
-                accumulationDrawItems,
-                accumulationCsgFrameData,
-                accumulationInstanceData.size(),
-                accumulationMaterialTypedBytes.size()
-            );
+            avboitAccumulationPayload.accumulationSnapshot.capture(accumulationDrawItems, accumulationCsgFrameData, accumulationInstanceData.size(), accumulationMaterialTypedBytes.size());
             avboitAccumulationPayload.accumulationPhasePrepared = true;
         }
     }

@@ -45,20 +45,14 @@ Win32TextInputService::~Win32TextInputService(){
 }
 
 TextInputCapabilities Win32TextInputService::capabilities()const noexcept{
-    return {
-        .commit = true, .preedit = m_imeAvailable, .surrounding = false, .deleteSurrounding = false,
-        .backend = TextInputBackend::Win32Imm32
-    };
+    return { .commit = true, .preedit = m_imeAvailable, .surrounding = false, .deleteSurrounding = false, .backend = TextInputBackend::Win32Imm32 };
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextInputAdmission::Enum Win32TextInputService::startNativeSession(
-    const TextInputSessionToken token,
-    const TextInputSessionDesc& desc
-){
+TextInputAdmission::Enum Win32TextInputService::startNativeSession(const TextInputSessionToken token, const TextInputSessionDesc& desc){
     static_cast<void>(token);
     if(!IsWindow(static_cast<HWND>(m_nativeWindowHandle.get())))
         return TextInputAdmission::Unavailable;
@@ -122,12 +116,7 @@ TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInpu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool DispatchWin32TextInputMessage(
-    ITextInputService& service,
-    const u32 message,
-    const usize wParam,
-    const isize lParam
-){
+bool DispatchWin32TextInputMessage(ITextInputService& service, const u32 message, const usize wParam, const isize lParam){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
     return checked_cast<Win32TextInputService*>(&service)->handleMessage(message, wParam, lParam);

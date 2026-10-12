@@ -103,10 +103,7 @@ static constexpr u32 s_QueryRetryCount = 4u;
     bool informationReady = false;
     for(u32 attempt = 0u; attempt < s_QueryRetryCount; ++attempt){
         ULONG requiredBytes = 0u;
-        if(GetSystemCpuSetInformation(
-            reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(informationStorage.data()),
-            informationBytes, &requiredBytes, process, 0u
-        )){
+        if(GetSystemCpuSetInformation(reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(informationStorage.data()), informationBytes, &requiredBytes, process, 0u)){
             informationBytes = requiredBytes;
             informationReady = true;
             break;
@@ -132,13 +129,9 @@ static constexpr u32 s_QueryRetryCount = 4u;
             if(information->Size < sizeof(SYSTEM_CPU_SET_INFORMATION))
                 return MakeUnexpected(Failure{});
             const auto& cpuSet = information->CpuSet;
-            const bool permittedGroup = FindIf(
-                processGroups.begin(), processGroups.end(),
-                [&cpuSet](const USHORT group){ return group == cpuSet.Group; }
+            const bool permittedGroup = FindIf(processGroups.begin(), processGroups.end(), [&cpuSet](const USHORT group){ return group == cpuSet.Group; }
             ) != processGroups.end();
-            const bool permittedSet = defaultSets.empty() || FindIf(
-                defaultSets.begin(), defaultSets.end(),
-                [&cpuSet](const ULONG id){ return id == cpuSet.Id; }
+            const bool permittedSet = defaultSets.empty() || FindIf(defaultSets.begin(), defaultSets.end(), [&cpuSet](const ULONG id){ return id == cpuSet.Id; }
             ) != defaultSets.end();
             const bool reservedElsewhere = cpuSet.Allocated && !cpuSet.AllocatedToTargetProcess;
             bool permittedMask = true;
@@ -149,12 +142,7 @@ static constexpr u32 s_QueryRetryCount = 4u;
                     permittedMask = false;
             }
             if(permittedGroup && permittedSet && permittedMask && !reservedElsewhere){
-                placements.push_back(CpuWorkerPlacement{
-                    cpuSet.LogicalProcessorIndex,
-                    cpuSet.Group,
-                    cpuSet.EfficiencyClass,
-                    CpuAffinity::Any
-                });
+                placements.push_back(CpuWorkerPlacement{ cpuSet.LogicalProcessorIndex, cpuSet.Group, cpuSet.EfficiencyClass, CpuAffinity::Any });
             }
         }
         offset += information->Size;

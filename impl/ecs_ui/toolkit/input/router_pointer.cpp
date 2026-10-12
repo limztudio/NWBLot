@@ -60,13 +60,8 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
             appendPointerGesture(*hit, result);
         return;
     }
-    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed
-        : m_secondaryDown ? m_secondarySequenceConsumed : hit != nullptr;
-    if(
-        m_primaryDown && m_pointerSequenceConsumed && hit != nullptr
-        && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable
-        && hit->popup == m_capturePopup && hit->control == m_captureControl
-    ){
+    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hit != nullptr;
+    if(m_primaryDown && m_pointerSequenceConsumed && hit != nullptr && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable && hit->popup == m_capturePopup && hit->control == m_captureControl){
         const HitTarget* host = hit->owner.valid() ? controlHost(*hit) : nullptr;
         if(host != nullptr)
             appendControlAction(*host, *hit, ControlActionKind::Activate, 0.0, result);

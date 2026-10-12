@@ -32,19 +32,9 @@ public:
 
 public:
     [[nodiscard]] bool discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<DependencyInputSelection> selectInputs(
-        const PipelineOptions& options,
-        NWB::Core::Alloc::ScratchArena& scratchArena
-    )const;
-    [[nodiscard]] Expected<NWB::Core::Metascript::Document> read(
-        usize index,
-        NWB::Core::Alloc::ScratchArena& scratchArena
-    )const;
-    [[nodiscard]] Expected<usize> resolve(
-        const Name& virtualPath,
-        const Name& assetType,
-        NWB::Core::Alloc::ScratchArena& scratchArena
-    )const;
+    [[nodiscard]] Expected<DependencyInputSelection> selectInputs(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<NWB::Core::Metascript::Document> read(usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<usize> resolve(const Name& virtualPath, const Name& assetType, NWB::Core::Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] const NWB::Core::Assets::DiscoveredNwbFileVector& files()const noexcept{ return m_files; }
 
 

@@ -56,11 +56,7 @@ inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
 void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual);
 
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddHazardDomain(
-    Graphics::GpuTaskGraph& graph,
-    const Name& identity,
-    const AStringView label
-);
+[[nodiscard]] Graphics::GpuGraphResourceId AddHazardDomain(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label);
 
 [[nodiscard]] Graphics::GpuGraphResourceId AddTextureMetadata(
     Graphics::GpuTaskGraph& graph,
@@ -87,12 +83,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
 );
 
-[[nodiscard]] Graphics::GpuGraphPipelineId AddPipelineMetadata(
-    Graphics::GpuTaskGraph& graph,
-    const Name& identity,
-    const AStringView label,
-    const Graphics::GpuGraphPipelineType::Enum type
-);
+[[nodiscard]] Graphics::GpuGraphPipelineId AddPipelineMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::GpuGraphPipelineType::Enum type);
 
 [[nodiscard]] Graphics::GpuTaskId AddTask(
     Graphics::GpuTaskGraph& graph,
@@ -117,10 +108,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const usize dependencyCount = 0u
 );
 
-[[nodiscard]] bool Analyze(
-    const Graphics::GpuTaskGraph& graph,
-    Graphics::GpuTaskGraphAnalysis& analysis
-);
+[[nodiscard]] bool Analyze(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis);
 
 [[nodiscard]] bool Assign(
     const Graphics::GpuTaskGraph& graph,
@@ -160,10 +148,7 @@ struct SingleQueueCompile{
     explicit SingleQueueCompile(TestArena& testArena);
 
 
-    [[nodiscard]] bool compile(
-        const Graphics::GpuTaskGraph& graph,
-        const Graphics::GpuTaskGraphCompileOptions& options = {}
-    );
+    [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
 struct TwoQueueCompile{
@@ -179,10 +164,7 @@ struct TwoQueueCompile{
     explicit TwoQueueCompile(TestArena& testArena);
 
 
-    [[nodiscard]] bool compile(
-        const Graphics::GpuTaskGraph& graph,
-        const Graphics::GpuTaskGraphCompileOptions& options = {}
-    );
+    [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
 struct ThreeQueueCompile{
@@ -199,10 +181,7 @@ struct ThreeQueueCompile{
     explicit ThreeQueueCompile(TestArena& testArena);
 
 
-    [[nodiscard]] bool compile(
-        const Graphics::GpuTaskGraph& graph,
-        const Graphics::GpuTaskGraphCompileOptions& options = {}
-    );
+    [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
@@ -210,20 +189,12 @@ struct ThreeQueueCompile{
     const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,
     const Graphics::GpuQueueCapability::Mask third = Graphics::GpuQueueCapability::None
 ){
-    return static_cast<Graphics::GpuQueueCapability::Mask>(
-        static_cast<u8>(first)
-        | static_cast<u8>(second)
-        | static_cast<u8>(third)
-    );
+    return static_cast<Graphics::GpuQueueCapability::Mask>(static_cast<u8>(first) | static_cast<u8>(second) | static_cast<u8>(third));
 }
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(
     const u16 index = 0u,
-    const Graphics::GpuQueueCapability::Mask capabilities = QueueCapabilities(
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueueCapability::Transfer
-    )
+    const Graphics::GpuQueueCapability::Mask capabilities = QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Transfer)
 );
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index = 1u);
@@ -244,16 +215,9 @@ struct TransferOwnershipPair{
     Graphics::GpuTaskId consumer;
 };
 
-[[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
-    Graphics::GpuTaskGraph& graph,
-    const Graphics::ResourceQueueSharing::Mask queueSharing
-);
+[[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(Graphics::GpuTaskGraph& graph, const Graphics::ResourceQueueSharing::Mask queueSharing);
 
-[[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(
-    const Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskId producer,
-    const Graphics::GpuTaskId consumer
-);
+[[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer);
 
 struct ExternalFinalReadPair{
     Graphics::GpuGraphResourceId resource;
@@ -276,13 +240,7 @@ struct ExternalFinalReadPair{
 );
 
 
-[[nodiscard]] bool HasInferredHazard(
-    const Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskId producer,
-    const Graphics::GpuTaskId consumer,
-    const Graphics::GpuGraphResourceId resource,
-    const Graphics::GpuTaskHazardType::Enum hazard
-);
+[[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

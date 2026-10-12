@@ -21,51 +21,32 @@ function(nwb_apply_debug_symbols target)
     get_target_property(_nwb_target_type ${target} TYPE)
 
     if(NWB_COMPILER_FRONTEND_MSVC)
-        set_target_properties(${target} PROPERTIES
-            MSVC_DEBUG_INFORMATION_FORMAT ProgramDatabase
-        )
+        set_target_properties(${target} PROPERTIES MSVC_DEBUG_INFORMATION_FORMAT ProgramDatabase)
 
         foreach(_nwb_config IN LISTS NWB_BUILD_CONFIGURATIONS)
             string(TOUPPER "${_nwb_config}" _nwb_config_upper)
             nwb_resolve_target_output_name(${target} "${_nwb_config}" _nwb_config_output_name)
-            set_target_properties(${target} PROPERTIES
-                "COMPILE_PDB_OUTPUT_DIRECTORY_${_nwb_config_upper}" "${NWB_OUTPUT_ROOT}/${_nwb_config}"
-            )
+            set_target_properties(${target} PROPERTIES "COMPILE_PDB_OUTPUT_DIRECTORY_${_nwb_config_upper}" "${NWB_OUTPUT_ROOT}/${_nwb_config}")
 
             if(_nwb_target_type STREQUAL "STATIC_LIBRARY")
-                set_target_properties(${target} PROPERTIES
-                    "COMPILE_PDB_NAME_${_nwb_config_upper}" "${_nwb_config_output_name}"
-                )
+                set_target_properties(${target} PROPERTIES "COMPILE_PDB_NAME_${_nwb_config_upper}" "${_nwb_config_output_name}")
             else()
-                set_target_properties(${target} PROPERTIES
-                    "COMPILE_PDB_NAME_${_nwb_config_upper}" "${_nwb_config_output_name}_compile"
-                )
+                set_target_properties(${target} PROPERTIES "COMPILE_PDB_NAME_${_nwb_config_upper}" "${_nwb_config_output_name}_compile")
             endif()
         endforeach()
     elseif(NWB_COMPILER_IS_CLANG_GNU)
-        target_compile_options(${target} PRIVATE
-            -gcodeview
-        )
+        target_compile_options(${target} PRIVATE -gcodeview)
     endif()
 
-    if(
-        _nwb_target_type STREQUAL "EXECUTABLE"
-        OR _nwb_target_type STREQUAL "SHARED_LIBRARY"
-        OR _nwb_target_type STREQUAL "MODULE_LIBRARY"
-    )
+    if(_nwb_target_type STREQUAL "EXECUTABLE" OR _nwb_target_type STREQUAL "SHARED_LIBRARY" OR _nwb_target_type STREQUAL "MODULE_LIBRARY")
         foreach(_nwb_config IN LISTS NWB_BUILD_CONFIGURATIONS)
             string(TOUPPER "${_nwb_config}" _nwb_config_upper)
             nwb_resolve_target_output_name(${target} "${_nwb_config}" _nwb_config_output_name)
-            set_target_properties(${target} PROPERTIES
-                "PDB_OUTPUT_DIRECTORY_${_nwb_config_upper}" "${NWB_OUTPUT_ROOT}/${_nwb_config}"
-                "PDB_NAME_${_nwb_config_upper}" "${_nwb_config_output_name}"
-            )
+            set_target_properties(${target} PROPERTIES "PDB_OUTPUT_DIRECTORY_${_nwb_config_upper}" "${NWB_OUTPUT_ROOT}/${_nwb_config}" "PDB_NAME_${_nwb_config_upper}" "${_nwb_config_output_name}")
         endforeach()
 
         if(NWB_COMPILER_IS_CLANG_GNU)
-            target_link_options(${target} PRIVATE
-                LINKER:/DEBUG
-            )
+            target_link_options(${target} PRIVATE LINKER:/DEBUG)
         endif()
     endif()
 endfunction()
@@ -73,91 +54,37 @@ endfunction()
 function(nwb_configure_optimization)
     # Root-directory optimization applies to every C/C++ target, including vendor libraries.
     if(NWB_COMPILER_FRONTEND_MSVC)
-        add_compile_options(
-            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:/Od>
-            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:opt>>:/O2>
-            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:fin>>:/O2>
-        )
+        add_compile_options($<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:/Od> $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:opt>>:/O2> $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:fin>>:/O2>)
     elseif(NWB_COMPILER_IS_CLANG)
-        add_compile_options(
-            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:-O0>
-            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:opt>>:-O2>
-            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:fin>>:-O3>
-        )
+        add_compile_options($<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:-O0> $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:opt>>:-O2> $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:fin>>:-O3>)
     else()
         message(FATAL_ERROR "NWBLot now requires a Clang-based toolchain.")
     endif()
 endfunction()
 
 function(nwb_apply_codegen target)
-    set_target_properties(${target} PROPERTIES
-        C_STANDARD 17
-        C_STANDARD_REQUIRED YES
-        C_EXTENSIONS NO
-    )
+    set_target_properties(${target} PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
 
     nwb_apply_latest_cxx(${target})
     nwb_apply_debug_symbols(${target})
 
     if(WIN32 AND NWB_COMPILER_IS_CLANG)
-        set_property(TARGET ${target} PROPERTY
-            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:dbg>:Debug>DLL"
-        )
+        set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:dbg>:Debug>DLL")
     endif()
 
-    target_compile_definitions(${target} PRIVATE
-        $<$<CONFIG:dbg>:_DEBUG>
-        $<$<CONFIG:dbg>:NWB_DEBUG>
-        $<$<CONFIG:opt>:NDEBUG>
-        $<$<CONFIG:opt>:NWB_OPTIMIZE>
-        $<$<CONFIG:fin>:NDEBUG>
-        $<$<CONFIG:fin>:NWB_FINAL>
-    )
+    target_compile_definitions(${target} PRIVATE $<$<CONFIG:dbg>:_DEBUG> $<$<CONFIG:dbg>:NWB_DEBUG> $<$<CONFIG:opt>:NDEBUG> $<$<CONFIG:opt>:NWB_OPTIMIZE> $<$<CONFIG:fin>:NDEBUG> $<$<CONFIG:fin>:NWB_FINAL>)
 
     if(WIN32)
-        target_compile_definitions(${target} PRIVATE
-            NOMINMAX
-            WIN32_LEAN_AND_MEAN
-        )
+        target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     endif()
 
     if(NWB_COMPILER_FRONTEND_MSVC)
-        target_compile_options(${target} PRIVATE
-            /W4
-            /permissive-
-            /GR-
-            /wd4201
-            $<$<CONFIG:dbg>:/Ob0>
-            $<$<CONFIG:dbg>:/Oy->
-            $<$<CONFIG:opt>:/Ob1>
-            $<$<CONFIG:opt>:/Oy->
-            $<$<CONFIG:fin>:/Ob2>
-            $<$<CONFIG:fin>:/Oy>
-        )
-        target_link_options(${target} PRIVATE
-            $<$<CONFIG:dbg>:/DEBUG>
-            $<$<CONFIG:opt>:/DEBUG>
-            $<$<CONFIG:opt>:/OPT:REF>
-            $<$<CONFIG:opt>:/OPT:ICF>
-            $<$<CONFIG:fin>:/DEBUG>
-            $<$<CONFIG:fin>:/OPT:REF>
-            $<$<CONFIG:fin>:/OPT:ICF>
-        )
+        target_compile_options(${target} PRIVATE /W4 /permissive- /GR- /wd4201 $<$<CONFIG:dbg>:/Ob0> $<$<CONFIG:dbg>:/Oy-> $<$<CONFIG:opt>:/Ob1> $<$<CONFIG:opt>:/Oy-> $<$<CONFIG:fin>:/Ob2> $<$<CONFIG:fin>:/Oy>)
+        target_link_options(${target} PRIVATE $<$<CONFIG:dbg>:/DEBUG> $<$<CONFIG:opt>:/DEBUG> $<$<CONFIG:opt>:/OPT:REF> $<$<CONFIG:opt>:/OPT:ICF> $<$<CONFIG:fin>:/DEBUG> $<$<CONFIG:fin>:/OPT:REF> $<$<CONFIG:fin>:/OPT:ICF>)
     elseif(NWB_COMPILER_IS_CLANG)
-        target_compile_options(${target} PRIVATE
-            -Wall
-            -Wextra
-            $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-            # Crash unwinding needs asynchronous .eh_frame tables for faults between instructions,
-            # including fin builds that omit frame pointers.
-            -fasynchronous-unwind-tables
-            $<$<CONFIG:dbg>:-g>
-            $<$<CONFIG:dbg>:-fno-omit-frame-pointer>
-            $<$<CONFIG:opt>:-g>
-            $<$<CONFIG:opt>:-fno-omit-frame-pointer>
-            $<$<CONFIG:fin>:-g>
-            $<$<CONFIG:fin>:-fomit-frame-pointer>
-        )
+        target_compile_options(${target} PRIVATE -Wall -Wextra $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+            # Crash unwinding needs asynchronous .eh_frame tables for faults between instructions, including fin builds that omit frame pointers.
+            -fasynchronous-unwind-tables $<$<CONFIG:dbg>:-g> $<$<CONFIG:dbg>:-fno-omit-frame-pointer> $<$<CONFIG:opt>:-g> $<$<CONFIG:opt>:-fno-omit-frame-pointer> $<$<CONFIG:fin>:-g> $<$<CONFIG:fin>:-fomit-frame-pointer>)
     else()
         message(FATAL_ERROR "NWBLot now requires a Clang-based toolchain.")
     endif()

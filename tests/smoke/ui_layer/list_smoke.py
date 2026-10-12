@@ -10,12 +10,8 @@ import time
 from list_native import ListNativeInput
 from list_probe import center, observe_list, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -32,8 +28,7 @@ class ListRun:
         self.deadline = time.monotonic() + args.timeout
         self.snapshot = None
         self.stages = []
-        self.expected = {"selected": 0, "cursor": 0, "count": 100000, "focused": 0, "reversed": 0,
-            "removed": 0, "visible": 1, "commits": 0, "underlying": 0}
+        self.expected = {"selected": 0, "cursor": 0, "count": 100000, "focused": 0, "reversed": 0, "removed": 0, "visible": 1, "commits": 0, "underlying": 0}
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -68,8 +63,7 @@ class ListRun:
             if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < 400.0:
                 raise SmokeSkip("the list fixture needs a logical client of at least 600x400")
             self.backend.capture_client_window(self.handle, path)
-            report = observe_list(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra)
+            report = observe_list(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
                 for field in dynamic:
@@ -82,10 +76,8 @@ class ListRun:
         raise SmokeFailure(f"list displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
-                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus",
-            "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
+                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus", "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
         (self.args.output_directory / "list.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):
@@ -102,20 +94,16 @@ class ListRun:
         self.native.tap("Up")
         self.checkpoint("up_skips_disabled_key5", selected=4, cursor=4)
         self.native.tap("Page_Down")
-        self.checkpoint("page_down_ensures_selected_visible", dynamic=("selected", "cursor"),
-            extra=lambda s: s["selected"] == s["cursor"] and s["selected"] > 4 and s["rectangles"]["selected_row"][2] > 0.0)
+        self.checkpoint("page_down_ensures_selected_visible", dynamic=("selected", "cursor"), extra=lambda s: s["selected"] == s["cursor"] and s["selected"] > 4 and s["rectangles"]["selected_row"][2] > 0.0)
         self.native.tap("Home")
         self.checkpoint("home_selects_first", selected=1, cursor=1, first=0)
         self.expected.pop("first")
         self.native.tap("End")
-        self.checkpoint("end_reaches100000_without_bulk_labels", selected=100000, cursor=100000,
-            extra=lambda s: s["past"] == 100000 and s["first"] > 99980)
+        self.checkpoint("end_reaches100000_without_bulk_labels", selected=100000, cursor=100000, extra=lambda s: s["past"] == 100000 and s["first"] > 99980)
         self.native.tap("Return")
         self.checkpoint("enter_activates_current_key", commits=2)
         self.native.tap("Page_Up")
-        self.checkpoint("page_up_ensures_selected_visible", dynamic=("selected", "cursor"),
-            extra=lambda s: s["selected"] == s["cursor"] and 99980 < s["selected"] < 100000
-                and s["rectangles"]["selected_row"][2] > 0.0)
+        self.checkpoint("page_up_ensures_selected_visible", dynamic=("selected", "cursor"), extra=lambda s: s["selected"] == s["cursor"] and 99980 < s["selected"] < 100000 and s["rectangles"]["selected_row"][2] > 0.0)
         old_first = self.snapshot["first"]
         self.native.wheel(2, *self.point(*center(self.snapshot["rectangles"]["viewport"])))
         self.checkpoint("wheel_scrolls_preserving_selected_key", extra=lambda s: s["first"] < old_first)
@@ -136,8 +124,7 @@ class ListRun:
         self.native.click(*self.row(3))
         self.checkpoint("pointer_reselects_known_key", selected=4, cursor=4, commits=3)
         self.native.tap("F5")
-        self.checkpoint("reorder_keeps_selected_key_and_scrolls_to_new_index", reversed=1,
-            extra=lambda s: s["first"] > 99980 and s["rectangles"]["selected_row"][2] > 0.0)
+        self.checkpoint("reorder_keeps_selected_key_and_scrolls_to_new_index", reversed=1, extra=lambda s: s["first"] > 99980 and s["rectangles"]["selected_row"][2] > 0.0)
         self.native.tap("F6")
         self.checkpoint("remove_selected_key_clears_selection", selected=0, cursor=0, count=99999, removed=4)
         self.native.tap("Home")
@@ -170,8 +157,7 @@ class ListRun:
         self.backend.resize_client(self.handle, 800, 600)
         self.checkpoint("resize_preserves_keyed_model", extent=(800, 600))
         self.native.click(*self.row(0))
-        self.checkpoint("first_pointer_after_resize_uses_accepted_geometry", selected=100000, cursor=100000,
-            focused=1, commits=6, extent=(800, 600))
+        self.checkpoint("first_pointer_after_resize_uses_accepted_geometry", selected=100000, cursor=100000, focused=1, commits=6, extent=(800, 600))
 
 
 def run(args):

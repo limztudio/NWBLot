@@ -14,8 +14,7 @@ struct NwbSkinnedMeshLocalBoundsPushConstants{
     uint2 payload0;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbSkinnedMeshLocalBoundsPushConstants> g_NwbSkinnedMeshLocalBoundsPush;
+[[vk::push_constant]] ConstantBuffer<NwbSkinnedMeshLocalBoundsPushConstants> g_NwbSkinnedMeshLocalBoundsPush;
 
 groupshared float3 g_NwbSkinnedMeshLocalBoundsMin[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
 groupshared float3 g_NwbSkinnedMeshLocalBoundsMax[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];

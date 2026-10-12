@@ -35,11 +35,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const bool meshletCulled = nwbMeshletCulled(cullContext, instance);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
     if(meshletCulled){
-        for(
-            uint localPrimitiveIndex = groupThreadID.x;
-            localPrimitiveIndex < primitiveCount;
-            localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
-        )
+        for(uint localPrimitiveIndex = groupThreadID.x; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X)
             nwbMeshStoreCulledEmulationPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
         return;
     }
@@ -47,11 +43,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 #if NWB_CSG_ENABLED
     const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
     if(nwbMeshCsgFullyRemovedCullEnabled() && csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
-        for(
-            uint localPrimitiveIndex = groupThreadID.x;
-            localPrimitiveIndex < primitiveCount;
-            localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
-        )
+        for(uint localPrimitiveIndex = groupThreadID.x; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X)
             nwbMeshStoreCulledEmulationPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
         return;
     }
@@ -65,18 +57,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     // Full local-reference identity preserves attribute seams and meshlet-specific raster flags.
     // Meshlet-level exits precede this cooperative phase, so all remaining lanes reach the barrier.
     const uint localVertexCount = nwbMeshletVertexCount(meshlet);
-    for(
-        uint localVertexIndex = groupThreadID.x;
-        localVertexIndex < localVertexCount;
-        localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X
-    ){
-        const NwbMeshGeneratedVertex generatedVertex = nwbMeshBuildMeshletVertex(
-            meshletIndex,
-            meshlet,
-            decodeInfo,
-            localVertexIndex,
-            instance
-        );
+    for(uint localVertexIndex = groupThreadID.x; localVertexIndex < localVertexCount; localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
+        const NwbMeshGeneratedVertex generatedVertex = nwbMeshBuildMeshletVertex(meshletIndex, meshlet, decodeInfo, localVertexIndex, instance);
 #if NWB_MESH_EMULATION_INDEXED_OUTPUT
         const uint outputVertexIndex = NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset + localVertexIndex;
         nwbMeshGeneratedVertices()[outputVertexIndex] = generatedVertex;
@@ -87,11 +69,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     }
     GroupMemoryBarrierWithGroupSync();
 
-    for(
-        uint localPrimitiveIndex = groupThreadID.x;
-        localPrimitiveIndex < primitiveCount;
-        localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
-    ){
+    for(uint localPrimitiveIndex = groupThreadID.x; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
         const uint primitiveBase = nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex);
         const uint3 localVertexIndices = nwbMeshLoadMeshletPrimitive(primitiveBase);
 #if NWB_MESH_EMULATION_INDEXED_OUTPUT
@@ -99,10 +77,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         const float4 b = g_NwbMeshletStagedClipPositions[localVertexIndices.y];
         const float4 c = g_NwbMeshletStagedClipPositions[localVertexIndices.z];
         const bool triangleCulled = nwbMeshAllOutsideClipPlane(a, b, c) || nwbMeshAllOutsideScissor(a, b, c);
-        const uint3 outputIndices = triangleCulled
-            ? uint3(NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX)
-            : localVertexIndices + (NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset)
-        ;
+        const uint3 outputIndices = triangleCulled ? uint3(NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX) : localVertexIndices + (NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset);
         nwbMeshStoreGeneratedIndices(primitiveBase, outputIndices);
 #else
         NwbMeshGeneratedVertex generatedVertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT];
@@ -133,12 +108,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 [shader("mesh")]
 [numthreads(NWB_MESH_SHADER_GROUP_SIZE_X, 1, 1)]
 [outputtopology("triangle")]
-void main(
-    uint3 groupThreadID : SV_GroupThreadID,
-    uint3 groupID : SV_GroupID,
-    OutputVertices<NwbMeshRasterVertex, NWB_MESH_SHADER_MAX_VERTICES> vertices,
-    OutputIndices<uint3, NWB_MESH_SHADER_MAX_TRIANGLES> triangles
-){
+void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID, OutputVertices<NwbMeshRasterVertex, NWB_MESH_SHADER_MAX_VERTICES> vertices, OutputIndices<uint3, NWB_MESH_SHADER_MAX_TRIANGLES> triangles){
     const uint meshletIndex = groupID.x;
     if(meshletIndex >= nwbMeshletCount()){
         SetMeshOutputCounts(0u, 0u);
@@ -173,30 +143,12 @@ void main(
 
     SetMeshOutputCounts(vertexCount, primitiveCount);
 
-    for(
-        uint localVertexIndex = groupThreadIndex;
-        localVertexIndex < vertexCount;
-        localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X
-    ){
-        vertices[localVertexIndex] = nwbMeshBuildRasterVertex(
-            nwbMeshBuildMeshletVertex(
-                meshletIndex,
-                meshlet,
-                decodeInfo,
-                localVertexIndex,
-                instance
-            )
-        );
+    for(uint localVertexIndex = groupThreadIndex; localVertexIndex < vertexCount; localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
+        vertices[localVertexIndex] = nwbMeshBuildRasterVertex(nwbMeshBuildMeshletVertex(meshletIndex, meshlet, decodeInfo, localVertexIndex, instance));
     }
 
-    for(
-        uint localPrimitiveIndex = groupThreadIndex;
-        localPrimitiveIndex < primitiveCount;
-        localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
-    ){
-        triangles[localPrimitiveIndex] = nwbMeshLoadMeshletPrimitive(
-            nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex)
-        );
+    for(uint localPrimitiveIndex = groupThreadIndex; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
+        triangles[localPrimitiveIndex] = nwbMeshLoadMeshletPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
     }
 }
 

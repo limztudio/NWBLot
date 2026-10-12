@@ -64,13 +64,7 @@ inline void RegisterAutoFactory(QueueT& queue, const FactoryT factory){
 }
 
 template<typename QueueT, typename ContextT, typename FunctionVectorT, typename LogNullT, typename LogFailureT>
-[[nodiscard]] inline bool RunAutoCollectedFunctions(
-    QueueT& queue,
-    ContextT& context,
-    FunctionVectorT& scratchFunctions,
-    LogNullT&& logNull,
-    LogFailureT&& logFailure
-){
+[[nodiscard]] inline bool RunAutoCollectedFunctions(QueueT& queue, ContextT& context, FunctionVectorT& scratchFunctions, LogNullT&& logNull, LogFailureT&& logFailure){
     queue.copyTo(scratchFunctions);
 
     for(const auto function : scratchFunctions){
@@ -90,13 +84,7 @@ template<typename QueueT, typename ContextT, typename FunctionVectorT, typename 
 
 
 template<typename FactoryVectorT, typename CreateProductT, typename RegisterProductT, typename LogNullProductT, typename LogRegisterFailureT>
-inline void RegisterAutoFactoryProducts(
-    const FactoryVectorT& factories,
-    CreateProductT&& createProduct,
-    RegisterProductT&& registerProduct,
-    LogNullProductT&& logNullProduct,
-    LogRegisterFailureT&& logRegisterFailure
-){
+inline void RegisterAutoFactoryProducts(const FactoryVectorT& factories, CreateProductT&& createProduct, RegisterProductT&& registerProduct, LogNullProductT&& logNullProduct, LogRegisterFailureT&& logRegisterFailure){
     for(const auto factory : factories){
         if(factory == nullptr)
             continue;

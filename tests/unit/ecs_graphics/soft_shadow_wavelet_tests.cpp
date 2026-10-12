@@ -33,10 +33,7 @@ TEST(SoftShadowWavelet, IndependentFreshTemporalInputsPermitExactlyOneWaveletPer
 
 TEST(SoftShadowWavelet, EveryUnpreparedRouteRetainsSeparateWavelets){
     for(u32 flags = 0u; flags < 16u; ++flags){
-        EXPECT_EQ(CanCombineSoftShadowWavelets(
-            (flags & 1u) != 0u, (flags & 2u) != 0u, (flags & 4u) != 0u, (flags & 8u) != 0u,
-            1u, 1u
-        ), flags == 15u) << flags;
+        EXPECT_EQ(CanCombineSoftShadowWavelets((flags & 1u) != 0u, (flags & 2u) != 0u, (flags & 4u) != 0u, (flags & 8u) != 0u, 1u, 1u), flags == 15u) << flags;
     }
 }
 

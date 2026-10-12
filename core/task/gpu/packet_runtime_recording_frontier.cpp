@@ -96,17 +96,7 @@ bool GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
     // Compiler packet IDs are in stable topological order, preserving state-seed dependencies.
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-        if(!recordPacket(
-            graph,
-            compiledGraph,
-            planAccess,
-            artifactAccess,
-            packet,
-            outRecordedGraph,
-            scratch,
-            stateFanInScratchArena,
-            commandIrCapture
-        )){
+        if(!recordPacket(graph, compiledGraph, planAccess, artifactAccess, packet, outRecordedGraph, scratch, stateFanInScratchArena, commandIrCapture)){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;
@@ -133,13 +123,8 @@ struct PacketRecordingFrontierEntry{
     bool allowsParallelRecording = false;
 };
 
-[[nodiscard]] bool LessPacketRecordingFrontierEntry(
-    const PacketRecordingFrontierEntry& left,
-    const PacketRecordingFrontierEntry& right
-)noexcept{
-    return left.frontier < right.frontier
-        || (left.frontier == right.frontier && left.packet.index < right.packet.index)
-    ;
+[[nodiscard]] bool LessPacketRecordingFrontierEntry(const PacketRecordingFrontierEntry& left, const PacketRecordingFrontierEntry& right)noexcept{
+    return left.frontier < right.frontier || (left.frontier == right.frontier && left.packet.index < right.packet.index);
 }
 
 
@@ -162,10 +147,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
-    GpuRecordedGraph::ArtifactOperation artifactOperation(
-        outRecordedGraph,
-        GpuRecordedGraph::ArtifactOperationMode::Exclusive
-    );
+    GpuRecordedGraph::ArtifactOperation artifactOperation(outRecordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
     if(!artifactOperation.valid())
         return false;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
@@ -177,43 +159,16 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const Timer recordingOperationBegin = TimerNow();
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-        if(
-            !declarationAccess.valid()
-            || !prepareRecordingAttempt(
-                graph,
-                compiledGraph,
-                range,
-                outRecordedGraph,
-                declarationAccess,
-                planAccess,
-                artifactOperation
-            )
-        )
+        if(!declarationAccess.valid() || !prepareRecordingAttempt(graph, compiledGraph, range, outRecordedGraph, declarationAccess, planAccess, artifactOperation))
             return false;
     }
-    GpuRecordedGraph::PacketRecordingScratch* const serialScratch =
-        outRecordedGraph.serialRecordingScratch(artifactOperation)
-    ;
+    GpuRecordedGraph::PacketRecordingScratch* const serialScratch = outRecordedGraph.serialRecordingScratch(artifactOperation);
     if(!serialScratch || !serialScratch->stateFanInScratchArena)
         return false;
     Alloc::ScratchArena& stateFanInScratchArena = *serialScratch->stateFanInScratchArena;
-    if(!recordPreparedPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        planAccess,
-        artifactOperation,
-        range,
-        outRecordedGraph,
-        *serialScratch,
-        stateFanInScratchArena,
-        commandIrCapture,
-        outFailedPacket
-    ))
+    if(!recordPreparedPacketRangeInCompileOrder(graph, compiledGraph, planAccess, artifactOperation, range, outRecordedGraph, *serialScratch, stateFanInScratchArena, commandIrCapture, outFailedPacket))
         return false;
-    outRecordedGraph.addRecordingElapsedSeconds(
-        DurationInSeconds<f64>(TimerNow(), recordingOperationBegin),
-        artifactOperation
-    );
+    outRecordedGraph.addRecordingElapsedSeconds(DurationInSeconds<f64>(TimerNow(), recordingOperationBegin), artifactOperation);
     return true;
 }
 
@@ -236,14 +191,7 @@ bool GpuNativePacketRecorder::recordTaskRangeInCompileOrder(
             return false;
         range = planAccess.packetRangeForTasks(firstTask, lastTask);
     }
-    return recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        range,
-        outRecordedGraph,
-        outFailedPacket,
-        commandIrCapture
-    );
+    return recordPacketRangeInCompileOrder(graph, compiledGraph, range, outRecordedGraph, outFailedPacket, commandIrCapture);
 }
 
 
@@ -260,10 +208,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
 
     if(outFailedPacket)
         *outFailedPacket = {};
-    GpuRecordedGraph::ArtifactOperation artifactOperation(
-        outRecordedGraph,
-        GpuRecordedGraph::ArtifactOperationMode::Exclusive
-    );
+    GpuRecordedGraph::ArtifactOperation artifactOperation(outRecordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
     if(!artifactOperation.valid())
         return false;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
@@ -299,11 +244,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             if(effectiveFrontier == Limit<u32>::s_Max)
                 return false;
             const auto raiseFromSourcePacket = [&](const GpuSubmissionPacketId sourcePacket){
-                if(
-                    !planAccess.validPacket(sourcePacket)
-                    || sourcePacket == packet
-                    || sourcePacket.index >= packet.index
-                )
+                if(!planAccess.validPacket(sourcePacket) || sourcePacket == packet || sourcePacket.index >= packet.index)
                     return false;
                 if(sourcePacket.index < rangeBegin)
                     return true;
@@ -328,10 +269,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
                 const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
                 const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
-                if(
-                    task.id != tasks[taskIndex]
-                    || !compiledTaskView.valid()
-                )
+                if(task.id != tasks[taskIndex] || !compiledTaskView.valid())
                     return false;
                 allowsParallelRecording = allowsParallelRecording && task.scheduling.allowParallelRecording;
                 for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
@@ -341,11 +279,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             }
             if(!recordingEntries.empty() && effectiveFrontier < recordingEntries.back().frontier)
                 recordingFrontiersAreMonotonic = false;
-            recordingEntries.push_back(RecordingEntry{
-                .packet = packet,
-                .frontier = effectiveFrontier,
-                .allowsParallelRecording = allowsParallelRecording,
-            });
+            recordingEntries.push_back(RecordingEntry{ .packet = packet, .frontier = effectiveFrontier, .allowsParallelRecording = allowsParallelRecording, });
             if(allowsParallelRecording)
                 ++parallelPacketCount;
         }
@@ -354,20 +288,10 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             parallelResults.reserve(parallelPacketCount);
             parallelAborts.reserve(parallelPacketCount);
         }
-        if(!prepareRecordingAttempt(
-            graph,
-            compiledGraph,
-            range,
-            outRecordedGraph,
-            declarationAccess,
-            planAccess,
-            artifactOperation
-        ))
+        if(!prepareRecordingAttempt(graph, compiledGraph, range, outRecordedGraph, declarationAccess, planAccess, artifactOperation))
             return false;
     }
-    GpuRecordedGraph::PacketRecordingScratch* const serialScratch =
-        outRecordedGraph.serialRecordingScratch(artifactOperation)
-    ;
+    GpuRecordedGraph::PacketRecordingScratch* const serialScratch = outRecordedGraph.serialRecordingScratch(artifactOperation);
     if(!serialScratch || !serialScratch->stateFanInScratchArena)
         return false;
     Alloc::ScratchArena& serialStateFanInScratchArena = *serialScratch->stateFanInScratchArena;
@@ -376,10 +300,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         SIMDVectorDouble workerBusySeconds = {};
         for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
             const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-            const GpuRecordedPacket* const recordedPacket = outRecordedGraph.findWithinArtifactOperation(
-                packet,
-                artifactOperation
-            );
+            const GpuRecordedPacket* const recordedPacket = outRecordedGraph.findWithinArtifactOperation(packet, artifactOperation);
             if(recordedPacket)
                 workerBusySeconds += SIMDVectorDouble{ recordedPacket->recordingSeconds, recordedPacket->recordingSeconds };
         }
@@ -390,28 +311,12 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         const SIMDVectorDouble logicalWorkerSlotCount = SIMDVectorDouble{ workerCount, workerCount } + SIMDVectorDouble{ 1.0, 1.0 };
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
         const SIMDVectorDouble availableWorkerSeconds = SIMDVectorDouble{ elapsedSeconds, elapsedSeconds } * logicalWorkerSlotCount;
-        outRecordedGraph.addReadyFrontierStatistics(
-            elapsedSeconds,
-            workerBusySeconds.x,
-            availableWorkerSeconds.x,
-            artifactOperation
-        );
+        outRecordedGraph.addReadyFrontierStatistics(elapsedSeconds, workerBusySeconds.x, availableWorkerSeconds.x, artifactOperation);
     };
 
     // Command-IR records form one linear graph-generation artifact. Keeping capture serial preserves its existing record order and rollback contract. This path records directly after the shared prepare step so the enclosing ready-frontier operation owns exactly one elapsed span rather than nesting compile-order telemetry.
     if(!usesParallelRecording){
-        if(!recordPreparedPacketRangeInCompileOrder(
-            graph,
-            compiledGraph,
-            planAccess,
-            artifactOperation,
-            range,
-            outRecordedGraph,
-            *serialScratch,
-            serialStateFanInScratchArena,
-            commandIrCapture,
-            outFailedPacket
-        ))
+        if(!recordPreparedPacketRangeInCompileOrder(graph, compiledGraph, planAccess, artifactOperation, range, outRecordedGraph, *serialScratch, serialStateFanInScratchArena, commandIrCapture, outFailedPacket))
             return false;
         completeReadyFrontierTelemetry();
         return true;
@@ -433,12 +338,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
             for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask.prologueStateSeedCount; ++stateSeedIndex){
                 const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
-                if(
-                    !planAccess.validPacket(sourcePacket)
-                    || sourcePacket == packet
-                    || sourcePacket.index >= packet.index
-                    || !outRecordedGraph.findWithinArtifactOperation(sourcePacket, artifactOperation)
-                )
+                if(!planAccess.validPacket(sourcePacket) || sourcePacket == packet || sourcePacket.index >= packet.index || !outRecordedGraph.findWithinArtifactOperation(sourcePacket, artifactOperation))
                     return false;
             }
         }
@@ -446,20 +346,13 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     };
     // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent packet may lower the frontier again
     if(!recordingFrontiersAreMonotonic){
-        Sort(
-            recordingEntries.begin(),
-            recordingEntries.end(),
-            __hidden_gpu_packet_runtime_recording_frontier::LessPacketRecordingFrontierEntry
-        );
+        Sort(recordingEntries.begin(), recordingEntries.end(), __hidden_gpu_packet_runtime_recording_frontier::LessPacketRecordingFrontierEntry);
     }
 
     usize frontierBegin = 0u;
     while(frontierBegin < recordingEntries.size()){
         usize frontierEnd = frontierBegin + 1u;
-        while(
-            frontierEnd < recordingEntries.size()
-            && recordingEntries[frontierEnd].frontier == recordingEntries[frontierBegin].frontier
-        )
+        while(frontierEnd < recordingEntries.size() && recordingEntries[frontierEnd].frontier == recordingEntries[frontierBegin].frontier)
             ++frontierEnd;
 
         parallelPacketIndices.clear();
@@ -472,17 +365,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             }
             if(recordingEntries[recordingIndex].allowsParallelRecording)
                 parallelPacketIndices.push_back(packet.index);
-            else if(!recordPacket(
-                graph,
-                compiledGraph,
-                planAccess,
-                artifactOperation,
-                packet,
-                outRecordedGraph,
-                *serialScratch,
-                serialStateFanInScratchArena,
-                nullptr
-            )){
+            else if(!recordPacket(graph, compiledGraph, planAccess, artifactOperation, packet, outRecordedGraph, *serialScratch, serialStateFanInScratchArena, nullptr)){
                 if(outFailedPacket)
                     *outFailedPacket = packet;
                 return false;
@@ -492,26 +375,12 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         if(!parallelPacketIndices.empty()){
             parallelResults.resize(parallelPacketIndices.size());
             parallelAborts.resize(parallelPacketIndices.size());
-            const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(
-                artifactOperation
-            );
-            ReadyFrontierRecordingUnwindScope recordingUnwind(
-                graph,
-                compiledGraph,
-                planAccess,
-                outRecordedGraph,
-                artifactOperation,
-                parallelPacketIndices,
-                parallelAborts,
-                recordingAttemptGeneration
-            );
+            const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation);
+            ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, outRecordedGraph, artifactOperation, parallelPacketIndices, parallelAborts, recordingAttemptGeneration);
 
             cpuScheduler.parallelFor(0u, parallelPacketIndices.size(), [&](const usize parallelIndex){
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
-                GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.packetRecordingScratch(
-                    packet,
-                    artifactOperation
-                );
+                GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.packetRecordingScratch(packet, artifactOperation);
                 if(!scratch || !scratch->stateFanInScratchArena){
                     parallelResults[parallelIndex] = 0u;
                     return;
@@ -548,13 +417,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 TerminateInvariant();
             }
             recordingUnwind.release();
-            outRecordedGraph.cachePacketRecordingOverlaps(
-                compiledGraph,
-                planAccess,
-                parallelPacketIndices,
-                scratchArena,
-                artifactOperation
-            );
+            outRecordedGraph.cachePacketRecordingOverlaps(compiledGraph, planAccess, parallelPacketIndices, scratchArena, artifactOperation);
             for(usize parallelIndex = 0u; parallelIndex < parallelResults.size(); ++parallelIndex){
                 if(parallelResults[parallelIndex] != 0u)
                     continue;

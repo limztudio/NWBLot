@@ -110,10 +110,7 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
     const usize lastTokenOffset = inOutText.size() - ::NameDetail::s_DebugHashTextLength;
     for(usize i = 0u; i <= lastTokenOffset;){
         const auto hashText = ::NameDetail::CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
-        const auto hash = hashText
-            ? ::NameDetail::DecodeDebugHashText(AStringView(hashText->data(), ::NameDetail::s_DebugHashTextLength))
-            : Expected<NameHash>(MakeUnexpected(Failure{}))
-        ;
+        const auto hash = hashText ? ::NameDetail::DecodeDebugHashText(AStringView(hashText->data(), ::NameDetail::s_DebugHashTextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
         char resolvedText[s_MaxResolvedTextLength] = {};
         if(hash && Resolve(*hash, resolvedText, sizeof(resolvedText))){
             if(!decoded){

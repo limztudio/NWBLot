@@ -12,13 +12,9 @@ import refraction_gallery_smoke as refraction
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 
-REFLECTION_CAPTURES = tuple(reflection.OpticalCapture(name, name) for name in
-    ("optical_csg_reference", "optical_csg_cap", "optical_csg_cavity", "optical_sliver", "optical_csg_sliver",
-        "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap",
-        "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"))
-REFRACTION_CAPTURES = (("csg_reference", "automatic"), ("csg_reference", "screen"),
-    ("csg_cap", "automatic"), ("csg_cap", "screen"), ("csg_middle", "automatic"),
-    ("csg_middle", "screen"), ("csg_uncut", "automatic"))
+REFLECTION_CAPTURES = tuple(reflection.OpticalCapture(name, name) for name in ("optical_csg_reference", "optical_csg_cap", "optical_csg_cavity", "optical_sliver", "optical_csg_sliver",
+        "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"))
+REFRACTION_CAPTURES = (("csg_reference", "automatic"), ("csg_reference", "screen"), ("csg_cap", "automatic"), ("csg_cap", "screen"), ("csg_middle", "automatic"), ("csg_middle", "screen"), ("csg_uncut", "automatic"))
 # This rectangle stays inside the retained slab silhouette for every fixture. Rim rasterization and the original receiver silhouette cannot establish optical equivalence.
 REFRACTION_RECTANGLE = (325, 235, 635, 485)
 MAXIMUM_MEAN_ERROR = 0.4
@@ -39,9 +35,7 @@ def refraction_difference(reference, candidate):
             total += sum(deltas)
             maximum = max(maximum, largest)
     count = (right - left) * (bottom - top)
-    return {"rectangle": list(REFRACTION_RECTANGLE), "pixels": count,
-        "pixels_over_eight": changed, "changed_fraction": changed / count,
-        "mean_absolute_rgb_error": total / (count * 3), "maximum_channel_error": maximum}
+    return {"rectangle": list(REFRACTION_RECTANGLE), "pixels": count, "pixels_over_eight": changed, "changed_fraction": changed / count, "mean_absolute_rgb_error": total / (count * 3), "maximum_channel_error": maximum}
 
 
 def require_refraction_match(reference, candidate):
@@ -84,15 +78,11 @@ def run_refraction(args):
         (args.output_directory / f"{case}_{route}.png").write_bytes(refraction.png_rgb_bytes(frame))
     reference = frames[("csg_reference", "automatic")]
     carved = frames[("csg_cap", "automatic")]
-    metrics = {
-        "retained_slab_matches": require_refraction_match(reference, carved),
-        "cap_only_slab_matches": require_refraction_match(reference, frames[("csg_middle", "automatic")]),
-        "screen_entry_matches": require_refraction_match(frames[("csg_reference", "screen")], frames[("csg_cap", "screen")]),
-        "screen_cap_only_matches": require_refraction_match(frames[("csg_reference", "screen")], frames[("csg_middle", "screen")]),
+    metrics = { "retained_slab_matches": require_refraction_match(reference, carved), "cap_only_slab_matches": require_refraction_match(reference, frames[("csg_middle", "automatic")]),
+        "screen_entry_matches": require_refraction_match(frames[("csg_reference", "screen")], frames[("csg_cap", "screen")]), "screen_cap_only_matches": require_refraction_match(frames[("csg_reference", "screen")], frames[("csg_middle", "screen")]),
         "original_thickness_differs": require_refraction_distinct(reference, frames[("csg_uncut", "automatic")], "uncut thickness control"),
         "screen_approximation_differs": require_refraction_distinct(carved, frames[("csg_cap", "screen")], "screen fallback control"),
-        "limitations": "Automatic captures require hardware dispatch. Central retained-solid pixels compare physical entry/exit and attenuation; the screen capture is a separate approximation control.",
-    }
+        "limitations": "Automatic captures require hardware dispatch. Central retained-solid pixels compare physical entry/exit and attenuation; the screen capture is a separate approximation control.", }
     (args.output_directory / "csg_refraction_comparisons.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     print("PASS: generated CSG glass entry/exit match retained geometry in hardware and screen routes, with distinct thickness and approximation controls", flush=True)
     return 0

@@ -38,14 +38,8 @@ struct RayTracingSceneGraphReads{
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses;
 };
 
-// Import common scene reads once per physical resource. Geometry buffers and material sampled textures belong to
-// the existing frozen resource sets supplied separately by the caller. A failure returns an entirely invalid bundle.
-[[nodiscard]] RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
-    Core::GpuTaskGraph& graph,
-    const RayTracingSceneGraphResources& resources,
-    Core::ResourceStates::Mask tlasInitialState,
-    Core::Alloc::ScratchArena& scratchArena
-);
+// Import common scene reads once per physical resource. Geometry buffers and material sampled textures belong to the existing frozen resource sets supplied separately by the caller. A failure returns an entirely invalid bundle.
+[[nodiscard]] RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& graph, const RayTracingSceneGraphResources& resources, Core::ResourceStates::Mask tlasInitialState, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

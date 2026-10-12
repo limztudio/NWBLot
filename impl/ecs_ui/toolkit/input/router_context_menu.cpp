@@ -18,10 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 bool InputRouter::currentContextMenuOwner(const ContextMenuOwner& owner)const{
     const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
-    return
-        m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu
-        && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control
-    ;
+    return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
 }
 
 Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, const u64 declarationGeneration){
@@ -30,10 +27,7 @@ Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, c
         return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_contextMenuActions.size(); ++index){
         const auto& candidate = m_contextMenuActions[index];
-        if(
-            candidate.id.target != id || candidate.id.declarationGeneration != declarationGeneration
-            || candidate.popup != target->popup || candidate.control != target->control
-        )
+        if(candidate.id.target != id || candidate.id.declarationGeneration != declarationGeneration || candidate.popup != target->popup || candidate.control != target->control)
             continue;
         const ContextMenuAction action = candidate;
         m_contextMenuActions.erase(m_contextMenuActions.begin() + static_cast<isize>(index));
@@ -58,9 +52,7 @@ void InputRouter::reconcileContextMenus(){
     }
 }
 
-void InputRouter::appendContextMenu(
-    const HitTarget& target, const Point& position, const bool keyboard, InputRoutingResult& result
-){
+void InputRouter::appendContextMenu(const HitTarget& target, const Point& position, const bool keyboard, InputRoutingResult& result){
     if(m_contextMenuActions.size() == s_InputMaxContextMenuActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
@@ -72,16 +64,12 @@ void InputRouter::appendContextMenu(
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeContextMenuKey(
-    const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed, InputRoutingResult& result
-){
+bool InputRouter::routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed, InputRoutingResult& result){
     const bool trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;
     if(!alreadyPressed && !event.repeat){
-        source.contextOwner = {
-            focused->id, focused->declarationGeneration, focused->popup, focused->control
-        };
+        source.contextOwner = { focused->id, focused->declarationGeneration, focused->popup, focused->control };
         appendContextMenu(*focused, { focused->rectangle.x, NumericSimd::Add(focused->rectangle.y, focused->rectangle.height) }, true, result);
     }
     return true;
@@ -94,8 +82,7 @@ void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& re
     updateHover();
     const HitTarget* hit = findTarget(m_hover);
     if(event.type == InputEventType::SecondaryUp){
-        result.pointerConsumed |= m_secondaryDown ? m_secondarySequenceConsumed
-            : m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
+        result.pointerConsumed |= m_secondaryDown ? m_secondarySequenceConsumed : m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
         m_secondaryDown = false;
         m_secondarySequenceConsumed = false;
         m_secondaryOwner = {};

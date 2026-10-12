@@ -43,8 +43,9 @@ struct PresentationFpsSample{
     [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? presentations() / wallSeconds : 0.0; }
 };
 
-// Observes an owning runtime's cumulative accepted-present count against steady-clock timestamps. Repeated idle
-// callbacks do not add frames; long stalls remain in elapsed wall time. No simulation-delta or GPU-query input.
+// Observes an owning runtime's cumulative accepted-present count against steady-clock timestamps.
+// Repeated idle callbacks do not add frames; long stalls remain in elapsed wall time.
+// No simulation-delta or GPU-query input.
 class PresentationFpsProbe final{
 public:
     explicit PresentationFpsProbe(f64 warmupSeconds = 0.25, f64 measurementSeconds = 0.0);

@@ -104,10 +104,7 @@ void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTask
     for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
         const u32 index = m_searchStack[cursor];
         const TaskNode& node = m_nodes[index];
-        if(
-            (scope && node.scope == scope)
-            || (index == handle.index && node.generation == handle.generation)
-        )
+        if((scope && node.scope == scope) || (index == handle.index && node.generation == handle.generation))
             throw RuntimeException("CPU task cannot join work that requires its own completion");
         visit(node.parent);
         for(const TaskHandle dependent : node.dependents)
@@ -141,10 +138,7 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
 
         m_changed.wait(lock, [this, &scope, &wait](){
             validateWaitLocked({}, &scope);
-            return
-                scope.m_pending.load(MemoryOrder::acquire) == 0u
-                || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &wait)
-            ;
+            return scope.m_pending.load(MemoryOrder::acquire) == 0u || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &wait);
         });
     }
 }

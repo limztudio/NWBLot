@@ -68,10 +68,7 @@ float2 nwbMeshLoadUv0(const NwbMeshUv0 value){
 }
 
 half4 nwbMeshLoadHalf4(const NwbMeshHalf4 value){
-    return half4(float4(
-        nwbUnpackHalf2x16(value.xy),
-        nwbUnpackHalf2x16(value.zw)
-    ));
+    return half4(float4(nwbUnpackHalf2x16(value.xy), nwbUnpackHalf2x16(value.zw)));
 }
 
 NwbMeshHalf4 nwbMeshStoreHalf4(const float4 value){

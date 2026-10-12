@@ -70,13 +70,7 @@ private:
 
 
 public:
-    Parser(
-        MStringView source,
-        MetaArena& arena,
-        MVector<ParseError>& errors,
-        MStringMap<Value>& variables,
-        Document::DeclarationList& declarations
-    )
+    Parser(MStringView source, MetaArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations)
         : m_lexer(source)
         , m_arena(arena)
         , m_scratchArena(MetascriptArenaScope::s_ParserScratch, s_ParserScratchArenaBytes)
@@ -96,12 +90,7 @@ public:
         return finalizeExplicitDeclaration(outAssetType, outAssetVariable);
     }
 
-    bool parseWithImplicitAsset(
-        MString& outAssetType,
-        MString& outAssetVariable,
-        const MStringView assetType,
-        const MStringView assetVariable
-    ){
+    bool parseWithImplicitAsset(MString& outAssetType, MString& outAssetVariable, const MStringView assetType, const MStringView assetVariable){
         if(!declareImplicitAsset(outAssetType, outAssetVariable, assetType, assetVariable))
             return false;
         return parseStatements();
@@ -152,15 +141,7 @@ private:
         return declareVariable(typeName, variableName, Move(initialValue), typeLine, typeColumn, variableLine, variableColumn);
     }
 
-    bool declareVariable(
-        const MStringView typeName,
-        const MStringView variableName,
-        Value&& initialValue,
-        const u32 typeLine,
-        const u32 typeColumn,
-        const u32 variableLine,
-        const u32 variableColumn
-    ){
+    bool declareVariable(const MStringView typeName, const MStringView variableName, Value&& initialValue, const u32 typeLine, const u32 typeColumn, const u32 variableLine, const u32 variableColumn){
         if(typeName.empty()){
             error(typeLine, typeColumn, "type name must not be empty");
             return false;
@@ -182,12 +163,7 @@ private:
         return true;
     }
 
-    bool declareImplicitAsset(
-        MString& outAssetType,
-        MString& outAssetVariable,
-        const MStringView assetType,
-        const MStringView assetVariable
-    ){
+    bool declareImplicitAsset(MString& outAssetType, MString& outAssetVariable, const MStringView assetType, const MStringView assetVariable){
         if(assetType.empty() || assetVariable.empty()){
             error(1u, 1u, "implicit asset declaration requires asset type and variable");
             return false;
@@ -250,13 +226,7 @@ private:
         const TokenType::Enum assignOp = m_current.type;
         const u32 assignLine = m_current.line;
         const u32 assignColumn = m_current.column;
-        if(
-            assignOp != TokenType::Equal
-            && assignOp != TokenType::PlusEqual
-            && assignOp != TokenType::MinusEqual
-            && assignOp != TokenType::StarEqual
-            && assignOp != TokenType::SlashEqual
-        ){
+        if(assignOp != TokenType::Equal && assignOp != TokenType::PlusEqual && assignOp != TokenType::MinusEqual && assignOp != TokenType::StarEqual && assignOp != TokenType::SlashEqual){
             errorExpected("expected assignment operator");
             return false;
         }
@@ -500,22 +470,16 @@ private:
     }
 
     Value parseAdditive(){
-        return parseBinaryExpression(
-            [&](){ return parseMultiplicative(); },
-            TokenType::Plus,
-            TokenType::Minus,
-            [](const TokenType::Enum op, const Value& left, const Value& right){
+        return parseBinaryExpression([&](){ return parseMultiplicative(); },
+            TokenType::Plus, TokenType::Minus, [](const TokenType::Enum op, const Value& left, const Value& right){
                 return op == TokenType::Plus ? left + right : left - right;
             }
         );
     }
 
     Value parseMultiplicative(){
-        return parseBinaryExpression(
-            [&](){ return parseUnary(); },
-            TokenType::Star,
-            TokenType::Slash,
-            [](const TokenType::Enum op, const Value& left, const Value& right){
+        return parseBinaryExpression([&](){ return parseUnary(); },
+            TokenType::Star, TokenType::Slash, [](const TokenType::Enum op, const Value& left, const Value& right){
                 return op == TokenType::Star ? left * right : left / right;
             }
         );
@@ -932,15 +896,7 @@ private:
         return false;
     }
 
-    bool validateNumericOperands(
-        const TokenType::Enum op,
-        const Value& lhs,
-        const Value& rhs,
-        const u32 line,
-        const u32 column,
-        const AStringView operandError,
-        const bool rejectZeroDivisor = false
-    ){
+    bool validateNumericOperands(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column, const AStringView operandError, const bool rejectZeroDivisor = false){
         if(!(lhs.isNumeric() && rhs.isNumeric())){
             if(!operandError.empty())
                 error(line, column, operandError);
@@ -1058,10 +1014,7 @@ private:
     void errorExpected(MStringView expected){
         const auto desc = tokenDescription();
         ScratchString msg{m_scratchArena};
-        if(
-            expected.size() <= Limit<usize>::s_Max - s_ExpectedTokenFoundSeparatorLength
-            && desc.size() <= Limit<usize>::s_Max - expected.size() - s_ExpectedTokenFoundSeparatorLength
-        )
+        if(expected.size() <= Limit<usize>::s_Max - s_ExpectedTokenFoundSeparatorLength && desc.size() <= Limit<usize>::s_Max - expected.size() - s_ExpectedTokenFoundSeparatorLength)
             msg.reserve(expected.size() + s_ExpectedTokenFoundSeparatorLength + desc.size());
         msg.append(expected.data(), expected.size());
         msg.append(s_ExpectedTokenFoundSeparator);
@@ -1173,10 +1126,7 @@ bool Document::parse(IMetaReader& reader){
     m_variables.clear();
     m_declarations.clear();
 
-    Alloc::ScratchArena scratchArena(
-        MetascriptArenaScope::s_DocumentReaderScratch,
-        __hidden_metascript_parser::s_DocumentReaderChunkBytes
-    );
+    Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_DocumentReaderScratch, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
     BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
     buffer.reserve(__hidden_metascript_parser::s_DocumentReaderChunkBytes);
     MChar chunk[__hidden_metascript_parser::s_DocumentReaderChunkBytes];

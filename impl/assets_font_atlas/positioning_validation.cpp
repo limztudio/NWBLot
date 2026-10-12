@@ -86,10 +86,7 @@ public:
             if(!range(0u, 14u))
                 return false;
             const u64 variations = u32At(10u);
-            if(
-                variations != 0u && (!range(variations, 8u) || u16At(variations) != 1u || u16At(variations + 2u) != 0u
-                || !range(variations + 8u, static_cast<u64>(u32At(variations + 4u)) * 8u))
-            )
+            if(variations != 0u && (!range(variations, 8u) || u16At(variations) != 1u || u16At(variations + 2u) != 0u || !range(variations + 8u, static_cast<u64>(u32At(variations + 4u)) * 8u)))
                 return false;
         }
         return true;
@@ -180,10 +177,7 @@ private:
             const u64 record = offset + 4u + index * (format == 1u ? 2u : 6u);
             const u32 start = u16At(record);
             const u32 end = format == 1u ? start : u16At(record + 2u);
-            if(
-                start > end || end >= m_glyphCount || (index > 0u && start <= previous)
-                || (format == 2u && u16At(record + 4u) != glyphCount)
-            )
+            if(start > end || end >= m_glyphCount || (index > 0u && start <= previous) || (format == 2u && u16At(record + 4u) != glyphCount))
                 return MakeUnexpected(Failure{});
             glyphCount += end - start + 1u;
             previous = end;
@@ -346,10 +340,7 @@ private:
                 for(u32 pair = 0u; pair < pairs; ++pair){
                     const u64 record = set + 2u + pair * (stride + 2u);
                     const u32 second = u16At(record);
-                    if(
-                        second >= m_glyphCount || (pair > 0u && second <= previous)
-                        || !value(record + 2u, firstFormat, set) || !value(record + 2u + valueSize(firstFormat), secondFormat, set)
-                    )
+                    if(second >= m_glyphCount || (pair > 0u && second <= previous) || !value(record + 2u, firstFormat, set) || !value(record + 2u + valueSize(firstFormat), secondFormat, set))
                         return false;
                     previous = second;
                 }
@@ -427,10 +418,7 @@ private:
             const u32 type = u16At(lookup);
             const u32 flags = u16At(lookup + 2u);
             const u32 itemCount = u16At(lookup + 4u);
-            if(
-                type < 1u || type > 9u || (flags & 0x00e0u) != 0u
-                || !range(lookup + 6u, itemCount * 2u + ((flags & 0x10u) != 0u ? 2u : 0u))
-            )
+            if(type < 1u || type > 9u || (flags & 0x00e0u) != 0u || !range(lookup + 6u, itemCount * 2u + ((flags & 0x10u) != 0u ? 2u : 0u)))
                 return false;
             for(u32 item = 0u; item < itemCount; ++item){
                 const u32 displacement = u16At(lookup + 6u + item * 2u);
@@ -458,10 +446,7 @@ bool ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, c
     if(table.bytes.empty() || table.bytes.size() > s_FontAtlasMaxPositioningBytes || glyphCount == 0u || glyphCount > s_FontAtlasMaxGlyphCount)
         return false;
     __hidden_font_atlas_positioning::TableValidator validator(table.bytes, glyphCount);
-    const bool valid = table.tag == s_FontAtlasKernTag ? validator.kern()
-        : table.tag == s_FontAtlasGposTag ? validator.gpos()
-        : table.tag == s_FontAtlasGdefTag ? validator.gdef()
-        : false;
+    const bool valid = table.tag == s_FontAtlasKernTag ? validator.kern() : table.tag == s_FontAtlasGposTag ? validator.gpos() : table.tag == s_FontAtlasGdefTag ? validator.gdef() : false;
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: invalid or over-budget raw positioning table {}"), table.tag);
     return valid;

@@ -22,13 +22,7 @@ namespace __hidden_gpu_persistent_resource_state_cache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BuildSelection(
-    CommandListResourceSelection& selection,
-    const TextureHandle* const textures,
-    const usize textureCount,
-    const BufferHandle* const buffers,
-    const usize bufferCount
-){
+[[nodiscard]] bool BuildSelection(CommandListResourceSelection& selection, const TextureHandle* const textures, const usize textureCount, const BufferHandle* const buffers, const usize bufferCount){
     for(usize index = 0u; index < textureCount; ++index){
         if(!selection.addTexture(textures[index].get(), index))
             return false;
@@ -40,13 +34,7 @@ namespace __hidden_gpu_persistent_resource_state_cache{
     return true;
 }
 
-void RetainSelectedHandles(
-    const CommandListResourceSelection& selection,
-    const TextureHandle* const textures,
-    const BufferHandle* const buffers,
-    GraphicsVector<TextureHandle>& outTextures,
-    GraphicsVector<BufferHandle>& outBuffers
-){
+void RetainSelectedHandles(const CommandListResourceSelection& selection, const TextureHandle* const textures, const BufferHandle* const buffers, GraphicsVector<TextureHandle>& outTextures, GraphicsVector<BufferHandle>& outBuffers){
     outTextures.reserve(selection.textureCount());
     outBuffers.reserve(selection.bufferCount());
     for(usize index = 0u; index < selection.size(); ++index){
@@ -90,12 +78,7 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
     Alloc::ScratchArena& scratchArena
 ){
     if(&source == &m_states){
-        if(
-            !source.valid()
-            || source.deviceGeneration() == 0u
-            || (textureCount != 0u && !textures)
-            || (bufferCount != 0u && !buffers)
-        ){
+        if(!source.valid() || source.deviceGeneration() == 0u || (textureCount != 0u && !textures) || (bufferCount != 0u && !buffers)){
             reset();
             return false;
         }
@@ -110,8 +93,8 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
         GraphicsVector<BufferHandle> retainedBuffers(m_arena);
         RetainSelectedHandles(selection, textures, buffers, retainedTextures, retainedBuffers);
 
-        // Finish every allocation and retain new live handles before filtering the accepted snapshot. Self-filtering
-        // only shrinks its existing state arrays; after its input checks, compaction and these same-arena swaps cannot fail.
+        // Finish every allocation and retain new live handles before filtering the accepted snapshot.
+        // Self-filtering only shrinks its existing state arrays; after its input checks, compaction and these same-arena swaps cannot fail.
         if(!m_states.buildResourceSubset(m_states, selection)){
             reset();
             return false;
@@ -180,8 +163,8 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
                 return false;
         }
     }
-    // The selected typed handles stay in sourceCandidate through fan-in. Release the temporary selection before
-    // fan-in reuses the same scratch arena, so repeated operations reclaim every selection allocation in LIFO order.
+    // The selected typed handles stay in sourceCandidate through fan-in.
+    // Release the temporary selection before fan-in reuses the same scratch arena, so repeated operations reclaim every selection allocation in LIFO order.
     if(retainedStates){
         const CommandListResourceStateHandoff* const branches[] = { &sourceCandidate.m_states };
         if(!outCandidate.m_states.buildFanIn(*retainedStates, branches, LengthOf(branches), scratchArena))
@@ -219,12 +202,7 @@ bool GpuPersistentResourceStateCache::buildFilteredResourceSubset(
 }
 
 bool GpuPersistentResourceStateCache::commit(Candidate& candidate)noexcept{
-    if(
-        &candidate.m_owner != this
-        || !candidate.valid()
-        || m_textures.get_allocator() != candidate.m_textures.get_allocator()
-        || m_buffers.get_allocator() != candidate.m_buffers.get_allocator()
-    )
+    if(&candidate.m_owner != this || !candidate.valid() || m_textures.get_allocator() != candidate.m_textures.get_allocator() || m_buffers.get_allocator() != candidate.m_buffers.get_allocator())
         return false;
 
     if(!m_states.exchangeSnapshot(candidate.m_states))

@@ -36,8 +36,7 @@ struct NwbCombinedShadowReprojectMergePushConstants{
     uint transparentMomentsOutSlot;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbCombinedShadowReprojectMergePushConstants> g_NwbShadowMergePush;
+[[vk::push_constant]] ConstantBuffer<NwbCombinedShadowReprojectMergePushConstants> g_NwbShadowMergePush;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,27 +67,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 Wc = float3(worldPositionSample);
 
-    const NwbShadowMergeReprojection reprojection = nwbShadowReprojectHistory(
-        Wc,
-        g_NwbShadowMergePush.prevWorldToClip,
-        g_NwbShadowMergePush.historyValid,
-        halfWidth,
-        halfHeight
-    );
-    const bool historyAccepted = nwbShadowMergeHistoryAccepted(
-        reprojection,
-        valid,
-        g_NwbShadowMergePush.geometryPrevSlot,
-        Nc,
-        currentCameraDistance
-    );
+    const NwbShadowMergeReprojection reprojection = nwbShadowReprojectHistory(Wc, g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid, halfWidth, halfHeight);
+    const bool historyAccepted = nwbShadowMergeHistoryAccepted(reprojection, valid, g_NwbShadowMergePush.geometryPrevSlot, Nc, currentCameraDistance);
 
     uint validTapMask = 0u;
     if(valid){
-        [unroll]
-        for(int dy = -1; dy <= 1; ++dy){
-            [unroll]
-            for(int dx = -1; dx <= 1; ++dx){
+        [unroll] for(int dy = -1; dy <= 1; ++dy){
+            [unroll] for(int dx = -1; dx <= 1; ++dx){
                 const int2 tap = clamp(texel + int2(dx, dy), int2(0), int2(hw - 1, hh - 1));
                 if(!(nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, tap).w <= half(0.5h)))
                     validTapMask |= 1u << uint((dy + 1) * 3 + dx + 1);
@@ -97,28 +82,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
 
     for(uint slot = 0u; slot < slotEnd; ++slot){
-        [unroll]
-        for(uint channel = 0u; channel < 2u; ++channel){
+        [unroll] for(uint channel = 0u; channel < 2u; ++channel){
             const bool opaque = channel == 0u;
             const uint softTraceSlot = opaque ? g_NwbShadowMergePush.opaqueSoftTraceSlot : g_NwbShadowMergePush.transparentSoftTraceSlot;
             const uint historyInSlot = opaque ? g_NwbShadowMergePush.opaqueHistoryInSlot : g_NwbShadowMergePush.transparentHistoryInSlot;
             const uint momentsInSlot = opaque ? g_NwbShadowMergePush.opaqueMomentsInSlot : g_NwbShadowMergePush.transparentMomentsInSlot;
             const uint historyOutSlot = opaque ? g_NwbShadowMergePush.opaqueHistoryOutSlot : g_NwbShadowMergePush.transparentHistoryOutSlot;
             const uint momentsOutSlot = opaque ? g_NwbShadowMergePush.opaqueMomentsOutSlot : g_NwbShadowMergePush.transparentMomentsOutSlot;
-            const NwbShadowMergeResult result = nwbShadowMergeChannel<true>(
-                texel,
-                reprojection.texel,
-                hw,
-                hh,
-                slot,
-                valid,
-                historyAccepted,
-                softTraceSlot,
-                historyInSlot,
-                momentsInSlot,
-                g_NwbShadowMergePush.geometryCurrSlot,
-                validTapMask
-            );
+            const NwbShadowMergeResult result = nwbShadowMergeChannel<true>(texel, reprojection.texel, hw, hh, slot, valid, historyAccepted, softTraceSlot, historyInSlot, momentsInSlot, g_NwbShadowMergePush.geometryCurrSlot, validTapMask);
             nwbHeapStorageImage2DArrayFloat4(historyOutSlot)[uint3(h, slot)] = result.history;
             nwbHeapStorageImage2DArrayFloat4(momentsOutSlot)[uint3(h, slot)] = result.moments;
         }

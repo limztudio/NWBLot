@@ -25,9 +25,7 @@ LIT_MAIN = "__main__"
 
 def record(divisor=1, backend=LIT_HARDWARE, phases=2, base=512):
     full = (base // divisor) ** 2
-    return (quality.SETTING_MARKER + str(divisor) + LIT_N
-        + f"RendererSystem: dispatched {backend} caustic producer ({full // phases} photons/frame, "
-        + f"{phases} temporal phases, {full} full-grid budget, 2 caustic lights, 10 refractive instances)")
+    return (quality.SETTING_MARKER + str(divisor) + LIT_N + f"RendererSystem: dispatched {backend} caustic producer ({full // phases} photons/frame, " + f"{phases} temporal phases, {full} full-grid budget, 2 caustic lights, 10 refractive instances)")
 
 
 class CausticQualitySmokeTests(unittest.TestCase):
@@ -38,8 +36,7 @@ class CausticQualitySmokeTests(unittest.TestCase):
         executable = self.output / "renderer.exe"
         executable.write_bytes(b"fixture")
         self.stress_args = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.output), "--no-logserver"]
-        self.optical_args = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.output),
-            "--output-directory", str(self.output / "optical")]
+        self.optical_args = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.output), "--output-directory", str(self.output / "optical")]
 
     def test_cli_rejects_unsupported_photon_grid_divisors(self):
         for parse, required in ((stress.parse_args, self.stress_args), (optical.parse_args, self.optical_args)):
@@ -66,10 +63,8 @@ class CausticQualitySmokeTests(unittest.TestCase):
     def test_missing_mismatched_malformed_and_incoherent_evidence_fails(self):
         text = record(2)
         self.assertTrue(quality.verify_settings(text, 2)["verified"])
-        cases = ("", text.replace(quality.SETTING_MARKER + "2", quality.SETTING_MARKER + "1"),
-            text + LIT_N + quality.SETTING_MARKER + "2", text.replace("65536 full-grid", "262144 full-grid"),
-            text.replace("32768 photons/frame", "16384 photons/frame"), text.replace("2 temporal", "3 temporal"),
-            text.replace("2 caustic lights", "0 caustic lights"), text.replace("producer (", "producer (bad "))
+        cases = ("", text.replace(quality.SETTING_MARKER + "2", quality.SETTING_MARKER + "1"), text + LIT_N + quality.SETTING_MARKER + "2", text.replace("65536 full-grid", "262144 full-grid"),
+            text.replace("32768 photons/frame", "16384 photons/frame"), text.replace("2 temporal", "3 temporal"), text.replace("2 caustic lights", "0 caustic lights"), text.replace("producer (", "producer (bad "))
         for candidate in cases:
             with self.subTest(candidate=candidate), self.assertRaises(quality.SmokeFailure):
                 quality.verify_settings(candidate, 2)

@@ -27,12 +27,7 @@ inline constexpr AStringView s_OwnerSeparator = "_";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Name DeriveRuntimeResourceName(
-    const Name& sourceName,
-    const u64 ownerId,
-    const u32 editRevision,
-    const AStringView label
-){
+[[nodiscard]] inline Name DeriveRuntimeResourceName(const Name& sourceName, const u64 ownerId, const u32 editRevision, const AStringView label){
     if(!sourceName || label.empty())
         return s_NameNone;
 

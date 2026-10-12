@@ -33,8 +33,7 @@ def _capture_after_resize(args, target):
             raise smoke.SmokeFailure(f"executable does not exist: {executable}")
         environment = smoke.prepare_application_capture_environment(args, smoke.build_launch_environment(args))
         backend = smoke.create_capture_backend()
-        logserver, port, log_directory, baseline, pattern = smoke.launch_logserver(
-            args, executable, environment)
+        logserver, port, log_directory, baseline, pattern = smoke.launch_logserver(args, executable, environment)
         application = smoke.launch_testbed(args, executable, environment, port)
         handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
         if not handle:

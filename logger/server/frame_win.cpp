@@ -121,35 +121,15 @@ static LogRowColors ResolveLogRowColors(const Core::Common::LogType::Enum type, 
     case Core::Common::LogType::Info:
         return SelectLogRowColors(alternate, s_DefaultEvenLogRowColors, s_InfoOddLogRowColors);
     case Core::Common::LogType::Warning:
-        return SelectLogRowColors(
-            alternate,
-            s_WarningEvenLogRowColors,
-            s_WarningOddLogRowColors
-        );
+        return SelectLogRowColors(alternate, s_WarningEvenLogRowColors, s_WarningOddLogRowColors);
     case Core::Common::LogType::CriticalWarning:
-        return SelectLogRowColors(
-            alternate,
-            s_CriticalWarningEvenLogRowColors,
-            s_CriticalWarningOddLogRowColors
-        );
+        return SelectLogRowColors(alternate, s_CriticalWarningEvenLogRowColors, s_CriticalWarningOddLogRowColors);
     case Core::Common::LogType::Assert:
-        return SelectLogRowColors(
-            alternate,
-            s_AssertEvenLogRowColors,
-            s_AssertOddLogRowColors
-        );
+        return SelectLogRowColors(alternate, s_AssertEvenLogRowColors, s_AssertOddLogRowColors);
     case Core::Common::LogType::Error:
-        return SelectLogRowColors(
-            alternate,
-            s_ErrorEvenLogRowColors,
-            s_ErrorOddLogRowColors
-        );
+        return SelectLogRowColors(alternate, s_ErrorEvenLogRowColors, s_ErrorOddLogRowColors);
     case Core::Common::LogType::Fatal:
-        return SelectLogRowColors(
-            alternate,
-            s_FatalEvenLogRowColors,
-            s_FatalOddLogRowColors
-        );
+        return SelectLogRowColors(alternate, s_FatalEvenLogRowColors, s_FatalOddLogRowColors);
     default:
         return SelectLogRowColors(alternate, s_DefaultEvenLogRowColors, s_InfoOddLogRowColors);
     }
@@ -189,36 +169,9 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_CREATE:
         {
-            s_Font = CreateFont(
-                s_LogFontHeight,
-                0,
-                0, 0,
-                FW_NORMAL,
-                FALSE,
-                FALSE,
-                FALSE,
-                DEFAULT_CHARSET,
-                OUT_DEFAULT_PRECIS,
-                CLIP_DEFAULT_PRECIS,
-                DEFAULT_QUALITY,
-                DEFAULT_PITCH | FF_SWISS,
-                NWB_TEXT("Terminal")
-            );
+            s_Font = CreateFont(s_LogFontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, NWB_TEXT("Terminal"));
 
-            s_ListHwnd = CreateWindowEx(
-                0,
-                NWB_TEXT("LISTBOX"),
-                nullptr,
-                WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY,
-                0,
-                0,
-                0,
-                0,
-                hwnd,
-                reinterpret_cast<HMENU>(1),
-                frame->data<WinFrame>().instance(),
-                nullptr
-            );
+            s_ListHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<WinFrame>().instance(), nullptr);
             if(!s_ListHwnd)
                 PostQuitMessage(0);
             else{
@@ -409,20 +362,7 @@ bool Frame::init(){
     if(!RegisterClassEx(&wc))
         return false;
 
-    HWND hwnd = CreateWindowEx(
-        s_WindowExtendedStyle,
-        wc.lpszClassName,
-        s_WindowTitle.data(),
-        s_WindowStyle,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        nullptr,
-        nullptr,
-        wc.hInstance,
-        nullptr
-    );
+    HWND hwnd = CreateWindowEx(s_WindowExtendedStyle, wc.lpszClassName, s_WindowTitle.data(), s_WindowStyle, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, wc.hInstance, nullptr);
     data<FrameDetail::WinFrame>().setHwnd(hwnd);
     if(!data<FrameDetail::WinFrame>().hwnd())
         return false;

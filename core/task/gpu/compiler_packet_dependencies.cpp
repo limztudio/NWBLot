@@ -20,15 +20,8 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static const GpuPacketStateSeed* TaskPrologueStateSeeds(
-    const GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    const GpuCompiledTask& task
-)noexcept{
-    if(
-        task.prologueStateSeedCount == 0u
-        || task.prologueStateSeedOffset > compiledPlan.prologueStateSeeds.size()
-        || task.prologueStateSeedCount > compiledPlan.prologueStateSeeds.size() - task.prologueStateSeedOffset
-    )
+[[nodiscard]] static const GpuPacketStateSeed* TaskPrologueStateSeeds(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuCompiledTask& task)noexcept{
+    if(task.prologueStateSeedCount == 0u || task.prologueStateSeedOffset > compiledPlan.prologueStateSeeds.size() || task.prologueStateSeedCount > compiledPlan.prologueStateSeeds.size() - task.prologueStateSeedOffset)
         return nullptr;
     return compiledPlan.prologueStateSeeds.data() + task.prologueStateSeedOffset;
 }
@@ -44,11 +37,7 @@ namespace GpuTaskGraphCompilerDetail{
 ){
     const usize packetCount = compiledPlan.packets.size();
     const bool plansResourceStateDependencies = !resourceStateDependencies.empty();
-    if(
-        packetCount > static_cast<usize>(Limit<u32>::s_Max)
-        || compiledPlan.packetDependencies.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || compiledPlan.packetExternalDependencies.size() > static_cast<usize>(Limit<u32>::s_Max)
-    )
+    if(packetCount > static_cast<usize>(Limit<u32>::s_Max) || compiledPlan.packetDependencies.size() > static_cast<usize>(Limit<u32>::s_Max) || compiledPlan.packetExternalDependencies.size() > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
     for(const GpuPacketDependency& dependency : resourceStateDependencies){
@@ -63,25 +52,16 @@ namespace GpuTaskGraphCompilerDetail{
             return false;
     }
     for(const GpuTaskExternalDependencyEdge& dependency : initialOwnershipDependencies){
-        if(
-            !graph.validTask(dependency.consumer)
-            || !graph.validExternalCompletion(dependency.completion)
-        )
+        if(!graph.validTask(dependency.consumer) || !graph.validExternalCompletion(dependency.completion))
             return false;
     }
     for(const GpuTaskExternalDependencyEdge& dependency : initialAvailabilityDependencies){
-        if(
-            !graph.validTask(dependency.consumer)
-            || !graph.validExternalCompletion(dependency.completion)
-        )
+        if(!graph.validTask(dependency.consumer) || !graph.validExternalCompletion(dependency.completion))
             return false;
     }
 
     if(plansResourceStateDependencies){
-        Sort(
-            resourceStateDependencies.begin(),
-            resourceStateDependencies.end(),
-            [](const GpuPacketDependency& lhs, const GpuPacketDependency& rhs){
+        Sort(resourceStateDependencies.begin(), resourceStateDependencies.end(), [](const GpuPacketDependency& lhs, const GpuPacketDependency& rhs){
                 if(lhs.consumer.index != rhs.consumer.index)
                     return lhs.consumer.index < rhs.consumer.index;
                 return lhs.producer.index > rhs.producer.index;
@@ -102,14 +82,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(plansResourceStateDependencies && packetCount == 0u)
         return false;
     const auto publishPacketDependency = [&](const GpuSubmissionPacketId producer, const GpuSubmissionPacketId consumer){
-        if(
-            !producer.valid()
-            || !consumer.valid()
-            || producer.generation != compiledPlan.planGeneration
-            || consumer.generation != compiledPlan.planGeneration
-            || producer.index >= consumer.index
-            || consumer.index >= packetCount
-        )
+        if(!producer.valid() || !consumer.valid() || producer.generation != compiledPlan.planGeneration || consumer.generation != compiledPlan.planGeneration || producer.index >= consumer.index || consumer.index >= packetCount)
             return false;
 
         const usize producerRowOffset = static_cast<usize>(producer.index) * packetReachabilityWordsPerPacket;
@@ -127,10 +100,7 @@ namespace GpuTaskGraphCompilerDetail{
         if(!wordCount)
             return false;
         const usize packetReachabilityWordCount = *wordCount;
-        if(
-            packetReachabilityWordCount > Limit<usize>::s_Max / sizeof(u64)
-            || packetReachabilityWordCount > packetReachability.max_size()
-        )
+        if(packetReachabilityWordCount > Limit<usize>::s_Max / sizeof(u64) || packetReachabilityWordCount > packetReachability.max_size())
             return false;
         packetReachability.resize(packetReachabilityWordCount, 0u);
         // Earlier consumers may already contain terminal edges accepted without the dense closure.
@@ -150,19 +120,12 @@ namespace GpuTaskGraphCompilerDetail{
     usize resourceStateDependencyIndex = 0u;
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < compiledPlan.packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = compiledPlan.packets[consumerPacketIndex];
-        const GpuSubmissionPacketId consumerPacketID{
-            .generation = compiledPlan.planGeneration,
-            .index = static_cast<u32>(consumerPacketIndex),
-        };
+        const GpuSubmissionPacketId consumerPacketID{ .generation = compiledPlan.planGeneration, .index = static_cast<u32>(consumerPacketIndex), };
         consumerPacket.dependencyOffset = static_cast<u32>(compiledPlan.packetDependencies.size());
         const auto appendPacketDependency = [&](const GpuSubmissionPacketId producerPacket){
             if(producerPacket == consumerPacketID)
                 return true;
-            if(
-                !producerPacket.valid()
-                || producerPacket.index >= consumerPacketIndex
-                || producerPacket.generation != compiledPlan.planGeneration
-            )
+            if(!producerPacket.valid() || producerPacket.index >= consumerPacketIndex || producerPacket.generation != compiledPlan.planGeneration)
                 return false;
 
             if(packetDependencyConsumerMarkers[producerPacket.index] == consumerPacketID.index)
@@ -170,10 +133,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(compiledPlan.packetDependencies.size() >= static_cast<usize>(Limit<u32>::s_Max))
                 return false;
 
-            compiledPlan.packetDependencies.push_back(GpuPacketDependency{
-                .producer = producerPacket,
-                .consumer = consumerPacketID,
-            });
+            compiledPlan.packetDependencies.push_back(GpuPacketDependency{ .producer = producerPacket, .consumer = consumerPacketID, });
             packetDependencyConsumerMarkers[producerPacket.index] = consumerPacketID.index;
             ++consumerPacket.dependencyCount;
             return true;
@@ -219,24 +179,14 @@ namespace GpuTaskGraphCompilerDetail{
                 if(!appendExternalDependency(consumerTaskView.externalDependencies[dependencyIndex]))
                     return false;
             }
-            while(
-                initialOwnershipDependencyIndex < initialOwnershipDependencies.size()
-                && initialOwnershipDependencies[initialOwnershipDependencyIndex].consumer == consumerTask
-            ){
-                const GpuExternalCompletionId completion =
-                    initialOwnershipDependencies[initialOwnershipDependencyIndex].completion
-                ;
+            while(initialOwnershipDependencyIndex < initialOwnershipDependencies.size() && initialOwnershipDependencies[initialOwnershipDependencyIndex].consumer == consumerTask){
+                const GpuExternalCompletionId completion = initialOwnershipDependencies[initialOwnershipDependencyIndex].completion;
                 ++initialOwnershipDependencyIndex;
                 if(!appendExternalDependency(completion))
                     return false;
             }
-            while(
-                initialAvailabilityDependencyIndex < initialAvailabilityDependencies.size()
-                && initialAvailabilityDependencies[initialAvailabilityDependencyIndex].consumer == consumerTask
-            ){
-                const GpuExternalCompletionId completion =
-                    initialAvailabilityDependencies[initialAvailabilityDependencyIndex].completion
-                ;
+            while(initialAvailabilityDependencyIndex < initialAvailabilityDependencies.size() && initialAvailabilityDependencies[initialAvailabilityDependencyIndex].consumer == consumerTask){
+                const GpuExternalCompletionId completion = initialAvailabilityDependencies[initialAvailabilityDependencyIndex].completion;
                 ++initialAvailabilityDependencyIndex;
                 if(!appendExternalDependency(completion))
                     return false;
@@ -246,14 +196,10 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
 
         bool consumerDependsOnNonRoot = false;
-        const bool hasResourceStateConsumerGroup = resourceStateDependencyIndex < resourceStateDependencies.size()
-            && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID
-        ;
+        const bool hasResourceStateConsumerGroup = resourceStateDependencyIndex < resourceStateDependencies.size() && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID;
         if(packetReachabilityWordsPerPacket != 0u || hasResourceStateConsumerGroup){
             for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.dependencyCount; ++dependencyIndex){
-                const GpuPacketDependency& dependency = compiledPlan.packetDependencies[
-                    consumerPacket.dependencyOffset + dependencyIndex
-                ];
+                const GpuPacketDependency& dependency = compiledPlan.packetDependencies[consumerPacket.dependencyOffset + dependencyIndex];
                 if(packetReachabilityWordsPerPacket != 0u){
                     if(!publishPacketDependency(dependency.producer, dependency.consumer))
                         return false;
@@ -263,34 +209,21 @@ namespace GpuTaskGraphCompilerDetail{
             }
         }
 
-        // Each state-synchronization consumer group is ordered nearest-producer first. If an existing or newly added path already joins
-        // an older producer into this packet, avoid adding a redundant direct edge while retaining the
-        // canonical dependency order.
-        while(
-            resourceStateDependencyIndex < resourceStateDependencies.size()
-            && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID
-        ){
-            const GpuSubmissionPacketId producerPacketID =
-                resourceStateDependencies[resourceStateDependencyIndex].producer
-            ;
+        // Each state-synchronization consumer group is ordered nearest-producer first.
+        // If an existing or newly added path already joins an older producer into this packet, avoid adding a redundant direct edge while retaining the canonical dependency order.
+        while(resourceStateDependencyIndex < resourceStateDependencies.size() && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID){
+            const GpuSubmissionPacketId producerPacketID = resourceStateDependencies[resourceStateDependencyIndex].producer;
             ++resourceStateDependencyIndex;
             if(packetDependencyConsumerMarkers[producerPacketID.index] == consumerPacketID.index)
                 continue;
-            if(
-                packetReachabilityWordsPerPacket == 0u
-                && (consumerDependsOnNonRoot || compiledPlan.packets[producerPacketID.index].dependencyCount != 0u)
-            ){
+            if(packetReachabilityWordsPerPacket == 0u && (consumerDependsOnNonRoot || compiledPlan.packets[producerPacketID.index].dependencyCount != 0u)){
                 // Root producers cannot form an indirect path; allocate closure only when that proof no longer holds.
                 if(!initializePacketReachability(consumerPacketIndex))
                     return false;
             }
             if(packetReachabilityWordsPerPacket != 0u){
-                const usize reachabilityWord = consumerPacketIndex * packetReachabilityWordsPerPacket
-                    + producerPacketID.index / s_BitsPerPacketReachabilityWord
-                ;
-                const u64 reachabilityBit = static_cast<u64>(1u)
-                    << (producerPacketID.index % s_BitsPerPacketReachabilityWord)
-                ;
+                const usize reachabilityWord = consumerPacketIndex * packetReachabilityWordsPerPacket + producerPacketID.index / s_BitsPerPacketReachabilityWord;
+                const u64 reachabilityBit = static_cast<u64>(1u) << (producerPacketID.index % s_BitsPerPacketReachabilityWord);
                 if((packetReachability[reachabilityWord] & reachabilityBit) != 0u)
                     continue;
             }
@@ -307,26 +240,14 @@ namespace GpuTaskGraphCompilerDetail{
     if(resourceStateDependencyIndex != resourceStateDependencies.size())
         return false;
 
-    // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative
-    // GPU submission order. Native recording only needs prior packets that export a state snapshot consumed by a
-    // prologue seed, so retain the longest such chain as immutable ready-frontier depth without unnecessarily
-    // serializing explicit ordering-only packet dependencies on the CPU.
+    // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative GPU submission order.
+    // Native recording only needs prior packets that export a state snapshot consumed by a prologue seed, so retain the longest such chain as immutable ready-frontier depth without unnecessarily serializing explicit ordering-only packet dependencies on the CPU.
     for(usize packetIndex = 0u; packetIndex < compiledPlan.packets.size(); ++packetIndex){
         GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
-        const GpuSubmissionPacketId packetID{
-            .generation = compiledPlan.planGeneration,
-            .index = static_cast<u32>(packetIndex),
-        };
+        const GpuSubmissionPacketId packetID{ .generation = compiledPlan.planGeneration, .index = static_cast<u32>(packetIndex), };
         for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
-            const GpuPacketDependency& dependency = compiledPlan.packetDependencies[
-                packet.dependencyOffset + dependencyIndex
-            ];
-            if(
-                dependency.consumer.index != packetIndex
-                || dependency.consumer.generation != compiledPlan.planGeneration
-                || dependency.producer.index >= packetIndex
-                || dependency.producer.generation != compiledPlan.planGeneration
-            )
+            const GpuPacketDependency& dependency = compiledPlan.packetDependencies[packet.dependencyOffset + dependencyIndex];
+            if(dependency.consumer.index != packetIndex || dependency.consumer.generation != compiledPlan.planGeneration || dependency.producer.index >= packetIndex || dependency.producer.generation != compiledPlan.planGeneration)
                 return false;
         }
 
@@ -342,12 +263,7 @@ namespace GpuTaskGraphCompilerDetail{
                 return false;
             for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask->prologueStateSeedCount; ++stateSeedIndex){
                 const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
-                if(
-                    !sourcePacket.valid()
-                    || sourcePacket == packetID
-                    || sourcePacket.index >= packetIndex
-                    || sourcePacket.generation != compiledPlan.planGeneration
-                )
+                if(!sourcePacket.valid() || sourcePacket == packetID || sourcePacket.index >= packetIndex || sourcePacket.generation != compiledPlan.planGeneration)
                     return false;
 
                 const u32 producerFrontier = compiledPlan.packets[sourcePacket.index].recordingFrontier;
@@ -364,13 +280,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
         const GpuCompiledTask* const producer = FindCompiledTask(compiledPlan, endpoint->producer);
         const GpuPhysicalQueueInfo* const queue = producer ? FindCompiledQueueInfo(compiledPlan, producer->queue) : nullptr;
-        if(
-            !producer
-            || !producer->packet.valid()
-            || producer->packet.generation != compiledPlan.planGeneration
-            || !queue
-            || queue->queueClass != CommandQueue::Graphics
-        )
+        if(!producer || !producer->packet.valid() || producer->packet.generation != compiledPlan.planGeneration || !queue || queue->queueClass != CommandQueue::Graphics)
             return false;
 
         for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
@@ -385,12 +295,7 @@ namespace GpuTaskGraphCompilerDetail{
                 break;
             }
         }
-        compiledPlan.presentEndpoint = GpuCompiledPresentEndpoint{
-            .producer = endpoint->producer,
-            .backBuffer = endpoint->backBuffer,
-            .packet = producer->packet,
-            .queue = queue->id,
-        };
+        compiledPlan.presentEndpoint = GpuCompiledPresentEndpoint{ .producer = endpoint->producer, .backBuffer = endpoint->backBuffer, .packet = producer->packet, .queue = queue->id, };
         compiledPlan.hasPresentEndpoint = true;
     }
     return true;

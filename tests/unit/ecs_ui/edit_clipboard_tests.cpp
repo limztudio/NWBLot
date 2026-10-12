@@ -191,12 +191,9 @@ TEST(UiEditClipboard, ReadOnlyPreventsCutPasteAndCancelsMutationIfPolicyChangesD
     Ui::EditModel model(arena.arena);
     ASSERT_TRUE(model.setText("abcd"));
     ASSERT_TRUE(model.selectAll());
-    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut, ClipboardChannel::Clipboard, true).status,
-        UiEditClipboardStatus::ReadOnly);
-    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::Clipboard, true).status,
-        UiEditClipboardStatus::ReadOnly);
-    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, ClipboardChannel::Clipboard, true).status,
-        UiEditClipboardStatus::Pending);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
     ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success));
     EXPECT_EQ(controller.drain(s_Owner, model, true).status, UiEditClipboardStatus::Published);
@@ -213,8 +210,7 @@ TEST(UiEditClipboard, UnsupportedPrimarySelectionRejectsBeforeTransferAdmission)
     DelayedClipboard service(arena.arena);
     UiEditClipboardController controller(arena.arena, service);
     Ui::EditModel model(arena.arena);
-    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::PrimarySelection).status,
-        UiEditClipboardStatus::Unsupported);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::PrimarySelection).status, UiEditClipboardStatus::Unsupported);
 }
 
 TEST(UiEditClipboard, OwnerThreadViolationCannotPollApplyOrCancelAHostRequest){

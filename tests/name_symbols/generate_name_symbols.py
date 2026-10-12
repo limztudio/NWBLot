@@ -194,10 +194,7 @@ def run_workloads(arguments):
     # Graceful GUI exits are required to write sidecars.
     ctest = resolve_ctest_command()
     for regex in arguments.ctest_regex:
-        rc = run_command(
-            ctest + [ARG_TEST_DIR_FLAG, arguments.build_dir, ARG_TEST_CONFIG_FLAG, arguments.config, ARG_TEST_REGEX_FLAG, regex, ARG_OUTPUT_ON_FAILURE],
-            cwd=arguments.source_dir,
-        )
+        rc = run_command(ctest + [ARG_TEST_DIR_FLAG, arguments.build_dir, ARG_TEST_CONFIG_FLAG, arguments.config, ARG_TEST_REGEX_FLAG, regex, ARG_OUTPUT_ON_FAILURE], cwd=arguments.source_dir,)
         if rc == CTEST_NO_TESTS_EXIT_CODE:
             log(MSG_CTEST_NO_MATCH.format(regex))
         elif rc != 0:

@@ -7,18 +7,7 @@ import os
 from pathlib import Path
 from typing import Dict, Optional, Sequence
 from launcher.models import LaunchSettings
-from launcher.constants import (
-    CMAKE_BUILD_FLAG,
-    CMAKE_CONFIG_FLAG,
-    CMAKE_PARALLEL_FLAG,
-    CMAKE_TARGET_FLAG,
-    DEFAULT_DOMAIN,
-    FILE_API_TARGET_EXECUTABLE,
-    MSG_NOT_EXECUTABLE,
-    MSG_EXECUTABLE_ARTIFACT_REQUIRED,
-    MSG_EXECUTABLE_METADATA_REQUIRED,
-    MSG_NO_TARGETS,
-)
+from launcher.constants import (CMAKE_BUILD_FLAG, CMAKE_CONFIG_FLAG, CMAKE_PARALLEL_FLAG, CMAKE_TARGET_FLAG, DEFAULT_DOMAIN, FILE_API_TARGET_EXECUTABLE, MSG_NOT_EXECUTABLE, MSG_EXECUTABLE_ARTIFACT_REQUIRED, MSG_EXECUTABLE_METADATA_REQUIRED, MSG_NO_TARGETS,)
 
 
 class BuildController:
@@ -32,14 +21,7 @@ class BuildController:
         if not targets:
             raise ValueError(MSG_NO_TARGETS)
 
-        command = list(settings.cmake) + [
-            CMAKE_BUILD_FLAG,
-            str(settings.build_dir),
-            CMAKE_TARGET_FLAG,
-            *targets,
-            CMAKE_CONFIG_FLAG,
-            settings.config,
-        ]
+        command = list(settings.cmake) + [CMAKE_BUILD_FLAG, str(settings.build_dir), CMAKE_TARGET_FLAG, *targets, CMAKE_CONFIG_FLAG, settings.config,]
         if args.jobs:
             command += [CMAKE_PARALLEL_FLAG, str(args.jobs)]
         _facade.run_checked(command, settings.root, env, args.dry_run)
@@ -59,13 +41,7 @@ class BuildController:
         _facade.build_target(args, settings, args.profile_logserver_target, env)
 
     @staticmethod
-    def resolve_executable_path(
-        settings: LaunchSettings,
-        target: str,
-        executable_override: Optional[Path],
-        executable_base_name: Optional[str],
-        dry_run: bool,
-    ) -> Path:
+    def resolve_executable_path(settings: LaunchSettings, target: str, executable_override: Optional[Path], executable_base_name: Optional[str], dry_run: bool,) -> Path:
         import launcher as _facade
         if executable_override is not None:
             return executable_override if executable_override.is_absolute() else settings.root / executable_override
@@ -81,10 +57,7 @@ class BuildController:
             return target_info.artifacts[0]
 
         base_name = executable_base_name or _facade.target_default_executable_base_name(target)
-        return _facade.output_root(settings.root, settings.platform_name, settings.arch, settings.domain) / settings.config / _facade.executable_name(
-            base_name,
-            settings.platform_name,
-        )
+        return _facade.output_root(settings.root, settings.platform_name, settings.arch, settings.domain) / settings.config / _facade.executable_name(base_name, settings.platform_name,)
 
     @staticmethod
     def resolve_working_directory(settings: LaunchSettings, override: Optional[Path], default_directory: Path) -> Path:

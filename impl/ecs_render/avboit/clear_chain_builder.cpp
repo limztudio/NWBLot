@@ -20,10 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitClearChainBuilder::AvboitClearChainBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererAvboitSystem& avboitSystem
-)
+AvboitClearChainBuilder::AvboitClearChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)
     : m_graph(graph)
     , m_avboitSystem(avboitSystem){
 }
@@ -32,10 +29,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(
-    const AvboitClearChainInputs& inputs,
-    GraphClearTimingRecordState& clearTimingState
-){
+[[nodiscard]] Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitClearChainInputs& inputs, GraphClearTimingRecordState& clearTimingState){
     AvboitClearChainResult result{};
     if(!inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});
@@ -65,25 +59,12 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
         avboitClearScheduling.mergeWithPrevious = true;
         // Clear chain and Occupancy share one AVBOIT Pre timing packet across consumer frontiers.
         avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
-        const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](
-            const Name identity,
-            const AStringView markerLabel,
-            const Core::GpuTaskId& dependency
-        ){
+        const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency){
             Core::GpuTaskDesc clearDesc;
-            clearDesc
-                .setIdentity(identity)
-                .setMarkerLabel(markerLabel)
-                .setScheduling(avboitClearScheduling)
-                .setDependencies(&dependency, 1u)
-            ;
+            clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(avboitClearScheduling).setDependencies(&dependency, 1u);
             return clearDesc;
         };
-        const auto makeAvboitFloatClearDesc = [](
-            const Core::GpuGraphResourceId destination,
-            const Core::Color& value,
-            const Core::GpuClearTextureTaskRecordHooks& recordHooks = {}
-        ){
+        const auto makeAvboitFloatClearDesc = [](const Core::GpuGraphResourceId destination, const Core::Color& value, const Core::GpuClearTextureTaskRecordHooks& recordHooks = {}){
             Core::GpuClearTextureTaskDesc clearDesc;
             clearDesc.destination = destination;
             clearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
@@ -92,127 +73,49 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
             clearDesc.recordHooks = recordHooks;
             return clearDesc;
         };
-        const Core::GpuClearTextureTaskRecordHooks avboitClearBeginHooks{
-            .context = &clearTimingState,
-            .beforeClear = &BeginGraphClearTimingRecord,
-            .discarded = &DiscardGraphClearTimingRecord,
-        };
-        const Core::GpuClearTextureTaskRecordHooks avboitClearEndHooks{
-            .context = &clearTimingState,
-            .afterClear = &EndGraphClearTimingRecord,
-            .discarded = &DiscardGraphClearTimingRecord,
-        };
+        const Core::GpuClearTextureTaskRecordHooks avboitClearBeginHooks{ .context = &clearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
+        const Core::GpuClearTextureTaskRecordHooks avboitClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
-        avboitClearTask = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.low_raster"),
-                "AVBOIT Clear Low Raster",
-                inputs.uploadTask
-            ),
-            makeAvboitFloatClearDesc(inputs.lowRaster, transparentBlack, avboitClearBeginHooks)
-        );
+        avboitClearTask = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(Name("render.avboit.clear.low_raster"), "AVBOIT Clear Low Raster", inputs.uploadTask), makeAvboitFloatClearDesc(inputs.lowRaster, transparentBlack, avboitClearBeginHooks));
         if(!avboitClearTask.valid())
             return MakeUnexpected(Failure{});
         m_avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
-        avboitClearTask = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.accum_color"),
-                "AVBOIT Clear Accumulation Color",
-                avboitClearTask
-            ),
-            makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack)
-        );
+        avboitClearTask = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(Name("render.avboit.clear.accum_color"), "AVBOIT Clear Accumulation Color", avboitClearTask), makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack));
         if(!avboitClearTask.valid())
             return MakeUnexpected(Failure{});
-        avboitClearTask = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.accum_extinction"),
-                "AVBOIT Clear Accumulation Extinction",
-                avboitClearTask
-            ),
-            makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack)
-        );
+        avboitClearTask = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(Name("render.avboit.clear.accum_extinction"), "AVBOIT Clear Accumulation Extinction", avboitClearTask), makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack));
         if(!avboitClearTask.valid())
             return MakeUnexpected(Failure{});
         const Core::GpuGraphResourceId foregroundClearTargets[] = { inputs.foregroundColor, inputs.foregroundExtinction };
         for(const auto target : foregroundClearTargets){
             avboitClearTask = m_graph.addClearTextureTask(
-                makeAvboitClearTaskDesc(target == inputs.foregroundColor
-                    ? Name("render.avboit.clear.foreground_color") : Name("render.avboit.clear.foreground_extinction"),
-                    "AVBOIT Clear Foreground", avboitClearTask),
+                makeAvboitClearTaskDesc(target == inputs.foregroundColor ? Name("render.avboit.clear.foreground_color") : Name("render.avboit.clear.foreground_extinction"), "AVBOIT Clear Foreground", avboitClearTask),
                 makeAvboitFloatClearDesc(target, transparentBlack));
             if(!avboitClearTask.valid())
                 return MakeUnexpected(Failure{});
         }
-        const auto appendAvboitBufferClear = [&](
-            const Name identity,
-            const AStringView markerLabel,
-            const Core::GpuGraphResourceId destination,
-            const u32 value
-        ){
-            avboitClearTask = m_graph.addClearBufferTask(
-                makeAvboitClearTaskDesc(identity, markerLabel, avboitClearTask),
-                Core::GpuClearBufferTaskDesc{
-                    .destination = destination,
-                    .clearValue = value,
-                }
-            );
+        const auto appendAvboitBufferClear = [&](const Name identity, const AStringView markerLabel, const Core::GpuGraphResourceId destination, const u32 value){
+            avboitClearTask = m_graph.addClearBufferTask(makeAvboitClearTaskDesc(identity, markerLabel, avboitClearTask), Core::GpuClearBufferTaskDesc{ .destination = destination, .clearValue = value, });
             return avboitClearTask.valid();
         };
         if(
-            !appendAvboitBufferClear(
-                Name("render.avboit.clear.coverage"),
-                "AVBOIT Clear Coverage",
-                inputs.coverage,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.depth_warp"),
-                "AVBOIT Clear Depth Warp",
-                inputs.depthWarp,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.control"),
-                "AVBOIT Clear Control",
-                inputs.control,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.extinction"),
-                "AVBOIT Clear Extinction",
-                inputs.extinction,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.extinction_overflow"),
-                "AVBOIT Clear Extinction Overflow",
-                inputs.extinctionOverflow,
-                NWB_AVBOIT_OVERFLOW_INVALID
-            )
+            !appendAvboitBufferClear(Name("render.avboit.clear.coverage"), "AVBOIT Clear Coverage", inputs.coverage, 0u)
+            || !appendAvboitBufferClear(Name("render.avboit.clear.depth_warp"), "AVBOIT Clear Depth Warp", inputs.depthWarp, 0u)
+            || !appendAvboitBufferClear(Name("render.avboit.clear.control"), "AVBOIT Clear Control", inputs.control, 0u)
+            || !appendAvboitBufferClear(Name("render.avboit.clear.extinction"), "AVBOIT Clear Extinction", inputs.extinction, 0u)
+            || !appendAvboitBufferClear(Name("render.avboit.clear.extinction_overflow"), "AVBOIT Clear Extinction Overflow", inputs.extinctionOverflow, NWB_AVBOIT_OVERFLOW_INVALID)
         )
             return MakeUnexpected(Failure{});
         avboitClearTask = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.transmittance"),
-                "AVBOIT Clear Transmittance",
-                avboitClearTask
-            ),
-            makeAvboitFloatClearDesc(
-                inputs.transmittance,
-                Core::Color(1.f, 1.f, 1.f, 1.f),
-                avboitClearEndHooks
-            )
+            makeAvboitClearTaskDesc(Name("render.avboit.clear.transmittance"), "AVBOIT Clear Transmittance", avboitClearTask),
+            makeAvboitFloatClearDesc(inputs.transmittance, Core::Color(1.f, 1.f, 1.f, 1.f), avboitClearEndHooks)
         );
         if(!avboitClearTask.valid())
             return MakeUnexpected(Failure{});
         m_avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
     }
     result.clearTask = avboitClearTask;
-    result.clearFirstTask = inputs.clearTargets
-        ? m_avboitSystem.taskGraphStage().m_clearFirstTask
-        : Core::GpuTaskId{}
-    ;
+    result.clearFirstTask = inputs.clearTargets ? m_avboitSystem.taskGraphStage().m_clearFirstTask : Core::GpuTaskId{};
     return result;
 }
 

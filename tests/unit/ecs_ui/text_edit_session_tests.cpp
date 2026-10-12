@@ -156,10 +156,7 @@ TEST(UiTextEditSession, DeleteAddressesPublishedUtf8BytesThenCommitUsesUpdatedSe
     ASSERT_TRUE(model.setText("abCde"));
     ASSERT_TRUE(model.setSelection(3u, 3u));
     ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        service.erase(1u, 1u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(service.erase(1u, 1u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("X"), TextInputAdmission::Accepted);
     const auto result = session.drain(s_Owner, model);
     EXPECT_EQ(result.status, UiTextEditStatus::Applied);
@@ -176,10 +173,7 @@ TEST(UiTextEditSession, SelectedSurroundingDeleteCannotMisapplyWaylandExclusionS
     ASSERT_TRUE(model.setText("abcDEFghi"));
     ASSERT_TRUE(model.setSelection(3u, 6u));
     ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        service.erase(1u, 1u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(service.erase(1u, 1u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("X"), TextInputAdmission::Accepted);
     EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::ModelRejected);
     EXPECT_EQ(model.text(), "abcDEFghi");
@@ -219,10 +213,7 @@ TEST(UiTextEditSession, DeleteAfterUnpublishedCommitCannotDeleteDifferentText){
     ASSERT_TRUE(model.setText("ab"));
     ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("X"), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        service.erase(1u, 0u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(service.erase(1u, 0u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::StaleSurrounding);
     EXPECT_EQ(model.text(), "abX");
     EXPECT_FALSE(session.token().valid());
@@ -236,10 +227,7 @@ TEST(UiTextEditSession, NativeByteDeleteCannotSplitAGrapheme){
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("e\xCC\x81"));
     ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        service.erase(2u, 0u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret),
-        TextInputAdmission::Accepted
-    );
+    ASSERT_EQ(service.erase(2u, 0u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::ModelRejected);
     EXPECT_EQ(model.text(), "e\xCC\x81");
     EXPECT_FALSE(model.canUndo());

@@ -18,59 +18,31 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::renderSurfelGiAgeFree(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources
-){
+bool RendererRayTracingSystem::renderSurfelGiAgeFree(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, true, false, false, false, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiUpsample(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources
-){
+bool RendererRayTracingSystem::renderSurfelGiUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, false, false, true);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiHashBuild(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources
-){
+bool RendererRayTracingSystem::renderSurfelGiHashBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, true, false, false, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiSpawn(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources
-){
+bool RendererRayTracingSystem::renderSurfelGiSpawn(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, true, false, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources
-){
+bool RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, true, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiTrace(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources
-){
+bool RendererRayTracingSystem::renderSurfelGiTrace(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, true, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiResolve(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources
-){
+bool RendererRayTracingSystem::renderSurfelGiResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, false, true, false);
 }
 
@@ -223,11 +195,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.setComputeState(state);
         heap.bindCompute(commandList, *m_rayTracingState.m_surfelTraceBuildArgsPipeline.get());
         commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-        commandList.dispatch(
-            NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_X,
-            NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Y,
-            NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Z
-        );
+        commandList.dispatch(NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_X, NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Y, NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Z);
     }
 
     if(!dispatchTrace && !dispatchResolve && !dispatchRemaining)
@@ -245,9 +213,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
             return false;
         }
-        const Core::GpuDescriptorHandle tlasHeapHandle = m_rayTracingState.m_surfelUseHwTrace
-            ? m_rayTracingState.m_tlasHeapHandle
-            : Core::GpuDescriptorHandle::Invalid();
+        const Core::GpuDescriptorHandle tlasHeapHandle = m_rayTracingState.m_surfelUseHwTrace ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();
         heap.bindCompute(commandList, *tracePipeline, tlasHeapHandle);
         commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         commandList.dispatchIndirect(0u);
@@ -277,13 +243,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             if(commandList.commandRecordingFailed())
                 return false;
             if(!m_rayTracingState.m_surfelResolveDispatchLogged){
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})")
-                    , targets.surfelResolveFactor
-                    , targets.width
-                    , targets.height
-                    , resolveSize.width
-                    , resolveSize.height
-                );
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})"), targets.surfelResolveFactor, targets.width, targets.height, resolveSize.width, resolveSize.height);
                 m_rayTracingState.m_surfelResolveDispatchLogged = true;
             }
         }
@@ -319,18 +279,9 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         const bool submissionComplete =
             submissionToken.valid()
             && submissionToken.hasPhysicalQueueIdentity()
-            && m_graphics.getDevice().queueGetCompletedInstance(
-                Core::GpuPhysicalQueueId{
-                    .index = submissionToken.physicalQueueIndex,
-                    .deviceGeneration = submissionToken.deviceGeneration,
-                }
-            ) >= submissionToken.value
+            && m_graphics.getDevice().queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration, }) >= submissionToken.value
         ;
-        if(
-            submissionToken.valid()
-            && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay
-            && submissionComplete
-        ){
+        if(submissionToken.valid() && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay && submissionComplete){
             const u32* counts = static_cast<const u32*>(m_graphics.getDevice().mapBuffer(*readback, Core::CpuAccessMode::Read));
             if(counts){
                 const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
@@ -339,9 +290,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
                 m_graphics.getDevice().unmapBuffer(*readback);
                 if((geometryFailures & ~m_rayTracingState.m_surfelTraceGeometryFailureFlags) != 0u){
                     m_rayTracingState.m_surfelTraceGeometryFailureFlags |= geometryFailures;
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG GI traversal rejected incomplete geometry or exceeded crossing capacity (flags={}); conservative occlusion and zero bounce radiance retained")
-                        , geometryFailures
-                    );
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG GI traversal rejected incomplete geometry or exceeded crossing capacity (flags={}); conservative occlusion and zero bounce radiance retained"), geometryFailures);
                 }
                 NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
                     , static_cast<u64>(bumpTop - freeTop)

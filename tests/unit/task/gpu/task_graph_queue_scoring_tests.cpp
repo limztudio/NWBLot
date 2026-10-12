@@ -153,13 +153,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
                                 continue;
                             if(assignment.queue == candidate.id)
                                 queueLoad += costs[assignment.task.index];
-                            else if(
-                                range[1u] <= 1u
-                                && task.scheduling.overlapPreferred
-                                && !task.scheduling.avoidQueueCrossing
-                                && !reachable[taskIndex][assignment.task.index]
-                                && !reachable[assignment.task.index][taskIndex]
-                            )
+                            else if(range[1u] <= 1u && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing && !reachable[taskIndex][assignment.task.index] && !reachable[assignment.task.index][taskIndex])
                                 overlap += costs[assignment.task.index];
                         }
                         const u64 external = candidate.id == queues[1u].id ? 13u : candidate.id == queues[2u].id ? Limit<u64>::s_Max : 0u;
@@ -174,18 +168,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
                             if(edge.producer == task.id && !ignored(consumerRow) && assignments[consumerRow].queue != candidate.id)
                                 ++outgoingCrossings;
                         }
-                        const Graphics::GpuQueueAssignmentScore score = BuildQueueAssignmentScore(
-                            declarations,
-                            analysis,
-                            assignments,
-                            assignmentIndices,
-                            topology,
-                            reachability,
-                            scoringData,
-                            task,
-                            candidate,
-                            exclusions
-                        );
+                        const Graphics::GpuQueueAssignmentScore score = BuildQueueAssignmentScore(declarations, analysis, assignments, assignmentIndices, topology, reachability, scoringData, task, candidate, exclusions);
                         EXPECT_EQ(score.queueLoad, SaturateReferenceTerm(queueLoad));
                         EXPECT_EQ(score.overlap, SaturateReferenceTerm(overlap));
                         EXPECT_EQ(score.incomingCrossings, incomingCrossings);

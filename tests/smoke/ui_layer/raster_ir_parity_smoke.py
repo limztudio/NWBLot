@@ -28,13 +28,11 @@ def parse_args(argv):
     parser.add_argument("--working-directory", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--replay-marker", required=True,
-        help="Exact log substring emitted only after retained raster IR was actually replayed.")
+    parser.add_argument("--replay-marker", required=True, help="Exact log substring emitted only after retained raster IR was actually replayed.")
     parser.add_argument("--mode-environment", default="NWB_UI_IR_REPLAY")
     parser.add_argument("--frames", type=int, default=60)
     parser.add_argument("--timeout", type=float, default=75.0)
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
-        help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 3:
         parser.error("--frames must include both empty startup frames and painted UI")
@@ -48,27 +46,14 @@ def parse_args(argv):
 def capture_command(args, scene, mode, path, log_path=None, *, resize=False):
     script = Path(__file__).resolve().parent / "raster_ir_flat_capture.py" if scene == "startup" or resize \
         else SMOKE_DIRECTORY / "window_capture_smoke.py"
-    command = [
-        sys.executable, str(script),
-        "--executable", str(args.executable.resolve()),
-        "--working-directory", str(args.working_directory.resolve()),
-        "--output", str(path),
-        "--window-title", "NWB UI Layer Smoke",
-        "--timeout", str(args.timeout),
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation",
-        "--expect-log-message", "Loader: project startup complete",
-        "--expect-log-message", "UiLayerSmokeProject: shutdown",
-    ]
+    command = [sys.executable, str(script), "--executable", str(args.executable.resolve()), "--working-directory", str(args.working_directory.resolve()), "--output", str(path), "--window-title", "NWB UI Layer Smoke", "--timeout", str(args.timeout),
+        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation", "--expect-log-message", "Loader: project startup complete", "--expect-log-message", "UiLayerSmokeProject: shutdown",]
     if resize:
-        command += ["--application-capture", "--log-output", str(log_path),
-            "--application-capture-frame-count", "240", "--resize-before-capture", "800", "600",
-            "--expect-log-message", "GraphicsRuntime: Back buffer resized to 800x600"]
+        command += ["--application-capture", "--log-output", str(log_path), "--application-capture-frame-count", "240", "--resize-before-capture", "800", "600", "--expect-log-message", "GraphicsRuntime: Back buffer resized to 800x600"]
     else:
-        command += ["--application-capture", "--log-output", str(log_path),
-            "--application-capture-frame-count", "2" if scene == "startup" else str(args.frames)]
+        command += ["--application-capture", "--log-output", str(log_path), "--application-capture-frame-count", "2" if scene == "startup" else str(args.frames)]
     if scene == "paint" or resize:
-        command += ["--expect-log-message",
-            "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"]
+        command += ["--expect-log-message", "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"]
     elif scene == "texture_image":
         command += ["--expect-log-message", "UiTextureImageSmoke: state sequence="]
     if mode == "replay" and scene != "startup":
@@ -84,8 +69,7 @@ def capture_command(args, scene, mode, path, log_path=None, *, resize=False):
 
 def capture_environment(args, scene, mode):
     fixture = "TEXTURE_IMAGE" if scene == "texture_image" else None
-    environment = build_fixture_environment(os.environ, fixture,
-        skin="alternate" if fixture else "default", force_x11=True)
+    environment = build_fixture_environment(os.environ, fixture, skin="alternate" if fixture else "default", force_x11=True)
     environment[args.mode_environment] = "1" if mode == "replay" else "0"
     return environment
 
@@ -93,8 +77,7 @@ def capture_environment(args, scene, mode):
 def launch_capture(args, scene, mode, path, log_path=None, *, resize=False):
     environment = capture_environment(args, scene, mode)
     environment["NWB_UI_LAYER_RESIZE_CAPTURE"] = "1" if resize else "0"
-    result = subprocess.run(capture_command(args, scene, mode, path, log_path, resize=resize),
-        env=environment, check=False, timeout=args.timeout + 45.0)
+    result = subprocess.run(capture_command(args, scene, mode, path, log_path, resize=resize), env=environment, check=False, timeout=args.timeout + 45.0)
     if result.returncode == SKIP_EXIT_CODE:
         return False
     if result.returncode:
@@ -140,8 +123,7 @@ def run(args):
         if replay is None:
             return SKIP_EXIT_CODE
         parity = compare_frames(direct[0], replay[0])
-        report["scenes"][scene] = {"direct_observation": direct[1],
-            "replay_observation": replay[1], "parity": parity}
+        report["scenes"][scene] = {"direct_observation": direct[1], "replay_observation": replay[1], "parity": parity}
         report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         if not parity["passed"]:
             raise SmokeFailure(f"{scene} direct/replay framebuffer pixels differ: {parity}")
@@ -152,9 +134,7 @@ def run(args):
     if replay_resize is None:
         return SKIP_EXIT_CODE
     parity = compare_frames(direct_resize[0], replay_resize[0])
-    resize_report = {"before": "paint scene fixed-frame application capture at 960x540",
-        "after": {"direct_observation": direct_resize[1],
-            "replay_observation": replay_resize[1], "parity": parity}}
+    resize_report = {"before": "paint scene fixed-frame application capture at 960x540", "after": {"direct_observation": direct_resize[1], "replay_observation": replay_resize[1], "parity": parity}}
     report["scenes"]["paint_resize"] = resize_report
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if not parity["passed"]:

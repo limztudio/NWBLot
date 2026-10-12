@@ -19,8 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-corner trace attributes parallel to the triangle index buffer; preserves smooth vs hard edges (no
-// position-indexed normal collapse).
+// Per-corner trace attributes parallel to the triangle index buffer; preserves smooth vs hard edges (no position-indexed normal collapse).
 struct AttribGpu{
     Half4U normal;
     Float2U uv0;
@@ -62,11 +61,7 @@ template<
 
     Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndexCount, scratchArena);
 
-    if(!ForEachMeshletTriangleCorner(
-        meshlets,
-        localVertexRefs,
-        primitiveIndices,
-        [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef) -> bool {
+    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef) -> bool {
             const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
             const auto attributeRef = DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex);
             if(!attributeRef)
@@ -84,19 +79,8 @@ template<
     return outAttributes;
 }
 
-[[nodiscard]] inline Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
-    Core::Alloc::ScratchArena& scratchArena,
-    const MeshGeometryPayload& payload
-){
-    return BuildMeshletTriangleAttributes(
-        scratchArena,
-        payload.meshlets(),
-        payload.meshletLocalVertexRefs(),
-        payload.meshletAttributeRefDeltas(),
-        payload.meshletPrimitiveIndices(),
-        payload.normalStream(),
-        payload.uv0Stream()
-    );
+[[nodiscard]] inline Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayload& payload){
+    return BuildMeshletTriangleAttributes(scratchArena, payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletAttributeRefDeltas(), payload.meshletPrimitiveIndices(), payload.normalStream(), payload.uv0Stream());
 }
 
 

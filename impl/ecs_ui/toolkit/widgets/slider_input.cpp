@@ -30,34 +30,22 @@ bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placem
     while(hasControl || hasTrack || hasThumb){
         if(!sliderMatches(frame))
             return false;
-        if(
-            hasControl && (!hasTrack || control->id.sequence < trackGesture->updateSequence)
-            && (!hasThumb || control->id.sequence < thumbGesture->updateSequence)
-        ){
-            if(
-                control->control != frame.m_token
-                || !SliderBehavior::Apply(frame.m_state, frame.m_options, *control, frame.m_result)
-            )
+        if(hasControl && (!hasTrack || control->id.sequence < trackGesture->updateSequence) && (!hasThumb || control->id.sequence < thumbGesture->updateSequence)){
+            if(control->control != frame.m_token || !SliderBehavior::Apply(frame.m_state, frame.m_options, *control, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
             control = m_context.takeControlAction(frame.m_widget, true, frame.m_token);
             hasControl = control.has_value();
         }
         else if(hasTrack && (!hasThumb || trackGesture->updateSequence < thumbGesture->updateSequence)){
-            if(
-                trackGesture->control != frame.m_token
-                || !SliderBehavior::Seek(frame.m_state, frame.m_options, *trackGesture, frame.m_result)
-            )
+            if(trackGesture->control != frame.m_token || !SliderBehavior::Seek(frame.m_state, frame.m_options, *trackGesture, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
             trackGesture = m_context.takePartPointerGesture(frame.m_widget, track, true);
             hasTrack = trackGesture.has_value();
         }
         else{
-            if(
-                thumbGesture->control != frame.m_token
-                || !SliderBehavior::Drag(frame.m_state, frame.m_options, *thumbGesture, frame.m_result)
-            )
+            if(thumbGesture->control != frame.m_token || !SliderBehavior::Drag(frame.m_state, frame.m_options, *thumbGesture, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
             thumbGesture = m_context.takePartPointerGesture(frame.m_widget, thumb, true);

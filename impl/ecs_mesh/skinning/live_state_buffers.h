@@ -35,10 +35,7 @@ private:
 
 
 public:
-    MeshSkinningStateBufferCollector(
-        Core::Alloc::ScratchArena& scratchArena,
-        Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers
-    );
+    MeshSkinningStateBufferCollector(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers);
     MeshSkinningStateBufferCollector(MeshSkinningStateBufferCollector&&) = delete;
 
 

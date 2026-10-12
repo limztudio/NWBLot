@@ -98,15 +98,7 @@ struct NwbCsgRayResolution{
 
 
 interface NwbCsgRayOpenVisitor{
-    [mutating] uint visit(
-        const uint primitive,
-        const float distance,
-        const float2 barycentrics,
-        const float minimum,
-        const float maximum,
-        __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-        const uint cutCount
-    );
+    [mutating] uint visit(const uint primitive, const float distance, const float2 barycentrics, const float minimum, const float maximum, __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], const uint cutCount);
 };
 
 struct NwbCsgRaySolidIterator{
@@ -129,11 +121,7 @@ uint4 nwbCsgRayReceiverRange(const uint contextSlot, const uint instanceIndex){
 
 uint nwbCsgRayValidateReceiverRange(const uint contextSlot, const uint4 range){
     const uint cutterCount = nwbHeapRawBuffer(contextSlot).Load(12u);
-    return
-        (range.z & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u || range.w == 0u || range.x > cutterCount
-        || range.y > cutterCount - range.x || range.y > NWB_CSG_RAY_MAX_CUTTERS
-        ? NWB_CSG_RAY_FAILURE_UNSUPPORTED : 0u
-    ;
+    return (range.z & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u || range.w == 0u || range.x > cutterCount || range.y > cutterCount - range.x || range.y > NWB_CSG_RAY_MAX_CUTTERS ? NWB_CSG_RAY_FAILURE_UNSUPPORTED : 0u;
 }
 
 NwbCsgRayCutter nwbCsgRayLoadCutter(const uint contextSlot, const uint cutterIndex){
@@ -184,20 +172,10 @@ NwbBvhNode nwbCsgRayReceiverRoot(const uint contextSlot, const uint instanceInde
 }
 
 uint nwbCsgRayValidateReceiverOrigin(const float3 localOrigin, const NwbBvhNode root){
-    return
-        !all(isfinite(localOrigin)) || !all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax)
-        ? NWB_CSG_RAY_FAILURE_TOPOLOGY : 0u
-    ;
+    return !all(isfinite(localOrigin)) || !all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax) ? NWB_CSG_RAY_FAILURE_TOPOLOGY : 0u;
 }
 
-bool nwbCsgRayBoundsIntersect(
-    const NwbSwBvhInstance instance,
-    const NwbBvhNode root,
-    const float3 worldOrigin,
-    const float3 worldDirection,
-    const float minimum,
-    const float maximum
-){
+bool nwbCsgRayBoundsIntersect(const NwbSwBvhInstance instance, const NwbBvhNode root, const float3 worldOrigin, const float3 worldDirection, const float minimum, const float maximum){
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     // Invalid current-pose bounds must reach the diagnosed geometry path rather than silently omit a receiver.
@@ -205,8 +183,7 @@ bool nwbCsgRayBoundsIntersect(
         return true;
     float nearDistance = minimum;
     float farDistance = maximum;
-    [unroll]
-    for(uint axis = 0u; axis < 3u; ++axis){
+    [unroll] for(uint axis = 0u; axis < 3u; ++axis){
         if(direction[axis] == 0.0){
             if(origin[axis] < root.aabbMin[axis] || origin[axis] > root.aabbMax[axis])
                 return false;
@@ -226,38 +203,21 @@ bool nwbCsgRaySameDistance(const float first, const float second){
 }
 
 // Outward slab uncertainty is used only to certify removed space, never as an occluder or a ray bias.
-bool nwbCsgRayReceiverSegment(
-    const NwbSwBvhInstance instance,
-    const NwbBvhNode root,
-    const float3 worldOrigin,
-    const float3 worldDirection,
-    const float minimum,
-    const float maximum,
-    out float2 segment
-){
+bool nwbCsgRayReceiverSegment(const NwbSwBvhInstance instance, const NwbBvhNode root, const float3 worldOrigin, const float3 worldDirection, const float minimum, const float maximum, out float2 segment){
     segment = float2(minimum, maximum);
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float roundoff = 8.0 * 1.1920928955078125e-7;
     const float4 point = float4(abs(worldOrigin), 1.0);
-    const float3 originError = float3(
-        dot(abs(instance.worldToObjectRow0), point),
-        dot(abs(instance.worldToObjectRow1), point),
-        dot(abs(instance.worldToObjectRow2), point)
-    ) * roundoff;
-    const float3 directionError = float3(
-        dot(abs(instance.worldToObjectRow0.xyz), abs(worldDirection)),
-        dot(abs(instance.worldToObjectRow1.xyz), abs(worldDirection)),
-        dot(abs(instance.worldToObjectRow2.xyz), abs(worldDirection))
-    ) * roundoff;
+    const float3 originError = float3(dot(abs(instance.worldToObjectRow0), point), dot(abs(instance.worldToObjectRow1), point), dot(abs(instance.worldToObjectRow2), point)) * roundoff;
+    const float3 directionError = float3(dot(abs(instance.worldToObjectRow0.xyz), abs(worldDirection)), dot(abs(instance.worldToObjectRow1.xyz), abs(worldDirection)), dot(abs(instance.worldToObjectRow2.xyz), abs(worldDirection))) * roundoff;
     if(
         !all(isfinite(origin)) || !all(isfinite(direction)) || !all(isfinite(originError)) || !all(isfinite(directionError))
         || !all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax)
         || !all(isfinite(segment)) || maximum <= minimum
     )
         return false;
-    [unroll]
-    for(uint axis = 0u; axis < 3u; ++axis){
+    [unroll] for(uint axis = 0u; axis < 3u; ++axis){
         const float denominator = abs(direction[axis]) - directionError[axis];
         if(direction[axis] == 0.0){
             if(origin[axis] - originError[axis] <= root.aabbMin[axis] || origin[axis] + originError[axis] >= root.aabbMax[axis])
@@ -268,10 +228,8 @@ bool nwbCsgRayReceiverSegment(
             return false;
         const float first = (root.aabbMin[axis] - origin[axis]) / direction[axis];
         const float second = (root.aabbMax[axis] - origin[axis]) / direction[axis];
-        const float firstError = (originError[axis] + roundoff * (abs(root.aabbMin[axis]) + abs(origin[axis]))
-            + abs(first) * directionError[axis]) / denominator + roundoff * abs(first);
-        const float secondError = (originError[axis] + roundoff * (abs(root.aabbMax[axis]) + abs(origin[axis]))
-            + abs(second) * directionError[axis]) / denominator + roundoff * abs(second);
+        const float firstError = (originError[axis] + roundoff * (abs(root.aabbMin[axis]) + abs(origin[axis])) + abs(first) * directionError[axis]) / denominator + roundoff * abs(first);
+        const float secondError = (originError[axis] + roundoff * (abs(root.aabbMax[axis]) + abs(origin[axis])) + abs(second) * directionError[axis]) / denominator + roundoff * abs(second);
         const float endpointError = max(firstError, secondError);
         if(!isfinite(first) || !isfinite(second) || !isfinite(endpointError))
             return false;
@@ -282,19 +240,11 @@ bool nwbCsgRayReceiverSegment(
 }
 
 bool nwbCsgRayCutCoversSegment(const float2 cut, const float2 segment, const float margin){
-    return all(isfinite(cut)) && isfinite(margin) && margin >= 0.0
-        && cut.x + margin < segment.x && cut.y - margin > segment.y
-    ;
+    return all(isfinite(cut)) && isfinite(margin) && margin >= 0.0 && cut.x + margin < segment.x && cut.y - margin > segment.y;
 }
 
 // Scale geometry and direction independently; a fixed determinant cutoff would lose valid small triangles and grazing solid crossings.
-NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(
-    const NwbRtInstanceMaterial material,
-    const uint primitive,
-    const bool closed,
-    const float3 origin,
-    const float3 direction
-){
+NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(const NwbRtInstanceMaterial material, const uint primitive, const bool closed, const float3 origin, const float3 direction){
     NwbCsgRayTriangleHit result = (NwbCsgRayTriangleHit)0;
     const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
@@ -305,10 +255,7 @@ NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(
     const float3 edgeMagnitude = max(abs(edge0), abs(edge1));
     const float edgeScale = max(edgeMagnitude.x, max(edgeMagnitude.y, edgeMagnitude.z));
     const float directionScale = max(abs(direction.x), max(abs(direction.y), abs(direction.z)));
-    if(
-        !all(isfinite(edge0)) || !all(isfinite(edge1)) || !isfinite(edgeScale)
-        || !isfinite(directionScale) || directionScale == 0.0
-    ){
+    if(!all(isfinite(edge0)) || !all(isfinite(edge1)) || !isfinite(edgeScale) || !isfinite(directionScale) || directionScale == 0.0){
         result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
         return result;
     }
@@ -349,13 +296,7 @@ NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(
     return result;
 }
 
-uint nwbCsgRayInsertCrossing(
-    const uint materialSlot,
-    const uint instanceIndex,
-    const NwbCsgRayCrossing crossing,
-    __ref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
-    inout uint crossingCount
-){
+uint nwbCsgRayInsertCrossing(const uint materialSlot, const uint instanceIndex, const NwbCsgRayCrossing crossing, __ref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY], inout uint crossingCount){
     if(!isfinite(crossing.distance) || crossing.distance <= 0.0 || (crossing.windingDelta != -1 && crossing.windingDelta != 1))
         return NWB_CSG_RAY_FAILURE_TOPOLOGY;
     for(uint index = 0u; index < crossingCount; ++index){
@@ -364,9 +305,7 @@ uint nwbCsgRayInsertCrossing(
         if(nwbRayTraceCoplanarSeam(materialSlot, instanceIndex, crossings[index].primitive, crossing.primitive))
             return 0u;
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
-        if(nwbRayTraceIncidentBoundary(
-            material, crossings[index].primitive, crossings[index].barycentrics, crossing.primitive, crossing.barycentrics
-        )){
+        if(nwbRayTraceIncidentBoundary(material, crossings[index].primitive, crossings[index].barycentrics, crossing.primitive, crossing.barycentrics)){
 #if NWB_CSG_RAY_STRICT_NORMALS
             // A solid crease has one membership crossing but no unique optical interface normal.
             crossings[index].normalAmbiguous = true;
@@ -386,14 +325,7 @@ uint nwbCsgRayInsertCrossing(
     return 0u;
 }
 
-bool nwbCsgRayLoadCutUnion(
-    const uint contextSlot,
-    const uint4 range,
-    const float3 origin,
-    const float3 direction,
-    __ref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-    out uint cutCount
-){
+bool nwbCsgRayLoadCutUnion(const uint contextSlot, const uint4 range, const float3 origin, const float3 direction, __ref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], out uint cutCount){
     cutCount = 0u;
     for(uint index = 0u; index < range.y; ++index){
         const uint cutterIndex = range.x + index;
@@ -401,10 +333,7 @@ bool nwbCsgRayLoadCutUnion(
         NwbCsgRayCutInterval cut;
         cut.nearCutter = cutterIndex;
         cut.farCutter = cutterIndex;
-        if(!nwbCsgAnalyticCutterInterval(
-            cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2,
-            cutter.parameter0, origin, direction, cut.distance
-        ))
+        if(!nwbCsgAnalyticCutterInterval(cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2, cutter.parameter0, origin, direction, cut.distance))
             return false;
         if(cut.distance.y <= cut.distance.x || cut.distance.y <= 0.0)
             continue;
@@ -431,13 +360,7 @@ bool nwbCsgRayLoadCutUnion(
     return true;
 }
 
-bool nwbCsgRayOpenBoundaryVisible(
-    const float distance,
-    const float minimum,
-    const float maximum,
-    __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-    const uint cutCount
-){
+bool nwbCsgRayOpenBoundaryVisible(const float distance, const float minimum, const float maximum, __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], const uint cutCount){
     if(distance <= minimum || distance >= maximum)
         return false;
     for(uint index = 0u; index < cutCount; ++index){
@@ -459,21 +382,12 @@ struct NwbCsgRayNearestOpenVisitor : NwbCsgRayOpenVisitor{
     uint instanceIndex;
 #endif
 
-    [mutating] uint visit(
-        const uint primitive,
-        const float distance,
-        const float2 barycentrics,
-        const float minimum,
-        const float maximum,
-        __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-        const uint cutCount
-    ){
+    [mutating] uint visit(const uint primitive, const float distance, const float2 barycentrics, const float minimum, const float maximum, __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], const uint cutCount){
 #if NWB_CSG_RAY_OPTICAL_REUSE
         hasPositiveOpenEvent = true;
 #endif
 #if NWB_CSG_RAY_STRICT_NORMALS
-        if(boundary.hit && nwbCsgRaySameDistance(distance, boundary.distance)
-            && nwbCsgRayOpenBoundaryVisible(distance, minimum, maximum, cuts, cutCount)){
+        if(boundary.hit && nwbCsgRaySameDistance(distance, boundary.distance) && nwbCsgRayOpenBoundaryVisible(distance, minimum, maximum, cuts, cutCount)){
             if(primitive != boundary.primitive && !nwbRayTraceCoplanarSeam(materialSlot, instanceIndex, primitive, boundary.primitive))
                 boundary.normalAmbiguous = true;
             return 0u;
@@ -493,13 +407,7 @@ struct NwbCsgRayNearestOpenVisitor : NwbCsgRayOpenVisitor{
     }
 };
 
-uint nwbCsgRayBeginSolidWalk(
-    __constref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
-    const uint crossingCount,
-    const float3 localOrigin,
-    const NwbBvhNode root,
-    out NwbCsgRaySolidIterator iterator
-){
+uint nwbCsgRayBeginSolidWalk(__constref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY], const uint crossingCount, const float3 localOrigin, const NwbBvhNode root, out NwbCsgRaySolidIterator iterator){
     iterator = (NwbCsgRaySolidIterator)0;
     iterator.nearBoundary.primitive = NWB_CSG_RAY_INVALID_INDEX;
     iterator.nearBoundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
@@ -510,13 +418,7 @@ uint nwbCsgRayBeginSolidWalk(
     return 0u;
 }
 
-bool nwbCsgRayNextSolidSpan(
-    __constref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
-    const uint crossingCount,
-    inout NwbCsgRaySolidIterator iterator,
-    out NwbCsgRayBoundary nearBoundary,
-    out NwbCsgRayBoundary farBoundary
-){
+bool nwbCsgRayNextSolidSpan(__constref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY], const uint crossingCount, inout NwbCsgRaySolidIterator iterator, out NwbCsgRayBoundary nearBoundary, out NwbCsgRayBoundary farBoundary){
     nearBoundary = (NwbCsgRayBoundary)0;
     farBoundary = (NwbCsgRayBoundary)0;
     while(iterator.first < crossingCount){
@@ -562,14 +464,7 @@ NwbCsgRayCutIterator nwbCsgRayBeginCutWalk(const NwbCsgRayBoundary nearBoundary)
     return iterator;
 }
 
-bool nwbCsgRayNextRetainedSpan(
-    const NwbCsgRayBoundary farBoundary,
-    __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-    const uint cutCount,
-    inout NwbCsgRayCutIterator iterator,
-    out NwbCsgRayBoundary retainedNear,
-    out NwbCsgRayBoundary retainedFar
-){
+bool nwbCsgRayNextRetainedSpan(const NwbCsgRayBoundary farBoundary, __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], const uint cutCount, inout NwbCsgRayCutIterator iterator, out NwbCsgRayBoundary retainedNear, out NwbCsgRayBoundary retainedFar){
     retainedNear = (NwbCsgRayBoundary)0;
     retainedFar = (NwbCsgRayBoundary)0;
     if(iterator.cursor.distance >= farBoundary.distance)
@@ -603,13 +498,7 @@ bool nwbCsgRayNextRetainedSpan(
     return true;
 }
 
-bool nwbCsgRaySelectSpanBoundary(
-    const NwbCsgRayBoundary nearBoundary,
-    const NwbCsgRayBoundary farBoundary,
-    const float minimum,
-    const float maximum,
-    inout NwbCsgRayBoundary result
-){
+bool nwbCsgRaySelectSpanBoundary(const NwbCsgRayBoundary nearBoundary, const NwbCsgRayBoundary farBoundary, const float minimum, const float maximum, inout NwbCsgRayBoundary result){
     if(farBoundary.distance <= nearBoundary.distance)
         return false;
     if(nearBoundary.distance > minimum && nearBoundary.distance < maximum){
@@ -625,15 +514,7 @@ bool nwbCsgRaySelectSpanBoundary(
     return false;
 }
 
-bool nwbCsgRaySubtractSpan(
-    const NwbCsgRayBoundary nearBoundary,
-    const NwbCsgRayBoundary farBoundary,
-    __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-    const uint cutCount,
-    const float minimum,
-    const float maximum,
-    inout NwbCsgRayBoundary result
-){
+bool nwbCsgRaySubtractSpan(const NwbCsgRayBoundary nearBoundary, const NwbCsgRayBoundary farBoundary, __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], const uint cutCount, const float minimum, const float maximum, inout NwbCsgRayBoundary result){
     NwbCsgRayCutIterator iterator = nwbCsgRayBeginCutWalk(nearBoundary);
     NwbCsgRayBoundary retainedNear;
     NwbCsgRayBoundary retainedFar;
@@ -646,10 +527,7 @@ bool nwbCsgRaySubtractSpan(
 
 bool nwbCsgRayBoundaryNormal(const uint contextSlot, const NwbCsgRayBoundary boundary, const float3 worldPosition, out float3 normal){
     const NwbCsgRayCutter cutter = nwbCsgRayLoadCutter(contextSlot, boundary.cutter);
-    return nwbCsgAnalyticCutterNormal(
-        cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2,
-        cutter.parameter0, worldPosition, normal
-    );
+    return nwbCsgAnalyticCutterNormal(cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2, cutter.parameter0, worldPosition, normal);
 }
 
 

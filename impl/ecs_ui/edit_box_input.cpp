@@ -30,10 +30,7 @@ void UiEditBoxHost::collectNative(){
                 TerminateInvariant();
             return;
         }
-        if(
-            index == Core::s_TextInputMaxEvents || event.native.token != m_session.token()
-            || event.native.sequence <= m_lastNativeSequence
-        ){
+        if(index == Core::s_TextInputMaxEvents || event.native.token != m_session.token() || event.native.sequence <= m_lastNativeSequence){
             reset();
             return;
         }
@@ -99,10 +96,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         if(!append(Move(event)))
             return;
     }
-    else if(
-        input.type <= Ui::InputEventType::PrimaryUp
-        && (input.type != Ui::InputEventType::PointerMove || previousCapture.valid())
-    ){
+    else if(input.type <= Ui::InputEventType::PrimaryUp && (input.type != Ui::InputEventType::PointerMove || previousCapture.valid())){
         const Ui::WidgetId target = input.type == Ui::InputEventType::PrimaryDown ? m_context.input().focus() : previousCapture;
         if(input.type == Ui::InputEventType::PrimaryDown && m_context.input().capture() != target){
             m_clickTracker.cancel();
@@ -135,8 +129,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         event.dragging = input.type != Ui::InputEventType::PrimaryDown;
         event.completed = input.type == Ui::InputEventType::PrimaryUp;
         if(input.type == Ui::InputEventType::PrimaryDown){
-            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision,
-                entry->displayed.externalRevision, input.position, input.timestampMs, input.shift) == UiEditClickKind::Word;
+            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, input.timestampMs, input.shift) == UiEditClickKind::Word;
         }
         else if(input.type == Ui::InputEventType::PrimaryUp)
             m_clickTracker.release(entry->owner);

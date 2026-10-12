@@ -57,11 +57,7 @@ struct ResourceSetContext{
         for(usize index = 0u; index < count; ++index){
             char text[32u] = {};
             const Name identity = DeriveName(Name("tests/resource_set_validation/resource/"), FormatDecimal(index, text));
-            const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}
-                .setIdentity(identity)
-                .setMarkerLabel("Resource Set Validation Input")
-                .setType(Core::GpuGraphResourceType::Buffer)
-            );
+            const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Input").setType(Core::GpuGraphResourceType::Buffer));
             if(!resource.valid())
                 return false;
             members.push_back(resource);
@@ -72,11 +68,7 @@ struct ResourceSetContext{
     }
 
     [[nodiscard]] Core::GpuGraphResourceSetDesc description(const Name& identity)const{
-        return Core::GpuGraphResourceSetDesc{}
-            .setIdentity(identity)
-            .setMarkerLabel("Resource Set Validation Members")
-            .setMembers(members.data(), members.size())
-        ;
+        return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Members").setMembers(members.data(), members.size());
     }
 };
 

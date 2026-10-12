@@ -130,8 +130,7 @@ private:
     struct BindingReservation{
         const void* owner = nullptr;
         VulkanDetail::HeapBindingRange range;
-        VulkanDetail::HeapBindingResourceClass::Enum resourceClass =
-            VulkanDetail::HeapBindingResourceClass::Buffer;
+        VulkanDetail::HeapBindingResourceClass::Enum resourceClass = VulkanDetail::HeapBindingResourceClass::Buffer;
     };
 
 
@@ -185,20 +184,13 @@ private:
         GpuPhysicalQueueId physicalQueue;
 
 
-        BufferChunk(
-            CpuTaskScheduler& pool,
-            BufferHandle buf,
-            TrackedCommandBuffer* chunkOwner,
-            u64 chunkNativeRecordingID,
-            GpuPhysicalQueueId queue,
-            u64 sz
-        );
+        BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz);
         ~BufferChunk();
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
-    // The owning list keeps every chunk address stable. Accepted submissions traverse only this intrusive active
-    // chain, so accumulated retired storage cannot increase the post-native-accept commit cost.
+    // The owning list keeps every chunk address stable.
+    // Accepted submissions traverse only this intrusive active chain, so accumulated retired storage cannot increase the post-native-accept commit cost.
     struct QueueChunkLedger{
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;
@@ -218,32 +210,10 @@ public:
 
 public:
     void clear()noexcept;
-    [[nodiscard]] Expected<BufferSuballocation> suballocateBuffer(
-        u64 size,
-        TrackedCommandBuffer* owner,
-        u64 nativeRecordingID,
-        GpuPhysicalQueueId queue,
-        u64 completedVersion,
-        u32 alignment = s_DefaultUploadSuballocationAlignment
-    );
-    void submitChunks(
-        GpuPhysicalQueueId queue,
-        u64 submittedVersion,
-        const Queue::SubmissionCommandListIdentity* submittedCommandLists,
-        usize submittedCommandListCount,
-        const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
-    )noexcept;
-    void discardChunks(
-        GpuPhysicalQueueId queue,
-        TrackedCommandBuffer* owner,
-        u64 nativeRecordingID,
-        u64 reusableVersion
-    );
-    void abandonChunks(
-        GpuPhysicalQueueId queue,
-        TrackedCommandBuffer* owner,
-        u64 nativeRecordingID
-    )noexcept;
+    [[nodiscard]] Expected<BufferSuballocation> suballocateBuffer(u64 size, TrackedCommandBuffer* owner, u64 nativeRecordingID, GpuPhysicalQueueId queue, u64 completedVersion, u32 alignment = s_DefaultUploadSuballocationAlignment);
+    void submitChunks(GpuPhysicalQueueId queue, u64 submittedVersion, const Queue::SubmissionCommandListIdentity* submittedCommandLists, usize submittedCommandListCount, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
+    void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID, u64 reusableVersion);
+    void abandonChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID)noexcept;
 
 
 private:
@@ -252,26 +222,9 @@ private:
     [[nodiscard]] QueueChunkLedger* findQueueLedgerLocked(GpuPhysicalQueueId queue)noexcept;
     [[nodiscard]] QueueChunkLedger* findOrCreateQueueLedgerLocked(GpuPhysicalQueueId queue);
     void linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
-    void retireChunkLocked(
-        QueueChunkLedger& ledger,
-        BufferChunk& chunk,
-        u64 version,
-        bool resetAllocated
-    )noexcept;
-    void retireSubmittedChunksLocked(
-        GpuPhysicalQueueId queue,
-        u64 version,
-        const Queue::SubmissionCommandListIdentity* submittedCommandLists,
-        usize submittedCommandListCount,
-        const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
-    )noexcept;
-    void retireOwnerChunksLocked(
-        GpuPhysicalQueueId queue,
-        u64 version,
-        bool resetAllocated,
-        TrackedCommandBuffer& owner,
-        u64 nativeRecordingID
-    )noexcept;
+    void retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, u64 version, bool resetAllocated)noexcept;
+    void retireSubmittedChunksLocked(GpuPhysicalQueueId queue, u64 version, const Queue::SubmissionCommandListIdentity* submittedCommandLists, usize submittedCommandListCount, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
+    void retireOwnerChunksLocked(GpuPhysicalQueueId queue, u64 version, bool resetAllocated, TrackedCommandBuffer& owner, u64 nativeRecordingID)noexcept;
 
 
 private:
@@ -312,13 +265,7 @@ private:
 
 
 public:
-    Buffer(
-        const VulkanContext& context,
-        VulkanAllocator& allocator,
-        const BufferDesc& creationDesc,
-        const VkBufferCreateInfo& bufferInfo,
-        bool initialStateKnown
-    );
+    Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, bool initialStateKnown);
     ~Buffer();
 
 
@@ -375,14 +322,7 @@ private:
 };
 
 
-inline UploadManager::BufferChunk::BufferChunk(
-    CpuTaskScheduler& pool,
-    BufferHandle buf,
-    TrackedCommandBuffer* chunkOwner,
-    u64 chunkNativeRecordingID,
-    GpuPhysicalQueueId queue,
-    u64 sz
-)
+inline UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)
     : RefCounter<GraphicsResource>(pool)
     , buffer(Move(buf))
     , owner(chunkOwner)
@@ -422,14 +362,7 @@ struct TextureViewKeyHasher{
 
 
 class Texture final : public RefCounter<GraphicsResource>, NoCopy{
-    friend Expected<VkImageViewCreateInfo> VulkanDetail::BuildTextureImageViewCreateInfo(
-        Texture& texture,
-        const TextureSubresourceSet& resolvedSubresources,
-        TextureDimension::Enum dimension,
-        Format::Enum format,
-        TStringView operationName,
-        bool assertFailure
-    );
+    friend Expected<VkImageViewCreateInfo> VulkanDetail::BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, TextureDimension::Enum dimension, Format::Enum format, TStringView operationName, bool assertFailure);
 
     friend class BackendContext;
     friend class Device;
@@ -442,13 +375,7 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    Texture(
-        const VulkanContext& context,
-        VulkanAllocator& allocator,
-        const TextureDesc& creationDesc,
-        const VkImageCreateInfo& imageInfo,
-        bool initialStateKnown
-    );
+    Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc, const VkImageCreateInfo& imageInfo, bool initialStateKnown);
     ~Texture();
 
 
@@ -469,19 +396,9 @@ public:
     // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
     [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const;
     Object getNativeHandle(ObjectType objectType);
-    Object getNativeView(
-        ObjectType objectType,
-        Format::Enum format,
-        TextureSubresourceSet subresources,
-        TextureDimension::Enum dimension,
-        bool
-    );
+    Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
 
-    [[nodiscard]] VkImageView getView(
-        const TextureSubresourceSet& subresources,
-        TextureDimension::Enum dimension,
-        Format::Enum format
-    );
+    [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
 
 
 private:

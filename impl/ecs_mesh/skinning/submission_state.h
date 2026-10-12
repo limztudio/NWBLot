@@ -29,13 +29,7 @@ struct MeshSkinningSubmissionCommit{
 };
 
 
-inline void ApplyMeshSkinningSubmissionCommit(
-    const bool submissionAccepted,
-    const u32 currentEditRevision,
-    RuntimeMeshDirtyFlags& inOutDirtyFlags,
-    bool& inOutBindlessResourceSlotsUploaded,
-    const MeshSkinningSubmissionCommit& commit
-)noexcept{
+inline void ApplyMeshSkinningSubmissionCommit(const bool submissionAccepted, const u32 currentEditRevision, RuntimeMeshDirtyFlags& inOutDirtyFlags, bool& inOutBindlessResourceSlotsUploaded, const MeshSkinningSubmissionCommit& commit)noexcept{
     if(!submissionAccepted || currentEditRevision != commit.editRevision)
         return;
 

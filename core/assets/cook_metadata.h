@@ -138,10 +138,7 @@ using AssetValueMetadataParseFunction = AssetMetadataParseResult::Enum (*)(Asset
 
 class AssetMetadataParserAutoRegistrar final{
 public:
-    AssetMetadataParserAutoRegistrar(
-        AssetDocumentMetadataParseFunction documentFunction,
-        AssetValueMetadataParseFunction valueFunction
-    );
+    AssetMetadataParserAutoRegistrar(AssetDocumentMetadataParseFunction documentFunction, AssetValueMetadataParseFunction valueFunction);
 };
 
 
@@ -174,23 +171,12 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(
-    CookArena& cookArena,
-    const CookVector<ResolvedAssetRoot>& assetRoots,
-    AStringView expectedExtension,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookArena, const CookVector<ResolvedAssetRoot>& assetRoots, AStringView expectedExtension, ScratchArena& scratchArena);
 [[nodiscard]] bool AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
-[[nodiscard]] bool ParseAssetMetadata(
-    CookArena& cookArena,
-    const DiscoveredNwbFileVector& nwbFiles,
-    ParsedAssetMetadata& outMetadata,
-    Core::CpuTaskScheduler& cpuScheduler,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwbFiles, ParsedAssetMetadata& outMetadata, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

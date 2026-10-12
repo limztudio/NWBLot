@@ -17,9 +17,7 @@ NWB_IMPL_BEGIN
 
 
 bool SoftShadowCombinedWaveletInputs::valid()const noexcept{
-    const Core::Texture* textures[] = {
-        opaqueHistory, opaqueMoments, transparentHistory, transparentMoments, geometry, opaqueOutput, transparentOutput
-    };
+    const Core::Texture* textures[] = { opaqueHistory, opaqueMoments, transparentHistory, transparentMoments, geometry, opaqueOutput, transparentOutput };
     for(usize index = 0u; index < LengthOf(textures); ++index){
         if(!textures[index])
             return false;
@@ -55,22 +53,12 @@ bool RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        resolve.m_combinedWavelet.m_shader,
-        AssetsGraphicsShadow::s_SoftResolveCombinedWaveletShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_CombinedShadowWavelet"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(resolve.m_combinedWavelet.m_shader, AssetsGraphicsShadow::s_SoftResolveCombinedWaveletShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowWavelet")){
         resolve.m_combinedWaveletFailed = true;
         return false;
     }
     Core::ComputePipelineDesc desc;
-    desc
-        .setComputeShader(resolve.m_combinedWavelet.m_shader)
-        .addBindingLayout(resolve.m_combinedWaveletBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    desc.setComputeShader(resolve.m_combinedWavelet.m_shader).addBindingLayout(resolve.m_combinedWaveletBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     resolve.m_combinedWavelet.m_pipeline = device.createComputePipeline(desc);
     resolve.m_combinedWaveletFailed = !resolve.m_combinedWavelet.m_pipeline;
     return !resolve.m_combinedWaveletFailed;
@@ -124,11 +112,7 @@ bool RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList
     commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resolve.m_combinedWavelet.m_pipeline.get());
     commandList.setPushConstants(&push, sizeof(push));
-    commandList.dispatch(
-        DivideUp(push.resolve.halfWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)),
-        DivideUp(push.resolve.halfHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)),
-        1u
-    );
+    commandList.dispatch(DivideUp(push.resolve.halfWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), DivideUp(push.resolve.halfHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), 1u);
     return true;
 }
 

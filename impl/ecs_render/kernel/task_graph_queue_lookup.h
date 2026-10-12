@@ -25,19 +25,13 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const Core::GpuPhysicalQueueInfo* QueueForTask(
-    const Core::GpuTaskRecordContext& context,
-    const Core::GpuTaskId* const task
-){
+[[nodiscard]] inline const Core::GpuPhysicalQueueInfo* QueueForTask(const Core::GpuTaskRecordContext& context, const Core::GpuTaskId* const task){
     if(!task || !task->valid())
         return nullptr;
     return context.compiledPlan.queueInfoForTask(*task);
 }
 
-[[nodiscard]] inline const Core::GpuPhysicalQueueInfo* QueueForTask(
-    const Core::GpuTaskRecordContext& context,
-    const Core::GpuTaskId& task
-){
+[[nodiscard]] inline const Core::GpuPhysicalQueueInfo* QueueForTask(const Core::GpuTaskRecordContext& context, const Core::GpuTaskId& task){
     if(!task.valid())
         return nullptr;
     return context.compiledPlan.queueInfoForTask(task);

@@ -32,11 +32,7 @@ namespace CsgIntervalDetail{
 }
 
 
-[[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(
-    const DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData,
-    const u32 meshViewHeapSlot
-){
+[[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const u32 meshViewHeapSlot){
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
     const SIMDVectorSingle workRectLanes = VectorMax(VectorSet(static_cast<f32>(workRect.minX), static_cast<f32>(workRect.minY), static_cast<f32>(workRect.maxX), static_cast<f32>(workRect.maxY)), VectorZero());
@@ -50,12 +46,7 @@ namespace CsgIntervalDetail{
 }
 
 
-[[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(
-    const DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData,
-    const u32 meshViewHeapSlot,
-    const u32 csgContextHeapSlot
-){
+[[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const u32 meshViewHeapSlot, const u32 csgContextHeapSlot){
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
     CsgIntervalDispatchPushConstants pushConstants;
@@ -90,17 +81,11 @@ static void DispatchCsgIntervalCompute(
     // Bind after setComputeState so the StorageImage table resolves.
     heap.bindCompute(commandList, *pipeline);
 
-    const CsgIntervalDispatchPushConstants pushConstants =
-        BuildCsgIntervalDispatchPushConstants(targets, csgFrameData, meshViewHeapSlot, csgContextHeapSlot)
-    ;
+    const CsgIntervalDispatchPushConstants pushConstants = BuildCsgIntervalDispatchPushConstants(targets, csgFrameData, meshViewHeapSlot, csgContextHeapSlot);
     if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
         return;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(
-        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
-        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
-        1u
-    );
+    commandList.dispatch(DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)), DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)), 1u);
 }
 
 
@@ -122,18 +107,11 @@ Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSam
     CsgIntervalSampleStateGpuData state{};
     if(!csgFrameData.hasWork())
         return state;
-    if(
-        !csgResources.frameReady(csgFrameData)
-        || !frameBindings.bindingValid()
-    )
+    if(!csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid())
         return MakeUnexpected(Failure{});
 
     // Freeze rect and slot before recording; later state must not leak in.
-    state = CsgIntervalDetail::BuildCsgIntervalSampleState(
-        targets,
-        csgFrameData,
-        frameBindings.meshView.heapHandle.slot()
-    );
+    state = CsgIntervalDetail::BuildCsgIntervalSampleState(targets, csgFrameData, frameBindings.meshView.heapHandle.slot());
     return state;
 }
 
@@ -163,12 +141,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     );
 }
 
-void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-){
+void RendererCsgSystem::dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
     if(!csgFrameData.hasWork())
         return;
     NWB_ASSERT(m_csgState.m_receiverSpanBuildPipeline);
@@ -177,22 +150,10 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    CsgIntervalDetail::DispatchCsgIntervalCompute(
-        commandList,
-        m_graphics.getDevice().getDescriptorHeap(),
-        targets,
-        csgFrameData,
-        m_csgState.m_receiverSpanBuildPipeline.get(),
-        csgResources.clipContextSlotsHeapHandle.slot()
-    );
+    CsgIntervalDetail::DispatchCsgIntervalCompute(commandList, m_graphics.getDevice().getDescriptorHeap(), targets, csgFrameData, m_csgState.m_receiverSpanBuildPipeline.get(), csgResources.clipContextSlotsHeapHandle.slot());
 }
 
-void RendererCsgSystem::dispatchCsgIntervalCombine(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-){
+void RendererCsgSystem::dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
     if(!csgFrameData.hasWork())
         return;
     NWB_ASSERT(m_csgState.m_intervalCombinePipeline);
@@ -201,22 +162,10 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    CsgIntervalDetail::DispatchCsgIntervalCompute(
-        commandList,
-        m_graphics.getDevice().getDescriptorHeap(),
-        targets,
-        csgFrameData,
-        m_csgState.m_intervalCombinePipeline.get(),
-        csgResources.clipContextSlotsHeapHandle.slot()
-    );
+    CsgIntervalDetail::DispatchCsgIntervalCompute(commandList, m_graphics.getDevice().getDescriptorHeap(), targets, csgFrameData, m_csgState.m_intervalCombinePipeline.get(), csgResources.clipContextSlotsHeapHandle.slot());
 }
 
-void RendererCsgSystem::renderCsgIntervalCaps(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-){
+void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
     NWB_ASSERT(m_csgState.m_intervalCapFillPipeline);
     NWB_ASSERT(csgResources.frameReady(csgFrameData));
     NWB_ASSERT(targets.framebuffer);
@@ -224,10 +173,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, m_graphics.getDevice(), commandList);
 
     Core::ViewportState viewportState;
-    viewportState
-        .addViewport(targets.framebuffer->getFramebufferInfo().getViewport())
-        .addScissorRect(CsgIntervalDetail::ResolveCsgFrameWorkRect(targets, csgFrameData))
-    ;
+    viewportState.addViewport(targets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(CsgIntervalDetail::ResolveCsgFrameWorkRect(targets, csgFrameData));
 
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(m_csgState.m_intervalCapFillPipeline.get());
@@ -238,15 +184,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(
 
     ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
-    ECSRenderDetail::SetShaderDrivenPushConstants(
-        commandList,
-        0u,
-        0u,
-        0u,
-        viewportState,
-        frameHeapSlots,
-        0u
-    );
+    ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, 0u, 0u, viewportState, frameHeapSlots, 0u);
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
@@ -268,10 +206,7 @@ void RendererCsgSystem::renderRefractionIntervalCaps(
     NWB_ASSERT(receiverIndices && receiverCount != 0u);
 
     Core::ViewportState viewportState;
-    viewportState
-        .addViewport(targets.avboit.refractionFramebuffer->getFramebufferInfo().getViewport())
-        .addScissorRect(workRect)
-    ;
+    viewportState.addViewport(targets.avboit.refractionFramebuffer->getFramebufferInfo().getViewport()).addScissorRect(workRect);
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(csgResources.refractionCapFillPipeline.get());
     graphicsState.setFramebuffer(targets.avboit.refractionFramebuffer.get());

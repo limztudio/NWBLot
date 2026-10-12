@@ -26,14 +26,8 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(world);
     m_frameDelta.add(delta);
     synchronizeInput();
-    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(
-        m_resourcesReady,
-        m_renderer.hasPendingFrame(),
-        m_context.ready(),
-        [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(
-                ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin"
-            );
+    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
+            auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin");
             const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
             if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
                 return false;
@@ -58,13 +52,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(*skin);
-    m_paint.begin(
-        m_display,
-        m_frameGeneration,
-        m_skinSelection.generation(),
-        m_skinSelection.selected(),
-        *skin
-    );
+    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), m_skinSelection.selected(), *skin);
     m_paint.reserve(256u);
     m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u);

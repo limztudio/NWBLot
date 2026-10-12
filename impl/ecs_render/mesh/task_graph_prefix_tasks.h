@@ -53,12 +53,9 @@ namespace ECSRenderDetail{
 struct MeshViewSetupGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
-    // The graphics runtime, the async-prefix timing slot, the timing-ticket slot, and the
-    // single-packet span flag are required: mesh-view setup always records the prefix timing
-    // decision for this frame. Only the shadow-visibility task stays optional: the queue lookup
-    // may be absent when no visibility pass runs. References (not nullable pointers) carry the
-    // required bindings so a missing binding fails at declaration time instead of silently
-    // returning `false` inside Record.
+    // The graphics runtime, the async-prefix timing slot, the timing-ticket slot, and the single-packet span flag are required: mesh-view setup always records the prefix timing decision for this frame.
+    // Only the shadow-visibility task stays optional: the queue lookup may be absent when no visibility pass runs.
+    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
@@ -67,11 +64,7 @@ struct MeshViewSetupGraphTask{
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -79,9 +72,8 @@ struct MeshViewSetupGraphTask{
 struct MeshViewUploadCommitGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
-    // The mesh system and the ready flag are required: the commit always publishes mesh-view
-    // readiness for this frame. References (not nullable pointers) carry those bindings so a
-    // missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // The mesh system and the ready flag are required: the commit always publishes mesh-view readiness for this frame.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererMeshSystem& meshSystem;
         ECSRenderDetail::MeshViewGpuData viewState;
@@ -89,11 +81,7 @@ struct MeshViewUploadCommitGraphTask{
         bool& ready;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    )noexcept;
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
     static void Discarded(Payload& payload)noexcept;
 };

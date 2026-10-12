@@ -25,17 +25,10 @@ namespace __hidden_gpu_task_graph_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CompatibleResourceMetadata(
-    const GpuTaskGraphResourceView& resource,
-    const GpuGraphResourceDesc& desc
-)noexcept{
-    // Re-importing an ownership source through the ordinary typed-import overload could silently exchange one
-    // of its immutable ownership snapshots. Require callers to reuse its graph resource ID instead.
-    if(
-        resource.initialOwnerHandoffSourceCount != 0u
-        || desc.initialOwnerHandoffSources
-        || desc.initialOwnerHandoffSourceCount != 0u
-    )
+[[nodiscard]] static bool CompatibleResourceMetadata(const GpuTaskGraphResourceView& resource, const GpuGraphResourceDesc& desc)noexcept{
+    // Re-importing an ownership source through the ordinary typed-import overload could silently exchange one of its immutable ownership snapshots.
+    // Require callers to reuse its graph resource ID instead.
+    if(resource.initialOwnerHandoffSourceCount != 0u || desc.initialOwnerHandoffSources || desc.initialOwnerHandoffSourceCount != 0u)
         return false;
     return resource.identity == desc.identity
         && resource.type == desc.type
@@ -49,30 +42,16 @@ namespace __hidden_gpu_task_graph_imports{
     ;
 }
 
-[[nodiscard]] static bool CompatibleRetainedExternalFinalState(
-    const bool keepInitialState,
-    const ResourceStates::Mask nativeInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    // Native command-list close restores retained resources to their descriptor state. A typed graph import must
-    // not publish a different known terminal state after that restoration.
+[[nodiscard]] static bool CompatibleRetainedExternalFinalState(const bool keepInitialState, const ResourceStates::Mask nativeInitialState, const ResourceStates::Mask externalFinalState)noexcept{
+    // Native command-list close restores retained resources to their descriptor state.
+    // A typed graph import must not publish a different known terminal state after that restoration.
     return !keepInitialState || externalFinalState == ResourceStates::Unknown || externalFinalState == nativeInitialState;
 }
 
-[[nodiscard]] static bool CompatibleQueueAdmission(
-    const ResourceQueueAdmissionSnapshot& admission,
-    const ResourceQueueSharing::Mask logicalSharing,
-    const usize retainedQueueFamilyIndexCount
-)noexcept{
-    if(
-        !admission.valid()
-        || admission.admittedQueueClasses != logicalSharing
-        || retainedQueueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max)
-    )
+[[nodiscard]] static bool CompatibleQueueAdmission(const ResourceQueueAdmissionSnapshot& admission, const ResourceQueueSharing::Mask logicalSharing, const usize retainedQueueFamilyIndexCount)noexcept{
+    if(!admission.valid() || admission.admittedQueueClasses != logicalSharing || retainedQueueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
-    return admission.queueFamilyIndexCount
-        <= static_cast<usize>(Limit<u32>::s_Max) - retainedQueueFamilyIndexCount
-    ;
+    return admission.queueFamilyIndexCount <= static_cast<usize>(Limit<u32>::s_Max) - retainedQueueFamilyIndexCount;
 }
 
 
@@ -134,47 +113,28 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
 
     const TextureDesc& textureDesc = texture->getCreationDescription();
     const ResourceQueueAdmissionSnapshot queueAdmission = texture->getQueueAdmissionSnapshot();
-    if(!__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(
-        queueAdmission,
-        textureDesc.queueSharing,
-        m_queueFamilyIndices.size()
-    ))
+    if(!__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(queueAdmission, textureDesc.queueSharing, m_queueFamilyIndices.size()))
         return {};
-    if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
-        textureDesc.keepInitialState,
-        textureDesc.initialState,
-        desc.externalFinalState
-    ))
+    if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(textureDesc.keepInitialState, textureDesc.initialState, desc.externalFinalState))
         return {};
 
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
-        // The backend preserves managed-fresh descriptor semantics while retaining Unknown for native or partially
-        // published textures whose current state is not established by their creation description.
+        // The backend preserves managed-fresh descriptor semantics while retaining Unknown for native or partially published textures whose current state is not established by their creation description.
         resolvedDesc.initialState = texture->resolveTaskGraphImportInitialState();
     }
     if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != textureDesc.queueSharing)
         return {};
     resolvedDesc.queueSharing = textureDesc.queueSharing;
 
-    const ResourceImportMatch match = findResourceImportMatch(
-        &resolvedDesc.identity.identityHash(), { texture.get(), GpuGraphResourceType::Texture }
-    );
+    const ResourceImportMatch match = findResourceImportMatch(&resolvedDesc.identity.identityHash(), { texture.get(), GpuGraphResourceType::Texture });
     if(match.index != s_InvalidImportIndex){
-        if(
-            !match.samePointer
-            || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc)
-        )
+        if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return {};
         return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
-    return appendResourceWithinMutation(
-        resolvedDesc,
-        &queueAdmission,
-        ResourceBinding{ .texture = &texture, .deviceGeneration = texture->getDeviceGeneration() },
-        mutation
-    );
+    return appendResourceWithinMutation(resolvedDesc, &queueAdmission, ResourceBinding{ .texture = &texture, .deviceGeneration = texture->getDeviceGeneration() }, mutation);
 }
 
 GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc){
@@ -182,28 +142,14 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     if(!mutation.valid())
         return {};
 
-    if(
-        !buffer
-        || !buffer->descriptionMatchesCreation()
-        || !desc.identity
-        || desc.markerLabel.empty()
-        || desc.type != GpuGraphResourceType::Buffer
-    )
+    if(!buffer || !buffer->descriptionMatchesCreation() || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Buffer)
         return {};
 
     const BufferDesc& bufferDesc = buffer->getCreationDescription();
     const ResourceQueueAdmissionSnapshot queueAdmission = buffer->getQueueAdmissionSnapshot();
-    if(!__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(
-        queueAdmission,
-        bufferDesc.queueSharing,
-        m_queueFamilyIndices.size()
-    ))
+    if(!__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(queueAdmission, bufferDesc.queueSharing, m_queueFamilyIndices.size()))
         return {};
-    if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
-        bufferDesc.keepInitialState,
-        bufferDesc.initialState,
-        desc.externalFinalState
-    ))
+    if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(bufferDesc.keepInitialState, bufferDesc.initialState, desc.externalFinalState))
         return {};
 
     GpuGraphResourceDesc resolvedDesc = desc;
@@ -213,52 +159,35 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
         return {};
     resolvedDesc.queueSharing = bufferDesc.queueSharing;
 
-    const ResourceImportMatch match = findResourceImportMatch(
-        &resolvedDesc.identity.identityHash(), { buffer.get(), GpuGraphResourceType::Buffer }
-    );
+    const ResourceImportMatch match = findResourceImportMatch(&resolvedDesc.identity.identityHash(), { buffer.get(), GpuGraphResourceType::Buffer });
     if(match.index != s_InvalidImportIndex){
-        if(
-            !match.samePointer
-            || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc)
-        )
+        if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return {};
         return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
-    return appendResourceWithinMutation(
-        resolvedDesc,
-        &queueAdmission,
-        ResourceBinding{ .buffer = &buffer, .deviceGeneration = buffer->getDeviceGeneration() },
-        mutation
-    );
+    return appendResourceWithinMutation(resolvedDesc, &queueAdmission, ResourceBinding{ .buffer = &buffer, .deviceGeneration = buffer->getDeviceGeneration() }, mutation);
 }
 
 GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedTexture(const TextureHandle& texture)const noexcept{
     if(!m_graph || !texture)
         return {};
     const auto match = m_graph->findResourceImportMatch(nullptr, { texture.get(), GpuGraphResourceType::Texture });
-    return match.index == GpuTaskGraph::s_InvalidImportIndex
-        ? GpuGraphResourceId{}
-        : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
+    return match.index == GpuTaskGraph::s_InvalidImportIndex ? GpuGraphResourceId{} : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
 }
 
 GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedBuffer(const BufferHandle& buffer)const noexcept{
     if(!m_graph || !buffer)
         return {};
     const auto match = m_graph->findResourceImportMatch(nullptr, { buffer.get(), GpuGraphResourceType::Buffer });
-    return match.index == GpuTaskGraph::s_InvalidImportIndex
-        ? GpuGraphResourceId{}
-        : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
+    return match.index == GpuTaskGraph::s_InvalidImportIndex ? GpuGraphResourceId{} : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
 }
 
 const GpuPresentEndpoint* GpuTaskGraphDeclarationReadView::presentEndpoint()const & noexcept{
     return m_graph && m_graph->m_hasPresentEndpoint ? &m_graph->m_presentEndpoint : nullptr;
 }
 
-GpuGraphResourceId GpuTaskGraph::importAccelStruct(
-    const RayTracingAccelStructHandle& accelStruct,
-    const GpuGraphResourceDesc& desc
-){
+GpuGraphResourceId GpuTaskGraph::importAccelStruct(const RayTracingAccelStructHandle& accelStruct, const GpuGraphResourceDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -277,52 +206,27 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
         if(
             !backingBuffer->descriptionMatchesCreation()
             || backingBufferDesc.queueSharing != creationQueueSharing
-            || !__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(
-                queueAdmission,
-                creationQueueSharing,
-                m_queueFamilyIndices.size()
-            )
-            || !__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
-                backingBufferDesc.keepInitialState,
-                backingBufferDesc.initialState,
-                desc.externalFinalState
-            )
+            || !__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(queueAdmission, creationQueueSharing, m_queueFamilyIndices.size())
+            || !__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(backingBufferDesc.keepInitialState, backingBufferDesc.initialState, desc.externalFinalState)
         )
             return {};
     }
 
     GpuGraphResourceDesc resolvedDesc = desc;
-    if(
-        backingBuffer
-        && !resolvedDesc.hasExplicitInitialState
-        && resolvedDesc.initialState == ResourceStates::Unknown
-    )
+    if(backingBuffer && !resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown)
         resolvedDesc.initialState = backingBuffer->resolveTaskGraphImportInitialState();
-    if(
-        resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive
-        && resolvedDesc.queueSharing != creationQueueSharing
-    )
+    if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != creationQueueSharing)
         return {};
     resolvedDesc.queueSharing = creationQueueSharing;
 
-    const ResourceImportMatch match = findResourceImportMatch(
-        &resolvedDesc.identity.identityHash(), { accelStruct.get(), GpuGraphResourceType::AccelStruct }
-    );
+    const ResourceImportMatch match = findResourceImportMatch(&resolvedDesc.identity.identityHash(), { accelStruct.get(), GpuGraphResourceType::AccelStruct });
     if(match.index != s_InvalidImportIndex){
-        if(
-            !match.samePointer
-            || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc)
-        )
+        if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return {};
         return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
-    return appendResourceWithinMutation(
-        resolvedDesc,
-        backingBuffer ? &queueAdmission : nullptr,
-        ResourceBinding{ .accelStruct = &accelStruct, .deviceGeneration = accelStruct->getDeviceGeneration() },
-        mutation
-    );
+    return appendResourceWithinMutation(resolvedDesc, backingBuffer ? &queueAdmission : nullptr, ResourceBinding{ .accelStruct = &accelStruct, .deviceGeneration = accelStruct->getDeviceGeneration() }, mutation);
 }
 
 GpuGraphResourceId GpuTaskGraph::importHazardDomain(const GpuGraphResourceDesc& desc){
@@ -340,11 +244,7 @@ GpuGraphResourceSetId GpuTaskGraph::importResourceSet(const GpuGraphResourceSetD
     if(!mutation.valid())
         return {};
 
-    if(
-        !desc.identity
-        || desc.markerLabel.empty()
-        || (desc.memberCount != 0u && !desc.members)
-    )
+    if(!desc.identity || desc.markerLabel.empty() || (desc.memberCount != 0u && !desc.members))
         return {};
 
     const u32 resourceSetIndex = findResourceSetIdentity(desc.identity);
@@ -367,11 +267,7 @@ bool GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
     if(!mutation.valid())
         return false;
 
-    if(
-        m_hasPresentEndpoint
-        || !validTask(endpoint.producer)
-        || !validResource(endpoint.backBuffer)
-    )
+    if(m_hasPresentEndpoint || !validTask(endpoint.producer) || !validResource(endpoint.backBuffer))
         return false;
 
     m_presentEndpoint = endpoint;
@@ -397,10 +293,7 @@ u32 GpuTaskGraph::findResourceIdentity(const Name& identity)const noexcept{
     return s_InvalidImportIndex;
 }
 
-GpuTaskGraph::ResourceImportMatch GpuTaskGraph::findResourceImportMatch(
-    const NameHash* const identity,
-    const ResourcePointerKey& pointer
-)const noexcept{
+GpuTaskGraph::ResourceImportMatch GpuTaskGraph::findResourceImportMatch(const NameHash* const identity, const ResourcePointerKey& pointer)const noexcept{
     if(!pointer.pointer)
         return {};
     if(m_resourceIdentityIndex){
@@ -412,8 +305,8 @@ GpuTaskGraph::ResourceImportMatch GpuTaskGraph::findResourceImportMatch(
         }
         if(identity){
             const auto found = m_resourceIdentityIndex->find(*identity);
-            // At the same ordinal the typed pointer wins. An earlier identity conflict still rejects before a
-            // later pointer match, matching the original ordered import validation.
+            // At the same ordinal the typed pointer wins.
+            // An earlier identity conflict still rejects before a later pointer match, matching the original ordered import validation.
             if(found != m_resourceIdentityIndex->end() && found.value() < match.index)
                 return { found.value(), false };
         }
@@ -483,8 +376,8 @@ void GpuTaskGraph::prepareResourceIndexes(const ResourcePointerKey& pendingPoint
             }
         }
 
-        // Build both tables before publishing either. Their move construction cannot fail, and both contain only
-        // already-published ordinals; an unsuccessful later append may retain capacity without changing lookup.
+        // Build both tables before publishing either.
+        // Their move construction cannot fail, and both contain only already-published ordinals; an unsuccessful later append may retain capacity without changing lookup.
         static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
         static_assert(IsNothrowMoveConstructible_V<ResourcePointerIndex>);
         m_resourceIdentityIndex.emplace(Move(identities));

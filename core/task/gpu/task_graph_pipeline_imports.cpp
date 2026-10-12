@@ -27,12 +27,9 @@ namespace __hidden_gpu_task_graph_pipeline_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CompatiblePipelineMetadata(
-    const GpuTaskGraphPipelineView& pipeline,
-    const GpuGraphPipelineDesc& desc
-)noexcept{
-    // Identity and concrete pipeline kind define the graph-side table key.  Marker text is observational metadata,
-    // matching resource imports where a later compatible import reuses the original graph-owned label.
+[[nodiscard]] static bool CompatiblePipelineMetadata(const GpuTaskGraphPipelineView& pipeline, const GpuGraphPipelineDesc& desc)noexcept{
+    // Identity and concrete pipeline kind define the graph-side table key.
+    // Marker text is observational metadata, matching resource imports where a later compatible import reuses the original graph-owned label.
     return pipeline.identity == desc.identity && pipeline.type == desc.type;
 }
 
@@ -85,10 +82,7 @@ GpuGraphPipelineId GpuTaskGraph::importPipeline(const GpuGraphPipelineDesc& desc
     return appendPipeline(desc, {});
 }
 
-GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
-    const GraphicsPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
+GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(const GraphicsPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -98,10 +92,7 @@ GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
 
     const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
     if(match.index != s_InvalidImportIndex){
-        if(
-            !match.samePointer
-            || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc)
-        )
+        if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
             return {};
         return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
     }
@@ -109,10 +100,7 @@ GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
     return appendPipeline(desc, { .graphicsPipeline = &pipeline, .deviceGeneration = pipeline->getDeviceGeneration() });
 }
 
-GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
-    const ComputePipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
+GpuGraphPipelineId GpuTaskGraph::importComputePipeline(const ComputePipelineHandle& pipeline, const GpuGraphPipelineDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -122,10 +110,7 @@ GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
 
     const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
     if(match.index != s_InvalidImportIndex){
-        if(
-            !match.samePointer
-            || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc)
-        )
+        if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
             return {};
         return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
     }
@@ -133,10 +118,7 @@ GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
     return appendPipeline(desc, { .computePipeline = &pipeline, .deviceGeneration = pipeline->getDeviceGeneration() });
 }
 
-GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
-    const MeshletPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
+GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(const MeshletPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -146,10 +128,7 @@ GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
 
     const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
     if(match.index != s_InvalidImportIndex){
-        if(
-            !match.samePointer
-            || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc)
-        )
+        if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
             return {};
         return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
     }
@@ -157,10 +136,7 @@ GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
     return appendPipeline(desc, { .meshletPipeline = &pipeline, .deviceGeneration = pipeline->getDeviceGeneration() });
 }
 
-GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
-    const RayTracingPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
+GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(const RayTracingPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -170,10 +146,7 @@ GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
 
     const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
     if(match.index != s_InvalidImportIndex){
-        if(
-            !match.samePointer
-            || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc)
-        )
+        if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
             return {};
         return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
     }
@@ -198,10 +171,7 @@ u32 GpuTaskGraph::findPipelineIdentity(const Name& identity)const noexcept{
     return s_InvalidImportIndex;
 }
 
-GpuTaskGraph::PipelineImportMatch GpuTaskGraph::findPipelineImportMatch(
-    const Name& identity,
-    const PipelinePointerKey& pointer
-)const noexcept{
+GpuTaskGraph::PipelineImportMatch GpuTaskGraph::findPipelineImportMatch(const Name& identity, const PipelinePointerKey& pointer)const noexcept{
     if(!pointer.pointer)
         return {};
     if(m_pipelineIdentityIndex){
@@ -272,14 +242,7 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
     if(!mutation.valid())
         return {};
 
-    if(
-        !desc.identity
-        || desc.markerLabel.empty()
-        || desc.markerLabel.size() > Limit<u32>::s_Max
-        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
-        || desc.type >= GpuGraphPipelineType::kCount
-        || m_pipelines.size() >= Limit<u32>::s_Max
-    )
+    if(!desc.identity || desc.markerLabel.empty() || desc.markerLabel.size() > Limit<u32>::s_Max || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size() || desc.type >= GpuGraphPipelineType::kCount || m_pipelines.size() >= Limit<u32>::s_Max)
         return {};
 
     GpuGraphPipelineNode pipeline;

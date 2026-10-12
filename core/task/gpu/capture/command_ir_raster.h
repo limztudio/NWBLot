@@ -19,7 +19,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Raster records carry graph indices and scalars only. Variable vertex bindings and push bytes live in the stream blob.
+// Raster records carry graph indices and scalars only.
+// Variable vertex bindings and push bytes live in the stream blob.
 // The first retained raster scope supports one color attachment, one viewport, optional scissor, and direct draws.
 #pragma pack(push, 1)
 struct GpuCommandIrRasterVertexWire{
@@ -223,8 +224,8 @@ struct GpuCommandIrRasterStateOwner{
     usize recordIndex = 0u;
 };
 
-// Sidecar owners never enter the wire. A heap lease and descriptor owner must remain live until native replay records
-// the exact heap binding; exported streams share these strong references with the capture rather than reacquiring them.
+// Sidecar owners never enter the wire.
+// A heap lease and descriptor owner must remain live until native replay records the exact heap binding; exported streams share these strong references with the capture rather than reacquiring them.
 struct GpuCommandIrRasterHeapOwner{
     GraphicsPipelineHandle pipeline;
     GpuCommandIrOwnerAnchor lease;

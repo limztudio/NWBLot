@@ -36,8 +36,7 @@ void nwbLightSpaceSortEvents(const uint pixelIndex, const uint count){
             const uint previousAddress = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + destination - 1u) * NWB_LIGHT_SPACE_EVENT_BYTES;
             const uint4 previous = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(previousAddress);
             const uint previousInstance = previous.y & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
-            const bool before = instance < previousInstance || (instance == previousInstance &&
-                (asfloat(value.x) > asfloat(previous.x) || (asfloat(value.x) == asfloat(previous.x) && value.z < previous.z)));
+            const bool before = instance < previousInstance || (instance == previousInstance && (asfloat(value.x) > asfloat(previous.x) || (asfloat(value.x) == asfloat(previous.x) && value.z < previous.z)));
             if(!before)
                 break;
             const uint previousOptical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(previousAddress + 16u);

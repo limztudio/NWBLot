@@ -33,36 +33,15 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId source = AddBufferMetadata(
-        graph,
-        Name("tests/task_graph/built_in_buffer_copy_source"),
-        "Built-In Buffer Copy Source"
-    );
-    const Graphics::GpuGraphResourceId destination = AddBufferMetadata(
-        graph,
-        Name("tests/task_graph/built_in_buffer_copy_destination"),
-        "Built-In Buffer Copy Destination"
-    );
+    const Graphics::GpuGraphResourceId source = AddBufferMetadata(graph, Name("tests/task_graph/built_in_buffer_copy_source"), "Built-In Buffer Copy Source");
+    const Graphics::GpuGraphResourceId destination = AddBufferMetadata(graph, Name("tests/task_graph/built_in_buffer_copy_destination"), "Built-In Buffer Copy Destination");
     ASSERT_TRUE(source.valid());
     ASSERT_TRUE(destination.valid());
 
     Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests/task_graph/built_in_buffer_copy"))
-        .setMarkerLabel("Built-In Buffer Copy")
-    ;
-    const Graphics::GpuCopyBufferTaskRegion region{
-        .source = source,
-        .destination = destination,
-        .dataSizeBytes = sizeof(u32),
-    };
-    EXPECT_FALSE(graph.addCopyBufferTask(
-        desc,
-        Graphics::GpuCopyBufferTaskDesc{
-            .regions = &region,
-            .regionCount = 1u,
-        }
-    ).valid());
+    desc.setIdentity(Name("tests/task_graph/built_in_buffer_copy")).setMarkerLabel("Built-In Buffer Copy");
+    const Graphics::GpuCopyBufferTaskRegion region{ .source = source, .destination = destination, .dataSizeBytes = sizeof(u32), };
+    EXPECT_FALSE(graph.addCopyBufferTask(desc, Graphics::GpuCopyBufferTaskDesc{ .regions = &region, .regionCount = 1u, }).valid());
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
     EXPECT_EQ(declarations.taskCount(), 0u);

@@ -30,11 +30,7 @@ inline constexpr u64 s_MediumQueueCostWeight = 4u;
 inline constexpr u64 s_LargeQueueCostWeight = 8u;
 
 
-inline constexpr u8 s_ValidQueueCapabilityMask =
-    static_cast<u8>(GpuQueueCapability::Transfer)
-    | static_cast<u8>(GpuQueueCapability::Compute)
-    | static_cast<u8>(GpuQueueCapability::Graphics)
-;
+inline constexpr u8 s_ValidQueueCapabilityMask = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
 
 // Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
@@ -50,20 +46,12 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
             NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
             TerminateInvariant();
         }
-        if(s_NextCompiledPlanGeneration.compare_exchange_weak(
-            nextGeneration,
-            nextGeneration + 1u,
-            MemoryOrder::relaxed,
-            MemoryOrder::relaxed
-        ))
+        if(s_NextCompiledPlanGeneration.compare_exchange_weak(nextGeneration, nextGeneration + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return nextGeneration;
     }
 }
 
-[[nodiscard]] bool HasCapabilities(
-    const GpuQueueCapability::Mask available,
-    const GpuQueueCapability::Mask required
-)noexcept{
+[[nodiscard]] bool HasCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{
     const u8 availableMask = static_cast<u8>(available);
     const u8 requiredMask = static_cast<u8>(required);
     return (availableMask & requiredMask) == requiredMask;
@@ -73,17 +61,10 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return queueClass < CommandQueue::kCount;
 }
 
-[[nodiscard]] static bool LogicalSharingIncludesQueueFamily(
-    const ResourceQueueSharing::Mask sharing,
-    const GpuPhysicalQueueTopology& topology,
-    const u32 familyIndex
-)noexcept{
+[[nodiscard]] static bool LogicalSharingIncludesQueueFamily(const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueTopology& topology, const u32 familyIndex)noexcept{
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
-        if(
-            queue.familyIndex == familyIndex
-            && ResourceQueueSharing::IncludesQueueClass(sharing, queue.queueClass)
-        )
+        if(queue.familyIndex == familyIndex && ResourceQueueSharing::IncludesQueueClass(sharing, queue.queueClass))
             return true;
     }
     return false;
@@ -91,10 +72,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 // A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by this compile topology.
 // A single requested family remains exclusive and may use ordinary ownership handoffs.
-[[nodiscard]] static bool LogicalSharingUsesConcurrentQueueSharing(
-    const ResourceQueueSharing::Mask sharing,
-    const GpuPhysicalQueueTopology& topology
-)noexcept{
+[[nodiscard]] static bool LogicalSharingUsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueTopology& topology)noexcept{
     if(sharing == ResourceQueueSharing::Exclusive)
         return false;
 
@@ -112,41 +90,23 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return false;
 }
 
-[[nodiscard]] bool ResourceSharingAdmitsQueue(
-    const GpuTaskGraphResourceView& resource,
-    const GpuPhysicalQueueTopology& topology,
-    const GpuPhysicalQueueInfo& queue
-)noexcept{
+[[nodiscard]] bool ResourceSharingAdmitsQueue(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& queue)noexcept{
     if(resource.hasQueueAdmission){
         const ResourceQueueAdmissionSnapshot& admission = resource.queueAdmission;
         return ResourceQueueAdmissionAdmitsQueue(admission, queue);
     }
 
-    return !LogicalSharingUsesConcurrentQueueSharing(resource.queueSharing, topology)
-        || LogicalSharingIncludesQueueFamily(resource.queueSharing, topology, queue.familyIndex)
-    ;
+    return !LogicalSharingUsesConcurrentQueueSharing(resource.queueSharing, topology) || LogicalSharingIncludesQueueFamily(resource.queueSharing, topology, queue.familyIndex);
 }
 
-[[nodiscard]] bool ResourceUsesConcurrentQueueSharing(
-    const GpuTaskGraphResourceView& resource,
-    const GpuPhysicalQueueTopology& topology
-)noexcept{
+[[nodiscard]] bool ResourceUsesConcurrentQueueSharing(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology)noexcept{
     if(resource.hasQueueAdmission)
         return resource.queueAdmission.usesConcurrentSharing;
     return LogicalSharingUsesConcurrentQueueSharing(resource.queueSharing, topology);
 }
 
-[[nodiscard]] bool ResourceSharesQueuePairConcurrently(
-    const GpuTaskGraphResourceView& resource,
-    const GpuPhysicalQueueTopology& topology,
-    const GpuPhysicalQueueInfo& sourceQueue,
-    const GpuPhysicalQueueInfo& destinationQueue
-)noexcept{
-    return sourceQueue.familyIndex != destinationQueue.familyIndex
-        && ResourceUsesConcurrentQueueSharing(resource, topology)
-        && ResourceSharingAdmitsQueue(resource, topology, sourceQueue)
-        && ResourceSharingAdmitsQueue(resource, topology, destinationQueue)
-    ;
+[[nodiscard]] bool ResourceSharesQueuePairConcurrently(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& sourceQueue, const GpuPhysicalQueueInfo& destinationQueue)noexcept{
+    return sourceQueue.familyIndex != destinationQueue.familyIndex && ResourceUsesConcurrentQueueSharing(resource, topology) && ResourceSharingAdmitsQueue(resource, topology, sourceQueue) && ResourceSharingAdmitsQueue(resource, topology, destinationQueue);
 }
 
 [[nodiscard]] bool IsValidQueueTopology(const GpuPhysicalQueueTopology& topology)noexcept{
@@ -157,13 +117,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         const u8 capabilityMask = static_cast<u8>(queue.capabilities);
-        if(
-            !queue.id.valid()
-            || !IsKnownQueueClass(queue.queueClass)
-            || queue.familyIndex == Limit<u32>::s_Max
-            || capabilityMask == 0u
-            || (capabilityMask & ~s_ValidQueueCapabilityMask) != 0u
-        )
+        if(!queue.id.valid() || !IsKnownQueueClass(queue.queueClass) || queue.familyIndex == Limit<u32>::s_Max || capabilityMask == 0u || (capabilityMask & ~s_ValidQueueCapabilityMask) != 0u)
             return false;
 
         switch(queue.queueClass){
@@ -205,11 +159,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     const GpuPhysicalQueueInfo* result = nullptr;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
-        if(
-            queue.queueClass != CommandQueue::Graphics
-            || !HasCapabilities(queue.capabilities, GpuQueueCapability::Graphics)
-            || !IsBetterQueue(queue, result)
-        )
+        if(queue.queueClass != CommandQueue::Graphics || !HasCapabilities(queue.capabilities, GpuQueueCapability::Graphics) || !IsBetterQueue(queue, result))
             continue;
         result = &queue;
     }

@@ -28,32 +28,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbSurfelFindSpawnCoverage(
-    uint id,
-    const uint poolCapacity,
-    const int3 cell,
-    const float radius,
-    const float3 worldPosition,
-    const float3 worldNormal,
-    const float normalBias,
-    out uint walk
-){
+uint nwbSurfelFindSpawnCoverage(uint id, const uint poolCapacity, const int3 cell, const float radius, const float3 worldPosition, const float3 worldNormal, const float normalBias, out uint walk){
     walk = 0u;
-    [loop]
-    while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
+    [loop] while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
         ++walk;
         const float3 position = g_NwbSurfelPool[id].position;
         const float3 normal = g_NwbSurfelPool[id].normal;
         const float3 delta = worldPosition - position;
         const float planeDistance = max(abs(dot(delta, normal)), abs(dot(delta, worldNormal)));
-        if(nwbSurfelIsAlive(g_NwbSurfelPool[id].sampleState) && nwbSurfelSpawnCoversCandidate(
-            nwbSurfelSameCell(g_NwbSurfelPool[id].cell, cell),
-            dot(worldNormal, normal),
-            dot(delta, delta),
-            planeDistance,
-            radius,
-            normalBias
-        ))
+        if(nwbSurfelIsAlive(g_NwbSurfelPool[id].sampleState) && nwbSurfelSpawnCoversCandidate(nwbSurfelSameCell(g_NwbSurfelPool[id].cell, cell), dot(worldNormal, normal), dot(delta, delta), planeDistance, radius, normalBias))
             return id;
         id = g_NwbSurfelPool[id].nextInCell;
     }
@@ -138,8 +121,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     bool allocated = false;
     {
         uint freeTop = g_NwbSurfelCounter[NWB_SURFEL_COUNTER_FREE_TOP];
-        [loop]
-        while(freeTop != 0u){
+        [loop] while(freeTop != 0u){
             uint prev;
             InterlockedCompareExchange(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_FREE_TOP], freeTop, freeTop - 1u, prev);
             if(prev == freeTop){
@@ -152,8 +134,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
     if(!allocated){
         uint bumpTop = g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP];
-        [loop]
-        while(bumpTop < poolCapacity){
+        [loop] while(bumpTop < poolCapacity){
             uint prev;
             InterlockedCompareExchange(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP], bumpTop, bumpTop + 1u, prev);
             if(prev == bumpTop){
@@ -181,8 +162,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint seedBucket = nwbSurfelHashCell(seedCell, cellCount);
         uint seedId = g_NwbSurfelSeedCellHead[seedBucket];
         uint seedWalk = 0u;
-        [loop]
-        while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
+        [loop] while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
             const NwbSurfel neighbour = g_NwbSurfelSeedPool[seedId];
             if(
                 nwbSurfelIsAlive(neighbour.sampleState)

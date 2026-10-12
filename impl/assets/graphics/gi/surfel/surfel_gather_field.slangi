@@ -38,13 +38,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbSurfelGatherField(
-    const float3 worldPosition,
-    const float3 normal,
-    const uint poolCapacity,
-    out half3 outIrradiance,
-    out half outCoverage
-){
+bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const uint poolCapacity, out half3 outIrradiance, out half outCoverage){
     outIrradiance = half3(0.0h);
     outCoverage = half(0.0h);
 
@@ -62,8 +56,7 @@ bool nwbSurfelGatherField(
     for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy){
         // These immutable heads are independent of each list walk; consume them in the original dx order.
         uint rowHeads[2 * NWB_SURFEL_GATHER_CELL_EXTENT + 1];
-        [unroll]
-        for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
+        [unroll] for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
             const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
             rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT] = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
         }
@@ -71,8 +64,7 @@ bool nwbSurfelGatherField(
             const int3 cell = baseCell + int3(dx, dy, dz);
             uint id = rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT];
             uint walk = 0u;
-            [loop]
-            while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
+            [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
                 const uint nextInCell = NWB_SURFEL_GATHER_FIELD_POOL[id].nextInCell;
                 const uint sampleState = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleState;
                 const uint sampleCount = nwbSurfelSampleCount(sampleState);
@@ -88,11 +80,7 @@ bool nwbSurfelGatherField(
                         weight = normalWeight * distanceWeight * confidence;
                         // Keep SH loads and reconstruction conditional on an actual contribution.
                         if(weight > half(0.0h)){
-                            irradianceSum += nwbSurfelShReconstruct(
-                                half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR),
-                                half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG),
-                                half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), normal
-                            ) * weight;
+                            irradianceSum += nwbSurfelShReconstruct(half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), normal) * weight;
                         }
                     }
                     totalWeight += weight;
@@ -112,12 +100,7 @@ bool nwbSurfelGatherField(
 }
 
 // Bounce tracing uses the normalized previous-frame field, not its screen-space ambient-blend confidence.
-bool nwbSurfelGatherField(
-    const float3 worldPosition,
-    const float3 normal,
-    const uint poolCapacity,
-    out half3 outIrradiance
-){
+bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const uint poolCapacity, out half3 outIrradiance){
     half ignoredCoverage;
     return nwbSurfelGatherField(worldPosition, normal, poolCapacity, outIrradiance, ignoredCoverage);
 }

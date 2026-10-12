@@ -90,20 +90,14 @@ public:
         m_workload = Move(*requestedWorkload);
         m_output = Move(*requestedOutput);
         const AStringView workload(m_workload.data(), m_workload.size());
-        if(
-            workload != "opaque" && workload != "hybrid" && workload != "shared"
-            && workload != "unique" && workload != "overrides" && workload != "runtime"
-        )
+        if(workload != "opaque" && workload != "hybrid" && workload != "shared" && workload != "unique" && workload != "overrides" && workload != "runtime")
             return false;
         const auto mode = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_MODE");
         if(!mode || (*mode != "timing" && *mode != "memory"))
             return false;
         m_memoryEnabled = *mode == "memory";
         m_runtime = workload == "runtime";
-        if(
-            !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
-            || !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
-        ){
+        if(!m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) || !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
             return false;
         }
@@ -136,8 +130,7 @@ public:
         if(!createBackdrop())
             return false;
         for(u32 index = 0u; index < s_ObjectCount; ++index){
-            const Float4 position((static_cast<f32>(index % 8u) - 3.5f) * 0.75f,
-                0.7f + static_cast<f32>(index / 8u) * 0.58f, 0.f, 0.f);
+            const Float4 position((static_cast<f32>(index % 8u) - 3.5f) * 0.75f, 0.7f + static_cast<f32>(index / 8u) * 0.58f, 0.f, 0.f);
             if(m_runtime && index % 8u == 0u){
                 if(!createRuntime(index, position))
                     return false;
@@ -166,8 +159,7 @@ public:
             ++m_renderers;
             if(workload == "overrides"){
                 entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, Name(s_Interface));
-                if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint",
-                    Float4(0.55f + static_cast<f32>(index) / 256.f, 0.85f, 1.f, 1.f)))
+                if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint", Float4(0.55f + static_cast<f32>(index) / 256.f, 0.85f, 1.f, 1.f)))
                     return false;
             }
         }
@@ -188,9 +180,7 @@ public:
         capture.gpuTiming = true;
         capture.memory = m_memoryEnabled;
         m_context.setPerfCapture(capture);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64")
-            , StringConvert(workload), StringConvert(*mode)
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64"), StringConvert(workload), StringConvert(*mode));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: vsync {}"), m_context.graphics.isVsyncEnabled() ? 1u : 0u);
@@ -228,19 +218,16 @@ public:
 
 private:
     [[nodiscard]] bool createBackdrop(){
-        const auto backdrop = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_Plane, s_Opaque, s_Interface,
-            Float4(0.1f, 0.1f, 0.1f, 1.f), Float4(0.f, 2.6f, 2.f, 0.f), Float4(5.f, 1.f, 3.5f, 0.f));
+        const auto backdrop = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.f), Float4(0.f, 2.6f, 2.f, 0.f), Float4(5.f, 1.f, 3.5f, 0.f));
         if(!backdrop.valid())
             return false;
         auto& transform = m_world->entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
         const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.f);
         const Half roughness = ConvertFloatToHalf(0.f);
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0",
-            NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
             return false;
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness",
-            NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
             return false;
         ++m_renderers;
         return true;
@@ -248,8 +235,7 @@ private:
 
     [[nodiscard]] bool createRuntime(const u32 index, const Float4& position){
         bool tintApplied = false;
-        const auto owner = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface,
-            Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f), tintApplied);
+        const auto owner = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f), tintApplied);
         if(!owner.valid() || !tintApplied)
             return false;
         SyncSmokeModelRuntimes(*m_world);
@@ -288,9 +274,7 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: actual ready renderer/runtime counts do not match the workload"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}")
-            , m_renderers, m_runtimeRenderers, m_transparentRenderers
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"), m_renderers, m_runtimeRenderers, m_transparentRenderers);
         return true;
     }
 

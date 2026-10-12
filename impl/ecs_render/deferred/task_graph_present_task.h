@@ -39,11 +39,9 @@ struct DeferredPresentGraphTask{
     // Acquired backbuffer recording belongs to the primary presentation timeline.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
 
-    // The deferred system, the graphics runtime, the frame targets, the async-final timing slot,
-    // the timing ticket, and the shadow-visibility task are required: present always closes the
-    // async-final range when shadow visibility runs on compute. Only the output-layer contributor
-    // stays optional. References (not nullable pointers) carry the required bindings so a missing
-    // binding fails at declaration time instead of silently returning `false` inside Record.
+    // The deferred system, the graphics runtime, the frame targets, the async-final timing slot, the timing ticket, and the shadow-visibility task are required: present always closes the async-final range when shadow visibility runs on compute.
+    // Only the output-layer contributor stays optional.
+    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         Core::GraphicsRuntime& graphics;
@@ -57,19 +55,10 @@ struct DeferredPresentGraphTask{
         const Core::GpuTaskId& shadowVisibilityTask;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
-    // Narrow output-layer acceptance: the only optional coupling inside Accepted. Unit tests cover
-    // this helper directly so they never need a full frame Payload for the handshake contract.
-    static void AcceptOutputLayer(
-        Core::IGpuTaskGraphOutputLayerContributor* contributor,
-        u64 frameGeneration,
-        const Core::QueueSubmissionToken& token
-    );
+    // Narrow output-layer acceptance: the only optional coupling inside Accepted. Unit tests cover this helper directly so they never need a full frame Payload for the handshake contract.
+    static void AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* contributor, u64 frameGeneration, const Core::QueueSubmissionToken& token);
 };
 
 

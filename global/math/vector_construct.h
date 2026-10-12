@@ -26,15 +26,11 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleMoveMask(SIMDVectorDouble value)noexcep
 #if defined(NWB_HAS_NEON64)
     const uint64x2_t low = vshrq_n_u64(SIMDVectorDoubleDetail::GetLowBits(value), 63u);
     const uint64x2_t high = vshrq_n_u64(SIMDVectorDoubleDetail::GetHighBits(value), 63u);
-    return static_cast<u32>(
-        vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u)
-    );
+    return static_cast<u32>(vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u));
 #elif defined(NWB_HAS_AVX)
     return static_cast<u32>(_mm256_movemask_pd(BitCast<__m256d>(value)));
 #elif defined(NWB_HAS_SSE2)
-    return static_cast<u32>(
-        _mm_movemask_pd(SIMDVectorDoubleDetail::GetLow(value)) | (_mm_movemask_pd(SIMDVectorDoubleDetail::GetHigh(value)) << 2u)
-    );
+    return static_cast<u32>(_mm_movemask_pd(SIMDVectorDoubleDetail::GetLow(value)) | (_mm_movemask_pd(SIMDVectorDoubleDetail::GetHigh(value)) << 2u));
 #else
     const SIMDVectorDoubleDetail::UIntVector bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(value) >> 63u;
     return static_cast<u32>(bits[0] | (bits[1] << 1u) | (bits[2] << 2u) | (bits[3] << 3u));
@@ -95,10 +91,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSetInt(u64 x, u64 y, u64 z
 #elif defined(NWB_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_set_epi64x(BitCast<i64>(w), BitCast<i64>(z), BitCast<i64>(y), BitCast<i64>(x)));
 #elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromUIntPairs(
-        _mm_set_epi64x(BitCast<i64>(y), BitCast<i64>(x)),
-        _mm_set_epi64x(BitCast<i64>(w), BitCast<i64>(z))
-    );
+    return SIMDVectorDoubleDetail::FromUIntPairs(_mm_set_epi64x(BitCast<i64>(y), BitCast<i64>(x)), _mm_set_epi64x(BitCast<i64>(w), BitCast<i64>(z)));
 #else
     return BitCast<SIMDVectorDouble>(SIMDVectorDoubleDetail::UIntVector{ x, y, z, w });
 #endif
@@ -623,12 +616,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatSignMask()noexcept{ r
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, u32 e0, u32 e1, u32 e2, u32 e3)noexcept{
     NWB_ASSERT(e0 < 4 && e1 < 4 && e2 < 4 && e3 < 4);
 #if defined(NWB_HAS_NEON)
-    static const u32 controlElement[4] = {
-        0x03020100u,
-        0x07060504u,
-        0x0B0A0908u,
-        0x0F0E0D0Cu,
-    };
+    static const u32 controlElement[4] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, };
 
     uint8x8x2_t table{};
     table.val[0] = vreinterpret_u8_f32(vget_low_f32(value));
@@ -644,12 +632,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, 
     const __m128i control = _mm_set_epi32(static_cast<i32>(e3), static_cast<i32>(e2), static_cast<i32>(e1), static_cast<i32>(e0));
     return _mm_permutevar_ps(value, control);
 #elif defined(NWB_HAS_SSE4)
-    return VectorSetInt(
-        VectorGetIntByIndex(value, e0),
-        VectorGetIntByIndex(value, e1),
-        VectorGetIntByIndex(value, e2),
-        VectorGetIntByIndex(value, e3)
-    );
+    return VectorSetInt(VectorGetIntByIndex(value, e0), VectorGetIntByIndex(value, e1), VectorGetIntByIndex(value, e2), VectorGetIntByIndex(value, e3));
 #else
     return VectorSetInt(value.u[e0], value.u[e1], value.u[e2], value.u[e3]);
 #endif
@@ -755,10 +738,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSwizzle(SIMDVectorDouble v
     NWB_ASSERT(e0 < 4 && e1 < 4 && e2 < 4 && e3 < 4);
 #if defined(NWB_HAS_NEON64)
     const uint8x16x2_t table = { BitCast<uint8x16_t>(SIMDVectorDoubleDetail::GetLow(value)), BitCast<uint8x16_t>(SIMDVectorDoubleDetail::GetHigh(value)) };
-    return SIMDVectorDoubleDetail::FromUIntPairs(
-        BitCast<uint64x2_t>(vqtbl2q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(e0, e1))),
-        BitCast<uint64x2_t>(vqtbl2q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(e2, e3)))
-    );
+    return SIMDVectorDoubleDetail::FromUIntPairs(BitCast<uint64x2_t>(vqtbl2q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(e0, e1))), BitCast<uint64x2_t>(vqtbl2q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(e2, e3))));
 #elif defined(NWB_HAS_AVX2)
     const __m256i indices = _mm256_set_epi32(
         static_cast<i32>(e3 * 2u + 1u),
@@ -784,17 +764,9 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSwizzle(SIMDVectorDouble v
     ));
     return BitCast<SIMDVectorDouble>(_mm256_blendv_pd(samePairs, oppositePairs, pairControl));
 #elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::PermutePair(value, value, e0, e1),
-        SIMDVectorDoubleDetail::PermutePair(value, value, e2, e3)
-    );
+    return SIMDVectorDoubleDetail::FromPairs(SIMDVectorDoubleDetail::PermutePair(value, value, e0, e1), SIMDVectorDoubleDetail::PermutePair(value, value, e2, e3));
 #else
-    return VectorDoubleSetInt(
-        BitCast<u64>(value[e0]),
-        BitCast<u64>(value[e1]),
-        BitCast<u64>(value[e2]),
-        BitCast<u64>(value[e3])
-    );
+    return VectorDoubleSetInt(BitCast<u64>(value[e0]), BitCast<u64>(value[e1]), BitCast<u64>(value[e2]), BitCast<u64>(value[e3]));
 #endif
 }
 
@@ -804,10 +776,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSwizzle(SIMDVectorDouble v
 #if defined(NWB_HAS_AVX2)
     return BitCast<SIMDVectorDouble>(_mm256_permute4x64_pd(BitCast<__m256d>(value), _MM_SHUFFLE(E3, E2, E1, E0)));
 #elif defined(NWB_HAS_NEON64) || defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::PermutePair<E0, E1>(value, value),
-        SIMDVectorDoubleDetail::PermutePair<E2, E3>(value, value)
-    );
+    return SIMDVectorDoubleDetail::FromPairs(SIMDVectorDoubleDetail::PermutePair<E0, E1>(value, value), SIMDVectorDoubleDetail::PermutePair<E2, E3>(value, value));
 #else
     return __builtin_shufflevector(value, value, E0, E1, E2, E3);
 #endif
@@ -823,16 +792,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSwizzle<0, 1, 2, 3>(SIMDVe
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIMDVectorSingle v1, u32 x, u32 y, u32 z, u32 w)noexcept{
     NWB_ASSERT(x < 8 && y < 8 && z < 8 && w < 8);
 #if defined(NWB_HAS_NEON)
-    static const u32 controlElement[8] = {
-        0x03020100u,
-        0x07060504u,
-        0x0B0A0908u,
-        0x0F0E0D0Cu,
-        0x13121110u,
-        0x17161514u,
-        0x1B1A1918u,
-        0x1F1E1D1Cu,
-    };
+    static const u32 controlElement[8] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, 0x13121110u, 0x17161514u, 0x1B1A1918u, 0x1F1E1D1Cu, };
 
     uint8x8x4_t table{};
     table.val[0] = vreinterpret_u8_f32(vget_low_f32(v0));
@@ -861,12 +821,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
         w < 4u ? VectorGetIntByIndex(v0, w) : VectorGetIntByIndex(v1, w - 4u)
     );
 #else
-    return VectorSetInt(
-        x < 4u ? v0.u[x] : v1.u[x - 4u],
-        y < 4u ? v0.u[y] : v1.u[y - 4u],
-        z < 4u ? v0.u[z] : v1.u[z - 4u],
-        w < 4u ? v0.u[w] : v1.u[w - 4u]
-    );
+    return VectorSetInt(x < 4u ? v0.u[x] : v1.u[x - 4u], y < 4u ? v0.u[y] : v1.u[y - 4u], z < 4u ? v0.u[z] : v1.u[z - 4u], w < 4u ? v0.u[w] : v1.u[w - 4u]);
 #endif
 }
 
@@ -1015,10 +970,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoublePermute(SIMDVectorDouble v
         BitCast<uint8x16_t>(SIMDVectorDoubleDetail::GetLow(v0)), BitCast<uint8x16_t>(SIMDVectorDoubleDetail::GetHigh(v0)),
         BitCast<uint8x16_t>(SIMDVectorDoubleDetail::GetLow(v1)), BitCast<uint8x16_t>(SIMDVectorDoubleDetail::GetHigh(v1))
     };
-    return SIMDVectorDoubleDetail::FromUIntPairs(
-        BitCast<uint64x2_t>(vqtbl4q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(x, y))),
-        BitCast<uint64x2_t>(vqtbl4q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(z, w)))
-    );
+    return SIMDVectorDoubleDetail::FromUIntPairs(BitCast<uint64x2_t>(vqtbl4q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(x, y))), BitCast<uint64x2_t>(vqtbl4q_u8(table, SIMDVectorDoubleDetail::PermuteByteIndices(z, w))));
 #elif defined(NWB_HAS_AVX)
     const __m256d first = BitCast<__m256d>(VectorDoubleSwizzle(v0, x & 3u, y & 3u, z & 3u, w & 3u));
     const __m256d second = BitCast<__m256d>(VectorDoubleSwizzle(v1, x & 3u, y & 3u, z & 3u, w & 3u));
@@ -1030,17 +982,9 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoublePermute(SIMDVectorDouble v
     ));
     return BitCast<SIMDVectorDouble>(_mm256_blendv_pd(first, second, sourceControl));
 #elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::PermutePair(v0, v1, x, y),
-        SIMDVectorDoubleDetail::PermutePair(v0, v1, z, w)
-    );
+    return SIMDVectorDoubleDetail::FromPairs(SIMDVectorDoubleDetail::PermutePair(v0, v1, x, y), SIMDVectorDoubleDetail::PermutePair(v0, v1, z, w));
 #else
-    return VectorDoubleSetInt(
-        x < 4u ? BitCast<u64>(v0[x]) : BitCast<u64>(v1[x - 4u]),
-        y < 4u ? BitCast<u64>(v0[y]) : BitCast<u64>(v1[y - 4u]),
-        z < 4u ? BitCast<u64>(v0[z]) : BitCast<u64>(v1[z - 4u]),
-        w < 4u ? BitCast<u64>(v0[w]) : BitCast<u64>(v1[w - 4u])
-    );
+    return VectorDoubleSetInt(x < 4u ? BitCast<u64>(v0[x]) : BitCast<u64>(v1[x - 4u]), y < 4u ? BitCast<u64>(v0[y]) : BitCast<u64>(v1[y - 4u]), z < 4u ? BitCast<u64>(v0[z]) : BitCast<u64>(v1[z - 4u]), w < 4u ? BitCast<u64>(v0[w]) : BitCast<u64>(v1[w - 4u]));
 #endif
 }
 
@@ -1050,14 +994,9 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoublePermute(SIMDVectorDouble v
 #if defined(NWB_HAS_AVX2)
     const __m256d first = _mm256_permute4x64_pd(BitCast<__m256d>(v0), _MM_SHUFFLE(W & 3u, Z & 3u, Y & 3u, X & 3u));
     const __m256d second = _mm256_permute4x64_pd(BitCast<__m256d>(v1), _MM_SHUFFLE(W & 3u, Z & 3u, Y & 3u, X & 3u));
-    return BitCast<SIMDVectorDouble>(
-        _mm256_blend_pd(first, second, ((X & 4u) >> 2u) | ((Y & 4u) >> 1u) | (Z & 4u) | ((W & 4u) << 1u))
-    );
+    return BitCast<SIMDVectorDouble>(_mm256_blend_pd(first, second, ((X & 4u) >> 2u) | ((Y & 4u) >> 1u) | (Z & 4u) | ((W & 4u) << 1u)));
 #elif defined(NWB_HAS_NEON64) || defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::PermutePair<X, Y>(v0, v1),
-        SIMDVectorDoubleDetail::PermutePair<Z, W>(v0, v1)
-    );
+    return SIMDVectorDoubleDetail::FromPairs(SIMDVectorDoubleDetail::PermutePair<X, Y>(v0, v1), SIMDVectorDoubleDetail::PermutePair<Z, W>(v0, v1));
 #else
     return __builtin_shufflevector(v0, v1, X, Y, Z, W);
 #endif
@@ -1088,12 +1027,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 s
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSelectControl(u32 selectX, u32 selectY, u32 selectZ, u32 selectW)noexcept{
-    return VectorDoubleSetInt(
-        selectX ? 0xFFFFFFFFFFFFFFFFu : 0u,
-        selectY ? 0xFFFFFFFFFFFFFFFFu : 0u,
-        selectZ ? 0xFFFFFFFFFFFFFFFFu : 0u,
-        selectW ? 0xFFFFFFFFFFFFFFFFu : 0u
-    );
+    return VectorDoubleSetInt(selectX ? 0xFFFFFFFFFFFFFFFFu : 0u, selectY ? 0xFFFFFFFFFFFFFFFFu : 0u, selectZ ? 0xFFFFFFFFFFFFFFFFu : 0u, selectW ? 0xFFFFFFFFFFFFFFFFu : 0u);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAndInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
@@ -1108,17 +1042,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAndInt(SIMDVectorSingle v0, SIMD
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleAndInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(NWB_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromUIntPairs(
-        vandq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)),
-        vandq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1))
-    );
+    return SIMDVectorDoubleDetail::FromUIntPairs(vandq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)), vandq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1)));
 #elif defined(NWB_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_and_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)));
 #elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        _mm_and_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
-        _mm_and_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
-    );
+    return SIMDVectorDoubleDetail::FromPairs(_mm_and_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), _mm_and_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
 #else
     const SIMDVectorDoubleDetail::UIntVector v0Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v0);
     const SIMDVectorDoubleDetail::UIntVector v1Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v1);
@@ -1138,17 +1066,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorOrInt(SIMDVectorSingle v0, SIMDV
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleOrInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(NWB_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromUIntPairs(
-        vorrq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)),
-        vorrq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1))
-    );
+    return SIMDVectorDoubleDetail::FromUIntPairs(vorrq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)), vorrq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1)));
 #elif defined(NWB_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_or_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)));
 #elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        _mm_or_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
-        _mm_or_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
-    );
+    return SIMDVectorDoubleDetail::FromPairs(_mm_or_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), _mm_or_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
 #else
     const SIMDVectorDoubleDetail::UIntVector v0Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v0);
     const SIMDVectorDoubleDetail::UIntVector v1Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v1);
@@ -1168,17 +1090,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorXorInt(SIMDVectorSingle v0, SIMD
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleXorInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(NWB_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromUIntPairs(
-        veorq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)),
-        veorq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1))
-    );
+    return SIMDVectorDoubleDetail::FromUIntPairs(veorq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)), veorq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1)));
 #elif defined(NWB_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_xor_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)));
 #elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        _mm_xor_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)),
-        _mm_xor_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1))
-    );
+    return SIMDVectorDoubleDetail::FromPairs(_mm_xor_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), _mm_xor_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
 #else
     const SIMDVectorDoubleDetail::UIntVector v0Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v0);
     const SIMDVectorDoubleDetail::UIntVector v1Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v1);
@@ -1198,17 +1114,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAndCInt(SIMDVectorSingle v0, SIM
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleAndCInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(NWB_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromUIntPairs(
-        vbicq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)),
-        vbicq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1))
-    );
+    return SIMDVectorDoubleDetail::FromUIntPairs(vbicq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)), vbicq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1)));
 #elif defined(NWB_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_andnot_pd(BitCast<__m256d>(v1), BitCast<__m256d>(v0)));
 #elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        _mm_andnot_pd(SIMDVectorDoubleDetail::GetLow(v1), SIMDVectorDoubleDetail::GetLow(v0)),
-        _mm_andnot_pd(SIMDVectorDoubleDetail::GetHigh(v1), SIMDVectorDoubleDetail::GetHigh(v0))
-    );
+    return SIMDVectorDoubleDetail::FromPairs(_mm_andnot_pd(SIMDVectorDoubleDetail::GetLow(v1), SIMDVectorDoubleDetail::GetLow(v0)), _mm_andnot_pd(SIMDVectorDoubleDetail::GetHigh(v1), SIMDVectorDoubleDetail::GetHigh(v0)));
 #else
     const SIMDVectorDoubleDetail::UIntVector v0Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v0);
     const SIMDVectorDoubleDetail::UIntVector v1Bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(v1);
@@ -1250,9 +1160,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSelect(SIMDVectorDouble v0
     );
 #elif defined(NWB_HAS_AVX)
     const __m256d mask = BitCast<__m256d>(control);
-    return BitCast<SIMDVectorDouble>(
-        _mm256_or_pd(_mm256_andnot_pd(mask, BitCast<__m256d>(v0)), _mm256_and_pd(mask, BitCast<__m256d>(v1)))
-    );
+    return BitCast<SIMDVectorDouble>(_mm256_or_pd(_mm256_andnot_pd(mask, BitCast<__m256d>(v0)), _mm256_and_pd(mask, BitCast<__m256d>(v1))));
 #elif defined(NWB_HAS_SSE2)
     const __m128d low = SIMDVectorDoubleDetail::GetLow(control);
     const __m128d high = SIMDVectorDoubleDetail::GetHigh(control);

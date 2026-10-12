@@ -80,11 +80,7 @@ using GpuVersion = RefCountPtr<RefCounter<T>, ArenaRefDeleter<RefCounter<T>, Cor
 
 template<typename T, typename... Args>
 [[nodiscard]] GpuVersion<T> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args){
-    return GpuVersion<T>(
-        NewArenaObject<RefCounter<T>>(arena, Forward<Args>(args)...),
-        ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return GpuVersion<T>(NewArenaObject<RefCounter<T>>(arena, Forward<Args>(args)...), ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 
@@ -184,11 +180,7 @@ struct GpuFrameSlot{
 
 
 // Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
-[[nodiscard]] NWB_INLINE bool ResolvePaintPushConstants(
-    const GpuFrameData& frame,
-    const DrawCommand& draw,
-    GpuPaintPushConstants& push
-)noexcept{
+[[nodiscard]] NWB_INLINE bool ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept{
     push.material = static_cast<u32>(draw.material);
     push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
     if(draw.material == PaintMaterial::Skin)
@@ -256,16 +248,8 @@ struct GpuOutputTask{
 
 
 struct GpuRendererState final : NoCopy{
-    GpuRendererState(
-        Core::Alloc::GlobalArena& arena,
-        Core::GraphicsRuntime& graphics,
-        Core::Assets::AssetManager& assets,
-        GpuRenderer::ShaderPathResolveCallback resolver
-    );
-    [[nodiscard]] static bool MatchesAcquired(
-        const Core::AcquiredPresentationFrame& first,
-        const Core::AcquiredPresentationFrame& second
-    );
+    GpuRendererState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver);
+    [[nodiscard]] static bool MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second);
     [[nodiscard]] static bool ValidateGlyphPages(const DrawSnapshot& snapshot);
     [[nodiscard]] static bool ValidateSdfPages(const DrawSnapshot& snapshot);
     [[nodiscard]] static bool ValidateTextureImages(const DrawSnapshot& snapshot);
@@ -273,35 +257,20 @@ struct GpuRendererState final : NoCopy{
     [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
     [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
     [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(
-        Core::GpuTaskGraph& graph,
-        const GpuFrame& frame,
-        GpuRasterResourceUses& uses
-    );
+    [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     [[nodiscard]] GpuVersion<GpuSdfAtlasVersion> prepareSdfPage(const SharedSdfAtlasPage& page);
     [[nodiscard]] bool prepareSdfPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(
-        Core::GpuTaskGraph& graph,
-        const GpuFrame& frame,
-        GpuRasterResourceUses& uses
-    );
+    [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     [[nodiscard]] GpuVersion<GpuTextureImageVersion> prepareTextureImage(const SharedImageSource& source);
     [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(
-        Core::GpuTaskGraph& graph,
-        const GpuFrame& frame,
-        GpuRasterResourceUses& uses
-    );
+    [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     void trimImageCache(const DrawSnapshot& snapshot);
     void evictImageCacheEntry();
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer);
-    [[nodiscard]] Core::GpuTaskId declareStandalone(
-        Core::GpuTaskGraph& graph,
-        Core::GpuTimingFrameTransaction& frameTimingTransaction
-    );
+    [[nodiscard]] Core::GpuTaskId declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
 
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;

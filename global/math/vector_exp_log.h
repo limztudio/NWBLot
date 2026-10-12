@@ -301,19 +301,9 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPow(SIMDVectorSingle v0, SIMDVec
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
 #elif defined(NWB_HAS_NEON)
-    return SIMDConvertDetail::MakeF32(
-        Pow(vgetq_lane_f32(v0, 0), vgetq_lane_f32(v1, 0)),
-        Pow(vgetq_lane_f32(v0, 1), vgetq_lane_f32(v1, 1)),
-        Pow(vgetq_lane_f32(v0, 2), vgetq_lane_f32(v1, 2)),
-        Pow(vgetq_lane_f32(v0, 3), vgetq_lane_f32(v1, 3))
-    );
+    return SIMDConvertDetail::MakeF32(Pow(vgetq_lane_f32(v0, 0), vgetq_lane_f32(v1, 0)), Pow(vgetq_lane_f32(v0, 1), vgetq_lane_f32(v1, 1)), Pow(vgetq_lane_f32(v0, 2), vgetq_lane_f32(v1, 2)), Pow(vgetq_lane_f32(v0, 3), vgetq_lane_f32(v1, 3)));
 #else
-    return VectorSet(
-        Pow(VectorGetX(v0), VectorGetX(v1)),
-        Pow(VectorGetY(v0), VectorGetY(v1)),
-        Pow(VectorGetZ(v0), VectorGetZ(v1)),
-        Pow(VectorGetW(v0), VectorGetW(v1))
-    );
+    return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
 #endif
 }
 

@@ -110,9 +110,7 @@ private:
             u32 x = 0u;
             const u32 chunkEndX = width & ~3u;
             for(; x < chunkEndX; x += 4u){
-                SIMDVectorSingle alphaLanes = (alphaSource.mode == AlphaSourceMode::Constant)
-                    ? saturatedConstantAlpha
-                    : VectorSet((*alphaMask)(x, y)[0u], (*alphaMask)(x + 1u, y)[0u], (*alphaMask)(x + 2u, y)[0u], (*alphaMask)(x + 3u, y)[0u]);
+                SIMDVectorSingle alphaLanes = (alphaSource.mode == AlphaSourceMode::Constant) ? saturatedConstantAlpha : VectorSet((*alphaMask)(x, y)[0u], (*alphaMask)(x + 1u, y)[0u], (*alphaMask)(x + 2u, y)[0u], (*alphaMask)(x + 3u, y)[0u]);
                 const SIMDVectorSingle quantizedLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(alphaLanes), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
                 plane(x, y).a = static_cast<u8>(VectorGetX(quantizedLanes));
                 plane(x + 1u, y).a = static_cast<u8>(VectorGetY(quantizedLanes));
@@ -123,8 +121,7 @@ private:
             if(remaining >= 2u){
                 f32 values[4]{};
                 for(u32 lane = 0u; lane < remaining; ++lane)
-                    values[lane] = alphaSource.mode == AlphaSourceMode::Constant
-                        ? VectorGetX(saturatedConstantAlpha) : (*alphaMask)(x + lane, y)[0u];
+                    values[lane] = alphaSource.mode == AlphaSourceMode::Constant ? VectorGetX(saturatedConstantAlpha) : (*alphaMask)(x + lane, y)[0u];
                 u8 quantized[4]{};
                 if(AlphaBatchDetail::TryQuantize(values, remaining, quantized)){
                     for(u32 lane = 0u; lane < remaining; ++lane)
@@ -133,9 +130,7 @@ private:
                 }
             }
             for(; x < width; ++x){
-                const f32 alpha = (alphaSource.mode == AlphaSourceMode::Constant)
-                    ? VectorGetX(saturatedConstantAlpha)
-                    : (*alphaMask)(x, y)[0u];
+                const f32 alpha = (alphaSource.mode == AlphaSourceMode::Constant) ? VectorGetX(saturatedConstantAlpha) : (*alphaMask)(x, y)[0u];
                 plane(x, y).a = static_cast<u8>(VectorGetX(VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)))));
             }
         }
@@ -143,12 +138,7 @@ private:
     return true;
 }
 
-[[nodiscard]] static Expected<TexturePayload> Encode2DOrCube(
-    const Vector<Path>& inputPaths,
-    const TextureDimension::Enum dimension,
-    const bool srgb,
-    const AlphaSource& alphaSource
-){
+[[nodiscard]] static Expected<TexturePayload> Encode2DOrCube(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
     TexturePayload payload;
     const u32 planeCount = dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
@@ -157,10 +147,7 @@ private:
     basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
     EncodeBackendDetail::ConfigureCompressor(parameters, jobPool, basist::basis_tex_format::cUASTC_LDR_4x4, srgb);
-    parameters.m_tex_type = dimension == TextureDimension::TextureCube
-        ? basist::cBASISTexTypeCubemapArray
-        : basist::cBASISTexType2D
-    ;
+    parameters.m_tex_type = dimension == TextureDimension::TextureCube ? basist::cBASISTexTypeCubemapArray : basist::cBASISTexType2D;
     if(alphaSource.mode == AlphaSourceMode::Original){
         parameters.m_read_source_images = true;
         for(const Path& inputPath : inputPaths){
@@ -186,9 +173,7 @@ private:
     }
     const basisu::basis_compressor::error_code encodeResult = compressor.process();
     if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC encoding failed (Basis Universal error {}).")
-            , static_cast<u32>(encodeResult)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC encoding failed (Basis Universal error {})."), static_cast<u32>(encodeResult));
         return MakeUnexpected(Failure{});
     }
 
@@ -218,15 +203,7 @@ private:
         return MakeUnexpected(Failure{});
     }
 
-    EncodeBackendDetail::ResetPayload(
-        payload,
-        dimension,
-        firstDescriptor.m_orig_width,
-        firstDescriptor.m_orig_height,
-        1u,
-        TexturePayloadFormat::UastcLdr4x4,
-        srgb
-    );
+    EncodeBackendDetail::ResetPayload(payload, dimension, firstDescriptor.m_orig_width, firstDescriptor.m_orig_height, 1u, TexturePayloadFormat::UastcLdr4x4, srgb);
     payload.mips.reserve(mipCount);
     u32 mipWidth = payload.width;
     u32 mipHeight = payload.height;
@@ -263,11 +240,7 @@ private:
     return VectorTruncate(averaged);
 }
 
-[[nodiscard]] static SIMDVectorSingle AverageSrgbVolumeTexels(
-    const SIMDVectorSingle linearRgbSum,
-    const SIMDVectorSingle alphaSum,
-    const u32 count
-){
+[[nodiscard]] static SIMDVectorSingle AverageSrgbVolumeTexels(const SIMDVectorSingle linearRgbSum, const SIMDVectorSingle alphaSum, const u32 count){
     NWB_ASSERT(count != 0u);
     const SIMDVectorSingle averagedLinear = VectorDivide(linearRgbSum, VectorReplicate(static_cast<f32>(count)));
     const SIMDVectorSingle encodedRgb = ConvertLinearVolumeRgbToSrgb(averagedLinear);
@@ -278,10 +251,7 @@ private:
     return VectorSelect(VectorSet(VectorGetX(roundedRgb), VectorGetY(roundedRgb), VectorGetZ(roundedRgb), 0.0f), VectorTruncate(averagedAlpha), s_SIMDMaskW);
 }
 
-[[nodiscard]] static Expected<ImagePlanes> GenerateNextVolumeMip(
-    const ImagePlanes& sourcePlanes,
-    const bool srgb
-){
+[[nodiscard]] static Expected<ImagePlanes> GenerateNextVolumeMip(const ImagePlanes& sourcePlanes, const bool srgb){
     auto targets = EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes);
     if(!targets)
         return MakeUnexpected(Failure{});
@@ -331,30 +301,17 @@ private:
                     }
                 }
 
-                const SIMDVectorSingle average = srgb
-                    ? AverageSrgbVolumeTexels(linearRgbSum, alphaSum, filteredPlaneCount)
-                    : AverageLinearVolumeTexels(channelSums, filteredPlaneCount)
-                ;
+                const SIMDVectorSingle average = srgb ? AverageSrgbVolumeTexels(linearRgbSum, alphaSum, filteredPlaneCount) : AverageLinearVolumeTexels(channelSums, filteredPlaneCount);
                 Float4 targetTexel = {};
                 StoreFloat(average, targetTexel);
-                targetPlane(x, y) = basisu::color_rgba(
-                    static_cast<int>(targetTexel.r),
-                    static_cast<int>(targetTexel.g),
-                    static_cast<int>(targetTexel.b),
-                    static_cast<int>(targetTexel.a)
-                );
+                targetPlane(x, y) = basisu::color_rgba(static_cast<int>(targetTexel.r), static_cast<int>(targetTexel.g), static_cast<int>(targetTexel.b), static_cast<int>(targetTexel.a));
             }
         }
     }
     return Move(targets->planes);
 }
 
-[[nodiscard]] static bool EncodeVolumeMip(
-    const ImagePlanes& planes,
-    const bool srgb,
-    TexturePayload& inOutPayload,
-    bool& inOutHasAlpha
-){
+[[nodiscard]] static bool EncodeVolumeMip(const ImagePlanes& planes, const bool srgb, TexturePayload& inOutPayload, bool& inOutHasAlpha){
     if(planes.empty() || planes.size() > Limit<u32>::s_Max)
         return false;
 
@@ -382,17 +339,12 @@ private:
     }
     const basisu::basis_compressor::error_code encodeResult = compressor.process();
     if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC volume mip encoding failed (Basis Universal error {}).")
-            , static_cast<u32>(encodeResult)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC volume mip encoding failed (Basis Universal error {})."), static_cast<u32>(encodeResult));
         return false;
     }
 
     const basisu::basisu_backend_output& backendOutput = compressor.get_uastc_backend_output();
-    if(
-        !EncodeBackendDetail::ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_LDR_4x4)
-        || backendOutput.m_slice_desc.size() != planes.size()
-    ){
+    if(!EncodeBackendDetail::ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_LDR_4x4) || backendOutput.m_slice_desc.size() != planes.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC volume mip."));
         return false;
     }
@@ -403,11 +355,7 @@ private:
     return true;
 }
 
-[[nodiscard]] static Expected<TexturePayload> EncodeVolume(
-    const Vector<Path>& inputPaths,
-    const bool srgb,
-    const AlphaSource& alphaSource
-){
+[[nodiscard]] static Expected<TexturePayload> EncodeVolume(const Vector<Path>& inputPaths, const bool srgb, const AlphaSource& alphaSource){
     TexturePayload payload;
     auto sourcePlanes = EncodeBackendDetail::LoadPlanesFromFiles<EncodeBackendDetail::LdrPlaneLoader>(inputPaths);
     if(!sourcePlanes || !ApplyAlphaSource(alphaSource, *sourcePlanes))
@@ -433,15 +381,7 @@ private:
         mipVolumes[mipIndex] = Move(*mip);
     }
 
-    EncodeBackendDetail::ResetPayload(
-        payload,
-        TextureDimension::Texture3D,
-        width,
-        height,
-        depth,
-        TexturePayloadFormat::UastcLdr4x4,
-        srgb
-    );
+    EncodeBackendDetail::ResetPayload(payload, TextureDimension::Texture3D, width, height, depth, TexturePayloadFormat::UastcLdr4x4, srgb);
     payload.mips.reserve(mipCount);
     bool hasAlpha = false;
     for(u32 mipIndex = 0u; mipIndex < mipCount; ++mipIndex){
@@ -462,12 +402,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TexturePayload> EncodeTexture(
-    const Vector<Path>& inputPaths,
-    const TextureDimension::Enum dimension,
-    const bool srgb,
-    const AlphaSource& alphaSource
-){
+Expected<TexturePayload> EncodeTexture(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
     if(inputPaths.empty())
         return MakeUnexpected(Failure{});
 
@@ -489,28 +424,19 @@ Expected<TexturePayload> EncodeTexture(
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a 2D texture requires exactly one input image."));
             return MakeUnexpected(Failure{});
         }
-        return hdrInput
-            ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource)
-            : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource)
-        ;
+        return hdrInput ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource) : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource);
     case TextureDimension::TextureCube:
         if(inputPaths.size() != TextureFormat::s_TextureCubeFaceCount){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a cubemap requires exactly six ordered face images."));
             return MakeUnexpected(Failure{});
         }
-        return hdrInput
-            ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource)
-            : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource)
-        ;
+        return hdrInput ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource) : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource);
     case TextureDimension::Texture3D:
         if(inputPaths.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a volume texture requires one or more ordered Z slices."));
             return MakeUnexpected(Failure{});
         }
-        return hdrInput
-            ? EncodeBackendDetail::EncodeHdrVolume(inputPaths, alphaSource)
-            : __hidden_encode::EncodeVolume(inputPaths, srgb, alphaSource)
-        ;
+        return hdrInput ? EncodeBackendDetail::EncodeHdrVolume(inputPaths, alphaSource) : __hidden_encode::EncodeVolume(inputPaths, srgb, alphaSource);
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported texture dimension."));
         return MakeUnexpected(Failure{});

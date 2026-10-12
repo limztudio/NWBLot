@@ -249,52 +249,34 @@ u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
     }
 }
 
-Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(
-    const FormatInfo& formatInfo,
-    const TextureUploadAspect::Enum requestedAspect
-)noexcept{
+Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(const FormatInfo& formatInfo, const TextureUploadAspect::Enum requestedAspect)noexcept{
     if(requestedAspect >= TextureUploadAspect::kCount)
         return MakeUnexpected(Failure{});
 
     if(formatInfo.hasDepth && formatInfo.hasStencil){
-        if(
-            requestedAspect != TextureUploadAspect::Depth
-            && requestedAspect != TextureUploadAspect::Stencil
-        )
+        if(requestedAspect != TextureUploadAspect::Depth && requestedAspect != TextureUploadAspect::Stencil)
             return MakeUnexpected(Failure{});
         return requestedAspect;
     }
 
     if(formatInfo.hasDepth){
-        if(
-            requestedAspect != TextureUploadAspect::Automatic
-            && requestedAspect != TextureUploadAspect::Depth
-        )
+        if(requestedAspect != TextureUploadAspect::Automatic && requestedAspect != TextureUploadAspect::Depth)
             return MakeUnexpected(Failure{});
         return TextureUploadAspect::Depth;
     }
 
     if(formatInfo.hasStencil){
-        if(
-            requestedAspect != TextureUploadAspect::Automatic
-            && requestedAspect != TextureUploadAspect::Stencil
-        )
+        if(requestedAspect != TextureUploadAspect::Automatic && requestedAspect != TextureUploadAspect::Stencil)
             return MakeUnexpected(Failure{});
         return TextureUploadAspect::Stencil;
     }
 
-    if(
-        requestedAspect != TextureUploadAspect::Automatic
-        && requestedAspect != TextureUploadAspect::Color
-    )
+    if(requestedAspect != TextureUploadAspect::Automatic && requestedAspect != TextureUploadAspect::Color)
         return MakeUnexpected(Failure{});
     return TextureUploadAspect::Color;
 }
 
-Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(
-    const FormatInfo& formatInfo,
-    const TextureUploadAspect::Enum requestedAspect
-)noexcept{
+Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(const FormatInfo& formatInfo, const TextureUploadAspect::Enum requestedAspect)noexcept{
     TextureUploadAspectLayout layout;
 
     const auto resolvedAspect = ResolveTextureUploadAspect(formatInfo, requestedAspect);
@@ -304,8 +286,8 @@ Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(
     layout.blockWidth = GetFormatBlockWidth(formatInfo);
     layout.blockHeight = GetFormatBlockHeight(formatInfo);
     layout.bytesPerBlock = formatInfo.bytesPerBlock;
-    // Depth/stencil image aspects are copied from independent CPU planes.  D24S8/D32S8 both use a 32-bit
-    // depth plane and an 8-bit stencil plane even though their opaque whole-image allocation sizes differ.
+    // Depth/stencil image aspects are copied from independent CPU planes.
+    // D24S8/D32S8 both use a 32-bit depth plane and an 8-bit stencil plane even though their opaque whole-image allocation sizes differ.
     if(*resolvedAspect == TextureUploadAspect::Depth && formatInfo.hasStencil)
         layout.bytesPerBlock = sizeof(u32);
     else if(*resolvedAspect == TextureUploadAspect::Stencil)
@@ -323,10 +305,7 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
 
     const u32 mipWidth = Max(desc.width >> resolvedMipLevel, static_cast<u32>(1));
     const u32 mipHeight = Max(desc.height >> resolvedMipLevel, static_cast<u32>(1));
-    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D
-        ? Max(desc.depth >> resolvedMipLevel, static_cast<u32>(1))
-        : static_cast<u32>(1)
-    ;
+    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D ? Max(desc.depth >> resolvedMipLevel, static_cast<u32>(1)) : static_cast<u32>(1);
 
     return resolve(mipWidth, mipHeight, mipDepth);
 }
@@ -427,12 +406,7 @@ BufferRange BufferRange::intersect(const BufferRange& other)const noexcept{
 DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range)noexcept{
     const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 
-    DescriptorWriteItem result = Base(
-        slot,
-        isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer,
-        buffer,
-        Format::UNKNOWN,
-        TextureDimension::Unknown);
+    DescriptorWriteItem result = Base(slot, isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer, buffer, Format::UNKNOWN, TextureDimension::Unknown);
     result.range = range;
     return result;
 }
@@ -478,11 +452,7 @@ struct FramebufferAttachmentExtent{
     const TextureSubresourceSet subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
     if(subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
         return MakeUnexpected(Failure{});
-    return FramebufferAttachmentExtent{
-        .width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1)),
-        .height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1)),
-        .arraySize = subresources.numArraySlices,
-    };
+    return FramebufferAttachmentExtent{ .width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1)), .height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1)), .arraySize = subresources.numArraySlices, };
 }
 
 
@@ -499,10 +469,7 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
     const usize colorAttachmentCount = desc.colorAttachments.size();
     for(usize i = 0u; i < colorAttachmentCount; ++i){
         const FramebufferAttachment& attachment = desc.colorAttachments[i];
-        const Format::Enum attachmentFormat = attachment.format == Format::UNKNOWN && attachment.texture
-            ? attachment.texture->getCreationDescription().format
-            : attachment.format
-        ;
+        const Format::Enum attachmentFormat = attachment.format == Format::UNKNOWN && attachment.texture ? attachment.texture->getCreationDescription().format : attachment.format;
         colorFormats.push_back(attachmentFormat);
     }
 

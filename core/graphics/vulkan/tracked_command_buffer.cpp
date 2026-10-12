@@ -14,14 +14,7 @@
 NWB_VULKAN_BEGIN
 
 
-TrackedCommandBuffer::TrackedCommandBuffer(
-    Queue& queue,
-    const VulkanContext& context,
-    const u32 queueFamilyIndex,
-    const VkCommandPool commandPool,
-    const bool ownsCommandPool,
-    Futex* const sharedCommandPoolMutex
-)
+TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& context, const u32 queueFamilyIndex, const VkCommandPool commandPool, const bool ownsCommandPool, Futex* const sharedCommandPoolMutex)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_cmdPool(commandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
@@ -41,12 +34,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
         poolInfo.queueFamilyIndex = queueFamilyIndex;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-        const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(
-            m_context.device,
-            &poolInfo,
-            m_context.allocationCallbacks,
-            &m_cmdPool
-        );
+        const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
         if(createResult != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
             m_cmdPool = VK_NULL_HANDLE;
@@ -112,17 +100,9 @@ TrackedCommandBuffer::TimerQueryRecordingClaim& TrackedCommandBuffer::findOrAppe
     return claim;
 }
 
-TrackedCommandBuffer::TimerQueryRecordingClaim* TrackedCommandBuffer::findTimerQueryRecordingClaim(
-    TimerQuery& query,
-    const u64 generation
-)noexcept{
+TrackedCommandBuffer::TimerQueryRecordingClaim* TrackedCommandBuffer::findTimerQueryRecordingClaim(TimerQuery& query, const u64 generation)noexcept{
     for(TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        if(
-            claim.query == &query
-            && claim.queryIncarnation == query.m_incarnation
-            && claim.generation == generation
-            && claim.recordingID == m_recordingID
-        )
+        if(claim.query == &query && claim.queryIncarnation == query.m_incarnation && claim.generation == generation && claim.recordingID == m_recordingID)
             return &claim;
     }
     return nullptr;
@@ -130,12 +110,7 @@ TrackedCommandBuffer::TimerQueryRecordingClaim* TrackedCommandBuffer::findTimerQ
 
 bool TrackedCommandBuffer::recordsTimerQueryBegin(const TimerQuery& query, const u64 generation)const noexcept{
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        if(
-            claim.query == &query
-            && claim.generation == generation
-            && claim.recordingID == m_recordingID
-            && claim.recordsBegin
-        )
+        if(claim.query == &query && claim.generation == generation && claim.recordingID == m_recordingID && claim.recordsBegin)
             return true;
     }
     return false;
@@ -150,39 +125,18 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
 )const noexcept{
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         TimerQuery* const query = claim.query;
-        if(
-            !query
-            || claim.queryIncarnation == 0u
-            || query->m_incarnation != claim.queryIncarnation
-            || claim.recordingID == 0u
-            || claim.recordingID != m_recordingID
-            || claim.queue != submissionQueue.m_physicalQueue
-        )
+        if(!query || claim.queryIncarnation == 0u || query->m_incarnation != claim.queryIncarnation || claim.recordingID == 0u || claim.recordingID != m_recordingID || claim.queue != submissionQueue.m_physicalQueue)
             return false;
 
         NothrowScopedLock queryLock(query->m_mutex);
-        const QueueSubmissionToken currentPrerequisite = query->m_completedCycleSubmission.valid()
-            ? query->m_completedCycleSubmission
-            : query->m_resetAuthorizationSubmission
-        ;
+        const QueueSubmissionToken currentPrerequisite = query->m_completedCycleSubmission.valid() ? query->m_completedCycleSubmission : query->m_resetAuthorizationSubmission;
         const bool prerequisiteMatches =
             currentPrerequisite.queue == claim.prerequisiteSubmission.queue
             && currentPrerequisite.value == claim.prerequisiteSubmission.value
             && currentPrerequisite.physicalQueueIndex == claim.prerequisiteSubmission.physicalQueueIndex
             && currentPrerequisite.deviceGeneration == claim.prerequisiteSubmission.deviceGeneration
         ;
-        if(
-            (claim.recordsReset || claim.recordsBegin)
-            && (
-                !prerequisiteMatches
-                || !submissionQueue.coversTimerQueryPrerequisite(
-                    claim.prerequisiteSubmission,
-                    claim.prerequisiteObservedComplete,
-                    localWaits,
-                    localWaitCount
-                )
-            )
-        )
+        if((claim.recordsReset || claim.recordsBegin) && (!prerequisiteMatches || !submissionQueue.coversTimerQueryPrerequisite(claim.prerequisiteSubmission, claim.prerequisiteObservedComplete, localWaits, localWaitCount)))
             return false;
         const bool resetOwnerMatches =
             query->m_resetRecordingOwner.commandBuffer == this
@@ -190,16 +144,8 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
             && query->m_resetRecordingAuthorizationGeneration != 0u
             && query->m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
         ;
-        const bool beginOwnerMatches =
-            query->m_beginRecordingOwner.commandBuffer == this
-            && query->m_beginRecordingOwner.recordingID == claim.recordingID
-            && query->m_cycleGeneration == claim.generation
-        ;
-        const bool endOwnerMatches =
-            query->m_endRecordingOwner.commandBuffer == this
-            && query->m_endRecordingOwner.recordingID == claim.recordingID
-            && query->m_cycleGeneration == claim.generation
-        ;
+        const bool beginOwnerMatches = query->m_beginRecordingOwner.commandBuffer == this && query->m_beginRecordingOwner.recordingID == claim.recordingID && query->m_cycleGeneration == claim.generation;
+        const bool endOwnerMatches = query->m_endRecordingOwner.commandBuffer == this && query->m_endRecordingOwner.recordingID == claim.recordingID && query->m_cycleGeneration == claim.generation;
         if(claim.recordsReset && !claim.recordsBegin && !resetOwnerMatches)
             return false;
         if(
@@ -223,11 +169,7 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
         )
             return false;
         if(claim.recordsEnd){
-            if(
-                !endOwnerMatches
-                || query->m_cycleInvalidated
-                || query->m_cycleQueue != claim.queue
-            )
+            if(!endOwnerMatches || query->m_cycleInvalidated || query->m_cycleQueue != claim.queue)
                 return false;
             if(query->m_beginAccepted || claim.recordsBegin)
                 continue;
@@ -235,12 +177,7 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
             bool orderedAfterBatchBegin = false;
             for(usize precedingIndex = 0u; precedingIndex < precedingCommandBufferCount; ++precedingIndex){
                 TrackedCommandBuffer* const preceding = precedingCommandBuffers[precedingIndex];
-                if(
-                    preceding
-                    && preceding == query->m_beginRecordingOwner.commandBuffer
-                    && preceding->m_recordingID == query->m_beginRecordingOwner.recordingID
-                    && preceding->recordsTimerQueryBegin(*query, claim.generation)
-                ){
+                if(preceding && preceding == query->m_beginRecordingOwner.commandBuffer && preceding->m_recordingID == query->m_beginRecordingOwner.recordingID && preceding->recordsTimerQueryBegin(*query, claim.generation)){
                     orderedAfterBatchBegin = true;
                     break;
                 }
@@ -256,14 +193,7 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
     static_assert(noexcept(m_timerQueryRecordingClaims.clear()), "accepted timer-query claim release must be non-throwing");
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         TimerQuery* const query = claim.query;
-        if(
-            !query
-            || claim.queryIncarnation == 0u
-            || query->m_incarnation != claim.queryIncarnation
-            || claim.recordingID == 0u
-            || claim.recordingID != m_recordingID
-            || (!claim.recordsReset && !claim.recordsBegin && !claim.recordsEnd)
-        )
+        if(!query || claim.queryIncarnation == 0u || query->m_incarnation != claim.queryIncarnation || claim.recordingID == 0u || claim.recordingID != m_recordingID || (!claim.recordsReset && !claim.recordsBegin && !claim.recordsEnd))
             TerminateInvariant();
 
         NothrowScopedLock queryLock(query->m_mutex);
@@ -273,16 +203,8 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
             && query->m_resetRecordingAuthorizationGeneration != 0u
             && query->m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
         ;
-        const bool beginOwnerMatches =
-            query->m_beginRecordingOwner.commandBuffer == this
-            && query->m_beginRecordingOwner.recordingID == claim.recordingID
-            && query->m_cycleGeneration == claim.generation
-        ;
-        const bool endOwnerMatches =
-            query->m_endRecordingOwner.commandBuffer == this
-            && query->m_endRecordingOwner.recordingID == claim.recordingID
-            && query->m_cycleGeneration == claim.generation
-        ;
+        const bool beginOwnerMatches = query->m_beginRecordingOwner.commandBuffer == this && query->m_beginRecordingOwner.recordingID == claim.recordingID && query->m_cycleGeneration == claim.generation;
+        const bool endOwnerMatches = query->m_endRecordingOwner.commandBuffer == this && query->m_endRecordingOwner.recordingID == claim.recordingID && query->m_cycleGeneration == claim.generation;
 
         if(claim.recordsReset && !claim.recordsBegin){
             if(!resetOwnerMatches)
@@ -354,20 +276,10 @@ void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
             query->m_resetRecordingOwner = {};
             query->m_resetRecordingAuthorizationGeneration = 0u;
         }
-        if(
-            claim.recordsEnd
-            && query->m_endRecordingOwner.commandBuffer == this
-            && query->m_endRecordingOwner.recordingID == claim.recordingID
-            && query->m_cycleGeneration == claim.generation
-        ){
+        if(claim.recordsEnd && query->m_endRecordingOwner.commandBuffer == this && query->m_endRecordingOwner.recordingID == claim.recordingID && query->m_cycleGeneration == claim.generation){
             query->m_endRecordingOwner = {};
         }
-        if(
-            claim.recordsBegin
-            && query->m_beginRecordingOwner.commandBuffer == this
-            && query->m_beginRecordingOwner.recordingID == claim.recordingID
-            && query->m_cycleGeneration == claim.generation
-        ){
+        if(claim.recordsBegin && query->m_beginRecordingOwner.commandBuffer == this && query->m_beginRecordingOwner.recordingID == claim.recordingID && query->m_cycleGeneration == claim.generation){
             query->m_timestampQueue = query->m_cycleBaselineQueue;
             query->m_timestampValidBits = query->m_cycleBaselineValidBits;
             query->m_completedCycleSubmission = query->m_cycleBaselineCompletion;
@@ -377,12 +289,7 @@ void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
             query->m_beginAccepted = false;
             query->m_cycleInvalidated = query->m_endRecordingOwner.commandBuffer != nullptr;
         }
-        if(
-            query->m_cycleGeneration == claim.generation
-            && !query->m_beginRecordingOwner.commandBuffer
-            && !query->m_endRecordingOwner.commandBuffer
-            && !query->m_beginAccepted
-        ){
+        if(query->m_cycleGeneration == claim.generation && !query->m_beginRecordingOwner.commandBuffer && !query->m_endRecordingOwner.commandBuffer && !query->m_beginAccepted){
             query->m_cycleBaselineQueue = {};
             query->m_cycleQueue = {};
             query->m_cycleBaselineValidBits = 0u;
@@ -407,20 +314,12 @@ void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
     m_resourceReferences.discardBufferStateCommits();
 }
 
-void TrackedCommandBuffer::appendRetainedTextureStateCommit(
-    Texture& texture,
-    const MipLevel mipLevel,
-    const ArraySlice arraySlice
-){
-    // The closing barrier and its deferred state publication outlive CommandList::clearState(). Keep the texture
-    // alive with the command buffer until Queue::submit accepts or discards the command buffer.
+void TrackedCommandBuffer::appendRetainedTextureStateCommit(Texture& texture, const MipLevel mipLevel, const ArraySlice arraySlice){
+    // The closing barrier and its deferred state publication outlive CommandList::clearState().
+    // Keep the texture alive with the command buffer until Queue::submit accepts or discards the command buffer.
     m_resourceReferences.retainTexture(texture);
 
-    m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{
-        .texture = &texture,
-        .mipLevel = mipLevel,
-        .arraySlice = arraySlice,
-    });
+    m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{ .texture = &texture, .mipLevel = mipLevel, .arraySlice = arraySlice, });
 }
 
 void TrackedCommandBuffer::commitRetainedTextureStateCommits()noexcept{
@@ -449,10 +348,7 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     if(geometrySignatureCount > UINT32_MAX || (geometrySignatureCount != 0u && !geometrySignatures))
         return false;
 
-    GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = MakeGlobalUnique<AccelStructBuildSignatureRole>(
-        m_context.objectArena,
-        m_context.objectArena
-    );
+    GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = MakeGlobalUnique<AccelStructBuildSignatureRole>(m_context.objectArena, m_context.objectArena);
     if(!preparedRole)
         return false;
 
@@ -464,10 +360,7 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     }
 
     m_resourceReferences.retainResource(accelStruct);
-    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{
-        .accelStruct = &accelStruct,
-        .preparedRole = preparedRole.get(),
-    });
+    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{ .accelStruct = &accelStruct, .preparedRole = preparedRole.get(), });
     preparedRole.release();
     return true;
 }
@@ -538,9 +431,7 @@ void TrackedCommandBuffer::abandonPendingAccelStructBuildCommits()noexcept{
 
 void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap){
     m_resourceReferences.retainResource(opacityMicromap);
-    m_pendingOpacityMicromapBuildCommits.push_back(PendingOpacityMicromapBuildCommit{
-        .opacityMicromap = &opacityMicromap,
-    });
+    m_pendingOpacityMicromapBuildCommits.push_back(PendingOpacityMicromapBuildCommit{ .opacityMicromap = &opacityMicromap, });
 }
 
 bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept{

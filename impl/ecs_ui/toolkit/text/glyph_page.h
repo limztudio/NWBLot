@@ -37,10 +37,7 @@ struct GlyphPageBinding{
 };
 
 [[nodiscard]] inline bool SameGlyphPageKey(const GlyphPageBinding& first, const GlyphPageBinding& second)noexcept{
-    return
-        first.font == second.font && first.fontGeneration == second.fontGeneration
-        && first.atlasIdentity == second.atlasIdentity && first.index == second.index
-    ;
+    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
 }
 
 [[nodiscard]] bool operator==(const GlyphPageBinding& lhs, const GlyphPageBinding& rhs)noexcept;
@@ -49,8 +46,10 @@ struct GlyphPageBinding{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Coverage is linear R8. Published pages are immutable; versions sharing an atlas/page identity only append glyphs.
-// Repacking or replacing existing texels requires a new atlas identity. The caller's arena outlives all consumers.
+// Coverage is linear R8.
+// Published pages are immutable; versions sharing an atlas/page identity only append glyphs.
+// Repacking or replacing existing texels requires a new atlas identity.
+// The caller's arena outlives all consumers.
 class GlyphPage : NoCopy{
 public:
     using Pixels = Vector<u8, Core::Alloc::GlobalArena>;

@@ -17,13 +17,13 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Accepted native snapshot between graph generations, for live imports used in a later graph. Retains typed handles
-// so rebuilds cannot dangle; no renderer policy leaks into this utility.
+// Accepted native snapshot between graph generations, for live imports used in a later graph.
+// Retains typed handles so rebuilds cannot dangle; no renderer policy leaks into this utility.
 class GpuPersistentResourceStateCache final : NoCopy{
 public:
-    // A pre-submission candidate built for one cache from a recorded packet's final state. On commit, the cache
-    // exchanges storage with it. The consumed candidate keeps the displaced accepted storage alive until its caller
-    // has unwound outside the accepted-submission gate.
+    // A pre-submission candidate built for one cache from a recorded packet's final state.
+    // On commit, the cache exchanges storage with it.
+    // The consumed candidate keeps the displaced accepted storage alive until its caller has unwound outside the accepted-submission gate.
     class Candidate final : NoCopy{
         friend class GpuPersistentResourceStateCache;
 
@@ -75,42 +75,19 @@ public:
     [[nodiscard]] usize retainedTextureCount()const noexcept{ return m_textures.size(); }
     [[nodiscard]] usize retainedBufferCount()const noexcept{ return m_buffers.size(); }
 
-    // Replaces the accepted cache with `source` filtered to the supplied live imported resources for resource
-    // pruning that removes a runtime generation the prior snapshot referenced.
-    [[nodiscard]] bool replaceResourceSubset(
-        const CommandListResourceStateHandoff& source,
-        const TextureHandle* textures,
-        usize textureCount,
-        const BufferHandle* buffers,
-        usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    );
+    // Replaces the accepted cache with `source` filtered to the supplied live imported resources for resource pruning that removes a runtime generation the prior snapshot referenced.
+    [[nodiscard]] bool replaceResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
 
-    // Folds a graph packet's final native state into the retained accepted snapshot, then filters the result to the
-    // caller's current live resources.  The retained cache is changed only after the new candidate is complete.
-    [[nodiscard]] bool mergeResourceSubset(
-        const CommandListResourceStateHandoff& source,
-        const TextureHandle* textures,
-        usize textureCount,
-        const BufferHandle* buffers,
-        usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    );
+    // Folds a graph packet's final native state into the retained accepted snapshot, then filters the result to the caller's current live resources.
+    // The retained cache is changed only after the new candidate is complete.
+    [[nodiscard]] bool mergeResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
 
-    // Builds an acceptance-only candidate from the retained base state and `source`. The caller must call commit()
-    // only after the packet that produced `source` is accepted; a rejected packet leaves this cache untouched.
-    [[nodiscard]] bool buildMergedResourceSubset(
-        Candidate& outCandidate,
-        const CommandListResourceStateHandoff& source,
-        const TextureHandle* textures,
-        usize textureCount,
-        const BufferHandle* buffers,
-        usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    )const;
+    // Builds an acceptance-only candidate from the retained base state and `source`.
+    // The caller must call commit() only after the packet that produced `source` is accepted; a rejected packet leaves this cache untouched.
+    [[nodiscard]] bool buildMergedResourceSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena)const;
 
-    // Produces a typed, filtered source for recording without altering the accepted cache. This preserves the last
-    // accepted state when the newly recorded packet is later rejected.
+    // Produces a typed, filtered source for recording without altering the accepted cache.
+    // This preserves the last accepted state when the newly recorded packet is later rejected.
     [[nodiscard]] bool buildFilteredResourceSubset(
         Candidate& outCandidate,
         const CommandListResourceStateHandoff& source,
@@ -123,58 +100,27 @@ public:
 
     [[nodiscard]] bool commit(Candidate& candidate)noexcept;
 
-    [[nodiscard]] bool replaceBufferSubset(
-        const CommandListResourceStateHandoff& source,
-        const BufferHandle* buffers,
-        const usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    ){
+    [[nodiscard]] bool replaceBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
         return replaceResourceSubset(source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
-    [[nodiscard]] bool replaceTextureSubset(
-        const CommandListResourceStateHandoff& source,
-        const TextureHandle* textures,
-        const usize textureCount,
-        Alloc::ScratchArena& scratchArena
-    ){
+    [[nodiscard]] bool replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, const usize textureCount, Alloc::ScratchArena& scratchArena){
         return replaceResourceSubset(source, textures, textureCount, nullptr, 0u, scratchArena);
     }
 
-    [[nodiscard]] bool replaceTextureSubset(
-        const CommandListResourceStateHandoff& source,
-        const TextureHandle& texture,
-        Alloc::ScratchArena& scratchArena
-    ){
+    [[nodiscard]] bool replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle& texture, Alloc::ScratchArena& scratchArena){
         return replaceTextureSubset(source, &texture, 1u, scratchArena);
     }
 
-    [[nodiscard]] bool mergeBufferSubset(
-        const CommandListResourceStateHandoff& source,
-        const BufferHandle* buffers,
-        const usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    ){
+    [[nodiscard]] bool mergeBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
         return mergeResourceSubset(source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
-    [[nodiscard]] bool buildMergedBufferSubset(
-        Candidate& outCandidate,
-        const CommandListResourceStateHandoff& source,
-        const BufferHandle* buffers,
-        const usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    )const{
+    [[nodiscard]] bool buildMergedBufferSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena)const{
         return buildMergedResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
-    [[nodiscard]] bool buildFilteredBufferSubset(
-        Candidate& outCandidate,
-        const CommandListResourceStateHandoff& source,
-        const BufferHandle* buffers,
-        const usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    )const{
+    [[nodiscard]] bool buildFilteredBufferSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena)const{
         return buildFilteredResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 

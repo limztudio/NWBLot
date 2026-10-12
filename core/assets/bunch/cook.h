@@ -36,13 +36,7 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(
-    const Path& assetRoot,
-    AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

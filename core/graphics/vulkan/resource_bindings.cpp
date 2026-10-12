@@ -98,11 +98,7 @@ u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcep
     return (alignment == 0 || alignment > UINT32_MAX) ? 1u : static_cast<u32>(alignment);
 }
 
-Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(
-    const u32 sampleCount,
-    const bool alphaToCoverageEnable,
-    TStringView operationName
-){
+Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, TStringView operationName){
     auto state = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
     if(!IsSupportedSampleCount(sampleCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
@@ -114,11 +110,7 @@ Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState
     return state;
 }
 
-void ConfigurePipelineDepthStencilState(
-    const DepthStencilState& state,
-    PipelineStencilFaceMode::Enum stencilFaceMode,
-    VkPipelineDepthStencilStateCreateInfo& outState
-)noexcept{
+void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept{
     outState = MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
     outState.depthTestEnable = state.depthTestEnable ? VK_TRUE : VK_FALSE;
     outState.depthWriteEnable = state.depthWriteEnable ? VK_TRUE : VK_FALSE;
@@ -145,11 +137,7 @@ Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     state.viewportState.viewportCount = 1;
     state.viewportState.scissorCount = 1;
 
-    const auto multisampling = ConfigurePipelineMultisampleState(
-        fbinfo.sampleCount,
-        renderState.blendState.alphaToCoverageEnable,
-        operationName
-    );
+    const auto multisampling = ConfigurePipelineMultisampleState(fbinfo.sampleCount, renderState.blendState.alphaToCoverageEnable, operationName);
     if(!multisampling)
         return MakeUnexpected(Failure{});
     state.multisampling = *multisampling;
@@ -170,11 +158,7 @@ Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     return state;
 }
 
-Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(
-    const FramebufferInfo& fbinfo,
-    TStringView operationName,
-    Alloc::ScratchArena& scratchArena
-){
+Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, TStringView operationName, Alloc::ScratchArena& scratchArena){
     PipelineRenderingInfo rendering(scratchArena);
     rendering.colorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0u; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
@@ -184,11 +168,7 @@ Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(
             return MakeUnexpected(Failure{});
         }
         if(!VulkanDetail::IsPipelineColorAttachmentFormatClassValid(fbinfo.colorFormats[i])){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} has depth or stencil aspects"),
-                operationName,
-                i
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} has depth or stencil aspects"), operationName, i);
             return MakeUnexpected(Failure{});
         }
         rendering.colorFormats.push_back(vkFormat);
@@ -217,12 +197,7 @@ Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(
     return rendering;
 }
 
-void DestroyPipelineAndOwnedLayout(
-    const VulkanContext& context,
-    VkPipeline& pipeline,
-    VkPipelineLayout& pipelineLayout,
-    bool& ownsPipelineLayout
-){
+void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout){
     if(pipeline){
         context.deviceDispatch.vkDestroyPipeline(context.device, pipeline, context.allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
@@ -241,14 +216,10 @@ constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(Resou
 }
 
 bool IsDescriptorBufferBackendReady(const VulkanContext& context){
-    return context.descriptorBufferManager
-        && context.descriptorBufferManager->isEnabled()
-    ;
+    return context.descriptorBufferManager && context.descriptorBufferManager->isEnabled();
 }
 
-Expected<DescriptorBufferSegmentKind::Enum> TryResolveBindlessDescriptorBufferLayout(
-    const BindlessLayoutDesc& desc
-)noexcept{
+Expected<DescriptorBufferSegmentKind::Enum> TryResolveBindlessDescriptorBufferLayout(const BindlessLayoutDesc& desc)noexcept{
     auto segmentKind = DescriptorBufferSegmentKind::None;
     bool hasDescriptors = false;
 
@@ -280,14 +251,7 @@ bool ValidateDescriptorBufferBindingFootprint(
     TStringView operationName
 ){
     const u32 descriptorSize = manager.getDescriptorSize(descriptorType);
-    if(
-        descriptorSize == 0u
-        || descriptorCount == 0u
-        || setSizeBytes == 0u
-        || setSizeBytes > UINT32_MAX
-        || bindingOffsetBytes > UINT32_MAX
-        || bindingOffsetBytes >= setSizeBytes
-    ){
+    if(descriptorSize == 0u || descriptorCount == 0u || setSizeBytes == 0u || setSizeBytes > UINT32_MAX || bindingOffsetBytes > UINT32_MAX || bindingOffsetBytes >= setSizeBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer binding {} has an invalid footprint."), operationName, bindingSlot);
         return false;
     }
@@ -331,24 +295,14 @@ bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSi
         return false;
     }
     if(byteSize > context.physicalDeviceProperties.limits.maxPushConstantsSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size {} exceeds device limit {}")
-            , operationName
-            , byteSize
-            , context.physicalDeviceProperties.limits.maxPushConstantsSize
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size {} exceeds device limit {}"), operationName, byteSize, context.physicalDeviceProperties.limits.maxPushConstantsSize);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size exceeds device limit"));
         return false;
     }
     return true;
 }
 
-Expected<VkPipelineLayout> CreatePipelineLayout(
-    const VulkanContext& context,
-    const VkDescriptorSetLayout* setLayouts,
-    const u32 setLayoutCount,
-    const u32 pushConstantByteSize,
-    TStringView operationName
-){
+Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, const u32 setLayoutCount, const u32 pushConstantByteSize, TStringView operationName){
     VkResult res = VK_SUCCESS;
 
     VkPipelineLayout layout = VK_NULL_HANDLE;
@@ -427,12 +381,7 @@ BindingLayout::BindingLayout(const VulkanContext& context)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_descriptorSetLayouts(context.objectArena)
-    , m_descriptorBufferBindingOffsets(
-        0,
-        Hasher<u32>(),
-        EqualTo<u32>(),
-        context.objectArena
-    )
+    , m_descriptorBufferBindingOffsets(0, Hasher<u32>(), EqualTo<u32>(), context.objectArena)
     , m_context(context)
 {}
 BindingLayout::~BindingLayout(){
@@ -481,13 +430,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
-    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(
-            m_context,
-            nullptr,
-            0u,
-            pushConstantByteSize,
-            NWB_TEXT("create binding layout")
-        );
+    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, NWB_TEXT("create binding layout"));
     if(!pipelineLayout){
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
@@ -521,25 +464,14 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchArena> bindings{scratchArena};
     bindings.reserve(desc.registerSpaces.size());
-    HashSet<u32, Alloc::ScratchArena, Hasher<u32>, EqualTo<u32>> registerSpaceSlots(
-        0,
-        Hasher<u32>(),
-        EqualTo<u32>(),
-        scratchArena
-    );
+    HashSet<u32, Alloc::ScratchArena, Hasher<u32>, EqualTo<u32>> registerSpaceSlots(0, Hasher<u32>(), EqualTo<u32>(), scratchArena);
     registerSpaceSlots.reserve(desc.registerSpaces.size());
 
     const u32 maxCapacity = VulkanDetail::NormalizeBindlessDescriptorCapacity(desc.maxCapacity);
     for(usize i = 0u; i < desc.registerSpaces.size(); ++i){
         const auto& item = desc.registerSpaces[i];
-        if(
-            !VulkanDetail::IsBindlessRegisterSpaceType(item.type)
-            || (item.type == ResourceType::RayTracingAccelStruct && desc.layoutType != BindlessLayoutType::Immutable)
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}")
-                , item.slot
-                , static_cast<u32>(item.type)
-            );
+        if(!VulkanDetail::IsBindlessRegisterSpaceType(item.type) || (item.type == ResourceType::RayTracingAccelStruct && desc.layoutType != BindlessLayoutType::Immutable)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}"), item.slot, static_cast<u32>(item.type));
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
         }
@@ -601,15 +533,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     for(const auto& item : desc.registerSpaces){
         VkDeviceSize bindingOffsetBytes = 0;
         m_context.deviceDispatch.vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
-        if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(
-            *m_context.descriptorBufferManager,
-            VulkanDetail::ConvertDescriptorType(item.type),
-            maxCapacity,
-            setSizeBytes,
-            bindingOffsetBytes,
-            item.slot,
-            NWB_TEXT("bindless layout")
-        )){
+        if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(*m_context.descriptorBufferManager, VulkanDetail::ConvertDescriptorType(item.type), maxCapacity, setSizeBytes, bindingOffsetBytes, item.slot, NWB_TEXT("bindless layout"))){
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
         }

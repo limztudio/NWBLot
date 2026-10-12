@@ -22,18 +22,16 @@ NWB_CORE_BEGIN
 class GpuGraphSubmissionTransaction;
 
 
-// One accepted terminal packet that contributes to a graph-to-external resource handoff. Several disjoint texture
-// subresource ranges may be published by different packets; a consumer waits on the returned compact token frontier
-// before opening the handoff's merged native state source.
+// One accepted terminal packet that contributes to a graph-to-external resource handoff.
+// Several disjoint texture subresource ranges may be published by different packets; a consumer waits on the returned compact token frontier before opening the handoff's merged native state source.
 struct GpuTaskGraphExternalResourceHandoffProducer{
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;
     QueueSubmissionToken token;
 };
 
-// One exact terminal range that contributes to a graph-to-external handoff. A later graph can turn each range into
-// an immutable initial-owner source with the corresponding graph-local completion token; direct native consumers
-// normally use the compact `waitTokens` frontier instead.
+// One exact terminal range that contributes to a graph-to-external handoff.
+// A later graph can turn each range into an immutable initial-owner source with the corresponding graph-local completion token; direct native consumers normally use the compact `waitTokens` frontier instead.
 struct GpuTaskGraphExternalResourceHandoffRange{
     GpuTaskResourceRange range;
     GpuTaskId producerTask;
@@ -41,9 +39,8 @@ struct GpuTaskGraphExternalResourceHandoffRange{
     QueueSubmissionToken token;
 };
 
-// Immutable view into one caller-owned GpuTaskGraphExternalResourceHandoffSnapshot. Copying this view does not copy
-// its pointed-to arrays; keep the snapshot alive and externally serialize every read against refill or destruction
-// of that same snapshot.
+// Immutable view into one caller-owned GpuTaskGraphExternalResourceHandoffSnapshot.
+// Copying this view does not copy its pointed-to arrays; keep the snapshot alive and externally serialize every read against refill or destruction of that same snapshot.
 struct GpuTaskGraphExternalResourceHandoff{
     u64 planGeneration = 0u;
     GpuGraphResourceId resource;
@@ -62,24 +59,13 @@ struct GpuTaskGraphExternalResourceHandoff{
 
 
     [[nodiscard]] bool valid()const noexcept{
-        return planGeneration != 0u
-            && resource.valid()
-            && destinationQueue.valid()
-            && finalState != ResourceStates::Unknown
-            && producerCount != 0u
-            && producers
-            && waitTokenCount != 0u
-            && waitTokens
-            && terminalRangeCount != 0u
-            && terminalRanges
-            && stateSource
-        ;
+        return planGeneration != 0u && resource.valid() && destinationQueue.valid() && finalState != ResourceStates::Unknown && producerCount != 0u && producers && waitTokenCount != 0u && waitTokens && terminalRangeCount != 0u && terminalRanges && stateSource;
     }
 };
 
 
-// External handoff snapshot: builds into the inactive role, publishes via one non-throwing swap (failure keeps
-// the prior snapshot). Per-object serialization; distinct objects concurrent.
+// External handoff snapshot: builds into the inactive role, publishes via one non-throwing swap (failure keeps the prior snapshot).
+// Per-object serialization; distinct objects concurrent.
 class GpuTaskGraphExternalResourceHandoffSnapshot final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
 
@@ -95,10 +81,7 @@ public:
 public:
     [[nodiscard]] const GpuTaskGraphExternalResourceHandoff* value()const noexcept;
     [[nodiscard]] bool valid()const noexcept;
-    [[nodiscard]] bool validFor(
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess
-    )const noexcept;
+    [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
 
 
 private:

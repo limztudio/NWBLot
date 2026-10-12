@@ -23,8 +23,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const uint spanCount = nwbHeapStorageImage2DArrayUint2(spanCountSlot).Load(int3(pixel, 0)).x;
     bool hasPeel = false;
     bool hasPeelCap = false;
-    [unroll]
-    for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
+    [unroll] for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
         if(layer >= layers)
             break;
         const int3 texel = int3(pixel, int(layer));

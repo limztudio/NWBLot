@@ -26,8 +26,7 @@
 
 #pragma warning(push)
 #pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapReflectionMaterialContexts[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapReflectionMaterialContexts[];
 #pragma warning(pop)
 #define g_NwbReflectionMaterialContext g_NwbHeapReflectionMaterialContexts[g_NwbReflectionParameters.materialContextSlot]
 
@@ -132,10 +131,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         g_NwbReflectionParameters.maxRayDistance,
     };
     if(g_NwbReflectionParameters.diagnosticsEnabled != 0u){
-        const bool exterior = nwbOpticalSegmentProvenExterior(
-            config.opticalSceneHeapSlot, surface.position + surface.normal * surface.bias, surface.direction,
-            config.minDistance, config.maxDistance, config.maxQueries
-        );
+        const bool exterior = nwbOpticalSegmentProvenExterior(config.opticalSceneHeapSlot, surface.position + surface.normal * surface.bias, surface.direction, config.minDistance, config.maxDistance, config.maxQueries);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS, exterior ? 1u : 0u);
     }
     const NwbOpticalTraceResult result = nwbOpticalTrace(config, surface.position + surface.normal * surface.bias, surface.direction);
@@ -153,10 +149,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     }
 #else
     // A complete scene with no transparent instances uses this separately compiled kernel. Its private storage contains no media or candidate-event arrays, so opaque-only reflection retains the simple query path.
-    const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(
-        g_NwbReflectionMaterialContext.sceneSlots.z, surface.position + surface.normal * surface.bias,
-        surface.direction, surface.bias, g_NwbReflectionParameters.maxRayDistance
-    );
+    const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(g_NwbReflectionMaterialContext.sceneSlots.z, surface.position + surface.normal * surface.bias, surface.direction, surface.bias, g_NwbReflectionParameters.maxRayDistance);
 #if NWB_RT_CSG_ENABLED
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS, hit.queryBudgetUnits);
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES, hit.physicalQueries);

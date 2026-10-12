@@ -56,10 +56,7 @@ struct EntityID{
         : id(idValue)
     {}
     inline constexpr EntityID(u32 index, u32 generation)noexcept
-        : id(
-            ((generation & ECSDetail::s_EntityGenerationMask) << ECSDetail::s_EntityIndexBits)
-            | (index & ECSDetail::s_EntityIndexMask)
-        ){}
+        : id(((generation & ECSDetail::s_EntityGenerationMask) << ECSDetail::s_EntityIndexBits) | (index & ECSDetail::s_EntityIndexMask)){}
 
     inline constexpr u32 index()const noexcept{ return id & ECSDetail::s_EntityIndexMask; }
     inline constexpr u32 generation()const noexcept{ return (id >> ECSDetail::s_EntityIndexBits) & ECSDetail::s_EntityGenerationMask; }

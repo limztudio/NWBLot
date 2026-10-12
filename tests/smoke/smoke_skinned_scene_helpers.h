@@ -38,34 +38,17 @@ namespace Smoke{
 using SmokeModelRef = Core::Assets::AssetRef<Impl::Model>;
 
 
-inline void AddSmokeSkinnedRenderSystems(
-    Core::ECS::World& world,
-    ProjectRuntimeContext& context,
-    const SmokeRenderQualitySettings& baseSettings = {}
-){
+inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context, const SmokeRenderQualitySettings& baseSettings = {}){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
-    world.addSystem<Impl::ModelSystem>(
-        world,
-        context.assetManager,
-        Impl::CreateModelObjectRendererHooks()
-    );
-    auto& meshSkinningSystem = world.addSystem<Impl::MeshSkinningSystem>(
-        world,
-        context.graphics,
-        context.assetManager,
-        systems.mesh,
-        context.shaderPathResolver
-    );
+    world.addSystem<Impl::ModelSystem>(world, context.assetManager, Impl::CreateModelObjectRendererHooks());
+    auto& meshSkinningSystem = world.addSystem<Impl::MeshSkinningSystem>(world, context.graphics, context.assetManager, systems.mesh, context.shaderPathResolver);
 
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(systems.renderer);
     context.frameGraphRegistry.registerContributor(systems.renderer);
 }
 
-inline void DestroySmokeSkinnedRenderWorld(
-    ProjectRuntimeContext& context,
-    NotNullUniquePtr<Core::ECS::World>& world
-){
+inline void DestroySmokeSkinnedRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){
     if(!world.owner())
         return;
 
@@ -98,14 +81,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
 ){
     outTintApplied = false;
 
-    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(
-        world,
-        arena,
-        material,
-        materialInterfacePath,
-        position,
-        scale
-    );
+    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, arena, material, materialInterfacePath, position, scale);
 
     auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
     modelComponent.model = model;
@@ -127,28 +103,12 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     const Float4& scale
 ){
     bool tintApplied = false;
-    return CreateTintedModelEntity(
-        world,
-        arena,
-        model,
-        material,
-        materialInterfacePath,
-        colorTint,
-        position,
-        scale,
-        tintApplied
-    );
+    return CreateTintedModelEntity(world, arena, model, material, materialInterfacePath, colorTint, position, scale, tintApplied);
 }
 
-[[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID owner,
-    const Name objectName,
-    const u32 objectKind
-){
+[[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(Core::ECS::World& world, const Core::ECS::EntityID owner, const Name objectName, const u32 objectKind){
     Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
-    world.view<Impl::ModelObjectComponent>().each(
-        [&](const Core::ECS::EntityID entity, Impl::ModelObjectComponent& object){
+    world.view<Impl::ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, Impl::ModelObjectComponent& object){
             if(result.valid())
                 return;
             if(object.owner == owner && object.object == objectName && object.kind == objectKind)

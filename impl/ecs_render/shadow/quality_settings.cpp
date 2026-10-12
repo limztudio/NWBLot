@@ -17,13 +17,11 @@ NWB_IMPL_BEGIN
 
 
 bool ValidateShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
-    return settings.transparentSampling <= TransparentShadowSampling::TemporalOne
-        && (settings.receiverResolution == ShadowReceiverResolution::Half || settings.receiverResolution == ShadowReceiverResolution::Quarter);
+    return settings.transparentSampling <= TransparentShadowSampling::TemporalOne && (settings.receiverResolution == ShadowReceiverResolution::Half || settings.receiverResolution == ShadowReceiverResolution::Quarter);
 }
 
 u32 ResolveTransparentShadowSampleCount(const ShadowQualitySettings& settings, const bool temporalHistoryUsable)noexcept{
-    return settings.transparentSampling == TransparentShadowSampling::TemporalOne && temporalHistoryUsable
-        ? 1u : NWB_SW_SHADOW_TRANSPARENT_SPP;
+    return settings.transparentSampling == TransparentShadowSampling::TemporalOne && temporalHistoryUsable ? 1u : NWB_SW_SHADOW_TRANSPARENT_SPP;
 }
 
 

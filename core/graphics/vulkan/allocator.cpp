@@ -32,11 +32,7 @@ inline VmaAllocationCreateInfo BuildDeviceLocalAllocationInfo()noexcept{
     return allocInfo;
 }
 
-inline VmaAllocationCreateInfo BuildMappedHostAllocationInfo(
-    const VkMemoryPropertyFlags requiredFlags,
-    const VkMemoryPropertyFlags preferredFlags,
-    const VmaAllocationCreateFlags accessFlags
-)noexcept{
+inline VmaAllocationCreateInfo BuildMappedHostAllocationInfo(const VkMemoryPropertyFlags requiredFlags, const VkMemoryPropertyFlags preferredFlags, const VmaAllocationCreateFlags accessFlags)noexcept{
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | requiredFlags;
@@ -47,18 +43,10 @@ inline VmaAllocationCreateInfo BuildMappedHostAllocationInfo(
 
 inline VmaAllocationCreateInfo BuildCpuAccessAllocationInfo(const CpuAccessMode::Enum cpuAccess)noexcept{
     if(cpuAccess == CpuAccessMode::Read){
-        return BuildMappedHostAllocationInfo(
-            0,
-            VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
-        );
+        return BuildMappedHostAllocationInfo(0, VK_MEMORY_PROPERTY_HOST_CACHED_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
     }
 
-    return BuildMappedHostAllocationInfo(
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        0,
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-    );
+    return BuildMappedHostAllocationInfo(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 }
 
 inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc, const VkDeviceSize bufferSize){
@@ -77,10 +65,7 @@ inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc,
 }
 
 inline VmaAllocationCreateInfo BuildStagingTextureAllocationInfo(const CpuAccessMode::Enum cpuAccess)noexcept{
-    return cpuAccess == CpuAccessMode::None
-        ? BuildDeviceLocalAllocationInfo()
-        : BuildCpuAccessAllocationInfo(cpuAccess)
-    ;
+    return cpuAccess == CpuAccessMode::None ? BuildDeviceLocalAllocationInfo() : BuildCpuAccessAllocationInfo(cpuAccess);
 }
 
 inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc)noexcept{
@@ -93,18 +78,12 @@ inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc)noex
         break;
     case HeapType::Upload:
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        allocInfo.flags =
-            VMA_ALLOCATION_CREATE_MAPPED_BIT
-            | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-        ;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         break;
     case HeapType::Readback:
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
         allocInfo.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        allocInfo.flags =
-            VMA_ALLOCATION_CREATE_MAPPED_BIT
-            | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
-        ;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
         break;
     default:
         break;
@@ -114,11 +93,7 @@ inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc)noex
 }
 
 inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo()noexcept{
-    return BuildMappedHostAllocationInfo(
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        0,
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
-    );
+    return BuildMappedHostAllocationInfo(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 }
 
 inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex)noexcept{
@@ -192,10 +167,7 @@ inline VulkanAllocationHandle ToVulkanAllocationHandle(const VmaAllocation alloc
     return reinterpret_cast<VulkanAllocationHandle>(allocation);
 }
 
-[[nodiscard]] inline Expected<void*, VkResult> MapAllocation(
-    const VulkanAllocatorHandle allocator,
-    const VulkanAllocationHandle allocation
-){
+[[nodiscard]] inline Expected<void*, VkResult> MapAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation){
     if(!allocation)
         return MakeUnexpected(VK_ERROR_MEMORY_MAP_FAILED);
     void* data = nullptr;
@@ -205,12 +177,7 @@ inline VulkanAllocationHandle ToVulkanAllocationHandle(const VmaAllocation alloc
     return data;
 }
 
-inline VkResult InvalidateAllocation(
-    const VulkanAllocatorHandle allocator,
-    const VulkanAllocationHandle allocation,
-    const u64 offset,
-    const u64 size
-){
+inline VkResult InvalidateAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation, const u64 offset, const u64 size){
     if(!allocation)
         return VK_ERROR_MEMORY_MAP_FAILED;
     return vmaInvalidateAllocation(ToVmaAllocator(allocator), ToVmaAllocation(allocation), offset, size);
@@ -221,35 +188,18 @@ inline void UnmapAllocation(const VulkanAllocatorHandle allocator, const VulkanA
     vmaUnmapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation));
 }
 
-inline void UnmapTransientAllocation(
-    const VulkanAllocatorHandle allocator,
-    const VulkanAllocationHandle allocation,
-    void*& mappedMemory,
-    const bool persistentlyMapped
-){
+inline void UnmapTransientAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation, void*& mappedMemory, const bool persistentlyMapped){
     if(mappedMemory && !persistentlyMapped){
         UnmapAllocation(allocator, allocation);
         mappedMemory = nullptr;
     }
 }
 
-[[nodiscard]] inline Expected<BufferAllocation, VkResult> CreateBufferAllocation(
-    const VulkanAllocatorHandle allocator,
-    const VkPhysicalDeviceMemoryProperties& memoryProperties,
-    const VkBufferCreateInfo& bufferInfo,
-    const VmaAllocationCreateInfo& allocInfo
-){
+[[nodiscard]] inline Expected<BufferAllocation, VkResult> CreateBufferAllocation(const VulkanAllocatorHandle allocator, const VkPhysicalDeviceMemoryProperties& memoryProperties, const VkBufferCreateInfo& bufferInfo, const VmaAllocationCreateInfo& allocInfo){
     BufferAllocation result;
     VmaAllocationInfo allocationInfo{};
     VmaAllocation vmaAllocation = nullptr;
-    const VkResult res = vmaCreateBuffer(
-        ToVmaAllocator(allocator),
-        &bufferInfo,
-        &allocInfo,
-        &result.buffer,
-        &vmaAllocation,
-        &allocationInfo
-    );
+    const VkResult res = vmaCreateBuffer(ToVmaAllocator(allocator), &bufferInfo, &allocInfo, &result.buffer, &vmaAllocation, &allocationInfo);
     if(res != VK_SUCCESS)
         return MakeUnexpected(res);
 
@@ -259,13 +209,7 @@ inline void UnmapTransientAllocation(
     return result;
 }
 
-inline void DestroyBufferAllocation(
-    const VulkanAllocatorHandle allocator,
-    VkBuffer& buffer,
-    VulkanAllocationHandle& allocation,
-    void*& mappedMemory,
-    const bool persistentlyMapped
-){
+inline void DestroyBufferAllocation(const VulkanAllocatorHandle allocator, VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory, const bool persistentlyMapped){
     if(allocation){
         UnmapTransientAllocation(allocator, allocation, mappedMemory, persistentlyMapped);
         vmaDestroyBuffer(ToVmaAllocator(allocator), buffer, ToVmaAllocation(allocation));
@@ -333,12 +277,7 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_creationDesc, bufferInfo.size);
-    const auto allocation = __hidden_vulkan_allocator::CreateBufferAllocation(
-        m_allocator,
-        m_context.memoryProperties,
-        bufferInfo,
-        allocInfo
-    );
+    const auto allocation = __hidden_vulkan_allocator::CreateBufferAllocation(m_allocator, m_context.memoryProperties, bufferInfo, allocInfo);
     if(!allocation)
         return allocation.error();
 
@@ -355,13 +294,7 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
 }
 
 void VulkanAllocator::destroyBuffer(Buffer& buffer){
-    __hidden_vulkan_allocator::DestroyBufferAllocation(
-        m_allocator,
-        buffer.m_buffer,
-        buffer.m_allocation,
-        buffer.m_mappedMemory,
-        buffer.m_persistentlyMapped
-    );
+    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer.m_buffer, buffer.m_allocation, buffer.m_mappedMemory, buffer.m_persistentlyMapped);
     buffer.m_persistentlyMapped = false;
     buffer.m_requiresInvalidate = false;
 }
@@ -386,23 +319,12 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildDeviceLocalAllocationInfo();
     VmaAllocation allocation = nullptr;
-    const VkResult res = vmaCreateImage(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        &imageInfo,
-        &allocInfo,
-        &texture.m_image,
-        &allocation,
-        nullptr
-    );
+    const VkResult res = vmaCreateImage(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), &imageInfo, &allocInfo, &texture.m_image, &allocation, nullptr);
     if(res == VK_SUCCESS){
         texture.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
 #if defined(NWB_DEBUG)
         if(texture.m_creationDesc.name)
-            vmaSetAllocationName(
-                __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-                allocation,
-                texture.m_creationDesc.name.logText().data()
-            );
+            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), allocation, texture.m_creationDesc.name.logText().data());
 #endif
     }
     return res;
@@ -410,11 +332,7 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
 
 void VulkanAllocator::destroyTexture(Texture& texture){
     if(texture.m_allocation){
-        vmaDestroyImage(
-            __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-            texture.m_image,
-            __hidden_vulkan_allocator::ToVmaAllocation(texture.m_allocation)
-        );
+        vmaDestroyImage(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), texture.m_image, __hidden_vulkan_allocator::ToVmaAllocation(texture.m_allocation));
     }
     else{
         NWB_ASSERT(texture.m_image == VK_NULL_HANDLE);
@@ -424,21 +342,12 @@ void VulkanAllocator::destroyTexture(Texture& texture){
     texture.m_allocation = nullptr;
 }
 
-VkResult VulkanAllocator::createStagingTexture(
-    StagingTexture& texture,
-    const VkBufferCreateInfo& bufferInfo,
-    const CpuAccessMode::Enum cpuAccess
-){
+VkResult VulkanAllocator::createStagingTexture(StagingTexture& texture, const VkBufferCreateInfo& bufferInfo, const CpuAccessMode::Enum cpuAccess){
     if(!m_allocator)
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildStagingTextureAllocationInfo(cpuAccess);
-    const auto allocation = __hidden_vulkan_allocator::CreateBufferAllocation(
-        m_allocator,
-        m_context.memoryProperties,
-        bufferInfo,
-        allocInfo
-    );
+    const auto allocation = __hidden_vulkan_allocator::CreateBufferAllocation(m_allocator, m_context.memoryProperties, bufferInfo, allocInfo);
     if(!allocation)
         return allocation.error();
 
@@ -454,13 +363,7 @@ VkResult VulkanAllocator::createStagingTexture(
 }
 
 void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
-    __hidden_vulkan_allocator::DestroyBufferAllocation(
-        m_allocator,
-        texture.m_buffer,
-        texture.m_allocation,
-        texture.m_mappedMemory,
-        true
-    );
+    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, texture.m_buffer, texture.m_allocation, texture.m_mappedMemory, true);
     texture.m_requiresInvalidate = false;
 }
 
@@ -478,10 +381,7 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
     memRequirements.size = heap.m_desc.capacity;
     memRequirements.alignment = Max<VkDeviceSize>(m_context.physicalDeviceProperties.limits.bufferImageGranularity, 1u);
     if(heap.m_desc.type == HeapType::Readback){
-        memRequirements.alignment = Max<VkDeviceSize>(
-            memRequirements.alignment,
-            m_context.physicalDeviceProperties.limits.nonCoherentAtomSize
-        );
+        memRequirements.alignment = Max<VkDeviceSize>(memRequirements.alignment, m_context.physicalDeviceProperties.limits.nonCoherentAtomSize);
     }
     memRequirements.memoryTypeBits = VulkanDetail::BuildNonProtectedMemoryTypeBits(m_context.memoryProperties);
     if(memRequirements.memoryTypeBits == 0u)
@@ -490,24 +390,14 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHeapAllocationInfo(heap.m_desc);
     VmaAllocationInfo allocationInfo{};
     VmaAllocation allocation = nullptr;
-    const VkResult res = vmaAllocateDedicatedMemory(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        &memRequirements,
-        &allocInfo,
-        nullptr,
-        &allocation,
-        &allocationInfo
-    );
+    const VkResult res = vmaAllocateDedicatedMemory(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), &memRequirements, &allocInfo, nullptr, &allocation, &allocationInfo);
     if(res == VK_SUCCESS){
         heap.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
         heap.m_memory = allocationInfo.deviceMemory;
         heap.m_memoryOffset = allocationInfo.offset;
         heap.m_memoryTypeIndex = allocationInfo.memoryType;
         heap.m_mappedMemory = allocationInfo.pMappedData;
-        heap.m_requiresInvalidate =
-            heap.m_desc.type == HeapType::Readback
-            && __hidden_vulkan_allocator::BuildRequiresInvalidate(m_context.memoryProperties, allocationInfo.memoryType)
-        ;
+        heap.m_requiresInvalidate = heap.m_desc.type == HeapType::Readback && __hidden_vulkan_allocator::BuildRequiresInvalidate(m_context.memoryProperties, allocationInfo.memoryType);
         if(heap.m_desc.type != HeapType::DeviceLocal && !heap.m_mappedMemory){
             freeHeap(heap);
             return VK_ERROR_MEMORY_MAP_FAILED;
@@ -519,10 +409,7 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
 
 void VulkanAllocator::freeHeap(Heap& heap){
     if(heap.m_allocation){
-        vmaFreeMemory(
-            __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-            __hidden_vulkan_allocator::ToVmaAllocation(heap.m_allocation)
-        );
+        vmaFreeMemory(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(heap.m_allocation));
         heap.m_allocation = nullptr;
     }
     heap.m_memory = VK_NULL_HANDLE;
@@ -543,25 +430,13 @@ VkResult VulkanAllocator::invalidateHeapMemory(Heap& heap, const u64 offset, con
 VkResult VulkanAllocator::bindHeapBufferMemory(Buffer& buffer, Heap& heap, const u64 offset){
     if(!heap.m_allocation)
         return VK_ERROR_INITIALIZATION_FAILED;
-    return vmaBindBufferMemory2(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        __hidden_vulkan_allocator::ToVmaAllocation(heap.m_allocation),
-        offset,
-        buffer.m_buffer,
-        nullptr
-    );
+    return vmaBindBufferMemory2(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(heap.m_allocation), offset, buffer.m_buffer, nullptr);
 }
 
 VkResult VulkanAllocator::bindHeapTextureMemory(Texture& texture, Heap& heap, const u64 offset){
     if(!heap.m_allocation)
         return VK_ERROR_INITIALIZATION_FAILED;
-    return vmaBindImageMemory2(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        __hidden_vulkan_allocator::ToVmaAllocation(heap.m_allocation),
-        offset,
-        texture.m_image,
-        nullptr
-    );
+    return vmaBindImageMemory2(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(heap.m_allocation), offset, texture.m_image, nullptr);
 }
 
 Expected<BufferAllocation, VkResult> VulkanAllocator::createHostMappedBuffer(const VkBufferCreateInfo& bufferInfo){
@@ -569,12 +444,7 @@ Expected<BufferAllocation, VkResult> VulkanAllocator::createHostMappedBuffer(con
         return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHostMappedBufferAllocationInfo();
-    return __hidden_vulkan_allocator::CreateBufferAllocation(
-        m_allocator,
-        m_context.memoryProperties,
-        bufferInfo,
-        allocInfo
-    );
+    return __hidden_vulkan_allocator::CreateBufferAllocation(m_allocator, m_context.memoryProperties, bufferInfo, allocInfo);
 }
 
 void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory)noexcept{
@@ -629,10 +499,7 @@ void VulkanAllocator::unregisterTextureNativeIdentity(const VkImage nativeImage,
         m_textureNativeIdentities.erase(found);
 }
 
-bool VulkanAllocator::isTextureNativeIdentityRegistered(
-    const VkImage nativeImage,
-    const Texture& texture
-)const noexcept{
+bool VulkanAllocator::isTextureNativeIdentityRegistered(const VkImage nativeImage, const Texture& texture)const noexcept{
     if(nativeImage == VK_NULL_HANDLE)
         return false;
 

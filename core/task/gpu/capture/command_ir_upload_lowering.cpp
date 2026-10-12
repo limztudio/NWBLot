@@ -25,20 +25,12 @@ namespace GpuCommandIrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(
-    const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraphDeclarationReadView& graph,
-    CommandList& commandList,
-    const GpuPhysicalQueueInfo& queue
-)noexcept{
+GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList, const GpuPhysicalQueueInfo& queue)noexcept{
     if(record.opcode == GpuCommandIrOpcode::UploadBuffer){
         Buffer* const destination = graph.bufferForResource(record.destination);
         if(!destination)
             return GpuCommandIrReplayError::StreamChangedDuringReplay;
-        if(
-            !GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), destination, ResourceStates::CopyDest)
-            || !ResourceQueueAdmissionAdmitsQueue(destination->getQueueAdmissionSnapshot(), queue)
-        )
+        if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), destination, ResourceStates::CopyDest) || !ResourceQueueAdmissionAdmitsQueue(destination->getQueueAdmissionSnapshot(), queue))
             return GpuCommandIrReplayError::BackendResourceNotReady;
         const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(destination);
         if(permanentState != ResourceStates::Unknown && permanentState != record.finalState)
@@ -49,10 +41,7 @@ GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(
         Texture* const destination = graph.textureForResource(record.destination);
         if(!destination)
             return GpuCommandIrReplayError::StreamChangedDuringReplay;
-        if(
-            !GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), destination, ResourceStates::CopyDest)
-            || !ResourceQueueAdmissionAdmitsQueue(destination->getQueueAdmissionSnapshot(), queue)
-        )
+        if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), destination, ResourceStates::CopyDest) || !ResourceQueueAdmissionAdmitsQueue(destination->getQueueAdmissionSnapshot(), queue))
             return GpuCommandIrReplayError::BackendResourceNotReady;
         const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(destination);
         if(permanentState != ResourceStates::Unknown && permanentState != record.finalState)
@@ -62,18 +51,8 @@ GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(
     return GpuCommandIrReplayError::StreamChangedDuringReplay;
 }
 
-bool LowerUploadOperation(
-    const GpuCommandIrBuiltinTaskRecord& record,
-    const BinaryByteView blobBytes,
-    const GpuTaskGraphDeclarationReadView& graph,
-    CommandList& commandList
-)noexcept{
-    if(
-        !blobBytes.data()
-        || record.blobSizeBytes == 0u
-        || record.blobOffsetBytes > static_cast<u64>(blobBytes.size())
-        || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes
-    )
+bool LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList)noexcept{
+    if(!blobBytes.data() || record.blobSizeBytes == 0u || record.blobOffsetBytes > static_cast<u64>(blobBytes.size()) || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes)
         return false;
     const void* const bytes = blobBytes.data() + static_cast<usize>(record.blobOffsetBytes);
     const usize byteCount = static_cast<usize>(record.blobSizeBytes);
@@ -85,10 +64,7 @@ bool LowerUploadOperation(
         const BufferRange range(record.destinationOffsetBytes, record.blobSizeBytes);
         commandList.setBufferState(destination, ResourceStates::CopyDest, false, range);
         commandList.commitBarriers();
-        if(
-            commandList.commandRecordingFailed()
-            || !commandList.tryWriteBuffer(*destination, bytes, byteCount, record.destinationOffsetBytes)
-        )
+        if(commandList.commandRecordingFailed() || !commandList.tryWriteBuffer(*destination, bytes, byteCount, record.destinationOffsetBytes))
             return false;
         if(record.finalState != ResourceStates::CopyDest){
             commandList.setBufferState(destination, record.finalState, false, range);
@@ -104,18 +80,7 @@ bool LowerUploadOperation(
         const TextureSubresourceSet subresources(slice.mipLevel, 1u, slice.arraySlice, 1u);
         commandList.setTextureState(destination, subresources, ResourceStates::CopyDest);
         commandList.commitBarriers();
-        if(
-            commandList.commandRecordingFailed()
-            || !commandList.tryWriteTexture(
-                *destination,
-                slice.arraySlice,
-                slice.mipLevel,
-                bytes,
-                static_cast<usize>(record.rowPitch),
-                static_cast<usize>(record.depthPitch),
-                record.uploadAspect
-            )
-        )
+        if(commandList.commandRecordingFailed() || !commandList.tryWriteTexture(*destination, slice.arraySlice, slice.mipLevel, bytes, static_cast<usize>(record.rowPitch), static_cast<usize>(record.depthPitch), record.uploadAspect))
             return false;
         if(record.finalState != ResourceStates::CopyDest){
             commandList.setTextureState(destination, subresources, record.finalState);

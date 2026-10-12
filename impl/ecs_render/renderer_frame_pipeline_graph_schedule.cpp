@@ -87,16 +87,9 @@ bool RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTran
             .setIdentity(Name("render.frame_timing_begin"))
             .setMarkerLabel("Frame Timing Begin")
             .setScheduling(scheduling),
-        Core::FrameTimingBeginGraphTask::Payload{
-            .frameTimingTransaction = frameTimingTransaction,
-            .device = m_graphics.getDevice(),
-            .scopeDefinition = RendererGpuTimingScope::s_Frame,
-        }
+        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = RendererGpuTimingScope::s_Frame, }
     );
-    if(
-        !m_deferredFrameTimingBeginTask.valid()
-        || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(m_deferredFrameTimingBeginTask)
-    ){
+    if(!m_deferredFrameTimingBeginTask.valid() || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(m_deferredFrameTimingBeginTask)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare frame timing prelude"));
         return false;
     }

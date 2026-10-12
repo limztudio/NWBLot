@@ -32,10 +32,7 @@ struct ControlToken{
 };
 
 [[nodiscard]] inline bool operator==(const ControlToken& lhs, const ControlToken& rhs)noexcept{
-    return
-        lhs.instanceGeneration == rhs.instanceGeneration && lhs.contentGeneration == rhs.contentGeneration
-        && lhs.contentRevision == rhs.contentRevision
-    ;
+    return lhs.instanceGeneration == rhs.instanceGeneration && lhs.contentGeneration == rhs.contentGeneration && lhs.contentRevision == rhs.contentRevision;
 }
 
 namespace ControlActionKind{

@@ -10,7 +10,8 @@
 
 
 // Global descriptor heap - structured BVH-node view over the StorageBuffer class.
-// Software per-mesh node buffers are read as StructuredBuffer<NwbBvhNode>; other geometry uses raw ByteAddressBuffer (bindless_heap.slangi). This alias is separate so only node-traversing passes include NwbBvhNode / bvh_common, keeping hardware shadow, caustic, and GI include graphs BVH-free.
+// Software per-mesh node buffers are read as StructuredBuffer<NwbBvhNode>; other geometry uses raw ByteAddressBuffer (bindless_heap.slangi).
+// This alias is separate so only node-traversing passes include NwbBvhNode / bvh_common, keeping hardware shadow, caustic, and GI include graphs BVH-free.
 // Same set/binding as the raw arrays (one Vulkan descriptor; 32-byte stride is per-view decoration): node buffers need no second registration.
 
 
@@ -26,8 +27,7 @@
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate structured view of the storage-buffer descriptor table in bindless_heap.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbBvhNode> g_NwbHeapBvhNodeBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbBvhNode> g_NwbHeapBvhNodeBuffers[];
 #pragma warning(pop)
 
 

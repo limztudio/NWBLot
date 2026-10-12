@@ -35,8 +35,7 @@ bool EditModel::updateComposition(const AStringView value, const usize anchor, c
         return false;
     if(!GraphemeSegmentation::IsScalarBoundary(value, anchor) || !GraphemeSegmentation::IsScalarBoundary(value, caret))
         return false;
-    const usize retainedBytes = m_text.size() - (Max(m_compositionAnchor, m_compositionCaret)
-        - Min(m_compositionAnchor, m_compositionCaret));
+    const usize retainedBytes = m_text.size() - (Max(m_compositionAnchor, m_compositionCaret) - Min(m_compositionAnchor, m_compositionCaret));
     if(retainedBytes > m_limits.maxBytes - value.size())
         return false;
     AString<Core::Alloc::GlobalArena> candidate(m_arena);
@@ -67,8 +66,7 @@ void EditModel::cancelComposition()noexcept{
 }
 
 EditCompositionView EditModel::composition()const noexcept{
-    return { { m_preedit.data(), m_preedit.size() }, m_preeditAnchor, m_preeditCaret,
-        Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), m_compositionActive };
+    return { { m_preedit.data(), m_preedit.size() }, m_preeditAnchor, m_preeditCaret, Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), m_compositionActive };
 }
 
 

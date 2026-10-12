@@ -58,16 +58,11 @@ struct SurfelGiLifecycleResult{
 
 class SurfelGiLifecycleBuilder final : NoCopy{
 public:
-    SurfelGiLifecycleBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererRayTracingSystem& raytracingSystem
-    );
+    SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
 
 
 public:
-    [[nodiscard]] Expected<SurfelGiLifecycleResult> declare(
-        const SurfelGiLifecycleInputs& inputs
-    );
+    [[nodiscard]] Expected<SurfelGiLifecycleResult> declare(const SurfelGiLifecycleInputs& inputs);
 
 
 private:

@@ -15,18 +15,14 @@ STATE = re.compile(r"UiTextAreaSmoke: state sequence=(\d+) values=((?:\d+,){24}\
 GEOMETRY = re.compile(rf"UiTextAreaSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 METRICS = re.compile(rf"UiTextAreaSmoke: metrics sequence=(\d+) scroll=({NUMBER}),({NUMBER}) measure=({NUMBER}),({NUMBER}) line_height=({NUMBER}) selections=(\d+) maximum=({NUMBER}),({NUMBER})")
 SKIN = re.compile(r"UiTextAreaSmoke: skin=(default|alternate)")
-FIELDS = ("bytes", "hash", "anchor", "caret", "focus", "enabled", "readonly", "compact", "long_document",
-    "preferred_valid", "preferred_bits", "submits", "cancels", "blurs", "abandons", "outside", "clipboard_seeds",
-    "clipboard_pending", "model_revision", "external_revision", "selection_generation", "coherent", "line_count",
-    "can_undo", "can_redo")
-RECTANGLES = ("bounds", "content", "clip", "caret", "reset", "long", "readonly", "enabled", "viewport", "clipboard", "outside",
-    "x_track", "x_thumb", "y_track", "y_thumb", "corner")
+FIELDS = ("bytes", "hash", "anchor", "caret", "focus", "enabled", "readonly", "compact", "long_document", "preferred_valid", "preferred_bits", "submits", "cancels", "blurs", "abandons", "outside", "clipboard_seeds",
+    "clipboard_pending", "model_revision", "external_revision", "selection_generation", "coherent", "line_count", "can_undo", "can_redo")
+RECTANGLES = ("bounds", "content", "clip", "caret", "reset", "long", "readonly", "enabled", "viewport", "clipboard", "outside", "x_track", "x_thumb", "y_track", "y_thumb", "corner")
 MARKER_PARTS = tuple(3 if index in (1, 10, 18, 19, 20) else 2 for index in range(len(FIELDS))) + (2,)
 
 
 def document_fields(text, anchor, caret):
-    return {"bytes": len(text.encode("utf-8")), "hash": text_hash(text), "anchor": anchor, "caret": caret,
-        "line_count": text.count("\n") + 1}
+    return {"bytes": len(text.encode("utf-8")), "hash": text_hash(text), "anchor": anchor, "caret": caret, "line_count": text.count("\n") + 1}
 
 
 def snapshot_from_logs(text):
@@ -38,8 +34,7 @@ def snapshot_from_logs(text):
     values = tuple(map(int, state[2].split(",")))
     display = tuple(map(float, displays[-1].groups()))
     metrics = [item for item in METRICS.finditer(text) if int(item[1]) == sequence]
-    rectangles = {item[2]: tuple(map(float, item.groups()[2:])) for item in GEOMETRY.finditer(text)
-        if int(item[1]) == sequence}
+    rectangles = {item[2]: tuple(map(float, item.groups()[2:])) for item in GEOMETRY.finditer(text) if int(item[1]) == sequence}
     if not metrics or any(name not in rectangles for name in RECTANGLES):
         return None
     metric = metrics[-1]
@@ -53,13 +48,11 @@ def snapshot_from_logs(text):
         raise SmokeFailure("TextArea fixture reported nonfinite geometry")
     if any(value <= 0.0 for value in display) or line_height <= 0.0 or any(value < 0.0 for value in (*scroll, *maximum)):
         raise SmokeFailure("TextArea fixture reported invalid display, line height, or scroll")
-    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)),
-        "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles,
+    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles,
         "scroll": scroll, "measure": measure, "maximum": maximum, "line_height": line_height, "selection_count": count}
 
 
-def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None, extra=None, minimum_selection_lines=0,
-    allow_offscreen_caret=False):
+def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None, extra=None, minimum_selection_lines=0, allow_offscreen_caret=False):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
     probes = []
@@ -71,14 +64,12 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
         pixels = [rows[py][px] for py in range(y - radius, y + radius + 1) for px in range(x - radius, x + radius + 1)]
         observed = tuple(sorted(pixel[channel] for pixel in pixels)[len(pixels) // 2] for channel in range(3))
         error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": [x, y], "expected": list(color), "observed": list(observed),
-            "error": error, "passed": error <= tolerance})
+        probes.append({"name": name, "position": [x, y], "expected": list(color), "observed": list(observed), "error": error, "passed": error <= tolerance})
 
     marker = 0
     for index, (value, parts) in enumerate(zip((*snapshot["values"], snapshot["sequence"]), MARKER_PARTS)):
         for part in range(parts):
-            probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot["logical_extent"][1] - 13.0),
-                encoded_marker(value >> (part * 12)))
+            probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot["logical_extent"][1] - 13.0), encoded_marker(value >> (part * 12)))
             marker += 1
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     probe("panel_atlas", (28.0, 394.0), panel, 8)
@@ -157,21 +148,19 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
             probes.append({"name": "text_ink", "coverage": 0.0, "passed": False})
         else:
             residual, negative_coverage, x, y, color, observed = best
-            probes.append({"name": "text_ink", "position": [x, y], "expected": list(color), "observed": list(observed),
-                "coverage": -negative_coverage, "error": residual, "passed": residual <= 5})
+            probes.append({"name": "text_ink", "position": [x, y], "expected": list(color), "observed": list(observed), "coverage": -negative_coverage, "error": residual, "passed": residual <= 5})
     visible_selections = 0
     if focused and snapshot["anchor"] != snapshot["caret"]:
         backdrop = linear_channels(background)
-        selection_color = linear_rgb_bytes(tuple(selected * 0.75 + base * 0.25
-            for selected, base in zip((0.20, 0.40, 0.78), backdrop)))
+        selection_color = linear_rgb_bytes(tuple(selected * 0.75 + base * 0.25 for selected, base in zip((0.20, 0.40, 0.78), backdrop)))
         for index in range(snapshot["selection_count"]):
             sx, sy, sw, sh = snapshot["rectangles"][f"selection_{index}"]
             left, top, right, bottom = max(sx, lx), max(sy, ly), min(sx + sw, lx + lw), min(sy + sh, ly + lh)
             if right - left < 4.0 or bottom - top < 4.0:
                 continue
             visible_selections += 1
-            # A clipped first/last line can end inside its glyphs. Find a solid selected
-            # patch inside this line's clipped rectangle, retaining the exact blend gate.
+            # A clipped first/last line can end inside its glyphs.
+            # Find a solid selected patch inside this line's clipped rectangle, retaining the exact blend gate.
             pixel_left = max(1, math.ceil(left * scale_x) + 1)
             pixel_right = min(width - 2, math.floor(min(right, left + 72.0) * scale_x) - 1)
             pixel_top = max(1, math.ceil(top * scale_y) + 1)
@@ -193,8 +182,7 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
                 probes.append({"name": f"selection_line_{index}", "passed": False})
             else:
                 error, x, y, observed = best
-                probes.append({"name": f"selection_line_{index}", "position": [x, y],
-                    "expected": list(selection_color), "observed": list(observed), "error": error, "passed": error <= 5})
+                probes.append({"name": f"selection_line_{index}", "position": [x, y], "expected": list(selection_color), "observed": list(observed), "error": error, "passed": error <= 5})
     geometry_matches &= visible_selections >= minimum_selection_lines
     if focused and enabled and not snapshot["readonly"] and snapshot["anchor"] == snapshot["caret"] and caret_visible:
         geometry_matches &= abs(kw * scale_x - 1.0) <= 0.01
@@ -204,13 +192,9 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
         color = linear_rgb_bytes((0.95, 0.97, 1.0))
         pixels = [rows[y][column] for y in range(max(0, row - 1), min(height, row + 2))]
         error = min(max(abs(actual - reference) for actual, reference in zip(pixel, color)) for pixel in pixels)
-        probes.append({"name": "caret", "position": [column, row], "expected": list(color),
-            "observed": [list(pixel) for pixel in pixels], "error": error, "tolerance": 5, "passed": error <= 5})
+        probes.append({"name": "caret", "position": [column, row], "expected": list(color), "observed": [list(pixel) for pixel in pixels], "error": error, "tolerance": 5, "passed": error <= 5})
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
     extra_matches = extra is None or bool(extra(snapshot))
-    return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes,
-        "geometry_matches": bool(geometry_matches), "model_matches": model_matches, "extra_matches": extra_matches,
-        "visible_selection_lines": visible_selections, "marker_count": marker, "caret_visible": caret_visible,
-        "allow_offscreen_caret": allow_offscreen_caret,
-        "passed": model_matches and geometry_matches and extra_matches and (extent is None or (width, height) == extent)
-            and all(item["passed"] for item in probes)}
+    return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes, "geometry_matches": bool(geometry_matches), "model_matches": model_matches, "extra_matches": extra_matches,
+        "visible_selection_lines": visible_selections, "marker_count": marker, "caret_visible": caret_visible, "allow_offscreen_caret": allow_offscreen_caret,
+        "passed": model_matches and geometry_matches and extra_matches and (extent is None or (width, height) == extent) and all(item["passed"] for item in probes)}

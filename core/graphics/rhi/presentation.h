@@ -25,12 +25,7 @@ struct AcquiredBackBuffer{
     u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] bool valid()const noexcept{
-        return texture
-            && availabilityCompletion.valid()
-            && availabilityCompletion.hasPhysicalQueueIdentity()
-            && index != Limit<u32>::s_Max
-            && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present)
-        ;
+        return texture && availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity() && index != Limit<u32>::s_Max && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present);
     }
 };
 
@@ -57,11 +52,7 @@ struct PresentationReceipt{
     bool accepted = false;
 
     [[nodiscard]] bool valid()const noexcept{
-        return
-            availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity()
-            && index != Limit<u32>::s_Max
-            && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present)
-        ;
+        return availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity() && index != Limit<u32>::s_Max && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present);
     }
 
     void record(const AcquiredBackBuffer& acquired, const bool presentationAccepted)noexcept{

@@ -1,18 +1,5 @@
 nwb_declare_static_library(nwb_ecs)
-target_sources(nwb_ecs PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/profile_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/entity_id.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/world.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/entity_id.h"
-    "${CMAKE_CURRENT_LIST_DIR}/entity.h"
-    "${CMAKE_CURRENT_LIST_DIR}/component.h"
-    "${CMAKE_CURRENT_LIST_DIR}/type_id.h"
-    "${CMAKE_CURRENT_LIST_DIR}/system.h"
-    "${CMAKE_CURRENT_LIST_DIR}/query.h"
-    "${CMAKE_CURRENT_LIST_DIR}/message_bus.h"
-    "${CMAKE_CURRENT_LIST_DIR}/world.h"
-    "${CMAKE_CURRENT_LIST_DIR}/module.h"
-    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
-)
+target_sources(nwb_ecs PRIVATE "${CMAKE_CURRENT_LIST_DIR}/profile_names.h" "${CMAKE_CURRENT_LIST_DIR}/entity_id.cpp" "${CMAKE_CURRENT_LIST_DIR}/system.cpp" "${CMAKE_CURRENT_LIST_DIR}/world.cpp" "${CMAKE_CURRENT_LIST_DIR}/entity_id.h"
+    "${CMAKE_CURRENT_LIST_DIR}/entity.h" "${CMAKE_CURRENT_LIST_DIR}/component.h" "${CMAKE_CURRENT_LIST_DIR}/type_id.h" "${CMAKE_CURRENT_LIST_DIR}/system.h" "${CMAKE_CURRENT_LIST_DIR}/query.h" "${CMAKE_CURRENT_LIST_DIR}/message_bus.h"
+    "${CMAKE_CURRENT_LIST_DIR}/world.h" "${CMAKE_CURRENT_LIST_DIR}/module.h" "${CMAKE_CURRENT_LIST_DIR}/arena_names.h")
 target_link_libraries(nwb_ecs PUBLIC nwb_common nwb_alloc nwb_cpu_task)

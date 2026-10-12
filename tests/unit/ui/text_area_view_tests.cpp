@@ -22,8 +22,7 @@ protected:
     [[nodiscard]] bool prepareDense(){ return m_model.setText("abcdef\nabcdef\nabcdef") && shapeView(); }
 
     [[nodiscard]] bool manualPlace(const Point scroll, const f32 width = 20.0f, const f32 height = 12.0f){
-        const auto placement = m_view.arrange(
-            { 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, scroll, 1.0f, false
+        const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, scroll, 1.0f, false
         );
         if(!placement)
             return false;

@@ -46,12 +46,7 @@ namespace Scenario{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void DeclareDenseDependencies(
-    Graphics::GpuTaskGraph& graph,
-    const usize taskCount,
-    const Scenario::Enum scenario,
-    Graphics::Alloc::ScratchArena& scratch
-){
+static void DeclareDenseDependencies(Graphics::GpuTaskGraph& graph, const usize taskCount, const Scenario::Enum scenario, Graphics::Alloc::ScratchArena& scratch){
     Vector<Graphics::GpuGraphResourceId, Graphics::Alloc::ScratchArena> resources(scratch);
     Vector<Graphics::GpuTaskId, Graphics::Alloc::ScratchArena> tasks(scratch);
     Vector<Graphics::GpuTaskResourceUse, Graphics::Alloc::ScratchArena> uses(scratch);
@@ -61,9 +56,7 @@ static void DeclareDenseDependencies(
     if(scenario != Scenario::Explicit){
         for(usize index = 0u; index < taskCount; ++index){
             char text[32u] = {};
-            resources.push_back(AddHazardDomain(
-                graph, DeriveName(Name("tests/dense_dependencies/resource/"), FormatDecimal(index, text)), "Dense Hazard"
-            ));
+            resources.push_back(AddHazardDomain(graph, DeriveName(Name("tests/dense_dependencies/resource/"), FormatDecimal(index, text)), "Dense Hazard"));
             ASSERT_TRUE(resources.back().valid());
         }
     }

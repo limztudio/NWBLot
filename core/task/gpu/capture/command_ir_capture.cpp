@@ -24,22 +24,12 @@ namespace GpuCommandIrDetail{
 
 [[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
     constexpr u32 allowedResourceStates = (static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput) << 1u) - 1u;
-    if(
-        record.opcode >= GpuCommandIrOpcode::kCount
-        || !record.task.valid()
-        || !record.packet.valid()
-        || !record.queue.valid()
-        || !record.destination.valid()
-        || record.destination.generation != record.task.generation
-    )
+    if(record.opcode >= GpuCommandIrOpcode::kCount || !record.task.valid() || !record.packet.valid() || !record.queue.valid() || !record.destination.valid() || record.destination.generation != record.task.generation)
         return false;
 
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:
-        return record.source.valid()
-            && record.source.generation == record.task.generation
-            && record.dataSizeBytes != 0u
-        ;
+        return record.source.valid() && record.source.generation == record.task.generation && record.dataSizeBytes != 0u;
     case GpuCommandIrOpcode::CopyTexture:
         return record.source.valid() && record.source.generation == record.task.generation;
     case GpuCommandIrOpcode::ClearBuffer:
@@ -48,18 +38,10 @@ namespace GpuCommandIrDetail{
         return record.clearTextureValueType < GpuClearTextureTaskValueType::kCount
             && record.destinationSubresources.numMipLevels != 0u
             && record.destinationSubresources.numArraySlices != 0u
-            && (
-                record.clearTextureValueType != GpuClearTextureTaskValueType::DepthStencil
-                || record.clearDepth
-                || record.clearStencil
-            )
+            && (record.clearTextureValueType != GpuClearTextureTaskValueType::DepthStencil || record.clearDepth || record.clearStencil)
         ;
     case GpuCommandIrOpcode::ClearTextureRectUInt:
-        return record.destinationSubresources.numMipLevels != 0u
-            && record.destinationSubresources.numArraySlices != 0u
-            && record.clearRect.maxX > record.clearRect.minX
-            && record.clearRect.maxY > record.clearRect.minY
-        ;
+        return record.destinationSubresources.numMipLevels != 0u && record.destinationSubresources.numArraySlices != 0u && record.clearRect.maxX > record.clearRect.minX && record.clearRect.maxY > record.clearRect.minY;
     case GpuCommandIrOpcode::UploadBuffer:
         return record.sourceUploadBlob.valid()
             && record.sourceUploadBlob.generation == record.task.generation
@@ -123,11 +105,7 @@ template<typename RecordT>
     static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
     static_assert(sizeof(RecordT) <= Limit<u16>::s_Max, "Command IR record exceeds its u16 byte-size field");
 
-    if(
-        outBytes.size() < sizeof(GpuCommandIrStreamHeader)
-        || !BinaryDetail::CanAppendBytes(outBytes, sizeof(RecordT))
-        || outBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - sizeof(RecordT)
-    )
+    if(outBytes.size() < sizeof(GpuCommandIrStreamHeader) || !BinaryDetail::CanAppendBytes(outBytes, sizeof(RecordT)) || outBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - sizeof(RecordT))
         return false;
 
     ContainerDetail::ReserveGrowingCapacity(outBytes, outBytes.size() + sizeof(RecordT));
@@ -136,70 +114,31 @@ template<typename RecordT>
 }
 
 [[nodiscard]] static GpuCommandIrRecordContext EncodeContext(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
-    return GpuCommandIrRecordContext{
-        .taskIndex = record.task.index,
-        .packetIndex = record.packet.index,
-        .queueIndex = record.queue.index,
-        .queueDeviceGeneration = record.queue.deviceGeneration,
-    };
+    return GpuCommandIrRecordContext{ .taskIndex = record.task.index, .packetIndex = record.packet.index, .queueIndex = record.queue.index, .queueDeviceGeneration = record.queue.deviceGeneration, };
 }
 
 [[nodiscard]] static GpuCommandIrTextureSlice EncodeTextureSlice(const TextureSlice& slice)noexcept{
-    return GpuCommandIrTextureSlice{
-        .x = slice.x,
-        .y = slice.y,
-        .z = slice.z,
-        .width = slice.width,
-        .height = slice.height,
-        .depth = slice.depth,
-        .mipLevel = slice.mipLevel,
-        .arraySlice = slice.arraySlice,
-    };
+    return GpuCommandIrTextureSlice{ .x = slice.x, .y = slice.y, .z = slice.z, .width = slice.width, .height = slice.height, .depth = slice.depth, .mipLevel = slice.mipLevel, .arraySlice = slice.arraySlice, };
 }
 
 [[nodiscard]] static GpuCommandIrTextureSubresourceSet EncodeSubresources(const TextureSubresourceSet& subresources)noexcept{
-    return GpuCommandIrTextureSubresourceSet{
-        .baseMipLevel = subresources.baseMipLevel,
-        .numMipLevels = subresources.numMipLevels,
-        .baseArraySlice = subresources.baseArraySlice,
-        .numArraySlices = subresources.numArraySlices,
-    };
+    return GpuCommandIrTextureSubresourceSet{ .baseMipLevel = subresources.baseMipLevel, .numMipLevels = subresources.numMipLevels, .baseArraySlice = subresources.baseArraySlice, .numArraySlices = subresources.numArraySlices, };
 }
 
 [[nodiscard]] static GpuCommandIrRect EncodeRect(const Rect& rect)noexcept{
-    return GpuCommandIrRect{
-        .minX = rect.minX,
-        .maxX = rect.maxX,
-        .minY = rect.minY,
-        .maxY = rect.maxY,
-    };
+    return GpuCommandIrRect{ .minX = rect.minX, .maxX = rect.maxX, .minY = rect.minY, .maxY = rect.maxY, };
 }
 
 [[nodiscard]] static GpuCommandIrFloatColor EncodeColor(const Color& color)noexcept{
-    return GpuCommandIrFloatColor{
-        .r = color.r,
-        .g = color.g,
-        .b = color.b,
-        .a = color.a,
-    };
+    return GpuCommandIrFloatColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
 }
 
 [[nodiscard]] static GpuCommandIrUIntColor EncodeColor(const UIntColor& color)noexcept{
-    return GpuCommandIrUIntColor{
-        .r = color.r,
-        .g = color.g,
-        .b = color.b,
-        .a = color.a,
-    };
+    return GpuCommandIrUIntColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
 }
 
 [[nodiscard]] static GpuCommandIrIntColor EncodeColor(const IntColor& color)noexcept{
-    return GpuCommandIrIntColor{
-        .r = color.r,
-        .g = color.g,
-        .b = color.b,
-        .a = color.a,
-    };
+    return GpuCommandIrIntColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
 }
 
 template<typename RecordT>
@@ -254,19 +193,11 @@ BinaryByteView GpuCommandIrCapture::commandBytes()const{
         return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
 
     if(m_packedDirty){
-        NWB_FATAL_ASSERT_MSG(
-            m_commandBytes.size() <= Limit<usize>::s_Max - m_blobBytes.size(),
-            "Command IR stream size exceeded addressable storage"
-        );
+        NWB_FATAL_ASSERT_MSG(m_commandBytes.size() <= Limit<usize>::s_Max - m_blobBytes.size(), "Command IR stream size exceeded addressable storage");
         const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
         m_packedBytes.resize(totalSize);
         NWB_MEMCPY(m_packedBytes.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
-        NWB_MEMCPY(
-            m_packedBytes.data() + m_commandBytes.size(),
-            m_blobBytes.size(),
-            m_blobBytes.data(),
-            m_blobBytes.size()
-        );
+        NWB_MEMCPY(m_packedBytes.data() + m_commandBytes.size(), m_blobBytes.size(), m_blobBytes.data(), m_blobBytes.size());
         m_packedDirty = false;
     }
     return BinaryByteView{ m_packedBytes.data(), m_packedBytes.size() };
@@ -281,12 +212,7 @@ Expected<GpuCommandIrOwnedStream> GpuCommandIrCapture::exportOwned(GraphicsArena
     candidate.resize(totalSize);
     NWB_MEMCPY(candidate.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
     if(!m_blobBytes.empty()){
-        NWB_MEMCPY(
-            candidate.data() + m_commandBytes.size(),
-            m_blobBytes.size(),
-            m_blobBytes.data(),
-            m_blobBytes.size()
-        );
+        NWB_MEMCPY(candidate.data() + m_commandBytes.size(), m_blobBytes.size(), m_blobBytes.data(), m_blobBytes.size());
     }
     GpuCommandIrRasterOwnerTable* ownerCandidate = nullptr;
     if(m_rasterOwners && (!m_rasterOwners->stateOwners.empty() || !m_rasterOwners->heapOwners.empty())){
@@ -322,15 +248,9 @@ bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)n
     usize prefixStateOwners = 0u;
     usize prefixHeapOwners = 0u;
     if(m_rasterOwners){
-        while(
-            prefixStateOwners < m_rasterOwners->stateOwners.size()
-            && m_rasterOwners->stateOwners[prefixStateOwners].recordIndex < target.m_recordCount
-        )
+        while(prefixStateOwners < m_rasterOwners->stateOwners.size() && m_rasterOwners->stateOwners[prefixStateOwners].recordIndex < target.m_recordCount)
             ++prefixStateOwners;
-        while(
-            prefixHeapOwners < m_rasterOwners->heapOwners.size()
-            && m_rasterOwners->heapOwners[prefixHeapOwners].recordIndex < target.m_recordCount
-        )
+        while(prefixHeapOwners < m_rasterOwners->heapOwners.size() && m_rasterOwners->heapOwners[prefixHeapOwners].recordIndex < target.m_recordCount)
             ++prefixHeapOwners;
     }
     if(
@@ -338,25 +258,16 @@ bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)n
         || target.m_resetEpoch != m_resetEpoch
         || target.m_recordingAttemptGeneration != m_recordingAttemptGeneration
         || target.m_recordCount > m_recordEndOffsets.size()
-        || target.m_commandSize != (
-            target.m_recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[target.m_recordCount - 1u]
-        )
+        || target.m_commandSize != (target.m_recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[target.m_recordCount - 1u])
         || target.m_blobSize != (target.m_recordCount == 0u ? 0u : m_blobEndOffsets[target.m_recordCount - 1u])
         || target.m_rasterStateOwnerCount != prefixStateOwners
         || target.m_rasterHeapOwnerCount != prefixHeapOwners
         || target.m_prefixSerial != (target.m_recordCount == 0u ? 0u : m_recordSerials[target.m_recordCount - 1u])
-        || (target.m_recordCount != 0u && (
-            target.m_graphGeneration != m_graphGeneration || target.m_planGeneration != m_planGeneration
-        ))
+        || (target.m_recordCount != 0u && (target.m_graphGeneration != m_graphGeneration || target.m_planGeneration != m_planGeneration))
     )
         return false;
 
-    rollbackPrefix(
-        target.m_recordCount,
-        target.m_recordCount == 0u ? 0u : target.m_graphGeneration,
-        target.m_recordCount == 0u ? 0u : target.m_planGeneration,
-        target.m_recordCount == 0u ? 0u : target.m_recordingAttemptGeneration
-    );
+    rollbackPrefix(target.m_recordCount, target.m_recordCount == 0u ? 0u : target.m_graphGeneration, target.m_recordCount == 0u ? 0u : target.m_planGeneration, target.m_recordCount == 0u ? 0u : target.m_recordingAttemptGeneration);
     return true;
 }
 
@@ -367,10 +278,7 @@ bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)n
 void GpuCommandIrCapture::reset()noexcept{
     static_assert(noexcept(m_recordEndOffsets.clear()));
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
-    NWB_FATAL_ASSERT_MSG(
-        m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader),
-        "Command IR capture reset requires its reserved stream header storage"
-    );
+    NWB_FATAL_ASSERT_MSG(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader), "Command IR capture reset requires its reserved stream header storage");
     if(m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
         TerminateInvariant();
 
@@ -409,20 +317,10 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
     if(recordCount > m_recordEndOffsets.size())
         return;
 
-    rollbackPrefix(
-        recordCount,
-        recordCount == 0u ? 0u : m_graphGeneration,
-        recordCount == 0u ? 0u : m_planGeneration,
-        recordCount == 0u ? 0u : m_recordingAttemptGeneration
-    );
+    rollbackPrefix(recordCount, recordCount == 0u ? 0u : m_graphGeneration, recordCount == 0u ? 0u : m_planGeneration, recordCount == 0u ? 0u : m_recordingAttemptGeneration);
 }
 
-void GpuCommandIrCapture::rollbackPrefix(
-    const usize recordCount,
-    const u64 graphGeneration,
-    const u64 planGeneration,
-    const u64 attemptGeneration
-)noexcept{
+void GpuCommandIrCapture::rollbackPrefix(const usize recordCount, const u64 graphGeneration, const u64 planGeneration, const u64 attemptGeneration)noexcept{
     const usize byteOffset = recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[recordCount - 1u];
     const usize blobEnd = recordCount == 0u ? 0u : m_blobEndOffsets[recordCount - 1u];
     static_assert(IsNothrowDestructible_V<usize>);
@@ -496,13 +394,7 @@ bool GpuCommandIrCapture::captureCopyTexture(
     return append(record);
 }
 
-bool GpuCommandIrCapture::captureClearBuffer(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue,
-    const GpuGraphResourceId destination,
-    const u32 clearValue
-){
+bool GpuCommandIrCapture::captureClearBuffer(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const u32 clearValue){
     GpuCommandIrBuiltinTaskRecord record;
     record.opcode = GpuCommandIrOpcode::ClearBuffer;
     record.task = task;
@@ -513,13 +405,7 @@ bool GpuCommandIrCapture::captureClearBuffer(
     return append(record);
 }
 
-bool GpuCommandIrCapture::captureClearTexture(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue,
-    const GpuGraphResourceId destination,
-    const GpuClearTextureTaskDesc& clearDesc
-){
+bool GpuCommandIrCapture::captureClearTexture(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const GpuClearTextureTaskDesc& clearDesc){
     GpuCommandIrBuiltinTaskRecord record;
     record.opcode = GpuCommandIrOpcode::ClearTexture;
     record.task = task;
@@ -538,13 +424,7 @@ bool GpuCommandIrCapture::captureClearTexture(
     return append(record);
 }
 
-bool GpuCommandIrCapture::captureClearTextureRectUInt(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue,
-    const GpuGraphResourceId destination,
-    const GpuClearTextureRectUIntTaskDesc& clearDesc
-){
+bool GpuCommandIrCapture::captureClearTextureRectUInt(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const GpuClearTextureRectUIntTaskDesc& clearDesc){
     GpuCommandIrBuiltinTaskRecord record;
     record.opcode = GpuCommandIrOpcode::ClearTextureRectUInt;
     record.task = task;
@@ -643,13 +523,9 @@ bool GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord
         // Color clears ignore aspect flags; depth/stencil selection is encoded only for depth/stencil clears.
         if(record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil){
             if(record.clearDepth)
-                encoded.clearFlags = static_cast<GpuCommandIrClearTextureFlag::Mask>(
-                    static_cast<u8>(encoded.clearFlags) | GpuCommandIrClearTextureFlag::ClearDepth
-                );
+                encoded.clearFlags = static_cast<GpuCommandIrClearTextureFlag::Mask>(static_cast<u8>(encoded.clearFlags) | GpuCommandIrClearTextureFlag::ClearDepth);
             if(record.clearStencil)
-                encoded.clearFlags = static_cast<GpuCommandIrClearTextureFlag::Mask>(
-                    static_cast<u8>(encoded.clearFlags) | GpuCommandIrClearTextureFlag::ClearStencil
-                );
+                encoded.clearFlags = static_cast<GpuCommandIrClearTextureFlag::Mask>(static_cast<u8>(encoded.clearFlags) | GpuCommandIrClearTextureFlag::ClearStencil);
         }
         return AppendEncodedRecord(m_commandBytes, encoded);
     }

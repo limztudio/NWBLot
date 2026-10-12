@@ -121,12 +121,7 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerLineKey, false);
     AppendUnsignedText(manifest, request.triggerLine);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestDumpDetailModeKey, false);
-    AppendJsonQuotedText(
-        manifest,
-        request.dumpDetailMode == DumpDetailMode::Full
-            ? PackageNames::s_ManifestDumpDetailModeFullValue
-            : PackageNames::s_ManifestDumpDetailModeSmallValue
-    );
+    AppendJsonQuotedText(manifest, request.dumpDetailMode == DumpDetailMode::Full ? PackageNames::s_ManifestDumpDetailModeFullValue : PackageNames::s_ManifestDumpDetailModeSmallValue);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestArtifactStrategyKey, false);
     AppendJsonQuotedText(manifest, ArtifactStrategyName(request));
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHandlerLifetimeKey, false);
@@ -199,11 +194,7 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
 }
 
 static bool HasCpuContext(const CrashRequest& request)noexcept{
-    return request.faultAddress != 0u
-        || request.instructionPointer != 0u
-        || request.stackPointer != 0u
-        || request.framePointer != 0u
-    ;
+    return request.faultAddress != 0u || request.instructionPointer != 0u || request.stackPointer != 0u || request.framePointer != 0u;
 }
 
 static bool HasCallstack(const CrashRequest& request)noexcept{
@@ -228,10 +219,7 @@ static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashReques
 template<typename ArenaT>
 static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
-    const u32 frameCount = request.callstackFrameCount > s_MaxCallstackFrames
-        ? static_cast<u32>(s_MaxCallstackFrames)
-        : request.callstackFrameCount
-    ;
+    const u32 frameCount = request.callstackFrameCount > s_MaxCallstackFrames ? static_cast<u32>(s_MaxCallstackFrames) : request.callstackFrameCount;
     for(u32 i = 0u; i < frameCount; ++i){
         text += '#';
         AppendUnsignedText(text, i);
@@ -369,12 +357,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         const bool dumpWritten = WriteWindowsMinidump(arena, request);
         if(!WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-            CrashStringT<ArenaT>(
-                dumpWritten
-                    ? "minidump captured; server-side PDB symbolication pending\n"
-                    : "minidump capture failed; metadata package only\n",
-                arena
-            )
+            CrashStringT<ArenaT>(dumpWritten ? "minidump captured; server-side PDB symbolication pending\n" : "minidump capture failed; metadata package only\n", arena)
         ))
             return false;
     }
@@ -397,10 +380,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
             return false;
     }
 #else
-    if(!WriteCrashTextFile(
-        RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-        CrashStringT<ArenaT>("native platform crash artifact expected; server-side symbolication pending\n", arena)
-    ))
+    if(!WriteCrashTextFile(RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName, CrashStringT<ArenaT>("native platform crash artifact expected; server-side symbolication pending\n", arena)))
         return false;
 #endif
 
@@ -463,15 +443,9 @@ Expected<CrashBytesT<ArenaT>> BuildPackageArchive(ArenaT& arena, const ::Path<Ar
     return archive;
 }
 
-template Expected<CrashBytesT<Alloc::GlobalArena>> BuildPackageArchive(
-    Alloc::GlobalArena& arena,
-    const ::Path<Alloc::GlobalArena>& packageDirectory
-);
+template Expected<CrashBytesT<Alloc::GlobalArena>> BuildPackageArchive(Alloc::GlobalArena& arena, const ::Path<Alloc::GlobalArena>& packageDirectory);
 
-template Expected<CrashBytesT<Alloc::PersistentArena>> BuildPackageArchive(
-    Alloc::PersistentArena& arena,
-    const ::Path<Alloc::PersistentArena>& packageDirectory
-);
+template Expected<CrashBytesT<Alloc::PersistentArena>> BuildPackageArchive(Alloc::PersistentArena& arena, const ::Path<Alloc::PersistentArena>& packageDirectory);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

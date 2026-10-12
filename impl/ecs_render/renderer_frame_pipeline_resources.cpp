@@ -31,10 +31,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
 
     const u32 surfelResolveFactor = static_cast<u32>(m_surfelGiQualitySettings.resolveResolution);
     const u32 shadowReceiverFactor = m_raytracingSystem.requestedShadowReceiverFactor();
-    if(
-        (m_frameTargets.surfelResolveFactor != 0u && m_frameTargets.surfelResolveFactor != surfelResolveFactor)
-        || (m_frameTargets.shadowReceiverFactor != 0u && m_frameTargets.shadowReceiverFactor != shadowReceiverFactor)
-    ){
+    if((m_frameTargets.surfelResolveFactor != 0u && m_frameTargets.surfelResolveFactor != surfelResolveFactor) || (m_frameTargets.shadowReceiverFactor != 0u && m_frameTargets.shadowReceiverFactor != shadowReceiverFactor)){
         // Shared producers must drain and recreate before their retained queue handoffs are cleared.
         if(!m_graphics.waitForIdle())
             return false;
@@ -45,8 +42,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
-    bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height
-        && deferredTargets->surfelResolveFactor == surfelResolveFactor && deferredTargets->shadowReceiverFactor == shadowReceiverFactor;
+    bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height && deferredTargets->surfelResolveFactor == surfelResolveFactor && deferredTargets->shadowReceiverFactor == shadowReceiverFactor;
     if(!targetsReady){
         // New targets invalidate stale compute scratch and visibility returns.
         resetTargetGenerationStateHandoffs();
@@ -321,14 +317,7 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
         Core::GpuCompiledGraph::ReadView planAccess(m_deferredLightingCompiledGraph);
         if(planAccess.valid()){
             const u64 recordingAttemptGeneration = m_deferredLightingRecordedGraph.recordingAttemptGeneration();
-            if(
-                recordingAttemptGeneration != 0u
-                && !m_deferredLightingSubmissionTransaction.discardUnaccepted(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    recordingAttemptGeneration
-                )
-            ){
+            if(recordingAttemptGeneration != 0u && !m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, recordingAttemptGeneration)){
                 NWB_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
                 TerminateInvariant();
             }
@@ -455,21 +444,13 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
 
     const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
     const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
-    if(
-        !presentationFrame.valid()
-        || presentationFrame.framebuffer.get() != framebuffer
-        || presentationFramebufferDesc.colorAttachments.size() != 1u
-        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
-    ){
+    if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return false;
     }
 
-    if(
-        m_frameTargets.surfelResolveFactor != static_cast<u32>(m_surfelGiQualitySettings.resolveResolution)
-        || m_frameTargets.shadowReceiverFactor != m_raytracingSystem.requestedShadowReceiverFactor()
-    ){
+    if(m_frameTargets.surfelResolveFactor != static_cast<u32>(m_surfelGiQualitySettings.resolveResolution) || m_frameTargets.shadowReceiverFactor != m_raytracingSystem.requestedShadowReceiverFactor()){
         const Core::TextureDesc& presentationDesc = presentationFrame.backBuffer.texture->getDescription();
         if(!validateResources(presentationDesc.width, presentationDesc.height, presentationDesc.sampleCount))
             return false;
@@ -491,43 +472,22 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
     else
         m_opticalVolumes.reset();
-    m_preparedCsgFrameState = HasCsgFrameCandidates(m_world)
-        ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem)
-        : CsgFrameState{}
-    ;
+    m_preparedCsgFrameState = HasCsgFrameCandidates(m_world) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
     m_preparedCsgFrameStateValid = true;
     const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
-    if(!m_reflectionSystem.prepareResources(
-        deferredTargets.width,
-        deferredTargets.height,
-        m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
-        hasCsgFrameWork && m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
-        m_reflectionSettings
-    ))
+    if(!m_reflectionSystem.prepareResources(deferredTargets.width, deferredTargets.height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), hasCsgFrameWork && m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings))
         return false;
 
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
     // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete renderer view is the safe prepass capacity bound for either material pass.
-    const usize csgReceiverRangeCount = hasCsgFrameWork
-        ? m_world.view<RendererComponent>().candidateCount()
-        : 0u
-    ;
+    const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
 
-    if(!m_materialSystem.prepareMaterialPassResources(
-        deferredTargets.framebuffer.get(),
-        MaterialPipelinePass::Opaque,
-        false,
-        m_preparedCsgFrameState,
-        nullptr
-    ))
+    if(!m_materialSystem.prepareMaterialPassResources(deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
         return false;
 
-    if(
-        m_preparedHasTransparentRenderers
-        && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState)
-    )
+    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState))
         return false;
 
     // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
@@ -538,13 +498,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     // All material passes have now established their frame buffers. Create CSG resources once from this renderer-owned prepass so draw paths only consume the prepared layouts and handles.
-    if(
-        hasCsgFrameWork
-        && !m_csgSystem.prepareCsgFrameResources(
-            csgReceiverRangeCount,
-            static_cast<usize>(m_preparedCsgFrameState.cutterCount)
-        )
-    )
+    if(hasCsgFrameWork && !m_csgSystem.prepareCsgFrameResources(csgReceiverRangeCount, static_cast<usize>(m_preparedCsgFrameState.cutterCount)))
         return false;
 
     // Resource selection and capacity growth happen before shared-graph compilation.

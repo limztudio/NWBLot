@@ -17,11 +17,7 @@ namespace TelemetryTestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(
-    const Telemetry::FrameGraphRuntimeStatistics& statistics,
-    const u32 nodeIndex,
-    const u16 reserved
-);
+Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(const Telemetry::FrameGraphRuntimeStatistics& statistics, const u32 nodeIndex, const u16 reserved);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -57,9 +57,7 @@ TEST(LightSpaceCaptureHistory, UntrustedSceneNeverReusesAcceptedCaptures){
 
 TEST(LightSpaceCaptureHistory, EachIdentityDomainAndTrustChangeForcesRefresh){
     const LightSpaceCaptureIdentity original{ 7u, 11u, 13u, true };
-    const LightSpaceCaptureIdentity changes[] = {
-        { 8u, 11u, 13u, true }, { 7u, 12u, 13u, true }, { 7u, 11u, 14u, true }, { 7u, 11u, 13u, false },
-    };
+    const LightSpaceCaptureIdentity changes[] = { { 8u, 11u, 13u, true }, { 7u, 12u, 13u, true }, { 7u, 11u, 14u, true }, { 7u, 11u, 13u, false }, };
     for(const auto& changed : changes){
         LightSpaceCaptureHistory history;
         history.beginFrame();
@@ -144,9 +142,7 @@ TEST(LightSpaceCaptureHistory, TwoAcceptedReusesRequireARefreshBeforeTheThird){
 
 TEST(LightSpaceCaptureHistory, TwoFrameReuseRetainsIdentityInvalidationAndRejectsUnsubmittedEdits){
     const LightSpaceCaptureIdentity original{ 7u, 11u, 13u, true };
-    const LightSpaceCaptureIdentity changes[] = {
-        { 8u, 11u, 13u, true }, { 7u, 12u, 13u, true }, { 7u, 11u, 14u, true }, { 7u, 11u, 13u, false },
-    };
+    const LightSpaceCaptureIdentity changes[] = { { 8u, 11u, 13u, true }, { 7u, 12u, 13u, true }, { 7u, 11u, 14u, true }, { 7u, 11u, 13u, false }, };
     for(const auto& changed : changes){
         for(const bool submitEdit : { false, true }){
             LightSpaceCaptureHistory history;

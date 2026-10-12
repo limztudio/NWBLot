@@ -31,8 +31,10 @@ struct UiClipboardPublicationResult{
 
 inline constexpr usize s_UiClipboardMaxPublications = 16u;
 
-// Copies are immutable native publications. Their owned OS requests survive later edits, focus and widget removal.
-// Drain on the OS thread; destruction cancels remaining requests. Service and arena outlive this bounded owner.
+// Copies are immutable native publications.
+// Their owned OS requests survive later edits, focus and widget removal.
+// Drain on the OS thread; destruction cancels remaining requests.
+// Service and arena outlive this bounded owner.
 class UiClipboardPublications final : NoCopy{
 private:
     struct Publication{
@@ -47,9 +49,7 @@ public:
 
 
 public:
-    [[nodiscard]] UiClipboardPublicationStatus::Enum request(
-        AStringView text, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard
-    );
+    [[nodiscard]] UiClipboardPublicationStatus::Enum request(AStringView text, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard);
     [[nodiscard]] UiClipboardPublicationResult drain();
     [[nodiscard]] bool cancel();
     [[nodiscard]] usize pending()const noexcept{ return m_requests.size(); }

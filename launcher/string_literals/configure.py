@@ -75,10 +75,7 @@ def main() -> int:
         print(json.dumps({"library": str(candidate), "version": ".".join(map(str, version))}))
         return 0
     details = "\n".join(failures) or "No LLVM C API shared library was found beside the compiler."
-    raise ValueError(
-        "String obfuscation requires the compiler host's matching LLVM C API shared library. "
-        "Install it with the Clang toolchain or set NWB_LLVM_C_LIBRARY to its path.\n" + details
-    )
+    raise ValueError("String obfuscation requires the compiler host's matching LLVM C API shared library. " "Install it with the Clang toolchain or set NWB_LLVM_C_LIBRARY to its path.\n" + details)
 
 
 if __name__ == "__main__":

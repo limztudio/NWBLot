@@ -10,11 +10,9 @@ SMOKE = pathlib.Path(__file__).resolve().parents[1] / "smoke"
 sys.path[:0] = [str(SMOKE / "ui_layer"), str(SMOKE)]
 
 from fixture_environment import (  # noqa: E402
-    AUXILIARY_SWITCHES, CAPTURE_ENVIRONMENT, FIXTURE_FLAGS, SKIN_FIXTURES, build_fixture_environment,
-)
+    AUXILIARY_SWITCHES, CAPTURE_ENVIRONMENT, FIXTURE_FLAGS, SKIN_FIXTURES, build_fixture_environment,)
 from probe_reference import (  # noqa: E402
-    authored_texel, compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile,
-)
+    authored_texel, compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile,)
 
 
 class UiFixtureEnvironmentTests(unittest.TestCase):
@@ -41,8 +39,7 @@ class UiFixtureEnvironmentTests(unittest.TestCase):
 
     def test_unknown_or_incoherent_selection_fails_without_mutating_inherited_state(self):
         inherited = {"PATH": "preserved"}
-        for fixture, skin in (("missing", "default"), ("image", "default"), ("", "default"),
-                ("IMAGE", "unknown"), (None, "alternate"), ("EDIT", "alternate"), ("INTERACTIVE", "alternate")):
+        for fixture, skin in (("missing", "default"), ("image", "default"), ("", "default"), ("IMAGE", "unknown"), (None, "alternate"), ("EDIT", "alternate"), ("INTERACTIVE", "alternate")):
             with self.subTest(fixture=fixture, skin=skin), self.assertRaises(ValueError):
                 build_fixture_environment(inherited, fixture, skin=skin)
         self.assertEqual(inherited, {"PATH": "preserved"})
@@ -110,8 +107,7 @@ class UiProbeReferenceTests(unittest.TestCase):
 
     def test_nine_slice_rejects_pixel_centers_outside_half_open_bounds(self):
         for pixel in ((-1, 12), (24, 12), (12, -1), (12, 24)):
-            self.assertEqual(sampled_region((0, 0, 24, 24), pixel, (1, 1), (53, 131, 192), (97, 176, 233)),
-                ((0.0, 0.0, 0.0), 0.0))
+            self.assertEqual(sampled_region((0, 0, 24, 24), pixel, (1, 1), (53, 131, 192), (97, 176, 233)), ((0.0, 0.0, 0.0), 0.0))
 
     def test_small_nine_slice_has_no_center_division_when_insets_meet(self):
         fill, border = (53, 131, 192), (97, 176, 233)

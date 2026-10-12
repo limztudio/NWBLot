@@ -67,20 +67,13 @@ struct AvboitIntegrationStageResult{
 
 class AvboitComputeEffectChainBuilder final : NoCopy{
 public:
-    AvboitComputeEffectChainBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererAvboitSystem& avboitSystem
-    );
+    AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem);
 
 
 public:
-    [[nodiscard]] Expected<AvboitDepthWarpStageResult> declareDepthWarp(
-        const AvboitDepthWarpStageInputs& inputs
-    );
+    [[nodiscard]] Expected<AvboitDepthWarpStageResult> declareDepthWarp(const AvboitDepthWarpStageInputs& inputs);
 
-    [[nodiscard]] Expected<AvboitIntegrationStageResult> declareIntegration(
-        const AvboitIntegrationStageInputs& inputs
-    );
+    [[nodiscard]] Expected<AvboitIntegrationStageResult> declareIntegration(const AvboitIntegrationStageInputs& inputs);
 
 
 private:

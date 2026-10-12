@@ -62,19 +62,8 @@ public:
     [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
         return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, m_streamId);
     }
-    [[nodiscard]] bool recordFrameGraph(
-        const FrameGraphNodeDescs& nodes,
-        const FrameGraphEdgeDescs& edges,
-        const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics
-    ){
-        return RecordFrameGraph(
-            m_recorder,
-            m_frameIndex,
-            nodes,
-            edges,
-            physicalQueueRuntimeStatistics,
-            m_streamId
-        );
+    [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics){
+        return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, m_streamId);
     }
     [[nodiscard]] bool recordFrameGraph(
         const FrameGraphNodeDescs& nodes,
@@ -82,15 +71,7 @@ public:
         const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
         const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
     ){
-        return RecordFrameGraph(
-            m_recorder,
-            m_frameIndex,
-            nodes,
-            edges,
-            physicalQueueRuntimeStatistics,
-            packetSubmissionStatistics,
-            m_streamId
-        );
+        return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, m_streamId);
     }
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
         return RecordPerfSessionReport(m_recorder, report, streamId);
@@ -119,10 +100,7 @@ public:
         , m_logRegistration(session.textLogCaptureLogger())
         , m_diagnostic(session.recorder())
     {
-        Common::ILogger* const forwardLogger = m_logRegistration.previousLogger() == &m_session.textLogCaptureLogger()
-            ? m_previousForwardLogger
-            : m_logRegistration.previousLogger()
-        ;
+        Common::ILogger* const forwardLogger = m_logRegistration.previousLogger() == &m_session.textLogCaptureLogger() ? m_previousForwardLogger : m_logRegistration.previousLogger();
         m_session.setForwardLogger(forwardLogger);
         m_diagnostic.setFrameIndex(session.frameIndex());
         m_diagnostic.setStreamId(session.streamId());

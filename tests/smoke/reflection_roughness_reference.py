@@ -40,9 +40,7 @@ def mirror_cells(width, height, camera_x=0.0):
     top = math.ceil(height * 0.5 - focal * 1.8 / 6.0) + 2
     bottom = math.floor(height * 0.5 + focal * 1.8 / 6.0) - 2
     nx, ny = GRID_SIZE
-    return [(left + (right - left) * x // nx, top + (bottom - top) * y // ny,
-        left + (right - left) * (x + 1) // nx, top + (bottom - top) * (y + 1) // ny)
-        for y in range(ny) for x in range(nx)]
+    return [(left + (right - left) * x // nx, top + (bottom - top) * y // ny, left + (right - left) * (x + 1) // nx, top + (bottom - top) * (y + 1) // ny) for y in range(ny) for x in range(nx)]
 
 
 def receiver_point(x, y, width, height, camera_x=0.0):
@@ -62,9 +60,7 @@ def smith_lambda(cosine, alpha):
 @lru_cache(maxsize=8)
 def emitter_quadrature(resolution):
     step = 2.0 * EMITTER_HALF_SIZE / resolution
-    return tuple(tuple((cx - EMITTER_HALF_SIZE + (x + 0.5) * step,
-        cy - EMITTER_HALF_SIZE + (y + 0.5) * step, cz, step * step)
-        for y in range(resolution) for x in range(resolution)) for cx, cy, cz in EMITTERS)
+    return tuple(tuple((cx - EMITTER_HALF_SIZE + (x + 0.5) * step, cy - EMITTER_HALF_SIZE + (y + 0.5) * step, cz, step * step) for y in range(resolution) for x in range(resolution)) for cx, cy, cz in EMITTERS)
 
 
 def integrated_radiance(point, roughness, color, camera_x=0.0, resolution=24):
@@ -96,8 +92,9 @@ def integrated_radiance(point, roughness, color, camera_x=0.0, resolution=24):
         distribution = alpha_squared / (math.pi * denominator * denominator)
         masking = 1.0 / (1.0 + lambda_v + smith_lambda(nl, alpha))
         fresnel = MIRROR_F0 + (1.0 - MIRROR_F0) * (1.0 - vh) ** 5
-        # f_r * NdotL * emitterCosine / distance^2 * dA. The two planes have parallel normals,
-        # so emitterCosine=NdotL; one NdotL cancels the BRDF denominator. No VNDF sampler is used.
+        # f_r * NdotL * emitterCosine / distance^2 * dA.
+        # The two planes have parallel normals, so emitterCosine=NdotL; one NdotL cancels the BRDF denominator.
+        # No VNDF sampler is used.
         total += distribution * masking * fresnel * nl * area / (4.0 * nv * distance_squared)
     return total
 
@@ -112,8 +109,7 @@ def reference_grid(width, height, roughness, camera_x=0.0):
             positions = ((x + 0.5, y + 0.5) for y in range(top, bottom) for x in range(left, right))
             count = (right - left) * (bottom - top)
         else:
-            positions = ((left + (right - left) * x, top + (bottom - top) * y)
-                for y in (0.25, 0.75) for x in (0.25, 0.75))
+            positions = ((left + (right - left) * x, top + (bottom - top) * y) for y in (0.25, 0.75) for x in (0.25, 0.75))
             count = 4
         sums = [0.0, 0.0]
         for x, y in positions:
@@ -157,8 +153,7 @@ def weighted_shape(cells, values, color):
     centers = [((left + right) * 0.5, (top + bottom) * 0.5) for left, top, right, bottom in cells]
     cx = sum(weight * center[0] for weight, center in zip(weights, centers)) / total
     cy = sum(weight * center[1] for weight, center in zip(weights, centers)) / total
-    spread = math.sqrt(sum(weight * ((center[0] - cx) ** 2 + (center[1] - cy) ** 2)
-        for weight, center in zip(weights, centers)) / total)
+    spread = math.sqrt(sum(weight * ((center[0] - cx) ** 2 + (center[1] - cy) ** 2) for weight, center in zip(weights, centers)) / total)
     return {LIT_ENERGY: total, LIT_CENTROID: [cx, cy], LIT_SPREAD: spread}
 
 
@@ -199,8 +194,7 @@ def analyze_furnace(frame, roughness):
         # At alpha=1 and F0=1, correlated Smith single-scatter GGX has this closed-form directional albedo.
         expected = 1.0 if roughness == 0.0 else 1.0 - nv * math.log1p(1.0 / nv)
         pixel_count = (cell[2] - cell[0]) * (cell[3] - cell[1])
-        blue = sum(DECODED_RADIANCE[rows[y][x][2]]
-            for y in range(cell[1], cell[3]) for x in range(cell[0], cell[2])) / pixel_count
+        blue = sum(DECODED_RADIANCE[rows[y][x][2]] for y in range(cell[1], cell[3]) for x in range(cell[0], cell[2])) / pixel_count
         errors.extend(abs(channel - expected) for channel in (*value, blue))
     mean_error = sum(errors) / len(errors)
     if mean_error > 0.04:

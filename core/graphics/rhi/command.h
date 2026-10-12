@@ -64,14 +64,8 @@ struct QueueSubmissionToken{
     [[nodiscard]] constexpr bool hasPhysicalQueueIdentity()const noexcept{
         return physicalQueueIndex != Limit<u16>::s_Max && deviceGeneration != 0u;
     }
-    [[nodiscard]] constexpr bool matchesPhysicalQueue(
-        const u16 index,
-        const u16 generation
-    )const noexcept{
-        return hasPhysicalQueueIdentity()
-            && physicalQueueIndex == index
-            && deviceGeneration == generation
-        ;
+    [[nodiscard]] constexpr bool matchesPhysicalQueue(const u16 index, const u16 generation)const noexcept{
+        return hasPhysicalQueueIdentity() && physicalQueueIndex == index && deviceGeneration == generation;
     }
 };
 
@@ -137,9 +131,9 @@ struct GpuCommandArenaStatistics{
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
 };
 
-// Snapshot for one recording worker on one physical queue. Direct recording is domain/index {0,0};
-// shards use the GpuRecordedPacket domain/index. Counters sample independently and may advance during the query;
-// the storage estimate covers handle objects only, not opaque driver memory.
+// Snapshot for one recording worker on one physical queue.
+// Direct recording is domain/index {0,0}; shards use the GpuRecordedPacket domain/index.
+// Counters sample independently and may advance during the query; the storage estimate covers handle objects only, not opaque driver memory.
 struct GpuCommandArenaWorkerStatistics{
     u64 recordingWorkerDomain = 0u;
     u64 commandPoolEpochCount = 0u;
@@ -227,13 +221,7 @@ struct TimerQueryResult{
         return seconds.x;
     }
     [[nodiscard]] bool hasComparableRange()const noexcept{
-        return
-            valid()
-            && comparableAcrossSubmissions
-            && timestampValidBits == s_FullWidthBits
-            && physicalQueue.valid()
-            && beginTicks <= endTicks
-        ;
+        return valid() && comparableAcrossSubmissions && timestampValidBits == s_FullWidthBits && physicalQueue.valid() && beginTicks <= endTicks;
     }
 };
 
@@ -302,48 +290,23 @@ public:
     }
 
     // Fan-in merge of branch-final states over a normalized base (branches opened from base; base < branches < consumer).
-    // Final states only: callers keep cross-branch hazards disjoint. False on invalid/incompatible; `this` != inputs.
-    [[nodiscard]] bool buildFanIn(
-        const CommandListResourceStateHandoff& base,
-        const CommandListResourceStateHandoff* const* branches,
-        usize branchCount,
-        Alloc::ScratchArena& scratchArena
-    );
+    // Final states only: callers keep cross-branch hazards disjoint.
+    // False on invalid/incompatible; `this` != inputs.
+    [[nodiscard]] bool buildFanIn(const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, usize branchCount, Alloc::ScratchArena& scratchArena);
 
-    // Subset handoff of selected resources (cross-queue imports take only what their queue may access). Nulls ignored,
-    // `source` may alias `this`; failure-atomic.
-    [[nodiscard]] bool buildResourceSubset(
-        const CommandListResourceStateHandoff& source,
-        Texture* const* textures,
-        usize textureCount,
-        Buffer* const* buffers,
-        usize bufferCount,
-        Alloc::ScratchArena& scratchArena
-    );
+    // Subset handoff of selected resources (cross-queue imports take only what their queue may access).
+    // Nulls ignored, `source` may alias `this`; failure-atomic.
+    [[nodiscard]] bool buildResourceSubset(const CommandListResourceStateHandoff& source, Texture* const* textures, usize textureCount, Buffer* const* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
     // Reuses one completed selection across multiple filtered snapshots without retaining its scratch storage.
     [[nodiscard]] bool buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection);
     [[nodiscard]] bool buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture, Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool buildTextureRangeSubset(
-        const CommandListResourceStateHandoff& source,
-        Texture* texture,
-        TextureSubresourceSet subresources
-    );
+    [[nodiscard]] bool buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
     // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges
     [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
     // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource. Verify that exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination captured by the producer's native state tracker.
-    [[nodiscard]] bool coversTextureRangeWithOwnership(
-        Texture* texture,
-        TextureSubresourceSet subresources,
-        GpuPhysicalQueueId expectedOwnerQueue,
-        GpuPhysicalQueueId expectedReleaseDestinationQueue
-    )const;
+    [[nodiscard]] bool coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const;
     // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
-    [[nodiscard]] bool coversBufferWithOwnership(
-        Buffer* buffer,
-        GpuPhysicalQueueId expectedOwnerQueue,
-        GpuPhysicalQueueId expectedReleaseDestinationQueue,
-        BufferRange range = s_EntireBuffer
-    )const;
+    [[nodiscard]] bool coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const;
     // Copies a valid state snapshot without exposing backend tracker storage.
     // Packet recording retains graph-owned producer seeds while individual command-list consumers request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);

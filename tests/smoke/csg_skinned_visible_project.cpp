@@ -167,25 +167,11 @@ private:
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
-    NWB::Core::ECS::EntityID createSkinnedReceiverInstance(
-        const Float4 position,
-        const Float4 colorTint,
-        const bool enableCsg
-    ){
+    NWB::Core::ECS::EntityID createSkinnedReceiverInstance(const Float4 position, const Float4 colorTint, const bool enableCsg){
         static_cast<void>(enableCsg);
 
         bool tintApplied = false;
-        const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
-            *m_world,
-            m_context.objectArena,
-            s_Model,
-            s_ReceiverMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            colorTint,
-            position,
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            tintApplied
-        );
+        const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_ReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(1.0f, 1.0f, 1.0f, 0.0f), tintApplied);
         if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
 
@@ -193,12 +179,7 @@ private:
     }
 
     [[nodiscard]] bool installCsgReceiverOnSpawnedModelObject(){
-        m_receiverObject = FindSpawnedModelObject(
-            *m_world,
-            m_receiver,
-            s_ModelMeshObject,
-            NWB::Impl::ModelObjectKind::SkinnedMesh
-        );
+        m_receiverObject = FindSpawnedModelObject(*m_world, m_receiver, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
         if(!m_receiverObject.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
             return false;
@@ -213,16 +194,8 @@ private:
     }
 
     void createReceiver(){
-        m_plainReceiver = createSkinnedReceiverInstance(
-            Float4(-s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f),
-            Float4(s_PlainReceiverTint.x, s_PlainReceiverTint.y, s_PlainReceiverTint.z, ReceiverAlpha()),
-            false
-        );
-        m_receiver = createSkinnedReceiverInstance(
-            Float4(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f),
-            Float4(s_CsgReceiverTint.x, s_CsgReceiverTint.y, s_CsgReceiverTint.z, ReceiverAlpha()),
-            true
-        );
+        m_plainReceiver = createSkinnedReceiverInstance(Float4(-s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_PlainReceiverTint.x, s_PlainReceiverTint.y, s_PlainReceiverTint.z, ReceiverAlpha()), false);
+        m_receiver = createSkinnedReceiverInstance(Float4(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_CsgReceiverTint.x, s_CsgReceiverTint.y, s_CsgReceiverTint.z, ReceiverAlpha()), true);
     }
 
     [[nodiscard]] SIMDVectorSingle resolveCutterAnchorLocalCenter()const{
@@ -258,20 +231,11 @@ private:
         }
 
         SIMDMatrix boneToModel = LoadFloat(skeleton->joints()[anchorIndex].localBindPose);
-        for(
-            u32 parentIndex = skeleton->joints()[anchorIndex].parentIndex;
-            parentIndex != NWB::Impl::s_SkeletonInvalidJointIndex && parentIndex < jointCount;
-            parentIndex = skeleton->joints()[parentIndex].parentIndex
-        )
+        for(u32 parentIndex = skeleton->joints()[anchorIndex].parentIndex; parentIndex != NWB::Impl::s_SkeletonInvalidJointIndex && parentIndex < jointCount; parentIndex = skeleton->joints()[parentIndex].parentIndex)
             boneToModel = MatrixMultiply(LoadFloat(skeleton->joints()[parentIndex].localBindPose), boneToModel);
 
         // The bone origin in model space is the translation column (M*v convention); receiver scale is 1.
-        return VectorMergeX(
-            VectorSplatW(boneToModel.v[0]),
-            VectorSplatW(boneToModel.v[1]),
-            VectorSplatW(boneToModel.v[2]),
-            VectorZero()
-        );
+        return VectorMergeX(VectorSplatW(boneToModel.v[0]), VectorSplatW(boneToModel.v[1]), VectorSplatW(boneToModel.v[2]), VectorZero());
     }
 
     void createCutter(const SIMDVectorSingle cutterLocalCenter){
@@ -293,11 +257,7 @@ private:
 #endif
         AssignCsgCutterParameters(cutter, parameters);
         const SIMDVectorSingle receiverRotation = BuildReceiverRotation(0.0f);
-        AssignCsgCutterTransform(
-            cutter,
-            BuildCutterWorldCenter(cutterLocalCenter, receiverRotation),
-            BuildCutterWorldRotation(0.0f, receiverRotation)
-        );
+        AssignCsgCutterTransform(cutter, BuildCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCutterWorldRotation(0.0f, receiverRotation));
 
         m_cutter = entity.id();
     }
@@ -320,11 +280,7 @@ private:
         if(!cutter)
             return;
 
-        AssignCsgCutterTransform(
-            *cutter,
-            BuildCutterWorldCenter(cutterLocalCenter, receiverRotation),
-            BuildCutterWorldRotation(m_animationTime, receiverRotation)
-        );
+        AssignCsgCutterTransform(*cutter, BuildCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCutterWorldRotation(m_animationTime, receiverRotation));
     }
 
 
@@ -343,18 +299,8 @@ public:
     virtual bool onStartup()override{
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
-            *m_world,
-            Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f)
-        );
-        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
-            *m_world,
-            s_DefaultDirectionalLightPitch,
-            s_DefaultDirectionalLightYaw,
-            0.0f,
-            s_WarmDirectionalLightColor,
-            s_DefaultDirectionalLightIntensity
-        );
+        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
+        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, s_WarmDirectionalLightColor, s_DefaultDirectionalLightIntensity);
 
         createReceiver();
         SyncSmokeModelRuntimes(*m_world);
@@ -394,14 +340,11 @@ public:
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // This test-only suspension freezes the animated skinned receiver and CSG cutter at the exact
-                // accepted frame the baseline manifest names. Production renderer scheduling is not involved.
+                // This test-only suspension freezes the animated skinned receiver and CSG cutter at the exact accepted frame the baseline manifest names.
+                // Production renderer scheduling is not involved.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
-                    m_rendererBaselineRenderedFrameCount
-                );
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
             }
             return true;
         }
@@ -445,10 +388,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return {
-        __hidden_csg_skinned_visible_smoke::s_FrameClientWidth,
-        __hidden_csg_skinned_visible_smoke::s_FrameClientHeight
-    };
+    return { __hidden_csg_skinned_visible_smoke::s_FrameClientWidth, __hidden_csg_skinned_visible_smoke::s_FrameClientHeight };
 }
 
 

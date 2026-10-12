@@ -48,13 +48,7 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::Scr
             continue;
         }
         ECSRenderDetail::MeshRayTracingResourceSnapshot preparedResources = *boundResources;
-        if(!ensureMeshSwBvhResources(
-            primitiveCount,
-            preparedResources.swBvhNodeBuffer,
-            preparedResources.swBvhParentBuffer,
-            preparedResources.swBvhNodeHeapHandle,
-            preparedResources.swBvhParentHeapHandle
-        )){
+        if(!ensureMeshSwBvhResources(primitiveCount, preparedResources.swBvhNodeBuffer, preparedResources.swBvhParentBuffer, preparedResources.swBvhNodeHeapHandle, preparedResources.swBvhParentHeapHandle)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
@@ -112,12 +106,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
             || !mesh.triangleIndexBuffer
             || mesh.meshletPrimitiveIndexCount == 0u
             || (mesh.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u
-            || !meshSwBvhResourcesReady(
-                mesh.swBvhNodeBuffer,
-                mesh.swBvhParentBuffer,
-                mesh.swBvhNodeHeapHandle,
-                mesh.swBvhParentHeapHandle
-            )
+            || !meshSwBvhResourcesReady(mesh.swBvhNodeBuffer, mesh.swBvhParentBuffer, mesh.swBvhNodeHeapHandle, mesh.swBvhParentHeapHandle)
             || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhPositionHeapHandle)
             || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhTriangleIndexHeapHandle)
         ){
@@ -128,11 +117,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
 
         const u32 primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
         const bool firstBuild = !mesh.swBvhTopologyBuilt || !mesh.swBvhBuildAccepted;
-        const bool performRefit =
-            mesh.runtimeMesh
-            && !firstBuild
-            && mesh.swBvhRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(primitiveCount)
-        ;
+        const bool performRefit = mesh.runtimeMesh && !firstBuild && mesh.swBvhRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(primitiveCount);
         const Core::BufferDesc& positionDesc = mesh.positionBuffer->getCreationDescription();
         const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getCreationDescription();
         const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getCreationDescription();
@@ -214,12 +199,7 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
         || (!meshResult->swBvhTopologyBuilt || !meshResult->swBvhBuildAccepted) != build.firstBuild
         || meshResult->csgLocalBounds.minBounds != build.aabbMin
         || meshResult->csgLocalBounds.maxBounds != build.aabbMax
-        || !meshSwBvhResourcesReady(
-            meshResult->swBvhNodeBuffer,
-            meshResult->swBvhParentBuffer,
-            meshResult->swBvhNodeHeapHandle,
-            meshResult->swBvhParentHeapHandle
-        )
+        || !meshSwBvhResourcesReady(meshResult->swBvhNodeBuffer, meshResult->swBvhParentBuffer, meshResult->swBvhNodeHeapHandle, meshResult->swBvhParentHeapHandle)
     )
         return false;
     return
@@ -233,10 +213,7 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
     ;
 }
 
-bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(
-    Core::CommandList& commandList,
-    const PreparedMeshSwBvhBuild& build
-){
+bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build){
     if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
         return false;
@@ -245,16 +222,7 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(
     Core::BufferHandle nodeBuffer = build.nodeBuffer;
     Core::BufferHandle parentBuffer = build.parentBuffer;
     const bool recorded = build.performRefit
-        ? refitMeshSwBvhPrepared(
-            commandList,
-            build.positionHeapHandle.slot(),
-            build.triangleIndexHeapHandle.slot(),
-            build.primitiveCount,
-            nodeBuffer,
-            parentBuffer,
-            build.nodeHeapHandle,
-            build.parentHeapHandle
-        )
+        ? refitMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, nodeBuffer, parentBuffer, build.nodeHeapHandle, build.parentHeapHandle)
         : buildMeshSwBvhPrepared(
             commandList,
             build.positionHeapHandle.slot(),
@@ -319,11 +287,7 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
             continue;
         }
         if(build.firstBuild){
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)")
-                , StringConvert(build.meshName.resolvedText())
-                , build.runtimeMesh
-                , static_cast<u64>(build.primitiveCount)
-            );
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"), StringConvert(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.primitiveCount));
         }
     }
     if(!allPlansCurrent)
@@ -331,9 +295,7 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
     clearPreparedMeshSwBvhBuilds();
 }
 
-bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
-)const noexcept{
+bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)const noexcept{
     if(!m_preparedMeshSwBvhBuildsReady)
         return false;
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){

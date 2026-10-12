@@ -72,8 +72,7 @@ static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
         for(u32 x = 0u; x < binding.width; ++x){
             const usize offset = (y * binding.width + x) * channelCount;
             for(u32 channel = 0u; channel < channelCount; ++channel)
-                pixels[offset + channel] = channel == 3u ? (x < 4u ? 0u : (x < 8u ? 128u : 255u))
-                    : (channel == 0u ? 0u : (channel == 1u ? 128u : 255u));
+                pixels[offset + channel] = channel == 3u ? (x < 4u ? 0u : (x < 8u ? 128u : 255u)) : (channel == 0u ? 0u : (channel == 1u ? 128u : 255u));
         }
     }
     return Impl::Ui::CreateSdfAtlasPage(arena, binding, Move(pixels));
@@ -101,9 +100,7 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
         __hidden_ui_text_smoke::MakeSdfPage(arena, 4u)
     }
 {
-    const bool configured = m_latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f })
-        == Impl::Ui::TextLayoutStatus::Success
-        && m_clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
+    const bool configured = m_latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success && m_clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
         && m_korean.setText({
             .text = __hidden_ui_text_smoke::s_Korean,
             .fontSize = 22.0f,
@@ -119,10 +116,7 @@ bool UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
     Impl::Ui::PaintBuilder& paint = context.paint;
     const f32 width = context.display.logicalWidth;
     const f32 height = context.display.logicalHeight;
-    if(
-        !m_latin.paint(context.text, paint, { width * 0.04f, height * 0.80f })
-        || !m_korean.paint(context.text, paint, { width * 0.04f, height * 0.875f })
-    )
+    if(!m_latin.paint(context.text, paint, { width * 0.04f, height * 0.80f }) || !m_korean.paint(context.text, paint, { width * 0.04f, height * 0.875f }))
         return false;
 
     paint.pushClip({ width * 0.34f, height * 0.82f, width * 0.21f, height * 0.08f });
@@ -139,8 +133,7 @@ bool UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
             return false;
     }
     for(u32 channel = 0u; channel < 4u; ++channel){
-        const Impl::Ui::Rect rectangle{ width * (0.64f + static_cast<f32>(channel) * 0.08f), height * 0.94f,
-            width * 0.05f, height * 0.045f };
+        const Impl::Ui::Rect rectangle{ width * (0.64f + static_cast<f32>(channel) * 0.08f), height * 0.94f, width * 0.05f, height * 0.045f };
         if(!paint.drawSdfGlyph(m_sdf[channel], channel, rectangle, { 0.f, 0.f, 1.f, 1.f }, { 0.2f, 1.f, 0.4f, 0.5f }))
             return false;
     }
@@ -152,11 +145,7 @@ bool UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
 
 
 SharedUiTextSmokeSamples CreateUiTextSmokeSamples(Core::Alloc::GlobalArena& arena){
-    return SharedUiTextSmokeSamples(
-        NewArenaObject<RefCounter<UiTextSmokeSamples>>(arena, arena),
-        ArenaRefDeleter<RefCounter<UiTextSmokeSamples>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiTextSmokeSamples(NewArenaObject<RefCounter<UiTextSmokeSamples>>(arena, arena), ArenaRefDeleter<RefCounter<UiTextSmokeSamples>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

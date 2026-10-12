@@ -170,11 +170,7 @@ bool EnsureOutputDirectory(const Path& outputPath, const AStringView assetKind){
     if(created)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}")
-        , StringConvert(assetKind)
-        , PathToString<tchar>(parentPath)
-        , StringConvert(created.error().message())
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}"), StringConvert(assetKind), PathToString<tchar>(parentPath), StringConvert(created.error().message()));
     return false;
 }
 
@@ -335,12 +331,7 @@ void WriteReferenceValue(Stream& file, const AStringView value, const bool quote
 }
 
 template<typename Stream>
-void WriteSkeletonAssetBody(
-    Stream& file,
-    const AStringView variableName,
-    const UtilityVector<ufbx_node*>& joints,
-    const UtilityVector<JointMatrix>& bindPoseMatrices
-){
+void WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices){
     file << variableName << ".joints = [\n";
     const UtilityVector<AString> jointNames = BuildUniqueJointNames(joints);
 
@@ -367,11 +358,7 @@ void WriteSkeletonAssetBody(
     file << "];\n";
 }
 
-bool WriteSkeletonAsset(
-    const Path& outputPath,
-    const UtilityVector<ufbx_node*>& joints,
-    const UtilityVector<JointMatrix>& bindPoseMatrices
-){
+bool WriteSkeletonAsset(const Path& outputPath, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices){
     if(!EnsureOutputDirectory(outputPath, s_SkeletonAssetKindText))
         return false;
 
@@ -429,13 +416,7 @@ void WriteSkinAssetBody(
     file << "];\n";
 }
 
-bool WriteSkinAsset(
-    const Path& outputPath,
-    const AStringView meshName,
-    const AStringView skeletonName,
-    const UtilityVector<MeshSkinInfluence>& influences,
-    const UtilityVector<JointMatrix>& inverseBindMatrices
-){
+bool WriteSkinAsset(const Path& outputPath, const AStringView meshName, const AStringView skeletonName, const UtilityVector<MeshSkinInfluence>& influences, const UtilityVector<JointMatrix>& inverseBindMatrices){
     if(influences.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: no skin influences were produced"));
         return false;
@@ -503,12 +484,7 @@ void WriteModelAssetBody(
     }
 }
 
-bool WriteModelAsset(
-    const Path& outputPath,
-    const AStringView meshName,
-    const Optional<AStringView> skinName,
-    const Optional<AStringView> skeletonName
-){
+bool WriteModelAsset(const Path& outputPath, const AStringView meshName, const Optional<AStringView> skinName, const Optional<AStringView> skeletonName){
     if(!EnsureOutputDirectory(outputPath, s_ModelAssetKindText))
         return false;
 
@@ -568,16 +544,7 @@ bool WriteAssetBunch(
     file << "\n\n";
     file << "model model;\n\n";
     if(skinnedBunch){
-        WriteModelAssetBody(
-            file,
-            s_ModelAssetKindText,
-            s_MeshAssetKindText,
-            s_SkinAssetKindText,
-            s_SkeletonAssetKindText,
-            s_SkeletonAssetKindText,
-            false,
-            true
-        );
+        WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, s_SkinAssetKindText, s_SkeletonAssetKindText, s_SkeletonAssetKindText, false, true);
     }
     else{
         WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, {}, {}, s_SkeletonAssetKindText, false, false);
@@ -661,16 +628,7 @@ bool WriteNwbAsset(
             return false;
         }
         if(assetType == OutputAssetType::Bunch && !separateAssets)
-            return __hidden_asset_writer::WriteAssetBunch(
-                outputPath,
-                mesh,
-                {},
-                {},
-                skeletonJoints,
-                skeletonBindPoseMatrices,
-                nullptr,
-                inverseBindMatrices
-            );
+            return __hidden_asset_writer::WriteAssetBunch(outputPath, mesh, {}, {}, skeletonJoints, skeletonBindPoseMatrices, nullptr, inverseBindMatrices);
 
         if(!__hidden_asset_writer::WriteMeshAsset(meshPath, mesh))
             return false;
@@ -680,11 +638,7 @@ bool WriteNwbAsset(
     if(!AssetWriterSkeletonDetail::ValidateSplitSkinSource(mesh, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices))
         return false;
 
-    auto skeletonResult = AssetWriterSkeletonDetail::BuildSkeletonOutputData(
-        skeletonJoints,
-        skeletonBindPoseMatrices,
-        inverseBindMatrices
-    );
+    auto skeletonResult = AssetWriterSkeletonDetail::BuildSkeletonOutputData(skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices);
     if(!skeletonResult)
         return false;
     AssetWriterSkeletonDetail::SkeletonOutputData& skeletonOutput = *skeletonResult;
@@ -707,16 +661,7 @@ bool WriteNwbAsset(
     if(assetType == OutputAssetType::Skin)
         return __hidden_asset_writer::WriteSkinAsset(outputPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices);
     if(assetType == OutputAssetType::Bunch && !separateAssets)
-        return __hidden_asset_writer::WriteAssetBunch(
-            outputPath,
-            splitMesh,
-            AStringView(skinName),
-            AStringView(skeletonName),
-            skeletonOutput.joints,
-            skeletonOutput.bindPoseMatrices,
-            &positionSkin,
-            skeletonOutput.inverseBindMatrices
-        );
+        return __hidden_asset_writer::WriteAssetBunch(outputPath, splitMesh, AStringView(skinName), AStringView(skeletonName), skeletonOutput.joints, skeletonOutput.bindPoseMatrices, &positionSkin, skeletonOutput.inverseBindMatrices);
 
     return __hidden_asset_writer::WriteMeshAsset(meshPath, splitMesh)
         && __hidden_asset_writer::WriteSkeletonAsset(skeletonPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices)

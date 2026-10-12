@@ -45,19 +45,14 @@ struct KeyResolution{
 }
 
 [[nodiscard]] static bool ValidOptions(const ListOptions& options)noexcept{
-    return
-        options.enabled && IsFinite(options.rowHeight) && options.rowHeight > 0.0f
-        && IsFinite(options.wheelRows) && options.wheelRows > 0.0f
-    ;
+    return options.enabled && IsFinite(options.rowHeight) && options.rowHeight > 0.0f && IsFinite(options.wheelRows) && options.wheelRows > 0.0f;
 }
 
 [[nodiscard]] static bool IsReverse(const ControlActionKind::Enum kind)noexcept{
     return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
-[[nodiscard]] static Expected<u64> FindCursor(const IListDataSource& source, const u64 count, const u64 cursor,
-    const ControlAction& action
-){
+[[nodiscard]] static Expected<u64> FindCursor(const IListDataSource& source, const u64 count, const u64 cursor, const ControlAction& action){
     if(count == 0u)
         return 0u;
     const auto current = ResolveKey(source, count, cursor);
@@ -70,10 +65,8 @@ struct KeyResolution{
     else if(action.kind == ControlActionKind::End)
         start = count - 1u;
     else if(current->present){
-        const u64 distance = action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown
-            ? action.pageRows : 1u;
-        start = reverse ? current->index - Min(distance, current->index)
-            : current->index + Min(distance, count - 1u - current->index);
+        const u64 distance = action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown ? action.pageRows : 1u;
+        start = reverse ? current->index - Min(distance, current->index) : current->index + Min(distance, count - 1u - current->index);
     }
     const auto index = source.findEnabled(start, reverse);
     if(!index)
@@ -90,10 +83,7 @@ struct KeyResolution{
 }
 
 [[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const ControlAction& action)noexcept{
-    if(
-        !IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0
-        || !IsFinite(action.maximum) || action.maximum < 0.0
-    )
+    if(!IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0 || !IsFinite(action.maximum) || action.maximum < 0.0)
         return MakeUnexpected(Failure{});
     f64 candidate = NumericSimd::Min(current, action.maximum);
     if(action.delta > 0.0)
@@ -154,9 +144,7 @@ bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
     return true;
 }
 
-bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const ListOptions& options,
-    const ControlAction& action, ListResult& result
-){
+bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const ListOptions& options, const ControlAction& action, ListResult& result){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
@@ -169,9 +157,7 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
         return false;
     if(action.kind == ControlActionKind::Wheel){
         const auto offset = WheelOffset(state.m_scroll.offset(), action);
-        if(
-            !offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(*offset)
-        )
+        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(*offset))
             return false;
         state.m_ensureCursor = false;
         result.valid = true;
@@ -212,16 +198,10 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
     return true;
 }
 
-bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source, const f32 rowHeight,
-    const f64 viewportHeight
-){
+bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source, const f32 rowHeight, const f64 viewportHeight){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
-    if(
-        !IsFinite(rowHeight) || rowHeight <= 0.0f || !IsFinite(viewportHeight) || viewportHeight < 0.0
-        || !SourceMatches(source, state.m_sourceGeneration, state.m_sourceRevision)
-        || state.m_inputGeneration != inputGeneration
-    )
+    if(!IsFinite(rowHeight) || rowHeight <= 0.0f || !IsFinite(viewportHeight) || viewportHeight < 0.0 || !SourceMatches(source, state.m_sourceGeneration, state.m_sourceRevision) || state.m_inputGeneration != inputGeneration)
         return false;
     if(!state.m_ensureCursor)
         return true;
@@ -234,12 +214,7 @@ bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source,
         return false;
     const f64 start = NumericSimd::Multiply(static_cast<f64>(resolved->index), static_cast<f64>(rowHeight));
     const f64 end = NumericSimd::Add(start, static_cast<f64>(rowHeight));
-    if(
-        !IsFinite(start) || !IsFinite(end) || end <= start
-        || !SourceMatches(source, state.m_sourceGeneration, state.m_sourceRevision)
-        || state.m_inputGeneration != inputGeneration
-        || !state.m_scroll.ensureVisible(start, end, viewportHeight)
-    )
+    if(!IsFinite(start) || !IsFinite(end) || end <= start || !SourceMatches(source, state.m_sourceGeneration, state.m_sourceRevision) || state.m_inputGeneration != inputGeneration || !state.m_scroll.ensureVisible(start, end, viewportHeight))
         return false;
     state.m_ensureCursor = false;
     return true;

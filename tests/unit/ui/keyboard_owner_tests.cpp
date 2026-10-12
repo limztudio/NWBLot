@@ -44,9 +44,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] static InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key,
-    const bool repeat = false
-){
+[[nodiscard]] static InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const bool repeat = false){
     InputEvent event;
     event.type = type;
     event.key = key;

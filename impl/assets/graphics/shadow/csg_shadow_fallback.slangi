@@ -36,14 +36,7 @@ uint nwbMeshFrameViewHeapSlot(){ return 0u; }
 #include "../common/math.slangi"
 
 // Capture reuse retains receiver/cutter poses. Query unchanged local geometry through its current TLAS transform, preserving t.
-bool nwbCsgRayPrepareHardwareRay(
-    const uint contextSlot,
-    const uint instanceIndex,
-    const float3 worldOrigin,
-    const float3 worldDirection,
-    out float3 queryOrigin,
-    out float3 queryDirection
-){
+bool nwbCsgRayPrepareHardwareRay(const uint contextSlot, const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, out float3 queryOrigin, out float3 queryDirection){
     const NwbSwBvhInstance retained = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const NwbMeshInstanceData current = nwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[material.meshInstanceIndex];
@@ -160,10 +153,7 @@ uint nwbCsgShadowRayInstanceOptics(
     visitor.optics.absorptionCoeff = float3(0.0);
     visitor.optics.interfaceTransmittance = half(1.0h);
     visitor.optics.crossingCount = 0u;
-    failure = nwbCsgRayCollectCrossings(
-        contextSlot, materialSlot, instanceIndex, range.w, origin, direction, minimum, maximum,
-        cuts, cutCount, crossings, crossingCount, visitor
-    ).failure;
+    failure = nwbCsgRayCollectCrossings(contextSlot, materialSlot, instanceIndex, range.w, origin, direction, minimum, maximum, cuts, cutCount, crossings, crossingCount, visitor).failure;
     if(failure != 0u)
         return failure;
     NwbCsgRaySolidIterator solid;
@@ -179,15 +169,12 @@ uint nwbCsgShadowRayInstanceOptics(
         NwbCsgRayBoundary retainedNear;
         NwbCsgRayBoundary retainedFar;
         while(nwbCsgRayNextRetainedSpan(farBoundary, cuts, cutCount, cut, retainedNear, retainedFar)){
-            if(!nwbCsgShadowIntegrateRetainedSpan(
-                contextSlot, materialSlot, instanceIndex, retainedNear, retainedFar, origin, direction, minimum, maximum, optics
-            ))
+            if(!nwbCsgShadowIntegrateRetainedSpan(contextSlot, materialSlot, instanceIndex, retainedNear, retainedFar, origin, direction, minimum, maximum, optics))
                 return NWB_CSG_RAY_FAILURE_TOPOLOGY;
         }
     }
     accumulator.opticalDepth += optics.absorption * half(optics.chord);
-    accumulator.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmission,
-        half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, optics.chord)));
+    accumulator.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmission, half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, optics.chord)));
     nwbCsgShadowAccumulateOpenOptics(accumulator, visitor.optics);
     return 0u;
 }

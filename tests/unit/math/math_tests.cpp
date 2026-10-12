@@ -48,15 +48,11 @@ NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(const f64 first, const f64 second, 
     return product + addend;
 }
 
-NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(const SIMDVectorDouble first,
-    const SIMDVectorDouble second, const SIMDVectorDouble addend
-)noexcept{
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
     return first * second + addend;
 }
 
-NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first,
-    const SIMDVectorDouble second, const SIMDVectorDouble addend
-)noexcept{
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
     const SIMDVectorDouble product = first * second;
     return product + addend;
 }
@@ -74,19 +70,15 @@ TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
     const SIMDVectorSingle lhs = VectorSet(first[0], first[1], first[2], first[3]);
     const SIMDVectorSingle rhs = VectorSet(second[0], second[1], second[2], second[3]);
     const SIMDVectorSingle sum = VectorMultiplyAddExpression(lhs, rhs, VectorSet(addend[0], addend[1], addend[2], addend[3]));
-    const SIMDVectorSingle subtraction = VectorNegativeMultiplySubtractExpression(lhs, rhs,
-        VectorSet(difference[0], difference[1], difference[2], difference[3]));
+    const SIMDVectorSingle subtraction = VectorNegativeMultiplySubtractExpression(lhs, rhs, VectorSet(difference[0], difference[1], difference[2], difference[3]));
     for(usize lane = 0u; lane < 4u; ++lane){
-        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(sum, lane)),
-            BitCast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane]))) << lane;
-        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(subtraction, lane)),
-            BitCast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane]))) << lane;
+        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(sum, lane)), BitCast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane]))) << lane;
+        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(subtraction, lane)), BitCast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane]))) << lane;
     }
 }
 
 TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
-    const SIMDVectorDouble precision = SIMDVectorDouble{ 0x1p+40, 0x1p-40, -0x1p+40, -0x1p-40 }
-        + SIMDVectorDouble{ 1., 0x1p-80, -1., -0x1p-80 };
+    const SIMDVectorDouble precision = SIMDVectorDouble{ 0x1p+40, 0x1p-40, -0x1p+40, -0x1p-40 } + SIMDVectorDouble{ 1., 0x1p-80, -1., -0x1p-80 };
     EXPECT_EQ(precision.x, 0x1.0000000001p+40);
     EXPECT_EQ(precision.y, 0x1.0000000001p-40);
     EXPECT_EQ(precision.z, -0x1.0000000001p+40);
@@ -103,13 +95,10 @@ TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
         const u64 expectedExpression = BitCast<u64>(LegacyDoubleMultiplyAddExpression(first[lane], second[lane], addend[lane]));
         EXPECT_EQ(BitCast<u64>(expression[lane]), expectedExpression) << lane;
         EXPECT_EQ(BitCast<u64>(namedExpression[lane]), expectedExpression) << lane;
-        EXPECT_EQ(BitCast<u64>(separate[lane]),
-            BitCast<u64>(LegacyDoubleMultiplyThenAdd(first[lane], second[lane], addend[lane]))) << lane;
+        EXPECT_EQ(BitCast<u64>(separate[lane]), BitCast<u64>(LegacyDoubleMultiplyThenAdd(first[lane], second[lane], addend[lane]))) << lane;
     }
 
-    const SIMDVectorDouble subnormal = SIMDVectorDouble{
-        BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 3u })
-    } * SIMDVectorDouble{ 2., 0.5, 2., 0.5 };
+    const SIMDVectorDouble subnormal = SIMDVectorDouble{ BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 3u }) } * SIMDVectorDouble{ 2., 0.5, 2., 0.5 };
     EXPECT_EQ(BitCast<u64>(subnormal.x), 2u);
     EXPECT_EQ(BitCast<u64>(subnormal.y), 2u);
     EXPECT_EQ(BitCast<u64>(subnormal.z), 0x8000000000000002u);
@@ -216,16 +205,11 @@ TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndS
         if(setStatus != 0)
             continue;
         for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
-            const SIMDVectorDouble input = VectorDoubleSet(
-                runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]
-            );
-            const SIMDVectorDouble results[]{
-                VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input),
-            };
+            const SIMDVectorDouble input = VectorDoubleSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
+            const SIMDVectorDouble results[]{ VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input), };
             for(usize operation = 0u; operation < LengthOf(results); ++operation){
                 for(usize lane = 0u; lane < 4u; ++lane)
-                    EXPECT_EQ(BitCast<u64>(results[operation][lane]), BitCast<u64>(expected[operation][row][lane]))
-                        << mode << ':' << operation << ':' << row << ':' << lane;
+                    EXPECT_EQ(BitCast<u64>(results[operation][lane]), BitCast<u64>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
             }
         }
     }
@@ -257,27 +241,18 @@ TEST(Math, DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering){
 }
 
 TEST(Math, DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries){
-    const SIMDVectorDouble sum = VectorDoubleAddInt(
-        VectorDoubleSetInt(Limit<u64>::s_Max, 0xffffffffu, 0x8000000000000000u, 0xfffffffffffffffeu),
-        VectorDoubleSetInt(1u, 1u, 0x8000000000000000u, 3u)
-    );
+    const SIMDVectorDouble sum = VectorDoubleAddInt(VectorDoubleSetInt(Limit<u64>::s_Max, 0xffffffffu, 0x8000000000000000u, 0xfffffffffffffffeu), VectorDoubleSetInt(1u, 1u, 0x8000000000000000u, 3u));
     const u64 expected[]{ 0u, 0x100000000u, 0u, 1u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(BitCast<u64>(sum[lane]), expected[lane]) << lane;
 }
 
 TEST(Math, DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision){
-    const SIMDVectorDouble dot = VectorDouble3Dot(
-        SIMDVectorDouble{ 0x1p+40 + 1.0, -0x1p+40, 0.0, Limit<f64>::s_QuietNaN },
-        SIMDVectorDouble{ 1.0, 1.0, 1.0, Limit<f64>::s_Infinity }
-    );
+    const SIMDVectorDouble dot = VectorDouble3Dot(SIMDVectorDouble{ 0x1p+40 + 1.0, -0x1p+40, 0.0, Limit<f64>::s_QuietNaN }, SIMDVectorDouble{ 1.0, 1.0, 1.0, Limit<f64>::s_Infinity });
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(dot[lane], 1.0) << lane;
 
-    const SIMDVectorDouble cross = VectorDouble3Cross(
-        SIMDVectorDouble{ 1.0, 1.0 + 0x1p-40, 0.0, Limit<f64>::s_QuietNaN },
-        SIMDVectorDouble{ 1.0, 1.0, 0.0, Limit<f64>::s_Infinity }
-    );
+    const SIMDVectorDouble cross = VectorDouble3Cross(SIMDVectorDouble{ 1.0, 1.0 + 0x1p-40, 0.0, Limit<f64>::s_QuietNaN }, SIMDVectorDouble{ 1.0, 1.0, 0.0, Limit<f64>::s_Infinity });
     EXPECT_EQ(cross.z, -0x1p-40);
     EXPECT_EQ(BitCast<u64>(cross.w), 0u);
 }
@@ -336,9 +311,7 @@ TEST(Math, DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZer
     }
     EXPECT_TRUE(SignBit(sine.w));
 
-    const SIMDVectorDouble invalidSine = VectorDoubleSin(
-        SIMDVectorDouble{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, -0.0 }
-    );
+    const SIMDVectorDouble invalidSine = VectorDoubleSin(SIMDVectorDouble{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, -0.0 });
     EXPECT_TRUE(IsNaN(invalidSine.x));
     EXPECT_TRUE(IsNaN(invalidSine.y));
     EXPECT_TRUE(IsNaN(invalidSine.z));
@@ -363,32 +336,21 @@ TEST(Math, DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZer
 }
 
 TEST(Math, DoubleModAvoidsQuotientOverflowAndUnderflowWhileKeepingDivisorSign){
-    const SIMDVectorDouble overflow = VectorDoubleMod(
-        SIMDVectorDouble{ Limit<f64>::s_Max, -Limit<f64>::s_Max, Limit<f64>::s_Max, -Limit<f64>::s_Max },
-        SIMDVectorDouble{ 0x1p-1000, 0x1p-1000, -0x1p-1000, -0x1p-1000 }
-    );
+    const SIMDVectorDouble overflow = VectorDoubleMod(SIMDVectorDouble{ Limit<f64>::s_Max, -Limit<f64>::s_Max, Limit<f64>::s_Max, -Limit<f64>::s_Max }, SIMDVectorDouble{ 0x1p-1000, 0x1p-1000, -0x1p-1000, -0x1p-1000 });
     const u64 overflowBits[]{ 0u, 0u, 0x8000000000000000u, 0x8000000000000000u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(BitCast<u64>(overflow[lane]), overflowBits[lane]) << lane;
 
-    const SIMDVectorDouble underflow = VectorDoubleMod(
-        SIMDVectorDouble{ 0x1p-1074, -0x1p-1074, 0x1p-1074, -0x1p-1074 },
-        SIMDVectorDouble{ Limit<f64>::s_Max, Limit<f64>::s_Max, -Limit<f64>::s_Max, -Limit<f64>::s_Max }
-    );
+    const SIMDVectorDouble underflow = VectorDoubleMod(SIMDVectorDouble{ 0x1p-1074, -0x1p-1074, 0x1p-1074, -0x1p-1074 }, SIMDVectorDouble{ Limit<f64>::s_Max, Limit<f64>::s_Max, -Limit<f64>::s_Max, -Limit<f64>::s_Max });
     const SIMDVectorDouble underflowExpected{ 0x1p-1074, Limit<f64>::s_Max, -Limit<f64>::s_Max, -0x1p-1074 };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(underflow[lane], underflowExpected[lane]) << lane;
 
-    const SIMDVectorDouble signs = VectorDoubleMod(
-        SIMDVectorDouble{ -5.5, 5.5, -5.5, 5.5 }, SIMDVectorDouble{ 2.0, -2.0, -2.0, 2.0 }
-    );
+    const SIMDVectorDouble signs = VectorDoubleMod(SIMDVectorDouble{ -5.5, 5.5, -5.5, 5.5 }, SIMDVectorDouble{ 2.0, -2.0, -2.0, 2.0 });
     const SIMDVectorDouble signsExpected{ 0.5, -0.5, -1.5, 1.5 };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(signs[lane], signsExpected[lane]) << lane;
-    const SIMDVectorDouble exceptional = VectorDoubleMod(
-        SIMDVectorDouble{ Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, 1.0, Limit<f64>::s_Max },
-        SIMDVectorDouble{ 1.0, 1.0, 0.0, Limit<f64>::s_Infinity }
-    );
+    const SIMDVectorDouble exceptional = VectorDoubleMod(SIMDVectorDouble{ Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, 1.0, Limit<f64>::s_Max }, SIMDVectorDouble{ 1.0, 1.0, 0.0, Limit<f64>::s_Infinity });
     EXPECT_TRUE(IsNaN(exceptional.x));
     EXPECT_TRUE(IsNaN(exceptional.y));
     EXPECT_TRUE(IsNaN(exceptional.z));
@@ -403,16 +365,12 @@ TEST(Math, DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundaries){
         EXPECT_EQ(BitCast<u64>(reduced[lane]), BitCast<u64>(std::remainder(huge[lane], s_Double2PI))) << lane;
         EXPECT_LE(Abs(reduced[lane]), s_DoublePI) << lane;
     }
-    const SIMDVectorDouble ties = VectorDoubleModAngles(
-        SIMDVectorDouble{ s_DoublePI, -s_DoublePI, 3.0 * s_DoublePI, -3.0 * s_DoublePI }
-    );
+    const SIMDVectorDouble ties = VectorDoubleModAngles(SIMDVectorDouble{ s_DoublePI, -s_DoublePI, 3.0 * s_DoublePI, -3.0 * s_DoublePI });
     const SIMDVectorDouble tiesExpected{ s_DoublePI, -s_DoublePI, -s_DoublePI, s_DoublePI };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(ties[lane], tiesExpected[lane]) << lane;
 
-    const SIMDVectorDouble exceptional = VectorDoubleModAngles(
-        SIMDVectorDouble{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, -0.0 }
-    );
+    const SIMDVectorDouble exceptional = VectorDoubleModAngles(SIMDVectorDouble{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, -0.0 });
     EXPECT_TRUE(IsNaN(exceptional.x));
     EXPECT_TRUE(IsNaN(exceptional.y));
     EXPECT_TRUE(IsNaN(exceptional.z));
@@ -460,10 +418,7 @@ TEST(Math, DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64Thres
 
 TEST(Math, DoubleMatrixTransformsAndInversePreserveSubunitOffsetsAtLargeTranslations){
     constexpr f64 s_Base = 0x1p+40;
-    const SIMDMatrixDouble matrix = MatrixDoubleMultiply(
-        MatrixDoubleTranslation(s_Base + 0.25, -s_Base + 0.5, 3.0 + 0x1p-40),
-        MatrixDoubleScaling(2.0, 4.0, 0.5)
-    );
+    const SIMDMatrixDouble matrix = MatrixDoubleMultiply(MatrixDoubleTranslation(s_Base + 0.25, -s_Base + 0.5, 3.0 + 0x1p-40), MatrixDoubleScaling(2.0, 4.0, 0.5));
     const SIMDVectorDouble point{ 0.25, -0.125, 0x1p-39, 1.0 };
     const SIMDVectorDouble transformed = VectorDouble3TransformCoord(point, matrix);
     EXPECT_EQ(transformed.x, s_Base + 0.75);
@@ -489,19 +444,12 @@ TEST(Math, DoubleMatrixTransformsAndInversePreserveSubunitOffsetsAtLargeTranslat
 }
 
 TEST(Math, DoubleDecompositionReconstructsNoncommutingRotationsWithNegativeScaleAndRejectsShear){
-    const SIMDMatrixDouble rotation = MatrixDoubleMultiply(
-        MatrixDoubleRotationX(0.5), MatrixDoubleMultiply(MatrixDoubleRotationY(-0.75), MatrixDoubleRotationZ(1.25))
-    );
-    const SIMDMatrixDouble matrix = MatrixDoubleMultiply(
-        MatrixDoubleTranslation(0x1p+40 + 0.25, -7.0 + 0x1p-40, 11.0 + 0x1p-40),
-        MatrixDoubleMultiply(rotation, MatrixDoubleScaling(-2.0, 3.0, 0.5))
-    );
+    const SIMDMatrixDouble rotation = MatrixDoubleMultiply(MatrixDoubleRotationX(0.5), MatrixDoubleMultiply(MatrixDoubleRotationY(-0.75), MatrixDoubleRotationZ(1.25)));
+    const SIMDMatrixDouble matrix = MatrixDoubleMultiply(MatrixDoubleTranslation(0x1p+40 + 0.25, -7.0 + 0x1p-40, 11.0 + 0x1p-40), MatrixDoubleMultiply(rotation, MatrixDoubleScaling(-2.0, 3.0, 0.5)));
     const auto decomposition = MatrixDoubleDecompose(matrix);
     ASSERT_TRUE(decomposition);
     EXPECT_FALSE(QuaternionDoubleIsNaN(decomposition->rotation));
-    const SIMDMatrixDouble reconstructed = MatrixDoubleAffineTransformation(
-        decomposition->scale, VectorDoubleZero(), decomposition->rotation, decomposition->translation
-    );
+    const SIMDMatrixDouble reconstructed = MatrixDoubleAffineTransformation(decomposition->scale, VectorDoubleZero(), decomposition->rotation, decomposition->translation);
     for(usize row = 0u; row < 4u; ++row){
         for(usize lane = 0u; lane < 3u; ++lane)
             EXPECT_NEAR(reconstructed.v[row][lane], matrix.v[row][lane], 4.0e-15) << row << ':' << lane;
@@ -541,9 +489,7 @@ TEST(Math, DoubleQuaternionAntipodalInterpolationPreservesSmallDeviationFromRigh
 TEST(Math, DoubleRigidQuaternionExtractionKeepsRowMatrixRotationAndDualTranslationDirection){
     // Transposing an M*v matrix during extraction reverses its nonzero rotation and corrupts the dual translation.
     const SIMDVectorDouble translation{ 7.0 + 0x1p-40, -11.0 + 0x1p-40, 5.0 + 0x1p-40, 0.0 };
-    const SIMDMatrixDouble matrix = MatrixDoubleMultiply(
-        MatrixDoubleTranslationFromVector(translation), MatrixDoubleRotationZ(0.75)
-    );
+    const SIMDMatrixDouble matrix = MatrixDoubleMultiply(MatrixDoubleTranslationFromVector(translation), MatrixDoubleRotationZ(0.75));
     const auto quaternion = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12);
     ASSERT_TRUE(quaternion);
     const SIMDVectorDouble direction{ 2.0, -3.0, 4.0, 0.0 };
@@ -554,9 +500,7 @@ TEST(Math, DoubleRigidQuaternionExtractionKeepsRowMatrixRotationAndDualTranslati
 
     const auto dualQuaternion = MatrixDoubleTryBuildRigidDualQuaternion(matrix, 0.0, 1.0e-12);
     ASSERT_TRUE(dualQuaternion);
-    const SIMDVectorDouble extractedTranslation = VectorDoubleScale(
-        QuaternionDoubleMultiply(dualQuaternion->dual, QuaternionDoubleConjugate(dualQuaternion->real)), 2.0
-    );
+    const SIMDVectorDouble extractedTranslation = VectorDoubleScale(QuaternionDoubleMultiply(dualQuaternion->dual, QuaternionDoubleConjugate(dualQuaternion->real)), 2.0);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(extractedTranslation[lane], translation[lane], 4.0e-15) << lane;
 
@@ -592,10 +536,7 @@ TEST(Math, FrustumSphereTangencyAndZeroRadiusKeepContainmentBoundary){
     SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, planes);
     const Array<f32, 6u> centers = { 0.5f, 0.25f, 1.5f, 9.5f, 10.5f, 1.0f };
-    const Array<ContainmentType::Enum, 6u> expected = {
-        ContainmentType::Intersects, ContainmentType::Disjoint, ContainmentType::Contains,
-        ContainmentType::Contains, ContainmentType::Intersects, ContainmentType::Contains,
-    };
+    const Array<ContainmentType::Enum, 6u> expected = { ContainmentType::Intersects, ContainmentType::Disjoint, ContainmentType::Contains, ContainmentType::Contains, ContainmentType::Intersects, ContainmentType::Contains, };
     for(usize index = 0u; index < centers.size(); ++index){
         const BoundingSphere sphere(Float3U(0.0f, 0.0f, centers[index]), index == centers.size() - 1u ? 0.0f : 0.5f);
         EXPECT_EQ(frustum.contains(sphere), expected[index]) << index;
@@ -605,13 +546,7 @@ TEST(Math, FrustumSphereTangencyAndZeroRadiusKeepContainmentBoundary){
 
 TEST(Math, HyperbolicTangentSaturatesAndPreservesSignedZero){
     const f32 infinity = Limit<f32>::s_Infinity;
-    EXPECT_TRUE(NearlyEqual4(
-        VectorTanH(VectorSet(50.0f, -50.0f, infinity, -infinity)),
-        1.0f,
-        -1.0f,
-        1.0f,
-        -1.0f
-    ));
+    EXPECT_TRUE(NearlyEqual4(VectorTanH(VectorSet(50.0f, -50.0f, infinity, -infinity)), 1.0f, -1.0f, 1.0f, -1.0f));
 
     const SIMDVectorSingle signedZeroTanH = VectorTanH(VectorSet(-0.0f, 0.0f, -0.0f, 0.0f));
     EXPECT_TRUE(SignBit(VectorGetX(signedZeroTanH)));
@@ -619,10 +554,7 @@ TEST(Math, HyperbolicTangentSaturatesAndPreservesSignedZero){
 }
 
 TEST(Math, VectorIntegerAddWrapsAtUnsignedLaneLimits){
-    const SIMDVectorSingle sum = VectorAddInt(
-        VectorSetInt(Limit<u32>::s_Max, 4u, 0xFFFFFFFEu, 19u),
-        VectorSetInt(1u, 7u, 3u, Limit<u32>::s_Max)
-    );
+    const SIMDVectorSingle sum = VectorAddInt(VectorSetInt(Limit<u32>::s_Max, 4u, 0xFFFFFFFEu, 19u), VectorSetInt(1u, 7u, 3u, Limit<u32>::s_Max));
 
     EXPECT_EQ(VectorGetIntX(sum), 0u);
     EXPECT_EQ(VectorGetIntZ(sum), 1u);
@@ -668,33 +600,12 @@ TEST(Math, BoxNormalHandlesCornerAndEqualDistanceTie){
     const SIMDVectorSingle boxHalfExtents = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
 
 
-    EXPECT_TRUE(NearlyEqual3(
-        SdfTests::BoxNormal(VectorSet(2.0f, 2.0f, 1.0f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
-        0.70710677f,
-        0.70710677f,
-        0.0f,
-        0.00001f
-    ));
-    EXPECT_TRUE(NearlyEqual3(
-        SdfTests::BoxNormal(VectorSet(0.9f, 0.9f, 0.2f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
-        1.0f,
-        0.0f,
-        0.0f
-    ));
+    EXPECT_TRUE(NearlyEqual3(SdfTests::BoxNormal(VectorSet(2.0f, 2.0f, 1.0f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f), 0.70710677f, 0.70710677f, 0.0f, 0.00001f));
+    EXPECT_TRUE(NearlyEqual3(SdfTests::BoxNormal(VectorSet(0.9f, 0.9f, 0.2f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f), 1.0f, 0.0f, 0.0f));
 }
 
 TEST(Math, DegeneratePlaneNormalUsesFallback){
-    EXPECT_TRUE(NearlyEqual4(
-        PlaneTests::FromPointNormal(
-            VectorZero(),
-            VectorSet(1.0f, 2.0f, 3.0f, 0.0f),
-            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        ),
-        0.0f,
-        0.0f,
-        1.0f,
-        -3.0f
-    ));
+    EXPECT_TRUE(NearlyEqual4(PlaneTests::FromPointNormal(VectorZero(), VectorSet(1.0f, 2.0f, 3.0f, 0.0f), VectorSet(0.0f, 0.0f, 1.0f, 0.0f)), 0.0f, 0.0f, 1.0f, -3.0f));
 }
 
 TEST(Math, MergingContainedSpherePreservesLargerBounds){
@@ -717,19 +628,13 @@ TEST(Math, MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTies){
         ASSERT_TRUE(decomposition);
         EXPECT_FALSE(Vector4IsNaN(decomposition->rotation));
         EXPECT_FALSE(Vector4IsInfinite(decomposition->rotation));
-        const SIMDMatrix reconstructed = MatrixAffineTransformation(
-            decomposition->scale, VectorZero(), decomposition->rotation, decomposition->translation
-        );
+        const SIMDMatrix reconstructed = MatrixAffineTransformation(decomposition->scale, VectorZero(), decomposition->rotation, decomposition->translation);
         for(usize row = 0u; row < 4u; ++row){
-            EXPECT_TRUE(NearlyEqual4(reconstructed.v[row],
-                VectorGetX(matrices[index].v[row]), VectorGetY(matrices[index].v[row]),
-                VectorGetZ(matrices[index].v[row]), VectorGetW(matrices[index].v[row]))) << row;
+            EXPECT_TRUE(NearlyEqual4(reconstructed.v[row], VectorGetX(matrices[index].v[row]), VectorGetY(matrices[index].v[row]), VectorGetZ(matrices[index].v[row]), VectorGetW(matrices[index].v[row]))) << row;
         }
     }
 
-    const SIMDMatrix shear = MatrixSet(
-        1.0f, 1.0f, 0.0f, 3.0f, 0.0f, 1.0f, 0.0f, -2.0f, 0.0f, 0.0f, 1.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f
-    );
+    const SIMDMatrix shear = MatrixSet(1.0f, 1.0f, 0.0f, 3.0f, 0.0f, 1.0f, 0.0f, -2.0f, 0.0f, 0.0f, 1.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     EXPECT_FALSE(MatrixDecompose(shear));
 }
 
@@ -772,14 +677,7 @@ TEST(Math, UnsignedFloatClampsNegativeOverflowAndNonfiniteInput){
 }
 
 TEST(Math, PartialHalfFloatBuffersPreserveSubnormalsAndNonfiniteInput){
-    f32 source[6] = {
-        0.0f,
-        -1.5f,
-        1.0f,
-        65504.0f,
-        5.9604644775390625e-8f,
-        Limit<f32>::s_Infinity
-    };
+    f32 source[6] = { 0.0f, -1.5f, 1.0f, 65504.0f, 5.9604644775390625e-8f, Limit<f32>::s_Infinity };
     Half packed[6] = {};
     f32 unpacked[6] = {};
 
@@ -856,12 +754,7 @@ static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const S
     NWB_MEMSET(&record, 0xa5, sizeof(record));
     const u64 poison[]{ 0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u };
     const usize logicalBytes = LogicalCount * sizeof(f64);
-    NWB_MEMCPY(
-        reinterpret_cast<u8*>(&record.value) + logicalBytes,
-        sizeof(Storage) - logicalBytes,
-        poison,
-        sizeof(Storage) - logicalBytes
-    );
+    NWB_MEMCPY(reinterpret_cast<u8*>(&record.value) + logicalBytes, sizeof(Storage) - logicalBytes, poison, sizeof(Storage) - logicalBytes);
     Array<u8, sizeof(StorageRecord)> original{};
     NWB_MEMCPY(original.data(), original.size(), &record, sizeof(record));
     for(const bool stream : { false, true }){
@@ -917,27 +810,15 @@ static void CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero(){
 TEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals){
     EXPECT_EQ(FloatingHashBits(-0.0), FloatingHashBits(0.0));
     EXPECT_NE(FloatingHashBits(1.0 + 0x1p-52), FloatingHashBits(1.0));
-    CheckStorageHashMatchesEquality(
-        Double4(-0.0, 1.0 + 0x1p-52, -0.0, 0x1p+40 + 1.0),
-        Double4(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0),
-        Double4(0.0, 1.0, 0.0, 0x1p+40 + 1.0)
-    );
-    CheckStorageHashMatchesEquality(
-        Double4U(-0.0, 1.0 + 0x1p-52, -0.0, 0x1p+40 + 1.0),
-        Double4U(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0),
-        Double4U(0.0, 1.0, 0.0, 0x1p+40 + 1.0)
-    );
+    CheckStorageHashMatchesEquality(Double4(-0.0, 1.0 + 0x1p-52, -0.0, 0x1p+40 + 1.0), Double4(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0), Double4(0.0, 1.0, 0.0, 0x1p+40 + 1.0));
+    CheckStorageHashMatchesEquality(Double4U(-0.0, 1.0 + 0x1p-52, -0.0, 0x1p+40 + 1.0), Double4U(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0), Double4U(0.0, 1.0, 0.0, 0x1p+40 + 1.0));
 }
 
 TEST(Math, AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage){
     const f64 pairExpected[]{ -0.0, 1.0 + 0x1p-52 };
-    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double2, 2u>(
-        SIMDVectorDouble{ pairExpected[0], pairExpected[1], Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairExpected
-    );
+    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double2, 2u>(SIMDVectorDouble{ pairExpected[0], pairExpected[1], Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairExpected);
     const f64 tripleExpected[]{ -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0 };
-    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double3, 3u>(
-        SIMDVectorDouble{ tripleExpected[0], tripleExpected[1], tripleExpected[2], Limit<f64>::s_QuietNaN }, tripleExpected
-    );
+    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double3, 3u>(SIMDVectorDouble{ tripleExpected[0], tripleExpected[1], tripleExpected[2], Limit<f64>::s_QuietNaN }, tripleExpected);
     const f64 matrixExpected[]{ -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0, 2.0, -0.0, -0x1p+40 - 1.0, 0x1p-40, -3.0, 1.0 + 0x1p-52 };
     const SIMDMatrixDouble matrix = {
         SIMDVectorDouble{ matrixExpected[0], matrixExpected[1], matrixExpected[2], Limit<f64>::s_Infinity },
@@ -970,32 +851,22 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     NWB_MEMSET(unaligned, 0x5a, sizeof(unaligned));
     const u64 poison = 0x7ff8000000001234u;
     for(usize index = 0u; index < LengthOf(aligned); ++index){
-        StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25 + 0.25 * static_cast<f64>(index),
-            (static_cast<f64>(index) - 1.0) * 0x1p-40, 1.0 + 0x1p-52, Limit<f64>::s_Infinity }, aligned[index].value);
-        NWB_MEMCPY(
-            reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64),
-            sizeof(aligned[index].value) - 3u * sizeof(f64),
-            &poison,
-            sizeof(poison)
-        );
+        StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25 + 0.25 * static_cast<f64>(index), (static_cast<f64>(index) - 1.0) * 0x1p-40, 1.0 + 0x1p-52, Limit<f64>::s_Infinity }, aligned[index].value);
+        NWB_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
     }
     Array<u8, sizeof(aligned)> alignedOriginal{};
     Array<u8, sizeof(unaligned)> unalignedOriginal{};
     NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned, sizeof(aligned));
     NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned, sizeof(unaligned));
     const SIMDMatrixDouble matrix = MatrixDoubleTranslation(0.25, 0.0, 0.0);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord),
-        &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &unaligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord), &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &unaligned[0].value);
     EXPECT_EQ(NWB_MEMCMP(aligned, alignedOriginal.data(), sizeof(aligned)), 0);
     for(usize index = 0u; index < LengthOf(aligned); ++index)
         EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.5 + 0.25 * static_cast<f64>(index)) << index;
 
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord),
-        &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(unaligned), matrix), &unaligned[0].value);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord),
-        &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord),
-        &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord), &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(unaligned), matrix), &unaligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord), &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord), &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
     for(usize index = 0u; index < LengthOf(aligned); ++index){
         EXPECT_EQ(aligned[index].value.x, 0x1p+40 + 1.25 + 0.25 * static_cast<f64>(index)) << index;
         EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.75 + 0.25 * static_cast<f64>(index)) << index;
@@ -1030,17 +901,11 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     NWB_MEMSET(pairs, 0xa5, sizeof(pairs));
     for(usize index = 0u; index < LengthOf(pairs); ++index){
         StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25, 1.0 + 0x1p-52, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairs[index].value);
-        NWB_MEMCPY(
-            reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64),
-            sizeof(pairs[index].value) - 2u * sizeof(f64),
-            &poison,
-            sizeof(poison)
-        );
+        NWB_MEMCPY(reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64), sizeof(pairs[index].value) - 2u * sizeof(f64), &poison, sizeof(poison));
     }
     Array<u8, sizeof(pairs)> pairOriginal{};
     NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs, sizeof(pairs));
-    EXPECT_EQ(VectorDouble2TransformCoordStream(&pairs[0].value, sizeof(PairRecord),
-        &pairs[0].value, sizeof(PairRecord), LengthOf(pairs), matrix), &pairs[0].value);
+    EXPECT_EQ(VectorDouble2TransformCoordStream(&pairs[0].value, sizeof(PairRecord), &pairs[0].value, sizeof(PairRecord), LengthOf(pairs), matrix), &pairs[0].value);
     for(usize index = 0u; index < LengthOf(pairs); ++index){
         EXPECT_EQ(pairs[index].value.x, 0x1p+40 + 0.5) << index;
         EXPECT_EQ(pairs[index].value.y, 1.0 + 0x1p-52) << index;
@@ -1075,8 +940,7 @@ TEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane){
             const SIMDVectorDouble equality[]{ VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
             for(const SIMDVectorDouble mask : equality){
                 for(usize lane = 0u; lane < 4u; ++lane)
-                    EXPECT_EQ(VectorDoubleGetIntByIndex(mask, lane), lane == changedLane ? 0u : Limit<u64>::s_Max)
-                        << changedLane << ':' << difference << ':' << lane;
+                    EXPECT_EQ(VectorDoubleGetIntByIndex(mask, lane), lane == changedLane ? 0u : Limit<u64>::s_Max) << changedLane << ':' << difference << ':' << lane;
             }
         }
     }
@@ -1088,18 +952,14 @@ TEST(Math, DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEve
         { 1.0 + 0x1p-24, 1.0 + 0x1.8p-23, -1.0 - 0x1p-24, -1.0 - 0x1.8p-23 },
         { 0x1p-150, 0x1.8p-149, -0x1p-150, -0x1.8p-149 },
     };
-    const SIMDVectorSingle overflow = ConvertVectorDoubleToSingle(
-        VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3])
-    );
+    const SIMDVectorSingle overflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]));
     const u32 overflowExpected[]{ 0x7f800000u, 0xff800000u, 0x80000000u, 0u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(overflow, lane), overflowExpected[lane]) << lane;
 
     const u32 subnormalBits[]{ 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
     volatile u32 runtimeSubnormalBits[]{ 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
-    const SIMDVectorSingle subnormals = VectorSetInt(
-        runtimeSubnormalBits[0], runtimeSubnormalBits[1], runtimeSubnormalBits[2], runtimeSubnormalBits[3]
-    );
+    const SIMDVectorSingle subnormals = VectorSetInt(runtimeSubnormalBits[0], runtimeSubnormalBits[1], runtimeSubnormalBits[2], runtimeSubnormalBits[3]);
     const SIMDVectorDouble widened = ConvertVectorSingleToDouble(subnormals);
     const f64 widenedExpected[]{ 0x1p-149, -0x1p-149, 0x1.fffffcp-127, -0x1.fffffcp-127 };
     const SIMDVectorSingle narrowed = ConvertVectorDoubleToSingle(widened);
@@ -1109,32 +969,24 @@ TEST(Math, DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEve
     }
 
     volatile u32 runtimeZeroBits[]{ 0x80000000u, 0u, 0x80000000u, 0u };
-    const SIMDVectorDouble signedZeros = ConvertVectorSingleToDouble(
-        VectorSetInt(runtimeZeroBits[0], runtimeZeroBits[1], runtimeZeroBits[2], runtimeZeroBits[3])
-    );
+    const SIMDVectorDouble signedZeros = ConvertVectorSingleToDouble(VectorSetInt(runtimeZeroBits[0], runtimeZeroBits[1], runtimeZeroBits[2], runtimeZeroBits[3]));
     const u64 zeroExpected[]{ 0x8000000000000000u, 0u, 0x8000000000000000u, 0u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorDoubleGetIntByIndex(signedZeros, lane), zeroExpected[lane]) << lane;
 
-    const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(
-        VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3])
-    );
+    const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]));
     const u32 roundedExpected[]{ 0x3f800000u, 0x3f800002u, 0xbf800000u, 0xbf800002u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(rounded, lane), roundedExpected[lane]) << lane;
 
-    const SIMDVectorSingle underflow = ConvertVectorDoubleToSingle(
-        VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3])
-    );
+    const SIMDVectorSingle underflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]));
     const u32 underflowExpected[]{ 0u, 2u, 0x80000000u, 0x80000002u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(underflow, lane), underflowExpected[lane]) << lane;
 }
 
 TEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs){
-    const SIMDVectorDouble first = VectorDoubleSetInt(
-        0xfff8000012345678u, 0x8000000000000000u, 0x0123456789abcdefu, 0x7ff0000000000001u
-    );
+    const SIMDVectorDouble first = VectorDoubleSetInt(0xfff8000012345678u, 0x8000000000000000u, 0x0123456789abcdefu, 0x7ff0000000000001u);
     const SIMDVectorDouble second = VectorDoubleSetInt(0u, 0x7ff800009abcdef0u, 0xfedcba9876543210u, Limit<u64>::s_Max);
     volatile u32 swizzleControls[][4]{ { 3u, 1u, 0u, 2u }, { 2u, 0u, 3u, 1u }, { 1u, 3u, 1u, 3u } };
     const u64 swizzleExpected[][4]{
@@ -1143,9 +995,7 @@ TEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs){
         { 0x8000000000000000u, 0x7ff0000000000001u, 0x8000000000000000u, 0x7ff0000000000001u }
     };
     for(usize index = 0u; index < LengthOf(swizzleExpected); ++index){
-        const SIMDVectorDouble result = VectorDoubleSwizzle(
-            first, swizzleControls[index][0], swizzleControls[index][1], swizzleControls[index][2], swizzleControls[index][3]
-        );
+        const SIMDVectorDouble result = VectorDoubleSwizzle(first, swizzleControls[index][0], swizzleControls[index][1], swizzleControls[index][2], swizzleControls[index][3]);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), swizzleExpected[index][lane]) << index << ':' << lane;
     }
@@ -1157,9 +1007,7 @@ TEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs){
         { 0x7ff800009abcdef0u, 0x7ff0000000000001u, 0u, 0xfff8000012345678u }
     };
     for(usize index = 0u; index < LengthOf(permuteExpected); ++index){
-        const SIMDVectorDouble result = VectorDoublePermute(
-            first, second, permuteControls[index][0], permuteControls[index][1], permuteControls[index][2], permuteControls[index][3]
-        );
+        const SIMDVectorDouble result = VectorDoublePermute(first, second, permuteControls[index][0], permuteControls[index][1], permuteControls[index][2], permuteControls[index][3]);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), permuteExpected[index][lane]) << index << ':' << lane;
     }

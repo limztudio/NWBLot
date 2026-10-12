@@ -67,10 +67,7 @@ bool IShader::loadBinaryForStage(const Core::Assets::AssetBytes& binary, const C
 
     const auto lookupResult = Core::ResolveSpirvEntryPointName(payload->bytecode, payload->entryPoint, Core::ShaderType::ToMask(shaderType));
     if(!lookupResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed")
-            , StringConvert(payload->entryPoint)
-            , StringConvert(assetType().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed"), StringConvert(payload->entryPoint), StringConvert(assetType().resolvedText()));
         return false;
     }
 

@@ -40,23 +40,13 @@ endfunction()
 function(write_partial_tangent_fbx input_path output_path)
     write_import_tangent_fbx("${input_path}" "${output_path}")
     read_normalized_fbx("${output_path}" partial_fbx)
-    string(REPLACE
-        "a: 1,0,0, 1,0,0, 1,0,0, 0,0,1, 0,0,1, 0,0,1"
-        "a: 0,0,0, 1,0,0, 1,0,0, 0,0,1, 0,0,1, 0,0,1"
-        partial_fbx
-        "${partial_fbx}"
-    )
+    string(REPLACE "a: 1,0,0, 1,0,0, 1,0,0, 0,0,1, 0,0,1, 0,0,1" "a: 0,0,0, 1,0,0, 1,0,0, 0,0,1, 0,0,1, 0,0,1" partial_fbx "${partial_fbx}")
     file(WRITE "${output_path}" "${partial_fbx}")
 endfunction()
 
 function(write_degenerate_uv_fbx input_path output_path)
     read_normalized_fbx("${input_path}" source_fbx)
-    string(REPLACE
-        "a: 0,0, 1,0, 0,1, 0,0, 1,0, 0,1"
-        "a: 0,0, 0,0, 0,0, 0,0, 0,0, 0,0"
-        degenerate_uv_fbx
-        "${source_fbx}"
-    )
+    string(REPLACE "a: 0,0, 1,0, 0,1, 0,0, 1,0, 0,1" "a: 0,0, 0,0, 0,0, 0,0, 0,0, 0,0" degenerate_uv_fbx "${source_fbx}")
     file(WRITE "${output_path}" "${degenerate_uv_fbx}")
 endfunction()
 

@@ -51,12 +51,7 @@ namespace Shape{
 };
 
 
-void DeclareGraph(
-    Graphics::GpuTaskGraph& graph,
-    const usize taskCount,
-    const Shape::Enum shape,
-    Graphics::Alloc::ScratchArena& scratch
-){
+void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Shape::Enum shape, Graphics::Alloc::ScratchArena& scratch){
     constexpr usize s_LayerSize = 16u;
     constexpr usize s_ChainSize = 32u;
     const bool interleaved = shape == Shape::InterleavedChains32;
@@ -79,11 +74,7 @@ void DeclareGraph(
         };
         if(shape == Shape::ReversedPairs && taskIndex % 2u != 0u && taskIndex + 1u < taskCount)
             addDependency(taskIndex + 1u);
-        else if(
-            (shape == Shape::OneEdge && taskIndex == 1u)
-            || ((shape == Shape::DisjointPairs || shape == Shape::MergedPairs) && taskIndex % 2u != 0u)
-            || (shape == Shape::TotalOrder && taskIndex != 0u)
-        )
+        else if((shape == Shape::OneEdge && taskIndex == 1u) || ((shape == Shape::DisjointPairs || shape == Shape::MergedPairs) && taskIndex % 2u != 0u) || (shape == Shape::TotalOrder && taskIndex != 0u))
             addDependency(taskIndex - 1u);
         else if((shape == Shape::Chains32 || interleaved) && logicalIndex % s_ChainSize != 0u)
             addDependency(logicalIndex - 1u);
@@ -162,15 +153,11 @@ void CheckIndexedScores(const Shape::Enum shape){
     for(usize intermediate = 0u; intermediate < s_TaskCount; ++intermediate)
         for(usize source = 0u; source < s_TaskCount; ++source)
             for(usize destination = 0u; destination < s_TaskCount; ++destination)
-                reachable[source][destination] = reachable[source][destination]
-                    || (reachable[source][intermediate] && reachable[intermediate][destination]);
+                reachable[source][destination] = reachable[source][destination] || (reachable[source][intermediate] && reachable[intermediate][destination]);
     for(usize source = 0u; source < s_TaskCount; ++source){
         for(usize destination = 0u; destination < s_TaskCount; ++destination){
             EXPECT_EQ(reachability.reaches(view.taskAt(source).id, view.taskAt(destination).id), reachable[source][destination]);
-            EXPECT_EQ(
-                reachability.transitivelyIndependent(view.taskAt(source).id, view.taskAt(destination).id),
-                source != destination && !reachable[source][destination] && !reachable[destination][source]
-            );
+            EXPECT_EQ(reachability.transitivelyIndependent(view.taskAt(source).id, view.taskAt(destination).id), source != destination && !reachable[source][destination] && !reachable[destination][source]);
         }
     }
     const auto referenceOverlap = [&](const GpuTaskQueuePlacementGroup& group, const Graphics::GpuPhysicalQueueId queue){
@@ -195,34 +182,14 @@ void CheckIndexedScores(const Shape::Enum shape){
         for(const auto& candidate : queues){
             for(usize row = 0u; row < assignments.size(); ++row){
                 const auto& task = assignments[row].task;
-                const Graphics::GpuQueueAssignmentScore score = BuildQueueAssignmentScore(
-                    view,
-                    analysis,
-                    assignments,
-                    indices,
-                    topology,
-                    reachability,
-                    scoringData,
-                    view.taskAt(task.index),
-                    candidate
-                );
+                const Graphics::GpuQueueAssignmentScore score = BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(task.index), candidate);
                 GpuTaskQueuePlacementGroup singleton;
                 singleton.assignmentOffset = row;
                 singleton.assignmentCount = 1u;
                 EXPECT_EQ(score.overlap, referenceOverlap(singleton, candidate.id));
             }
             for(const auto& group : groups){
-                const Graphics::GpuQueueAssignmentScore score = BuildQueuePlacementGroupScore(
-                    view,
-                    analysis,
-                    assignments,
-                    indices,
-                    topology,
-                    reachability,
-                    scoringData,
-                    group,
-                    candidate
-                );
+                const Graphics::GpuQueueAssignmentScore score = BuildQueuePlacementGroupScore(view, analysis, assignments, indices, topology, reachability, scoringData, group, candidate);
                 EXPECT_EQ(score.overlap, referenceOverlap(group, candidate.id));
             }
         }
@@ -254,9 +221,7 @@ TEST(GpuTaskQueueScoring, PartialDagMultiwordScoresPreserveIndependentCostsAfter
 }
 
 TEST(GpuTaskQueueScoring, CompactedPartialDagScoresPreserveMixedCostsAcrossMovesAndRebuilds){
-    constexpr Shape::Enum s_Shapes[] = {
-        Shape::OneEdge, Shape::DisjointPairs, Shape::ReversedPairs, Shape::DenseLayers, Shape::MergedPairs,
-    };
+    constexpr Shape::Enum s_Shapes[] = { Shape::OneEdge, Shape::DisjointPairs, Shape::ReversedPairs, Shape::DenseLayers, Shape::MergedPairs, };
     for(const Shape::Enum shape : s_Shapes)
         CheckIndexedScores<513u>(shape);
 }
@@ -320,10 +285,7 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
 TEST(GpuTaskQueueScoring, RebuildingRelationsClearsCompactedDenseOrderedAndFailedState){
     constexpr usize s_TaskCount = 513u;
     constexpr usize s_LayerSize = 16u;
-    constexpr Shape::Enum s_Shapes[] = {
-        Shape::ReversedPairs, Shape::DenseLayers, Shape::OneEdge,
-        Shape::Independent, Shape::TotalOrder, Shape::ReversedPairs,
-    };
+    constexpr Shape::Enum s_Shapes[] = { Shape::ReversedPairs, Shape::DenseLayers, Shape::OneEdge, Shape::Independent, Shape::TotalOrder, Shape::ReversedPairs, };
     TestArena testArena;
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     GpuTaskSchedulingReachability reachability(scratch);
@@ -353,10 +315,7 @@ TEST(GpuTaskQueueScoring, RebuildingRelationsClearsCompactedDenseOrderedAndFaile
                 const auto from = view.taskAt(source).id;
                 const auto to = view.taskAt(destination).id;
                 EXPECT_EQ(reachability.reaches(from, to), expectedReach(source, destination));
-                EXPECT_EQ(
-                    reachability.transitivelyIndependent(from, to),
-                    source != destination && !expectedReach(source, destination) && !expectedReach(destination, source)
-                );
+                EXPECT_EQ(reachability.transitivelyIndependent(from, to), source != destination && !expectedReach(source, destination) && !expectedReach(destination, source));
             }
         }
         EXPECT_FALSE(reachability.reaches(previousTask, view.taskAt(0u).id));
@@ -401,18 +360,7 @@ TEST(GpuTaskQueueScoring, PartialAssignmentsExcludeRelatedTasksWithoutRequiringO
     }
     scoringData.rebuildAssignmentLoads(assignments, topology);
     const auto score = [&](const usize taskIndex, const GpuTaskQueueScoreExclusions exclusions = {}){
-        return BuildQueueAssignmentScore(
-            view,
-            analysis,
-            assignments,
-            indices,
-            topology,
-            reachability,
-            scoringData,
-            view.taskAt(taskIndex),
-            queues[0u],
-            exclusions
-        );
+        return BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(taskIndex), queues[0u], exclusions);
     };
     EXPECT_EQ(score(1u).overlap, 8); // Assigned producer zero is related; task three is independent.
     EXPECT_EQ(score(2u).overlap, 9); // Both assigned tasks are independent of this absent task.
@@ -432,16 +380,7 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
             char identityText[32u] = {};
             Graphics::GpuTaskSchedulingHint scheduling;
             scheduling.cost = Graphics::GpuTaskCostHint::Large;
-            preceding = AddTaskWithCommands(
-                graph,
-                DeriveName(Name("tests/queue_no_masks/"), FormatDecimal(index, identityText)),
-                "Ordered Queue Task",
-                ComputeCommands(),
-                scheduling,
-                {},
-                preceding.valid() ? &preceding : nullptr,
-                preceding.valid() ? 1u : 0u
-            );
+            preceding = AddTaskWithCommands(graph, DeriveName(Name("tests/queue_no_masks/"), FormatDecimal(index, identityText)), "Ordered Queue Task", ComputeCommands(), scheduling, {}, preceding.valid() ? &preceding : nullptr, preceding.valid() ? 1u : 0u);
             ASSERT_TRUE(preceding.valid());
         }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -477,24 +416,11 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
                         if(other != index && assignments[other].queue == candidate.id)
                             expectedLoad += 8;
                     }
-                    const auto score = BuildQueueAssignmentScore(
-                        view,
-                        analysis,
-                        assignments,
-                        indices,
-                        topology,
-                        reachability,
-                        scoringData,
-                        view.taskAt(index),
-                        candidate
-                    );
+                    const auto score = BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(index), candidate);
                     EXPECT_EQ(score.queueLoad, expectedLoad);
                     EXPECT_EQ(score.overlap, 0);
                     EXPECT_EQ(score.incomingCrossings, index != 0u && assignments[index - 1u].queue != candidate.id ? 1 : 0);
-                    EXPECT_EQ(
-                        score.outgoingCrossings,
-                        index + 1u < s_TaskCount && assignments[index + 1u].queue != candidate.id ? 1 : 0
-                    );
+                    EXPECT_EQ(score.outgoingCrossings, index + 1u < s_TaskCount && assignments[index + 1u].queue != candidate.id ? 1 : 0);
                     EXPECT_EQ(score.ownershipTransfers, 0);
                 }
             }

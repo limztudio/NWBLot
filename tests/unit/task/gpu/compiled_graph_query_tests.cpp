@@ -47,10 +47,7 @@ static void CheckPacketQueries(const usize taskCount){
         const usize orderIndex = taskCount - declarationIndex - 1u;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = orderIndex != 0u;
-        const Graphics::GpuTaskId dependency{
-            .generation = graphGeneration,
-            .index = static_cast<u32>(declarationIndex + 1u),
-        };
+        const Graphics::GpuTaskId dependency{ .generation = graphGeneration, .index = static_cast<u32>(declarationIndex + 1u), };
         char identityText[32u] = {};
         tasks[orderIndex] = AddTaskWithCommands(
             graph,
@@ -64,16 +61,7 @@ static void CheckPacketQueries(const usize taskCount){
         );
         ASSERT_TRUE(tasks[orderIndex].valid());
     }
-    const Graphics::GpuTaskId nextPacketTask = AddTaskWithCommands(
-        graph,
-        Name("tests/compiled_query/next_packet"),
-        "Next Packet",
-        GraphicsCommands(),
-        {},
-        {},
-        &tasks.back(),
-        1u
-    );
+    const Graphics::GpuTaskId nextPacketTask = AddTaskWithCommands(graph, Name("tests/compiled_query/next_packet"), "Next Packet", GraphicsCommands(), {}, {}, &tasks.back(), 1u);
     ASSERT_TRUE(nextPacketTask.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);

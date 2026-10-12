@@ -54,10 +54,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags
-// are required: every interval record pass works against this frame's bindings. References (not
-// nullable pointers) carry those bindings so a missing binding fails at declaration time instead of
-// silently returning `false` inside Record.
+// The material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: every interval record pass works against this frame's bindings.
+// References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
 struct CsgOpaqueIntervalRecordInputs{
     RendererMaterialSystem& materialSystem;
     RendererCsgSystem& csgSystem;
@@ -104,23 +102,11 @@ struct CsgReceiverSpanBuildGraphTask{
             const bool& meshViewSetupReadyIn,
             const bool& sceneShadingSetupReadyIn
         )
-            : CsgOpaqueIntervalRecordInputs(
-                arena,
-                materialSystemIn,
-                csgSystemIn,
-                targetsIn,
-                timingTicketIn,
-                meshViewSetupReadyIn,
-                sceneShadingSetupReadyIn
-            )
+            : CsgOpaqueIntervalRecordInputs(arena, materialSystemIn, csgSystemIn, targetsIn, timingTicketIn, meshViewSetupReadyIn, sceneShadingSetupReadyIn)
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -139,23 +125,11 @@ struct CsgIntervalCombineGraphTask{
             const bool& meshViewSetupReadyIn,
             const bool& sceneShadingSetupReadyIn
         )
-            : CsgOpaqueIntervalRecordInputs(
-                arena,
-                materialSystemIn,
-                csgSystemIn,
-                targetsIn,
-                timingTicketIn,
-                meshViewSetupReadyIn,
-                sceneShadingSetupReadyIn
-            )
+            : CsgOpaqueIntervalRecordInputs(arena, materialSystemIn, csgSystemIn, targetsIn, timingTicketIn, meshViewSetupReadyIn, sceneShadingSetupReadyIn)
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -163,11 +137,9 @@ struct CsgIntervalCombineGraphTask{
 struct CsgIntervalSampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot, and
-    // the setup readiness flags are required: interval sample always rasterizes this frame's CSG pass.
-    // The compute-emulation timing stays optional: it is bound only when the emulation output is
-    // graph-owned. References (not nullable pointers) carry the required bindings so a missing binding
-    // fails at declaration time instead of silently returning `false` inside Record.
+    // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: interval sample always rasterizes this frame's CSG pass.
+    // The compute-emulation timing stays optional: it is bound only when the emulation output is graph-owned.
+    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -199,11 +171,7 @@ struct CsgIntervalSampleGraphTask{
         );
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.opaqueCsgComputeEmulationTiming);

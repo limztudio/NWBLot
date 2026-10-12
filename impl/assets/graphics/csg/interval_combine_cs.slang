@@ -108,15 +108,13 @@ void nwbCsgIntervalCombineInsertEntry(
         return;
     }
 
-    [loop]
-    for(uint layerIndex = 0u; layerIndex < removedIntervalLayerCount; ++layerIndex){
+    [loop] for(uint layerIndex = 0u; layerIndex < removedIntervalLayerCount; ++layerIndex){
         if(candidate.sortDepth >= entries[layerIndex].sortDepth)
             continue;
 
         NwbCsgRemovedIntervalCandidate displaced = entries[layerIndex];
         entries[layerIndex] = candidate;
-        [loop]
-        for(uint shiftIndex = layerIndex + 1u; shiftIndex < removedIntervalLayerCount; ++shiftIndex){
+        [loop] for(uint shiftIndex = layerIndex + 1u; shiftIndex < removedIntervalLayerCount; ++shiftIndex){
             NwbCsgRemovedIntervalCandidate next = entries[shiftIndex];
             entries[shiftIndex] = displaced;
             displaced = next;
@@ -126,10 +124,7 @@ void nwbCsgIntervalCombineInsertEntry(
 }
 
 bool nwbCsgIntervalCombineBackCapVisible(const float2 spanDepth, const float4 cutterDepth, const half4 capNormal){
-    return capNormal.w > half(0.0h)
-        && cutterDepth.w + NWB_CSG_INTERVAL_OVERLAP_EPSILON >= spanDepth.x
-        && cutterDepth.w <= spanDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON
-    ;
+    return capNormal.w > half(0.0h) && cutterDepth.w + NWB_CSG_INTERVAL_OVERLAP_EPSILON >= spanDepth.x && cutterDepth.w <= spanDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON;
 }
 
 void nwbCsgIntervalCombineAppendUnion(
@@ -154,9 +149,7 @@ void nwbCsgIntervalCombineAppendUnion(
     const uint firstSource = 1u + spanIndex * NWB_CSG_PEEL_LAYER_COUNT + firstInterval;
     const uint lastSource = 1u + spanIndex * NWB_CSG_PEEL_LAYER_COUNT + lastInterval;
     entry.sourcePair = firstSource | (lastSource << 16u);
-    nwbCsgIntervalCombineInsertEntry(
-        entries, entry, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags
-    );
+    nwbCsgIntervalCombineInsertEntry(entries, entry, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
 }
 
 void nwbCsgIntervalCombineSpan(
@@ -175,8 +168,7 @@ void nwbCsgIntervalCombineSpan(
     for(uint intervalIndex = 0u; intervalIndex < NWB_CSG_PEEL_LAYER_COUNT; ++intervalIndex)
         intervals[intervalIndex] = (NwbCsgClippedInterval)0;
     uint intervalCount = 0u;
-    [unroll]
-    for(uint intervalIndex = 0u; intervalIndex < NWB_CSG_PEEL_LAYER_COUNT; ++intervalIndex){
+    [unroll] for(uint intervalIndex = 0u; intervalIndex < NWB_CSG_PEEL_LAYER_COUNT; ++intervalIndex){
         if(intervalIndex >= intervalLayerCount)
             break;
         const int3 texel = int3(int2(pixel), int(intervalIndex));
@@ -207,16 +199,12 @@ void nwbCsgIntervalCombineSpan(
     uint lastInterval = firstInterval;
     float unionExit = intervals[0].linearDepth.y;
     float unionCutterExit = intervals[0].cutterExit;
-    [unroll]
-    for(uint intervalIndex = 1u; intervalIndex < NWB_CSG_PEEL_LAYER_COUNT; ++intervalIndex){
+    [unroll] for(uint intervalIndex = 1u; intervalIndex < NWB_CSG_PEEL_LAYER_COUNT; ++intervalIndex){
         if(intervalIndex >= intervalCount)
             break;
         const NwbCsgClippedInterval candidate = intervals[intervalIndex];
         if(candidate.linearDepth.x > unionExit + NWB_CSG_INTERVAL_OVERLAP_EPSILON){
-            nwbCsgIntervalCombineAppendUnion(
-                entries, pixel, spanDepth, spanIndex, firstInterval, lastInterval,
-                removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags
-            );
+            nwbCsgIntervalCombineAppendUnion(entries, pixel, spanDepth, spanIndex, firstInterval, lastInterval, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
             firstInterval = candidate.intervalIndex;
             lastInterval = firstInterval;
             unionExit = candidate.linearDepth.y;
@@ -229,22 +217,12 @@ void nwbCsgIntervalCombineSpan(
             unionCutterExit = candidate.cutterExit;
         }
     }
-    nwbCsgIntervalCombineAppendUnion(
-        entries, pixel, spanDepth, spanIndex, firstInterval, lastInterval,
-        removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags
-    );
+    nwbCsgIntervalCombineAppendUnion(entries, pixel, spanDepth, spanIndex, firstInterval, lastInterval, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
 }
 
-void nwbCsgIntervalCombineWriteEntries(
-    const uint2 pixel,
-    const NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
-    const uint removedIntervalLayerCount,
-    const uint removedIntervalCount,
-    const uint flags
-){
+void nwbCsgIntervalCombineWriteEntries(const uint2 pixel, const NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT], const uint removedIntervalLayerCount, const uint removedIntervalCount, const uint flags){
     const uint storedIntervalCount = min(removedIntervalCount, removedIntervalLayerCount);
-    [loop]
-    for(uint layerIndex = 0u; layerIndex < storedIntervalCount; ++layerIndex){
+    [loop] for(uint layerIndex = 0u; layerIndex < storedIntervalCount; ++layerIndex){
         const uint3 texel = uint3(pixel, layerIndex);
         const uint sourcePair = entries[layerIndex].sourcePair;
         if(sourcePair == 0u){
@@ -297,8 +275,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint removedIntervalLayerCount = nwbCsgIntervalCombineRemovedIntervalLayerCount();
 
     NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT];
-    [unroll]
-    for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
+    [unroll] for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
         entries[layerIndex].sortDepth = NWB_CSG_INVALID_DISTANCE;
         entries[layerIndex].sourcePair = 0u;
     }
@@ -313,13 +290,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint spanCount = min(rawSpanCount, spanLayerCount);
 
     uint removedIntervalCount = 0u;
-    [loop]
-    for(uint spanIndex = 0u; spanIndex < spanCount; ++spanIndex){
+    [loop] for(uint spanIndex = 0u; spanIndex < spanCount; ++spanIndex){
         const uint4 spanData = g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
-        nwbCsgIntervalCombineSpan(
-            entries, pixel, spanData, spanIndex, intervalLayerCount,
-            removedIntervalLayerCount, removedIntervalCount, flags
-        );
+        nwbCsgIntervalCombineSpan(entries, pixel, spanData, spanIndex, intervalLayerCount, removedIntervalLayerCount, removedIntervalCount, flags);
     }
 
     nwbCsgIntervalCombineWriteEntries(pixel, entries, removedIntervalLayerCount, removedIntervalCount, flags);

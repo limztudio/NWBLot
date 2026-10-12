@@ -95,12 +95,7 @@ using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 }
 
 [[nodiscard]] inline bool NearlyEqual4(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
-    return
-        NearlyEqual(VectorGetX(value), x, epsilon)
-        && NearlyEqual(VectorGetY(value), y, epsilon)
-        && NearlyEqual(VectorGetZ(value), z, epsilon)
-        && NearlyEqual(VectorGetW(value), w, epsilon)
-    ;
+    return NearlyEqual(VectorGetX(value), x, epsilon) && NearlyEqual(VectorGetY(value), y, epsilon) && NearlyEqual(VectorGetZ(value), z, epsilon) && NearlyEqual(VectorGetW(value), w, epsilon);
 }
 
 [[nodiscard]] inline bool NearlyEqual3(const Float4& value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon){

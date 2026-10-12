@@ -44,12 +44,7 @@ struct SliderPlacement{
 class SliderLayout final{
 public:
     [[nodiscard]] static Expected<SliderMetrics> Measure(const SliderOptions& options, const SliderStyle& style)noexcept;
-    [[nodiscard]] static Expected<SliderPlacement> Place(
-        const Rect& bounds,
-        const Rect& clip,
-        const SliderMetrics& metrics,
-        f64 normalized
-    )noexcept;
+    [[nodiscard]] static Expected<SliderPlacement> Place(const Rect& bounds, const Rect& clip, const SliderMetrics& metrics, f64 normalized)noexcept;
 };
 
 

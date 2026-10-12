@@ -61,9 +61,7 @@ TEST_F(UiInputBindingsTests, MalformedKeysEnumsAndModifiersPreserveAcceptedProfi
     const InputKeyBinding accepted{ Core::Key::W, 0, 0, InputCommand::Left };
     ASSERT_TRUE(m_bindings.set(&accepted, 1u));
     const InputKeyBinding* previous = m_bindings.bindings().data();
-    const i32 invalidKeys[]{
-        Core::Key::Unknown, Core::Key::Space - 1, Core::Key::Menu + 1, Core::Key::Apostrophe + 1, Core::Key::GraveAccent + 1
-    };
+    const i32 invalidKeys[]{ Core::Key::Unknown, Core::Key::Space - 1, Core::Key::Menu + 1, Core::Key::Apostrophe + 1, Core::Key::GraveAccent + 1 };
     for(const i32 key : invalidKeys){
         InputKeyBinding invalid = accepted;
         invalid.key = key;

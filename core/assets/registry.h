@@ -30,19 +30,11 @@ public:
     bool registerCodec(UniquePtr<IAssetCodec>&& codec, bool replaceExisting = false);
     bool unregisterCodec(const Name& assetType);
 
-    [[nodiscard]] Expected<UniquePtr<IAsset>> deserializeAsset(
-        const Name& assetType,
-        const Name& virtualPath,
-        const AssetBytes& binary
-    )const;
+    [[nodiscard]] Expected<UniquePtr<IAsset>> deserializeAsset(const Name& assetType, const Name& virtualPath, const AssetBytes& binary)const;
 
 
 private:
-    [[nodiscard]] Expected<UniquePtr<IAsset>> deserializeAssetByName(
-        const Name& assetType,
-        const Name& virtualPath,
-        const AssetBytes& binary
-    )const;
+    [[nodiscard]] Expected<UniquePtr<IAsset>> deserializeAssetByName(const Name& assetType, const Name& virtualPath, const AssetBytes& binary)const;
 
 
 private:

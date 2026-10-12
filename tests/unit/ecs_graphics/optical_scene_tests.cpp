@@ -52,10 +52,7 @@ TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
 }
 
 TEST(OpticalScene, ClosedAndUnknownTransparentPoliciesRequireGeneralTransport){
-    const OpticalBoundaryMode::Enum modes[] = {
-        OpticalBoundaryMode::ClosedNested, OpticalBoundaryMode::ClosedPriority,
-        static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max),
-    };
+    const OpticalBoundaryMode::Enum modes[] = { OpticalBoundaryMode::ClosedNested, OpticalBoundaryMode::ClosedPriority, static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max), };
     for(const auto mode : modes){
         for(const bool boundsValid : {false, true}){
             OpticalSceneContext context;
@@ -111,9 +108,7 @@ TEST(OpticalScene, UntrustedTransparentBoundsCannotBecomeAnAirShortcut){
 TEST(OpticalScene, NonfiniteAndInvertedBoundsRejectTheProof){
     OpticalSceneContext context;
     RendererComponent renderer;
-    const Float3U invalidMins[] = {
-        { Limit<f32>::s_Infinity, 0.f, 0.f }, { 2.f, 0.f, 0.f },
-    };
+    const Float3U invalidMins[] = { { Limit<f32>::s_Infinity, 0.f, 0.f }, { 2.f, 0.f, 0.f }, };
     for(const auto& boundsMin : invalidMins){
         RayTracingOpticalSceneGather gather(context.scratch, 1u);
         gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, boundsMin, { 1.f, 1.f, 1.f }, true);
@@ -172,11 +167,7 @@ TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslatio
     const Float3U& minimum = bounds->minimum;
     const Float3U& maximum = bounds->maximum;
     for(u32 corner = 0u; corner < 8u; ++corner){
-        const f64 coordinates[] = {
-            (corner & 1u) ? localMax.x : localMin.x,
-            (corner & s_ExpectedDualCount) ? localMax.y : localMin.y,
-            (corner & 4u) ? localMax.z : localMin.z,
-        };
+        const f64 coordinates[] = { (corner & 1u) ? localMax.x : localMin.x, (corner & s_ExpectedDualCount) ? localMax.y : localMin.y, (corner & 4u) ? localMax.z : localMin.z, };
         for(usize row = 0u; row < 3u; ++row){
             f64 exact = transform.m[row][3u];
             for(usize column = 0u; column < 3u; ++column)

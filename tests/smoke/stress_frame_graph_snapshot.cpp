@@ -75,11 +75,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
 }
 
 [[nodiscard]] bool ValidateSnapshot(const Core::Telemetry::FrameGraphPayload& payload, const u64 sourceFrame)noexcept{
-    if(
-        payload.frameIndex != sourceFrame || payload.nodes.empty() || payload.edges.empty()
-        || !payload.packetSubmissionStatisticsPresent || payload.packetSubmissionStatistics.empty()
-        || payload.physicalQueueRuntimeStatistics.empty()
-    )
+    if(payload.frameIndex != sourceFrame || payload.nodes.empty() || payload.edges.empty() || !payload.packetSubmissionStatisticsPresent || payload.packetSubmissionStatistics.empty() || payload.physicalQueueRuntimeStatistics.empty())
         return false;
     usize runtimeOwnerCount = 0u;
     u64 planGeneration = 0u;
@@ -89,10 +85,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
             continue;
         ++runtimeOwnerCount;
         const auto& statistics = node.runtimeStatistics;
-        if(
-            statistics.planGeneration == 0u || statistics.compile.taskCount == 0u || statistics.compile.packetCount == 0u
-            || statistics.submission.rejectedPacketCount != 0u || statistics.submission.acceptedPacketCount == 0u
-        )
+        if(statistics.planGeneration == 0u || statistics.compile.taskCount == 0u || statistics.compile.packetCount == 0u || statistics.submission.rejectedPacketCount != 0u || statistics.submission.acceptedPacketCount == 0u)
             return false;
         planGeneration = statistics.planGeneration;
         expectedTaskCount = statistics.compile.taskCount;
@@ -120,12 +113,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
     return true;
 }
 
-[[nodiscard]] bool WriteSnapshot(
-    OutputFileStream& output,
-    const Core::Telemetry::FrameGraphPayload& payload,
-    const u64 graphicsFrame,
-    const u64 completedFrames
-){
+[[nodiscard]] bool WriteSnapshot(OutputFileStream& output, const Core::Telemetry::FrameGraphPayload& payload, const u64 graphicsFrame, const u64 completedFrames){
     output.precision(17);
     output << "{\n\"type\":\"stress_frame_graph_snapshot\",\"source_frame\":" << payload.frameIndex
         << ",\"graphics_frame_at_capture\":" << graphicsFrame << ",\"completed_frames\":" << completedFrames
@@ -141,9 +129,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
         WriteJsonText(output, node.label);
         output << ",\"kind\":" << static_cast<u32>(node.kind) << ",\"flags\":" << static_cast<u32>(node.flags);
         if(node.compiledTask.present){
-            output << ",\"plan_generation\":" << node.compiledTask.planGeneration
-                << ",\"packet_index\":" << node.compiledTask.packetIndex
-                << ",\"packetization_decision\":" << static_cast<u32>(node.compiledTask.packetizationDecision);
+            output << ",\"plan_generation\":" << node.compiledTask.planGeneration << ",\"packet_index\":" << node.compiledTask.packetIndex << ",\"packetization_decision\":" << static_cast<u32>(node.compiledTask.packetizationDecision);
         }
         if(node.queueAssignment.present){
             output << ",\"queue_class\":";
@@ -152,9 +138,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
             WriteQueue(output, node.queueAssignment.plannedQueue);
             output << ",\"accepted_queue\":";
             WriteQueue(output, node.queueAssignment.acceptedQueue);
-            output << ",\"dedicated\":" << (node.queueAssignment.dedicated ? "true" : "false")
-                << ",\"assignment_reason\":" << static_cast<u32>(node.queueAssignment.reason)
-                << ",\"assignment_modifiers\":" << static_cast<u32>(node.queueAssignment.modifiers);
+            output << ",\"dedicated\":" << (node.queueAssignment.dedicated ? "true" : "false") << ",\"assignment_reason\":" << static_cast<u32>(node.queueAssignment.reason) << ",\"assignment_modifiers\":" << static_cast<u32>(node.queueAssignment.modifiers);
         }
         if(node.runtimeStatistics.present){
             const auto& statistics = node.runtimeStatistics;
@@ -178,8 +162,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
         const auto& edge = payload.edges[index];
         if(index != 0u)
             output << ",\n";
-        output << "{\"from\":" << edge.fromNodeIndex << ",\"to\":" << edge.toNodeIndex
-            << ",\"kind\":" << static_cast<u32>(edge.kind) << ",\"flags\":" << static_cast<u32>(edge.flags) << '}';
+        output << "{\"from\":" << edge.fromNodeIndex << ",\"to\":" << edge.toNodeIndex << ",\"kind\":" << static_cast<u32>(edge.kind) << ",\"flags\":" << static_cast<u32>(edge.flags) << '}';
     }
     output << "\n],\n\"physical_queues\":[\n";
     for(usize index = 0u; index < payload.physicalQueueRuntimeStatistics.size(); ++index){
@@ -206,8 +189,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
         const auto& packet = payload.packetSubmissionStatistics[index];
         if(index != 0u)
             output << ",\n";
-        output << "{\"owner_node\":" << packet.ownerNodeIndex << ",\"plan_generation\":" << packet.packetGeneration
-            << ",\"packet_index\":" << packet.packetIndex << ",\"queue\":";
+        output << "{\"owner_node\":" << packet.ownerNodeIndex << ",\"plan_generation\":" << packet.packetGeneration << ",\"packet_index\":" << packet.packetIndex << ",\"queue\":";
         WriteQueue(output, packet.queue);
         output << ",\"queue_class\":";
         WriteJsonText(output, QueueClassLabel(packet.queueClass));
@@ -263,10 +245,7 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         return false;
     }
     Core::Telemetry::TelemetryBytes encoded(arena);
-    if(
-        !Core::Telemetry::EncodeEventStream(session.view(), encoded)
-        || encoded.size() > static_cast<usize>(Limit<StreamSize>::s_Max)
-    ){
+    if(!Core::Telemetry::EncodeEventStream(session.view(), encoded) || encoded.size() > static_cast<usize>(Limit<StreamSize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: event stream encoding failed"));
         return false;
     }

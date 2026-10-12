@@ -147,16 +147,11 @@ bool UiComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const 
 }
 
 void UiComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u64, 16u> UiComboSmokeScene::values()const{
@@ -243,11 +238,7 @@ bool IsUiLayerComboSkinSmokeEnabled(){
 }
 
 SharedUiComboSmokeScene CreateUiComboSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiComboSmokeScene(
-        NewArenaObject<RefCounter<UiComboSmokeScene>>(arena, input),
-        ArenaRefDeleter<RefCounter<UiComboSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiComboSmokeScene(NewArenaObject<RefCounter<UiComboSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiComboSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

@@ -36,8 +36,7 @@ class TemporalOmissionEvidenceTests(unittest.TestCase):
         text = report(warmup_temporal, 100) + report(False, 100) + report(tail_temporal, 100)
         (self.path / "gpu_timing.txt").write_text(text, encoding=LIT_UTF_8)
         reports = benchmark.parse_intervals(text, finalized=True)
-        return {"variant": asdict(proof.VARIANT), "artifacts": str(self.path), "retained_report_range": [1, 2],
-            "reports": 1, LIT_SCOPES: benchmark.summarize_intervals(reports[1:2]), "mip_count": 10}
+        return {"variant": asdict(proof.VARIANT), "artifacts": str(self.path), "retained_report_range": [1, 2], "reports": 1, LIT_SCOPES: benchmark.summarize_intervals(reports[1:2]), "mip_count": 10}
 
     def test_cap_one_requires_no_temporal_ranges_in_any_completed_report(self):
         result = proof.validate_recording_evidence(self.trial(1), 1)
@@ -67,14 +66,11 @@ class TemporalOmissionEvidenceTests(unittest.TestCase):
 
 class TemporalOmissionCapabilityTests(unittest.TestCase):
     def test_available_and_unavailable_are_contradictory(self):
-        self.assertFalse(proof.hardware_unavailable_without_errors(
-            "ReflectionSmokeProject: hardware unavailable\nReflectionSmokeProject: hardware available\n"))
+        self.assertFalse(proof.hardware_unavailable_without_errors("ReflectionSmokeProject: hardware unavailable\nReflectionSmokeProject: hardware available\n"))
 
     def test_repeated_unavailable_marker_is_not_a_capability_proof(self):
-        self.assertTrue(proof.hardware_unavailable_without_errors(
-            LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + "ReflectionSmokeProject: shutdown\n"))
-        self.assertFalse(proof.hardware_unavailable_without_errors(
-            LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI * 2))
+        self.assertTrue(proof.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + "ReflectionSmokeProject: shutdown\n"))
+        self.assertFalse(proof.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI * 2))
 
     def test_no_marker_cannot_hide_an_acquisition_failure(self):
         self.assertFalse(proof.hardware_unavailable_without_errors("ReflectionSmokeProject: shutdown\n"))
@@ -82,8 +78,7 @@ class TemporalOmissionCapabilityTests(unittest.TestCase):
     def test_validation_or_error_messages_are_never_masked(self):
         for error in proof.benchmark.STRICT_LOG_FAILURE_MESSAGES:
             with self.subTest(error=error):
-                self.assertFalse(proof.hardware_unavailable_without_errors(
-                    LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + error + " detected\n"))
+                self.assertFalse(proof.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + error + " detected\n"))
 
 
 if __name__ == LIT_MAIN:

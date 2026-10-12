@@ -46,15 +46,9 @@ namespace __hidden_mesh_raytracing_snapshots{
     return true;
 }
 
-[[nodiscard]] bool RuntimeMeshletSnapshotMatches(
-    const MeshResources& mesh,
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot
-){
+[[nodiscard]] bool RuntimeMeshletSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot){
     if(!RuntimeMeshletBoundsReady(mesh)){
-        return
-            snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer
-            && !snapshot.meshletDescHeapHandle.valid() && !snapshot.meshletLocalBoundsHeapHandle.valid()
-        ;
+        return snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer && !snapshot.meshletDescHeapHandle.valid() && !snapshot.meshletLocalBoundsHeapHandle.valid();
     }
     return
         snapshot.meshletCount == mesh.meshletCount
@@ -65,9 +59,7 @@ namespace __hidden_mesh_raytracing_snapshots{
     ;
 }
 
-ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapshot(
-    const MeshResources& mesh
-){
+ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapshot(const MeshResources& mesh){
     ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot = {
         .meshName = mesh.meshName,
         .runtimeMeshVersion = mesh.runtimeMeshVersion,
@@ -114,10 +106,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
     return snapshot;
 }
 
-[[nodiscard]] bool RayTracingResourceSnapshotMatches(
-    const MeshResources& mesh,
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot
-){
+[[nodiscard]] bool RayTracingResourceSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot){
     return
         mesh.meshName == snapshot.meshName
         && mesh.positionBuffer.get() == snapshot.positionBuffer.get()
@@ -153,10 +142,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
     ;
 }
 
-[[nodiscard]] bool RayTracingResourceIdentityMatches(
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs,
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs
-){
+[[nodiscard]] bool RayTracingResourceIdentityMatches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs){
     return
         lhs.meshName == rhs.meshName
         && lhs.positionBuffer.get() == rhs.positionBuffer.get()
@@ -192,9 +178,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererMeshSystem::collectRayTracingResourceSnapshots(
-    ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots
-)const{
+void RendererMeshSystem::collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const{
     outSnapshots.clear();
     outSnapshots.reserve(m_meshState.m_meshes.size());
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
@@ -203,9 +187,7 @@ void RendererMeshSystem::collectRayTracingResourceSnapshots(
     }
 }
 
-Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::findRayTracingResourceSnapshot(
-    const Name& meshName
-)const{
+Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::findRayTracingResourceSnapshot(const Name& meshName)const{
     const auto found = m_meshState.m_meshes.find(meshName);
     if(found == m_meshState.m_meshes.end())
         return MakeUnexpected(Failure{});
@@ -213,9 +195,7 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::fi
     return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(found.value());
 }
 
-Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTracingResourceSnapshot(
-    const RenderableMeshDesc& desc
-)const{
+Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& desc)const{
     if(!desc.valid())
         return MakeUnexpected(Failure{});
 
@@ -243,24 +223,13 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::fi
     return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(mesh);
 }
 
-bool RendererMeshSystem::commitRayTracingResourceSnapshot(
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
-    ECSRenderDetail::MeshRayTracingResourceSnapshot& desired
-){
+bool RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired){
     const auto found = m_meshState.m_meshes.find(expected.meshName);
-    const bool currentMatches = found != m_meshState.m_meshes.end()
-        && __hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected)
-    ;
+    const bool currentMatches = found != m_meshState.m_meshes.end() && __hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected);
     if(!currentMatches || !__hidden_mesh_raytracing_snapshots::RayTracingResourceIdentityMatches(expected, desired)){
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        const Core::GpuDescriptorHandle currentNodeHandle = found != m_meshState.m_meshes.end()
-            ? found.value().swBvhNodeHeapHandle
-            : Core::GpuDescriptorHandle::Invalid()
-        ;
-        const Core::GpuDescriptorHandle currentParentHandle = found != m_meshState.m_meshes.end()
-            ? found.value().swBvhParentHeapHandle
-            : Core::GpuDescriptorHandle::Invalid()
-        ;
+        const Core::GpuDescriptorHandle currentNodeHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhNodeHeapHandle : Core::GpuDescriptorHandle::Invalid();
+        const Core::GpuDescriptorHandle currentParentHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhParentHeapHandle : Core::GpuDescriptorHandle::Invalid();
         const Core::GpuDescriptorHandle candidateNodeHandle = desired.swBvhNodeHeapHandle;
         if(
             heap.isInitialized()
@@ -291,12 +260,7 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
     }
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(
-        heap.isInitialized()
-        && expected.swBvhNodeHeapHandle.valid()
-        && expected.swBvhNodeHeapHandle != desired.swBvhNodeHeapHandle
-        && expected.swBvhNodeHeapHandle != desired.swBvhParentHeapHandle
-    )
+    if(heap.isInitialized() && expected.swBvhNodeHeapHandle.valid() && expected.swBvhNodeHeapHandle != desired.swBvhNodeHeapHandle && expected.swBvhNodeHeapHandle != desired.swBvhParentHeapHandle)
         heap.free(expected.swBvhNodeHeapHandle);
     if(
         heap.isInitialized()
@@ -309,8 +273,7 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
 
     MeshResources& mesh = found.value();
     const bool blasReplaced = mesh.blas.get() != desired.blas.get();
-    const bool swBvhReplaced = mesh.swBvhNodeBuffer.get() != desired.swBvhNodeBuffer.get()
-        || mesh.swBvhParentBuffer.get() != desired.swBvhParentBuffer.get();
+    const bool swBvhReplaced = mesh.swBvhNodeBuffer.get() != desired.swBvhNodeBuffer.get() || mesh.swBvhParentBuffer.get() != desired.swBvhParentBuffer.get();
     mesh.blas = desired.blas;
     mesh.swBvhNodeBuffer = desired.swBvhNodeBuffer;
     mesh.swBvhParentBuffer = desired.swBvhParentBuffer;
@@ -329,15 +292,9 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
     return true;
 }
 
-Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::ensureRayTracingInputHeapHandles(
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected
-){
+Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected){
     const auto found = m_meshState.m_meshes.find(expected.meshName);
-    if(
-        found == m_meshState.m_meshes.end()
-        || !__hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected)
-        || !ensureMeshSwBvhInputHeapHandles(found.value())
-    )
+    if(found == m_meshState.m_meshes.end() || !__hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected) || !ensureMeshSwBvhInputHeapHandles(found.value()))
         return MakeUnexpected(Failure{});
 
     return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(found.value());

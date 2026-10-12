@@ -32,10 +32,7 @@ namespace NWB::Tests::Smoke{
 inline constexpr f32 s_DegreesPerTurn = 360.0f;
 
 
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(
-    ProjectRuntimeContext& context,
-    const TStringView projectName
-){
+[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(ProjectRuntimeContext& context, const TStringView projectName){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
         NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: ECS world allocation failed"), projectName);
@@ -49,18 +46,10 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
     return MakeNotNullUnique(Move(world));
 }
 
-[[nodiscard]] inline Core::ECS::EntityID CreateSmokeCamera(
-    Core::ECS::World& world,
-    const f32 cameraHeight,
-    const f32 cameraDistance,
-    const f32 cameraPitch
-){
+[[nodiscard]] inline Core::ECS::EntityID CreateSmokeCamera(Core::ECS::World& world, const f32 cameraHeight, const f32 cameraDistance, const f32 cameraPitch){
     auto activeCameraEntity = world.createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
-    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(
-        world,
-        Float4(0.0f, cameraHeight, -cameraDistance, 0.0f)
-    );
+    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, Float4(0.0f, cameraHeight, -cameraDistance, 0.0f));
     auto* cameraTransform = world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera);
     NWB_ASSERT(cameraTransform);
     StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform->rotation);
@@ -76,11 +65,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 [[nodiscard]] inline u32 RendererBaselineCaptureFreezeFrame(){
     static const u32 s_captureFrame = [](){
         const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
-        if(
-            !configuredFrame
-            || !IsFinite(*configuredFrame)
-            || *configuredFrame < 1.0f
-        ){
+        if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f){
             return 0u;
         }
         return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
@@ -91,12 +76,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 [[nodiscard]] inline f32 RendererBaselineFixedDelta(){
     static const f32 s_fixedDelta = [](){
         const auto configuredDelta = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS");
-        if(
-            !configuredDelta
-            || !IsFinite(*configuredDelta)
-            || *configuredDelta <= 0.0f
-            || *configuredDelta > 1.0f
-        ){
+        if(!configuredDelta || !IsFinite(*configuredDelta) || *configuredDelta <= 0.0f || *configuredDelta > 1.0f){
             return 0.0f;
         }
         return *configuredDelta;
@@ -106,15 +86,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 
 class YawSpinController final{
 public:
-    void update(
-        const f32 safeDelta,
-        const f32 frozenYaw,
-        const bool frozenYawValid,
-        const ArrowYawInputHandler& arrowYawInput,
-        const f32 manualYawSpeed,
-        const f32 spinSpeed,
-        const f32 maxSpinDelta
-    ){
+    void update(const f32 safeDelta, const f32 frozenYaw, const bool frozenYawValid, const ArrowYawInputHandler& arrowYawInput, const f32 manualYawSpeed, const f32 spinSpeed, const f32 maxSpinDelta){
         if(frozenYawValid){
             m_yaw = frozenYaw;
             return;
@@ -154,18 +126,10 @@ struct SmokeYawDisplay{
     if(wrapped < 0.0f)
         wrapped += twoPi;
 
-    return {
-        wrapped,
-        wrapped * (s_DegreesPerTurn / twoPi),
-    };
+    return { wrapped, wrapped * (s_DegreesPerTurn / twoPi), };
 }
 
-inline void SetSmokeYawWindowTitle(
-    ProjectRuntimeContext& context,
-    const f32 yaw,
-    const bool manualControl,
-    const f32 twoPi
-){
+inline void SetSmokeYawWindowTitle(ProjectRuntimeContext& context, const f32 yaw, const bool manualControl, const f32 twoPi){
     const SmokeYawDisplay display = MakeSmokeYawDisplay(yaw, twoPi);
 
     static constexpr usize s_TitleCapacity = 192u;

@@ -384,10 +384,7 @@ TEST_F(UiComboLoanTests, LaterPopupTextCannotChangeAnEarlierComboAfterItsPaint){
     const auto declarePair = [this, &other](const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
-        return
-            m_builder.comboBox("combo", m_source, m_state, Options()).valid
-            && m_builder.comboBox("other", m_callbacks, other, Options()).valid
-        ;
+        return m_builder.comboBox("combo", m_source, m_state, Options()).valid && m_builder.comboBox("other", m_callbacks, other, Options()).valid;
     };
     ASSERT_TRUE(declarePair(1u));
     ASSERT_TRUE(finishPanel());
@@ -416,10 +413,7 @@ TEST_F(UiComboLoanTests, LaterPopupTextCannotChangeTheEarlierSourceAfterItsLoanW
     const auto declarePair = [this, &other, &source](const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
-        return
-            m_builder.comboBox("combo", m_source, m_state, Options()).valid
-            && m_builder.comboBox("other", source, other, Options()).valid
-        ;
+        return m_builder.comboBox("combo", m_source, m_state, Options()).valid && m_builder.comboBox("other", source, other, Options()).valid;
     };
     ASSERT_TRUE(declarePair(1u));
     ASSERT_TRUE(finishPanel());

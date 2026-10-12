@@ -18,8 +18,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbRefractionOutput[pixel] = float4(0.0);
         return;
     }
-    g_NwbRefractionOutput[pixel] = g_NwbRefractionPush.refractionEnabled != 0u
-        ? nwbRefractionResolveScreen(pixel, entry) : float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
+    g_NwbRefractionOutput[pixel] = g_NwbRefractionPush.refractionEnabled != 0u ? nwbRefractionResolveScreen(pixel, entry) : float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
 }
 
 

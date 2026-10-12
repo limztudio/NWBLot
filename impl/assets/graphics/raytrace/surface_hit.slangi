@@ -21,12 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbRayTraceGeometryHit nwbRayTraceClosestOrdinaryGeometryHit(
-    const float3 origin,
-    const float3 direction,
-    const float minDistance,
-    const float maxDistance
-){
+NwbRayTraceGeometryHit nwbRayTraceClosestOrdinaryGeometryHit(const float3 origin, const float3 direction, const float minDistance, const float maxDistance){
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -59,12 +54,7 @@ NwbRayTraceGeometryHit nwbRayTraceClosestOrdinaryGeometryHit(
     return hit;
 }
 
-NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(
-    const float3 origin,
-    const float3 direction,
-    const float minDistance,
-    const float maxDistance
-){
+NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(const float3 origin, const float3 direction, const float minDistance, const float maxDistance){
     NwbRayTraceGeometryHit hit = nwbRayTraceClosestOrdinaryGeometryHit(origin, direction, minDistance, maxDistance);
 #if NWB_RT_CSG_ENABLED
     nwbRayTraceCsgClosestGeometryHit(NWB_RT_CSG_CONTEXT_SLOT, NWB_RT_CSG_MATERIAL_SLOT, origin, direction, minDistance, hit);
@@ -72,13 +62,7 @@ NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(
     return hit;
 }
 
-NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
-    const uint instanceMaterialHeapSlot,
-    const float3 origin,
-    const float3 direction,
-    const float minDistance,
-    const float maxDistance
-){
+NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }

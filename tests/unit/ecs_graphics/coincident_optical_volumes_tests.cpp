@@ -65,9 +65,7 @@ TEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLeng
     SelectionContext context;
     const u8 firstBytes[] = { 1u, 2u, 3u, 4u };
     const u8 changedBytes[] = { 1u, 2u, 3u, 5u };
-    CoincidentOpticalVolumeCandidate candidates[] = {
-        MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u)
-    };
+    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     candidates[0].mutableTypedBytes = firstBytes;
     candidates[0].mutableTypedByteCount = sizeof(firstBytes);
     candidates[1].mutableTypedBytes = changedBytes;
@@ -84,9 +82,7 @@ TEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLeng
 
 TEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSemantics){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = {
-        MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u)
-    };
+    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     candidates[1].boundaryMode = 1u;
     candidates[2].boundaryMode = 2u;
     candidates[3].boundaryMode = 2u;
@@ -116,9 +112,7 @@ TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermu
     };
 
     for(const auto& permutation : permutations){
-        const CoincidentOpticalVolumeCandidate candidates[] = {
-            source[permutation[0]], source[permutation[1]], source[permutation[2]]
-        };
+        const CoincidentOpticalVolumeCandidate candidates[] = { source[permutation[0]], source[permutation[1]], source[permutation[2]] };
         context.selection.select(candidates, LengthOf(candidates), context.scratch);
         EXPECT_FALSE(context.selection.isSuppressed(source[0].entity));
         EXPECT_TRUE(context.selection.isSuppressed(source[1].entity));
@@ -128,10 +122,7 @@ TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermu
 
 TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = {
-        MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u),
-        MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u), MakeCandidate(90u)
-    };
+    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u), MakeCandidate(90u) };
     const Name firstGroup("tests/coincident_optical_volumes/first");
     const Name secondGroup("tests/coincident_optical_volumes/second");
     candidates[2].group = firstGroup;
@@ -154,9 +145,7 @@ TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries)
 
 TEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = {
-        MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u)
-    };
+    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     for(auto& candidate : candidates)
         candidate.group = Name("tests/coincident_optical_volumes/translation");
     candidates[1].position.x = 0.0000001f;
@@ -171,10 +160,7 @@ TEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInE
 
 TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBoundaries){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = {
-        MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u),
-        MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u)
-    };
+    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u) };
     for(auto& candidate : candidates)
         candidate.group = Name("tests/coincident_optical_volumes/transforms");
     candidates[1].rotation = Float4U(0.6f, 0.f, 0.f, 0.8f);

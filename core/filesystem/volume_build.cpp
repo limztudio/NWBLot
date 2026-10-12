@@ -60,14 +60,7 @@ Expected<VolumeBuildInfo> BuildVolume(const Path& outputDirectory, const VolumeB
             return MakeUnexpected(Failure{});
     }
 
-    if(
-        !FilesystemVolumeStagingDetail::PromoteStagedVolume(
-            stagedVolumePaths,
-            outputDirectory,
-            config.volumeName.view(),
-            static_cast<usize>(buildInfo.segmentCount)
-        )
-    ){
+    if(!FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedVolumePaths, outputDirectory, config.volumeName.view(), static_cast<usize>(buildInfo.segmentCount))){
         return MakeUnexpected(Failure{});
     }
     stageDirectoryCleanup.dismiss();

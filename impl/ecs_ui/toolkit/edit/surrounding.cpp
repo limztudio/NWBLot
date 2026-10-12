@@ -40,10 +40,7 @@ bool EditModel::eraseAroundSelection(const usize beforeBytes, const usize afterB
     const usize caret = m_caret - beforeBytes;
     const auto anchorBoundary = LowerBound(boundaries->begin(), boundaries->end(), anchor);
     const auto caretBoundary = LowerBound(boundaries->begin(), boundaries->end(), caret);
-    if(
-        anchorBoundary == boundaries->end() || *anchorBoundary != anchor
-        || caretBoundary == boundaries->end() || *caretBoundary != caret
-    )
+    if(anchorBoundary == boundaries->end() || *anchorBoundary != anchor || caretBoundary == boundaries->end() || *caretBoundary != caret)
         return false;
 
     recordHistory(text(), m_anchor, m_caret, after, anchor, caret);

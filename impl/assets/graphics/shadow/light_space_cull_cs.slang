@@ -31,8 +31,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         float3 minimum = float3(asfloat(0x7f7fffffu));
         float3 maximum = -minimum;
         bool boundsValid = true;
-        [loop]
-        for(uint meshletIndex = firstMeshlet; meshletIndex < endMeshlet; ++meshletIndex){
+        [loop] for(uint meshletIndex = firstMeshlet; meshletIndex < endMeshlet; ++meshletIndex){
             const uint boundsAddress = meshletIndex * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
             const uint flags = bounds.Load(boundsAddress + NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET);
             if((flags & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) == 0u){

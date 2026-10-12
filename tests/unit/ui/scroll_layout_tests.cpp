@@ -34,8 +34,7 @@ static_assert(!IsConstructible_V<ScrollState, ScrollState&&>);
 
 TEST(UiScrollLayoutTests, EmptyContentUsesFullPaddedViewportAndEmptyVisibleRange){
     ScrollPlacement placement;
-    const auto placementResult = ScrollLayout::Calculate(
-        { 10.0f, 20.0f, 200.0f, 120.0f },
+    const auto placementResult = ScrollLayout::Calculate({ 10.0f, 20.0f, 200.0f, 120.0f },
         { 0.0f, 0.0f, 400.0f, 300.0f },
         { 8.0f, 6.0f, 4.0f, 14.0f },
         12.0f,
@@ -175,16 +174,7 @@ TEST(UiScrollLayoutTests, ExclusiveBottomBoundaryDoesNotDeclareTheTouchingNextRo
 TEST(UiScrollLayoutTests, InheritedVerticalClipCullsRowsWithoutChangingLogicalRangeOrThumb){
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
     ScrollPlacement placement;
-    const auto placementResult = ScrollLayout::Calculate(
-        bounds,
-        { 10.0f, 60.0f, 200.0f, 20.0f },
-        {},
-        12.0f,
-        16.0f,
-        20u,
-        20.0f,
-        40.0
-    );
+    const auto placementResult = ScrollLayout::Calculate(bounds, { 10.0f, 60.0f, 200.0f, 20.0f }, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     NWB::UiWidgetTests::ExpectRect(placement.viewport, { 10.0f, 20.0f, 188.0f, 100.0f });
@@ -198,16 +188,7 @@ TEST(UiScrollLayoutTests, InheritedVerticalClipCullsRowsWithoutChangingLogicalRa
 TEST(UiScrollLayoutTests, InheritedHorizontalClipKeepsRowOriginAndWidthStable){
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
     ScrollPlacement placement;
-    const auto placementResult = ScrollLayout::Calculate(
-        bounds,
-        { 50.0f, 20.0f, 30.0f, 100.0f },
-        {},
-        12.0f,
-        16.0f,
-        20u,
-        20.0f,
-        40.0
-    );
+    const auto placementResult = ScrollLayout::Calculate(bounds, { 50.0f, 20.0f, 30.0f, 100.0f }, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     NWB::UiWidgetTests::ExpectRect(placement.contentClip, { 50.0f, 20.0f, 30.0f, 100.0f });
@@ -220,8 +201,7 @@ TEST(UiScrollLayoutTests, InheritedHorizontalClipKeepsRowOriginAndWidthStable){
 
 TEST(UiScrollLayoutTests, DisjointAndZeroAreaClipsHaveNoVisibleRowsButKeepScrolling){
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
-    const Rect clips[] = { { 300.0f, 20.0f, 100.0f, 100.0f }, { 10.0f, 200.0f, 100.0f, 100.0f },
-        { 10.0f, 20.0f, 0.0f, 100.0f }, { 10.0f, 20.0f, 100.0f, 0.0f } };
+    const Rect clips[] = { { 300.0f, 20.0f, 100.0f, 100.0f }, { 10.0f, 200.0f, 100.0f, 100.0f }, { 10.0f, 20.0f, 0.0f, 100.0f }, { 10.0f, 20.0f, 100.0f, 0.0f } };
     for(const Rect& clip : clips){
         ScrollPlacement placement;
         const auto placementResult = ScrollLayout::Calculate(bounds, clip, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
@@ -238,16 +218,7 @@ TEST(UiScrollLayoutTests, DisjointAndZeroAreaClipsHaveNoVisibleRowsButKeepScroll
 TEST(UiScrollLayoutTests, PaddingCanCollapseLogicalViewportWithoutNegativeSizes){
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
     ScrollPlacement placement;
-    const auto placementResult = ScrollLayout::Calculate(
-        bounds,
-        bounds,
-        { 300.0f, 200.0f, 300.0f, 200.0f },
-        12.0f,
-        16.0f,
-        20u,
-        20.0f,
-        40.0
-    );
+    const auto placementResult = ScrollLayout::Calculate(bounds, bounds, { 300.0f, 200.0f, 300.0f, 200.0f }, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     NWB::UiWidgetTests::ExpectRect(placement.viewport, { 210.0f, 120.0f, 0.0f, 0.0f });
@@ -287,16 +258,7 @@ TEST(UiScrollLayoutTests, ExtentsBeyondDoubleViewportPrecisionFailInsteadOfLosin
     const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
     const auto previousResult = ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(previousResult);
-    EXPECT_FALSE(ScrollLayout::Calculate(
-        bounds,
-        bounds,
-        {},
-        12.0f,
-        16.0f,
-        Limit<u64>::s_Max,
-        Limit<f32>::s_Max,
-        Limit<f64>::s_Max
-    ));
+    EXPECT_FALSE(ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, Limit<u64>::s_Max, Limit<f32>::s_Max, Limit<f64>::s_Max));
 }
 
 TEST(UiScrollLayoutTests, InvalidLayoutInputsRejectPlacement){
@@ -304,9 +266,7 @@ TEST(UiScrollLayoutTests, InvalidLayoutInputsRejectPlacement){
     const Insets validPadding{ 4.0f, 8.0f, 12.0f, 16.0f };
     const auto previousResult = ScrollLayout::Calculate(validBounds, validBounds, validPadding, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(previousResult);
-    const auto reject = [](const Rect& bounds, const Rect& clip, const Insets& padding,
-        const f32 width, const f32 minimum, const f32 height, const f64 offset
-    ){
+    const auto reject = [](const Rect& bounds, const Rect& clip, const Insets& padding, const f32 width, const f32 minimum, const f32 height, const f64 offset){
         EXPECT_FALSE(ScrollLayout::Calculate(bounds, clip, padding, width, minimum, 20u, height, offset));
     };
     Rect bounds = validBounds;

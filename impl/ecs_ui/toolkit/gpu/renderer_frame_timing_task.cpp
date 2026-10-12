@@ -14,11 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuFrameTimingEndTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool GpuFrameTimingEndTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     return payload.frameTimingTransaction.recordEnd(commandList);
 }

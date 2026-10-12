@@ -49,9 +49,7 @@ static constexpr f32 s_Gap = 4.0f;
 
 [[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics){
     const Impl::Ui::Rect content = Impl::Ui::WindowLayout::Content(state, metrics);
-    return { content.x + metrics.contentPadding.left,
-        content.y + metrics.contentPadding.top + s_LabelHeight + s_SeparatorHeight + 2.0f * s_Gap,
-        s_ControlWidth, s_ControlHeight };
+    return { content.x + metrics.contentPadding.left, content.y + metrics.contentPadding.top + s_LabelHeight + s_SeparatorHeight + 2.0f * s_Gap, s_ControlWidth, s_ControlHeight };
 }
 
 
@@ -90,8 +88,7 @@ bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
         row.gap = __hidden_ui_window_smoke::s_Gap;
         if(!ui.beginRow("actions", row))
             return false;
-        const WidgetOptions control{ { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlWidth },
-            { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlHeight } };
+        const WidgetOptions control{ { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlWidth }, { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlHeight } };
         if(ui.button("increase", "Increase", control)){
             ++m_count;
             logAction(NWB_TEXT("increase"));
@@ -109,16 +106,11 @@ bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
 }
 
 void UiWindowSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
@@ -159,16 +151,13 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
 
 void UiWindowSmokeScene::logAction(const TStringView action){
     ++m_actions;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: action={} count={} locked={} actions={}")
-        , action, m_count, static_cast<u32>(m_locked), m_actions
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: action={} count={} locked={} actions={}"), action, m_count, static_cast<u32>(m_locked), m_actions);
 }
 
 void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl::Ui::WindowMetrics& metrics)const{
     using namespace Impl::Ui;
     const Rect& bounds = m_window.bounds;
-    const f32 values[]{ bounds.x, bounds.y, bounds.width, bounds.height, static_cast<f32>(m_count),
-        static_cast<f32>(m_window.collapsed), static_cast<f32>(m_locked), static_cast<f32>(m_sequence) };
+    const f32 values[]{ bounds.x, bounds.y, bounds.width, bounds.height, static_cast<f32>(m_count), static_cast<f32>(m_window.collapsed), static_cast<f32>(m_locked), static_cast<f32>(m_sequence) };
     const f32 markerY = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index < LengthOf(values); ++index)
         context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, markerY, 14.0f, 12.0f },
@@ -196,11 +185,7 @@ bool IsUiLayerWindowSkinSmokeEnabled(){
 }
 
 SharedUiWindowSmokeScene CreateUiWindowSmokeScene(Core::Alloc::GlobalArena& arena){
-    return SharedUiWindowSmokeScene(
-        NewArenaObject<RefCounter<UiWindowSmokeScene>>(arena),
-        ArenaRefDeleter<RefCounter<UiWindowSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiWindowSmokeScene(NewArenaObject<RefCounter<UiWindowSmokeScene>>(arena), ArenaRefDeleter<RefCounter<UiWindowSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

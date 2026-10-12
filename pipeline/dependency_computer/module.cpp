@@ -53,10 +53,7 @@ int RunPipelineTool(const int argc, char** argv){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), StringConvert(parsed.outputPath));
             return s_PipelineExitFailure;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs (skin dependencies: {})")
-            , inputs.size()
-            , parsed.includeSkinDependencies
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs (skin dependencies: {})"), inputs.size(), parsed.includeSkinDependencies);
         return s_PipelineExitSuccess;
     });
 }

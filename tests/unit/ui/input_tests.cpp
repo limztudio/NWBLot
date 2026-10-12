@@ -206,8 +206,7 @@ TEST_F(UiInputTests, TransientHoverDepartureAndReentryAdvanceActivityBeforeTheNe
 }
 
 TEST_F(UiInputTests, HoverActivityUsesTheControlHostLifetimeAcrossOwnedParts){
-    HitTarget targets[]{ Target(1u, { 10.0f, 10.0f, 80.0f, 20.0f }),
-        Target(2u, { 20.0f, 10.0f, 10.0f, 20.0f }), Target(3u, { 40.0f, 10.0f, 10.0f, 20.0f }) };
+    HitTarget targets[]{ Target(1u, { 10.0f, 10.0f, 80.0f, 20.0f }), Target(2u, { 20.0f, 10.0f, 10.0f, 20.0f }), Target(3u, { 40.0f, 10.0f, 10.0f, 20.0f }) };
     targets[0].control = { 11u, 12u, 13u };
     for(usize index = 1u; index < 3u; ++index){
         targets[index].owner = targets[0].id;

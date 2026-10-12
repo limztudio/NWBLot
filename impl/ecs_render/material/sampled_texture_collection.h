@@ -124,11 +124,7 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::G
 
 
 // Rejection preserves the successfully collected prefix.
-[[nodiscard]] bool AppendPreparedMaterialSurfaceSampledTextures(
-    const MaterialSurfaceInfo& materialInfo,
-    const RendererMaterialResourceState& resources,
-    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
-);
+[[nodiscard]] bool AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, const RendererMaterialResourceState& resources, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector);
 [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedMaterialPassSampledTextures(
     const MaterialSurfaceInfoMap& materials,
     const RendererMaterialResourceState& resources,
@@ -137,10 +133,7 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::G
     Core::Alloc::ScratchArena& scratchArena
 );
 // Names check sequentially; a missing name preserves the published prefix.
-[[nodiscard]] bool MergePreparedShadowMaterialSampledTextures(
-    const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures,
-    MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector
-);
+[[nodiscard]] bool MergePreparedShadowMaterialSampledTextures(const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector);
 
 
 // Materials validate into reused storage before textures enter the output.
@@ -158,10 +151,7 @@ private:
 
 
 public:
-    ShadowMaterialSampledTextureCollector(
-        Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    ShadowMaterialSampledTextureCollector(Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures, Core::Alloc::ScratchArena& scratchArena);
     ShadowMaterialSampledTextureCollector(ShadowMaterialSampledTextureCollector&&) = delete;
 
 

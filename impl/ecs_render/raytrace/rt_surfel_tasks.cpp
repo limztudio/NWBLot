@@ -28,14 +28,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask::Payload{
-            .raytracingSystem = *this,
-            .graphics = m_graphics,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .timingTicket = timingTicket,
-            .asyncTiming = asyncTiming,
-        }
+        RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask::Payload{ .raytracingSystem = *this, .graphics = m_graphics, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -49,13 +42,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask::Payload{
-            .raytracingSystem = *this,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .timingTicket = timingTicket,
-            .asyncTiming = asyncTiming,
-        }
+        RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -69,13 +56,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask::Payload{
-            .raytracingSystem = *this,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .timingTicket = timingTicket,
-            .asyncTiming = asyncTiming,
-        }
+        RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -89,13 +70,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask::Payload{
-            .raytracingSystem = *this,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .timingTicket = timingTicket,
-            .asyncTiming = asyncTiming,
-        }
+        RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -109,13 +84,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask::Payload{
-            .raytracingSystem = *this,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .timingTicket = timingTicket,
-            .asyncTiming = asyncTiming,
-        }
+        RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -129,13 +98,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask::Payload{
-            .raytracingSystem = *this,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .timingTicket = timingTicket,
-            .asyncTiming = asyncTiming,
-        }
+        RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -149,27 +112,13 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{
-            .raytracingSystem = *this,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .timingTicket = timingTicket,
-            .asyncTiming = asyncTiming,
-        }
+        RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLifecycleTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc
-){
-    return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(
-        desc,
-        SurfelGiInitializationLifecycleGraphTask::Payload{
-            .raytracingSystem = *this,
-        }
-    );
+Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc){
+    return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(desc, SurfelGiInitializationLifecycleGraphTask::Payload{ .raytracingSystem = *this, });
 }
 
 

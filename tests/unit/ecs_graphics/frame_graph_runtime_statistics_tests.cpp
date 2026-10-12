@@ -128,8 +128,7 @@ struct PhysicalQueueRuntimeSnapshots{
     return statistics;
 }
 
-[[nodiscard]] static NWB::Core::GpuTaskGraphPacketSubmissionStatistics
-MakeValidPacketSubmissionStatistics()noexcept{
+[[nodiscard]] static NWB::Core::GpuTaskGraphPacketSubmissionStatistics MakeValidPacketSubmissionStatistics()noexcept{
     return NWB::Core::GpuTaskGraphPacketSubmissionStatistics{
         .graphGeneration = 11u,
         .planGeneration = 12u,
@@ -157,60 +156,27 @@ MakeValidPacketSubmissionStatistics()noexcept{
 TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots){
     PhysicalQueueRuntimeSnapshots snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
     ++snapshots.submission.recordingAttemptGeneration;
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
-            snapshots.compile,
-            snapshots.recording,
-            snapshots.submission
-        )
-    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
 
     snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
     ++snapshots.recording.queue.index;
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
-            snapshots.compile,
-            snapshots.recording,
-            snapshots.submission
-        )
-    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
 
     snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
     snapshots.submission.queueClass = NWB::Core::CommandQueue::Graphics;
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
-            snapshots.compile,
-            snapshots.recording,
-            snapshots.submission
-        )
-    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
 
     snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
     snapshots.submission.recoverySubmissionCount = s_ExpectedDualCount;
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
-            snapshots.compile,
-            snapshots.recording,
-            snapshots.submission
-        )
-    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
 }
 
 TEST(EcsGraphics, FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner){
-    const NWB::Core::GpuTaskGraphPacketSubmissionStatistics statistics =
-        MakeValidPacketSubmissionStatistics()
-    ;
+    const NWB::Core::GpuTaskGraphPacketSubmissionStatistics statistics = MakeValidPacketSubmissionStatistics();
     NWB::Core::GpuTaskGraphPacketSubmissionStatistics invalid = statistics;
     invalid.queueClass = NWB::Core::CommandQueue::kCount;
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(invalid, 4u)
-    ));
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
-            statistics,
-            Limit<u32>::s_Max
-        )
-    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(invalid, 4u)));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(statistics, Limit<u32>::s_Max)));
 }
 
 TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
@@ -220,35 +186,15 @@ TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
     NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueStatistics(testArena.arena);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(testArena.arena);
-    NWB::Core::Telemetry::FrameGraphBuilder builder(
-        nodes,
-        edges,
-        pendingNameEdges,
-        physicalQueueStatistics,
-        packetStatistics,
-        41u
-    );
+    NWB::Core::Telemetry::FrameGraphBuilder builder(nodes, edges, pendingNameEdges, physicalQueueStatistics, packetStatistics, 41u);
 
     const NWB::Core::Telemetry::FrameGraphNodeHandle owner = builder.addPass(
         Name("packet_owner"),
         "Packet owner",
-        NWB::Core::Telemetry::FrameGraphPassMetadata{
-            .queueAssignment = {},
-            .compiledTask = {},
-            .runtimeStatistics = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
-                MakeValidRuntimeStatistics(),
-                41u,
-                41u
-            ),
-        }
+        NWB::Core::Telemetry::FrameGraphPassMetadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(MakeValidRuntimeStatistics(), 41u, 41u), }
     );
     ASSERT_TRUE(owner.valid());
-    NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics =
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
-            MakeValidPacketSubmissionStatistics(),
-            owner.index
-        )
-    ;
+    NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics = NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(MakeValidPacketSubmissionStatistics(), owner.index);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord excessiveDuration = statistics;
     excessiveDuration.submissionSeconds = 0.003;
     EXPECT_FALSE(builder.addPacketSubmissionStatistics(owner, excessiveDuration));
@@ -259,10 +205,7 @@ TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
     EXPECT_EQ(packetStatistics[0u].commandListCount, 1u);
     EXPECT_FALSE(builder.addPacketSubmissionStatistics(owner, packetStatistics[0u]));
 
-    const NWB::Core::Telemetry::FrameGraphNodeHandle resource = builder.addResource(
-        Name("packet_resource"),
-        "Packet resource"
-    );
+    const NWB::Core::Telemetry::FrameGraphNodeHandle resource = builder.addResource(Name("packet_resource"), "Packet resource");
     ASSERT_TRUE(resource.valid());
     statistics = packetStatistics[0u];
     statistics.ownerNodeIndex = resource.index;
@@ -281,22 +224,16 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot
     const NWB::Core::GpuTaskGraphRuntimeStatistics statistics = MakeValidRuntimeStatistics();
     ASSERT_TRUE(statistics.valid());
 
-    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics matching =
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(statistics, 41u, 41u)
-    ;
+    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics matching = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(statistics, 41u, 41u);
     EXPECT_TRUE(matching.present);
     EXPECT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphRuntimeStatistics(matching));
-    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics stale =
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(statistics, 42u, 41u)
-    ;
+    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics stale = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(statistics, 42u, 41u);
     EXPECT_FALSE(stale.present);
 
     NWB::Core::GpuTaskGraphRuntimeStatistics invalidGenerations = statistics;
     ++invalidGenerations.submission.planGeneration;
     ASSERT_FALSE(invalidGenerations.valid());
-    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics invalid =
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(invalidGenerations, 41u, 41u)
-    ;
+    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics invalid = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(invalidGenerations, 41u, 41u);
     EXPECT_FALSE(invalid.present);
 }
 
@@ -305,41 +242,23 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsRejectsInconsistentInheritedWaitEli
     NWB::Core::GpuTaskGraphRuntimeStatistics runtimeStatistics = MakeValidRuntimeStatistics();
     runtimeStatistics.submission.timelineWaitCount = 0u;
     runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 1u;
-    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphRuntimeStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(runtimeStatistics, 41u, 41u)
-    ));
+    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(runtimeStatistics, 41u, 41u)));
     ++runtimeStatistics.submission.inheritedTimelineWaitElisionCount;
     EXPECT_FALSE(NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(runtimeStatistics, 41u, 41u).present);
 
     PhysicalQueueRuntimeSnapshots snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
     snapshots.submission.timelineWaitCount = 1u;
     snapshots.submission.inheritedTimelineWaitElisionCount = 1u;
-    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
-            snapshots.compile,
-            snapshots.recording,
-            snapshots.submission
-        )
-    ));
+    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
     ++snapshots.submission.inheritedTimelineWaitElisionCount;
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
-            snapshots.compile,
-            snapshots.recording,
-            snapshots.submission
-        )
-    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
 
     NWB::Core::GpuTaskGraphPacketSubmissionStatistics packetStatistics = MakeValidPacketSubmissionStatistics();
     packetStatistics.timelineWaitCount = 0u;
     packetStatistics.inheritedTimelineWaitElisionCount = 1u;
-    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, 4u)
-    ));
+    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, 4u)));
     ++packetStatistics.inheritedTimelineWaitElisionCount;
-    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, 4u)
-    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, 4u)));
 }
 
 
@@ -357,17 +276,10 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
         .queueIndex = 0u,
         .id = NWB::Core::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
         .queueClass = NWB::Core::CommandQueue::Graphics,
-        .capabilities = static_cast<NWB::Core::GpuQueueCapability::Mask>(
-            static_cast<u8>(NWB::Core::GpuQueueCapability::Graphics)
-            | static_cast<u8>(NWB::Core::GpuQueueCapability::Compute)
-            | static_cast<u8>(NWB::Core::GpuQueueCapability::Transfer)
-        ),
+        .capabilities = static_cast<NWB::Core::GpuQueueCapability::Mask>(static_cast<u8>(NWB::Core::GpuQueueCapability::Graphics) | static_cast<u8>(NWB::Core::GpuQueueCapability::Compute) | static_cast<u8>(NWB::Core::GpuQueueCapability::Transfer)),
         .dedicated = false,
     };
-    const NWB::Core::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
+    const NWB::Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     NWB::Core::GpuTaskGraphAnalysis analysis(testArena.arena);
     NWB::Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ecs_graphics/reset_runtime_statistics_scratch"));
@@ -376,16 +288,9 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
 
     const NWB::Core::GpuCompiledGraph::ReadView planAccess(compiledGraph);
     ASSERT_TRUE(planAccess.validFor(declarationAccess));
-    const NWB::Core::GpuTaskGraphRuntimeStatistics resetStatistics = NWB::Core::CollectGpuTaskGraphRuntimeStatistics(
-        compiledGraph,
-        planAccess,
-        recordedGraph,
-        transaction
-    );
+    const NWB::Core::GpuTaskGraphRuntimeStatistics resetStatistics = NWB::Core::CollectGpuTaskGraphRuntimeStatistics(compiledGraph, planAccess, recordedGraph, transaction);
     ASSERT_FALSE(resetStatistics.valid());
-    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics telemetry =
-        NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(resetStatistics, 41u, 41u)
-    ;
+    const NWB::Core::Telemetry::FrameGraphRuntimeStatistics telemetry = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(resetStatistics, 41u, 41u);
     EXPECT_FALSE(telemetry.present);
 }
 

@@ -53,32 +53,14 @@ struct ModelInputs{
 
 
     ModelInputs(){
-        skeletonObjects.push_back(ModelSkeletonObject{
-            .name = Name(s_RIG),
-            .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton"),
-        });
-        staticMeshObjects.push_back(ModelStaticMeshObject{
-            .name = Name(s_PROP),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
-            .material = {},
-            .parentObject = Name(s_RIG),
-            .parentJoint = Name("hand"),
-        });
-        skinnedMeshObjects.push_back(ModelSkinnedMeshObject{
-            .name = Name(s_BODY),
-            .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
-            .material = {},
-            .skeletonObject = Name(s_RIG),
-        });
+        skeletonObjects.push_back(ModelSkeletonObject{ .name = Name(s_RIG), .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton"), });
+        staticMeshObjects.push_back(ModelStaticMeshObject{ .name = Name(s_PROP), .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()), .material = {}, .parentObject = Name(s_RIG), .parentJoint = Name("hand"), });
+        skinnedMeshObjects.push_back(ModelSkinnedMeshObject{ .name = Name(s_BODY), .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"), .material = {}, .skeletonObject = Name(s_RIG), });
         publish();
     }
 
     void publish(){
-        model.setObjects(
-            Model::SkeletonObjectVector(skeletonObjects),
-            Model::StaticMeshObjectVector(staticMeshObjects),
-            Model::SkinnedMeshObjectVector(skinnedMeshObjects)
-        );
+        model.setObjects(Model::SkeletonObjectVector(skeletonObjects), Model::StaticMeshObjectVector(staticMeshObjects), Model::SkinnedMeshObjectVector(skinnedMeshObjects));
     }
 };
 
@@ -248,10 +230,7 @@ TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloads
     ModelAssetCodec codec;
     Core::Assets::AssetBytes binary(inputs.arena);
     ASSERT_TRUE(codec.serialize(inputs.model, binary));
-    const usize expectedBytes = sizeof(ModelBinaryPayload::ModelHeaderBinary)
-        + sizeof(ModelBinaryPayload::ModelSkeletonObjectBinary)
-        + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary)
-        + sizeof(ModelBinaryPayload::ModelSkinnedMeshObjectBinary);
+    const usize expectedBytes = sizeof(ModelBinaryPayload::ModelHeaderBinary) + sizeof(ModelBinaryPayload::ModelSkeletonObjectBinary) + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary) + sizeof(ModelBinaryPayload::ModelSkinnedMeshObjectBinary);
     ASSERT_EQ(binary.size(), expectedBytes);
     Model loaded(inputs.arena, inputs.model.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));

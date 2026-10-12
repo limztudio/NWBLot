@@ -84,12 +84,7 @@ GpuTimingFrameTransaction::~GpuTimingFrameTransaction()noexcept{
     abandonWithoutCallbacks();
 }
 
-bool GpuTimingFrameTransaction::begin(
-    const GpuTimingScopeDefinition& scopeDefinition,
-    Device& device,
-    CommandList& commandList,
-    const GpuTimingSampleAttribution attribution
-){
+bool GpuTimingFrameTransaction::begin(const GpuTimingScopeDefinition& scopeDefinition, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution){
     if(m_state != State::Idle)
         return false;
     if(&commandList.getDevice() != &device){
@@ -114,10 +109,7 @@ bool GpuTimingFrameTransaction::begin(
 bool GpuTimingFrameTransaction::recordEnd(CommandList& commandList){
     if(m_state == State::Inactive)
         return true;
-    if(
-        m_state != State::BeginRecorded
-        && m_state != State::BeginAccepted
-    )
+    if(m_state != State::BeginRecorded && m_state != State::BeginAccepted)
         return false;
 
     if(!m_recorder.recordDeferredScopeEnd(commandList, m_scope)){
@@ -136,10 +128,7 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
         return true;
 
     NWB_ASSERT(m_state == State::BeginRecorded || m_state == State::EndRecorded);
-    if(
-        (m_state != State::BeginRecorded && m_state != State::EndRecorded)
-        || !m_recorder.validateScopeSubmission(m_scope, token)
-    ){
+    if((m_state != State::BeginRecorded && m_state != State::EndRecorded) || !m_recorder.validateScopeSubmission(m_scope, token)){
         m_recorder.quarantineScope(m_scope);
         m_scope = {};
         m_state = State::Resolved;
@@ -147,11 +136,7 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
     }
 
     if(m_beginSubmission.valid()){
-        const bool matches = m_beginSubmission.queue == token.queue
-            && m_beginSubmission.value == token.value
-            && m_beginSubmission.physicalQueueIndex == token.physicalQueueIndex
-            && m_beginSubmission.deviceGeneration == token.deviceGeneration
-        ;
+        const bool matches = m_beginSubmission.queue == token.queue && m_beginSubmission.value == token.value && m_beginSubmission.physicalQueueIndex == token.physicalQueueIndex && m_beginSubmission.deviceGeneration == token.deviceGeneration;
         if(!matches){
             m_recorder.quarantineScope(m_scope);
             m_scope = {};
@@ -166,10 +151,7 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
     return true;
 }
 
-bool GpuTimingFrameTransaction::confirmEndSubmission(
-    const QueueSubmissionToken& token,
-    const bool publishSample
-){
+bool GpuTimingFrameTransaction::confirmEndSubmission(const QueueSubmissionToken& token, const bool publishSample){
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
 
@@ -182,11 +164,7 @@ bool GpuTimingFrameTransaction::confirmEndSubmission(
         && token.deviceGeneration == m_beginSubmission.deviceGeneration
         && token.value >= m_beginSubmission.value
     ;
-    if(
-        m_state != State::EndRecorded
-        || !orderedSameQueue
-        || !m_recorder.confirmScope(m_scope, token, publishSample)
-    ){
+    if(m_state != State::EndRecorded || !orderedSameQueue || !m_recorder.confirmScope(m_scope, token, publishSample)){
         m_recorder.quarantineScope(m_scope);
         m_scope = {};
         m_state = State::Resolved;
@@ -206,8 +184,8 @@ bool GpuTimingFrameTransaction::prepareForRecovery(){
     if(!needsRetirement())
         return true;
 
-    // The old endpoint lives only in a packet that will not reach Vulkan, so it is safe for the recovery command
-    // list to overwrite the timestamp query's end slot. The begin reservation remains held throughout.
+    // The old endpoint lives only in a packet that will not reach Vulkan, so it is safe for the recovery command list to overwrite the timestamp query's end slot.
+    // The begin reservation remains held throughout.
     if(m_state == State::BeginAccepted)
         return true;
     if(m_state == State::EndRecorded && m_recorder.prepareDeferredScopeForRecovery(m_scope)){
@@ -253,20 +231,13 @@ void GpuTimingFrameTransaction::abandonWithoutCallbacks()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTimingMeasure::GpuTimingMeasure(
-    GpuTimingRecorder& recorder,
-    const GpuTimingScopeDefinition& scopeDefinition,
-    Device& device,
-    CommandList& commandList,
-    const GpuTimingSampleAttribution attribution
-)
+GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingScopeDefinition& scopeDefinition, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution)
     : m_recorder(recorder)
     , m_commandList(commandList)
 {
-    // For a normal one-command-list scope, the marker brackets the whole timing range. A split scope closes the
-    // marker before its producer list closes and writes its ending timestamp on the ordered consumer list. Scope
-    // identity is retained separately for timing aggregation; the marker keeps the authored text so release
-    // diagnostics never receive a Name hash in place of the original label.
+    // For a normal one-command-list scope, the marker brackets the whole timing range.
+    // A split scope closes the marker before its producer list closes and writes its ending timestamp on the ordered consumer list.
+    // Scope identity is retained separately for timing aggregation; the marker keeps the authored text so release diagnostics never receive a Name hash in place of the original label.
     if(!scopeDefinition.valid()){
         NWB_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
         return;
@@ -281,18 +252,13 @@ GpuTimingMeasure::GpuTimingMeasure(
 
 GpuTimingMeasure::~GpuTimingMeasure()noexcept{
     if(UncaughtExceptionCount() != 0){
-        // A split measure may be owned by the caller of a task-graph recording operation and therefore outlive the
-        // opening command list during exception unwind. The command-list recording owner recovers its complete marker
-        // stack while that list is still alive; relinquish only this stale token instead of dereferencing the opener.
+        // A split measure may be owned by the caller of a task-graph recording operation and therefore outlive the opening command list during exception unwind.
+        // The command-list recording owner recovers its complete marker stack while that list is still alive; relinquish only this stale token instead of dereferencing the opener.
         abandonTimingWithoutCallbacks();
         m_marker = {};
         return;
     }
-    if(
-        !m_commandList.isRecording()
-        || !m_commandList.hasCommandBuffer()
-        || m_commandList.commandRecordingFailed()
-    ){
+    if(!m_commandList.isRecording() || !m_commandList.hasCommandBuffer() || m_commandList.commandRecordingFailed()){
         abandonTimingWithoutCallbacks();
         abandonMarker();
         return;

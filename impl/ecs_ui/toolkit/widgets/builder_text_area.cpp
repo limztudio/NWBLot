@@ -41,10 +41,7 @@ public:
 
 public:
     [[nodiscard]] virtual bool apply(EditModel& model, const EditAction::Enum action, const bool)noexcept override{
-        if(
-            m_context.failed() || &model != &m_model
-            || model.instanceGeneration() != m_instanceGeneration || m_state.revision() != m_revision
-        )
+        if(m_context.failed() || &model != &m_model || model.instanceGeneration() != m_instanceGeneration || m_state.revision() != m_revision)
             return false;
         return action <= EditAction::Abandon;
     }
@@ -100,8 +97,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == widget->id;
     if(m_editHost){
-        TextAreaNavigationResolver navigation(m_arena, m_text, m_context, state, m_style.fontSize,
-            m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()));
+        TextAreaNavigationResolver navigation(m_arena, m_text, m_context, state, m_style.fontSize, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()));
         __hidden_builder_text_area::TextAreaActions actions(model, state, m_context);
         result = m_editHost->editNavigated(*widget, model, editOptions, m_context.popupToken(), state.m_navigation, navigation, actions);
     }
@@ -123,8 +119,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
         || state.m_visual.selectionGeneration != model.selectionGeneration()
         || state.m_compositionGeneration != model.compositionGeneration()
         || state.m_visual.anchor != model.anchor() || state.m_visual.caret != model.caret()
-        || (!state.m_visual.focused && result.focused
-            && (!m_context.input().capture().valid() || m_context.input().capture() == widget->id)))
+        || (!state.m_visual.focused && result.focused && (!m_context.input().capture().valid() || m_context.input().capture() == widget->id)))
     )
         state.m_revealCaret = true;
     if(!firstBinding && state.m_compositionGeneration != model.compositionGeneration())

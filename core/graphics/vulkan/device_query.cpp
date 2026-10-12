@@ -62,8 +62,7 @@ namespace __hidden_device_query{
 
 
 bool Device::queryFeatureSupport(Feature::Enum feature)const noexcept{
-    const VulkanDetail::RayTracingCapabilityInputs rayTracingCapabilities =
-        __hidden_device_query::CollectRayTracingCapabilityInputs(m_context);
+    const VulkanDetail::RayTracingCapabilityInputs rayTracingCapabilities = __hidden_device_query::CollectRayTracingCapabilityInputs(m_context);
 
     switch(feature){
     case Feature::DeferredCommandLists:
@@ -73,28 +72,13 @@ bool Device::queryFeatureSupport(Feature::Enum feature)const noexcept{
     case Feature::RayTracingPipeline:
         return VulkanDetail::SupportsRayTracingPipeline(rayTracingCapabilities);
     case Feature::RayQuery:
-        return
-            m_context.extensions.khrRayQuery
-            && m_context.rayQueryFeatureEnabled
-            && VulkanDetail::SupportsRayTracingAccelStruct(rayTracingCapabilities)
-        ;
+        return m_context.extensions.khrRayQuery && m_context.rayQueryFeatureEnabled && VulkanDetail::SupportsRayTracingAccelStruct(rayTracingCapabilities);
     case Feature::ShaderExecutionReordering:
-        return
-            (m_context.extensions.extRayTracingInvocationReorder && m_context.rayTracingInvocationReorderExtFeatureEnabled)
-            || (m_context.extensions.nvRayTracingInvocationReorder && m_context.rayTracingInvocationReorderFeatureEnabled)
-        ;
+        return (m_context.extensions.extRayTracingInvocationReorder && m_context.rayTracingInvocationReorderExtFeatureEnabled) || (m_context.extensions.nvRayTracingInvocationReorder && m_context.rayTracingInvocationReorderFeatureEnabled);
     case Feature::Spheres:
-        return
-            m_context.extensions.nvRayTracingLinearSweptSpheres
-            && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE
-            && queryFeatureSupport(Feature::RayTracingPipeline)
-        ;
+        return m_context.extensions.nvRayTracingLinearSweptSpheres && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE && queryFeatureSupport(Feature::RayTracingPipeline);
     case Feature::LinearSweptSpheres:
-        return
-            m_context.extensions.nvRayTracingLinearSweptSpheres
-            && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE
-            && queryFeatureSupport(Feature::RayTracingPipeline)
-        ;
+        return m_context.extensions.nvRayTracingLinearSweptSpheres && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE && queryFeatureSupport(Feature::RayTracingPipeline);
     case Feature::RayTracingOpacityMicromap:
         return VulkanDetail::SupportsRayTracingOpacityMicromap(rayTracingCapabilities);
     case Feature::RayTracingClusters:
@@ -155,20 +139,12 @@ bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
     imageFormatInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     auto imageFormatProperties = VulkanDetail::MakeVkStruct<VkImageFormatProperties2>(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2);
-    const VkResult res = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties2(
-        m_context.physicalDevice,
-        &imageFormatInfo,
-        &imageFormatProperties
-    );
+    const VkResult res = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties2(m_context.physicalDevice, &imageFormatInfo, &imageFormatProperties);
     if(res == VK_SUCCESS)
         return true;
 
     if(res != VK_ERROR_FORMAT_NOT_SUPPORTED){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"),
-            StringConvert(GetFormatInfo(format).getName()),
-            ResultToString(res)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"), StringConvert(GetFormatInfo(format).getName()), ResultToString(res));
     }
     return false;
 }
@@ -227,10 +203,7 @@ void Device::probeCompressedTextureFormats(){
     for(u32 formatValue = static_cast<u32>(Format::BC1_UNORM); formatValue <= static_cast<u32>(Format::ASTC_12x12_FLOAT); ++formatValue){
         const Format::Enum format = static_cast<Format::Enum>(formatValue);
         FormatSupport::Mask support = queryFormatSupportUncached(format);
-        if(
-            (support & FormatSupport::Texture) == FormatSupport::Texture
-            && !canCreateSampledTextureFormat(format)
-        ){
+        if((support & FormatSupport::Texture) == FormatSupport::Texture && !canCreateSampledTextureFormat(format)){
             support &= ~(requiredReadableSupport | FormatSupport::ShaderLoad);
         }
         m_compressedFormatSupport[formatValue] = support;
@@ -411,14 +384,8 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
             fillMatMulFormat(i);
     }
 
-    output.trainingFloat16 =
-        m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
-        && m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE
-    ;
-    output.trainingFloat32 =
-        m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
-        && m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE
-    ;
+    output.trainingFloat16 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE && m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
+    output.trainingFloat32 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE && m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
 
     return output;
 }
@@ -426,26 +393,11 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
     VkResult res = VK_SUCCESS;
 
-    if(
-        type > CooperativeVectorDataType::Float64
-        || layout > CooperativeVectorMatrixLayout::TrainingOptimal
-        || type == CooperativeVectorDataType::UInt8Packed
-        || type == CooperativeVectorDataType::SInt8Packed
-        || rows <= 0
-        || columns <= 0
-    )
+    if(type > CooperativeVectorDataType::Float64 || layout > CooperativeVectorMatrixLayout::TrainingOptimal || type == CooperativeVectorDataType::UInt8Packed || type == CooperativeVectorDataType::SInt8Packed || rows <= 0 || columns <= 0)
         return 0;
-    if(
-        (type == CooperativeVectorDataType::FloatE4M3 || type == CooperativeVectorDataType::FloatE5M2)
-        && (layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor)
-    )
+    if((type == CooperativeVectorDataType::FloatE4M3 || type == CooperativeVectorDataType::FloatE5M2) && (layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor))
         return 0;
-    if(
-        !m_context.extensions.nvCooperativeVector
-        || m_context.coopVecFeatures.cooperativeVector != VK_TRUE
-        || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
-        || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
-    )
+    if(!m_context.extensions.nvCooperativeVector || m_context.coopVecFeatures.cooperativeVector != VK_TRUE || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV)
         return 0;
 
     const VkComponentTypeKHR componentType = VulkanDetail::ConvertCoopVecDataType(type);
@@ -485,12 +437,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     if(!rowByteSize)
         return 0;
 
-    const usize srcStride = GetCooperativeVectorOptimalMatrixStride(
-        type,
-        CooperativeVectorMatrixLayout::RowMajor,
-        static_cast<u32>(rows),
-        static_cast<u32>(columns)
-    );
+    const usize srcStride = GetCooperativeVectorOptimalMatrixStride(type, CooperativeVectorMatrixLayout::RowMajor, static_cast<u32>(rows), static_cast<u32>(columns));
     if(srcStride == 0u)
         return 0;
 
@@ -501,16 +448,8 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
         return 0;
     const usize srcSize = *precedingRowsByteSize + *rowByteSize;
 
-    const usize dstStride = GetCooperativeVectorOptimalMatrixStride(
-        type,
-        layout,
-        static_cast<u32>(rows),
-        static_cast<u32>(columns)
-    );
-    if(
-        (layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor)
-        && dstStride == 0u
-    )
+    const usize dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, static_cast<u32>(rows), static_cast<u32>(columns));
+    if((layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor) && dstStride == 0u)
         return 0;
 
     auto convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);

@@ -32,12 +32,7 @@ static constexpr char s_StagedVolumePathTokenSeparator = '_';
 static constexpr usize s_StagedVolumePathTokenSeparatorCount = 2u;
 static constexpr usize s_StagedVolumePathHashDigits = sizeof(u64) * 2u;
 
-StagedVolumePaths BuildStagedVolumePaths(
-    const Path& outputDirectory,
-    const AStringView volumeName,
-    const AStringView configurationSafeName,
-    ScratchArena& scratchArena
-){
+StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, const AStringView configurationSafeName, ScratchArena& scratchArena){
     const ScratchString volumeSafeName = BuildCanonicalSafeCacheName(scratchArena, volumeName);
     ScratchString stageToken{scratchArena};
     stageToken.reserve(volumeSafeName.size() + configurationSafeName.size() + s_StagedVolumePathTokenSeparatorCount + s_StagedVolumePathHashDigits);

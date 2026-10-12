@@ -105,8 +105,7 @@ LIT_MAIN = "__main__"
 def report(rows, cpu_frames=500):
     text = f"=== interval: {cpu_frames} frames / 0.500000s ===\n"
     for scope, total, samples in rows:
-        text += (f"  {scope}: window_avg_ms=999 window_min_ms=888 window_max_ms=1000 published_windows=2 total_ms={total} "
-            f"gpu_samples={samples} sample_avg_ms=777\n")
+        text += (f"  {scope}: window_avg_ms=999 window_min_ms=888 window_max_ms=1000 published_windows=2 total_ms={total} " f"gpu_samples={samples} sample_avg_ms=777\n")
     return text
 
 
@@ -127,8 +126,7 @@ def matched_trials(frame_delta=-.5, control_delta=0.0):
             delta = frame_delta if variant.name == LIT_HYBRID else 0.0
             controls = .5 + (control_delta if variant.name == LIT_HYBRID else 0.0)
             scopes = synthetic_scopes(variant, 5.0 + block * .03 + delta, controls)
-            trials.append({LIT_BLOCK: block, LIT_VARIANT: benchmark.asdict(variant), LIT_SCOPES: scopes,
-                LIT_KERNEL_WORK_MS: benchmark.kernel_work_ms(scopes, variant, 10)})
+            trials.append({LIT_BLOCK: block, LIT_VARIANT: benchmark.asdict(variant), LIT_SCOPES: scopes, LIT_KERNEL_WORK_MS: benchmark.kernel_work_ms(scopes, variant, 10)})
     return variants, trials
 
 
@@ -152,17 +150,9 @@ class TimingNormalizationTests(unittest.TestCase):
         retired = current.replace("window_avg_ms=", "avg=").replace("window_min_ms=", "min=")
         retired = retired.replace("window_max_ms=", "max=").replace("published_windows=", "samples=")
         invalid = [retired, current.replace(" sample_avg_ms=777", "")]
-        invalid.extend(current.replace(old, new) for old, new in (
-            ("window_avg_ms=999", "avg=999"), ("window_min_ms=888", "min=888"),
-            ("window_max_ms=1000", "max=1000"), ("published_windows=2", "samples=2"),
-            ("total_ms=1", "total_ms=NaN"), ("total_ms=1", "total_ms=-1"),
-            ("gpu_samples=2", "gpu_samples=0"), ("gpu_samples=2", "gpu_samples=1.5"),
-            ("gpu_samples=2", "gpu_samples=2 gpu_samples=3"),
-            ("published_windows=2", "published_windows=0"),
-            ("published_windows=2", "published_windows=4294967296"),
-            ("gpu_samples=2", "gpu_samples=18446744073709551616"),
-            ("window_min_ms=888", "window_min_ms=1001"), ("sample_avg_ms=777", "sample_avg_ms=1e999"),
-        ))
+        invalid.extend(current.replace(old, new) for old, new in (("window_avg_ms=999", "avg=999"), ("window_min_ms=888", "min=888"), ("window_max_ms=1000", "max=1000"), ("published_windows=2", "samples=2"),
+            ("total_ms=1", "total_ms=NaN"), ("total_ms=1", "total_ms=-1"), ("gpu_samples=2", "gpu_samples=0"), ("gpu_samples=2", "gpu_samples=1.5"), ("gpu_samples=2", "gpu_samples=2 gpu_samples=3"), ("published_windows=2", "published_windows=0"),
+            ("published_windows=2", "published_windows=4294967296"), ("gpu_samples=2", "gpu_samples=18446744073709551616"), ("window_min_ms=888", "window_min_ms=1001"), ("sample_avg_ms=777", "sample_avg_ms=1e999"),))
         invalid.append(report([(benchmark.FRAME, 1, 1), (benchmark.FRAME, 1, 1)]))
         for text in invalid:
             for evidence in (text, current + text):
@@ -281,12 +271,9 @@ class BenchmarkCoverageBoundaryTests(unittest.TestCase):
 
 class BenchmarkEnvironmentTests(unittest.TestCase):
     def test_diagnostics_and_capture_controls_are_sanitized_then_explicit(self):
-        args = SimpleNamespace(family=LIT_ROUGH, ray_budget=100, history_samples=16, roughness=.4,
-            sampling_seed=0, optical_queries=8, screen_steps=96)
-        inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_FINAL_STATE: "1",
-            "NWB_REFRACTION_SMOKE_GALLERY": "1", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
-            "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT": "4", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: LIT_N_10,
-            LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_NWB_REFLECTION_SMOKE_FEEDBACK: "1", LIT_PRESERVED: LIT_YES}
+        args = SimpleNamespace(family=LIT_ROUGH, ray_budget=100, history_samples=16, roughness=.4, sampling_seed=0, optical_queries=8, screen_steps=96)
+        inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_FINAL_STATE: "1", "NWB_REFRACTION_SMOKE_GALLERY": "1", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
+            "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT": "4", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: LIT_N_10, LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_NWB_REFLECTION_SMOKE_FEEDBACK: "1", LIT_PRESERVED: LIT_YES}
         env, overrides = benchmark.timed_environment(inherited, args, benchmark.Variant("raw", LIT_HARDWARE), Path(LIT_NEW_TXT))
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_FEEDBACK], "0")
@@ -313,21 +300,13 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
             benchmark.parse_args(common + [LIT_SCREEN_STEPS, LIT_N_257])
 
     def test_optical_family_rejects_missing_or_wrong_query_bound(self):
-        args = benchmark.parse_args([LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT,
-            LIT_FAMILY, LIT_OPTICAL_CLEAR, "--require-hardware"])
+        args = benchmark.parse_args([LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT, LIT_FAMILY, LIT_OPTICAL_CLEAR, "--require-hardware"])
         variant = benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE)
-        text = ("ReflectionSmokeProject: case optical_clear created\nReflectionSmokeProject: shutdown\n" +
-            LIT_TIMING_UNFOCUSED +
-            LIT_TIMING_RANGES +
-            "ReflectionSmokeProject: timing depth mip count 10\n" +
-            "ReflectionSmokeProject: reflection mode hardware\nReflectionSmokeProject: hardware ray budget 1382400\n" +
-            "ReflectionSmokeProject: screen feedback 0\nReflectionSmokeProject: screen steps 96\n" +
-            "ReflectionSmokeProject: optical query limit 16\n" +
-            "Reflection resolve: hardware\nReflectionSmokeProject: hardware available\n" +
-            "RendererSystem: deferred rendering targets ready (960x720, frame)\n")
+        text = ("ReflectionSmokeProject: case optical_clear created\nReflectionSmokeProject: shutdown\n" + LIT_TIMING_UNFOCUSED + LIT_TIMING_RANGES + "ReflectionSmokeProject: timing depth mip count 10\n" +
+            "ReflectionSmokeProject: reflection mode hardware\nReflectionSmokeProject: hardware ray budget 1382400\n" + "ReflectionSmokeProject: screen feedback 0\nReflectionSmokeProject: screen steps 96\n" +
+            "ReflectionSmokeProject: optical query limit 16\n" + "Reflection resolve: hardware\nReflectionSmokeProject: hardware available\n" + "RendererSystem: deferred rendering targets ready (960x720, frame)\n")
         benchmark.validate_trial_log(text, args, variant)
-        for bad in (text.replace("optical query limit 16", "optical query limit 1"),
-                text.replace("ReflectionSmokeProject: optical query limit 16\n", "")):
+        for bad in (text.replace("optical query limit 16", "optical query limit 1"), text.replace("ReflectionSmokeProject: optical query limit 16\n", "")):
             with self.subTest(text=bad), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.validate_trial_log(bad, args, variant)
 
@@ -342,29 +321,16 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
     def test_route_dimensions_and_diagnostics_are_verified_from_runtime_logs(self):
         args = SimpleNamespace(family=LIT_FLOOR, ray_budget=100, require_hardware=True, width=960, height=720, screen_steps=96, mip_count=10)
         variant = benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE)
-        text = ("ReflectionSmokeProject: case floor created\nReflectionSmokeProject: shutdown\n" +
-            LIT_TIMING_UNFOCUSED +
-            LIT_TIMING_RANGES +
-            "ReflectionSmokeProject: timing depth mip count 10\n" +
-            "ReflectionSmokeProject: reflection mode hardware\nReflectionSmokeProject: hardware ray budget 100\n" +
-            "ReflectionSmokeProject: screen feedback 0\nReflectionSmokeProject: screen steps 96\n" +
-            "Reflection resolve: hardware\nReflectionSmokeProject: hardware available\n" +
-            "RendererSystem: deferred rendering targets ready (960x720, frame)\n")
+        text = ("ReflectionSmokeProject: case floor created\nReflectionSmokeProject: shutdown\n" + LIT_TIMING_UNFOCUSED + LIT_TIMING_RANGES + "ReflectionSmokeProject: timing depth mip count 10\n" +
+            "ReflectionSmokeProject: reflection mode hardware\nReflectionSmokeProject: hardware ray budget 100\n" + "ReflectionSmokeProject: screen feedback 0\nReflectionSmokeProject: screen steps 96\n" +
+            "Reflection resolve: hardware\nReflectionSmokeProject: hardware available\n" + "RendererSystem: deferred rendering targets ready (960x720, frame)\n")
         benchmark.validate_trial_log(text, args, variant)
         benchmark.validate_trial_log(text.replace("\n", "\r\n"), args, variant)
-        for bad in (text.replace("960x720", "1280x720"), text.replace("Reflection resolve: hardware", "Reflection resolve: disabled"),
-                text.replace("screen feedback 0", "screen feedback 1"), text.replace(LIT_SCREEN_STEPS_96, "screen steps 16"),
-                text.replace("ray budget 100", "ray budget 1000"), text.replace(LIT_SCREEN_STEPS_96, "screen steps 960"),
-                text.replace("reflection mode hardware", "reflection mode hardware_unknown"),
-                text + "ReflectionSmokeProject: hardware ray budget 200\n", text + "Reflection resolve: disabled\n",
-                text + "ReflectionSmokeProject: screen feedback 0\n",
-                text.replace(LIT_TIMING_UNFOCUSED, ""),
-                text.replace("timing render unfocused 1", "timing render unfocused 0"),
-                text.replace(LIT_TIMING_RANGES, ""),
-                text.replace("timing in-flight ranges 32", "timing in-flight ranges 2"),
-                text.replace("timing depth mip count 10", "timing depth mip count 9"),
-                text + "ReflectionSmokeStatistics: sequence=3\n", text + "ReflectionSmokeFeedback: sequence=3\n",
-                text + "ReflectionSmokeProject: hardware unavailable\n"):
+        for bad in (text.replace("960x720", "1280x720"), text.replace("Reflection resolve: hardware", "Reflection resolve: disabled"), text.replace("screen feedback 0", "screen feedback 1"), text.replace(LIT_SCREEN_STEPS_96, "screen steps 16"),
+                text.replace("ray budget 100", "ray budget 1000"), text.replace(LIT_SCREEN_STEPS_96, "screen steps 960"), text.replace("reflection mode hardware", "reflection mode hardware_unknown"),
+                text + "ReflectionSmokeProject: hardware ray budget 200\n", text + "Reflection resolve: disabled\n", text + "ReflectionSmokeProject: screen feedback 0\n", text.replace(LIT_TIMING_UNFOCUSED, ""),
+                text.replace("timing render unfocused 1", "timing render unfocused 0"), text.replace(LIT_TIMING_RANGES, ""), text.replace("timing in-flight ranges 32", "timing in-flight ranges 2"),
+                text.replace("timing depth mip count 10", "timing depth mip count 9"), text + "ReflectionSmokeStatistics: sequence=3\n", text + "ReflectionSmokeFeedback: sequence=3\n", text + "ReflectionSmokeProject: hardware unavailable\n"):
             with self.subTest(text=bad), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.validate_trial_log(bad, args, variant)
 
@@ -378,21 +344,14 @@ class CostlyMissQualificationTests(unittest.TestCase):
         (self.root / LIT_RES / LIT_AUTHORED_VOL).write_bytes(b"exact shader and mesh cook")
         executable = self.root / LIT_APP_EXE
         executable.write_bytes(b"exact optimized executable")
-        self.args = benchmark.parse_args([LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.root),
-            LIT_OUTPUT_DIRECTORY, str(self.root / LIT_OUTPUT), LIT_FAMILY, LIT_FEEDBACK_LONG_MISS, LIT_INCLUDE_FEEDBACK,
+        self.args = benchmark.parse_args([LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.root), LIT_OUTPUT_DIRECTORY, str(self.root / LIT_OUTPUT), LIT_FAMILY, LIT_FEEDBACK_LONG_MISS, LIT_INCLUDE_FEEDBACK,
             "--qualification", str(self.root / "qualified.json")])
         self.identity = benchmark.file_identity(executable)
-        self.evidence = {LIT_TEMPORAL: False, "spatial_filter": False, "fixed_delta_seconds": 1 / 60, LIT_OPTICAL_QUERIES: 16,
-            LIT_BUILD_IDENTITY: {LIT_EXECUTABLE_SHA256: self.identity[LIT_SHA256],
-                "asset_volumes": benchmark.authored_volume_hashes(self.root)},
-            LIT_CAPTURES: [{LIT_NAME: "long_miss_feedback" if enabled else "long_miss_baseline", "enabled": enabled,
-                "case": LIT_FEEDBACK_LONG_MISS, "mode": LIT_HYBRID, LIT_HARDWARE_BUDGET: self.args.ray_budget,
-                LIT_SCREEN_STEPS_2: 16, LIT_SEED: 0, "roughness": 0.0, "final_state": False, "mutation": False, LIT_EXTENT: "native"}
-                for enabled in (False, True)],
-            LIT_METRICS: {LIT_LONG_MISS_GEOMETRY: {LIT_PASSED: True}, "long_miss": {"images": {LIT_PASSED: True}},
-                LIT_COSTLY_MISS_QUALIFICATION: {LIT_COMPLETED_OBSERVATIONS: 8, LIT_ACTUAL_ATTEMPTS: 100,
-                    LIT_ACTUAL_ITERATIONS: 1300, LIT_MEAN_ITERATIONS_PER_ATTEMPT: 13.0,
-                    LIT_ACTUAL_STEP_LIMIT_MISSES: 30, "step_limit_miss_fraction": .3}}}
+        self.evidence = {LIT_TEMPORAL: False, "spatial_filter": False, "fixed_delta_seconds": 1 / 60, LIT_OPTICAL_QUERIES: 16, LIT_BUILD_IDENTITY: {LIT_EXECUTABLE_SHA256: self.identity[LIT_SHA256], "asset_volumes": benchmark.authored_volume_hashes(self.root)},
+            LIT_CAPTURES: [{LIT_NAME: "long_miss_feedback" if enabled else "long_miss_baseline", "enabled": enabled, "case": LIT_FEEDBACK_LONG_MISS, "mode": LIT_HYBRID, LIT_HARDWARE_BUDGET: self.args.ray_budget,
+                LIT_SCREEN_STEPS_2: 16, LIT_SEED: 0, "roughness": 0.0, "final_state": False, "mutation": False, LIT_EXTENT: "native"} for enabled in (False, True)],
+            LIT_METRICS: {LIT_LONG_MISS_GEOMETRY: {LIT_PASSED: True}, "long_miss": {"images": {LIT_PASSED: True}}, LIT_COSTLY_MISS_QUALIFICATION: {LIT_COMPLETED_OBSERVATIONS: 8, LIT_ACTUAL_ATTEMPTS: 100,
+                    LIT_ACTUAL_ITERATIONS: 1300, LIT_MEAN_ITERATIONS_PER_ATTEMPT: 13.0, LIT_ACTUAL_STEP_LIMIT_MISSES: 30, "step_limit_miss_fraction": .3}}}
 
     def write(self, evidence):
         self.args.qualification.write_text(json.dumps(evidence), encoding=LIT_UTF_8)
@@ -407,8 +366,7 @@ class CostlyMissQualificationTests(unittest.TestCase):
 
     def test_rejects_missing_unqualified_or_incompatible_evidence(self):
         variations = []
-        for key, value in ((LIT_COMPLETED_OBSERVATIONS, 7), (LIT_ACTUAL_ITERATIONS, 100), (LIT_ACTUAL_STEP_LIMIT_MISSES, 1),
-                (LIT_MEAN_ITERATIONS_PER_ATTEMPT, 99.0), (LIT_ACTUAL_ATTEMPTS, 0)):
+        for key, value in ((LIT_COMPLETED_OBSERVATIONS, 7), (LIT_ACTUAL_ITERATIONS, 100), (LIT_ACTUAL_STEP_LIMIT_MISSES, 1), (LIT_MEAN_ITERATIONS_PER_ATTEMPT, 99.0), (LIT_ACTUAL_ATTEMPTS, 0)):
             changed = copy.deepcopy(self.evidence)
             changed[LIT_METRICS][LIT_COSTLY_MISS_QUALIFICATION][key] = value
             variations.append(changed)
@@ -495,8 +453,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
     def test_failed_launch_cleans_logserver_and_preserves_original_failure(self):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
             root = Path(temporary)
-            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root),
-                LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
+            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
             backend = Mock()
             backend.close.side_effect = OSError(LIT_BACKEND_CLOSE_FAILED)
             logserver = object()
@@ -519,8 +476,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
     def test_unmapped_window_backend_type_error_propagates_without_old_signature_retry(self):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
             root = Path(temporary)
-            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root),
-                LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
+            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
             runtime, logserver, backend = Mock(), Mock(), Mock()
             backend.wait_for_window.return_value = None
             backend.find_window_for_pid.side_effect = TypeError(LIT_BACKEND_DISCOVERY_FAILED)
@@ -542,8 +498,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
     def test_empty_completed_timing_reports_explain_absent_gpu_samples(self):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
             root = Path(temporary)
-            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root),
-                LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
+            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
             runtime, logserver, backend = Mock(), Mock(), Mock()
             backend.wait_for_window.return_value = 1
             def launch(*_):

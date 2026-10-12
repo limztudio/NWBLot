@@ -33,8 +33,10 @@ struct UiEditClipboardResult{
     bool selectionChanged = false;
 };
 
-// The OS owns transfer and native selection. This controller owns copied request fences, never a model pointer.
-// Cancel before any local edit/selection change, focus loss, owner removal or model replacement. Drain before host edits.
+// The OS owns transfer and native selection.
+// This controller owns copied request fences, never a model pointer.
+// Cancel before any local edit/selection change, focus loss, owner removal or model replacement.
+// Drain before host edits.
 // End native text input before a drain that may apply cut/paste, and restart it with the resulting surrounding text.
 class UiEditClipboardController final : NoCopy{
 public:
@@ -43,10 +45,7 @@ public:
 
 
 public:
-    [[nodiscard]] UiEditClipboardResult request(
-        const UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action,
-        Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, bool readOnly = false
-    );
+    [[nodiscard]] UiEditClipboardResult request(const UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, bool readOnly = false);
     [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, bool readOnly = false);
     [[nodiscard]] bool cancel();
     [[nodiscard]] bool pending()const noexcept{ return m_token.valid(); }

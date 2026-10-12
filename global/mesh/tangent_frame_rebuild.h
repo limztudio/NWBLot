@@ -60,14 +60,8 @@ struct alignas(Float4) TangentFrameAccumulator{
     SIMDVectorSingle tangent = {};
     SIMDVectorSingle bitangent = {};
 };
-static_assert(
-    alignof(TangentFrameAccumulator) >= alignof(Float4),
-    "TangentFrameAccumulator must keep SIMD calculation lanes aligned"
-);
-static_assert(
-    (sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator)) == s_AlignRemainderZero,
-    "TangentFrameAccumulator array stride must keep every element aligned"
-);
+static_assert(alignof(TangentFrameAccumulator) >= alignof(Float4), "TangentFrameAccumulator must keep SIMD calculation lanes aligned");
+static_assert((sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator)) == s_AlignRemainderZero, "TangentFrameAccumulator array stride must keep every element aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,20 +82,11 @@ struct TangentFrameDirections{
     SIMDVectorSingle bitangent;
 };
 
-[[nodiscard]] inline Expected<TangentFrameDirections> AccumulateTriangleTangentFrame(
-    const SIMDVectorSingle uv0,
-    const SIMDVectorSingle uv1,
-    const SIMDVectorSingle uv2,
-    SIMDVectorSingle edge01,
-    SIMDVectorSingle edge02
-)noexcept{
+[[nodiscard]] inline Expected<TangentFrameDirections> AccumulateTriangleTangentFrame(const SIMDVectorSingle uv0, const SIMDVectorSingle uv1, const SIMDVectorSingle uv2, SIMDVectorSingle edge01, SIMDVectorSingle edge02)noexcept{
     const SIMDVectorSingle uvDelta1 = VectorSubtract(uv1, uv0);
     const SIMDVectorSingle uvDelta2 = VectorSubtract(uv2, uv0);
     const SIMDVectorSingle determinantVector = Vector2Cross(uvDelta1, uvDelta2);
-    if(
-        !VectorIsFinite(determinantVector, VectorComponentMask::s_XYZW)
-        || Vector4LessOrEqual(VectorAbs(determinantVector), VectorReplicate(s_Epsilon))
-    )
+    if(!VectorIsFinite(determinantVector, VectorComponentMask::s_XYZW) || Vector4LessOrEqual(VectorAbs(determinantVector), VectorReplicate(s_Epsilon)))
         return MakeUnexpected(Failure{});
 
     const SIMDVectorSingle du1 = VectorSplatX(uvDelta1);
@@ -109,14 +94,8 @@ struct TangentFrameDirections{
     const SIMDVectorSingle du2 = VectorSplatX(uvDelta2);
     const SIMDVectorSingle dv2 = VectorSplatY(uvDelta2);
     const SIMDVectorSingle inverseDeterminant = VectorReciprocal(determinantVector);
-    const SIMDVectorSingle tangent = VectorMultiply(
-        VectorSubtract(VectorMultiply(edge01, dv2), VectorMultiply(edge02, dv1)),
-        inverseDeterminant
-    );
-    const SIMDVectorSingle bitangent = VectorMultiply(
-        VectorSubtract(VectorMultiply(edge02, du1), VectorMultiply(edge01, du2)),
-        inverseDeterminant
-    );
+    const SIMDVectorSingle tangent = VectorMultiply(VectorSubtract(VectorMultiply(edge01, dv2), VectorMultiply(edge02, dv1)), inverseDeterminant);
+    const SIMDVectorSingle bitangent = VectorMultiply(VectorSubtract(VectorMultiply(edge02, du1), VectorMultiply(edge01, du2)), inverseDeterminant);
     if(!FrameValidDirection(tangent) || !FrameValidDirection(bitangent))
         return MakeUnexpected(Failure{});
     return TangentFrameDirections{ tangent, bitangent };
@@ -133,21 +112,8 @@ struct TangentFrameDirections{
 
 
 template<typename ScratchArenaT>
-[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(
-    ScratchArenaT& scratchArena,
-    TangentFrameRebuildVertex* vertices,
-    const usize vertexCount,
-    const u32* indices,
-    const usize indexCount
-){
-    if(
-        !vertices
-        || !indices
-        || vertexCount == 0u
-        || indexCount == 0u
-        || (indexCount % TangentFrameRebuildDetail::s_IndicesPerTriangle) != 0u
-        || vertexCount > static_cast<usize>(Limit<u32>::s_Max)
-    )
+[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, TangentFrameRebuildVertex* vertices, const usize vertexCount, const u32* indices, const usize indexCount){
+    if(!vertices || !indices || vertexCount == 0u || indexCount == 0u || (indexCount % TangentFrameRebuildDetail::s_IndicesPerTriangle) != 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return MakeUnexpected(Failure{});
 
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
@@ -155,11 +121,7 @@ template<typename ScratchArenaT>
             return MakeUnexpected(Failure{});
     }
 
-    Vector<TangentFrameRebuildDetail::TangentFrameAccumulator, ScratchArenaT> accumulators(
-        vertexCount,
-        TangentFrameRebuildDetail::TangentFrameAccumulator{},
-        scratchArena
-    );
+    Vector<TangentFrameRebuildDetail::TangentFrameAccumulator, ScratchArenaT> accumulators(vertexCount, TangentFrameRebuildDetail::TangentFrameAccumulator{}, scratchArena);
 
     TangentFrameRebuildResult result;
     const usize triangleCount = indexCount / TangentFrameRebuildDetail::s_IndicesPerTriangle;
@@ -227,23 +189,14 @@ template<typename ScratchArenaT>
         }
 
         const SIMDVectorSingle tangent = FrameResolveTangent(normal, tangentSource, previousTangent);
-        if(
-            !FrameValidDirection(tangent)
-            || Vector4Greater(
-                VectorAbs(Vector3Dot(normal, tangent)),
-                VectorReplicate(TangentFrameRebuildDetail::s_TangentOrthogonalityTolerance)
-            )
-        )
+        if(!FrameValidDirection(tangent) || Vector4Greater(VectorAbs(Vector3Dot(normal, tangent)), VectorReplicate(TangentFrameRebuildDetail::s_TangentOrthogonalityTolerance)))
             return MakeUnexpected(Failure{});
 
         f32 handedness = TangentFrameRebuildDetail::ResolveTangentHandedness(vertex.tangent.w);
         const SIMDVectorSingle bitangent = accumulator.bitangent;
         if(FrameValidDirection(bitangent)){
             const SIMDVectorSingle bitangentSign = Vector3Dot(Vector3Cross(normal, tangent), bitangent);
-            if(
-                VectorIsFinite(bitangentSign, VectorComponentMask::s_XYZW)
-                && Vector4Greater(VectorAbs(bitangentSign), VectorReplicate(TangentFrameRebuildDetail::s_Epsilon))
-            )
+            if(VectorIsFinite(bitangentSign, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(bitangentSign), VectorReplicate(TangentFrameRebuildDetail::s_Epsilon)))
                 handedness = Vector4Less(bitangentSign, VectorZero()) ? -1.0f : 1.0f;
         }
 
@@ -257,11 +210,7 @@ template<typename ScratchArenaT>
 }
 
 template<typename ScratchArenaT, typename VertexVectorT, typename IndexVectorT>
-[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(
-    ScratchArenaT& scratchArena,
-    VertexVectorT& vertices,
-    const IndexVectorT& indices
-){
+[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, VertexVectorT& vertices, const IndexVectorT& indices){
     return RebuildTangentFrames(scratchArena, vertices.data(), vertices.size(), indices.data(), indices.size());
 }
 

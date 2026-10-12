@@ -28,8 +28,7 @@ struct NwbShadowGeometryDownsamplePushConstants{
     uint receiverFactor;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbShadowGeometryDownsamplePushConstants> g_NwbShadowGeometryDownsamplePushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbShadowGeometryDownsamplePushConstants> g_NwbShadowGeometryDownsamplePushConstants;
 
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbShadowGeometryDownsamplePushConstants.sceneShadingSlot
 // This pass never reads lights, but scene/buffer.slangi requires a valid heap expression for the shared helper ABI.

@@ -41,11 +41,7 @@ struct CsgShapeBounds{
     bool finiteBounds = false;
 };
 
-using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(
-    const SIMDMatrix& shapeToWorld,
-    const u8* parameterBytes,
-    usize parameterByteSize
-);
+using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize);
 
 struct CsgShapeTypeDesc{
     using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>;
@@ -122,18 +118,8 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(
-        const Name& name,
-        const SIMDMatrix& shapeToWorld,
-        const u8* parameterBytes,
-        usize parameterByteSize
-    )const;
-    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(
-        CsgShapeTypeId typeId,
-        const SIMDMatrix& shapeToWorld,
-        const u8* parameterBytes,
-        usize parameterByteSize
-    )const;
+    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(const Name& name, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize)const;
+    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize)const;
 
 
 private:

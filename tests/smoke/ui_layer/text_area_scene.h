@@ -65,14 +65,11 @@ private:
     bool m_longDocument = false;
 };
 
-using SharedUiTextAreaSmokeScene = RefCountPtr<
-    RefCounter<UiTextAreaSmokeScene>, ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiTextAreaSmokeScene = RefCountPtr< RefCounter<UiTextAreaSmokeScene>, ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerTextAreaSmokeEnabled();
 [[nodiscard]] bool IsUiLayerTextAreaSkinSmokeEnabled();
-[[nodiscard]] SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(
-    Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard);
+[[nodiscard]] SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

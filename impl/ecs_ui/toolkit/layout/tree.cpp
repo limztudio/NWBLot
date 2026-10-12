@@ -20,8 +20,7 @@ NWB_IMPL_UI_BEGIN
 
 bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
     const auto validSize = [](const LayoutSize& size)noexcept{
-        return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f
-            && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
+        return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
     };
     const Insets& padding = description.padding;
     return
@@ -36,17 +35,11 @@ bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
 }
 
 bool LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
-        && rectangle.width >= 0.0f && rectangle.height >= 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-    ;
+    return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
 }
 
 Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVectorSingle intersection = IntersectRectValue(
-        VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height)
-    );
+    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height));
     return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
 }
 

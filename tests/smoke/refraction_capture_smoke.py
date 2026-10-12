@@ -55,8 +55,7 @@ def compare_refraction_frames(reference, refracted):
     for x, y in region_pixels(width, height, GLASS_REGION):
         glass_count += 1
         before, after = baseline[y][x], output[y][x]
-        # Both directions are required: merely attenuating, tinting, or replacing
-        # clear glass with black cannot pass as geometric stripe displacement.
+        # Both directions are required: merely attenuating, tinting, or replacing clear glass with black cannot pass as geometric stripe displacement.
         if max(before) - min(before) < 25 and max(after) - min(after) < 25:
             before_luma, after_luma = sum(before) / 3.0, sum(after) / 3.0
             dark_to_light += before_luma < 85 and after_luma > 155
@@ -78,16 +77,8 @@ def compare_refraction_frames(reference, refracted):
         foreground_retained += before and after
         foreground_added += after and not before
 
-    metrics = {
-        "glass_pixels": glass_count,
-        "dark_to_light_pixels": dark_to_light,
-        "light_to_dark_pixels": light_to_dark,
-        "exterior_pixels": exterior_count,
-        "exterior_changed_pixels": exterior_changed,
-        "foreground_reference_pixels": foreground_before,
-        "foreground_retained_pixels": foreground_retained,
-        "foreground_added_pixels": foreground_added,
-    }
+    metrics = { "glass_pixels": glass_count, "dark_to_light_pixels": dark_to_light, "light_to_dark_pixels": light_to_dark, "exterior_pixels": exterior_count, "exterior_changed_pixels": exterior_changed, "foreground_reference_pixels": foreground_before,
+        "foreground_retained_pixels": foreground_retained, "foreground_added_pixels": foreground_added, }
     failures = []
     if min(dark_to_light, light_to_dark) < max(30, glass_count * 0.005):
         failures.append("clear glass did not displace both dark and light stripe edges")
@@ -104,15 +95,10 @@ def compare_refraction_frames(reference, refracted):
 
 def capture_variant(args, name, enabled, hardware, expected_dispatch):
     path = args.output_directory / f"refraction_{name}.bmp"
-    command = [
-        sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(path), "--log-output", str(path.with_suffix(".log")), "--application-capture",
-        "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
-        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created",
-        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + ("enabled" if enabled else LIT_DISABLED),
-        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown",
-    ]
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
+        "--output", str(path), "--log-output", str(path.with_suffix(".log")), "--application-capture", "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
+        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created", LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + ("enabled" if enabled else LIT_DISABLED),
+        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown",]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:
@@ -165,18 +151,13 @@ def main(argv):
         if baseline is None:
             return SKIP_EXIT_CODE
         metrics = {}
-        for name, hardware, diagnostic in (
-            ("automatic", True, "AVBOIT refraction resolve: hardware" if args.require_hardware else LIT_AVBOIT_REFRACTION_RESOLVE),
-            ("screen_space", False, "AVBOIT refraction resolve: screen-space"),
-        ):
+        for name, hardware, diagnostic in (("automatic", True, "AVBOIT refraction resolve: hardware" if args.require_hardware else LIT_AVBOIT_REFRACTION_RESOLVE), ("screen_space", False, "AVBOIT refraction resolve: screen-space"),):
             result = capture_variant(args, name, True, hardware, diagnostic)
             if result is None:
                 return SKIP_EXIT_CODE
             metrics[name] = compare_refraction_frames(baseline, result)
             width, height, rows = result
-            difference = [[tuple(min(abs(a - b) * 3, 255) for a, b in zip(before, after))
-                for before, after in zip(reference_row, output_row)]
-                for reference_row, output_row in zip(baseline[2], rows)]
+            difference = [[tuple(min(abs(a - b) * 3, 255) for a, b in zip(before, after)) for before, after in zip(reference_row, output_row)] for reference_row, output_row in zip(baseline[2], rows)]
             write_bmp_24(args.output_directory / f"refraction_{name}_difference.bmp", width, height, difference)
         (args.output_directory / "refraction_metrics.json").write_text(json.dumps(metrics, indent=2) + LIT_N, encoding=LIT_UTF_8)
         print("PASS: clear-glass displacement, foreground AVBOIT preservation, exterior stability, and both resolve routes\n" + json.dumps(metrics, indent=2))

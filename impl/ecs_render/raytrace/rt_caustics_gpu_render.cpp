@@ -19,12 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::renderGpuBvhCaustics(
-    Core::CommandList& commandList,
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
-    DeferredFrameTargets& targets,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
-){
+bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Software photon producer runs before deferred lighting.
 
     if(!hasCausticWork(meshView))
@@ -33,26 +28,14 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     NWB_ASSERT(targets.bindless.valid());
     const f32 temporalDecay = causticTemporalDecay();
     const auto& pipeline = m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline;
-    if(
-        !pipeline
-        || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-        || !causticResolveResourcesReady(targets, temporalDecay)
-    )
+    if(!pipeline || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets, temporalDecay))
         return false;
     const u32 temporalPhaseCount = causticTemporalPhaseCount();
     const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticSwPhotonGridSide, temporalPhaseCount);
     const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
-        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(
-            targets,
-            meshView,
-            m_rayTracingState,
-            photonBudget,
-            m_rayTracingState.m_sceneBvhInstanceCount,
-            static_cast<u32>(m_graphics.getFrameIndex()),
-            temporalPhaseCount
-        );
+        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(targets, meshView, m_rayTracingState, photonBudget, m_rayTracingState.m_sceneBvhInstanceCount, static_cast<u32>(m_graphics.getFrameIndex()), temporalPhaseCount);
 
         Core::ComputeState computeState;
         computeState.setPipeline(pipeline.get());
@@ -70,12 +53,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         causticPhotonTiming->reset();
     }
     else{
-        Core::GpuTimingMeasure timing(
-            m_graphics.gpuTiming(),
-            RendererGpuTimingScope::s_CausticPhotons,
-            m_graphics.getDevice(),
-            commandList
-        );
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
         recordPhotons();
     }
 

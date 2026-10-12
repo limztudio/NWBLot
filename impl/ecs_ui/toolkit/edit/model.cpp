@@ -39,8 +39,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
 
 
 static EditLimits BoundedLimits(const EditLimits& limits)noexcept{
-    return { Min(limits.maxBytes, s_MaxBytes), Min(limits.maxHistoryRecords, s_MaxHistoryRecords),
-        Min(limits.maxHistoryBytes, s_MaxHistoryBytes) };
+    return { Min(limits.maxBytes, s_MaxBytes), Min(limits.maxHistoryRecords, s_MaxHistoryRecords), Min(limits.maxHistoryBytes, s_MaxHistoryBytes) };
 }
 
 

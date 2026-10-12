@@ -29,10 +29,7 @@ namespace __hidden_ui_image_layout{
 
 
 [[nodiscard]] static bool ValidSize(const LayoutSize& size)noexcept{
-    return
-        size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f
-        && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f)
-    ;
+    return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
 }
 
 
@@ -45,11 +42,7 @@ namespace __hidden_ui_image_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ImageMetrics> ImageLayout::Measure(
-    const ImageOptions& options,
-    const UiSkinRegion& region,
-    const f32 density
-)noexcept{
+Expected<ImageMetrics> ImageLayout::Measure(const ImageOptions& options, const UiSkinRegion& region, const f32 density)noexcept{
     using namespace __hidden_ui_image_layout;
     if(
         !ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint)

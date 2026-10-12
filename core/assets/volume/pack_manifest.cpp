@@ -38,11 +38,7 @@ static bool ValidateManifestVirtualPath(const Name& virtualPath){
     return false;
 }
 
-static u64 BuildDefaultCookKeyHash(
-    const Name& virtualPath,
-    const u64 payloadSize,
-    const u64 payloadHash
-){
+static u64 BuildDefaultCookKeyHash(const Name& virtualPath, const u64 payloadSize, const u64 payloadHash){
     static constexpr u32 s_DefaultPayloadCookKeyVersion = 1u;
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_DefaultPayloadCookKeyVersion);
@@ -52,31 +48,19 @@ static u64 BuildDefaultCookKeyHash(
     return hash;
 }
 
-static AssetVolumePayloadIdentity BuildPayloadIdentity(
-    const Name& virtualPath,
-    const void* payloadBytes,
-    const usize payloadByteCount,
-    const u64 cookKeyHash
-){
+static AssetVolumePayloadIdentity BuildPayloadIdentity(const Name& virtualPath, const void* payloadBytes, const usize payloadByteCount, const u64 cookKeyHash){
     AssetVolumePayloadIdentity identity;
     identity.payloadSize = static_cast<u64>(payloadByteCount);
     identity.payloadHash = ComputeFnv64Bytes(payloadBytes, payloadByteCount);
-    identity.cookKeyHash = cookKeyHash != 0u
-        ? cookKeyHash
-        : BuildDefaultCookKeyHash(virtualPath, identity.payloadSize, identity.payloadHash);
+    identity.cookKeyHash = cookKeyHash != 0u ? cookKeyHash : BuildDefaultCookKeyHash(virtualPath, identity.payloadSize, identity.payloadHash);
     return identity;
 }
 
-static bool ValidatePayloadIdentity(
-    const Name& virtualPath,
-    const AssetVolumePayloadIdentity& identity
-){
+static bool ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePayloadIdentity& identity){
     if(identity.cookKeyHash != 0u)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: manifest entry '{}' has an empty cook key")
-        , StringConvert(virtualPath.resolvedText())
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: manifest entry '{}' has an empty cook key"), StringConvert(virtualPath.resolvedText()));
     return false;
 }
 
@@ -91,20 +75,13 @@ bool ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64
     return true;
 }
 
-bool AppendObjectFilePayloadToManifest(
-    AssetVolumePackManifest& manifest,
-    const Name& virtualPath,
-    const Path& objectPath,
-    const AssetVolumePayloadIdentity& identity
-){
+bool AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Path& objectPath, const AssetVolumePayloadIdentity& identity){
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(!ValidatePayloadIdentity(virtualPath, identity))
         return false;
     if(objectPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object manifest entry '{}' has an empty cache path")
-            , StringConvert(virtualPath.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object manifest entry '{}' has an empty cache path"), StringConvert(virtualPath.resolvedText()));
         return false;
     }
 
@@ -118,28 +95,15 @@ bool AppendObjectFilePayloadToManifest(
     return true;
 }
 
-bool AppendPayloadBytesToManifest(
-    AssetVolumePackManifest& manifest,
-    const Name& virtualPath,
-    const void* payloadBytes,
-    const usize payloadByteCount,
-    const u64 cookKeyHash
-){
+bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, const usize payloadByteCount, const u64 cookKeyHash){
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(payloadByteCount > 0u && payloadBytes == nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: payload manifest entry '{}' has null bytes")
-            , StringConvert(virtualPath.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: payload manifest entry '{}' has null bytes"), StringConvert(virtualPath.resolvedText()));
         return false;
     }
 
-    const AssetVolumePayloadIdentity identity = BuildPayloadIdentity(
-        virtualPath,
-        payloadBytes,
-        payloadByteCount,
-        cookKeyHash
-    );
+    const AssetVolumePayloadIdentity identity = BuildPayloadIdentity(virtualPath, payloadBytes, payloadByteCount, cookKeyHash);
     if(!ValidatePayloadIdentity(virtualPath, identity))
         return false;
 

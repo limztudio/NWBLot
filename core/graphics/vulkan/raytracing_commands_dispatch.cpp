@@ -22,10 +22,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateRayDispatchDimensions(
-    const RayTracingDispatchRaysArguments& arguments,
-    const RayDispatchLimits& limits
-)noexcept{
+bool ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& arguments, const RayDispatchLimits& limits)noexcept{
     if(arguments.width == 0u || arguments.height == 0u || arguments.depth == 0u)
         return true;
     if(limits.maxInvocationCount == 0u)
@@ -75,10 +72,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || !m_context.rayTracingPipelineFeatureEnabled
         || !m_context.deviceDispatch.vkCmdTraceRaysKHR
     ){
-        rejectCommandRecording(
-            s_DispatchRaysOperation,
-            NWB_TEXT("ray-tracing dispatch is unavailable on this device generation")
-        );
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("ray-tracing dispatch is unavailable on this device generation"));
         return;
     }
 
@@ -95,14 +89,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     const auto snapshot = shaderTable->captureDispatchSnapshot();
 
     RayTracingPipeline* const pipeline = snapshot.pipeline.get();
-    if(
-        !pipeline
-        || &pipeline->m_context != &m_context
-        || &pipeline->m_device != &m_device
-        || pipeline->getDeviceGeneration() != m_context.deviceGeneration
-        || pipeline->m_pipeline == VK_NULL_HANDLE
-        || pipeline->m_pipelineLayout == VK_NULL_HANDLE
-    ){
+    if(!pipeline || &pipeline->m_context != &m_context || &pipeline->m_device != &m_device || pipeline->getDeviceGeneration() != m_context.deviceGeneration || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table pipeline is foreign or not ready"));
         return;
     }
@@ -128,22 +115,12 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     const u32 baseAlignment = handleLayout->baseAlignment;
     const u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     const u32 maxShaderGroupStride = m_context.rayTracingPipelineProperties.maxShaderGroupStride;
-    if(
-        handleSize == 0u
-        || handleSizeAligned < handleSize
-        || handleAlignment == 0u
-        || handleSizeAligned % handleAlignment != 0u
-        || maxShaderGroupStride == 0u
-        || handleSizeAligned > maxShaderGroupStride
-    ){
+    if(handleSize == 0u || handleSizeAligned < handleSize || handleAlignment == 0u || handleSizeAligned % handleAlignment != 0u || maxShaderGroupStride == 0u || handleSizeAligned > maxShaderGroupStride){
         rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table stride is invalid"));
         return;
     }
 
-    const auto buildRegion = [&](
-        const ShaderTable::DispatchRegionSnapshot& regionSnapshot,
-        const bool required
-    ) -> Expected<VkStridedDeviceAddressRegionKHR>{
+    const auto buildRegion = [&](const ShaderTable::DispatchRegionSnapshot& regionSnapshot, const bool required) -> Expected<VkStridedDeviceAddressRegionKHR>{
         Buffer* const buffer = regionSnapshot.buffer.get();
         if(!buffer){
             if(required || regionSnapshot.offset != 0u || regionSnapshot.recordCount != 0u || regionSnapshot.selectedGroupCount != 0u)
@@ -156,10 +133,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             || (required && regionSnapshot.recordCount != 1u)
             || &buffer->m_context != &m_context
             || buffer->getDeviceGeneration() != m_context.deviceGeneration
-            || !isBufferReadyForCommandQueue(
-                buffer,
-                VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-            )
+            || !isBufferReadyForCommandQueue(buffer, VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
             || buffer->m_buffer == VK_NULL_HANDLE
             || buffer->m_deviceAddress == 0u
         )
@@ -178,18 +152,11 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             return MakeUnexpected(Failure{});
 
         const u64 regionSize = static_cast<u64>(regionSnapshot.recordCount) * handleSizeAligned;
-        if(
-            !VulkanDetail::IsBufferRangeInBounds(creationDesc, regionSnapshot.offset, regionSize)
-            || regionSnapshot.offset > Limit<u64>::s_Max - buffer->m_deviceAddress
-        )
+        if(!VulkanDetail::IsBufferRangeInBounds(creationDesc, regionSnapshot.offset, regionSize) || regionSnapshot.offset > Limit<u64>::s_Max - buffer->m_deviceAddress)
             return MakeUnexpected(Failure{});
 
         const u64 deviceAddress = buffer->m_deviceAddress + regionSnapshot.offset;
-        if(
-            deviceAddress == 0u
-            || deviceAddress % baseAlignment != 0u
-            || regionSize > Limit<u64>::s_Max - deviceAddress
-        )
+        if(deviceAddress == 0u || deviceAddress % baseAlignment != 0u || regionSize > Limit<u64>::s_Max - deviceAddress)
             return MakeUnexpected(Failure{});
 
         return VkStridedDeviceAddressRegionKHR{ deviceAddress, handleSizeAligned, regionSize };
@@ -209,16 +176,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     retainResource(snapshot.hit.buffer.get());
     retainResource(snapshot.callable.buffer.get());
 
-    m_context.deviceDispatch.vkCmdTraceRaysKHR(
-        m_currentCmdBuf->m_cmdBuf,
-        &*raygenRegion,
-        &*missRegion,
-        &*hitRegion,
-        &*callableRegion,
-        args.width,
-        args.height,
-        args.depth
-    );
+    m_context.deviceDispatch.vkCmdTraceRaysKHR(m_currentCmdBuf->m_cmdBuf, &*raygenRegion, &*missRegion, &*hitRegion, &*callableRegion, args.width, args.height, args.depth);
 }
 
 

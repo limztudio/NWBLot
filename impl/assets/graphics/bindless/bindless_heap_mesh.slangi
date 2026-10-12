@@ -13,7 +13,8 @@
 
 // Global descriptor heap - typed mesh-stream views over the StorageBuffer class.
 // Raster geometry is stored in eleven immutable streams with five different structured element layouts plus four raw byte streams.
-// They all share the StorageBuffer descriptor table: the type/stride below is a shader-side view, exactly like the BVH-node alias in bindless_heap_bvh.slangi. Per-draw instance data carries the slot for each mesh-stream ABI position.
+// They all share the StorageBuffer descriptor table: the type/stride below is a shader-side view, exactly like the BVH-node alias in bindless_heap_bvh.slangi.
+// Per-draw instance data carries the slot for each mesh-stream ABI position.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,20 +31,13 @@
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed views of the StorageBuffer descriptor table in bindless_heap.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapMeshPositionBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapMeshHalf4Buffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshUv0, Std430DataLayout> g_NwbHeapMeshUv0Buffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbHeapMeshletDescBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbHeapMeshletLocalVertexRefBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<uint, Std430DataLayout> g_NwbHeapMeshMaterialTypedBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbHeapMeshInstanceBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapMeshPositionBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapMeshHalf4Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshUv0, Std430DataLayout> g_NwbHeapMeshUv0Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbHeapMeshletDescBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbHeapMeshletLocalVertexRefBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbHeapMeshMaterialTypedBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbHeapMeshInstanceBuffers[];
 #pragma warning(pop)
 
 

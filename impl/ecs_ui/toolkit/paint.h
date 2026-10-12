@@ -150,13 +150,7 @@ public:
 
 public:
     // Skin payload validation belongs to loading; begin captures its descriptor for this frame.
-    void begin(
-        const DisplayMetrics& metrics,
-        u64 generation,
-        u64 skinGeneration,
-        const Core::Assets::AssetRef<UiSkin>& skinRef,
-        const UiSkin& skin
-    );
+    void begin(const DisplayMetrics& metrics, u64 generation, u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin);
     void reserve(usize quadCount, usize clipDepth = 8u);
     void pushClip(const Rect& clip);
     [[nodiscard]] bool popClip();
@@ -169,31 +163,18 @@ public:
     [[nodiscard]] bool prepareGlyphPages(const SharedGlyphPage* pages, usize count);
     [[nodiscard]] bool drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
     [[nodiscard]] bool prepareSdfPages(const SharedSdfAtlasPage* pages, usize count);
-    [[nodiscard]] bool prepareImages(
-        const SharedGlyphPage* glyphPages, usize glyphCount,
-        const SharedSdfAtlasPage* sdfPages, usize sdfCount,
-        const SharedImageSource* textureImages = nullptr, usize textureCount = 0u
-    );
-    [[nodiscard]] bool drawSdfGlyph(
-        const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {}
-    );
+    [[nodiscard]] bool prepareImages(const SharedGlyphPage* glyphPages, usize glyphCount, const SharedSdfAtlasPage* sdfPages, usize sdfCount, const SharedImageSource* textureImages = nullptr, usize textureCount = 0u);
+    [[nodiscard]] bool drawSdfGlyph(const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {});
     [[nodiscard]] bool prepareTextureImages(const SharedImageSource* images, usize count);
     // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
-    [[nodiscard]] bool drawImage(
-        const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f },
-        const Color& tint = {}
-    );
+    [[nodiscard]] bool drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {});
     [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
     [[nodiscard]] Rect currentClip()const;
 
 
 private:
-    void emitQuad(
-        const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material,
-        u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u,
-        u32 textureImageIndex = Limit<u32>::s_Max
-    );
+    void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material, u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u, u32 textureImageIndex = Limit<u32>::s_Max);
     void emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint);
 
 

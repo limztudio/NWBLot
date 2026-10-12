@@ -78,10 +78,7 @@ static u64 DiagnosticSiteHash(const DiagnosticEventRecord& record)noexcept{
 }
 
 static bool DiagnosticResultCanSuppressDuplicatePlatformCrash(const CrashDumpResult& result)noexcept{
-    return result.status != CrashDumpStatus::NotInstalled
-        && result.status != CrashDumpStatus::RequestFailed
-        && result.status != CrashDumpStatus::PackageWriteFailed
-    ;
+    return result.status != CrashDumpStatus::NotInstalled && result.status != CrashDumpStatus::RequestFailed && result.status != CrashDumpStatus::PackageWriteFailed;
 }
 
 static bool ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category){
@@ -206,14 +203,8 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
     CopyFixedBuffer(Detail::g_State.logServerUrl, config.logServerUrl);
     CopyFixedBuffer(Detail::g_State.crashUploadToken, config.crashUploadToken);
 
-    const ::Path<ArenaT> spoolDirectory = config.spoolDirectory.empty()
-        ? DefaultCrashSpoolDirectory(arena)
-        : config.spoolDirectory
-    ;
-    const ::Path<ArenaT> handlerExecutablePath = config.handlerExecutablePath.empty()
-        ? DefaultCrashHandlerExecutablePath(arena)
-        : ::Path<ArenaT>(arena, config.handlerExecutablePath)
-    ;
+    const ::Path<ArenaT> spoolDirectory = config.spoolDirectory.empty() ? DefaultCrashSpoolDirectory(arena) : config.spoolDirectory;
+    const ::Path<ArenaT> handlerExecutablePath = config.handlerExecutablePath.empty() ? DefaultCrashHandlerExecutablePath(arena) : ::Path<ArenaT>(arena, config.handlerExecutablePath);
     Detail::g_State.dumpDetailMode = config.dumpDetailMode;
     Detail::g_State.capturePolicy = config.capturePolicy;
     Detail::g_State.spoolRetention = config.spoolRetention;

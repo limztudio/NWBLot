@@ -50,8 +50,8 @@ private:
             if(!backing)
                 return nullptr;
 
-            // Header and aligned payload share one backing allocation. Logical capacity
-            // excludes the header so cache sizing and arena telemetry keep their contract.
+            // Header and aligned payload share one backing allocation.
+            // Logical capacity excludes the header so cache sizing and arena telemetry keep their contract.
             return new(backing) Chunk(payloadSize, static_cast<u8*>(backing) + payloadOffset);
         }
         static inline void Destroy(Chunk& chunk)noexcept{
@@ -197,8 +197,7 @@ public:
         return p;
     }
 
-    // LIFO reclaim only: p must be the bucket's most-recent allocation (same contract as deallocate);
-    // resizes the top in place, or relocates to a fresh block and copies when it cannot grow in place.
+    // LIFO reclaim only: p must be the bucket's most-recent allocation (same contract as deallocate); resizes the top in place, or relocates to a fresh block and copies when it cannot grow in place.
     inline void* reallocate(void* p, usize align, usize size){
         NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
@@ -240,8 +239,7 @@ public:
         return next;
     }
 
-    // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation;
-    // any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
+    // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation; any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
     inline void deallocate(void* p, usize align, usize size){
         NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align) || size == 0u)
@@ -279,8 +277,8 @@ private:
                 return nullptr;
         }
 
-        // Secure the replacement before changing ownership. Each undersized cached chunk is retired once;
-        // future new chunks keep the high-water size so alternating workloads do not recreate small chunks.
+        // Secure the replacement before changing ownership.
+        // Each undersized cached chunk is retired once; future new chunks keep the high-water size so alternating workloads do not recreate small chunks.
         while(bucket.cached && bucket.cached != chunk){
             Chunk* discarded = bucket.cached;
             bucket.cached = discarded->m_next;

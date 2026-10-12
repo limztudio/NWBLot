@@ -40,10 +40,7 @@ static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
 }
 
 [[nodiscard]] static u32 ReadU32(const u8* bytes)noexcept{
-    return
-        static_cast<u32>(bytes[0u]) | (static_cast<u32>(bytes[1u]) << 8u)
-        | (static_cast<u32>(bytes[2u]) << 16u) | (static_cast<u32>(bytes[3u]) << 24u)
-    ;
+    return static_cast<u32>(bytes[0u]) | (static_cast<u32>(bytes[1u]) << 8u) | (static_cast<u32>(bytes[2u]) << 16u) | (static_cast<u32>(bytes[3u]) << 24u);
 }
 
 [[nodiscard]] static Expected<u32> ImageByteCount(const u32 width, const u32 height, const u32 channels)noexcept{
@@ -72,18 +69,9 @@ static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(
-    const BinaryByteView sfnt,
-    const u32 faceIndex,
-    const PreparedFontImageView* groups,
-    const usize groupCount,
-    Core::Assets::AssetArena& arena
-){
+Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const PreparedFontImageView* groups, const usize groupCount, Core::Assets::AssetArena& arena){
     using namespace __hidden_prepared_source;
-    if(
-        !sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u
-        || !groups || groupCount == 0u || groupCount > s_MaxGroupCount
-    ){
+    if(!sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u || !groups || groupCount == 0u || groupCount > s_MaxGroupCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
         return MakeUnexpected(AStringView("invalid font bytes, face index, or image group count"));
     }
@@ -92,10 +80,7 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(
     for(usize index = 0u; index < groupCount; ++index){
         const PreparedFontImageView& group = groups[index];
         const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
-        if(
-            !expectedBytes || !group.pixels.data() || group.pixels.size() != *expectedBytes
-            || *expectedBytes > s_MaxPixelBytes - pixelByteCount
-        ){
+        if(!expectedBytes || !group.pixels.data() || group.pixels.size() != *expectedBytes || *expectedBytes > s_MaxPixelBytes - pixelByteCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes"), index);
             return MakeUnexpected(AStringView("image dimensions, channels, or pixel bytes are invalid"));
         }
@@ -148,10 +133,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         return ReadFailure(path, "prepared-source header is truncated");
     const u32 fontByteCount = ReadU32(header + 12u);
     const u32 groupCount = ReadU32(header + 16u);
-    if(
-        ReadU32(header) != s_Magic || ReadU32(header + 4u) != s_Version
-        || ReadU32(header + 8u) != 0u || ReadU32(header + 20u) != 0u
-    )
+    if(ReadU32(header) != s_Magic || ReadU32(header + 4u) != s_Version || ReadU32(header + 8u) != 0u || ReadU32(header + 20u) != 0u)
         return ReadFailure(path, "unsupported prepared-source magic, version, face index, or flags; rebuild required");
     if(fontByteCount == 0u || fontByteCount > s_FontMaxSourceBytes || groupCount == 0u || groupCount > s_MaxGroupCount)
         return ReadFailure(path, "font size or image group count is outside prepared-source limits");
@@ -171,10 +153,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         group.height = ReadU32(groupHeader + 4u);
         group.channelCount = ReadU32(groupHeader + 8u);
         const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
-        if(
-            !expectedBytes || ReadU32(groupHeader + 12u) != *expectedBytes
-            || *expectedBytes > s_MaxPixelBytes - pixelByteCount
-        )
+        if(!expectedBytes || ReadU32(groupHeader + 12u) != *expectedBytes || *expectedBytes > s_MaxPixelBytes - pixelByteCount)
             return ReadFailure(path, "image dimensions, channels, or byte count are invalid");
         pixelByteCount += *expectedBytes;
         groupByteCounts[index] = *expectedBytes;

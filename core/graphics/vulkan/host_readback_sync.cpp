@@ -48,10 +48,7 @@ VkBufferMemoryBarrier2 BuildHostReadBufferBarrier(const VkBuffer buffer)noexcept
     return barrier;
 }
 
-void CollectUniquePhysicalQueueFamilyIndices(
-    const GpuPhysicalQueueTopology& topology,
-    Vector<u32, Alloc::ScratchArena>& familyIndices
-){
+void CollectUniquePhysicalQueueFamilyIndices(const GpuPhysicalQueueTopology& topology, Vector<u32, Alloc::ScratchArena>& familyIndices){
     familyIndices.clear();
     if(!topology.queues)
         return;
@@ -74,28 +71,16 @@ void CollectUniquePhysicalQueueFamilyIndices(
     }
 }
 
-Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(
-    const GpuPhysicalQueueTopology& topology,
-    const usize slotsPerQueue
-)noexcept{
+Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(const GpuPhysicalQueueTopology& topology, const usize slotsPerQueue)noexcept{
     AmdBreadcrumbRingLayout layout;
-    if(
-        !topology.queues
-        || topology.queueCount == 0u
-        || topology.queueCount > static_cast<usize>(Limit<u16>::s_Max)
-        || slotsPerQueue == 0u
-    )
+    if(!topology.queues || topology.queueCount == 0u || topology.queueCount > static_cast<usize>(Limit<u16>::s_Max) || slotsPerQueue == 0u)
         return MakeUnexpected(Failure{});
 
     const auto totalSlotCount = TryMultiply<usize>(topology.queueCount, slotsPerQueue);
     if(!totalSlotCount)
         return MakeUnexpected(Failure{});
     const auto totalByteSize = TryMultiply<usize>(*totalSlotCount, sizeof(u32));
-    if(
-        !totalByteSize
-        || slotsPerQueue > static_cast<usize>(Limit<u32>::s_Max)
-        || *totalByteSize > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
-    )
+    if(!totalByteSize || slotsPerQueue > static_cast<usize>(Limit<u32>::s_Max) || *totalByteSize > static_cast<usize>(Limit<VkDeviceSize>::s_Max))
         return MakeUnexpected(Failure{});
 
     const u16 deviceGeneration = topology.queues[0u].id.deviceGeneration;
@@ -103,11 +88,7 @@ Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(
         return MakeUnexpected(Failure{});
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueId& queue = topology.queues[queueIndex].id;
-        if(
-            !queue.valid()
-            || queue.deviceGeneration != deviceGeneration
-            || queue.index != queueIndex
-        )
+        if(!queue.valid() || queue.deviceGeneration != deviceGeneration || queue.index != queueIndex)
             return MakeUnexpected(Failure{});
     }
 
@@ -119,11 +100,7 @@ Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(
     return layout;
 }
 
-Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(
-    const AmdBreadcrumbRingLayout& layout,
-    const GpuPhysicalQueueId& queue,
-    const usize localSlot
-)noexcept{
+Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(const AmdBreadcrumbRingLayout& layout, const GpuPhysicalQueueId& queue, const usize localSlot)noexcept{
     if(
         layout.deviceGeneration == 0u
         || layout.physicalQueueCount == 0u
@@ -144,20 +121,13 @@ Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(
 
     const usize resolvedFlatSlot = *queueFirstSlot + localSlot;
     const auto resolvedByteOffset = TryMultiply<usize>(resolvedFlatSlot, sizeof(u32));
-    if(
-        resolvedFlatSlot >= layout.totalSlotCount
-        || !resolvedByteOffset
-        || *resolvedByteOffset > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
-    )
+    if(resolvedFlatSlot >= layout.totalSlotCount || !resolvedByteOffset || *resolvedByteOffset > static_cast<usize>(Limit<VkDeviceSize>::s_Max))
         return MakeUnexpected(Failure{});
 
     return AmdBreadcrumbRingSlot{ resolvedFlatSlot, static_cast<VkDeviceSize>(*resolvedByteOffset) };
 }
 
-Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(
-    const u64 currentSerial,
-    const usize slotsPerQueue
-)noexcept{
+Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(const u64 currentSerial, const usize slotsPerQueue)noexcept{
     AmdBreadcrumbReservation reservation;
     if(slotsPerQueue == 0u || slotsPerQueue > static_cast<usize>(Limit<u32>::s_Max))
         return MakeUnexpected(Failure{});
@@ -202,9 +172,7 @@ void HostReadbackBarrierTracker::registerDeviceOwnedBuffer(const VkBuffer buffer
         return;
 }
 
-void HostReadbackBarrierTracker::appendBarriers(
-    Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& barriers
-)const{
+void HostReadbackBarrierTracker::appendBarriers(Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& barriers)const{
     barriers.reserve(barriers.size() + m_buffers.size());
     for(const VkBuffer buffer : m_buffers)
         barriers.push_back(BuildHostReadBufferBarrier(buffer));

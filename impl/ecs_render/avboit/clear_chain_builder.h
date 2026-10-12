@@ -51,17 +51,11 @@ struct AvboitClearChainResult{
 
 class AvboitClearChainBuilder final : NoCopy{
 public:
-    AvboitClearChainBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererAvboitSystem& avboitSystem
-    );
+    AvboitClearChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem);
 
 
 public:
-    [[nodiscard]] Expected<AvboitClearChainResult> declare(
-        const AvboitClearChainInputs& inputs,
-        GraphClearTimingRecordState& clearTimingState
-    );
+    [[nodiscard]] Expected<AvboitClearChainResult> declare(const AvboitClearChainInputs& inputs, GraphClearTimingRecordState& clearTimingState);
 
 
 private:

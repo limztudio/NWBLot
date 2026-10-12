@@ -59,15 +59,7 @@ void nwbCsgShadowConservativeTexel(const uint pixel){
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * 4u, asuint(0.0));
 }
 
-bool nwbCsgShadowCapEvent(
-    const uint instance,
-    const uint cutterIndex,
-    const float depth,
-    const bool entering,
-    const float3 rayOrigin,
-    const float3 rayDirection,
-    out NwbLightSpaceEvent event
-){
+bool nwbCsgShadowCapEvent(const uint instance, const uint cutterIndex, const float depth, const bool entering, const float3 rayOrigin, const float3 rayDirection, out NwbLightSpaceEvent event){
     event = (NwbLightSpaceEvent)0;
     const float3 world = rayOrigin + rayDirection * depth;
     float3 normal;
@@ -163,18 +155,11 @@ bool nwbCsgShadowSubtractSpan(
         if(cursor.depth <= nearEvent.depth)
             return true;
     }
-    return nwbCsgShadowEmitSpan(pixel, transparent, instance, cursor, nearEvent, cursorCutter, 0xffffffffu,
-        rayOrigin, rayDirection, outputCount, opaqueDepth);
+    return nwbCsgShadowEmitSpan(pixel, transparent, instance, cursor, nearEvent, cursorCutter, 0xffffffffu, rayOrigin, rayDirection, outputCount, opaqueDepth);
 }
 
 // Input records stay local while expanded cap records overwrite the same bounded global stream.
-bool nwbCsgShadowConvertEvents(
-    const uint pixel,
-    const NwbLightSpaceView view,
-    const uint2 viewPixel,
-    const uint count,
-    out bool converted
-){
+bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, const uint2 viewPixel, const uint count, out bool converted){
     converted = false;
     NwbLightSpaceEvent input[NWB_LIGHT_SPACE_EVENTS_PER_TEXEL];
     bool hasCsg = false;
@@ -303,10 +288,7 @@ bool nwbCsgShadowConvertEvents(
             const NwbLightSpaceEvent closedEvent = boundaryDelta > 0 ? enteringEvent : exitingEvent;
             if(!inside)
                 farEvent = closedEvent;
-            else if(!nwbCsgShadowSubtractSpan(
-                pixel, transparent, instance, farEvent, closedEvent, intervals, intervalCount,
-                rayOrigin, rayDirection, outputCount, opaqueDepth
-            ))
+            else if(!nwbCsgShadowSubtractSpan(pixel, transparent, instance, farEvent, closedEvent, intervals, intervalCount, rayOrigin, rayDirection, outputCount, opaqueDepth))
                 return false;
         }
         if(winding != 0)

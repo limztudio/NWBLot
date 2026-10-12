@@ -33,14 +33,9 @@ bool ReflectionCpuTimingProbe::initialize(const AStringView caseName){
         return false;
     }
     const auto outputPath = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
-    if(!m_publications.initialize(
-        true, true, outputPath ? AStringView(outputPath->data(), outputPath->size()) : AStringView{}
-    ))
+    if(!m_publications.initialize(true, true, outputPath ? AStringView(outputPath->data(), outputPath->size()) : AStringView{}))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: configured case={} preparation_presentations=64 warmup_seconds=5")
-        NWB_TEXT(" minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1")
-        , StringConvert(caseName)
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: configured case={} preparation_presentations=64 warmup_seconds=5") NWB_TEXT(" minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"), StringConvert(caseName));
     return true;
 }
 
@@ -55,10 +50,7 @@ bool ReflectionCpuTimingProbe::update(){
             return true;
         m_prepared = true;
         m_preparationBegin = now;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: preparation complete presentations={} source_frame={}")
-            , presentations
-            , sourceFrame
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: preparation complete presentations={} source_frame={}"), presentations, sourceFrame);
     }
     const auto status = m_presentation.observe(presentations, now);
     if(status == PresentationFpsStatus::Invalid){
@@ -68,11 +60,7 @@ bool ReflectionCpuTimingProbe::update(){
     if(m_presentation.measurementStarted() && !m_measuring){
         m_measuring = true;
         m_intervalSourceFrame = sourceFrame;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: measurement begin presentations={} source_frame={} warmup_seconds={}")
-            , presentations
-            , sourceFrame
-            , DurationInSeconds<f64>(now, m_preparationBegin)
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: measurement begin presentations={} source_frame={} warmup_seconds={}"), presentations, sourceFrame, DurationInSeconds<f64>(now, m_preparationBegin));
     }
     if(!m_publications.observe(m_context.perfSession, m_presentation, presentations, false))
         return false;

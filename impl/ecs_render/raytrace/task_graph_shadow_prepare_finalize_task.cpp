@@ -20,11 +20,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShadowPrepareAccelStructFinalizeGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-)noexcept{
+bool ShadowPrepareAccelStructFinalizeGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
     static_cast<void>(payload);
     static_cast<void>(commandList);
     static_cast<void>(context);

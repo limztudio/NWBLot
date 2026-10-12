@@ -118,14 +118,7 @@ struct CsgClipWorkBounds{
     bool valid = false;
 
     // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
-    [[nodiscard]] bool resolveCutter(
-        const CsgShapeRegistry& shapeRegistry,
-        const CsgShapeTypeInfo& shapeType,
-        const SIMDMatrix& shapeToWorld,
-        const u8* parameterBytes,
-        usize parameterByteSize,
-        const CsgClipWorkBounds& receiverBounds
-    );
+    [[nodiscard]] bool resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize, const CsgClipWorkBounds& receiverBounds);
 };
 
 struct CsgFrameWorkRegion{
@@ -140,13 +133,7 @@ struct CsgFrameWorkRegion{
     [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
     [[nodiscard]] u32 height()const noexcept{ return bounded() ? maxY - minY : 0u; }
 
-    void expandWorldBounds(
-        const SIMDMatrix& worldToClip,
-        SIMDVectorSingle minBounds,
-        SIMDVectorSingle maxBounds,
-        u32 frameWidth,
-        u32 frameHeight
-    );
+    void expandWorldBounds(const SIMDMatrix& worldToClip, SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds, u32 frameWidth, u32 frameHeight);
     void expandFull()noexcept{ fullFrame = true; }
     void expandClamped(const i32 rectMinX, const i32 rectMaxX, const i32 rectMinY, const i32 rectMaxY, const u32 frameWidth, const u32 frameHeight)noexcept{
         if(fullFrame || frameWidth == 0u || frameHeight == 0u)
@@ -174,12 +161,7 @@ struct CsgFrameWorkRegion{
             return Core::Rect(static_cast<i32>(frameWidth), static_cast<i32>(frameHeight));
 
         const SIMDVectorSingle resolvedMax = VectorMin(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f));
-        return Core::Rect(
-            static_cast<i32>(minX),
-            static_cast<i32>(VectorGetX(resolvedMax)),
-            static_cast<i32>(minY),
-            static_cast<i32>(VectorGetY(resolvedMax))
-        );
+        return Core::Rect(static_cast<i32>(minX), static_cast<i32>(VectorGetX(resolvedMax)), static_cast<i32>(minY), static_cast<i32>(VectorGetY(resolvedMax)));
     }
 };
 

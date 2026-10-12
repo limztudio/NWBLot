@@ -97,21 +97,9 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibilityOpaque(
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-    )
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return MakeUnexpected(Failure{});
-    return renderShadowVisibility(
-        commandList,
-        targets,
-        deferredLightingResources,
-        true,
-        graphOwnsOpaqueTemporalMergeEntryStates,
-        true,
-        lightSpace
-    );
+    return renderShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, lightSpace);
 }
 
 Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
@@ -153,19 +141,11 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const SoftShadowOpaqueResolvePhase::Enum phase
 ){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-        || (phase != SoftShadowOpaqueResolvePhase::TemporalAndWavelet && !m_rayTracingState.m_softShadowTemporalReady)
-    )
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u || (phase != SoftShadowOpaqueResolvePhase::TemporalAndWavelet && !m_rayTracingState.m_softShadowTemporalReady))
         return false;
     const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 groupSize = hardwareShadowSupported
-        ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)
-        : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)
-    ;
+    const u32 groupSize = hardwareShadowSupported ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE) : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
     const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
     const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
     dispatchSoftShadowDenoiseAndTransparentFold(
@@ -194,46 +174,15 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
     return true;
 }
 
-bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex,
-    const bool hardwareShadowSupported
-){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-    )
+bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const u32 frameIndex, const bool hardwareShadowSupported){
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
     const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 groupSize = hardwareShadowSupported
-        ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)
-        : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)
-    ;
+    const u32 groupSize = hardwareShadowSupported ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE) : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
     const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
     const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
-    dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList,
-        targets,
-        deferredLightingResources,
-        frameIndex,
-        softGroupsX,
-        softGroupsY,
-        false,
-        false,
-        false,
-        false,
-        true,
-        false,
-        false,
-        false,
-        false,
-        true,
-        false
-    );
+    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, false, false, false, false, true, false, false, false, false, true, false);
     return true;
 }
 

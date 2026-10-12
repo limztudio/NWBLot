@@ -34,15 +34,9 @@ Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const BakeOpti
     Core::Assets::AssetVector<Impl::PreparedFontImageView> images(arena);
     images.reserve(atlas.groups.size());
     for(const auto& group : atlas.groups){
-        images.push_back(Impl::PreparedFontImageView{
-            .width = group.width,
-            .height = group.height,
-            .channelCount = group.channelCount,
-            .pixels = { group.pixels.data(), group.pixels.size() },
-        });
+        images.push_back(Impl::PreparedFontImageView{ .width = group.width, .height = group.height, .channelCount = group.channelCount, .pixels = { group.pixels.data(), group.pixels.size() }, });
     }
-    return Impl::SerializePreparedFontSource(
-        { source->data(), source->size() }, atlas.faceIndex, images.data(), images.size(), arena
+    return Impl::SerializePreparedFontSource({ source->data(), source->size() }, atlas.faceIndex, images.data(), images.size(), arena
     );
 }
 

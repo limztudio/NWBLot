@@ -53,17 +53,11 @@ struct HardwareCausticsResolveChainResult{
 
 class HardwareCausticsResolveChainBuilder final : NoCopy{
 public:
-    HardwareCausticsResolveChainBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererRayTracingSystem& raytracingSystem
-    );
+    HardwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
 
 
 public:
-    [[nodiscard]] Expected<HardwareCausticsResolveChainResult> declare(
-        const HardwareCausticsResolveChainInputs& inputs,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] Expected<HardwareCausticsResolveChainResult> declare(const HardwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

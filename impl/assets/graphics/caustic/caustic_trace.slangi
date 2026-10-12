@@ -168,10 +168,7 @@ void nwbCausticEmissionBasis(float3 axis, out float3 right, out float3 up){
 
 float2 nwbCausticProjectAabbExtent(float3 aabbMin, float3 aabbMax, float3 right, float3 up){
     const float3 halfExtent = (aabbMax - aabbMin) * 0.5;
-    return float2(
-        abs(right.x) * halfExtent.x + abs(right.y) * halfExtent.y + abs(right.z) * halfExtent.z,
-        abs(up.x) * halfExtent.x + abs(up.y) * halfExtent.y + abs(up.z) * halfExtent.z
-    );
+    return float2(abs(right.x) * halfExtent.x + abs(right.y) * halfExtent.y + abs(right.z) * halfExtent.z, abs(up.x) * halfExtent.x + abs(up.y) * halfExtent.y + abs(up.z) * halfExtent.z);
 }
 
 uint nwbCausticHashU32(uint x){
@@ -195,9 +192,7 @@ float2 nwbCausticJitteredTemporalCell(const uint photonIndex, const uint gridSid
     const uint fullGridSide = max(gridSide, 1u);
     const uint phaseCount = temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT
         ? NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT
-        : (temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT
-            ? NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT
-            : NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT)
+        : (temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT ? NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT : NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT)
     ;
     const uint phase = frameIndex % phaseCount;
     uint row = 0u;
@@ -256,12 +251,7 @@ half3 nwbCausticLightColor(const float4 colorIntensity){
     return half3(clamp(colorIntensity.xyz, float3(0.0), float3(1.5))) * half(min(max(colorIntensity.w, 0.0), 2.0));
 }
 
-NwbCausticPhoton nwbCausticCreatePhoton(
-    const NwbCausticEmission emission,
-    const half3 lightColor,
-    const uint emissionTargetCount,
-    const uint photonCount
-){
+NwbCausticPhoton nwbCausticCreatePhoton(const NwbCausticEmission emission, const half3 lightColor, const uint emissionTargetCount, const uint photonCount){
     // Photon budgets exceed the finite half range; normalize energy in float before quantizing the final flux.
     const float perPhoton = emission.domainArea * float(emissionTargetCount) / float(max(photonCount, 1u));
 

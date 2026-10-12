@@ -21,10 +21,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmissionOperation(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph
-)noexcept{
+Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept{
     if(!SubmissionOperation::ActiveFor(*this))
         return MakeUnexpected(Failure{});
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
@@ -32,18 +29,10 @@ Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubm
         return MakeUnexpected(Failure{});
 
     NothrowScopedLock lock(m_mutex);
-    if(
-        !validForLocked(planAccess)
-        || m_recordingAttemptGeneration == 0u
-        || !m_activeSubmissionBinding.valid()
-        || m_submissionBindingResolved
-    )
+    if(!validForLocked(planAccess) || m_recordingAttemptGeneration == 0u || !m_activeSubmissionBinding.valid() || m_submissionBindingResolved)
         return MakeUnexpected(Failure{});
     if(m_submissionExceptionClosing.test(MemoryOrder::acquire)){
-        if(
-            m_exceptionClosingRecordingAttemptGeneration != m_recordingAttemptGeneration
-            || m_exceptionClosingBinding != m_activeSubmissionBinding
-        )
+        if(m_exceptionClosingRecordingAttemptGeneration != m_recordingAttemptGeneration || m_exceptionClosingBinding != m_activeSubmissionBinding)
             TerminateInvariant();
         return SubmissionExceptionClosing{ m_exceptionClosingRecordingAttemptGeneration, m_exceptionClosingBinding };
     }
@@ -52,11 +41,7 @@ Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubm
     m_exceptionClosingBinding = m_activeSubmissionBinding;
     if(m_submissionExceptionClosing.testAndSet(MemoryOrder::release))
         TerminateInvariant();
-    if(!graph.beginSubmissionExceptionClosing(
-        compiledGraph,
-        m_exceptionClosingRecordingAttemptGeneration,
-        m_exceptionClosingBinding
-    )){
+    if(!graph.beginSubmissionExceptionClosing(compiledGraph, m_exceptionClosingRecordingAttemptGeneration, m_exceptionClosingBinding)){
         m_submissionExceptionClosing.clear(MemoryOrder::release);
         m_submissionExceptionClosing.notifyAll();
         m_exceptionClosingRecordingAttemptGeneration = 0u;
@@ -66,23 +51,12 @@ Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubm
     return SubmissionExceptionClosing{ m_exceptionClosingRecordingAttemptGeneration, m_exceptionClosingBinding };
 }
 
-bool GpuGraphSubmissionTransaction::submissionExceptionClosingResolved(
-    const GpuCompiledGraph& compiledGraph,
-    const u64 recordingAttemptGeneration,
-    const GpuGraphSubmissionBinding& submissionBinding
-)noexcept{
+bool GpuGraphSubmissionTransaction::submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     NothrowScopedLock lock(m_mutex);
-    if(
-        !m_submissionExceptionClosing.test(MemoryOrder::acquire)
-        || m_exceptionClosingRecordingAttemptGeneration != recordingAttemptGeneration
-        || m_exceptionClosingBinding != submissionBinding
-    )
+    if(!m_submissionExceptionClosing.test(MemoryOrder::acquire) || m_exceptionClosingRecordingAttemptGeneration != recordingAttemptGeneration || m_exceptionClosingBinding != submissionBinding)
         return true;
-    if(
-        m_recordingAttemptGeneration != recordingAttemptGeneration
-        || m_activeSubmissionBinding != submissionBinding
-    )
+    if(m_recordingAttemptGeneration != recordingAttemptGeneration || m_activeSubmissionBinding != submissionBinding)
         TerminateInvariant();
     if(!m_submissionBindingResolved){
         if(!validForLocked(planAccess))

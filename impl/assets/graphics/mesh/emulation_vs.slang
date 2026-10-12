@@ -23,14 +23,7 @@ struct NwbMeshEmulationVertexInput{
 
 
 NwbMeshRasterVertex main(NwbMeshEmulationVertexInput input){
-    return nwbMeshBuildRasterVertex(
-        input.position,
-        half4(input.color),
-        half3(input.normal.xyz),
-        half4(input.tangent),
-        input.uv0,
-        input.worldPosition
-    );
+    return nwbMeshBuildRasterVertex(input.position, half4(input.color), half3(input.normal.xyz), half4(input.tangent), input.uv0, input.worldPosition);
 }
 
 

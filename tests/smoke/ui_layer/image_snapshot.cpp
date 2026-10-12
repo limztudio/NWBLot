@@ -87,9 +87,7 @@ void UiImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.values[6u] = input.popupCount();
     current.values[7u] = imageTargets;
     const DisplayMetrics& previous = m_snapshot.display;
-    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth
-        || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX
-        || current.display.pixelScaleY != previous.pixelScaleY;
+    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
     bool changed = current.values != m_snapshot.values;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
@@ -98,15 +96,10 @@ void UiImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: display logical={}x{} scale={}x{}")
-            , current.display.logicalWidth, current.display.logicalHeight
-            , current.display.pixelScaleX, current.display.pixelScaleY
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{}")
-        , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{}"), current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]);
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         LogSmokeRect(NWB_TEXT("UiImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }

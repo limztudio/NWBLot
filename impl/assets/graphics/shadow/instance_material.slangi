@@ -17,7 +17,8 @@
 
 // Per-instance shadow-occluder material keyed by shadow instance id (HW InstanceID() == SW BVH leaf index).
 // flags bit0 = isTransparent (1: evaluate transmittance hook and continue; 0: opaque stop); surface and BXDF dispatch ids are separate domains.
-// materialConstantByteOffset + meshInstanceIndex reconstruct the surface hook's constants context. Mirrors NwbRtInstanceMaterialGpu.
+// materialConstantByteOffset + meshInstanceIndex reconstruct the surface hook's constants context.
+// Mirrors NwbRtInstanceMaterialGpu.
 struct NwbRtInstanceMaterial{
     uint surfaceDispatchId;
     uint flags;

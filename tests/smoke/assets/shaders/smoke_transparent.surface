@@ -14,8 +14,7 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
     const half4 tinted = half4(surface.base_color * runtime.color_tint);
     const half3 baseColor = nwbSmokeMaterialVertexColor(tinted.rgb);
-    // Raster coverage and optical absorption share tint/density; tracing applies Fresnel and Beer-Lambert
-    // across the actual volume thickness.
+    // Raster coverage and optical absorption share tint/density; tracing applies Fresnel and Beer-Lambert across the actual volume thickness.
     return nwbMakeGlassSurface(baseColor, inNormal, NWB_SURFACE_IOR_GLASS, tinted.rgb, tinted.a);
 }
 

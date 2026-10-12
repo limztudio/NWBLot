@@ -29,8 +29,7 @@ struct NwbCsgClipContextSlots{
 // Typed view over the global UniformBuffer table. The descriptor slot is carried by the existing mesh/CSG push data (or the receiver instance record), so no pass-local CSG clip cbuffer is needed.
 #pragma warning(push)
 #pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> g_NwbHeapCsgClipContextSlots[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> g_NwbHeapCsgClipContextSlots[];
 #pragma warning(pop)
 
 ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> nwbHeapCsgClipContextSlots(const uint slot){

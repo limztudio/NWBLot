@@ -17,8 +17,7 @@ def wait_for_caret_phase(backend, handle, process, samples, deadline):
         visible = True
         for column, first_row, end_row, color, tolerance in samples:
             rows = backend.sample_client_pixels(handle, column, first_row, 1, end_row - first_row)
-            visible &= any(max(abs(actual - expected) for actual, expected in zip(row[0], color)) <= tolerance
-                for row in rows)
+            visible &= any(max(abs(actual - expected) for actual, expected in zip(row[0], color)) <= tolerance for row in rows)
         now = time.monotonic()
         if not visible:
             off_at = now

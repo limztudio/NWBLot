@@ -97,9 +97,7 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.values[13u] = m_evictionCompleted;
     current.generations = { m_default->generation(), m_alternate->generation(), m_replacement->generation() };
     const DisplayMetrics& previous = m_snapshot.display;
-    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth
-        || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX
-        || current.display.pixelScaleY != previous.pixelScaleY;
+    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
     bool changed = current.values != m_snapshot.values || current.generations != m_snapshot.generations;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
@@ -108,10 +106,7 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}")
-            , current.display.logicalWidth, current.display.logicalHeight
-            , current.display.pixelScaleX, current.display.pixelScaleY
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
     }
     const auto& value = current.values;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},")

@@ -23,23 +23,11 @@ TextInputAdmission::Enum QueuedTextInputService::emitCommit(const TextInputSessi
     return admitEvent(token, TextInputEventKind::Commit, text, 0u, 0u, 0u, 0u, true);
 }
 
-TextInputAdmission::Enum QueuedTextInputService::emitPreedit(
-    const TextInputSessionToken token,
-    const AStringView text,
-    const usize anchorByte,
-    const usize caretByte,
-    const bool caretVisible
-){
+TextInputAdmission::Enum QueuedTextInputService::emitPreedit(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte, const bool caretVisible){
     return admitEvent(token, TextInputEventKind::Preedit, text, anchorByte, caretByte, 0u, 0u, caretVisible);
 }
 
-TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(
-    const TextInputSessionToken token,
-    const usize beforeBytes,
-    const usize afterBytes,
-    const u64 revision,
-    const TextInputDeletionBasis::Enum basis
-){
+TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(const TextInputSessionToken token, const usize beforeBytes, const usize afterBytes, const u64 revision, const TextInputDeletionBasis::Enum basis){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
     if(!token.valid() || token != m_activeToken)
@@ -52,10 +40,7 @@ TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(
     const usize end = basis == TextInputDeletionBasis::Selection ? Max(m_anchorByte, m_caretByte) : m_caretByte;
     if(beforeBytes > start || afterBytes > m_surrounding.size() - end)
         return TextInputAdmission::InvalidRange;
-    if(
-        !IsTextInputUtf8Boundary(m_surrounding, start - beforeBytes)
-        || !IsTextInputUtf8Boundary(m_surrounding, end + afterBytes)
-    )
+    if(!IsTextInputUtf8Boundary(m_surrounding, start - beforeBytes) || !IsTextInputUtf8Boundary(m_surrounding, end + afterBytes))
         return TextInputAdmission::InvalidRange;
     return admitEvent(token, TextInputEventKind::DeleteSurrounding, {}, 0u, 0u, beforeBytes, afterBytes, true, basis);
 }
@@ -113,14 +98,9 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
         return TextInputAdmission::Accepted;
 
     // Only consecutive preedit updates may coalesce; a commit or deletion is an ordering barrier.
-    const bool replace = kind == TextInputEventKind::Preedit && !m_events.empty()
-        && m_events.back().kind == TextInputEventKind::Preedit
-    ;
+    const bool replace = kind == TextInputEventKind::Preedit && !m_events.empty() && m_events.back().kind == TextInputEventKind::Preedit;
     const usize oldBytes = replace ? m_events.back().text.size() : 0u;
-    if(
-        (!replace && m_events.size() >= s_TextInputMaxEvents)
-        || text.size() > s_TextInputMaxQueuedTextBytes - (m_queuedTextBytes - oldBytes)
-    ){
+    if((!replace && m_events.size() >= s_TextInputMaxEvents) || text.size() > s_TextInputMaxQueuedTextBytes - (m_queuedTextBytes - oldBytes)){
         if(!cancelSession(token, TextInputCancelReason::Overflow))
             TerminateInvariant();
         return TextInputAdmission::QueueFull;

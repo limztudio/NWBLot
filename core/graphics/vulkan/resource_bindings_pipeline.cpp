@@ -17,11 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
-    const BindingLayoutVector& bindingLayouts,
-    TStringView operationName,
-    Alloc::ScratchArena& scratchArena
-)const{
+Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const{
     CreatedPipelineLayout result;
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
@@ -50,19 +46,13 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
             return MakeUnexpected(Failure{});
         }
         if(&layout->m_context != &m_context){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create {}: binding layout {} belongs to another device"),
-                operationName,
-                i
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} belongs to another device"), operationName, i);
             return MakeUnexpected(Failure{});
         }
 
         pushConstantByteSize = Max<u32>(pushConstantByteSize, layout->m_pushConstantByteSize);
         if(layout->m_descriptorSetLayouts.size() > static_cast<usize>(Limit<u32>::s_Max) - descriptorSetLayoutCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits")
-                , operationName
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits"), operationName);
             return MakeUnexpected(Failure{});
         }
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
@@ -76,21 +66,15 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
         }
         const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
         if(!layout->m_descriptorSetLayouts.empty() && !bindlessDesc){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} needs explicit set metadata for every descriptor layout.")
-                , operationName
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} needs explicit set metadata for every descriptor layout."), operationName);
             return MakeUnexpected(Failure{});
         }
         if(bindlessDesc && layout->m_descriptorSetLayouts.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: a bindless layout owns no descriptor-set layout.")
-                , operationName
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: a bindless layout owns no descriptor-set layout."), operationName);
             return MakeUnexpected(Failure{});
         }
         if(bindlessDesc && bindlessDesc->descriptorSetIndex == Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} bindless resource layouts require an explicit set index.")
-                , operationName
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} bindless resource layouts require an explicit set index."), operationName);
             return MakeUnexpected(Failure{});
         }
     }
@@ -138,12 +122,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
     }
 
     if(maxSetIndex >= m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}")
-            , operationName
-            , maxSetIndex
-            , m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}"), operationName, maxSetIndex, m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets);
         return MakeUnexpected(Failure{});
     }
 
@@ -165,10 +144,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
         for(usize localSetIndex = 0u; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
             const u32 setIndex = base + static_cast<u32>(localSetIndex);
             if(descriptorSetLayouts[setIndex] != VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}")
-                    , operationName
-                    , setIndex
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}"), operationName, setIndex);
                 return MakeUnexpected(Failure{});
             }
             descriptorSetLayouts[setIndex] = layout.m_descriptorSetLayouts[localSetIndex];
@@ -177,21 +153,12 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
 
     for(u32 setIndex = 0u; setIndex < totalSets; ++setIndex){
         if(descriptorSetLayouts[setIndex] == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing")
-                , operationName
-                , setIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing"), operationName, setIndex);
             return MakeUnexpected(Failure{});
         }
     }
 
-    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(
-        m_context,
-        descriptorSetLayouts.data(),
-        static_cast<u32>(descriptorSetLayouts.size()),
-        pushConstantByteSize,
-        operationName
-    );
+    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, descriptorSetLayouts.data(), static_cast<u32>(descriptorSetLayouts.size()), pushConstantByteSize, operationName);
     if(!pipelineLayout)
         return MakeUnexpected(Failure{});
     result.layout = *pipelineLayout;
@@ -201,11 +168,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
     return result;
 }
 
-Expected<PipelineBindingState> Device::buildPipelineBindings(
-    const BindingLayoutVector& bindingLayouts,
-    TStringView operationName,
-    Alloc::ScratchArena& scratchArena
-)const{
+Expected<PipelineBindingState> Device::buildPipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const{
     PipelineBindingState bindings;
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
@@ -225,21 +188,13 @@ Expected<PipelineBindingState> Device::buildPipelineBindings(
         const BindingLayout* const layout = bindingLayouts[layoutIndex].get();
         NWB_ASSERT(layout != nullptr);
         const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
-        bindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc
-            ? bindlessDesc->descriptorSetIndex
-            : Limit<u32>::s_Max
-        ;
+        bindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc ? bindlessDesc->descriptorSetIndex : Limit<u32>::s_Max;
     }
     return bindings;
 }
 
 
-void Device::appendPipelineShaderStage(
-    Shader& shader,
-    const VkShaderStageFlagBits stage,
-    PipelineSpecializationInfoVector& specializationInfos,
-    PipelineShaderStageVector& shaderStages
-)const{
+void Device::appendPipelineShaderStage(Shader& shader, const VkShaderStageFlagBits stage, PipelineSpecializationInfoVector& specializationInfos, PipelineShaderStageVector& shaderStages)const{
     Shader& s = shader;
     auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     stageInfo.stage = stage;

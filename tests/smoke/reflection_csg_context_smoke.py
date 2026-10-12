@@ -15,9 +15,7 @@ from reflection_roughness_smoke import CaptureSpec, parse_history, validate_hist
 from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_statistics
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
-PHASES = (("small_first", "optical_csg_cap", 12, 1), ("dense_first", "optical_csg_dense", 108, 1),
-    ("ordinary_dense", "optical_dense", 0, 0), ("small_return", "optical_csg_cap", 12, 1),
-    ("dense_return", "optical_csg_dense", 108, 1))
+PHASES = (("small_first", "optical_csg_cap", 12, 1), ("dense_first", "optical_csg_dense", 108, 1), ("ordinary_dense", "optical_dense", 0, 0), ("small_return", "optical_csg_cap", 12, 1), ("dense_return", "optical_csg_dense", 108, 1))
 CASE = "optical_csg_context_transition"
 PHASE_FIELDS = ("phase", "source_frame", "cut_receiver_primitives", "csg")
 CAPTURE_FIELDS = ("phase", "source_frame", "completed_frames")
@@ -56,8 +54,7 @@ def validate_ordinary_packets(log_text, statistics, history):
             raise SmokeFailure("ordinary hardware packet has a stale device identity")
         if observation["ray_capacity"] != min(sample["effective_budget"], sample["queue_capacity"]):
             raise SmokeFailure("ordinary packet describes a different frozen ray capacity")
-        if any(observation[name] != 1 for name in ("expected_slices", "hardware_nodes", "indexed_slices",
-            "compiled_nodes", "unique_packets", "accepted_packets")):
+        if any(observation[name] != 1 for name in ("expected_slices", "hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets")):
             raise SmokeFailure("ordinary phase must execute one accepted hardware task without stale CSG slices")
         if observation["graphics_packets"] != 1:
             raise SmokeFailure("ordinary matched control must retain its accepted primary Graphics hardware packet")
@@ -93,8 +90,7 @@ def analyze_evidence(log_text):
             raise SmokeFailure("context transition changed the requested current receiver admission")
         if not start["source_frame"] <= capture["source_frame"] < end or capture["completed_frames"] < 16:
             raise SmokeFailure("context transition captured before its completed-frame qualification")
-        selected = [sample for sample in statistics if sample["frame"] >= 3
-            and start["source_frame"] <= histories[(sample["sequence"], sample["generation"])]["graphics_frame"] < end]
+        selected = [sample for sample in statistics if sample["frame"] >= 3 and start["source_frame"] <= histories[(sample["sequence"], sample["generation"])]["graphics_frame"] < end]
         keys = {(sample["sequence"], sample["generation"]) for sample in selected}
         selected_history = [item for item in history if (item["sequence"], item["generation"]) in keys]
         if sum(item["graphics_frame"] < capture["source_frame"] for item in selected_history) < 16:
@@ -115,8 +111,7 @@ def analyze_evidence(log_text):
         phase_log = "\n".join(lines)
         spec = OpticalCapture(name, case)
         result = validate_optics(phase_log, spec)
-        result["capture_source"] = validate_history(phase_log, selected,
-            CaptureSpec(name, case=case, roughness=0, samples=16, temporal=False))
+        result["capture_source"] = validate_history(phase_log, selected, CaptureSpec(name, case=case, roughness=0, samples=16, temporal=False))
         if not csg:
             result["ordinary_packets"] = validate_ordinary_packets(phase_log, selected, selected_history)
         if cut_receiver_primitives == 12:
@@ -124,12 +119,8 @@ def analyze_evidence(log_text):
             for sample in selected:
                 optical = by_key[(sample["sequence"], sample["generation"])]
                 rays = sample["hardware_rays"]
-                if (not rays or rays != min(sample["candidates"], sample["effective_budget"])
-                    or sample["hardware_hits"] != rays or sample["opaque_pixels"] != rays or sample["glass_pixels"]
-                    or sample["fallback_pixels"] or optical["transparent_paths"] != rays
-                    or optical["query_budget_units"] != 11 * rays or optical["physical_queries"] != 7 * rays
-                    or optical["bootstrap_events"]
-                    or any(optical[field] for field in ("unsupported_paths", "limited_paths", "ambiguous_paths",
+                if (not rays or rays != min(sample["candidates"], sample["effective_budget"]) or sample["hardware_hits"] != rays or sample["opaque_pixels"] != rays or sample["glass_pixels"] or sample["fallback_pixels"] or optical["transparent_paths"] != rays
+                    or optical["query_budget_units"] != 11 * rays or optical["physical_queries"] != 7 * rays or optical["bootstrap_events"] or any(optical[field] for field in ("unsupported_paths", "limited_paths", "ambiguous_paths",
                         "tir_events", "medium_overflow_paths"))):
                     raise SmokeFailure("small cap phase lost exact completed rays, interface queries or resolved transport")
         evidence.append({"phase": phase, "name": name, "case": case, "begin": start, "capture": capture, **result})
@@ -143,8 +134,7 @@ def analyze_images(directory, evidence):
         path = directory / ("context_transition.bmp" if phase == 4 else f"context_transition.bmp.{phase}.bmp")
         frame = read_bmp_24_rows(path)
         frames.append(frame)
-        metrics[item["name"]] = {"image": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-            **analyze_image(frame, OpticalCapture(item["name"], item["case"]))}
+        metrics[item["name"]] = {"image": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), **analyze_image(frame, OpticalCapture(item["name"], item["case"]))}
     for first, second in ((0, 3), (1, 2), (1, 4)):
         metrics[f"phase_{first}_equals_{second}"] = compare_invariant(frames[first], frames[second])
     return metrics
@@ -166,12 +156,9 @@ def main(argv):
         parser.error("output directory must be empty; completed evidence is never overwritten")
     directory.mkdir(parents=True, exist_ok=True)
     output, log = directory / "context_transition.bmp", directory / "runtime.log"
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1",
-        "--timeout", str(args.timeout), "--log-output", str(log)]
-    for message in ("ReflectionSmokeProject: case " + CASE + " created", "ReflectionSmokeProject: hardware available",
-        "ReflectionSmokeProject: reflection mode hardware", "Reflection resolve: hardware",
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", "--timeout", str(args.timeout), "--log-output", str(log)]
+    for message in ("ReflectionSmokeProject: case " + CASE + " created", "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: reflection mode hardware", "Reflection resolve: hardware",
         "ReflectionCsgContext: complete captures=5", "ReflectionSmokeProject: shutdown"):
         command += ["--expect-log-message", message]
     if args.logserver_executable:
@@ -180,9 +167,7 @@ def main(argv):
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     environment = capture_environment(CASE, "hardware", DEFAULT_RAY_BUDGET)
-    environment.update({"NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": "16", "NWB_REFLECTION_SMOKE_TEMPORAL": "0",
-        "NWB_REFLECTION_SMOKE_SPATIAL": "0", "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": "16",
-        "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1"})
+    environment.update({"NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": "16", "NWB_REFLECTION_SMOKE_TEMPORAL": "0", "NWB_REFLECTION_SMOKE_SPATIAL": "0", "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": "16", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1"})
     try:
         result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 90)
         if result.returncode == SKIP_EXIT_CODE:
@@ -190,9 +175,7 @@ def main(argv):
         if result.returncode:
             raise SmokeFailure("live CSG context capture failed with exit " + str(result.returncode))
         evidence = analyze_evidence(log.read_text(encoding="utf-8"))
-        manifest = {"frame_source": "actual application framebuffer readback", "size": [960, 720],
-            "environment_overrides": {name: environment[name] for name in environment if name.startswith("NWB_")},
-            "completed_phase_evidence": evidence, "metrics": None,
+        manifest = {"frame_source": "actual application framebuffer readback", "size": [960, 720], "environment_overrides": {name: environment[name] for name in environment if name.startswith("NWB_")}, "completed_phase_evidence": evidence, "metrics": None,
             "diagnostic_sampling": "The owning probe samples each fixture frame after public graphics waitForIdle, retaining exact-source latest-only statistics.",
             "limitations": "Five live context transitions qualify HW reflection semantics and accepted packet coverage with synchronized frames; no asynchronous-overlap, performance or GI claim."}
         report = directory / "manifest.json"

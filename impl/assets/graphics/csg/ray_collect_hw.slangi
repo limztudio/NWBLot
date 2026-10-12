@@ -17,14 +17,7 @@
 #endif
 
 #if NWB_CSG_RAY_RETAINED_POSE
-bool nwbCsgRayPrepareHardwareRay(
-    const uint contextSlot,
-    const uint instanceIndex,
-    const float3 worldOrigin,
-    const float3 worldDirection,
-    out float3 queryOrigin,
-    out float3 queryDirection
-);
+bool nwbCsgRayPrepareHardwareRay(const uint contextSlot, const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, out float3 queryOrigin, out float3 queryDirection);
 #endif
 
 
@@ -73,9 +66,7 @@ NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
             continue;
         const uint primitive = query.CandidatePrimitiveIndex();
         if(!nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive)){
-            const uint failure = openVisitor.visit(
-                primitive, query.CandidateTriangleRayT(), query.CandidateTriangleBarycentrics(), minimum, maximum, cuts, cutCount
-            );
+            const uint failure = openVisitor.visit(primitive, query.CandidateTriangleRayT(), query.CandidateTriangleBarycentrics(), minimum, maximum, cuts, cutCount);
             if(failure != 0u){
                 result.failure = failure;
                 return result;

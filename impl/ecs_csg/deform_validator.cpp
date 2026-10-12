@@ -53,11 +53,7 @@ bool CsgDeformValidator::ValidOptions(const CsgDeformBuildOptions& options)noexc
     return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
 }
 
-bool CsgDeformValidator::ValidTopology(
-    NotNull<const CsgDeformTriangle*> triangles,
-    const usize triangleCount,
-    const usize vertexCount
-)noexcept{
+bool CsgDeformValidator::ValidTopology(NotNull<const CsgDeformTriangle*> triangles, const usize triangleCount, const usize vertexCount)noexcept{
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const CsgDeformTriangle& triangle = triangles.get()[triangleIndex];
         for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner){
@@ -68,10 +64,7 @@ bool CsgDeformValidator::ValidTopology(
     return true;
 }
 
-Expected<void, CsgDeformViabilityReason::Enum> CsgDeformValidator::FiniteInput(
-    NotNull<const CsgDeformVertex*> vertices,
-    const usize vertexCount
-)noexcept{
+Expected<void, CsgDeformViabilityReason::Enum> CsgDeformValidator::FiniteInput(NotNull<const CsgDeformVertex*> vertices, const usize vertexCount)noexcept{
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         if(!CsgDeformValidator::FiniteVertex(vertices.get()[vertexIndex])){
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);

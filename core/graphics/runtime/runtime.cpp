@@ -91,7 +91,8 @@ public:
         accumulate(scopeName, DurationInSeconds<f64>(TimerNow(), begin), timing);
     }
 
-    // Render passes execute on the main thread. One frame sample sums each callback without counting queue waits twice.
+    // Render passes execute on the main thread.
+    // One frame sample sums each callback without counting queue waits twice.
     // Scopes resolve once at stage time so flush() stays a pure record path.
     void accumulate(const Name& scopeName, const f64 seconds, Perf::TimingSink* timing = nullptr){
         for(u32 index = 0u; index < m_phaseCount; ++index){
@@ -119,10 +120,7 @@ public:
 
         for(u32 phaseIndex = 0u; phaseIndex < m_phaseCount; ++phaseIndex){
             const PhaseTiming& phase = m_phases[phaseIndex];
-            const Perf::TimingScopeId scope = phase.scope.valid()
-                ? phase.scope
-                : timing.registerScope(phase.scopeName)
-            ;
+            const Perf::TimingScopeId scope = phase.scope.valid() ? phase.scope : timing.registerScope(phase.scopeName);
             timing.recordSample(scope, phase.seconds, sampleFrameIndex);
         }
     }
@@ -132,22 +130,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GraphicsRuntime::GraphicsRuntime(
-    GraphicsAllocator& allocator,
-    CpuTaskScheduler& cpuScheduler,
-    GpuTaskScheduler& gpuTasks,
-    Perf::TimingSink& gpuTiming
-)
+GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming)
     : GraphicsRuntime(allocator, cpuScheduler, gpuTasks, gpuTiming, nullptr)
 {}
 
-GraphicsRuntime::GraphicsRuntime(
-    GraphicsAllocator& allocator,
-    CpuTaskScheduler& cpuScheduler,
-    GpuTaskScheduler& gpuTasks,
-    Perf::TimingSink& gpuTiming,
-    Perf::TimingSink* const cpuTiming
-)
+GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming, Perf::TimingSink* const cpuTiming)
     : m_allocator(allocator)
     , m_cpuScheduler(cpuScheduler)
     , m_gpuTasks(gpuTasks)
@@ -166,8 +153,8 @@ GraphicsRuntime::GraphicsRuntime(
         m_frameTimingScope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
 }
 GraphicsRuntime::~GraphicsRuntime()noexcept(false){
-    // An active unwind is already terminal. Detach the borrowed device binding without native
-    // callbacks or a GPU join, so the original exception reaches the application-entry boundary.
+    // An active unwind is already terminal.
+    // Detach the borrowed device binding without native callbacks or a GPU join, so the original exception reaches the application-entry boundary.
     const auto detachDevice = [this]()noexcept{
         if(auto* device = m_backend->getDevice(); device && m_gpuTasks.isAttachedTo(*device)){
             if(!m_gpuTasks.detachDevice(*device))
@@ -181,10 +168,7 @@ GraphicsRuntime::~GraphicsRuntime()noexcept(false){
 
     ScopeExit detachOnFailure(detachDevice);
 
-    NWB_FATAL_ASSERT_MSG(
-        destroy(),
-        NWB_TEXT("Graphics destruction requires either a completed device join or terminal device loss")
-    );
+    NWB_FATAL_ASSERT_MSG(destroy(), NWB_TEXT("Graphics destruction requires either a completed device join or terminal device loss"));
     detachOnFailure.release();
 }
 
@@ -228,10 +212,7 @@ bool GraphicsRuntime::init(const Common::FrameData& data){
     }
     m_previousFrameTimestamp = TimerNow();
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: window device and swap chain created ({}x{})")
-        , data.width()
-        , data.height()
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: window device and swap chain created ({}x{})"), data.width(), data.height());
     return true;
 }
 
@@ -304,11 +285,7 @@ bool GraphicsRuntime::updateWindowState(u32 width, u32 height, bool windowVisibl
         return true;
     }
 
-    if(
-        static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width)
-        || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)
-        || m_swapChainState.vsyncEnabled != m_requestedVSync
-    ){
+    if(static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width) || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height) || m_swapChainState.vsyncEnabled != m_requestedVSync){
         if(!resizeBackBuffer(width, height, m_requestedVSync))
             return false;
     }
@@ -339,8 +316,8 @@ bool GraphicsRuntime::destroy(){
         return false;
     }
     if(!m_backend->commitDestroy(Move(*transitionTicket))){
-        // Commit rejection retains the backend device. Restore only our binding; failed initialization must never
-        // detach or replace a scheduler belonging to a different runtime.
+        // Commit rejection retains the backend device.
+        // Restore only our binding; failed initialization must never detach or replace a scheduler belonging to a different runtime.
         if(detachScheduler && m_backend->getDevice() == device && !m_gpuTasks.attachDevice(*device))
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to restore the GPU scheduler after device teardown was rejected."));
         requestDeviceRecreation();
@@ -384,10 +361,7 @@ QueueSubmissionPreSubmitHook GraphicsRuntime::claimFramePresentationSignal()noex
     return m_backend->claimFramePresentationSignal();
 }
 
-bool GraphicsRuntime::confirmFramePresentationSignal(
-    const QueueSubmissionPreSubmitHook& claim,
-    const QueueSubmissionToken& token
-)noexcept{
+bool GraphicsRuntime::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
     return m_backend->confirmFramePresentationSignal(claim, token);
 }
 
@@ -439,8 +413,7 @@ bool GraphicsRuntime::prepareFramePreamble(){
     m_gpuTiming.beginFrame(m_frameIndex);
 
     // Materialize and reset every declared timer-query pool before any pass preparation can record a timestamp.
-    // Per-pass preparation submits skinning and shadow packets, so this must remain ahead of it as well as every
-    // later render packet on the same GPU timeline.
+    // Per-pass preparation submits skinning and shadow packets, so this must remain ahead of it as well as every later render packet on the same GPU timeline.
     if(m_gpuTiming.collectionActive()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to materialize one or more requested GPU-timing query pools"));
@@ -448,11 +421,7 @@ bool GraphicsRuntime::prepareFramePreamble(){
         // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
-        if(!GraphicsModuleDetail::SubmitGraphOwnedFrameTimingReset(
-            *this,
-            m_allocator.getObjectArena(),
-            m_gpuTiming
-        )){
+        if(!GraphicsModuleDetail::SubmitGraphOwnedFrameTimingReset(*this, m_allocator.getObjectArena(), m_gpuTiming)){
             m_gpuTiming.discardFrameReset();
             NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
         }
@@ -478,13 +447,10 @@ void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTimi
         return;
     }
 
-    // Each task pairs preparation with rendering. The dependency chain preserves skinning publication before the
-    // next pass prepares dependent meshes, while main-thread execution preserves the platform and UI contracts.
+    // Each task pairs preparation with rendering.
+    // The dependency chain preserves skinning publication before the next pass prepares dependent meshes, while main-thread execution preserves the platform and UI contracts.
     CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
-    const CpuTaskOptions options{
-        .priority = CpuTaskPriority::Critical,
-        .target = CpuTaskTarget::MainThread,
-    };
+    const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
     CpuTaskHandle previous;
     for(auto* renderPass : m_renderPasses){
         previous = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
@@ -498,9 +464,7 @@ void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTimi
                 prepareBegin = TimerNow();
             const bool resourcesPrepared = renderPass->prepareResources(framebuffer);
             if(phaseTiming)
-                phaseTiming->stage(resourcesPrepared
-                    ? __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesCpuTimingScope
-                    : __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesFailedCpuTimingScope, prepareBegin, m_cpuTiming);
+                phaseTiming->stage(resourcesPrepared ? __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesCpuTimingScope : __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesFailedCpuTimingScope, prepareBegin, m_cpuTiming);
             if(!resourcesPrepared){
                 NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
                 return;
@@ -542,9 +506,9 @@ bool GraphicsRuntime::shouldRenderUnfocused()const{
 }
 
 bool GraphicsRuntime::runFrame(){
-    // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work,
-    // and submission-suspended maintenance. Detailed phase scopes sit within this aggregate, so consumers must not
-    // sum them with it. Record only a successful call so a failed frame can never be published with a later one.
+    // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work, and submission-suspended maintenance.
+    // Detailed phase scopes sit within this aggregate, so consumers must not sum them with it.
+    // Record only a successful call so a failed frame can never be published with a later one.
     const bool recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled() && m_frameTimingScope.valid();
     Timer frameTimingBegin;
     const u64 sampleFrameIndex = m_frameIndex;
@@ -559,18 +523,14 @@ bool GraphicsRuntime::runFrame(){
         CpuTimingPhaseBatch phaseTiming;
         const bool rendered = animateRenderPresentInternal(&phaseTiming);
         if(rendered){
-            m_cpuTiming->recordSample(
-                m_frameTimingScope,
-                DurationInSeconds<f64>(TimerNow(), frameTimingBegin),
-                sampleFrameIndex
-            );
+            m_cpuTiming->recordSample(m_frameTimingScope, DurationInSeconds<f64>(TimerNow(), frameTimingBegin), sampleFrameIndex);
             phaseTiming.flush(*m_cpuTiming, sampleFrameIndex);
         }
         return rendered;
     }
 
-    // Do not let a capture hold hide a device-loss/recreation request. No backend beginFrame, render, or present call
-    // is made here, so the last completed frame stays on screen while the platform loop remains responsive.
+    // Do not let a capture hold hide a device-loss/recreation request.
+    // No backend beginFrame, render, or present call is made here, so the last completed frame stays on screen while the platform loop remains responsive.
     if(m_deviceRecreationRequested)
         return false;
 
@@ -582,11 +542,7 @@ bool GraphicsRuntime::runFrame(){
 
     YieldThread();
     if(recordFrameTiming)
-        m_cpuTiming->recordSample(
-            m_frameTimingScope,
-            DurationInSeconds<f64>(TimerNow(), frameTimingBegin),
-            sampleFrameIndex
-        );
+        m_cpuTiming->recordSample(m_frameTimingScope, DurationInSeconds<f64>(TimerNow(), frameTimingBegin), sampleFrameIndex);
     return true;
 }
 
@@ -631,15 +587,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             beginFrameResult = m_backend->beginFrame();
             if(beginFrameResult.status != BeginFrameStatus::ResizeRequired)
                 break;
-            if(
-                beginFrameResult.suggestedWidth == 0u
-                || beginFrameResult.suggestedHeight == 0u
-                || !resizeBackBuffer(
-                    beginFrameResult.suggestedWidth,
-                    beginFrameResult.suggestedHeight,
-                    m_requestedVSync
-                )
-            )
+            if(beginFrameResult.suggestedWidth == 0u || beginFrameResult.suggestedHeight == 0u || !resizeBackBuffer(beginFrameResult.suggestedWidth, beginFrameResult.suggestedHeight, m_requestedVSync))
                 break;
         }
         if(phaseTiming)
@@ -655,10 +603,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
         AcquiredBackBuffer acquiredBackBuffer = Move(beginFrameResult.backBuffer);
         if(acquiredBackBuffer.valid()){
             const u32 acquiredBackBufferIndex = acquiredBackBuffer.index;
-            if(
-                acquiredBackBufferIndex >= m_swapChainFramebuffers.size()
-                || !m_swapChainFramebuffers[acquiredBackBufferIndex]
-            ){
+            if(acquiredBackBufferIndex >= m_swapChainFramebuffers.size() || !m_swapChainFramebuffers[acquiredBackBufferIndex]){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image has no matching framebuffer; requesting recreation."));
                 if(!m_backend->abandonAcquiredFrame())
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
@@ -668,10 +613,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
 
             Framebuffer* const acquiredFramebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex].get();
             const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer->getDescription();
-            if(
-                acquiredFramebufferDesc.colorAttachments.size() != 1u
-                || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()
-            ){
+            if(acquiredFramebufferDesc.colorAttachments.size() != 1u || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
                 if(!m_backend->abandonAcquiredFrame())
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
@@ -679,10 +621,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 return false;
             }
 
-            m_acquiredPresentationFrame = {
-                .backBuffer = Move(acquiredBackBuffer),
-                .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex],
-            };
+            m_acquiredPresentationFrame = { .backBuffer = Move(acquiredBackBuffer), .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex], };
             const __hidden_graphics_lifecycle::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
 
             Timer framePreambleBegin;
@@ -692,8 +631,8 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             if(phaseTiming)
                 phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin, m_cpuTiming);
             if(!preamblePrepared){
-                // prepareFramePreamble() returns false only after the device requires recreation. Do not issue
-                // recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
+                // prepareFramePreamble() returns false only after the device requires recreation.
+                // Do not issue recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
                 requestDeviceRecreation();
                 return false;
             }
@@ -724,8 +663,8 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             if(phaseTiming)
                 phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin, m_cpuTiming);
             if(!presented){
-                // A consumed presentation already cleared acquisition and makes abandonment a no-op. Every
-                // healthy unconsumed failure is drained and quarantined before recreation.
+                // A consumed presentation already cleared acquisition and makes abandonment a no-op.
+                // Every healthy unconsumed failure is drained and quarantined before recreation.
                 if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame())
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the unpresented acquired frame; device teardown is required."));
                 requestDeviceRecreation();

@@ -13,10 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeSkinDependencies(const PipelineOptions& options,
-    NWB::Core::Assets::AssetArena& arena,
-    NWB::Core::Alloc::ScratchArena& scratchArena
-){
+Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeSkinDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
     using namespace NWB;
     namespace Assets = Core::Assets;
     Assets::AssetVector<Assets::AssetString> candidate(arena);
@@ -41,13 +38,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         if(Name(document->assetType()) != Impl::UiSkin::s_AssetTypeName)
             continue;
         const auto& file = files[index];
-        const auto texture = Impl::ExtractUiSkinTextureDependency(
-            file.assetRoot,
-            file.virtualRoot.view(),
-            file.filePath,
-            *document,
-            scratchArena
-        );
+        const auto texture = Impl::ExtractUiSkinTextureDependency(file.assetRoot, file.virtualRoot.view(), file.filePath, *document, scratchArena);
         if(!texture)
             return MakeUnexpected(Failure{});
         const auto provider = catalog.resolve(texture->name(), Impl::Texture::s_AssetTypeName, scratchArena);

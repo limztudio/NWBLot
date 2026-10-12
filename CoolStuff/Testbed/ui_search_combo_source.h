@@ -24,8 +24,7 @@ class UiSearchComboSource final : public UiFilteredListSource<UiSearchComboSourc
 
 
 private:
-    static constexpr Array<StringView, 12u> s_Labels{ "Apple", "Banana", "Blueberry", "Cherry", "Fig (disabled)", "Grape",
-        "Kiwi", "Lemon", "Mango", "Orange", "Pear", "Plum" };
+    static constexpr Array<StringView, 12u> s_Labels{ "Apple", "Banana", "Blueberry", "Cherry", "Fig (disabled)", "Grape", "Kiwi", "Lemon", "Mango", "Orange", "Pear", "Plum" };
 
 
 public:

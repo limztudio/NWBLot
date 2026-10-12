@@ -49,26 +49,14 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_shadowShader,
-        AssetsGraphicsShadow::s_RayQueryShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_ShadowRayQuery"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowShader, AssetsGraphicsShadow::s_RayQueryShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuery")){
         m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_shadowShader)
-        .addBindingLayout(m_rayTracingState.m_shadowBindingLayout)
-    ;
-    pipelineDesc
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-        .addBindingLayout(heap.getAccelStructLayout())
-    ;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowShader).addBindingLayout(m_rayTracingState.m_shadowBindingLayout);
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
     m_rayTracingState.m_shadowPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_shadowPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
@@ -105,26 +93,14 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_shadowSoftShader,
-        AssetsGraphicsShadow::s_RayQuerySoftShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_ShadowRayQuerySoft"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowSoftShader, AssetsGraphicsShadow::s_RayQuerySoftShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuerySoft")){
         m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_shadowSoftShader)
-        .addBindingLayout(m_rayTracingState.m_shadowBindingLayout)
-    ;
-    pipelineDesc
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-        .addBindingLayout(heap.getAccelStructLayout())
-    ;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowSoftShader).addBindingLayout(m_rayTracingState.m_shadowBindingLayout);
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
     m_rayTracingState.m_shadowSoftPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_shadowSoftPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
@@ -228,26 +204,15 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     if(pipeline)
         return true;
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        shader,
-        shaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Name(debugLabel)
-    ))
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
         return false;
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(shader)
-        .addBindingLayout(m_rayTracingState.m_swShadowBindingLayout)
-    ;
+    pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_swShadowBindingLayout);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    pipelineDesc
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     pipeline = m_graphics.getDevice().createComputePipeline(pipelineDesc);
     if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
@@ -259,16 +224,9 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
 bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instanceCount){
     // CPU-uploaded material context is shared by the exclusive HW/SW backends.
     if(m_rayTracingState.m_shadowInstanceMaterialBuffer && m_rayTracingState.m_shadowInstanceMaterialCapacity >= instanceCount)
-        return ensureRayTraceMaterialContextHeapHandle(
-            *m_rayTracingState.m_shadowInstanceMaterialBuffer.get(),
-            m_rayTracingState.m_shadowInstanceMaterialHeapHandle
-        );
+        return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
 
-    const usize capacity = ::NextGrowingCapacity(
-        m_rayTracingState.m_shadowInstanceMaterialCapacity,
-        instanceCount,
-        s_ShadowInstanceMaterialInitialCapacity
-    );
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowInstanceMaterialCapacity, instanceCount, s_ShadowInstanceMaterialInitialCapacity);
 
     Core::BufferDesc materialBufferDesc;
     materialBufferDesc
@@ -293,15 +251,9 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
 bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
     // Shadow tracing needs an instance record for every gathered occluder.
     if(instanceCount == 0u)
-        return !m_rayTracingState.m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(
-            *m_rayTracingState.m_shadowInstanceBuffer.get(),
-            m_rayTracingState.m_shadowInstanceHeapHandle
-        );
+        return !m_rayTracingState.m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
     if(m_rayTracingState.m_shadowInstanceBuffer && m_rayTracingState.m_shadowInstanceCapacity >= instanceCount)
-        return ensureRayTraceMaterialContextHeapHandle(
-            *m_rayTracingState.m_shadowInstanceBuffer.get(),
-            m_rayTracingState.m_shadowInstanceHeapHandle
-        );
+        return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
 
     const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowInstanceCapacity, instanceCount);
     Core::BufferDesc instanceBufferDesc;
@@ -329,10 +281,7 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
     if(m_rayTracingState.m_shadowMaterialTypedBuffer && m_rayTracingState.m_shadowMaterialTypedCapacity >= requiredByteCount)
-        return ensureRayTraceMaterialContextHeapHandle(
-            *m_rayTracingState.m_shadowMaterialTypedBuffer.get(),
-            m_rayTracingState.m_shadowMaterialTypedHeapHandle
-        );
+        return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle);
 
     const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowMaterialTypedCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;

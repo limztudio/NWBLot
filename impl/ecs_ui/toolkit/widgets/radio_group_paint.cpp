@@ -47,8 +47,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const bool checked = frame.m_snapshot.selectedKey == row.key;
         const bool hover = input.hover() == part;
         const bool pressed = input.capture() == part && input.primaryDown() && hover;
-        const Name& preferred = checked ? frame.m_style.checked : !enabled ? frame.m_style.disabled
-            : pressed ? frame.m_style.pressed : hover ? frame.m_style.hover : frame.m_style.normal;
+        const Name& preferred = checked ? frame.m_style.checked : !enabled ? frame.m_style.disabled : pressed ? frame.m_style.pressed : hover ? frame.m_style.hover : frame.m_style.normal;
         const Name& fallback = checked ? frame.m_style.checkedFallback : frame.m_style.normal;
         const UiSkinRegion* indicator = region(preferred, fallback);
         if(!indicator)
@@ -56,8 +55,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const UiSkinRegion* mark = region(frame.m_style.mark, frame.m_style.markFallback);
         if(!indicator || !mark)
             return false;
-        const Color tint = !enabled ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint
-            : hover ? frame.m_style.hoverTint : Color{};
+        const Color tint = !enabled ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint : hover ? frame.m_style.hoverTint : Color{};
         m_paint.pushClip(row.clip);
         bool painted = m_paint.drawRegion(indicator->name, row.indicator, tint);
         if(painted && checked)
@@ -68,8 +66,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const TextLayout& label = frame.m_labels[index];
         const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + frame.m_metrics.gap);
         const f32 verticalOffset = Max(0.0f, (row.rectangle.height - label.measure().y) * 0.5f);
-        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, row.rectangle.x, row.rectangle.y),
-            VectorSet(horizontalOffset, verticalOffset, horizontalOffset, verticalOffset));
+        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, row.rectangle.x, row.rectangle.y), VectorSet(horizontalOffset, verticalOffset, horizontalOffset, verticalOffset));
         const Point origin{ VectorGetX(textOrigin), VectorGetY(textOrigin) };
         m_paint.pushClip(row.textClip);
         if(painted)

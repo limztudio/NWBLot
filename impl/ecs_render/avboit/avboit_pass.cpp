@@ -37,14 +37,7 @@ static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::Color
     return target;
 }
 
-static void DispatchAvboitCompute(
-    Core::CommandList& commandList,
-    Core::ComputePipeline& pipeline,
-    Core::GpuDescriptorHeap& heap,
-    const AvboitFrameTargets& targets,
-    const u32 groupCountX,
-    const bool hdr10OutputActive
-){
+static void DispatchAvboitCompute(Core::CommandList& commandList, Core::ComputePipeline& pipeline, Core::GpuDescriptorHeap& heap, const AvboitFrameTargets& targets, const u32 groupCountX, const bool hdr10OutputActive){
     NWB_ASSERT(heap.isInitialized());
 
     Core::ComputeState computeState;
@@ -69,46 +62,28 @@ static void DispatchAvboitCompute(
 
 
 Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = {
-        Core::Format::RGBA16_FLOAT,
-        Core::Format::RGBA8_UNORM,
-    };
+    constexpr Core::Format::Enum candidates[] = { Core::Format::RGBA16_FLOAT, Core::Format::RGBA8_UNORM, };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
     return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = {
-        Core::Format::R16_FLOAT,
-        Core::Format::R32_FLOAT,
-        Core::Format::RGBA16_FLOAT,
-        Core::Format::R8_UNORM,
-        Core::Format::RGBA8_UNORM,
-    };
+    constexpr Core::Format::Enum candidates[] = { Core::Format::R16_FLOAT, Core::Format::R32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
     return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = {
-        NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT,
-    };
-    constexpr Core::FormatSupport::Mask requiredSupport =
-        Core::FormatSupport::Texture
-        | Core::FormatSupport::ShaderSample
-        | Core::FormatSupport::ShaderUavStore
-    ;
+    constexpr Core::Format::Enum candidates[] = { NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT, };
+    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample | Core::FormatSupport::ShaderUavStore;
 
     return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = {
-        Core::Format::R8_UNORM,
-        Core::Format::RGBA8_UNORM,
-    };
+    constexpr Core::Format::Enum candidates[] = { Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
     return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
@@ -124,11 +99,7 @@ Core::RenderState BuildRendererAvboitVoxelRenderState(){
 
 Core::RenderState BuildRendererAvboitAccumulateRenderState(){
     Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .disableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
+    renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullBack();
     renderState.blendState
         .setRenderTarget(NWB_AVBOIT_ACCUM_COLOR_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget())
@@ -141,11 +112,7 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
 
 Core::RenderState BuildRendererAvboitRefractionCaptureRenderState(){
     Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .enableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
+    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullBack();
     // Nearest fragment wins; no attachment blends.
     return renderState;
@@ -163,74 +130,30 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
     pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_VIRTUAL_SLICE_COUNT] = targets.virtualSliceCount;
     pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_PHYSICAL_SLICE_COUNT] = targets.physicalSliceCount;
     const u32 physicalExtinctionWordCount = DivideUp(targets.physicalSliceCount, ECSRenderAvboitDetail::s_AvboitExtinctionSlicesPerWord);
-    pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_EXTINCTION_WORD_COUNT] = static_cast<u32>(
-        static_cast<u64>(targets.lowWidth) * static_cast<u64>(targets.lowHeight) * static_cast<u64>(physicalExtinctionWordCount)
-    );
+    pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_EXTINCTION_WORD_COUNT] = static_cast<u32>(static_cast<u64>(targets.lowWidth) * static_cast<u64>(targets.lowHeight) * static_cast<u64>(physicalExtinctionWordCount));
     pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT] = DivideUp(targets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
-    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE] = hdr10OutputActive
-        ? NWB_AVBOIT_PRESENTATION_HDR10
-        : NWB_AVBOIT_PRESENTATION_SDR
-    ;
+    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE] = hdr10OutputActive ? NWB_AVBOIT_PRESENTATION_HDR10 : NWB_AVBOIT_PRESENTATION_SDR;
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = ECSRenderAvboitDetail::s_AvboitExtinctionFixedScale;
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS] = ECSRenderAvboitDetail::s_AvboitSelfOcclusionSliceBias;
-    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] = targets.refractionFramebuffer
-        ? NWB_AVBOIT_REFRACTION_ACCUMULATE
-        : NWB_AVBOIT_REFRACTION_DISABLED
-    ;
+    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] = targets.refractionFramebuffer ? NWB_AVBOIT_REFRACTION_ACCUMULATE : NWB_AVBOIT_REFRACTION_DISABLED;
     pushConstants.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES] = targets.deferredSlotsBufferDescriptor.slot();
     return pushConstants;
 }
 
-bool RendererAvboitSystem::prepareAvboitPassResources(
-    DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState
-){
+bool RendererAvboitSystem::prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return false;
 
     const bool hasTransparentCsgWork = csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
-    if(
-        hasTransparentCsgWork
-        && !m_materialSystem.prepareMaterialPassResources(
-            targets.framebuffer.get(),
-            MaterialPipelinePass::CsgReceiverSurface,
-            true,
-            csgFrameState,
-            nullptr
-        )
-    )
+    if(hasTransparentCsgWork && !m_materialSystem.prepareMaterialPassResources(targets.framebuffer.get(), MaterialPipelinePass::CsgReceiverSurface, true, csgFrameState, nullptr))
         return false;
 
     return
-        m_materialSystem.prepareMaterialPassResources(
-            avboitTargets.lowFramebuffer.get(),
-            MaterialPipelinePass::AvboitOccupancy,
-            true,
-            csgFrameState,
-            &avboitTargets
-        )
-        && m_materialSystem.prepareMaterialPassResources(
-            avboitTargets.lowFramebuffer.get(),
-            MaterialPipelinePass::AvboitExtinction,
-            true,
-            csgFrameState,
-            &avboitTargets
-        )
-        && m_materialSystem.prepareMaterialPassResources(
-            avboitTargets.accumulationFramebuffer.get(),
-            MaterialPipelinePass::AvboitAccumulate,
-            true,
-            csgFrameState,
-            &avboitTargets
-        )
-        && (!avboitTargets.refractionFramebuffer || m_materialSystem.prepareMaterialPassResources(
-            avboitTargets.refractionFramebuffer.get(),
-            MaterialPipelinePass::AvboitRefractionCapture,
-            true,
-            csgFrameState,
-            &avboitTargets
-        ))
+        m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer.get(), MaterialPipelinePass::AvboitOccupancy, true, csgFrameState, &avboitTargets)
+        && m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer.get(), MaterialPipelinePass::AvboitExtinction, true, csgFrameState, &avboitTargets)
+        && m_materialSystem.prepareMaterialPassResources(avboitTargets.accumulationFramebuffer.get(), MaterialPipelinePass::AvboitAccumulate, true, csgFrameState, &avboitTargets)
+        && (!avboitTargets.refractionFramebuffer || m_materialSystem.prepareMaterialPassResources(avboitTargets.refractionFramebuffer.get(), MaterialPipelinePass::AvboitRefractionCapture, true, csgFrameState, &avboitTargets))
     ;
 }
 
@@ -246,32 +169,19 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const bool materialGeometryStatesGraphOwned,
     Optional<Core::GpuTimingMeasure>& intervalTiming
 ){
-    if(
-        !targets.framebuffer
-        || receiverSurfaceDrawItems.empty()
-        || !csgFrameData.hasWork()
-        || !csgResources.frameReady(csgFrameData)
-        || !frameBindings.bindingValid()
-    )
+    if(!targets.framebuffer || receiverSurfaceDrawItems.empty() || !csgFrameData.hasWork() || !csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid())
         return;
 
     if(intervalTiming.has_value()){
         intervalTiming.value().discardTiming();
         intervalTiming.reset();
     }
-    intervalTiming.emplace(
-        m_graphics.gpuTiming(),
-        RendererGpuTimingScope::s_TransparentCsgIntervals,
-        m_graphics.getDevice(),
-        commandList
-    );
+    intervalTiming.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_TransparentCsgIntervals, m_graphics.getDevice(), commandList);
 
     // The native step only consumes graph-owned data; never rebuild it.
     const bool drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
     const bool csgResourcesReady = csgResources.frameReady(csgFrameData);
-    const bool receiverSurfaceDrawResourcesReady =
-        m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings)
-    ;
+    const bool receiverSurfaceDrawResourcesReady = m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings);
     if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady){
         // Preserve the short interval; drop the unfinished reservation.
         if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))
@@ -282,35 +192,12 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     }
 
     Core::ViewportState viewportState;
-    viewportState
-        .addViewport(targets.framebuffer->getFramebufferInfo().getViewport())
-        .addScissorRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height))
-    ;
+    viewportState.addViewport(targets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height));
 
-    m_csgSystem.dispatchCsgIntervalPeels(
-        commandList,
-        targets,
-        csgFrameData,
-        csgResources,
-        frameBindings
-    );
+    m_csgSystem.dispatchCsgIntervalPeels(commandList, targets, csgFrameData, csgResources, frameBindings);
 
-    const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
-        commandList,
-        targets.framebuffer.get(),
-        nullptr,
-        viewportState,
-        &csgResources,
-        frameBindings,
-        MaterialPipelinePass::CsgReceiverSurface,
-        true,
-        materialGeometryStatesGraphOwned,
-        false
-    };
-    m_materialSystem.renderMaterialPassDrawItems(
-        csgReceiverSurfaceDrawContext,
-        receiverSurfaceDrawItems
-    );
+    const MaterialPassDrawContext csgReceiverSurfaceDrawContext{ commandList, targets.framebuffer.get(), nullptr, viewportState, &csgResources, frameBindings, MaterialPipelinePass::CsgReceiverSurface, true, materialGeometryStatesGraphOwned, false };
+    m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, receiverSurfaceDrawItems);
 
     // Span and Combine are separate graph tasks; the aggregate endpoint remains open.
     if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))
@@ -441,61 +328,25 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     commandList.endRenderPass();
 }
 
-void RendererAvboitSystem::dispatchAvboitDepthWarp(
-    Core::CommandList& commandList,
-    AvboitFrameTargets& targets,
-    const Core::GpuTimingSampleAttribution timingAttribution,
-    bool* const timingRecorded
-){
-    Core::GpuTimingMeasure timing(
-        m_graphics.gpuTiming(),
-        RendererGpuTimingScope::s_AvboitDepthWarp,
-        m_graphics.getDevice(),
-        commandList,
-        timingAttribution
-    );
+void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, bool* const timingRecorded){
+    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, m_graphics.getDevice(), commandList, timingAttribution);
     if(timingRecorded)
         *timingRecorded = timing.valid();
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
-    __hidden_avboit::DispatchAvboitCompute(
-        commandList,
-        *m_avboitState.m_depthWarpPipeline.get(),
-        heap,
-        targets,
-        NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X,
-        m_graphics.isHDR10OutputActive()
-    );
+    __hidden_avboit::DispatchAvboitCompute(commandList, *m_avboitState.m_depthWarpPipeline.get(), heap, targets, NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X, m_graphics.isHDR10OutputActive());
 }
 
-void RendererAvboitSystem::dispatchAvboitIntegration(
-    Core::CommandList& commandList,
-    AvboitFrameTargets& targets,
-    const Core::GpuTimingSampleAttribution timingAttribution,
-    bool* const timingRecorded
-){
+void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, bool* const timingRecorded){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
-    Core::GpuTimingMeasure timing(
-        m_graphics.gpuTiming(),
-        RendererGpuTimingScope::s_AvboitIntegration,
-        m_graphics.getDevice(),
-        commandList,
-        timingAttribution
-    );
+    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, m_graphics.getDevice(), commandList, timingAttribution);
     if(timingRecorded)
         *timingRecorded = timing.valid();
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
-    __hidden_avboit::DispatchAvboitCompute(
-        commandList,
-        *m_avboitState.m_integratePipeline.get(),
-        heap,
-        targets,
-        DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)),
-        m_graphics.isHDR10OutputActive()
-    );
+    __hidden_avboit::DispatchAvboitCompute(commandList, *m_avboitState.m_integratePipeline.get(), heap, targets, DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)), m_graphics.isHDR10OutputActive());
 }
 
 

@@ -97,11 +97,7 @@ bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     if(!secondary.valid)
         return false;
     m_secondaryFocused = secondary.focused;
-    if(
-        !ui.label("read_only_hint", m_readOnly ? "F5: primary read-only" : "F5: primary editable", label)
-        || !ui.label("visibility_hint", "F6: hide primary / F7: reset", label)
-        || !ui.endPanel()
-    )
+    if(!ui.label("read_only_hint", m_readOnly ? "F5: primary read-only" : "F5: primary editable", label) || !ui.label("visibility_hint", "F6: hide primary / F7: reset", label) || !ui.endPanel())
         return false;
     observeState(context.text);
     paintMarkers(context);
@@ -125,22 +121,16 @@ bool UiEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i
 }
 
 void UiEditSmokeScene::resetModels(){
-    const bool reset = m_primary.setText(__hidden_ui_edit_smoke::s_Primary)
-        && m_secondary.setText(__hidden_ui_edit_smoke::s_Secondary);
+    const bool reset = m_primary.setText(__hidden_ui_edit_smoke::s_Primary) && m_secondary.setText(__hidden_ui_edit_smoke::s_Secondary);
     NWB_FATAL_ASSERT_MSG(reset, NWB_TEXT("UI edit smoke documents must be valid UTF8"));
 }
 
 void UiEditSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiEditSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiEditSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u32, 12u> UiEditSmokeScene::values()const{
@@ -200,11 +190,7 @@ bool IsUiLayerEditSmokeEnabled(){
 }
 
 SharedUiEditSmokeScene CreateUiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiEditSmokeScene(
-        NewArenaObject<RefCounter<UiEditSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiEditSmokeScene(NewArenaObject<RefCounter<UiEditSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

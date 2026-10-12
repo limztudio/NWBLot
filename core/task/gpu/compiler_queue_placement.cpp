@@ -33,12 +33,7 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] bool AccumulateInitialOwnershipQueue(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    GpuPhysicalQueueId& inOutQueue
-)noexcept{
+[[nodiscard]] bool AccumulateInitialOwnershipQueue(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, GpuPhysicalQueueId& inOutQueue)noexcept{
     if(resource.initialOwnerHandoffSourceCount == 0u)
         return AccumulateExactQueueConstraint(resource.initialOwnerQueue, inOutQueue);
 
@@ -58,12 +53,7 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] Expected<void, GpuTaskId> BuildInitialOwnershipQueueConstraints(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    Vector<GpuPhysicalQueueId, Alloc::ScratchArena>& outQueues,
-    Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] Expected<void, GpuTaskId> BuildInitialOwnershipQueueConstraints(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, Vector<GpuPhysicalQueueId, Alloc::ScratchArena>& outQueues, Alloc::ScratchArena& scratchArena){
     usize taskUseCapacity = 0u;
     usize ownedResourceUseCount = 0u;
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
@@ -71,10 +61,7 @@ using namespace GpuTaskGraphCompilerDetail;
         taskUseCapacity = Max(taskUseCapacity, task.resourceUseCount);
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskGraphResourceView resource = graph.resourceAt(task.resourceUses[useIndex].resource.index);
-            if(
-                resource.initialOwnerQueue.valid()
-                || resource.initialOwnerHandoffSourceCount != 0u
-            )
+            if(resource.initialOwnerQueue.valid() || resource.initialOwnerHandoffSourceCount != 0u)
                 ++ownedResourceUseCount;
         }
     }
@@ -94,30 +81,14 @@ using namespace GpuTaskGraphCompilerDetail;
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
-            if(
-                resource.type == GpuGraphResourceType::HazardDomain
-                || use.requiredState == ResourceStates::Unknown
-                || (
-                    !resource.initialOwnerQueue.valid()
-                    && resource.initialOwnerHandoffSourceCount == 0u
-                )
-            )
+            if(resource.type == GpuGraphResourceType::HazardDomain || use.requiredState == ResourceStates::Unknown || (!resource.initialOwnerQueue.valid() && resource.initialOwnerHandoffSourceCount == 0u))
                 continue;
 
             const auto plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range);
             if(!plannedRange)
                 return MakeUnexpected(taskID);
             if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
-                if(!CollectResourceFirstUseRangesWithinTask(
-                    graph,
-                    task,
-                    taskUses,
-                    useIndex,
-                    resource,
-                    (*plannedRange),
-                    scratchArena,
-                    firstUseRanges
-                ))
+                if(!CollectResourceFirstUseRangesWithinTask(graph, task, taskUses, useIndex, resource, (*plannedRange), scratchArena, firstUseRanges))
                     return MakeUnexpected(taskID);
                 if(!CollectLatestResourceStateFragments(states, history, resource, firstUseRanges, scratchArena, fragments))
                     return MakeUnexpected(taskID);
@@ -130,14 +101,7 @@ using namespace GpuTaskGraphCompilerDetail;
                 if(!AccumulateInitialOwnershipQueue(graph, resource, (*plannedRange), outQueues[taskID.index]))
                     return MakeUnexpected(taskID);
             }
-            if(!history.append(TrackedCompiledResourceState{
-                .resource = use.resource,
-                .range = (*plannedRange),
-                .task = taskID,
-                .state = use.requiredState,
-                .access = use.access,
-                .queue = {},
-            }))
+            if(!history.append(TrackedCompiledResourceState{ .resource = use.resource, .range = (*plannedRange), .task = taskID, .state = use.requiredState, .access = use.access, .queue = {}, }))
                 return MakeUnexpected(taskID);
         }
     }
@@ -146,17 +110,11 @@ using namespace GpuTaskGraphCompilerDetail;
 
 
 [[nodiscard]] bool TaskAllowsMerge(const GpuTaskGraphTaskView& task)noexcept{
-    return task.scheduling.allowPacketMerge
-        && !task.scheduling.forceSubmissionBoundary
-        && !task.scheduling.joinsAcceptedQueueFrontier
-    ;
+    return task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier;
 }
 
 
-[[nodiscard]] bool RequestsCompatiblePrecedingMerge(
-    const GpuTaskGraphTaskView& preceding,
-    const GpuTaskGraphTaskView& task
-)noexcept{
+[[nodiscard]] bool RequestsCompatiblePrecedingMerge(const GpuTaskGraphTaskView& preceding, const GpuTaskGraphTaskView& task)noexcept{
     if(!task.scheduling.mergeWithPrevious || !TaskAllowsMerge(preceding) || !TaskAllowsMerge(task))
         return false;
     if(!task.scheduling.allowMergeAcrossConsumerFrontier)
@@ -289,10 +247,7 @@ namespace GpuTaskGraphCompilerDetail{
         if(!singletonQueue)
             return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, taskID);
 
-        if(assignmentIndex != 0u && RequestsCompatiblePrecedingMerge(
-            graph.taskAt(analysis.topologicalOrder()[assignmentIndex - 1u].index),
-            task
-        )){
+        if(assignmentIndex != 0u && RequestsCompatiblePrecedingMerge(graph.taskAt(analysis.topologicalOrder()[assignmentIndex - 1u].index), task)){
             GpuTaskQueuePlacementGroup combined = outGroups.back();
             ++combined.assignmentCount;
             combined.requiredCapabilities |= singleton.requiredCapabilities;
@@ -301,23 +256,14 @@ namespace GpuTaskGraphCompilerDetail{
             if(AccumulateExactQueueConstraint(singleton.initialOwnershipQueue, combined.initialOwnershipQueue)){
                 NWB_ASSERT(legalityWitness);
                 // The witness already admits preceding members; only the appended task can invalidate it.
-                if(
-                    (!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id)
-                    && IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness)
-                )
+                if((!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id) && IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness))
                     combinedWitness = legalityWitness;
                 else
                     combinedWitness = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined);
             }
             if(combinedWitness){
                 combined.diagnosticOverrideQueue = outGroups.back().diagnosticOverrideQueue;
-                if(
-                    !AccumulateExactQueueConstraint(singleton.diagnosticOverrideQueue, combined.diagnosticOverrideQueue)
-                    || (
-                        combined.diagnosticOverrideQueue.valid()
-                        && !FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined)
-                    )
-                )
+                if(!AccumulateExactQueueConstraint(singleton.diagnosticOverrideQueue, combined.diagnosticOverrideQueue) || (combined.diagnosticOverrideQueue.valid() && !FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined)))
                     return fail(GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride, taskID);
                 outGroups.back() = combined;
                 legalityWitness = combinedWitness;
@@ -342,12 +288,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskQueuePlacementGroup& group,
     const GpuPhysicalQueueInfo& candidate
 )noexcept{
-    GpuTaskQueueScoreExclusions exclusions{
-        .assignmentOffset = group.assignmentOffset,
-        .assignmentCount = group.assignmentCount,
-        .totalCost = 0u,
-        .candidateQueueCost = 0u,
-    };
+    GpuTaskQueueScoreExclusions exclusions{ .assignmentOffset = group.assignmentOffset, .assignmentCount = group.assignmentCount, .totalCost = 0u, .candidateQueueCost = 0u, };
     bool allTasksAllowOverlap = true;
     for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
         const GpuTaskQueueAssignment& assignment = assignments[group.assignmentOffset + taskOffset];
@@ -387,17 +328,9 @@ namespace GpuTaskGraphCompilerDetail{
         overlap = scoringData.m_totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
     }
     else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){
-        overlap = scoringData.independentQueueCost(
-            schedulingReachability,
-            candidate.id,
-            NotNull<const GpuTaskQueueAssignment*>(assignments.data() + group.assignmentOffset),
-            group.assignmentCount
-        );
+        overlap = scoringData.independentQueueCost(schedulingReachability, candidate.id, NotNull<const GpuTaskQueueAssignment*>(assignments.data() + group.assignmentOffset), group.assignmentCount);
     }
-    score.overlap = overlap > static_cast<u64>(Limit<i32>::s_Max)
-        ? Limit<i32>::s_Max
-        : static_cast<i32>(overlap)
-    ;
+    score.overlap = overlap > static_cast<u64>(Limit<i32>::s_Max) ? Limit<i32>::s_Max : static_cast<i32>(overlap);
     return score;
 }
 

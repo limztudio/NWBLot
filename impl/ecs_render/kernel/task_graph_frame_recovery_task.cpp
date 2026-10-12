@@ -22,23 +22,13 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameRecoveryGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool FrameRecoveryGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
-    return payload.armed
-        && (!payload.retiresFrameTiming || payload.frameTimingTransaction.recordEnd(commandList))
-    ;
+    return payload.armed && (!payload.retiresFrameTiming || payload.frameTimingTransaction.recordEnd(commandList));
 }
 
 void FrameRecoveryGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-    if(
-        payload.armed
-        && payload.retiresFrameTiming
-        && !payload.frameTimingTransaction.confirmEndSubmission(token, false)
-    ){
+    if(payload.armed && payload.retiresFrameTiming && !payload.frameTimingTransaction.confirmEndSubmission(token, false)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
         payload.frameTimingTransaction.discard();
     }

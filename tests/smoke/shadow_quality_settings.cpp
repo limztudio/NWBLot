@@ -16,11 +16,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyShadowQualitySmokeSettings(
-    Impl::RendererSystem& renderer,
-    Core::Alloc::GlobalArena& arena,
-    const Impl::ShadowQualitySettings& baseSettings
-){
+bool ApplyShadowQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::ShadowQualitySettings& baseSettings){
     Impl::ShadowQualitySettings settings = baseSettings;
     if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SHADOW_TRANSPARENT_SAMPLING")){
         const AStringView sampling(value->data(), value->size());
@@ -42,10 +38,7 @@ bool ApplyShadowQualitySmokeSettings(
     }
     if(!renderer.setShadowQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowQualitySmoke: requested transparent_sampling={} receiver_factor={}")
-        , static_cast<u32>(settings.transparentSampling)
-        , static_cast<u32>(settings.receiverResolution)
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowQualitySmoke: requested transparent_sampling={} receiver_factor={}"), static_cast<u32>(settings.transparentSampling), static_cast<u32>(settings.receiverResolution));
     return true;
 }
 

@@ -20,12 +20,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TrackedResourceStateHistory::TrackedResourceStateHistory(
-    Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states,
-    const usize resourceCount,
-    const u64 graphGeneration,
-    Alloc::ScratchArena& scratchArena
-)
+TrackedResourceStateHistory::TrackedResourceStateHistory(Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states, const usize resourceCount, const u64 graphGeneration, Alloc::ScratchArena& scratchArena)
     : m_states(states)
     , m_resources(resourceCount, scratchArena)
     , m_links(scratchArena)

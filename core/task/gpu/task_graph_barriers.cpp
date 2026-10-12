@@ -18,30 +18,15 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::applyCompiledBarrier(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const PacketRecordingAccess& recordingAccess,
-    const GpuTaskId& task,
-    const GpuCompiledBarrier& barrier,
-    CommandList& commandList
-)const{
-    if(
-        !recordingAccess.validForTask(*this, compiledGraph, planAccess, task)
-        || !validResource(barrier.resource)
-        || barrier.type >= GpuCompiledBarrierType::kCount
-    )
+bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingAccess& recordingAccess, const GpuTaskId& task, const GpuCompiledBarrier& barrier, CommandList& commandList)const{
+    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::kCount)
         return false;
 
     const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];
     const auto resolveOwnershipQueues = [&]{
         const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
         const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
-        return sourceQueue
-            && destinationQueue
-            && sourceQueue->queueClass < CommandQueue::kCount
-            && destinationQueue->queueClass < CommandQueue::kCount
-        ;
+        return sourceQueue && destinationQueue && sourceQueue->queueClass < CommandQueue::kCount && destinationQueue->queueClass < CommandQueue::kCount;
     };
     switch(barrier.type){
     case GpuCompiledBarrierType::TextureTransition:
@@ -54,33 +39,20 @@ bool GpuTaskGraph::applyCompiledBarrier(
         if(barrier.isGraphInitialState){
             if(barrier.before == ResourceStates::Unknown)
                 return false;
-            const TextureSubresourceSet subresources = barrier.range.textureSubresources.resolve(
-                resource.texture->getCreationDescription(),
-                TextureSubresourceMipResolve::Range
-            );
+            const TextureSubresourceSet subresources = barrier.range.textureSubresources.resolve(resource.texture->getCreationDescription(), TextureSubresourceMipResolve::Range);
             const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
             const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
             for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-                    // CommandList::open can seed this exact subresource from an external handoff. Preserve that
-                    // producer truth, but do not mistake a keep-initial-state descriptor fallback for a packet
-                    // handoff: the graph declaration is authoritative when no explicit tracker state exists.
+                    // CommandList::open can seed this exact subresource from an external handoff.
+                    // Preserve that producer truth, but do not mistake a keep-initial-state descriptor fallback for a packet handoff: the graph declaration is authoritative when no explicit tracker state exists.
                     if(commandList.hasExplicitTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel))
                         continue;
-                    commandList.beginTrackingTextureState(
-                        resource.texture.get(),
-                        TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
-                        barrier.before
-                    );
+                    commandList.beginTrackingTextureState(resource.texture.get(), TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), barrier.before);
                 }
             }
         }
-        commandList.setTextureState(
-            resource.texture.get(),
-            barrier.range.textureSubresources,
-            barrier.after,
-            barrier.forceMemoryDependency
-        );
+        commandList.setTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after, barrier.forceMemoryDependency);
         return true;
     }
     case GpuCompiledBarrierType::BufferTransition:
@@ -104,19 +76,10 @@ bool GpuTaskGraph::applyCompiledBarrier(
         const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(resource.texture.get());
         if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
-        // A task thunk may transition internally after its declared entry use. Reapply the compiler-required
-        // final state against the native tracker, then retain it even when no Vulkan transition was needed so
-        // packet close publishes a complete external handoff.
-        commandList.setTextureState(
-            resource.texture.get(),
-            barrier.range.textureSubresources,
-            barrier.after
-        );
-        commandList.beginTrackingTextureState(
-            resource.texture.get(),
-            barrier.range.textureSubresources,
-            barrier.after
-        );
+        // A task thunk may transition internally after its declared entry use.
+        // Reapply the compiler-required final state against the native tracker, then retain it even when no Vulkan transition was needed so packet close publishes a complete external handoff.
+        commandList.setTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after);
+        commandList.beginTrackingTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after);
         return true;
     }
     case GpuCompiledBarrierType::BufferStateExport:{
@@ -138,8 +101,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
         const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(backingBuffer);
         if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
-        // Acceleration-structure state and ownership are represented by Vulkan through the allocation that backs
-        // the AS. Keep that lowering private to the graph runtime while retaining one typed graph resource.
+        // Acceleration-structure state and ownership are represented by Vulkan through the allocation that backs the AS.
+        // Keep that lowering private to the graph runtime while retaining one typed graph resource.
         commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
         commandList.beginTrackingBufferState(backingBuffer, barrier.after);
         return true;
@@ -160,41 +123,23 @@ bool GpuTaskGraph::applyCompiledBarrier(
             if(!commandList.hasExplicitBufferState(backingBuffer))
                 commandList.beginTrackingBufferState(backingBuffer, barrier.before);
         }
-        commandList.setAccelStructState(
-            resource.accelStruct.get(),
-            barrier.after,
-            barrier.forceMemoryDependency
-        );
+        commandList.setAccelStructState(resource.accelStruct.get(), barrier.after, barrier.forceMemoryDependency);
         return true;
     }
     case GpuCompiledBarrierType::TextureOwnershipRelease:{
         const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
         const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
-        if(
-            resource.type != GpuGraphResourceType::Texture
-            || !resource.texture
-            || !resolveOwnershipQueues()
-            || commandList.getResolvedDescription().physicalQueue != sourceQueue->id
-        )
+        if(resource.type != GpuGraphResourceType::Texture || !resource.texture || !resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != sourceQueue->id)
             return false;
         if(commandList.getPermanentTextureState(resource.texture.get()) != ResourceStates::Unknown)
             return false;
-        commandList.releaseTextureOwnership(
-            resource.texture.get(),
-            barrier.range.textureSubresources,
-            destinationQueue->id
-        );
+        commandList.releaseTextureOwnership(resource.texture.get(), barrier.range.textureSubresources, destinationQueue->id);
         return true;
     }
     case GpuCompiledBarrierType::BufferOwnershipRelease:{
         const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
         const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
-        if(
-            resource.type != GpuGraphResourceType::Buffer
-            || !resource.buffer
-            || !resolveOwnershipQueues()
-            || commandList.getResolvedDescription().physicalQueue != sourceQueue->id
-        )
+        if(resource.type != GpuGraphResourceType::Buffer || !resource.buffer || !resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != sourceQueue->id)
             return false;
         if(commandList.getPermanentBufferState(resource.buffer.get()) != ResourceStates::Unknown)
             return false;
@@ -204,12 +149,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
     case GpuCompiledBarrierType::AccelStructOwnershipRelease:{
         const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
         const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
-        if(
-            resource.type != GpuGraphResourceType::AccelStruct
-            || !resource.accelStruct
-            || !resolveOwnershipQueues()
-            || commandList.getResolvedDescription().physicalQueue != sourceQueue->id
-        )
+        if(resource.type != GpuGraphResourceType::AccelStruct || !resource.accelStruct || !resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != sourceQueue->id)
             return false;
         Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
         if(!backingBuffer)
@@ -226,9 +166,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
         if(!resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != destinationQueue->id)
             return false;
 
-        // CommandList::open imports the compiler-selected producer state seed before packet prologue lowering. That
-        // import emits the paired Vulkan acquire barrier with the exact exported layout, so this record is a checked
-        // graph-plan marker rather than a second native acquire.
+        // CommandList::open imports the compiler-selected producer state seed before packet prologue lowering.
+        // That import emits the paired Vulkan acquire barrier with the exact exported layout, so this record is a checked graph-plan marker rather than a second native acquire.
         return true;
     }
     default:
@@ -236,21 +175,12 @@ bool GpuTaskGraph::applyCompiledBarrier(
     }
 }
 
-bool GpuTaskGraph::seedTaskRetainedResourceStates(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const PacketRecordingAccess& recordingAccess,
-    const GpuTaskId& taskID,
-    CommandList& commandList
-)const{
+bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const{
     if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, taskID) || !validTask(taskID))
         return false;
 
     const GpuTaskNode& task = m_tasks[taskID.index];
-    const GpuTaskResourceUse* const resourceUses = task.resourceUseCount != 0u
-        ? m_resourceUses.data() + task.resourceUseOffset
-        : nullptr
-    ;
+    const GpuTaskResourceUse* const resourceUses = task.resourceUseCount != 0u ? m_resourceUses.data() + task.resourceUseOffset : nullptr;
     if(task.resourceUseCount != 0u && !resourceUses)
         return false;
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
@@ -268,16 +198,12 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
             if(!resource.texture)
                 return false;
             const TextureDesc& description = resource.texture->getCreationDescription();
-            // Only seed a state that the Vulkan backend will retain exactly at packet close. Other graph resources
-            // must already have an explicit compiler transition or native record-time state before they can become
-            // a source.
+            // Only seed a state that the Vulkan backend will retain exactly at packet close.
+            // Other graph resources must already have an explicit compiler transition or native record-time state before they can become a source.
             if(!description.keepInitialState || description.initialState != use.requiredState)
                 continue;
 
-            const TextureSubresourceSet subresources = use.range.textureSubresources.resolve(
-                description,
-                TextureSubresourceMipResolve::Range
-            );
+            const TextureSubresourceSet subresources = use.range.textureSubresources.resolve(description, TextureSubresourceMipResolve::Range);
             if(subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
                 return false;
 
@@ -294,9 +220,8 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
                 if(!stateMatches)
                     break;
             }
-            // A graph task can establish this state inside its own recording body (for example an upload changes
-            // CopyDest back to a texture's retained ShaderResource state). Only materialize a state that is already
-            // present before the task; the record body publishes its own state through the ordinary native tracker.
+            // A graph task can establish this state inside its own recording body (for example an upload changes CopyDest back to a texture's retained ShaderResource state).
+            // Only materialize a state that is already present before the task; the record body publishes its own state through the ordinary native tracker.
             if(!stateMatches)
                 continue;
             commandList.beginTrackingTextureState(resource.texture.get(), subresources, use.requiredState);

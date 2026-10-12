@@ -119,10 +119,7 @@ TEST(MeshSolidCodec, TailPaddingAndInconsistentPrimitiveCountsAreRejected){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid solid triangle padding")));
     Core::Assets::AssetBytes wrongCount(*cooked);
     constexpr u64 s_InconsistentIndexCount = 99u;
-    NWB_MEMCPY(
-        wrongCount.data() + offsetof(Impl::MeshBinaryPayload::MeshHeaderBinary, meshletPrimitiveIndexCount),
-        sizeof(s_InconsistentIndexCount), &s_InconsistentIndexCount, sizeof(s_InconsistentIndexCount)
-    );
+    NWB_MEMCPY(wrongCount.data() + offsetof(Impl::MeshBinaryPayload::MeshHeaderBinary, meshletPrimitiveIndexCount), sizeof(s_InconsistentIndexCount), &s_InconsistentIndexCount, sizeof(s_InconsistentIndexCount));
     EXPECT_FALSE(rejected.loadBinary(wrongCount));
 }
 
@@ -130,10 +127,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
     Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/compact_bounds"));
-    const Array<u32, 10u> words{
-        0x80000000u, 0x00000001u, 0x7f7fffffu, 0x3f800000u, 0xff000001u,
-        0x00000000u, 0x80000001u, 0xff7fffffu, 0x00800000u, 0x80000001u,
-    };
+    const Array<u32, 10u> words{ 0x80000000u, 0x00000001u, 0x7f7fffffu, 0x3f800000u, 0xff000001u, 0x00000000u, 0x80000001u, 0xff7fffffu, 0x00800000u, 0x80000001u, };
     Core::Assets::AssetVector<Impl::MeshletBounds> bounds(arena);
     bounds.resize(2u);
     for(usize index = 0u; index < bounds.size(); ++index){
@@ -152,9 +146,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
     }
     Core::Assets::AssetVector<Impl::MeshletBounds> decoded(arena);
     usize cursor = 0u;
-    ASSERT_TRUE(Core::Assets::ReadVectorPayload(
-        binary, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")
-    ));
+    ASSERT_TRUE(Core::Assets::ReadVectorPayload(binary, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")));
     ASSERT_EQ(decoded.size(), bounds.size());
     for(usize index = 0u; index < decoded.size(); ++index){
         for(usize component = 0u; component < 4u; ++component)
@@ -165,10 +157,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
         Core::Assets::AssetBytes truncated(binary);
         truncated.resize(truncated.size() - removedBytes);
         cursor = 0u;
-        EXPECT_FALSE(Core::Assets::ReadVectorPayload(
-            truncated, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")
-        ))
-            << "missing final cone bytes: " << removedBytes;
+        EXPECT_FALSE(Core::Assets::ReadVectorPayload(truncated, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"))) << "missing final cone bytes: " << removedBytes;
         EXPECT_EQ(cursor, 0u);
         EXPECT_TRUE(decoded.empty());
     }

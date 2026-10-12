@@ -103,13 +103,7 @@ GpuGraphSubmissionTransaction::~GpuGraphSubmissionTransaction()noexcept{
 
 
 bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
-    return m_valid
-        && planAccess.valid()
-        && m_generation == planAccess.generation()
-        && m_planGeneration == planAccess.planGeneration()
-        && m_deviceGeneration == planAccess.deviceGeneration()
-        && m_packets.size() == planAccess.packetCount()
-    ;
+    return m_valid && planAccess.valid() && m_generation == planAccess.generation() && m_planGeneration == planAccess.planGeneration() && m_deviceGeneration == planAccess.deviceGeneration() && m_packets.size() == planAccess.packetCount();
 }
 
 
@@ -118,11 +112,7 @@ bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuComp
     if(!planAccess.valid())
         return false;
     NothrowScopedLock lock(m_mutex);
-    return validForLocked(planAccess)
-        && m_recordingAttemptGeneration != 0u
-        && m_activeSubmissionBinding.valid()
-        && !m_submissionBindingResolved
-    ;
+    return validForLocked(planAccess) && m_recordingAttemptGeneration != 0u && m_activeSubmissionBinding.valid() && !m_submissionBindingResolved;
 }
 
 
@@ -171,10 +161,7 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
     const u64 nextPlanGeneration = planAccess.planGeneration();
     const u64 nextResetGeneration = GpuTaskGraph::AllocateGeneration();
     const u16 nextDeviceGeneration = planAccess.deviceGeneration();
-    const u64 nextAcceptanceRevision = nextValid
-        ? GpuPacketRuntimeDetail::AllocateAcceptanceRevision()
-        : 0u
-    ;
+    const u64 nextAcceptanceRevision = nextValid ? GpuPacketRuntimeDetail::AllocateAcceptanceRevision() : 0u;
     GpuTaskGraphSubmissionStatistics nextSubmissionStatistics;
     if(nextValid){
         nextSubmissionStatistics.graphGeneration = nextGeneration;
@@ -218,10 +205,7 @@ bool GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
     if(m_packets.empty())
         return false;
     for(const PacketRuntime& runtime : m_packets){
-        if(
-            runtime.state != PacketRuntimeState::Accepted
-            && runtime.state != PacketRuntimeState::Rejected
-        )
+        if(runtime.state != PacketRuntimeState::Accepted && runtime.state != PacketRuntimeState::Rejected)
             return false;
     }
     return true;
@@ -231,44 +215,25 @@ bool GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
 
 
 void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept{
-    if(
-        !m_activeSubmissionBinding.valid()
-        || m_submissionBindingResolved
-        || !allPacketsTerminalLocked()
-    )
+    if(!m_activeSubmissionBinding.valid() || m_submissionBindingResolved || !allPacketsTerminalLocked())
         return;
 
     // The exact bound plan and terminal transaction packets prove every graph task was accepted or discarded.
     // Keep terminal resolution declaration-storage free because the last packet lease may have released its read claim.
-    m_submissionBindingResolved = graph.resolveSubmissionTransaction(
-        compiledGraph,
-        m_recordingAttemptGeneration,
-        m_activeSubmissionBinding
-    );
+    m_submissionBindingResolved = graph.resolveSubmissionTransaction(compiledGraph, m_recordingAttemptGeneration, m_activeSubmissionBinding);
     if(!m_submissionBindingResolved){
         NWB_FATAL_ASSERT_MSG(false, "terminal transaction packets must resolve their exact graph binding");
         TerminateInvariant();
     }
 }
 
-bool GpuGraphSubmissionTransaction::beginPacketSubmission(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuSubmissionPacketId packetID,
-    const u64 recordingAttemptGeneration,
-    GpuTaskGraph::PacketSubmissionLease& outLease
-)noexcept{
+bool GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const u64 recordingAttemptGeneration, GpuTaskGraph::PacketSubmissionLease& outLease)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(
         !planAccess.valid()
         || !planAccess.validPacket(packetID)
         || outLease.valid()
-        || !graph.packetReadyForSubmission(
-            compiledGraph,
-            planAccess,
-            packetID,
-            recordingAttemptGeneration
-        )
+        || !graph.packetReadyForSubmission(compiledGraph, planAccess, packetID, recordingAttemptGeneration)
         || !bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration)
     )
         return false;
@@ -276,11 +241,7 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
     GpuGraphSubmissionBinding submissionBinding;
     {
         NothrowScopedLock lock(m_mutex);
-        if(
-            !validForLocked(planAccess)
-            || m_recordingAttemptGeneration != recordingAttemptGeneration
-            || packetID.index >= m_packets.size()
-        )
+        if(!validForLocked(planAccess) || m_recordingAttemptGeneration != recordingAttemptGeneration || packetID.index >= m_packets.size())
             return false;
         PacketRuntime& runtime = m_packets[packetID.index];
         if(runtime.state != PacketRuntimeState::Declared)
@@ -289,14 +250,7 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
         submissionBinding = m_activeSubmissionBinding;
     }
 
-    if(!graph.beginPacketSubmission(
-        compiledGraph,
-        planAccess,
-        packetID,
-        recordingAttemptGeneration,
-        submissionBinding,
-        outLease
-    )){
+    if(!graph.beginPacketSubmission(compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding, outLease)){
         NothrowScopedLock lock(m_mutex);
         if(validForLocked(planAccess) && packetID.index < m_packets.size()){
             PacketRuntime& runtime = m_packets[packetID.index];
@@ -322,20 +276,13 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     const bool submissionValid =
-        !planAccess.valid()
-        ? false
-        : packetView.valid()
+        !planAccess.valid() ? false : packetView.valid()
             && validFor(planAccess)
             && token.valid()
             && lease.valid()
             && lease.m_packet == packetID
             && lease.m_planGeneration == planAccess.planGeneration()
-            && matchesRecordingAttemptBinding(
-            graph,
-            compiledGraph,
-            lease.m_recordingAttemptGeneration,
-            lease.m_submissionBinding
-        )
+            && matchesRecordingAttemptBinding(graph, compiledGraph, lease.m_recordingAttemptGeneration, lease.m_submissionBinding)
     ;
     if(!submissionValid){
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet must retain its transaction submission lease");
@@ -344,11 +291,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
 
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
-    const bool tokenValid = queueInfo
-        && queueInfo->queueClass < CommandQueue::kCount
-        && token.queue == queueInfo->queueClass
-        && token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
-    ;
+    const bool tokenValid = queueInfo && queueInfo->queueClass < CommandQueue::kCount && token.queue == queueInfo->queueClass && token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
     if(!tokenValid){
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet token must match its exact compiled physical queue");
         TerminateInvariant();
@@ -369,25 +312,8 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         TerminateInvariant();
     }
 
-    graph.beginPacketSubmissionAcceptance(
-        compiledGraph,
-        planAccess,
-        packetID,
-        token,
-        lease
-    );
-    AcceptedPacketPublicationGuard publicationGuard(
-        *this,
-        graph,
-        compiledGraph,
-        planAccess,
-        packetID,
-        token,
-        lease,
-        nativeSubmissionInfo,
-        timingTickets,
-        timingTicketCount
-    );
+    graph.beginPacketSubmissionAcceptance(compiledGraph, planAccess, packetID, token, lease);
+    AcceptedPacketPublicationGuard publicationGuard(*this, graph, compiledGraph, planAccess, packetID, token, lease, nativeSubmissionInfo, timingTickets, timingTicketCount);
 
     bool callbacksAccepted = true;
     bool timingResolved = true;
@@ -411,13 +337,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     return callbacksAccepted;
 }
 
-void GpuGraphSubmissionTransaction::commitAcceptedPacket(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuSubmissionPacketId packetID,
-    const QueueSubmissionToken& token,
-    const NativeSubmissionInfo& nativeSubmissionInfo
-)noexcept{
+void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const QueueSubmissionToken& token, const NativeSubmissionInfo& nativeSubmissionInfo)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     NothrowScopedLock lock(m_mutex);
@@ -482,10 +402,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
     bool foundLatestQueue = false;
     for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == packet.queue){
-            const bool latestMatchesQueue = latest.token.valid()
-                && latest.token.queue == token.queue
-                && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
-            ;
+            const bool latestMatchesQueue = latest.token.valid() && latest.token.queue == token.queue && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
             if(!latestMatchesQueue){
                 NWB_FATAL_ASSERT_MSG(false, "accepted queue frontier token must preserve its exact physical queue identity");
                 TerminateInvariant();
@@ -502,10 +419,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
             TerminateInvariant();
         }
         static_assert(IsNothrowMoveConstructible_V<LatestAcceptedQueueToken>);
-        m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{
-            .queue = packet.queue,
-            .token = token,
-        });
+        m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{ .queue = packet.queue, .token = token, });
     }
     resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
 }

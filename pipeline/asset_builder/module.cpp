@@ -38,21 +38,13 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
     }
     Assets::ScratchArena scratchArena(s_AssetBuilderArena);
     const auto& sources = parsed.assetRoots.empty() ? parsed.inputs : parsed.assetRoots;
-    auto roots = Assets::ResolveAssetRoots(
-        *repoRoot,
-        sources,
-        parsed.assetRoots.empty(),
-        Assets::AssetRootDuplicatePolicy::ExactText,
-        scratchArena
-    );
+    auto roots = Assets::ResolveAssetRoots(*repoRoot, sources, parsed.assetRoots.empty(), Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     if(!roots){
         const auto& error = roots.error();
         if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect input '{}'"), StringConvert(sources[error.sourceIndex]));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root from '{}'")
-                , StringConvert(sources[error.sourceIndex])
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root from '{}'"), StringConvert(sources[error.sourceIndex]));
         return false;
     }
     if(roots->empty()){

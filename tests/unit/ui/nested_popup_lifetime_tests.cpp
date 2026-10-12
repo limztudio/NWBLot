@@ -64,8 +64,7 @@ protected:
 
     [[nodiscard]] bool finishParent(const u64 generation){
         const bool activated = m_builder.button("after", "After");
-        return !activated && m_builder.endPopup() && m_context.endRoot()
-            && m_context.finishFrame() && m_context.commitFrame(generation);
+        return !activated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
     [[nodiscard]] bool acceptPlain(const u64 generation){
@@ -112,8 +111,7 @@ protected:
         const bool activated = m_builder.button("anchor", "Commands");
         if(activated || !m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu).valid)
             return false;
-        if(!m_builder.beginPopup("child", m_child, ChildOptions())
-            || !m_builder.comboBox("combo", m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
+        if(!m_builder.beginPopup("child", m_child, ChildOptions()) || !m_builder.comboBox("combo", m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
             return false;
         for(usize index = 0u; index < 3u; ++index){
             if(!m_builder.beginPopup("deep", m_deeper[index], ChildOptions()))

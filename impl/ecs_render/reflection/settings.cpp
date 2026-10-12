@@ -43,8 +43,7 @@ bool ValidateReflectionSettings(const ReflectionSettings& settings)noexcept{
         return false;
     const SIMDVectorSingle top = LoadFloat(settings.environmentTop);
     const SIMDVectorSingle bottom = LoadFloat(settings.environmentBottom);
-    return VectorIsFinite(top, VectorComponentMask::s_XYZ) && VectorIsFinite(bottom, VectorComponentMask::s_XYZ)
-        && Vector3GreaterOrEqual(top, VectorZero()) && Vector3GreaterOrEqual(bottom, VectorZero());
+    return VectorIsFinite(top, VectorComponentMask::s_XYZ) && VectorIsFinite(bottom, VectorComponentMask::s_XYZ) && Vector3GreaterOrEqual(top, VectorZero()) && Vector3GreaterOrEqual(bottom, VectorZero());
 }
 
 

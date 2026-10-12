@@ -43,14 +43,7 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     firstTiming.publishFrameIndex = 41u;
     firstTiming.firstSampleFrameIndex = 40u;
     firstTiming.lastSampleFrameIndex = 40u;
-    ASSERT_TRUE(Telemetry::RecordPerfTiming(
-        recorder,
-        Telemetry::PerfTimingSource::Gpu,
-        gbufferScopeName,
-        "gbuffer",
-        firstTiming,
-        70u
-    ));
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Gpu, gbufferScopeName, "gbuffer", firstTiming, 70u));
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -63,14 +56,7 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     secondTiming.publishFrameIndex = 42u;
     secondTiming.firstSampleFrameIndex = 41u;
     secondTiming.lastSampleFrameIndex = 41u;
-    ASSERT_TRUE(Telemetry::RecordPerfTiming(
-        recorder,
-        Telemetry::PerfTimingSource::Gpu,
-        gbufferScopeName,
-        "gbuffer",
-        secondTiming,
-        80u
-    ));
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Gpu, gbufferScopeName, "gbuffer", secondTiming, 80u));
 
     nodes[0u].label = "Second GBuffer Pass";
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 41u, nodes, edges, 8u));
@@ -124,14 +110,7 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     aggregatedTiming.publishFrameIndex = 44u;
     aggregatedTiming.firstSampleFrameIndex = 43u;
     aggregatedTiming.lastSampleFrameIndex = 43u;
-    ASSERT_TRUE(Telemetry::RecordPerfTiming(
-        recorder,
-        Telemetry::PerfTimingSource::Gpu,
-        Name(s_GBUFFER),
-        "gbuffer",
-        aggregatedTiming,
-        70u
-    ));
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Gpu, Name(s_GBUFFER), "gbuffer", aggregatedTiming, 70u));
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -160,28 +139,14 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
     Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(
-        testArena.arena,
-        nodes,
-        edges,
-        physicalQueueRuntimeStatistics,
-        packetSubmissionStatistics
-    );
+    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     nodes[0u].runtimeStatistics.submission = {};
     physicalQueueRuntimeStatistics.clear();
     packetSubmissionStatistics.clear();
 
     Telemetry::Recorder exactRecorder(testArena.arena);
     exactRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(
-        exactRecorder,
-        58u,
-        nodes,
-        edges,
-        physicalQueueRuntimeStatistics,
-        packetSubmissionStatistics,
-        18u
-    ));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(exactRecorder, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
     Log::TelemetryReport exactReport(testArena.arena);
     auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, exactRecorder.view());
     ASSERT_TRUE(reportResult3);
@@ -216,24 +181,14 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 55u, nodes, edges, 15u));
 
-    const u16 unsupportedVersions[] = {
-        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
-        static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u),
-        Limit<u16>::s_Max,
-    };
+    const u16 unsupportedVersions[] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u), Limit<u16>::s_Max, };
     Telemetry::EncodedFrameGraphPayloadHeader header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
         header.version = version;
         NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        ASSERT_TRUE(recorder.recordBinary(
-            Telemetry::EventKind::FrameGraphFrame,
-            55u,
-            payload.data(),
-            payload.size(),
-            15u
-        ));
+        ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 55u, payload.data(), payload.size(), 15u));
     }
 
     Log::TelemetryReport report(testArena.arena);
@@ -278,10 +233,7 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     const AStringView resourceJson = json.substr(resourceJsonOffset, secondPassJsonOffset - resourceJsonOffset);
     const AStringView secondPassJson = json.substr(secondPassJsonOffset, jsonEdgesOffset - secondPassJsonOffset);
     EXPECT_TRUE(ContainsText(firstPassJson, s_RUNTIME_STATISTICS_NULL_JSON));
-    EXPECT_TRUE(ContainsText(
-        resourceJson,
-        s_RESOURCE_WITH_NULL_STATISTICS_JSON
-    ));
+    EXPECT_TRUE(ContainsText(resourceJson, s_RESOURCE_WITH_NULL_STATISTICS_JSON));
     EXPECT_TRUE(ContainsText(secondPassJson, s_RUNTIME_STATISTICS_NULL_JSON));
 
     const AStringView dot(report.graph.data(), report.graph.size());

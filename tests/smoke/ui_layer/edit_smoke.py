@@ -11,12 +11,8 @@ from caret_capture import wait_for_caret_phase
 from edit_native import EditNativeInput
 from edit_probe import CARET_RGB, TOLERANCE, caret_probe_position, caret_required, center, model, observe_edit, snapshot_from_logs
 from interaction_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -50,13 +46,11 @@ class EditRun:
         samples = []
         for field in fields:
             geometry = snapshot["fields"][field]
-            column, _, first_row, end_row = caret_probe_position(
-                geometry["caret"], geometry["content"], scale_x, scale_y, width, height)
+            column, _, first_row, end_row = caret_probe_position(geometry["caret"], geometry["content"], scale_x, scale_y, width, height)
             samples.append((column, first_row, end_row, CARET_RGB, TOLERANCE))
         wait_for_caret_phase(self.backend, self.handle, self.process, samples, deadline)
 
-    def checkpoint(self, name, primary, secondary, *, readonly=False, visible=True, extent=None,
-        selection=False, scrolled=False, allowed_primary=None):
+    def checkpoint(self, name, primary, secondary, *, readonly=False, visible=True, extent=None, selection=False, scrolled=False, allowed_primary=None):
         # Settle unchanged-state gates as well, exposing replay or late clipboard delivery.
         time.sleep(0.25)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
@@ -73,16 +67,13 @@ class EditRun:
             wanted = primary
             if allowed_primary is not None and snapshot["primary"] in allowed_primary:
                 wanted = snapshot["primary"]
-            if (not self.native.windows and snapshot["primary"] == wanted and snapshot["secondary"] == secondary
-                and snapshot["readonly"] == readonly and snapshot["visible"] == visible):
-                fields = [field for field, state in (("primary", wanted), ("secondary", secondary))
-                    if caret_required(field, state, readonly, visible, selection)]
+            if (not self.native.windows and snapshot["primary"] == wanted and snapshot["secondary"] == secondary and snapshot["readonly"] == readonly and snapshot["visible"] == visible):
+                fields = [field for field, state in (("primary", wanted), ("secondary", secondary)) if caret_required(field, state, readonly, visible, selection)]
                 if fields:
                     # Observe off-to-on before the capture's 0.2s settle; full-frame processing can alias the 1s blink cycle.
                     self.wait_for_caret_phase(snapshot, fields, stage_deadline)
             self.backend.capture_client_window(self.handle, path)
-            report = observe_edit(read_bmp_24_rows(path), snapshot, wanted, secondary, readonly, visible,
-                extent=extent, selection=selection, scrolled=scrolled)
+            report = observe_edit(read_bmp_24_rows(path), snapshot, wanted, secondary, readonly, visible, extent=extent, selection=selection, scrolled=scrolled)
             if report["passed"]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path)})
@@ -93,10 +84,8 @@ class EditRun:
         raise SmokeFailure(f"edit displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "stages": self.stages,
-            "input_path": "Win32 posted WM_CHAR/key/pointer messages, native Control/Shift modifiers and real cursor placement for double-click"
-                if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus",
-            "runtime_limit": "Synthetic commits bypass live IME composition. No native Wayland or physical pointer-grab qualification.",
+        report = {"passed": passed, "platform": platform.system(), "stages": self.stages, "input_path": "Win32 posted WM_CHAR/key/pointer messages, native Control/Shift modifiers and real cursor placement for double-click"
+                if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus", "runtime_limit": "Synthetic commits bypass live IME composition. No native Wayland or physical pointer-grab qualification.",
             "queued_focus_limit": "A posted batch may straddle frames. Old-owner text may commit before focus moves; it must never enter the new owner."}
         (self.args.output_directory / "edit.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
@@ -121,8 +110,7 @@ class EditRun:
         self.native.tap("a", control=True)
         self.native.tap("Delete", shift=True)
         self.native.tap("Insert", shift=True)
-        self.checkpoint("alternate_clipboard_read_only", model(primary, 0, length, True), model(primary),
-            readonly=True, selection=True, extent=(800, 600))
+        self.checkpoint("alternate_clipboard_read_only", model(primary, 0, length, True), model(primary), readonly=True, selection=True, extent=(800, 600))
         self.native.tap("F5")
         self.native.tap("End")
         return primary
@@ -237,11 +225,9 @@ class EditRun:
             self.native.aggregate_tap("Left", 2)
             self.checkpoint("aggregate_left_press_repeat", model(primary, 6, 6, True), model(secondary), extent=(800, 600))
             self.native.aggregate_tap("F5", 2)
-            self.checkpoint("aggregate_press_once", model(primary, 6, 6, True), model(secondary),
-                readonly=True, extent=(800, 600))
+            self.checkpoint("aggregate_press_once", model(primary, 6, 6, True), model(secondary), readonly=True, extent=(800, 600))
             self.native.aggregate_tap("F5", 2, repeat=True)
-            self.checkpoint("aggregate_repeat_without_press", model(primary, 6, 6, True), model(secondary),
-                readonly=True, extent=(800, 600))
+            self.checkpoint("aggregate_repeat_without_press", model(primary, 6, 6, True), model(secondary), readonly=True, extent=(800, 600))
             self.native.tap("F5")
             self.native.tap("F7")
             primary, secondary = "Hello 한글", "Target"
@@ -253,8 +239,7 @@ class EditRun:
                 # Both releases precede the next press; the two clicks stay inside the 500 ms window.
                 self.native.click(*first_word)
                 self.native.click(*first_word)
-                self.checkpoint("native_double_click_first_word", model(primary, 0, 5, True), model(secondary),
-                    selection=True, extent=(800, 600))
+                self.checkpoint("native_double_click_first_word", model(primary, 0, 5, True), model(secondary), selection=True, extent=(800, 600))
 
 
 def run(args, *, run_type=EditRun, input_bindings=False):

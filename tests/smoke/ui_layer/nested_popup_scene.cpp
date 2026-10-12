@@ -200,16 +200,11 @@ bool UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
 }
 
 void UiNestedPopupSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
@@ -269,8 +264,7 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
         if(target.id != input.focus())
             continue;
         if(target.popup.valid()){
-            m_focusScope = target.popup.instanceGeneration == m_child.instanceGeneration() ? 2u
-                : target.popup.instanceGeneration == m_parent.instanceGeneration() ? 1u : 3u;
+            m_focusScope = target.popup.instanceGeneration == m_child.instanceGeneration() ? 2u : target.popup.instanceGeneration == m_parent.instanceGeneration() ? 1u : 3u;
         }
         for(usize index = 0u; index < m_rectangles.size(); ++index){
             if(SameSmokeRect(target.rectangle, m_rectangles[index])){
@@ -325,9 +319,7 @@ Array<u64, 29u> UiNestedPopupSmokeScene::values()const{
         static_cast<u64>(m_childParentScope) };
 }
 
-Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& state,
-    const Impl::Ui::IListDataSource& source, const u64 key, const f32 rowHeight
-)const{
+Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& state, const Impl::Ui::IListDataSource& source, const u64 key, const f32 rowHeight)const{
     const auto& placement = state.placement();
     const auto index = source.indexOf(key);
     if(!index || *index < placement.firstRow || *index >= placement.endRow)
@@ -351,11 +343,7 @@ bool IsUiLayerNestedPopupSkinSmokeEnabled(){
 }
 
 SharedUiNestedPopupSmokeScene CreateUiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiNestedPopupSmokeScene(
-        NewArenaObject<RefCounter<UiNestedPopupSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiNestedPopupSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiNestedPopupSmokeScene(NewArenaObject<RefCounter<UiNestedPopupSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiNestedPopupSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

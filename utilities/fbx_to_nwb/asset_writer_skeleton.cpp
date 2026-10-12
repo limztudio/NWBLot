@@ -92,20 +92,12 @@ bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView conte
 Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle determinant;
     const SIMDMatrix inverse = MatrixInverse(&determinant, matrix);
-    if(
-        !VectorIsFinite(determinant, VectorComponentMask::s_XYZW)
-        || !Vector4Greater(VectorAbs(determinant), VectorReplicate(s_InvertibleJointDeterminantEpsilon))
-        || MatrixIsNaN(inverse)
-        || MatrixIsInfinite(inverse)
-    )
+    if(!VectorIsFinite(determinant, VectorComponentMask::s_XYZW) || !Vector4Greater(VectorAbs(determinant), VectorReplicate(s_InvertibleJointDeterminantEpsilon)) || MatrixIsNaN(inverse) || MatrixIsInfinite(inverse))
         return MakeUnexpected(Failure{});
     return inverse;
 }
 
-Expected<SIMDMatrix> BuildLocalBindPoseMatrix(
-    const SIMDMatrix& globalBindPose,
-    const SIMDMatrix* parentGlobalBindPose
-)noexcept{
+Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, const SIMDMatrix* parentGlobalBindPose)noexcept{
     if(!parentGlobalBindPose)
         return globalBindPose;
 
@@ -123,12 +115,7 @@ Expected<SIMDMatrix> BuildLocalBindPoseMatrix(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSplitSkinSource(
-    const SourceMeshStreams& mesh,
-    const UtilityVector<ufbx_node*>& skeletonJoints,
-    const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
-    const UtilityVector<JointMatrix>& inverseBindMatrices
-){
+bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, const UtilityVector<ufbx_node*>& skeletonJoints, const UtilityVector<JointMatrix>& skeletonBindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices){
     if(mesh.skin.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model requires source skin influences"));
         return false;
@@ -161,11 +148,7 @@ AString NodeName(const ufbx_node* node, const usize fallbackIndex){
     return out.str();
 }
 
-Expected<SkeletonOutputData> BuildSkeletonOutputData(
-    const UtilityVector<ufbx_node*>& joints,
-    const UtilityVector<JointMatrix>& bindPoseMatrices,
-    const UtilityVector<JointMatrix>& inverseBindMatrices
-){
+Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices){
     SkeletonOutputData outData;
 
     if(joints.size() != bindPoseMatrices.size()){
@@ -231,10 +214,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(
     sortedJointIndices.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
         sortedJointIndices.push_back(jointIndex);
-    Sort(
-        sortedJointIndices.begin(),
-        sortedJointIndices.end(),
-        [&parentDepths, &sortNames](const usize lhs, const usize rhs){
+    Sort(sortedJointIndices.begin(), sortedJointIndices.end(), [&parentDepths, &sortNames](const usize lhs, const usize rhs){
             if(parentDepths[lhs] != parentDepths[rhs])
                 return parentDepths[lhs] < parentDepths[rhs];
             if(sortNames[lhs] != sortNames[rhs])
@@ -250,10 +230,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(
 
     for(const usize oldJointIndex : sortedJointIndices){
         const u32 parentIndex = parentIndices[oldJointIndex];
-        const JointMatrix* parentGlobalBindPose = parentIndex != s_MissingSourceStreamIndex
-            ? &bindPoseMatrices[parentIndex]
-            : nullptr
-        ;
+        const JointMatrix* parentGlobalBindPose = parentIndex != s_MissingSourceStreamIndex ? &bindPoseMatrices[parentIndex] : nullptr;
         const SIMDMatrix globalBindPoseMatrix = LoadFloat(bindPoseMatrices[oldJointIndex]);
 
         SIMDMatrix parentGlobalBindPoseMatrix{};
@@ -281,10 +258,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(
     return outData;
 }
 
-bool RemapSkinInfluences(
-    UtilityVector<MeshSkinInfluence>& inOutInfluences,
-    const UtilityVector<u16>& oldToNewJointIndices
-){
+bool RemapSkinInfluences(UtilityVector<MeshSkinInfluence>& inOutInfluences, const UtilityVector<u16>& oldToNewJointIndices){
     for(MeshSkinInfluence& influence : inOutInfluences){
         for(usize slot = 0u; slot < s_MeshSkinInfluenceCount; ++slot){
             const u16 oldJointIndex = influence.joint[slot];
@@ -302,9 +276,7 @@ u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
     return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
 }
 
-Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(
-    const SourceMeshStreams& sourceMesh
-){
+Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh){
     PositionAlignedSkinnedMesh result;
     SourceMeshStreams& outMesh = result.mesh;
     UtilityVector<MeshSkinInfluence>& outPositionSkin = result.skin;

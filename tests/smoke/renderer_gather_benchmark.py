@@ -16,11 +16,8 @@ from types import SimpleNamespace
 import renderer_ab_benchmark as ab
 from reflection_benchmark import balanced_orders, paired_statistics
 from smoke_volume_identity import file_identity
-from window_capture_smoke import (
-    STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    create_capture_backend, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,
-)
+from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, launch_logserver, launch_testbed, require_normal_process_exit,
+    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
 LIT_OPAQUE = "opaque"
 LIT_HYBRID = "hybrid"
@@ -100,22 +97,15 @@ LIT_AUTHORED_VOLUME_HASHES = "authored_volume_hashes"
 LIT_MAIN = "__main__"
 
 WORKLOADS = (LIT_OPAQUE, LIT_HYBRID, "shared", "unique", "overrides", LIT_RUNTIME)
-CPU = (LIT_GRAPHICS_FRAME, "graphics.frame_preamble", LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES,
-    LIT_GRAPHICS_RENDER, "frame.project_update", "graphics.present", "graphics.begin_frame")
-GPU_BASE = (LIT_RENDER_FRAME, LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_SHADOW_VISIBILITY, LIT_RENDER_DEFERRED_LIGHTING,
-    LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT, "render.reflection_classify",
+CPU = (LIT_GRAPHICS_FRAME, "graphics.frame_preamble", LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES, LIT_GRAPHICS_RENDER, "frame.project_update", "graphics.present", "graphics.begin_frame")
+GPU_BASE = (LIT_RENDER_FRAME, LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_SHADOW_VISIBILITY, LIT_RENDER_DEFERRED_LIGHTING, LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT, "render.reflection_classify",
     "render.reflection_build_args", "render.reflection_hardware")
-GPU_TRANSPARENT = (LIT_RENDER_AVBOIT_CLEAR, "render.avboit_occupancy", "render.avboit_depth_warp",
-    "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate")
+GPU_TRANSPARENT = (LIT_RENDER_AVBOIT_CLEAR, "render.avboit_occupancy", "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate")
 GPU_INACTIVE = ("render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial")
-GPU_CONTROLS = (LIT_RENDER_FRAME, LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_SHADOW_VISIBILITY, LIT_RENDER_DEFERRED_LIGHTING,
-    LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT)
-ARENAS = tuple(LIT_IMPL_ECS_RENDER + name for name in (LIT_PREPARE, "render", LIT_TASK_GRAPH, "avboit_transparent_csg",
-    LIT_MATERIAL_PASS_PREPARE, "material_pass_render", "material_instance_mutable", LIT_RAY_TRACING_BUILD, "ray_tracing_attribute"))
+GPU_CONTROLS = (LIT_RENDER_FRAME, LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_SHADOW_VISIBILITY, LIT_RENDER_DEFERRED_LIGHTING, LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT)
+ARENAS = tuple(LIT_IMPL_ECS_RENDER + name for name in (LIT_PREPARE, "render", LIT_TASK_GRAPH, "avboit_transparent_csg", LIT_MATERIAL_PASS_PREPARE, "material_pass_render", "material_instance_mutable", LIT_RAY_TRACING_BUILD, "ray_tracing_attribute"))
 REQUIRED_ARENAS = tuple(LIT_IMPL_ECS_RENDER + name for name in (LIT_PREPARE, LIT_TASK_GRAPH, LIT_MATERIAL_PASS_PREPARE, LIT_RAY_TRACING_BUILD))
-FROZEN_SETTINGS = {"width": 960, "height": 720, "warmup": 96, LIT_SAMPLES: 256, "drain": 32,
-    "reflection_mode": "hardware", "hardware_budget": 4096, "optical_queries": 16,
-    "temporal": False, "spatial": False, "feedback": False, "diagnostics": False,
+FROZEN_SETTINGS = {"width": 960, "height": 720, "warmup": 96, LIT_SAMPLES: 256, "drain": 32, "reflection_mode": "hardware", "hardware_budget": 4096, "optical_queries": 16, "temporal": False, "spatial": False, "feedback": False, "diagnostics": False,
     "fixed_delta_seconds": .016666667, "sampling_seed": 0, "refraction": True}
 COUNTERS = ("allocations", "reallocations", "deallocations")
 GAUGES = (LIT_USED, LIT_RESERVED, LIT_HISTORICAL_ARENA_PEAK)
@@ -181,8 +171,7 @@ def summarize_rows(rows, workload, mode):
             raise SmokeFailure("callback subtotals exceed their measured parent")
         if measured[LIT_GRAPHICS_RENDER] > measured[LIT_GRAPHICS_FRAME] + .005:
             raise SmokeFailure("render stage exceeds complete graphics frame")
-    cpu = {scope: {LIT_SAMPLES: len(samples), LIT_TOTAL_MS: sum(row[LIT_SCOPES_MS][scope] for row in samples),
-        LIT_MEAN_MS: statistics.fmean(row[LIT_SCOPES_MS][scope] for row in samples),
+    cpu = {scope: {LIT_SAMPLES: len(samples), LIT_TOTAL_MS: sum(row[LIT_SCOPES_MS][scope] for row in samples), LIT_MEAN_MS: statistics.fmean(row[LIT_SCOPES_MS][scope] for row in samples),
         "median_ms": statistics.median(row[LIT_SCOPES_MS][scope] for row in samples)} for scope in CPU}
     start, end = samples[0][LIT_SOURCE_FRAME], samples[-1][LIT_SOURCE_FRAME]
     gpu = {}
@@ -250,8 +239,7 @@ def summarize_rows(rows, workload, mode):
                     integer(prior.get(field), f"baseline {scope}/{field}")
                 if value[LIT_PRESENT] and value.get("frame") != row[LIT_PUBLISH_FRAME]:
                     raise SmokeFailure("arena snapshot comes from another publication")
-                result = memory.setdefault(scope, {LIT_ALLOCATION_DELTAS: [], LIT_REALLOCATION_DELTAS: [],
-                    LIT_DEALLOCATION_DELTAS: [], LIT_RETAINED_USED_BYTES: [], LIT_RETAINED_RESERVED_BYTES: [], LIT_HISTORICAL_ARENA_PEAK: 0,
+                result = memory.setdefault(scope, {LIT_ALLOCATION_DELTAS: [], LIT_REALLOCATION_DELTAS: [], LIT_DEALLOCATION_DELTAS: [], LIT_RETAINED_USED_BYTES: [], LIT_RETAINED_RESERVED_BYTES: [], LIT_HISTORICAL_ARENA_PEAK: 0,
                     LIT_AVAILABLE_FRAMES: 0, LIT_BASELINE_AVAILABLE: previous[scope][LIT_PRESENT]})
                 result[LIT_AVAILABLE_FRAMES] += int(value[LIT_PRESENT])
                 for field, key in zip(COUNTERS, (LIT_ALLOCATION_DELTAS, LIT_REALLOCATION_DELTAS, LIT_DEALLOCATION_DELTAS)):
@@ -265,8 +253,7 @@ def summarize_rows(rows, workload, mode):
             previous = current
         for scope, value in memory.items():
             complete = value[LIT_BASELINE_AVAILABLE] and value[LIT_AVAILABLE_FRAMES] == len(samples)
-            memory[scope] = {key: (statistics.fmean(item) if isinstance(item, list) else item) if complete else None
-                for key, item in value.items() if key not in (LIT_AVAILABLE_FRAMES, LIT_BASELINE_AVAILABLE)}
+            memory[scope] = {key: (statistics.fmean(item) if isinstance(item, list) else item) if complete else None for key, item in value.items() if key not in (LIT_AVAILABLE_FRAMES, LIT_BASELINE_AVAILABLE)}
             memory[scope].update(available_frames=value[LIT_AVAILABLE_FRAMES], measured_frames=len(samples), complete=complete)
     return {LIT_CONFIGURATION: config, "source_window": [start, end], LIT_CPU: cpu, LIT_GPU: gpu, LIT_MEMORY: memory}
 
@@ -284,22 +271,17 @@ def compare(trials, orders, mode, seed=0, practical_ms=.02, practical_fraction=.
         raise SmokeFailure("timing and memory trials cannot be pooled")
     blocks = [{row[LIT_ARM]: row[LIT_RESULT] for row in trials if row[LIT_BLOCK] == index} for index in range(len(orders))]
     if mode == LIT_MEMORY:
-        return {LIT_STATUS: "memory_observation_only", LIT_ARENAS: {scope: {
-            key: {arm: (statistics.fmean(block[arm][LIT_MEMORY][scope][key] for block in blocks)
-                if all(block[arm][LIT_MEMORY][scope][key] is not None for block in blocks) else None) for arm in (LIT_BASELINE, LIT_CANDIDATE)}
-            for key in blocks[0][LIT_BASELINE][LIT_MEMORY][scope]} for scope in ARENAS},
+        return {LIT_STATUS: "memory_observation_only", LIT_ARENAS: {scope: { key: {arm: (statistics.fmean(block[arm][LIT_MEMORY][scope][key] for block in blocks)
+                if all(block[arm][LIT_MEMORY][scope][key] is not None for block in blocks) else None) for arm in (LIT_BASELINE, LIT_CANDIDATE)} for key in blocks[0][LIT_BASELINE][LIT_MEMORY][scope]} for scope in ARENAS},
             "peak_semantics": "historical maximum of individual arena lifetime peaks, not per-frame or concurrent process peak"}
-    cpu = {scope: paired_statistics([block[LIT_CANDIDATE][LIT_CPU][scope][LIT_MEAN_MS] - block[LIT_BASELINE][LIT_CPU][scope][LIT_MEAN_MS]
-        for block in blocks], seed) for scope in CPU}
+    cpu = {scope: paired_statistics([block[LIT_CANDIDATE][LIT_CPU][scope][LIT_MEAN_MS] - block[LIT_BASELINE][LIT_CPU][scope][LIT_MEAN_MS] for block in blocks], seed) for scope in CPU}
     controls = {}
     for scope in GPU_CONTROLS:
-        metric = paired_statistics([block[LIT_CANDIDATE][LIT_GPU][scope][LIT_MEAN_MS] - block[LIT_BASELINE][LIT_GPU][scope][LIT_MEAN_MS]
-            for block in blocks], seed)
+        metric = paired_statistics([block[LIT_CANDIDATE][LIT_GPU][scope][LIT_MEAN_MS] - block[LIT_BASELINE][LIT_GPU][scope][LIT_MEAN_MS] for block in blocks], seed)
         baseline = statistics.fmean(block[LIT_BASELINE][LIT_GPU][scope][LIT_MEAN_MS] for block in blocks)
         tolerance = max(control_floor_ms, practical_fraction * baseline)
         low, high = metric[LIT_CI95_MEAN_MS]
-        metric.update(tolerance_ms=tolerance, equivalent=low >= -tolerance and high <= tolerance,
-            material_drift=low > tolerance or high < -tolerance)
+        metric.update(tolerance_ms=tolerance, equivalent=low >= -tolerance and high <= tolerance, material_drift=low > tolerance or high < -tolerance)
         controls[scope] = metric
     baseline = statistics.fmean(block[LIT_BASELINE][LIT_CPU][LIT_GRAPHICS_RENDER][LIT_MEAN_MS] for block in blocks)
     threshold = max(practical_ms, practical_fraction * baseline)
@@ -318,10 +300,8 @@ def compare(trials, orders, mode, seed=0, practical_ms=.02, practical_fraction=.
         status = "resolved_cpu_render_increase"
     else:
         status = "cpu_change_unresolved"
-    return {LIT_STATUS: status, "primary": LIT_GRAPHICS_RENDER, "practical_threshold_ms": threshold,
-        LIT_CPU: cpu, LIT_GPU_CONTROLS: controls, "whole_cpu_frame_limit_ms": frame_limit,
-        "units": "milliseconds per successful CPU frame; complete GPU ranges normalized independently",
-        "multiplicity": "per-workload 95% intervals, no simultaneous six-workload claim"}
+    return {LIT_STATUS: status, "primary": LIT_GRAPHICS_RENDER, "practical_threshold_ms": threshold, LIT_CPU: cpu, LIT_GPU_CONTROLS: controls, "whole_cpu_frame_limit_ms": frame_limit,
+        "units": "milliseconds per successful CPU frame; complete GPU ranges normalized independently", "multiplicity": "per-workload 95% intervals, no simultaneous six-workload claim"}
 
 
 def environment(base, workload, mode, output, compiler_statistics_output=None):
@@ -329,9 +309,7 @@ def environment(base, workload, mode, output, compiler_statistics_output=None):
         if base.get(key, "").strip():
             raise SmokeFailure(f"explicit Vulkan layer override invalidates acquisition: {key}")
     env = {key: value for key, value in base.items() if not key.startswith(LIT_NWB) or key == LIT_NWB_LINUX_BACKEND}
-    env.update(NWB_GATHER_BENCHMARK_WORKLOAD=workload, NWB_GATHER_BENCHMARK_MODE=mode,
-        NWB_GATHER_BENCHMARK_OUTPUT=str(output), NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS="0.016666667",
-        NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME="0")
+    env.update(NWB_GATHER_BENCHMARK_WORKLOAD=workload, NWB_GATHER_BENCHMARK_MODE=mode, NWB_GATHER_BENCHMARK_OUTPUT=str(output), NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS="0.016666667", NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME="0")
     if compiler_statistics_output is not None:
         env["NWB_GATHER_COMPILER_STATISTICS_FILE"] = str(compiler_statistics_output)
     return env
@@ -344,10 +322,8 @@ def acquire(args, arm, block, position):
     launch = SimpleNamespace(**vars(args), working_directory=arm.runtime, executable=arm.executable)
     compiler_output = directory / "compiler_statistics.jsonl" if args.compiler_statistics else None
     env = environment(args.frozen_environment, args.workload, args.mode, result_path, compiler_output)
-    ab.write_json(directory / "launch.json", {LIT_ARM: asdict(arm) | {LIT_EXECUTABLE: str(arm.executable),
-        LIT_RUNTIME: str(arm.runtime), "source_manifest": str(arm.source_manifest)},
-        "environment": {key: value for key, value in env.items() if key.startswith((LIT_NWB, LIT_VK))},
-        "cache_before": ab.cache_identity(arm.runtime)})
+    ab.write_json(directory / "launch.json", {LIT_ARM: asdict(arm) | {LIT_EXECUTABLE: str(arm.executable), LIT_RUNTIME: str(arm.runtime), "source_manifest": str(arm.source_manifest)},
+        "environment": {key: value for key, value in env.items() if key.startswith((LIT_NWB, LIT_VK))}, "cache_before": ab.cache_identity(arm.runtime)})
     backend = process = logserver = handle = log_directory = None
     baseline, pattern = {}, ""
     logs_collected = False
@@ -372,12 +348,9 @@ def acquire(args, arm, block, position):
         logserver = None
         (directory / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
         logs_collected = True
-        required = [f"RendererGatherBenchmark: workload {args.workload} mode {args.mode} fixed objects 64",
-            "RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0",
-            "RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1",
-            "RendererGatherBenchmark: shutdown successful frames 384", "Reflection resolve: hardware"]
-        validate_expected_log_text(text, required, list(STRICT_LOG_FAILURE_MESSAGES) +
-            ["FramebufferCapture:", "render submission suspended", "render pass skipped", "device recreation"])
+        required = [f"RendererGatherBenchmark: workload {args.workload} mode {args.mode} fixed objects 64", "RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0",
+            "RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1", "RendererGatherBenchmark: shutdown successful frames 384", "Reflection resolve: hardware"]
+        validate_expected_log_text(text, required, list(STRICT_LOG_FAILURE_MESSAGES) + ["FramebufferCapture:", "render submission suspended", "render pass skipped", "device recreation"])
         signature = ab.device_material_signature(text)
         dims = re.findall(r"deferred rendering targets ready \((\d+)x(\d+),", text)
         if not dims or any(pair != ("960", "720") for pair in dims):
@@ -387,11 +360,8 @@ def acquire(args, arm, block, position):
             raise SmokeFailure("actual vsync evidence is missing")
         signature["vsync"] = vsync[0]
         result = read_result(result_path, args.workload, args.mode)
-        signature["actual_counts"] = {key: result[LIT_CONFIGURATION][key] for key in
-            (LIT_RENDERERS, LIT_RUNTIME_RENDERERS, LIT_TRANSPARENT_RENDERERS, LIT_RUNTIME_OWNERS)}
-        return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_RUNTIME_SIGNATURE: signature,
-            LIT_RESULT: result, "artifacts": str(directory),
-            "cache_after": ab.cache_identity(arm.runtime)}
+        signature["actual_counts"] = {key: result[LIT_CONFIGURATION][key] for key in (LIT_RENDERERS, LIT_RUNTIME_RENDERERS, LIT_TRANSPARENT_RENDERERS, LIT_RUNTIME_OWNERS)}
+        return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_RUNTIME_SIGNATURE: signature, LIT_RESULT: result, "artifacts": str(directory), "cache_after": ab.cache_identity(arm.runtime)}
     finally:
         primary_failure = sys.exc_info()[0] is not None
         errors = []
@@ -437,8 +407,7 @@ def parse_args(argv=None):
     parser.add_argument("--order-seed", type=int, default=0)
     parser.add_argument("--analysis-seed", type=int, default=0)
     parser.add_argument("--plan-only", action=LIT_STORE_TRUE)
-    parser.add_argument("--compiler-statistics", action=LIT_STORE_TRUE,
-        help="opt-in test-domain compiler snapshots; changes observer workload and requires separate diagnostic analysis")
+    parser.add_argument("--compiler-statistics", action=LIT_STORE_TRUE, help="opt-in test-domain compiler snapshots; changes observer workload and requires separate diagnostic analysis")
     args = parser.parse_args(argv)
     if args.blocks < 8 or args.blocks % 2 or not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("use at least eight even balanced blocks and a positive finite timeout")
@@ -453,8 +422,7 @@ def parse_args(argv=None):
 
 
 def run(args):
-    arms = tuple(ab.Arm(name, getattr(args, name + "_executable"), getattr(args, name + "_runtime"),
-        getattr(args, name + "_source_manifest")) for name in (LIT_BASELINE, LIT_CANDIDATE))
+    arms = tuple(ab.Arm(name, getattr(args, name + "_executable"), getattr(args, name + "_runtime"), getattr(args, name + "_source_manifest")) for name in (LIT_BASELINE, LIT_CANDIDATE))
     ab.validate_arm_separation(arms)
     identities = {arm.name: ab.freeze_arm(arm) for arm in arms}
     if identities[LIT_BASELINE][LIT_RESOURCES][LIT_AUTHORED_VOLUME_HASHES] != identities[LIT_CANDIDATE][LIT_RESOURCES][LIT_AUTHORED_VOLUME_HASHES]:
@@ -470,21 +438,14 @@ def run(args):
     paths.extend(args.logserver_executable.parent / name for name in ab.binary_identity(args.logserver_executable))
     paths.extend(Path(sys.modules[name].__file__).resolve() for name in modules)
     shared = {str(path): file_identity(path) for path in paths}
-    plan = {LIT_WORKLOAD: args.workload, LIT_MODE: args.mode, "orders": orders, "arms": identities,
-        "shared_files": shared, "settings": FROZEN_SETTINGS, "planned_trials": args.blocks * 2,
+    plan = {LIT_WORKLOAD: args.workload, LIT_MODE: args.mode, "orders": orders, "arms": identities, "shared_files": shared, "settings": FROZEN_SETTINGS, "planned_trials": args.blocks * 2,
         "gpu_environment": {key: value for key, value in args.frozen_environment.items() if key.startswith(LIT_VK) or key == LIT_NWB_LINUX_BACKEND},
-        "cpu_primary": LIT_GRAPHICS_RENDER, "cpu_subtotals": [LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES],
-        LIT_GPU_CONTROLS: GPU_CONTROLS, "memory_policy": "separate acquisition; no timing inference from memory mode",
-        "cpu_normalization": "sum scope milliseconds / 256 successful contiguous frames",
-        "gpu_normalization": "sum milliseconds / completed range count inside CPU source window, independently per scope",
-        "correctness": "qualify both frozen builds separately; benchmark does not replace visual/native tests",
-        "source_policy": "instrumentation and fixture must be present in both builds before freezing them"}
+        "cpu_primary": LIT_GRAPHICS_RENDER, "cpu_subtotals": [LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES], LIT_GPU_CONTROLS: GPU_CONTROLS, "memory_policy": "separate acquisition; no timing inference from memory mode",
+        "cpu_normalization": "sum scope milliseconds / 256 successful contiguous frames", "gpu_normalization": "sum milliseconds / completed range count inside CPU source window, independently per scope",
+        "correctness": "qualify both frozen builds separately; benchmark does not replace visual/native tests", "source_policy": "instrumentation and fixture must be present in both builds before freezing them"}
     if args.compiler_statistics:
-        plan["compiler_statistics_diagnostic"] = {
-            "enabled": True, "file": "<per-trial-directory>/compiler_statistics.jsonl",
-            LIT_SCOPE: "existing compiler wall durations; observer cost is included in graphics.render",
-            "validation": "separate compiler_statistics_diagnostic.py required; no change to timing/control gates",
-        }
+        plan["compiler_statistics_diagnostic"] = { "enabled": True, "file": "<per-trial-directory>/compiler_statistics.jsonl", LIT_SCOPE: "existing compiler wall durations; observer cost is included in graphics.render",
+            "validation": "separate compiler_statistics_diagnostic.py required; no change to timing/control gates", }
     args.output_directory.mkdir(parents=True, exist_ok=True)
     ab.write_json(args.output_directory / "plan.json", plan)
     if args.plan_only:

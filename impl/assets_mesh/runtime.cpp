@@ -38,9 +38,7 @@ bool Mesh::validatePayload()const{
     const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(hasIncompleteGeometryPayload()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload")
-            , meshPathText
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload"), meshPathText);
         return false;
     }
     const usize triangleCount = meshletPrimitiveIndices().size() / s_MeshletTriangleIndexCount;
@@ -50,13 +48,7 @@ bool Mesh::validatePayload()const{
         return false;
     }
 
-    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(
-        *this,
-        0u,
-        false,
-        NWB_TEXT("Mesh::validatePayload"),
-        meshPathText
-    ))
+    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(*this, 0u, false, NWB_TEXT("Mesh::validatePayload"), meshPathText))
         return false;
 
     return true;
@@ -71,13 +63,7 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
 
     const TStringView loadFailureContext = MeshBinaryPayload::s_MeshLoadBinaryContext;
     usize cursor = 0;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryPayload::MeshHeaderBinary>(
-        binary,
-        cursor,
-        MeshBinaryPayload::s_MeshMagic,
-        loadFailureContext,
-        MeshBinaryPayload::s_MeshAssetKindLabel
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryPayload::MeshHeaderBinary>(binary, cursor, MeshBinaryPayload::s_MeshMagic, loadFailureContext, MeshBinaryPayload::s_MeshAssetKindLabel);
     if(!headerResult)
         return false;
     const MeshBinaryPayload::MeshHeaderBinary& header = *headerResult;

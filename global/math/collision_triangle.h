@@ -23,37 +23,13 @@ namespace TriangleTests{
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL EdgeCross2D(SIMDVectorSingle a, SIMDVectorSingle b, SIMDVectorSingle c)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL SignedArea2D(SIMDVectorSingle a, SIMDVectorSingle b, SIMDVectorSingle c)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL AreaNormal(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
-[[nodiscard]] bool NWB_SIMD_CALL ContainsPoint2D(
-    SIMDVectorSingle point,
-    SIMDVectorSingle a,
-    SIMDVectorSingle b,
-    SIMDVectorSingle c,
-    SIMDVectorSingle tolerance
-)noexcept;
+[[nodiscard]] bool NWB_SIMD_CALL ContainsPoint2D(SIMDVectorSingle point, SIMDVectorSingle a, SIMDVectorSingle b, SIMDVectorSingle c, SIMDVectorSingle tolerance)noexcept;
 
-[[nodiscard]] Expected<f32> NWB_SIMD_CALL Intersects(
-    SIMDVectorSingle origin,
-    SIMDVectorSingle direction,
-    SIMDVectorSingle v0,
-    SIMDVectorSingle v1,
-    SIMDVectorSingle v2
-)noexcept;
+[[nodiscard]] Expected<f32> NWB_SIMD_CALL Intersects(SIMDVectorSingle origin, SIMDVectorSingle direction, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
 
-[[nodiscard]] bool NWB_SIMD_CALL Intersects(
-    SIMDVectorSingle a0,
-    SIMDVectorSingle a1,
-    SIMDVectorSingle a2,
-    SIMDVectorSingle b0,
-    SIMDVectorSingle b1,
-    SIMDVectorSingle b2
-)noexcept;
+[[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorSingle a0, SIMDVectorSingle a1, SIMDVectorSingle a2, SIMDVectorSingle b0, SIMDVectorSingle b1, SIMDVectorSingle b2)noexcept;
 
-[[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL Intersects(
-    SIMDVectorSingle v0,
-    SIMDVectorSingle v1,
-    SIMDVectorSingle v2,
-    SIMDVectorSingle plane
-)noexcept;
+[[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL Intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2, SIMDVectorSingle plane)noexcept;
 
 [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL ContainedBy(
     SIMDVectorSingle v0,
@@ -86,37 +62,13 @@ namespace TriangleDoubleTests{
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL EdgeCross2D(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL SignedArea2D(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL AreaNormal(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
-[[nodiscard]] bool NWB_SIMD_CALL ContainsPoint2D(
-    SIMDVectorDouble point,
-    SIMDVectorDouble a,
-    SIMDVectorDouble b,
-    SIMDVectorDouble c,
-    SIMDVectorDouble tolerance
-)noexcept;
+[[nodiscard]] bool NWB_SIMD_CALL ContainsPoint2D(SIMDVectorDouble point, SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c, SIMDVectorDouble tolerance)noexcept;
 
-[[nodiscard]] Expected<f64> NWB_SIMD_CALL Intersects(
-    SIMDVectorDouble origin,
-    SIMDVectorDouble direction,
-    SIMDVectorDouble v0,
-    SIMDVectorDouble v1,
-    SIMDVectorDouble v2
-)noexcept;
+[[nodiscard]] Expected<f64> NWB_SIMD_CALL Intersects(SIMDVectorDouble origin, SIMDVectorDouble direction, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
 
-[[nodiscard]] bool NWB_SIMD_CALL Intersects(
-    SIMDVectorDouble a0,
-    SIMDVectorDouble a1,
-    SIMDVectorDouble a2,
-    SIMDVectorDouble b0,
-    SIMDVectorDouble b1,
-    SIMDVectorDouble b2
-)noexcept;
+[[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorDouble a0, SIMDVectorDouble a1, SIMDVectorDouble a2, SIMDVectorDouble b0, SIMDVectorDouble b1, SIMDVectorDouble b2)noexcept;
 
-[[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL Intersects(
-    SIMDVectorDouble v0,
-    SIMDVectorDouble v1,
-    SIMDVectorDouble v2,
-    SIMDVectorDouble plane
-)noexcept;
+[[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL Intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2, SIMDVectorDouble plane)noexcept;
 
 [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL ContainedBy(
     SIMDVectorDouble v0,
@@ -140,21 +92,13 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL TriangleTests::EdgeCross2D(
-    const SIMDVectorSingle a,
-    const SIMDVectorSingle b,
-    const SIMDVectorSingle c
-)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL TriangleTests::EdgeCross2D(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c)noexcept{
     const SIMDVectorSingle ab = VectorSubtract(b, a);
     const SIMDVectorSingle ac = VectorSubtract(c, a);
     return VectorSubtract(VectorMultiply(VectorSplatX(ab), VectorSplatY(ac)), VectorMultiply(VectorSplatY(ab), VectorSplatX(ac)));
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL TriangleDoubleTests::EdgeCross2D(
-    const SIMDVectorDouble a,
-    const SIMDVectorDouble b,
-    const SIMDVectorDouble c
-)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL TriangleDoubleTests::EdgeCross2D(const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c)noexcept{
     const SIMDVectorDouble ab = VectorDoubleSubtract(b, a);
     const SIMDVectorDouble ac = VectorDoubleSubtract(c, a);
     return VectorDoubleSubtract(VectorDoubleMultiply(VectorDoubleSplatX(ab), VectorDoubleSplatY(ac)), VectorDoubleMultiply(VectorDoubleSplatY(ab), VectorDoubleSplatX(ac)));
@@ -164,19 +108,11 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL TriangleTests::SignedArea2D(
-    const SIMDVectorSingle a,
-    const SIMDVectorSingle b,
-    const SIMDVectorSingle c
-)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL TriangleTests::SignedArea2D(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c)noexcept{
     return VectorScale(TriangleTests::EdgeCross2D(a, b, c), CollisionDetail::s_Half);
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL TriangleDoubleTests::SignedArea2D(
-    const SIMDVectorDouble a,
-    const SIMDVectorDouble b,
-    const SIMDVectorDouble c
-)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL TriangleDoubleTests::SignedArea2D(const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c)noexcept{
     return VectorDoubleScale(TriangleDoubleTests::EdgeCross2D(a, b, c), CollisionDoubleDetail::s_DoubleHalf);
 }
 
@@ -184,19 +120,11 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL TriangleTests::AreaNormal(
-    const SIMDVectorSingle v0,
-    const SIMDVectorSingle v1,
-    const SIMDVectorSingle v2
-)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL TriangleTests::AreaNormal(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)noexcept{
     return Vector3Cross(VectorSubtract(v1, v0), VectorSubtract(v2, v0));
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL TriangleDoubleTests::AreaNormal(
-    const SIMDVectorDouble v0,
-    const SIMDVectorDouble v1,
-    const SIMDVectorDouble v2
-)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL TriangleDoubleTests::AreaNormal(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)noexcept{
     return VectorDouble3Cross(VectorDoubleSubtract(v1, v0), VectorDoubleSubtract(v2, v0));
 }
 
@@ -204,13 +132,7 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL TriangleTests::ContainsPoint2D(
-    const SIMDVectorSingle point,
-    const SIMDVectorSingle a,
-    const SIMDVectorSingle b,
-    const SIMDVectorSingle c,
-    const SIMDVectorSingle tolerance
-)noexcept{
+[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL TriangleTests::ContainsPoint2D(const SIMDVectorSingle point, const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c, const SIMDVectorSingle tolerance)noexcept{
     const SIMDVectorSingle negativeTolerance = VectorNegate(VectorSplatX(tolerance));
     const SIMDVectorSingle ab = TriangleTests::EdgeCross2D(a, b, point);
     const SIMDVectorSingle bc = TriangleTests::EdgeCross2D(b, c, point);
@@ -221,13 +143,7 @@ namespace TriangleDoubleTests{
     return CollisionDetail::Vector4AllTrue(inside);
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL TriangleDoubleTests::ContainsPoint2D(
-    const SIMDVectorDouble point,
-    const SIMDVectorDouble a,
-    const SIMDVectorDouble b,
-    const SIMDVectorDouble c,
-    const SIMDVectorDouble tolerance
-)noexcept{
+[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL TriangleDoubleTests::ContainsPoint2D(const SIMDVectorDouble point, const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c, const SIMDVectorDouble tolerance)noexcept{
     const SIMDVectorDouble negativeTolerance = VectorDoubleNegate(VectorDoubleSplatX(tolerance));
     const SIMDVectorDouble ab = TriangleDoubleTests::EdgeCross2D(a, b, point);
     const SIMDVectorDouble bc = TriangleDoubleTests::EdgeCross2D(b, c, point);
@@ -242,23 +158,11 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL TriangleTests::Intersects(
-    const SIMDVectorSingle origin,
-    const SIMDVectorSingle direction,
-    const SIMDVectorSingle v0,
-    const SIMDVectorSingle v1,
-    const SIMDVectorSingle v2
-)noexcept{
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL TriangleTests::Intersects(const SIMDVectorSingle origin, const SIMDVectorSingle direction, const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)noexcept{
     return CollisionDetail::RayIntersectsTriangle(origin, direction, v0, v1, v2);
 }
 
-[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL TriangleDoubleTests::Intersects(
-    const SIMDVectorDouble origin,
-    const SIMDVectorDouble direction,
-    const SIMDVectorDouble v0,
-    const SIMDVectorDouble v1,
-    const SIMDVectorDouble v2
-)noexcept{
+[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL TriangleDoubleTests::Intersects(const SIMDVectorDouble origin, const SIMDVectorDouble direction, const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)noexcept{
     return CollisionDoubleDetail::RayIntersectsTriangle(origin, direction, v0, v1, v2);
 }
 
@@ -266,14 +170,7 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL TriangleTests::Intersects(
-    const SIMDVectorSingle a0,
-    const SIMDVectorSingle a1,
-    const SIMDVectorSingle a2,
-    const SIMDVectorSingle b0,
-    const SIMDVectorSingle b1,
-    const SIMDVectorSingle b2
-)noexcept{
+[[nodiscard]] inline bool NWB_SIMD_CALL TriangleTests::Intersects(const SIMDVectorSingle a0, const SIMDVectorSingle a1, const SIMDVectorSingle a2, const SIMDVectorSingle b0, const SIMDVectorSingle b1, const SIMDVectorSingle b2)noexcept{
     const auto segmentIntersectsTriangle = [](const SIMDVectorSingle p0, const SIMDVectorSingle p1, const SIMDVectorSingle t0, const SIMDVectorSingle t1, const SIMDVectorSingle t2)noexcept{
         const SIMDVectorSingle direction = VectorSubtract(p1, p0);
         const auto distance = CollisionDetail::RayIntersectsTriangle(p0, direction, t0, t1, t2);
@@ -292,14 +189,7 @@ namespace TriangleDoubleTests{
     return CollisionDetail::MinMaxIntersects(minA, maxA, minB, maxB);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL TriangleDoubleTests::Intersects(
-    const SIMDVectorDouble a0,
-    const SIMDVectorDouble a1,
-    const SIMDVectorDouble a2,
-    const SIMDVectorDouble b0,
-    const SIMDVectorDouble b1,
-    const SIMDVectorDouble b2
-)noexcept{
+[[nodiscard]] inline bool NWB_SIMD_CALL TriangleDoubleTests::Intersects(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const auto segmentIntersectsTriangle = [](const SIMDVectorDouble p0, const SIMDVectorDouble p1, const SIMDVectorDouble t0, const SIMDVectorDouble t1, const SIMDVectorDouble t2)noexcept{
         const SIMDVectorDouble direction = VectorDoubleSubtract(p1, p0);
         const auto distance = CollisionDoubleDetail::RayIntersectsTriangle(p0, direction, t0, t1, t2);
@@ -322,12 +212,7 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL TriangleTests::Intersects(
-    const SIMDVectorSingle v0,
-    const SIMDVectorSingle v1,
-    const SIMDVectorSingle v2,
-    const SIMDVectorSingle plane
-)noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL TriangleTests::Intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2, const SIMDVectorSingle plane)noexcept{
     const SIMDVectorSingle d0 = CollisionDetail::PlaneDistance(plane, v0);
     const SIMDVectorSingle d1 = CollisionDetail::PlaneDistance(plane, v1);
     const SIMDVectorSingle d2 = CollisionDetail::PlaneDistance(plane, v2);
@@ -340,12 +225,7 @@ namespace TriangleDoubleTests{
     return PlaneIntersectionType::Intersecting;
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL TriangleDoubleTests::Intersects(
-    const SIMDVectorDouble v0,
-    const SIMDVectorDouble v1,
-    const SIMDVectorDouble v2,
-    const SIMDVectorDouble plane
-)noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL TriangleDoubleTests::Intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2, const SIMDVectorDouble plane)noexcept{
     const SIMDVectorDouble d0 = CollisionDoubleDetail::PlaneDoubleDistance(plane, v0);
     const SIMDVectorDouble d1 = CollisionDoubleDetail::PlaneDoubleDistance(plane, v1);
     const SIMDVectorDouble d2 = CollisionDoubleDetail::PlaneDoubleDistance(plane, v2);

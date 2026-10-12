@@ -9,14 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Every clip inequality is affine in object position. Eight bound corners enclose all current posed triangles.
+// Every clip inequality is affine in object position.
+// Eight bound corners enclose all current posed triangles.
 // Uncertain arithmetic retains the caster; only a common, strictly outside plane can remove its draw.
-bool nwbLightSpaceBoundsOutside(
-    const NwbLightSpaceView view,
-    const uint instanceIndex,
-    const float3 minimum,
-    const float3 maximum
-){
+bool nwbLightSpaceBoundsOutside(const NwbLightSpaceView view, const uint instanceIndex, const float3 minimum, const float3 maximum){
     if(view.depthRange.w == 0.0)
         return false;
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);

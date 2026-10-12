@@ -28,21 +28,12 @@ namespace RayTracingShadowVisibilityTaskDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both opaque soft-shadow resolve callbacks share one all-lit fallback: clear
-// visibility, realign the UAV state, and retire every owned timing reservation.
+// Both opaque soft-shadow resolve callbacks share one all-lit fallback: clear visibility, realign the UAV state, and retire every owned timing reservation.
 template<typename PayloadT>
-inline void RecoverOpaqueSoftShadowAllLit(
-    const PayloadT& payload,
-    Core::CommandList& commandList
-){
+inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
     payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
-    // The skipped transparent callbacks still declare this output as UAV. Keep the native state
-    // tracker aligned with their no-op graph handoff after the typed fallback clear.
-    commandList.setTextureState(
-        payload.targets.shadowVisibility.get(),
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::ResourceStates::UnorderedAccess
-    );
+    // The skipped transparent callbacks still declare this output as UAV. Keep the native state tracker aligned with their no-op graph handoff after the typed fallback clear.
+    commandList.setTextureState(payload.targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     payload.opaqueProduced = false;
     if(payload.asyncTiming.has_value()){
@@ -61,9 +52,7 @@ inline void RecoverOpaqueSoftShadowAllLit(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A prepared soft-transparent frame records opaque production, opaque resolve, transparent trace, and terminal
-// fold as one native packet. The shared state is stack-owned by the renderer for this graph transaction; it never
-// survives acceptance or a retry.
+// A prepared soft-transparent frame records opaque production, opaque resolve, transparent trace, and terminal fold as one native packet. The shared state is stack-owned by the renderer for this graph transaction; it never survives acceptance or a retry.
 struct ShadowVisibilityOpaqueGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -84,11 +73,7 @@ struct ShadowVisibilityOpaqueGraphTask{
         bool graphOwnsOpaqueTemporalMergeEntryStates = false;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
@@ -110,37 +95,15 @@ struct ShadowVisibilityOpaqueGraphTask{
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         if(queue->queueClass == Core::CommandQueue::Compute){
-            payload.asyncTiming.emplace(
-                payload.graphics.gpuTiming(),
-                RendererGpuTimingScope::s_AsyncShadow,
-                payload.graphics.getDevice(),
-                commandList
-            );
+            payload.asyncTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncShadow, payload.graphics.getDevice(), commandList);
         }
-        payload.shadowVisibilityTiming.emplace(
-            payload.graphics.gpuTiming(),
-            RendererGpuTimingScope::s_ShadowVisibility,
-            payload.graphics.getDevice(),
-            commandList
-        );
+        payload.shadowVisibilityTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, payload.graphics.getDevice(), commandList);
 
         bool opaqueRecorded = false;
         if(payload.prepared){
             const auto opaqueFrame = payload.hardwareShadowSupported
-                ? payload.raytracingSystem.renderShadowVisibilityOpaque(
-                    commandList,
-                    payload.targets,
-                    payload.deferredLightingResources,
-                    payload.graphOwnsOpaqueTemporalMergeEntryStates,
-                    &payload.lightSpace
-                )
-                : payload.raytracingSystem.renderGpuBvhShadowVisibilityOpaque(
-                    commandList,
-                    payload.targets,
-                    payload.deferredLightingResources,
-                    payload.graphOwnsOpaqueTemporalMergeEntryStates,
-                    &payload.lightSpace
-                )
+                ? payload.raytracingSystem.renderShadowVisibilityOpaque(commandList, payload.targets, payload.deferredLightingResources, payload.graphOwnsOpaqueTemporalMergeEntryStates, &payload.lightSpace)
+                : payload.raytracingSystem.renderGpuBvhShadowVisibilityOpaque(commandList, payload.targets, payload.deferredLightingResources, payload.graphOwnsOpaqueTemporalMergeEntryStates, &payload.lightSpace)
             ;
             opaqueRecorded = opaqueFrame.has_value();
             if(opaqueFrame)
@@ -149,13 +112,8 @@ struct ShadowVisibilityOpaqueGraphTask{
         if(!opaqueRecorded){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility"));
             payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
-            // The following graph callbacks declare the output as UAV. Keep the command-list tracker aligned with
-            // their declared no-op handoffs even when this fallback only recorded a typed clear.
-            commandList.setTextureState(
-                payload.targets.shadowVisibility.get(),
-                ECSRenderDetail::s_ShadowVisibilitySubresources,
-                Core::ResourceStates::UnorderedAccess
-            );
+            // The following graph callbacks declare the output as UAV. Keep the command-list tracker aligned with their declared no-op handoffs even when this fallback only recorded a typed clear.
+            commandList.setTextureState(payload.targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             payload.shadowVisibilityTiming.value().discardTiming();
             payload.shadowVisibilityTiming.reset();
@@ -167,8 +125,7 @@ struct ShadowVisibilityOpaqueGraphTask{
         }
 
         payload.opaqueProduced = true;
-        // Both timestamp ranges end in the terminal fold callback, but their debug markers must close before this
-        // graph task's marker closes.
+        // Both timestamp ranges end in the terminal fold callback, but their debug markers must close before this graph task's marker closes.
         const bool visibilityMarkerFinished = Core::FinishSplitGpuTimingMarker(&payload.shadowVisibilityTiming);
         bool asyncMarkerFinished = true;
         if(payload.asyncTiming.has_value())
@@ -189,9 +146,9 @@ struct ShadowVisibilityOpaqueGraphTask{
 };
 
 
-// The opaque producer leaves the trace and current geometry scratch in their declared states. This adjacent task
-// owns their sampled entry before temporal merge and, unless fused later, the first wavelet. Its tail retains dynamic ping-pong and
-// upsample work, while the terminal transparent fold remains the output/acceptance owner.
+// The opaque producer leaves the trace and current geometry scratch in their declared states.
+// This adjacent task owns their sampled entry before temporal merge and, unless fused later, the first wavelet.
+// Its tail retains dynamic ping-pong and upsample work, while the terminal transparent fold remains the output/acceptance owner.
 struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -213,11 +170,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         bool deferWavelet = false;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -229,12 +182,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
             payload.opaqueResolveTiming.value().discardTiming();
             payload.opaqueResolveTiming.reset();
         }
-        payload.opaqueResolveTiming.emplace(
-            payload.graphics.gpuTiming(),
-            RendererGpuTimingScope::s_ShadowOpaqueResolve,
-            payload.graphics.getDevice(),
-            commandList
-        );
+        payload.opaqueResolveTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueResolve, payload.graphics.getDevice(), commandList);
         if(payload.raytracingSystem.renderSoftOpaqueShadowResolvePhase(
             commandList,
             payload.targets,
@@ -283,11 +231,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         bool hardwareShadowSupported = false;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -297,13 +241,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(payload.raytracingSystem.renderSoftOpaqueShadowResolveTail(
-            commandList,
-            payload.targets,
-            payload.deferredLightingResources,
-            payload.opaqueFrameIndex,
-            payload.hardwareShadowSupported
-        )){
+        if(payload.raytracingSystem.renderSoftOpaqueShadowResolveTail(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, payload.hardwareShadowSupported)){
             payload.opaqueResolveTiming.value().finishTiming(commandList);
             payload.opaqueResolveTiming.reset();
             return true;
@@ -323,13 +261,10 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
 };
 
 
-// The prepared path keeps trace and resolve as separate callbacks so the graph lowers the transparent half output
-// from UAV to shader-read between them. The terminal resolve task owns shared timing and acceptance.
+// The prepared path keeps trace and resolve as separate callbacks so the graph lowers the transparent half output from UAV to shader-read between them. The terminal resolve task owns shared timing and acceptance.
 struct ShadowTransparentSoftTraceGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
-        Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
-    };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
 
     // All bindings are required: transparent trace always records against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
@@ -343,11 +278,7 @@ struct ShadowTransparentSoftTraceGraphTask{
         bool& transparentTraceProduced;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -357,14 +288,7 @@ struct ShadowTransparentSoftTraceGraphTask{
             return true;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(!payload.raytracingSystem.renderSoftTransparentShadowTrace(
-            commandList,
-            payload.targets,
-            payload.deferredLightingResources,
-            payload.opaqueFrameIndex,
-            true,
-            &payload.lightSpace
-        )){
+        if(!payload.raytracingSystem.renderSoftTransparentShadowTrace(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, true, &payload.lightSpace)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility"));
             return true;
         }
@@ -378,8 +302,7 @@ struct ShadowTransparentSoftTraceGraphTask{
 };
 
 
-// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected
-// history pair, publishes the next pair for the wavelet, and starts the resolve timing envelope.
+// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair for the wavelet, and starts the resolve timing envelope.
 struct ShadowTransparentSoftTemporalMergeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -399,11 +322,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         bool hardwareShadowSupported = false;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -414,15 +333,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         const auto recoverOpaqueTemporal = [&](){
             if(!payload.combinedTemporal)
                 return true;
-            return payload.raytracingSystem.renderSoftOpaqueShadowResolvePhase(
-                commandList,
-                payload.targets,
-                payload.deferredLightingResources,
-                payload.opaqueFrameIndex,
-                payload.hardwareShadowSupported,
-                true,
-                SoftShadowOpaqueResolvePhase::TemporalOnly
-            );
+            return payload.raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, payload.hardwareShadowSupported, true, SoftShadowOpaqueResolvePhase::TemporalOnly);
         };
         if(!payload.transparentTraceProduced)
             return recoverOpaqueTemporal();
@@ -430,21 +341,10 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
             payload.transparentResolveTiming.value().discardTiming();
             payload.transparentResolveTiming.reset();
         }
-        payload.transparentResolveTiming.emplace(
-            payload.graphics.gpuTiming(),
-            RendererGpuTimingScope::s_ShadowTransparentResolve,
-            payload.graphics.getDevice(),
-            commandList
-        );
+        payload.transparentResolveTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentResolve, payload.graphics.getDevice(), commandList);
         const bool merged = payload.combinedTemporal
             ? payload.raytracingSystem.renderSoftShadowCombinedTemporalMerge(commandList, payload.targets)
-            : payload.raytracingSystem.renderSoftTransparentShadowTemporalMerge(
-                commandList,
-                payload.targets,
-                payload.deferredLightingResources,
-                payload.opaqueFrameIndex,
-                payload.graphOwnsTransparentTemporalMergeEntryStates
-            )
+            : payload.raytracingSystem.renderSoftTransparentShadowTemporalMerge(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, payload.graphOwnsTransparentTemporalMergeEntryStates)
         ;
         if(merged){
             return Core::FinishSplitGpuTimingMarker(&payload.transparentResolveTiming);
@@ -464,8 +364,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
 };
 
 
-// The transparent trace or temporal merge publishes the first RGB wavelet input. The terminal fold keeps the final
-// upsample plus the established output/acceptance endpoint.
+// The transparent trace or temporal merge publishes the first RGB wavelet input. The terminal fold keeps the final upsample plus the established output/acceptance endpoint.
 struct ShadowTransparentSoftFirstWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -485,11 +384,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         bool combinedWavelet = false;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -504,15 +399,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             // Opaque temporal merge already completed. Recover only its first wavelet, without blending history twice.
             payload.transparentTraceProduced = false;
             Core::DiscardGpuTimingMeasure(&payload.transparentResolveTiming);
-            return payload.raytracingSystem.renderSoftOpaqueShadowResolvePhase(
-                commandList,
-                payload.targets,
-                payload.deferredLightingResources,
-                payload.opaqueFrameIndex,
-                true,
-                true,
-                SoftShadowOpaqueResolvePhase::WaveletOnly
-            );
+            return payload.raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, true, true, SoftShadowOpaqueResolvePhase::WaveletOnly);
         }
         if(!payload.transparentTraceProduced)
             return true;
@@ -523,12 +410,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
                 payload.transparentResolveTiming.value().discardTiming();
                 payload.transparentResolveTiming.reset();
             }
-            payload.transparentResolveTiming.emplace(
-                payload.graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowTransparentResolve,
-                payload.graphics.getDevice(),
-                commandList
-            );
+            payload.transparentResolveTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentResolve, payload.graphics.getDevice(), commandList);
         }
         else if(!payload.transparentResolveTiming.has_value()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope; preserving opaque visibility"));
@@ -536,13 +418,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             return true;
         }
 
-        if(payload.raytracingSystem.renderSoftTransparentShadowFirstWavelet(
-            commandList,
-            payload.targets,
-            payload.deferredLightingResources,
-            payload.opaqueFrameIndex,
-            payload.graphOwnsTransparentWaveletInputBoundary
-        )){
+        if(payload.raytracingSystem.renderSoftTransparentShadowFirstWavelet(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, payload.graphOwnsTransparentWaveletInputBoundary)){
             if(payload.startsTransparentResolveTiming && !Core::FinishSplitGpuTimingMarker(&payload.transparentResolveTiming))
                 return false;
             return true;
@@ -582,11 +458,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         bool combinedUpsample = false;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
@@ -595,10 +467,7 @@ struct ShadowTransparentSoftFoldGraphTask{
             return false;
         if(!payload.opaqueProduced)
             return true;
-        if(
-            !payload.shadowVisibilityTiming.has_value()
-            || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())
-        )
+        if(!payload.shadowVisibilityTiming.has_value() || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value()))
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -606,18 +475,8 @@ struct ShadowTransparentSoftFoldGraphTask{
             if(!payload.transparentResolveTiming.has_value())
                 return false;
             const bool resolved = payload.combinedUpsample
-                ? payload.raytracingSystem.renderSoftShadowTerminalUpsample(
-                    commandList,
-                    payload.targets,
-                    payload.deferredLightingResources,
-                    true
-                )
-                : payload.raytracingSystem.renderSoftTransparentShadowFold(
-                    commandList,
-                    payload.targets,
-                    payload.deferredLightingResources,
-                    payload.opaqueFrameIndex
-                )
+                ? payload.raytracingSystem.renderSoftShadowTerminalUpsample(commandList, payload.targets, payload.deferredLightingResources, true)
+                : payload.raytracingSystem.renderSoftTransparentShadowFold(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex)
             ;
             if(resolved){
                 payload.transparentResolveTiming.value().finishTiming(commandList);
@@ -639,12 +498,7 @@ struct ShadowTransparentSoftFoldGraphTask{
 
         // Fusion deferred the opaque upsample, so a failed transparent phase must still publish opaque visibility.
         if(payload.combinedUpsample && !payload.transparentTraceProduced){
-            if(!payload.raytracingSystem.renderSoftShadowTerminalUpsample(
-                commandList,
-                payload.targets,
-                payload.deferredLightingResources,
-                false
-            ))
+            if(!payload.raytracingSystem.renderSoftShadowTerminalUpsample(commandList, payload.targets, payload.deferredLightingResources, false))
                 return false;
         }
 
@@ -670,9 +524,7 @@ struct ShadowTransparentSoftFoldGraphTask{
 // Shadow visibility owns its graph task; pipeline composes the caustics successor.
 struct ShadowVisibilityGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
-        Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
-    };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
 
     // All bindings are required: visibility always records against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
@@ -686,18 +538,12 @@ struct ShadowVisibilityGraphTask{
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
         const GraphOwnedAdaptiveShadowPlan& adaptivePlan = payload.graphOwnedAdaptivePlan;
-        const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan =
-            adaptivePlan.enabled ? &adaptivePlan : nullptr
-        ;
+        const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan = adaptivePlan.enabled ? &adaptivePlan : nullptr;
 
         const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(!queue)
@@ -706,34 +552,17 @@ struct ShadowVisibilityGraphTask{
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         Optional<Core::GpuTimingMeasure> asyncTiming;
         if(queue->queueClass == Core::CommandQueue::Compute){
-            asyncTiming.emplace(
-                payload.graphics.gpuTiming(),
-                RendererGpuTimingScope::s_AsyncShadow,
-                payload.graphics.getDevice(),
-                commandList
-            );
+            asyncTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncShadow, payload.graphics.getDevice(), commandList);
         }
 
         bool shadowVisibilityWritten = false;
         if(payload.prepared && payload.hardwareShadowSupported){
-            shadowVisibilityWritten = payload.raytracingSystem.renderShadowVisibility(
-                commandList,
-                payload.targets,
-                payload.deferredLightingResources
-            ).has_value();
+            shadowVisibilityWritten = payload.raytracingSystem.renderShadowVisibility(commandList, payload.targets, payload.deferredLightingResources).has_value();
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
         }
         else if(payload.prepared){
-            shadowVisibilityWritten = payload.raytracingSystem.renderGpuBvhShadowVisibility(
-                commandList,
-                payload.targets,
-                payload.deferredLightingResources,
-                false,
-                false,
-                false,
-                graphOwnedAdaptivePlan
-            ).has_value();
+            shadowVisibilityWritten = payload.raytracingSystem.renderGpuBvhShadowVisibility(commandList, payload.targets, payload.deferredLightingResources, false, false, false, graphOwnedAdaptivePlan).has_value();
         }
         // The preceding typed white clear remains the all-lit result when no producer records.
 

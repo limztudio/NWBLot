@@ -61,11 +61,7 @@ bool X11ClipboardService::initialize(){
     m_timeProbeAtom = XInternAtom(&m_display, "NWB_CLIPBOARD_TIME", False);
     const long requestWords = XMaxRequestSize(&m_display);
     m_chunkBytes = requestWords > 64 ? Min<usize>(65536u, static_cast<usize>(requestWords - 64) * 4u) : 1024u;
-    return
-        operation.succeeded() && m_ownerWindow && m_clipboardAtom && m_utf8Atom && m_targetsAtom
-        && m_timestampAtom && m_multipleAtom && m_atomPairAtom && m_textAtom && m_utf8MimeAtom
-        && m_incrementalAtom && m_propertyAtom && m_timeProbeAtom
-    ;
+    return operation.succeeded() && m_ownerWindow && m_clipboardAtom && m_utf8Atom && m_targetsAtom && m_timestampAtom && m_multipleAtom && m_atomPairAtom && m_textAtom && m_utf8MimeAtom && m_incrementalAtom && m_propertyAtom && m_timeProbeAtom;
 }
 
 bool X11ClipboardService::handleEvent(const XEvent& event){
@@ -76,10 +72,7 @@ bool X11ClipboardService::handleEvent(const XEvent& event){
     }
     if(event.type == SelectionClear && event.xselectionclear.window == m_ownerWindow){
         if(OwnedSelection* const selection = ownedSelection(event.xselectionclear.selection)){
-            if(
-                XGetSelectionOwner(&m_display, event.xselectionclear.selection) == m_ownerWindow
-                || static_cast<i32>(static_cast<u32>(event.xselectionclear.time) - static_cast<u32>(selection->timestamp)) < 0
-            )
+            if(XGetSelectionOwner(&m_display, event.xselectionclear.selection) == m_ownerWindow || static_cast<i32>(static_cast<u32>(event.xselectionclear.time) - static_cast<u32>(selection->timestamp)) < 0)
                 return true;
             selection->owned = false;
             selection->utf8.clear();
@@ -132,12 +125,7 @@ ClipboardCapabilities X11ClipboardService::capabilities(const ClipboardChannel::
     return { available, available };
 }
 
-void X11ClipboardService::startNativeRequest(
-    const ClipboardRequestToken token,
-    const ClipboardOperation::Enum operation,
-    const ClipboardChannel::Enum channel,
-    const AStringView text
-){
+void X11ClipboardService::startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum channel, const AStringView text){
     m_operationToken = token;
     m_operation = operation;
     m_operationSelection = selectionAtom(channel);

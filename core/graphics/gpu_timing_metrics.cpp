@@ -35,10 +35,7 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool LessTimestampRange(
-    const GpuComparableTimestampRange& lhs,
-    const GpuComparableTimestampRange& rhs
-)noexcept{
+[[nodiscard]] static bool LessTimestampRange(const GpuComparableTimestampRange& lhs, const GpuComparableTimestampRange& rhs)noexcept{
     if(lhs.physicalQueue.deviceGeneration != rhs.physicalQueue.deviceGeneration)
         return lhs.physicalQueue.deviceGeneration < rhs.physicalQueue.deviceGeneration;
     if(lhs.physicalQueue.index != rhs.physicalQueue.index)
@@ -62,12 +59,7 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(
-    const GpuComparableTimestampRange* const packetEnvelopes,
-    const usize packetEnvelopeCount,
-    GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics,
-    Alloc::ScratchArena& scratchArena
-){
+Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const GpuComparableTimestampRange* const packetEnvelopes, const usize packetEnvelopeCount, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics, Alloc::ScratchArena& scratchArena){
     using namespace __hidden_gpu_timing_metrics;
 
     const auto reject = [&](){
@@ -86,15 +78,11 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(
     const usize queueCapacity = Min(packetEnvelopeCount, static_cast<usize>(Limit<u16>::s_Max));
     TimestampRangeVector sortedRanges{scratchArena};
     TimestampEventVector events{scratchArena};
-    if(
-        packetEnvelopeCount > sortedRanges.max_size()
-        || queueCapacity > outQueueMetrics.max_size()
-        || *eventCapacity > events.max_size()
-    )
+    if(packetEnvelopeCount > sortedRanges.max_size() || queueCapacity > outQueueMetrics.max_size() || *eventCapacity > events.max_size())
         return MakeUnexpected(Failure{});
 
-    // Reserve escaping output first. When all vectors share one LIFO scratch arena, the temporary buffers can then
-    // pop cleanly in reverse construction order instead of remaining pinned below the caller-owned output.
+    // Reserve escaping output first.
+    // When all vectors share one LIFO scratch arena, the temporary buffers can then pop cleanly in reverse construction order instead of remaining pinned below the caller-owned output.
     outQueueMetrics.reserve(queueCapacity);
     sortedRanges.reserve(packetEnvelopeCount);
     events.reserve(*eventCapacity);
@@ -103,11 +91,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(
     const u16 deviceGeneration = packetEnvelopes[0u].physicalQueue.deviceGeneration;
     for(usize envelopeIndex = 0u; envelopeIndex < packetEnvelopeCount; ++envelopeIndex){
         const GpuComparableTimestampRange& range = packetEnvelopes[envelopeIndex];
-        if(
-            !range.valid()
-            || range.secondsPerTick != secondsPerTick
-            || range.physicalQueue.deviceGeneration != deviceGeneration
-        )
+        if(!range.valid() || range.secondsPerTick != secondsPerTick || range.physicalQueue.deviceGeneration != deviceGeneration)
             return reject();
         sortedRanges.push_back(range);
     }

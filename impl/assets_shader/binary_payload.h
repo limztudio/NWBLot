@@ -66,11 +66,7 @@ namespace AssetPayloadEncodeFailure{
 };
 
 template<typename BytecodeContainer, typename PayloadContainer>
-[[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(
-    const AStringView entryPoint,
-    const BytecodeContainer& bytecode,
-    PayloadContainer& outPayload
-){
+[[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(const AStringView entryPoint, const BytecodeContainer& bytecode, PayloadContainer& outPayload){
     if(entryPoint.empty() || entryPoint.size() > Limit<u32>::s_Max)
         return AssetPayloadEncodeFailure::InvalidEntryPoint;
     if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)

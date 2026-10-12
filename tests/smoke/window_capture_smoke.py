@@ -48,46 +48,29 @@ LIT_HWND_CLIENT_RECT_UNAVAILABLE = "HWND 0x{hwnd:x} client rect is unavailable"
 
 
 SKIP_EXIT_CODE = 77
-STRICT_LOG_FAILURE_MESSAGES = (
-    "[WARNING]",
-    "[CRITICAL WARNING]",
-    "[ASSERT]",
-    "[ERROR]",
-    "[FATAL]",
-    "VUID-",
-    "Validation Error",
-    "failed to resolve shader",
-)
+STRICT_LOG_FAILURE_MESSAGES = ("[WARNING]", "[CRITICAL WARNING]", "[ASSERT]", "[ERROR]", "[FATAL]", "VUID-", "Validation Error", "failed to resolve shader",)
 FRAMEBUFFER_CAPTURE_PATH_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
 FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
 FRAMEBUFFER_CAPTURE_READY_MESSAGE = "FramebufferCapture: capture ready"
 FRAMEBUFFER_CAPTURE_SKIP_MESSAGE = "FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"
 RENDER_READY_POLL_SECONDS = 0.1
 RENDER_READY_TIMEOUT_SECONDS = 10.0
-WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(
-    ctypes.c_int,
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-)
+WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,)
 
-# The textured-GI smoke has a fixed camera and a white receiver plane.  This client-relative rectangle has a clear gap
-# below the sphere silhouette and covers the nearby root of its foreground opaque direct shadow.  Because the light is
-# white and the receiver has no texture or tint, a red value here can only come from the textured sphere's indirect bounce.
+# The textured-GI smoke has a fixed camera and a white receiver plane.
+# This client-relative rectangle has a clear gap below the sphere silhouette and covers the nearby root of its foreground opaque direct shadow.
+# Because the light is white and the receiver has no texture or tint, a red value here can only come from the textured sphere's indirect bounce.
 TEXTURE_SMOKE_RECEIVER_REGION = (0.480, 0.625, 0.505, 0.660)
 TEXTURE_SMOKE_RECEIVER_MIN_RED = 36
 TEXTURE_SMOKE_RECEIVER_RED_CHROMA = 6
 
-# CSG pose names match the fixture's frozen yaw values 0, 1, and 2 radians. Coordinates are offsets from image center,
-# measured in image heights so the vertical-FOV projection remains valid at different aspect ratios. These inset
-# rectangles come from the projected radius-.468 octahedron at camera distance2.2/FOV60 and its retained local-y<=0
-# pyramid, after Ry(yaw)*Ry(yaw)*Rx(.32*yaw)*Rz(.16*yaw). Each cut rectangle lies inside the uncut silhouette and outside
-# the retained pyramid; each retained rectangle lies inside that pyramid. Geometry-based synthetic tests protect those
-# margins. The late retained wedge is above/right of center because the cutter rotates with the receiver.
-TRANSPARENT_CSG_REGIONS = {
-    "early": ((-.030, -.125, .030, -.065), (-.030, .065, .030, .125)),
-    "mid": ((.025, -.125, .065, -.080), (-.065, .110, -.025, .140)),
-    "late": ((-.055, -.128, -.025, -.104), (.045, -.075, .080, -.050)),
-}
+# CSG pose names match the fixture's frozen yaw values 0, 1, and 2 radians.
+# Coordinates are offsets from image center, measured in image heights so the vertical-FOV projection remains valid at different aspect ratios.
+# These inset rectangles come from the projected radius-.468 octahedron at camera distance2.2/FOV60 and its retained local-y<=0 pyramid, after Ry(yaw)*Ry(yaw)*Rx(.32*yaw)*Rz(.16*yaw).
+# Each cut rectangle lies inside the uncut silhouette and outside the retained pyramid; each retained rectangle lies inside that pyramid.
+# Geometry-based synthetic tests protect those margins.
+# The late retained wedge is above/right of center because the cutter rotates with the receiver.
+TRANSPARENT_CSG_REGIONS = { "early": ((-.030, -.125, .030, -.065), (-.030, .065, .030, .125)), "mid": ((.025, -.125, .065, -.080), (-.065, .110, -.025, .140)), "late": ((-.055, -.128, -.025, -.104), (.045, -.075, .080, -.050)), }
 
 
 class SmokeSkip(Exception):
@@ -288,13 +271,7 @@ def request_linux_graceful_exit(window_handle):
     window_id = f"0x{int(window_handle):x}"
     close_helper = Path(__file__).with_name("x11_graceful_close.py")
     try:
-        result = subprocess.run(
-            [sys.executable, str(close_helper), window_id],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=6.0,
-        )
+        result = subprocess.run([sys.executable, str(close_helper), window_id], check=False, capture_output=True, text=True, timeout=6.0,)
     except (OSError, subprocess.TimeoutExpired) as error:
         write_status(f"Linux graceful X11 close failed for {window_id} ({error}); terminating")
         return False
@@ -310,13 +287,7 @@ def request_linux_graceful_exit(window_handle):
 
 def create_process_output_capture(working_directory, name):
     try:
-        stream = tempfile.NamedTemporaryFile(
-            mode="w+b",
-            prefix=f".nwb_window_capture_{name}_",
-            suffix=".log",
-            dir=working_directory,
-            delete=False,
-        )
+        stream = tempfile.NamedTemporaryFile(mode="w+b", prefix=f".nwb_window_capture_{name}_", suffix=".log", dir=working_directory, delete=False,)
     except OSError as error:
         raise SmokeFailure(f"failed to create {name} output capture in '{working_directory}': {error}") from error
 
@@ -343,13 +314,7 @@ def dispose_process_output_capture(capture):
 def launch_captured_process(command, working_directory, env, name):
     capture = create_process_output_capture(working_directory, name)
     try:
-        process = subprocess.Popen(
-            command,
-            cwd=working_directory,
-            env=env,
-            stdout=capture.stream,
-            stderr=subprocess.STDOUT,
-        )
+        process = subprocess.Popen(command, cwd=working_directory, env=env, stdout=capture.stream, stderr=subprocess.STDOUT,)
     except OSError:
         dispose_process_output_capture(capture)
         raise
@@ -448,12 +413,7 @@ def executable_sibling(executable, name):
 
 
 def resolve_lavapipe_icd():
-    candidates = (
-        Path("/usr/share/vulkan/icd.d/lvp_icd.x86_64.json"),
-        Path("/usr/share/vulkan/icd.d/lvp_icd.i686.json"),
-        Path("/etc/vulkan/icd.d/lvp_icd.x86_64.json"),
-        Path("/etc/vulkan/icd.d/lvp_icd.i686.json"),
-    )
+    candidates = (Path("/usr/share/vulkan/icd.d/lvp_icd.x86_64.json"), Path("/usr/share/vulkan/icd.d/lvp_icd.i686.json"), Path("/etc/vulkan/icd.d/lvp_icd.x86_64.json"), Path("/etc/vulkan/icd.d/lvp_icd.i686.json"),)
     for candidate in candidates:
         if candidate.exists():
             return candidate
@@ -462,15 +422,8 @@ def resolve_lavapipe_icd():
 
 
 def make_runtime_launch_args(args: argparse.Namespace) -> SimpleNamespace:
-    return SimpleNamespace(
-        no_logserver=args.no_logserver,
-        logserver_executable=args.logserver_executable,
-        log_port=0,
-        working_directory=args.runtime_dir,
-        timeout=args.startup_timeout,
-        application_arg=["--gpudbg"] if args.gpu_validation else [],
-        software_vulkan=LIT_OFF,
-    )
+    return SimpleNamespace(no_logserver=args.no_logserver, logserver_executable=args.logserver_executable, log_port=0, working_directory=args.runtime_dir, timeout=args.startup_timeout, application_arg=["--gpudbg"] if args.gpu_validation else [],
+        software_vulkan=LIT_OFF,)
 
 
 def build_launch_environment(args):
@@ -558,16 +511,7 @@ def capture_result_from_rgb_rows(handle, width, height, rows_rgb):
     transparent_multi = analyze_transparent_multi_rows(rows_rgb)
     transparent_csg = {pose: analyze_transparent_csg_rows(rows_rgb, pose) for pose in TRANSPARENT_CSG_REGIONS}
     texture_smoke = analyze_texture_smoke_rows(rows_rgb)
-    return CaptureResult(
-        handle,
-        width,
-        height,
-        analysis.has_pixel_variation,
-        analysis.appears_empty_or_white,
-        transparent_multi,
-        transparent_csg,
-        texture_smoke,
-    )
+    return CaptureResult(handle, width, height, analysis.has_pixel_variation, analysis.appears_empty_or_white, transparent_multi, transparent_csg, texture_smoke,)
 
 
 def write_capture_rows(handle, width, height, rows_rgb, output_path):
@@ -593,9 +537,7 @@ def read_bmp_24_rows(path):
     if signature != b"BM":
         raise SmokeFailure(f"application capture BMP '{path}' has an invalid signature")
     if declared_file_size != len(data):
-        raise SmokeFailure(
-            f"application capture BMP '{path}' declares {declared_file_size} bytes but contains {len(data)}"
-        )
+        raise SmokeFailure(f"application capture BMP '{path}' declares {declared_file_size} bytes but contains {len(data)}")
 
     dib_size = struct.unpack_from("<I", data, 14)[0]
     if dib_size < 40 or 14 + dib_size > len(data):
@@ -605,10 +547,7 @@ def read_bmp_24_rows(path):
     if width <= 0 or signed_height == 0:
         raise SmokeFailure(f"application capture BMP '{path}' has invalid dimensions {width}x{signed_height}")
     if planes != 1 or bits_per_pixel != 24 or compression != 0:
-        raise SmokeFailure(
-            f"application capture BMP '{path}' must be uncompressed 24-bit RGB "
-            f"(planes={planes}, bits={bits_per_pixel}, compression={compression})"
-        )
+        raise SmokeFailure(f"application capture BMP '{path}' must be uncompressed 24-bit RGB " f"(planes={planes}, bits={bits_per_pixel}, compression={compression})")
     if pixel_offset < 14 + dib_size or pixel_offset > len(data):
         raise SmokeFailure(f"application capture BMP '{path}' has invalid pixel offset {pixel_offset}")
 
@@ -617,13 +556,9 @@ def read_bmp_24_rows(path):
     expected_image_size = row_stride * height
     expected_file_size = pixel_offset + expected_image_size
     if image_size not in (0, expected_image_size):
-        raise SmokeFailure(
-            f"application capture BMP '{path}' declares image size {image_size}, expected {expected_image_size}"
-        )
+        raise SmokeFailure(f"application capture BMP '{path}' declares image size {image_size}, expected {expected_image_size}")
     if expected_file_size != len(data):
-        raise SmokeFailure(
-            f"application capture BMP '{path}' pixel payload ends at {expected_file_size}, file has {len(data)} bytes"
-        )
+        raise SmokeFailure(f"application capture BMP '{path}' pixel payload ends at {expected_file_size}, file has {len(data)} bytes")
 
     stored_rows = []
     for stored_y in range(height):
@@ -641,12 +576,9 @@ def read_bmp_24_rows(path):
 def validate_surfel_coverage_probe(path):
     """Check the interior of both same-cell, perpendicular faces in the opt-in GI scene."""
     width, height, rows = read_bmp_24_rows(path)
-    # The cube is fixed in the 1280x900 smoke camera. Fractional ROIs tolerate framebuffer scaling and avoid
-    # silhouette pixels, where normal/depth filtering should deliberately reduce coverage.
-    regions = {
-        "front": (0.80, 0.42, 0.92, 0.55),
-        "side": (0.735, 0.42, 0.770, 0.55),
-    }
+    # The cube is fixed in the 1280x900 smoke camera.
+    # Fractional ROIs tolerate framebuffer scaling and avoid silhouette pixels, where normal/depth filtering should deliberately reduce coverage.
+    regions = { "front": (0.80, 0.42, 0.92, 0.55), "side": (0.735, 0.42, 0.770, 0.55), }
     observed = {}
     for face, (left, top, right, bottom) in regions.items():
         x0, x1 = int(left * width), int(right * width)
@@ -669,11 +601,7 @@ def validate_surfel_coverage_probe(path):
     minimum = {"front": 1000, "side": 300}
     for face, (covered, pixels) in observed.items():
         if pixels < minimum[face] or covered < pixels * 0.80:
-            raise SmokeFailure(
-                "surfel coverage probe did not cover the perpendicular faces "
-                f"(front={observed['front'][0]}/{observed['front'][1]}, "
-                f"side={observed['side'][0]}/{observed['side'][1]})"
-            )
+            raise SmokeFailure("surfel coverage probe did not cover the perpendicular faces " f"(front={observed['front'][0]}/{observed['front'][1]}, " f"side={observed['side'][0]}/{observed['side'][1]})")
     return observed
 
 
@@ -727,11 +655,7 @@ def analyze_transparent_multi_rows(rows_rgb):
 def transparent_csg_regions(width, height, pose):
     def to_pixels(region):
         x0, y0, x1, y1 = region
-        return normalized_region(
-            width, height,
-            .5 + x0 * height / width, .5 + y0,
-            .5 + x1 * height / width, .5 + y1,
-        )
+        return normalized_region(width, height, .5 + x0 * height / width, .5 + y0, .5 + x1 * height / width, .5 + y1,)
 
     return tuple(to_pixels(region) for region in TRANSPARENT_CSG_REGIONS[pose])
 
@@ -746,16 +670,8 @@ def analyze_transparent_csg_rows(rows_rgb, pose):
     cut_region, remaining_region = transparent_csg_regions(width, height, pose)
     # The center's unlit green material is distinct from the red cylinder, blue cone, and gray opaque occluders.
     # Retain the ordinary foreground contrast threshold as well: color identity alone must not accept faint noise.
-    remaining_center_pixels = count_foreground_pixels_in_region(
-        rows_rgb, background, remaining_region,
-        pixel_predicate=lambda rgb: rgb[1] > rgb[0] and rgb[1] > rgb[2],
-    )
-    return TransparentCsgAnalysis(
-        count_background_like_pixels(rows_rgb, background, cut_region),
-        region_pixel_count(cut_region),
-        remaining_center_pixels,
-        region_pixel_count(remaining_region),
-    )
+    remaining_center_pixels = count_foreground_pixels_in_region(rows_rgb, background, remaining_region, pixel_predicate=lambda rgb: rgb[1] > rgb[0] and rgb[1] > rgb[2],)
+    return TransparentCsgAnalysis(count_background_like_pixels(rows_rgb, background, cut_region), region_pixel_count(cut_region), remaining_center_pixels, region_pixel_count(remaining_region),)
 
 
 def analyze_texture_smoke_rows(rows_rgb):
@@ -778,20 +694,10 @@ def analyze_texture_smoke_rows(rows_rgb):
     start_x, start_y, end_x, end_y = receiver_region
     for y in range(start_y, end_y):
         for red, green, blue in rows_rgb[y][start_x:end_x]:
-            if (
-                red >= TEXTURE_SMOKE_RECEIVER_MIN_RED
-                and red >= green + TEXTURE_SMOKE_RECEIVER_RED_CHROMA
-                and red >= blue + TEXTURE_SMOKE_RECEIVER_RED_CHROMA
-            ):
+            if (red >= TEXTURE_SMOKE_RECEIVER_MIN_RED and red >= green + TEXTURE_SMOKE_RECEIVER_RED_CHROMA and red >= blue + TEXTURE_SMOKE_RECEIVER_RED_CHROMA):
                 receiver_red_pixels += 1
 
-    return TextureSmokeAnalysis(
-        red_pixels,
-        green_pixels,
-        blue_pixels,
-        receiver_red_pixels,
-        region_pixel_count(receiver_region),
-    )
+    return TextureSmokeAnalysis(red_pixels, green_pixels, blue_pixels, receiver_red_pixels, region_pixel_count(receiver_region),)
 
 
 def estimate_background_rgb(rows_rgb, width, height):
@@ -838,11 +744,7 @@ def count_foreground_pixels_in_region(rows_rgb, background, region, pixel_predic
     for y in range(start_y, end_y):
         for x in range(start_x, end_x):
             red, green, blue = rows_rgb[y][x]
-            channel_delta = (
-                abs(red - background[0]),
-                abs(green - background[1]),
-                abs(blue - background[2]),
-            )
+            channel_delta = (abs(red - background[0]), abs(green - background[1]), abs(blue - background[2]),)
             if sum(channel_delta) >= 34 and max(channel_delta) >= 14:
                 if pixel_predicate is None or pixel_predicate((red, green, blue)):
                     count += 1
@@ -857,11 +759,7 @@ def count_background_like_pixels(rows_rgb, background, region):
     for y in range(start_y, end_y):
         for x in range(start_x, end_x):
             red, green, blue = rows_rgb[y][x]
-            channel_delta = (
-                abs(red - background[0]),
-                abs(green - background[1]),
-                abs(blue - background[2]),
-            )
+            channel_delta = (abs(red - background[0]), abs(green - background[1]), abs(blue - background[2]),)
             if sum(channel_delta) <= 28 and max(channel_delta) <= 12:
                 count += 1
 
@@ -918,115 +816,42 @@ def bgra_rgb_rows(buffer, width, height):
 
 
 class LinuxXWindowAttributes(ctypes.Structure):
-    _fields_ = [
-        ("x", ctypes.c_int),
-        ("y", ctypes.c_int),
-        (LIT_WIDTH, ctypes.c_int),
-        (LIT_HEIGHT, ctypes.c_int),
-        ("border_width", ctypes.c_int),
-        (LIT_DEPTH, ctypes.c_int),
-        ("visual", ctypes.c_void_p),
-        (LIT_ROOT, ctypes.c_ulong),
-        ("class", ctypes.c_int),
-        ("bit_gravity", ctypes.c_int),
-        ("win_gravity", ctypes.c_int),
-        ("backing_store", ctypes.c_int),
-        ("backing_planes", ctypes.c_ulong),
-        ("backing_pixel", ctypes.c_ulong),
-        ("save_under", ctypes.c_int),
-        ("colormap", ctypes.c_ulong),
-        ("map_installed", ctypes.c_int),
-        ("map_state", ctypes.c_int),
-        ("all_event_masks", ctypes.c_long),
-        ("your_event_mask", ctypes.c_long),
-        ("do_not_propagate_mask", ctypes.c_long),
-        ("override_redirect", ctypes.c_int),
-        ("screen", ctypes.c_void_p),
-    ]
+    _fields_ = [("x", ctypes.c_int), ("y", ctypes.c_int), (LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("border_width", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("visual", ctypes.c_void_p), (LIT_ROOT, ctypes.c_ulong), ("class", ctypes.c_int),
+        ("bit_gravity", ctypes.c_int), ("win_gravity", ctypes.c_int), ("backing_store", ctypes.c_int), ("backing_planes", ctypes.c_ulong), ("backing_pixel", ctypes.c_ulong), ("save_under", ctypes.c_int), ("colormap", ctypes.c_ulong),
+        ("map_installed", ctypes.c_int), ("map_state", ctypes.c_int), ("all_event_masks", ctypes.c_long), ("your_event_mask", ctypes.c_long), ("do_not_propagate_mask", ctypes.c_long), ("override_redirect", ctypes.c_int), ("screen", ctypes.c_void_p),]
 
 
 class LinuxXImageFuncs(ctypes.Structure):
-    _fields_ = [
-        ("create_image", ctypes.c_void_p),
-        ("destroy_image", ctypes.c_void_p),
-        ("get_pixel", ctypes.c_void_p),
-        ("put_pixel", ctypes.c_void_p),
-        ("sub_image", ctypes.c_void_p),
-        ("add_pixel", ctypes.c_void_p),
-    ]
+    _fields_ = [("create_image", ctypes.c_void_p), ("destroy_image", ctypes.c_void_p), ("get_pixel", ctypes.c_void_p), ("put_pixel", ctypes.c_void_p), ("sub_image", ctypes.c_void_p), ("add_pixel", ctypes.c_void_p),]
 
 
 class LinuxXImage(ctypes.Structure):
     pass
 
 
-LinuxXImage._fields_ = [
-    (LIT_WIDTH, ctypes.c_int),
-    (LIT_HEIGHT, ctypes.c_int),
-    ("xoffset", ctypes.c_int),
-    ("format", ctypes.c_int),
-    ("data", ctypes.c_void_p),
-    ("byte_order", ctypes.c_int),
-    ("bitmap_unit", ctypes.c_int),
-    ("bitmap_bit_order", ctypes.c_int),
-    ("bitmap_pad", ctypes.c_int),
-    (LIT_DEPTH, ctypes.c_int),
-    ("bytes_per_line", ctypes.c_int),
-    ("bits_per_pixel", ctypes.c_int),
-    ("red_mask", ctypes.c_ulong),
-    ("green_mask", ctypes.c_ulong),
-    ("blue_mask", ctypes.c_ulong),
-    ("obdata", ctypes.c_void_p),
-    ("f", LinuxXImageFuncs),
-]
+LinuxXImage._fields_ = [(LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("xoffset", ctypes.c_int), ("format", ctypes.c_int), ("data", ctypes.c_void_p), ("byte_order", ctypes.c_int), ("bitmap_unit", ctypes.c_int), ("bitmap_bit_order", ctypes.c_int),
+    ("bitmap_pad", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("bytes_per_line", ctypes.c_int), ("bits_per_pixel", ctypes.c_int), ("red_mask", ctypes.c_ulong), ("green_mask", ctypes.c_ulong), ("blue_mask", ctypes.c_ulong), ("obdata", ctypes.c_void_p),
+    ("f", LinuxXImageFuncs),]
 
 
-LINUX_X_INPUT_EVENT_PREFIX = [
-    (LIT_TYPE, ctypes.c_int),
-    ("serial", ctypes.c_ulong),
-    ("send_event", ctypes.c_int),
-    ("display", ctypes.c_void_p),
-    ("window", ctypes.c_ulong),
-    (LIT_ROOT, ctypes.c_ulong),
-    ("subwindow", ctypes.c_ulong),
-    ("time", ctypes.c_ulong),
-    ("x", ctypes.c_int),
-    ("y", ctypes.c_int),
-    ("x_root", ctypes.c_int),
-    ("y_root", ctypes.c_int),
-    ("state", ctypes.c_uint),
-]
+LINUX_X_INPUT_EVENT_PREFIX = [(LIT_TYPE, ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int), ("display", ctypes.c_void_p), ("window", ctypes.c_ulong), (LIT_ROOT, ctypes.c_ulong), ("subwindow", ctypes.c_ulong), ("time", ctypes.c_ulong),
+    ("x", ctypes.c_int), ("y", ctypes.c_int), ("x_root", ctypes.c_int), ("y_root", ctypes.c_int), ("state", ctypes.c_uint),]
 
 
 class LinuxXKeyEvent(ctypes.Structure):
-    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
-        ("keycode", ctypes.c_uint),
-        (LIT_SAME_SCREEN, ctypes.c_int),
-    ]
+    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [("keycode", ctypes.c_uint), (LIT_SAME_SCREEN, ctypes.c_int),]
 
 
 class LinuxXButtonEvent(ctypes.Structure):
-    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
-        ("button", ctypes.c_uint),
-        (LIT_SAME_SCREEN, ctypes.c_int),
-    ]
+    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [("button", ctypes.c_uint), (LIT_SAME_SCREEN, ctypes.c_int),]
 
 
 class LinuxXMotionEvent(ctypes.Structure):
-    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
-        ("is_hint", ctypes.c_char),
-        (LIT_SAME_SCREEN, ctypes.c_int),
-    ]
+    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [("is_hint", ctypes.c_char), (LIT_SAME_SCREEN, ctypes.c_int),]
 
 
 class LinuxXEvent(ctypes.Union):
-    _fields_ = [
-        (LIT_TYPE, ctypes.c_int),
-        ("xkey", LinuxXKeyEvent),
-        ("xbutton", LinuxXButtonEvent),
-        ("xmotion", LinuxXMotionEvent),
-        ("pad", ctypes.c_long * 24),
-    ]
+    _fields_ = [(LIT_TYPE, ctypes.c_int), ("xkey", LinuxXKeyEvent), ("xbutton", LinuxXButtonEvent), ("xmotion", LinuxXMotionEvent), ("pad", ctypes.c_long * 24),]
 
 
 class LinuxX11Capture:
@@ -1076,62 +901,20 @@ class LinuxX11Capture:
         self.x11.XInternAtom.restype = ctypes.c_ulong
         self.x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
         self.x11.XFree.argtypes = [ctypes.c_void_p]
-        self.x11.XFetchName.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.POINTER(ctypes.c_char_p),
-        ]
+        self.x11.XFetchName.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_char_p),]
         self.x11.XFetchName.restype = ctypes.c_int
-        self.x11.XQueryTree.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.POINTER(ctypes.c_ulong),
-            ctypes.POINTER(ctypes.c_ulong),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_ulong)),
-            ctypes.POINTER(ctypes.c_uint),
-        ]
+        self.x11.XQueryTree.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.POINTER(ctypes.c_ulong)), ctypes.POINTER(ctypes.c_uint),]
         self.x11.XQueryTree.restype = ctypes.c_int
-        self.x11.XGetWindowProperty.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.c_ulong,
-            ctypes.c_long,
-            ctypes.c_long,
-            ctypes.c_int,
-            ctypes.c_ulong,
-            ctypes.POINTER(ctypes.c_ulong),
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_ulong),
-            ctypes.POINTER(ctypes.c_ulong),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_ubyte)),
-        ]
+        self.x11.XGetWindowProperty.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_long, ctypes.c_long, ctypes.c_int, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.POINTER(ctypes.c_ubyte)),]
         self.x11.XGetWindowProperty.restype = ctypes.c_int
-        self.x11.XGetWindowAttributes.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.POINTER(self.XWindowAttributes),
-        ]
+        self.x11.XGetWindowAttributes.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(self.XWindowAttributes),]
         self.x11.XGetWindowAttributes.restype = ctypes.c_int
-        self.x11.XGetImage.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_uint,
-            ctypes.c_uint,
-            ctypes.c_ulong,
-            ctypes.c_int,
-        ]
+        self.x11.XGetImage.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_int,]
         self.x11.XGetImage.restype = ctypes.POINTER(self.XImage)
         self.x11.XDestroyImage.argtypes = [ctypes.POINTER(self.XImage)]
         self.x11.XDestroyImage.restype = ctypes.c_int
-        self.x11.XSendEvent.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.c_int,
-            ctypes.c_long,
-            ctypes.POINTER(LinuxXEvent),
-        ]
+        self.x11.XSendEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_long, ctypes.POINTER(LinuxXEvent),]
         self.x11.XSendEvent.restype = ctypes.c_int
         self.x11.XFlush.argtypes = [ctypes.c_void_p]
         self.x11.XFlush.restype = ctypes.c_int
@@ -1145,28 +928,9 @@ class LinuxX11Capture:
         self.x11.XRaiseWindow.restype = ctypes.c_int
         self.x11.XSetInputFocus.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
         self.x11.XSetInputFocus.restype = ctypes.c_int
-        self.x11.XWarpPointer.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.c_ulong,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_uint,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
+        self.x11.XWarpPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_int, ctypes.c_int,]
         self.x11.XWarpPointer.restype = ctypes.c_int
-        self.x11.XTranslateCoordinates.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.c_ulong,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_ulong),
-        ]
+        self.x11.XTranslateCoordinates.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_ulong),]
         self.x11.XTranslateCoordinates.restype = ctypes.c_int
 
     def get_window_pid(self, window):
@@ -1176,20 +940,7 @@ class LinuxX11Capture:
         bytes_after = ctypes.c_ulong()
         value = ctypes.POINTER(ctypes.c_ubyte)()
 
-        status = self.x11.XGetWindowProperty(
-            self.display,
-            window,
-            self.pid_atom,
-            0,
-            1,
-            False,
-            0,
-            ctypes.byref(actual_type),
-            ctypes.byref(actual_format),
-            ctypes.byref(item_count),
-            ctypes.byref(bytes_after),
-            ctypes.byref(value),
-        )
+        status = self.x11.XGetWindowProperty(self.display, window, self.pid_atom, 0, 1, False, 0, ctypes.byref(actual_type), ctypes.byref(actual_format), ctypes.byref(item_count), ctypes.byref(bytes_after), ctypes.byref(value),)
         if status != 0 or not value:
             return None
 
@@ -1229,14 +980,7 @@ class LinuxX11Capture:
         parent = ctypes.c_ulong()
         children = ctypes.POINTER(ctypes.c_ulong)()
         child_count = ctypes.c_uint()
-        status = self.x11.XQueryTree(
-            self.display,
-            window,
-            ctypes.byref(root),
-            ctypes.byref(parent),
-            ctypes.byref(children),
-            ctypes.byref(child_count),
-        )
+        status = self.x11.XQueryTree(self.display, window, ctypes.byref(root), ctypes.byref(parent), ctypes.byref(children), ctypes.byref(child_count),)
         if status == 0:
             return []
 
@@ -1360,16 +1104,7 @@ class LinuxX11Capture:
         root_x = ctypes.c_int()
         root_y = ctypes.c_int()
         child = ctypes.c_ulong()
-        if self.x11.XTranslateCoordinates(
-            self.display,
-            window,
-            self.root,
-            x,
-            y,
-            ctypes.byref(root_x),
-            ctypes.byref(root_y),
-            ctypes.byref(child),
-        ) == 0:
+        if self.x11.XTranslateCoordinates(self.display, window, self.root, x, y, ctypes.byref(root_x), ctypes.byref(root_y), ctypes.byref(child),) == 0:
             return x, y
 
         return root_x.value, root_y.value
@@ -1417,8 +1152,7 @@ class LinuxX11Capture:
         return result
 
     def capture_client_window(self, window, output_path):
-        # The X11 drawable selected for the application is already its client content; keep the M4 capture API
-        # portable while Windows explicitly strips the compositor-owned non-client frame below.
+        # The X11 drawable selected for the application is already its client content; keep the M4 capture API portable while Windows explicitly strips the compositor-owned non-client frame below.
         return self.capture_window(window, output_path)
 
     def capture_prepared_raw_client_window(self, window, output_path):
@@ -1429,8 +1163,7 @@ class LinuxX11Capture:
         client_width, client_height = self._validated_window_size(window)
         if x < 0 or y < 0 or width <= 0 or height <= 0 or x + width > client_width or y + height > client_height:
             raise SmokeFailure("X11 pixel sample falls outside the client area")
-        image = self.x11.XGetImage(self.display, window, x, y, width, height,
-            ctypes.c_ulong(-1).value, self.Z_PIXMAP)
+        image = self.x11.XGetImage(self.display, window, x, y, width, height, ctypes.c_ulong(-1).value, self.Z_PIXMAP)
         if not image:
             raise SmokeFailure(f"XGetImage failed for window 0x{window:x}")
         try:
@@ -1445,16 +1178,7 @@ class LinuxX11Capture:
         root_x = ctypes.c_int()
         root_y = ctypes.c_int()
         child = ctypes.c_ulong()
-        if self.x11.XTranslateCoordinates(
-            self.display,
-            window,
-            self.root,
-            0,
-            0,
-            ctypes.byref(root_x),
-            ctypes.byref(root_y),
-            ctypes.byref(child),
-        ) == 0:
+        if self.x11.XTranslateCoordinates(self.display, window, self.root, 0, 0, ctypes.byref(root_x), ctypes.byref(root_y), ctypes.byref(child),) == 0:
             return None
 
         root_attributes = self.get_attributes(self.root)
@@ -1473,16 +1197,7 @@ class LinuxX11Capture:
         return capture_x, capture_y, width, height
 
     def _capture_drawable_region(self, drawable, output_handle, x, y, width, height, output_path):
-        image = self.x11.XGetImage(
-            self.display,
-            drawable,
-            x,
-            y,
-            width,
-            height,
-            ctypes.c_ulong(-1).value,
-            self.Z_PIXMAP,
-        )
+        image = self.x11.XGetImage(self.display, drawable, x, y, width, height, ctypes.c_ulong(-1).value, self.Z_PIXMAP,)
         if not image:
             raise SmokeFailure(f"XGetImage failed for drawable 0x{drawable:x}")
 
@@ -1504,42 +1219,20 @@ class LinuxX11Capture:
 
 
 class WinRect(ctypes.Structure):
-    _fields_ = [
-        ("left", ctypes.c_long),
-        ("top", ctypes.c_long),
-        ("right", ctypes.c_long),
-        ("bottom", ctypes.c_long),
-    ]
+    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long),]
 
 
 class WinPoint(ctypes.Structure):
-    _fields_ = [
-        ("x", ctypes.c_long),
-        ("y", ctypes.c_long),
-    ]
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long),]
 
 
 class WinBitmapInfoHeader(ctypes.Structure):
-    _fields_ = [
-        ("biSize", ctypes.c_uint32),
-        ("biWidth", ctypes.c_long),
-        ("biHeight", ctypes.c_long),
-        ("biPlanes", ctypes.c_uint16),
-        ("biBitCount", ctypes.c_uint16),
-        ("biCompression", ctypes.c_uint32),
-        ("biSizeImage", ctypes.c_uint32),
-        ("biXPelsPerMeter", ctypes.c_long),
-        ("biYPelsPerMeter", ctypes.c_long),
-        ("biClrUsed", ctypes.c_uint32),
-        ("biClrImportant", ctypes.c_uint32),
-    ]
+    _fields_ = [("biSize", ctypes.c_uint32), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long), ("biPlanes", ctypes.c_uint16), ("biBitCount", ctypes.c_uint16), ("biCompression", ctypes.c_uint32), ("biSizeImage", ctypes.c_uint32),
+        ("biXPelsPerMeter", ctypes.c_long), ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", ctypes.c_uint32), ("biClrImportant", ctypes.c_uint32),]
 
 
 class WinBitmapInfo(ctypes.Structure):
-    _fields_ = [
-        ("bmiHeader", WinBitmapInfoHeader),
-        ("bmiColors", ctypes.c_uint32 * 3),
-    ]
+    _fields_ = [("bmiHeader", WinBitmapInfoHeader), ("bmiColors", ctypes.c_uint32 * 3),]
 
 
 class WindowsCapture:
@@ -1558,11 +1251,7 @@ class WindowsCapture:
     SWP_SHOWWINDOW = 0x0040
     SWP_ASYNCWINDOWPOS = 0x4000
     VK_RETURN = 0x0D
-    VIRTUAL_KEYS = {
-        **{str(index): 0x30 + index for index in range(0, 10)},
-        **{chr(ord("A") + index): 0x41 + index for index in range(0, 26)},
-        **{f"F{index}": 0x6F + index for index in range(1, 13)},
-    }
+    VIRTUAL_KEYS = { **{str(index): 0x30 + index for index in range(0, 10)}, **{chr(ord("A") + index): 0x41 + index for index in range(0, 26)}, **{f"F{index}": 0x6F + index for index in range(1, 13)}, }
     WM_KEYDOWN = 0x0100
     WM_KEYUP = 0x0101
     RECT = WinRect
@@ -1608,27 +1297,9 @@ class WindowsCapture:
         self.gdi32.CreateCompatibleBitmap.restype = ctypes.c_void_p
         self.gdi32.SelectObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         self.gdi32.SelectObject.restype = ctypes.c_void_p
-        self.gdi32.BitBlt.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_uint32,
-        ]
+        self.gdi32.BitBlt.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_uint32,]
         self.gdi32.BitBlt.restype = ctypes.c_int
-        self.gdi32.GetDIBits.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_uint,
-            ctypes.c_void_p,
-            ctypes.POINTER(self.BITMAPINFO),
-            ctypes.c_uint,
-        ]
+        self.gdi32.GetDIBits.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.POINTER(self.BITMAPINFO), ctypes.c_uint,]
         self.gdi32.GetDIBits.restype = ctypes.c_int
         self.gdi32.DeleteObject.argtypes = [ctypes.c_void_p]
         self.gdi32.DeleteObject.restype = ctypes.c_int
@@ -1729,10 +1400,7 @@ class WindowsCapture:
         outer_height = height + window_height - client_height
         if outer_width < width or outer_height < height:
             raise SmokeFailure("window/client rectangles disagree while calculating the requested resize")
-        if not self.user32.SetWindowPos(
-            ctypes.c_void_p(hwnd), None, 0, 0, outer_width, outer_height,
-            self.SWP_NOMOVE | self.SWP_NOZORDER | self.SWP_SHOWWINDOW | self.SWP_ASYNCWINDOWPOS,
-        ):
+        if not self.user32.SetWindowPos(ctypes.c_void_p(hwnd), None, 0, 0, outer_width, outer_height, self.SWP_NOMOVE | self.SWP_NOZORDER | self.SWP_SHOWWINDOW | self.SWP_ASYNCWINDOWPOS,):
             raise SmokeFailure(f"SetWindowPos failed while resizing HWND 0x{hwnd:x}")
 
     def send_named_key(self, hwnd, key_name):
@@ -1779,29 +1447,15 @@ class WindowsCapture:
         preference = ctypes.c_int(self.DWMWCP_DONOTROUND)
         preference_size = ctypes.sizeof(preference)
         if preference_size != 4:
-            raise SmokeFailure(
-                f"Windows raw client capture requires a 4-byte DWM corner preference; got {preference_size} bytes"
-            )
+            raise SmokeFailure(f"Windows raw client capture requires a 4-byte DWM corner preference; got {preference_size} bytes")
 
         dwmapi = self._raw_client_dwmapi()
-        result = dwmapi.DwmSetWindowAttribute(
-            ctypes.c_void_p(hwnd),
-            self.DWMWA_WINDOW_CORNER_PREFERENCE,
-            ctypes.byref(preference),
-            preference_size,
-        )
+        result = dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), self.DWMWA_WINDOW_CORNER_PREFERENCE, ctypes.byref(preference), preference_size,)
         unsigned_result = ctypes.c_uint32(result).value
         if unsigned_result == self.E_INVALIDARG:
-            raise SmokeSkip(
-                "Windows raw client capture requires Windows 11 build 22000 or later with "
-                "DWMWA_WINDOW_CORNER_PREFERENCE; DwmSetWindowAttribute returned HRESULT 0x80070057"
-            )
+            raise SmokeSkip("Windows raw client capture requires Windows 11 build 22000 or later with " "DWMWA_WINDOW_CORNER_PREFERENCE; DwmSetWindowAttribute returned HRESULT 0x80070057")
         if result != self.S_OK:
-            raise SmokeFailure(
-                "Windows raw client capture requires "
-                "DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND); "
-                f"HRESULT 0x{unsigned_result:08X}"
-            )
+            raise SmokeFailure("Windows raw client capture requires " "DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND); " f"HRESULT 0x{unsigned_result:08X}")
 
         result = dwmapi.DwmFlush()
         if result != self.S_OK:
@@ -1859,8 +1513,8 @@ class WindowsCapture:
                 self.user32.ReleaseDC(None, screen_dc)
 
     def capture_window(self, hwnd, output_path):
-        # Capture renderer-owned client pixels on every platform. The DWM frame contains unrelated active-window
-        # chrome and makes normalized scene regions differ from the X11 drawable contract.
+        # Capture renderer-owned client pixels on every platform.
+        # The DWM frame contains unrelated active-window chrome and makes normalized scene regions differ from the X11 drawable contract.
         self._prepare_capture_window(hwnd)
         rect = self._client_rect(hwnd)
         if not rect:
@@ -1911,12 +1565,7 @@ def launch_logserver(args, executable, env):
     log_pattern = "logserver_*.log"
     log_baseline = snapshot_log_files(log_directory, log_pattern)
     port = args.log_port if args.log_port else choose_free_port()
-    process = launch_captured_process(
-        [str(logserver), LIT_P, str(port)],
-        args.working_directory,
-        env,
-        LIT_LOGSERVER,
-    )
+    process = launch_captured_process([str(logserver), LIT_P, str(port)], args.working_directory, env, LIT_LOGSERVER,)
     try:
         wait_for_tcp_port(port, min(args.timeout, 10.0))
     except Exception as error:
@@ -1937,12 +1586,7 @@ def launch_testbed(args, executable, env, log_port):
         command.extend([LIT_A, "", LIT_P, "0"])
     command.extend(args.application_arg)
 
-    return launch_captured_process(
-        command,
-        args.working_directory,
-        env,
-        LIT_TESTBED,
-    )
+    return launch_captured_process(command, args.working_directory, env, LIT_TESTBED,)
 
 
 def wait_for_application_capture_exit(process, output_path, timeout_seconds):
@@ -1956,9 +1600,7 @@ def wait_for_application_capture_exit(process, output_path, timeout_seconds):
         time.sleep(0.05)
 
     artifact_state = "was written" if artifact_observed or output_path.is_file() else "was not written"
-    raise SmokeFailure(
-        f"timed out waiting for testbed to self-exit after application capture; artifact {artifact_state}"
-    )
+    raise SmokeFailure(f"timed out waiting for testbed to self-exit after application capture; artifact {artifact_state}")
 
 
 def ensure_process_running(process, stage, process_name=LIT_TESTBED):
@@ -2008,12 +1650,7 @@ def validate_transparent_multi_result(result):
         missing.append(f"right={analysis.right_pixels}")
 
     if missing:
-        observed = (
-            f"left={analysis.left_pixels}, "
-            f"center={analysis.center_pixels}, "
-            f"right={analysis.right_pixels}, "
-            f"min={min_pixels}"
-        )
+        observed = (f"left={analysis.left_pixels}, " f"center={analysis.center_pixels}, " f"right={analysis.right_pixels}, " f"min={min_pixels}")
         raise SmokeFailure(f"transparent multi-object scene did not show all expected color regions ({observed})")
 
 
@@ -2028,20 +1665,15 @@ def validate_transparent_csg_result(result, pose):
         missing.append(f"remaining_center={analysis.remaining_center_pixels}")
 
     if missing:
-        observed = (
-            f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, "
-            f"remaining_center={analysis.remaining_center_pixels}/{analysis.remaining_region_pixels}, "
-            f"min_void={min_void_pixels}, "
-            f"min_remaining={min_remaining_pixels}"
-        )
+        observed = (f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, " f"remaining_center={analysis.remaining_center_pixels}/{analysis.remaining_region_pixels}, " f"min_void={min_void_pixels}, " f"min_remaining={min_remaining_pixels}")
         raise SmokeFailure(f"transparent CSG {pose} pose did not show the expected clipped center region ({observed})")
 
 
 def validate_texture_smoke_result(result):
     analysis = result.texture_smoke
     min_pixels = max(220, (result.width * result.height) // 4000)
-    # The receiver-only region is deliberately tight enough to exclude authored sphere texels. Require substantial
-    # coverage within that region while retaining a fixed floor that rejects isolated red noise.
+    # The receiver-only region is deliberately tight enough to exclude authored sphere texels.
+    # Require substantial coverage within that region while retaining a fixed floor that rejects isolated red noise.
     min_receiver_red_pixels = max(256, analysis.receiver_pixel_count // 4)
     missing = []
     if analysis.red_pixels < min_pixels:
@@ -2054,23 +1686,11 @@ def validate_texture_smoke_result(result):
         missing.append(f"receiver_red={analysis.receiver_red_pixels}")
 
     if missing:
-        observed = (
-            f"red={analysis.red_pixels}, "
-            f"green={analysis.green_pixels}, "
-            f"blue={analysis.blue_pixels}, "
-            f"receiver_red={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}, "
-            f"min={min_pixels}, receiver_min={min_receiver_red_pixels}"
-        )
+        observed = (f"red={analysis.red_pixels}, " f"green={analysis.green_pixels}, " f"blue={analysis.blue_pixels}, " f"receiver_red={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}, " f"min={min_pixels}, receiver_min={min_receiver_red_pixels}")
         raise SmokeFailure(f"texture smoke did not show the expected sampled texture and receiver-side GI ({observed})")
 
 
-def validate_expected_log_text(
-    log_text,
-    required_needles,
-    rejected_needles,
-    skip_needles=(),
-    skip_blocking_needles=(),
-):
+def validate_expected_log_text(log_text, required_needles, rejected_needles, skip_needles=(), skip_blocking_needles=(),):
     if not required_needles and not rejected_needles and not skip_needles and not skip_blocking_needles:
         return
     if not log_text:
@@ -2079,9 +1699,7 @@ def validate_expected_log_text(
         if needle in log_text:
             for blocking_needle in skip_blocking_needles:
                 if blocking_needle in log_text:
-                    raise SmokeFailure(
-                        f"capability skip also contained blocking log message '{blocking_needle}'\n{log_text[-4000:]}"
-                    )
+                    raise SmokeFailure(f"capability skip also contained blocking log message '{blocking_needle}'\n{log_text[-4000:]}")
             return needle
     for needle in rejected_needles:
         if needle in log_text:
@@ -2092,27 +1710,13 @@ def validate_expected_log_text(
     return None
 
 
-def validate_expected_log_messages(
-    log_directory,
-    log_baseline,
-    log_pattern,
-    required_needles,
-    rejected_needles,
-    skip_needles=(),
-    skip_blocking_needles=(),
-):
+def validate_expected_log_messages(log_directory, log_baseline, log_pattern, required_needles, rejected_needles, skip_needles=(), skip_blocking_needles=(),):
     if not required_needles and not rejected_needles and not skip_needles and not skip_blocking_needles:
         return
     if not log_directory:
         raise SmokeFailure("cannot validate expected log messages without captured runtime logs")
 
-    return validate_expected_log_text(
-        collect_log_delta(log_directory, log_baseline, log_pattern),
-        required_needles,
-        rejected_needles,
-        skip_needles,
-        skip_blocking_needles,
-    )
+    return validate_expected_log_text(collect_log_delta(log_directory, log_baseline, log_pattern), required_needles, rejected_needles, skip_needles, skip_blocking_needles,)
 
 
 def validate_application_capture_log_text(log_text, args):
@@ -2120,13 +1724,7 @@ def validate_application_capture_log_text(log_text, args):
     required_needles.extend(args.expect_log_message)
     skip_needles = [FRAMEBUFFER_CAPTURE_SKIP_MESSAGE]
     skip_needles.extend(args.skip_log_message)
-    return validate_expected_log_text(
-        log_text,
-        required_needles,
-        args.reject_log_message,
-        skip_needles,
-        args.skip_blocking_log_message,
-    )
+    return validate_expected_log_text(log_text, required_needles, args.reject_log_message, skip_needles, args.skip_blocking_log_message,)
 
 
 def validate_capture_for_args(args, result):
@@ -2161,10 +1759,7 @@ def capture_render_ready_window(args, backend, handle, process):
         ensure_process_running(process, "after a blank window capture")
         remaining_seconds = deadline - time.monotonic()
         if remaining_seconds <= 0.0:
-            raise SmokeFailure(
-                f"captured window 0x{result.handle:x}, but it remained blank or white for "
-                f"{args.render_ready_timeout:.2f} seconds while waiting for rendered content"
-            )
+            raise SmokeFailure(f"captured window 0x{result.handle:x}, but it remained blank or white for " f"{args.render_ready_timeout:.2f} seconds while waiting for rendered content")
         time.sleep(min(RENDER_READY_POLL_SECONDS, remaining_seconds))
 
 
@@ -2236,9 +1831,7 @@ def launch_and_capture(args, backend):
             raise SmokeFailure("timed out waiting for a visible testbed window")
 
         if getattr(args, LIT_RESIZE_CLIENT, None):
-            result = capture_resized_window(
-                args, backend, handle, testbed_process, log_directory, log_baseline, log_pattern,
-            )
+            result = capture_resized_window(args, backend, handle, testbed_process, log_directory, log_baseline, log_pattern,)
         else:
             time.sleep(args.settle_seconds)
             ensure_process_running(testbed_process, "before checked capture")
@@ -2252,15 +1845,7 @@ def launch_and_capture(args, backend):
             logserver_process = None
             require_normal_process_exit(logserver_exit_code, logserver_exit_tail, LIT_LOGSERVER)
         wait_for_log_drain(log_directory, log_baseline, log_pattern)
-        skip_reason = validate_expected_log_messages(
-            log_directory,
-            log_baseline,
-            log_pattern,
-            args.expect_log_message,
-            args.reject_log_message,
-            args.skip_log_message,
-            args.skip_blocking_log_message,
-        )
+        skip_reason = validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message, args.skip_log_message, args.skip_blocking_log_message,)
     finally:
         if testbed_process is not None:
             terminate_process(testbed_process, LIT_TESTBED, handle)
@@ -2287,29 +1872,16 @@ def launch_and_capture_application(args):
     artifact_observed = False
     log_text = ""
     try:
-        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
-            args,
-            executable,
-            env,
-        )
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(args, executable, env,)
         testbed_process = launch_testbed(args, executable, env, log_port)
         try:
-            testbed_exit_code, artifact_observed = wait_for_application_capture_exit(
-                testbed_process,
-                args.output,
-                args.timeout,
-            )
+            testbed_exit_code, artifact_observed = wait_for_application_capture_exit(testbed_process, args.output, args.timeout,)
         except SmokeFailure as error:
             wait_failure = error
 
         testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, LIT_TESTBED)
         testbed_process = None
-        log_text = shutdown_logserver_and_collect(
-            logserver_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-        )
+        log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern,)
         logserver_process = None
     finally:
         if testbed_process is not None:
@@ -2350,90 +1922,28 @@ def parse_args(argv):
     parser.add_argument("--window-title", default="", help="Expected window title when matching a launched testbed window.")
     parser.add_argument(LIT_TIMEOUT, type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument(LIT_SETTLE_SECONDS, type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
-    parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"),
-        help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
-    parser.add_argument("--resize-settle-seconds", type=float,
-        help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
-    parser.add_argument(
-        LIT_RENDER_READY_TIMEOUT,
-        type=float,
-        default=RENDER_READY_TIMEOUT_SECONDS,
-        help="Seconds to wait for a blank visible window to publish its first rendered frame.",
-    )
-    parser.add_argument(
-        "--application-capture",
-        action=LIT_STORE_TRUE,
-        help="Use the application's Vulkan framebuffer readback instead of desktop window capture.",
-    )
-    parser.add_argument(
-        LIT_APPLICATION_CAPTURE_FRAME_COUNT,
-        type=int,
-        default=360,
-        help="Positive rendered frame count at which application capture is requested. Defaults to 360.",
-    )
+    parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"), help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
+    parser.add_argument("--resize-settle-seconds", type=float, help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
+    parser.add_argument(LIT_RENDER_READY_TIMEOUT, type=float, default=RENDER_READY_TIMEOUT_SECONDS, help="Seconds to wait for a blank visible window to publish its first rendered frame.",)
+    parser.add_argument("--application-capture", action=LIT_STORE_TRUE, help="Use the application's Vulkan framebuffer readback instead of desktop window capture.",)
+    parser.add_argument(LIT_APPLICATION_CAPTURE_FRAME_COUNT, type=int, default=360, help="Positive rendered frame count at which application capture is requested. Defaults to 360.",)
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Do not start a logserver; launch with standalone log output.")
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=False,
-        help="Request graphics validation from a launched dbg/opt application; fin applications reject the request.")
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=False, help="Request graphics validation from a launched dbg/opt application; fin applications reject the request.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
-    parser.add_argument("--log-output", type=Path,
-        help="For application capture, save the exact collected per-launch log text before validation.")
+    parser.add_argument("--log-output", type=Path, help="For application capture, save the exact collected per-launch log text before validation.")
     parser.add_argument("--expect-log-message", action=LIT_APPEND, default=[], help="Required substring in the logserver output.")
-    parser.add_argument(
-        "--reject-log-message",
-        action=LIT_APPEND,
-        default=list(STRICT_LOG_FAILURE_MESSAGES),
-        help="Forbidden substring in the logserver output. Runtime warnings, assertions, errors, and validation failures are always rejected.",
-    )
-    parser.add_argument(
-        "--skip-log-message",
-        action=LIT_APPEND,
-        default=[],
-        help="Log substring that classifies the launched smoke as unsupported instead of failed.",
-    )
-    parser.add_argument(
-        "--skip-blocking-log-message",
-        action=LIT_APPEND,
-        default=list(STRICT_LOG_FAILURE_MESSAGES),
-        help="Log substring that remains a failure even when an explicit capability-skip marker is present. Runtime warnings, assertions, errors, and validation failures always block skips.",
-    )
-    parser.add_argument(
-        "--expect-transparent-multi",
-        action=LIT_STORE_TRUE,
-        help="Assert that the captured scene contains multiple distinct transparent mesh colors.",
-    )
-    parser.add_argument(
-        "--expect-transparent-csg",
-        action=LIT_STORE_TRUE,
-        help="Assert that the captured transparent center mesh contains a clipped CSG void.",
-    )
-    parser.add_argument(
-        "--transparent-csg-pose",
-        choices=tuple(TRANSPARENT_CSG_REGIONS),
-        help="Required with --expect-transparent-csg: early/mid/late selects the fixture's frozen yaw 0/1/2 interior regions.",
-    )
-    parser.add_argument(
-        "--expect-texture-smoke",
-        action=LIT_STORE_TRUE,
-        help="Assert that the captured scene visibly samples the authored red, green, and blue texture pattern.",
-    )
-    parser.add_argument(
-        "--expect-surfel-coverage-probe",
-        action=LIT_STORE_TRUE,
-        help="Assert that the closed GI scene's perpendicular same-cell probe faces receive surfel coverage.",
-    )
-    parser.add_argument(
-        "--software-vulkan",
-        choices=("auto", LIT_ON, LIT_OFF),
-        default=LIT_OFF,
-        help="On Linux, optionally use Mesa lavapipe. Defaults to the system Vulkan ICD.",
-    )
-    parser.add_argument(
-        "--application-arg",
-        action=LIT_APPEND,
-        default=[],
-        help="Extra argument to pass to the launched application. Repeat for multiple arguments.",
-    )
+    parser.add_argument("--reject-log-message", action=LIT_APPEND, default=list(STRICT_LOG_FAILURE_MESSAGES), help="Forbidden substring in the logserver output. Runtime warnings, assertions, errors, and validation failures are always rejected.",)
+    parser.add_argument("--skip-log-message", action=LIT_APPEND, default=[], help="Log substring that classifies the launched smoke as unsupported instead of failed.",)
+    parser.add_argument("--skip-blocking-log-message", action=LIT_APPEND, default=list(STRICT_LOG_FAILURE_MESSAGES),
+        help="Log substring that remains a failure even when an explicit capability-skip marker is present. Runtime warnings, assertions, errors, and validation failures always block skips.",)
+    parser.add_argument("--expect-transparent-multi", action=LIT_STORE_TRUE, help="Assert that the captured scene contains multiple distinct transparent mesh colors.",)
+    parser.add_argument("--expect-transparent-csg", action=LIT_STORE_TRUE, help="Assert that the captured transparent center mesh contains a clipped CSG void.",)
+    parser.add_argument("--transparent-csg-pose", choices=tuple(TRANSPARENT_CSG_REGIONS), help="Required with --expect-transparent-csg: early/mid/late selects the fixture's frozen yaw 0/1/2 interior regions.",)
+    parser.add_argument("--expect-texture-smoke", action=LIT_STORE_TRUE, help="Assert that the captured scene visibly samples the authored red, green, and blue texture pattern.",)
+    parser.add_argument("--expect-surfel-coverage-probe", action=LIT_STORE_TRUE, help="Assert that the closed GI scene's perpendicular same-cell probe faces receive surfel coverage.",)
+    parser.add_argument("--software-vulkan", choices=("auto", LIT_ON, LIT_OFF), default=LIT_OFF, help="On Linux, optionally use Mesa lavapipe. Defaults to the system Vulkan ICD.",)
+    parser.add_argument("--application-arg", action=LIT_APPEND, default=[], help="Extra argument to pass to the launched application. Repeat for multiple arguments.",)
     args = parser.parse_args(argv)
 
     if args.expect_transparent_csg and args.transparent_csg_pose is None:
@@ -2450,11 +1960,7 @@ def parse_args(argv):
         parser.error("--executable is required unless --window-handle is provided")
     require_positive_arg(parser, LIT_TIMEOUT, args.timeout)
     require_positive_arg(parser, LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout)
-    require_positive_arg(
-        parser,
-        LIT_APPLICATION_CAPTURE_FRAME_COUNT,
-        args.application_capture_frame_count,
-    )
+    require_positive_arg(parser, LIT_APPLICATION_CAPTURE_FRAME_COUNT, args.application_capture_frame_count,)
     require_non_negative_arg(parser, LIT_SETTLE_SECONDS, args.settle_seconds)
 
     if args.resize_client is not None:
@@ -2499,31 +2005,16 @@ def main(argv):
             status = f"captured window 0x{result.handle:x} ({result.width}x{result.height}) -> {args.output}"
         if args.expect_transparent_multi:
             analysis = result.transparent_multi
-            status = (
-                f"{status}; transparent regions "
-                f"left={analysis.left_pixels}, center={analysis.center_pixels}, right={analysis.right_pixels}"
-            )
+            status = (f"{status}; transparent regions " f"left={analysis.left_pixels}, center={analysis.center_pixels}, right={analysis.right_pixels}")
         if args.expect_transparent_csg:
             analysis = result.transparent_csg[args.transparent_csg_pose]
-            status = (
-                f"{status}; transparent CSG "
-                f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, "
-                f"remaining_center={analysis.remaining_center_pixels}/{analysis.remaining_region_pixels}"
-            )
+            status = (f"{status}; transparent CSG " f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, " f"remaining_center={analysis.remaining_center_pixels}/{analysis.remaining_region_pixels}")
         if args.expect_texture_smoke:
             analysis = result.texture_smoke
-            status = (
-                f"{status}; sampled texture hues "
-                f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}; "
-                f"receiver red GI={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}"
-            )
+            status = (f"{status}; sampled texture hues " f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}; " f"receiver red GI={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}")
         if args.expect_surfel_coverage_probe:
             probe = validate_surfel_coverage_probe(args.output)
-            status = (
-                f"{status}; surfel coverage probe "
-                f"front={probe['front'][0]}/{probe['front'][1]}, "
-                f"side={probe['side'][0]}/{probe['side'][1]}"
-            )
+            status = (f"{status}; surfel coverage probe " f"front={probe['front'][0]}/{probe['front'][1]}, " f"side={probe['side'][0]}/{probe['side'][1]}")
         write_status(status)
         return 0
     except SmokeSkip as exc:

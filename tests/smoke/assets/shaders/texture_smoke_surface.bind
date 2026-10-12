@@ -16,8 +16,8 @@ struct NwbTextureSmokeRuntimeMaterial{
     half4 color_tint;
 };
 
-// These instance names become shader accessor prefixes.  Keep them distinct from the shared smoke material so
-// aggregate shader modules can include both generated bind files without ambiguous helpers.
+// These instance names become shader accessor prefixes.
+// Keep them distinct from the shared smoke material so aggregate shader modules can include both generated bind files without ambiguous helpers.
 NwbTextureSmokeSurfaceMaterial texture_surface;
 NwbTextureSmokeRuntimeMaterial texture_runtime;
 

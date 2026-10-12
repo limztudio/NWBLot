@@ -35,18 +35,9 @@ Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
 bool Device::beginSubmissionOperation()noexcept{
     u64 state = m_submissionOperationState.load(MemoryOrder::acquire);
     for(;;){
-        if(
-            (state & s_SubmissionDrainBit) != 0u
-            || requiresRecreation()
-            || (state & s_SubmissionOperationCountMask) == s_SubmissionOperationCountMask
-        )
+        if((state & s_SubmissionDrainBit) != 0u || requiresRecreation() || (state & s_SubmissionOperationCountMask) == s_SubmissionOperationCountMask)
             return false;
-        if(m_submissionOperationState.compare_exchange_weak(
-            state,
-            state + 1u,
-            MemoryOrder::acquire,
-            MemoryOrder::relaxed
-        ))
+        if(m_submissionOperationState.compare_exchange_weak(state, state + 1u, MemoryOrder::acquire, MemoryOrder::relaxed))
             return true;
     }
 }
@@ -56,12 +47,7 @@ void Device::endSubmissionOperation()noexcept{
     for(;;){
         if((state & s_SubmissionOperationCountMask) == 0u)
             TerminateInvariant();
-        if(m_submissionOperationState.compare_exchange_weak(
-            state,
-            state - 1u,
-            MemoryOrder::release,
-            MemoryOrder::relaxed
-        )){
+        if(m_submissionOperationState.compare_exchange_weak(state, state - 1u, MemoryOrder::release, MemoryOrder::relaxed)){
             if((state & s_SubmissionOperationCountMask) == 1u)
                 m_submissionOperationState.notify_all();
             return;
@@ -78,12 +64,7 @@ bool Device::beginLifecycleDrain()noexcept{
     for(;;){
         if((state & s_SubmissionDrainBit) != 0u)
             return false;
-        if(m_submissionOperationState.compare_exchange_weak(
-            state,
-            state | s_SubmissionDrainBit,
-            MemoryOrder::acq_rel,
-            MemoryOrder::acquire
-        ))
+        if(m_submissionOperationState.compare_exchange_weak(state, state | s_SubmissionDrainBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
             break;
     }
 
@@ -126,39 +107,18 @@ QueueSubmissionToken Device::consumeAcquiredImageSemaphore(const VkSemaphore sem
         return {};
 
     const Queue::SubmissionWait acquireWait{ semaphore, 0u };
-    const auto submission = queue->submit(
-        nullptr,
-        0u,
-        nullptr,
-        &acquireWait,
-        1u,
-        nullptr,
-        0u,
-        true
-    );
+    const auto submission = queue->submit(nullptr, 0u, nullptr, &acquireWait, 1u, nullptr, 0u, true);
     if(!submission || !submission->accepted)
         return {};
 
-    return QueueSubmissionToken{
-        .value = submission->submittedID,
-        .physicalQueueIndex = executionQueue.index,
-        .deviceGeneration = executionQueue.deviceGeneration,
-        .queue = queue->m_queueID,
-    };
+    return QueueSubmissionToken{ .value = submission->submittedID, .physicalQueueIndex = executionQueue.index, .deviceGeneration = executionQueue.deviceGeneration, .queue = queue->m_queueID, };
 }
 
-Expected<VkResult> Device::presentNativeQueue(
-    const u32 nativeQueueIndex,
-    const VkPresentInfoKHR& presentInfo
-){
+Expected<VkResult> Device::presentNativeQueue(const u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo){
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid())
         return MakeUnexpected(Failure{});
-    if(
-        nativeQueueIndex >= m_nativeQueueStates.size()
-        || !m_nativeQueueStates[nativeQueueIndex]
-        || m_nativeQueueStates[nativeQueueIndex]->queue == VK_NULL_HANDLE
-    ){
+    if(nativeQueueIndex >= m_nativeQueueStates.size() || !m_nativeQueueStates[nativeQueueIndex] || m_nativeQueueStates[nativeQueueIndex]->queue == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
         return MakeUnexpected(Failure{});
     }

@@ -24,8 +24,7 @@ struct NwbCsgIntervalSampleState{
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // The interval sample state is a typed uniform-table alias.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> g_NwbHeapCsgIntervalSampleStates[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> g_NwbHeapCsgIntervalSampleStates[];
 #pragma warning(pop)
 
 

@@ -22,10 +22,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ComputeEmulationLayout> ResolveComputeEmulationLayout(
-    const u64 localVertexRefByteSize,
-    const u32 primitiveIndexCount
-)noexcept{
+Expected<ComputeEmulationLayout> ResolveComputeEmulationLayout(const u64 localVertexRefByteSize, const u32 primitiveIndexCount)noexcept{
     ComputeEmulationLayout layout{};
     if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
         return MakeUnexpected(Failure{});

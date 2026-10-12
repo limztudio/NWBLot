@@ -78,14 +78,9 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     return ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
 }
 
-[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(
-    SkinTestArena& testArena,
-    const UiSkinBinaryPayload::HeaderBinary& header,
-    const UiSkinBinaryPayload::RegionBinary& region
-){
+[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(SkinTestArena& testArena, const UiSkinBinaryPayload::HeaderBinary& header, const UiSkinBinaryPayload::RegionBinary& region){
     Core::Assets::AssetBytes binary(testArena.arena);
-    binary.reserve(sizeof(header) + sizeof(region)
-        + UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary) + sizeof(UiSkinBinaryPayload::TypographyBinary));
+    binary.reserve(sizeof(header) + sizeof(region) + UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary) + sizeof(UiSkinBinaryPayload::TypographyBinary));
     AppendPOD(binary, header);
     AppendPOD(binary, region);
     for(const UiSkinColor& color : UiSkinPalette{}.colors)
@@ -128,16 +123,11 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     metadata.append("asset.colors = [\r\n");
     const usize count = variant == 2u ? UiSkinColorRole::Count - 1u : UiSkinColorRole::Count;
     for(usize index = 0u; index < count; ++index){
-        const AStringView name = variant == 3u && index == count - 1u
-            ? s_PaletteRoleNames[0u]
-            : variant == 4u && index == count - 1u ? AStringView("unknown.role") : s_PaletteRoleNames[index];
+        const AStringView name = variant == 3u && index == count - 1u ? s_PaletteRoleNames[0u] : variant == 4u && index == count - 1u ? AStringView("unknown.role") : s_PaletteRoleNames[index];
         metadata.append("  { \"name\": \"");
         metadata.append(name);
         metadata.append("\", \"rgba\": ");
-        metadata.append(variant == 5u && index == 0u
-            ? "[16.1, 0.5, 0.75, 1.0]"
-            : variant == 6u && index == 0u ? "[0.25, 0.5, 0.75, 1.1]"
-            : index == UiSkinColorRole::ControlHoverTint ? "[1.08, 1.08, 1.08, 1.0]" : "[0.25, 0.5, 0.75, 1.0]");
+        metadata.append(variant == 5u && index == 0u ? "[16.1, 0.5, 0.75, 1.0]" : variant == 6u && index == 0u ? "[0.25, 0.5, 0.75, 1.1]" : index == UiSkinColorRole::ControlHoverTint ? "[1.08, 1.08, 1.08, 1.0]" : "[0.25, 0.5, 0.75, 1.0]");
         metadata.append(" },\r\n");
     }
     metadata.append("];\r\n");
@@ -154,11 +144,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     return metadata;
 }
 
-[[nodiscard]] static Core::Assets::AssetBytes MakeTypographyBinary(
-    SkinTestArena& testArena,
-    const UiSkinBinaryPayload::ColorBinary& color,
-    const f32 defaultFontSize
-){
+[[nodiscard]] static Core::Assets::AssetBytes MakeTypographyBinary(SkinTestArena& testArena, const UiSkinBinaryPayload::ColorBinary& color, const f32 defaultFontSize){
     UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
     Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
     binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary));
@@ -183,8 +169,7 @@ TEST(AssetsUiSkin, TypographyRejectsMalformedFooterWithoutReplacingSkin){
     ASSERT_TRUE(skin.loadBinary(MakeTypographyBinary(testArena, color, 21.5f)));
 
     for(u32 variant = 0u; variant < 5u; ++variant){
-        const f32 fontSize = variant == 2u ? 0.0f : variant == 3u ? 2049.0f
-            : variant == 4u ? Limit<f32>::s_QuietNaN : 21.5f;
+        const f32 fontSize = variant == 2u ? 0.0f : variant == 3u ? 2049.0f : variant == 4u ? Limit<f32>::s_QuietNaN : 21.5f;
         Core::Assets::AssetBytes binary = MakeTypographyBinary(testArena, color, fontSize);
         if(variant == 0u)
             binary.pop_back();
@@ -202,9 +187,7 @@ TEST(AssetsUiSkin, TypographyMetadataRequiresValidFontSize){
     auto entryResult = ParseMetadata(testArena, TypographyMetadata());
     ASSERT_TRUE(entryResult);
     const UiSkinCookEntry& entry = *entryResult;
-    const AStringView malformed[]{ "", "{}", "{\"default_font_size\": 0.0}",
-        "{\"default_font_size\": 2049.0}", "{\"default_font_size\": \"large\"}",
-        "{\"default_font_size\": 16.0, \"body\": 18.0}" };
+    const AStringView malformed[]{ "", "{}", "{\"default_font_size\": 0.0}", "{\"default_font_size\": 2049.0}", "{\"default_font_size\": \"large\"}", "{\"default_font_size\": 16.0, \"body\": 18.0}" };
     for(u32 index = 0u; index < LengthOf(malformed); ++index){
         EXPECT_FALSE(ParseMetadata(testArena, TypographyMetadata(malformed[index]))) << index;
         EXPECT_FLOAT_EQ(entry.typography.defaultFontSize, 21.5f);
@@ -271,8 +254,7 @@ TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
         header.version = version;
         Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
-        binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary)
-            + (version == 2u ? UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary) : 0u));
+        binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary) + (version == 2u ? UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary) : 0u));
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
         EXPECT_EQ(skin.regions().size(), 1u);
         EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);

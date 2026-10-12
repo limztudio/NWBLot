@@ -35,10 +35,7 @@ bool ValidRectangle(const Rect& rectangle)noexcept{
 }
 
 bool Contains(const Rect& rectangle, const Point& position)noexcept{
-    return
-        position.x >= rectangle.x && position.y >= rectangle.y
-        && position.x < NumericSimd::Add(rectangle.x, rectangle.width) && position.y < NumericSimd::Add(rectangle.y, rectangle.height)
-    ;
+    return position.x >= rectangle.x && position.y >= rectangle.y && position.x < NumericSimd::Add(rectangle.x, rectangle.width) && position.y < NumericSimd::Add(rectangle.y, rectangle.height);
 }
 
 
@@ -87,11 +84,7 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
 Expected<InputEvent> InputRouter::queue(const InputEvent& event){
     if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::CommandUp)
         return MakeUnexpected(Failure{});
-    if(
-        (event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel
-            || event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
-        && (!IsFinite(event.position.x) || !IsFinite(event.position.y))
-    )
+    if((event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel || event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp) && (!IsFinite(event.position.x) || !IsFinite(event.position.y)))
         return MakeUnexpected(Failure{});
     if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
         return MakeUnexpected(Failure{});
@@ -145,10 +138,7 @@ InputRoutingResult InputRouter::process(){
     return result;
 }
 
-bool InputRouter::commitTargets(
-    const HitTarget* targets, const usize count, const u64 layoutGeneration, const PopupScope* popups,
-    const usize popupCount, const u64 expectedFocusLossGeneration
-){
+bool InputRouter::commitTargets(const HitTarget* targets, const usize count, const u64 layoutGeneration, const PopupScope* popups, const usize popupCount, const u64 expectedFocusLossGeneration){
     if(count > s_InputMaxTargets || (count != 0u && targets == nullptr) || layoutGeneration == 0u || layoutGeneration <= m_layoutGeneration)
         return false;
     if(!stagePopups(popups, popupCount))
@@ -181,17 +171,14 @@ bool InputRouter::commitTargets(
     for(const auto& popup : m_stagedPopups){
         bool owner = false;
         for(const auto& target : m_stagedTargets){
-            owner |= target.id == popup.scope.token.widget && target.declarationGeneration == popup.scope.token.declarationGeneration
-                && target.popup == popup.scope.token && target.enabled;
+            owner |= target.id == popup.scope.token.widget && target.declarationGeneration == popup.scope.token.declarationGeneration && target.popup == popup.scope.token && target.enabled;
         }
         if(!owner)
             return false;
         if(popup.scope.dismissFocusTraversal){
             bool anchor = false;
             for(const auto& target : m_stagedTargets){
-                anchor |= target.id == popup.scope.focusAnchor
-                    && target.declarationGeneration == popup.scope.focusAnchorDeclarationGeneration
-                    && target.popup == popup.scope.parent && target.focusable && target.enabled && !target.owner.valid();
+                anchor |= target.id == popup.scope.focusAnchor && target.declarationGeneration == popup.scope.focusAnchorDeclarationGeneration && target.popup == popup.scope.parent && target.focusable && target.enabled && !target.owner.valid();
             }
             if(!anchor)
                 return false;
@@ -202,10 +189,7 @@ bool InputRouter::commitTargets(
     m_layoutGeneration = layoutGeneration;
     installPopups(expectedFocusLossGeneration);
     reconcileTargets();
-    if(
-        !m_focus.valid() && m_windowFocused
-        && (expectedFocusLossGeneration == Limit<u64>::s_Max || expectedFocusLossGeneration == m_focusLossGeneration)
-    ){
+    if(!m_focus.valid() && m_windowFocused && (expectedFocusLossGeneration == Limit<u64>::s_Max || expectedFocusLossGeneration == m_focusLossGeneration)){
         for(const auto& target : m_targets){
             if(target.focusOnCommit && target.focusable && isInteractive(target)){
                 m_focus = target.id;
@@ -281,10 +265,7 @@ bool InputRouter::consumeActivation(const WidgetId id){
         return false;
     for(usize index = 0u; index < m_actions.size(); ++index){
         const InputActionId& action = m_actions[index].id;
-        if(
-            action.target == id && action.declarationGeneration == target->declarationGeneration
-            && m_actions[index].popup == target->popup && m_actions[index].control == target->control
-        ){
+        if(action.target == id && action.declarationGeneration == target->declarationGeneration && m_actions[index].popup == target->popup && m_actions[index].control == target->control){
             m_actions.erase(m_actions.begin() + static_cast<isize>(index));
             return true;
         }
@@ -310,11 +291,7 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const{
         return nullptr;
     const HitTarget* found = nullptr;
     for(const HitTarget& target : m_targets){
-        if(
-            !isInteractive(target)
-            || !__hidden_ui_input_router::Contains(target.rectangle, position)
-            || !__hidden_ui_input_router::Contains(target.clip, position)
-        )
+        if(!isInteractive(target) || !__hidden_ui_input_router::Contains(target.rectangle, position) || !__hidden_ui_input_router::Contains(target.clip, position))
             continue;
         if(found == nullptr || target.layer > found->layer || (target.layer == found->layer && target.paintOrder >= found->paintOrder))
             found = &target;
@@ -323,26 +300,18 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const{
 }
 
 bool InputRouter::isInteractive(const HitTarget& target)const{
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
-        VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height)
-    );
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height));
     const f32 left = VectorGetX(visibleBounds);
     const f32 top = VectorGetY(visibleBounds);
     const f32 right = VectorGetZ(visibleBounds);
     const f32 bottom = VectorGetW(visibleBounds);
-    return
-        target.enabled && right > left && bottom > top && allowedByPopup(target)
-        && (!target.owner.valid() || controlHost(target) != nullptr)
-    ;
+    return target.enabled && right > left && bottom > top && allowedByPopup(target) && (!target.owner.valid() || controlHost(target) != nullptr);
 }
 
 void InputRouter::reconcileTargets(){
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
     const bool focusedText = focused != nullptr && focused->textEditable && !focused->owner.valid();
-    if(
-        focused == nullptr || !isInteractive(*focused) || !focused->focusable
-        || (!focusedText && focused->control != m_focusControl)
-    ){
+    if(focused == nullptr || !isInteractive(*focused) || !focused->focusable || (!focusedText && focused->control != m_focusControl)){
         m_focus = {};
         m_focusDeclaration = 0u;
         m_focusControl = {};
@@ -351,10 +320,7 @@ void InputRouter::reconcileTargets(){
         m_focusControl = focused->control;
     const HitTarget* captured = findTarget(m_capture, m_captureDeclaration);
     const bool capturedText = captured != nullptr && captured->textEditable && !captured->owner.valid();
-    if(
-        captured == nullptr || !isInteractive(*captured) || captured->popup != m_capturePopup
-        || (!capturedText && captured->control != m_captureControl)
-    ){
+    if(captured == nullptr || !isInteractive(*captured) || captured->popup != m_capturePopup || (!capturedText && captured->control != m_captureControl)){
         m_capture = {};
         m_capturePopup = {};
         m_captureDeclaration = 0u;
@@ -365,10 +331,7 @@ void InputRouter::reconcileTargets(){
     for(usize index = 0u; index < m_actions.size();){
         const InputActionId& action = m_actions[index].id;
         const HitTarget* target = findTarget(action.target, action.declarationGeneration);
-        if(
-            target == nullptr || !isInteractive(*target) || !target->activatable
-            || m_actions[index].popup != target->popup || m_actions[index].control != target->control
-        )
+        if(target == nullptr || !isInteractive(*target) || !target->activatable || m_actions[index].popup != target->popup || m_actions[index].control != target->control)
             m_actions.erase(m_actions.begin() + static_cast<isize>(index));
         else
             ++index;
@@ -385,10 +348,7 @@ void InputRouter::updateHover(){
     HoverIdentity identity;
     if(owner != nullptr)
         identity = { owner->id, owner->declarationGeneration, owner->popup, owner->control };
-    if(
-        m_hoverIdentity.owner != identity.owner || m_hoverIdentity.declarationGeneration != identity.declarationGeneration
-        || m_hoverIdentity.popup != identity.popup || m_hoverIdentity.control != identity.control
-    )
+    if(m_hoverIdentity.owner != identity.owner || m_hoverIdentity.declarationGeneration != identity.declarationGeneration || m_hoverIdentity.popup != identity.popup || m_hoverIdentity.control != identity.control)
         advanceHoverActivity();
     m_hoverIdentity = identity;
     m_hover = hovered == nullptr ? WidgetId{} : hovered->id;

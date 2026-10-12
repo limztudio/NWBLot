@@ -23,12 +23,7 @@ struct NwbDielectricInterface{
 };
 
 // Exact unpolarized dielectric Fresnel + Snell (unit direction, normal faces incident medium; explicit eta ratio; radiance (etaI/etaT)^2 cancels over air/glass/air; photon flux differs). Ref: pbr-book Dielectric_BSDF.
-NwbDielectricInterface nwbDielectricTransmit(
-    const float3 direction,
-    const float3 opposingNormal,
-    const float etaIncident,
-    const float etaTransmitted
-){
+NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float3 opposingNormal, const float etaIncident, const float etaTransmitted){
     NwbDielectricInterface result = (NwbDielectricInterface)0;
     if(etaIncident == etaTransmitted){
         result.direction = direction;

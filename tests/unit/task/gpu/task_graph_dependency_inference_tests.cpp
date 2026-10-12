@@ -40,77 +40,26 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId textureA = AddTextureMetadata(
-        graph,
-        Name("tests/task_graph/resource_set_texture_a"),
-        "Resource Set Texture A"
-    );
-    const Graphics::GpuGraphResourceId textureB = AddTextureMetadata(
-        graph,
-        Name("tests/task_graph/resource_set_texture_b"),
-        "Resource Set Texture B"
-    );
-    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
-        graph,
-        Name("tests/task_graph/resource_set_buffer"),
-        "Resource Set Buffer"
-    );
+    const Graphics::GpuGraphResourceId textureA = AddTextureMetadata(graph, Name("tests/task_graph/resource_set_texture_a"), "Resource Set Texture A");
+    const Graphics::GpuGraphResourceId textureB = AddTextureMetadata(graph, Name("tests/task_graph/resource_set_texture_b"), "Resource Set Texture B");
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(graph, Name("tests/task_graph/resource_set_buffer"), "Resource Set Buffer");
     ASSERT_TRUE(textureA.valid());
     ASSERT_TRUE(textureB.valid());
     ASSERT_TRUE(buffer.valid());
 
     const Graphics::GpuGraphResourceId members[] = { textureA, textureB, buffer };
-    const Graphics::GpuGraphResourceSetDesc resourceSetDesc = Graphics::GpuGraphResourceSetDesc{}
-        .setIdentity(Name("tests/task_graph/visible_resources"))
-        .setMarkerLabel("Visible Resources")
-        .setMembers(members, LengthOf(members))
-    ;
+    const Graphics::GpuGraphResourceSetDesc resourceSetDesc = Graphics::GpuGraphResourceSetDesc{}.setIdentity(Name("tests/task_graph/visible_resources")).setMarkerLabel("Visible Resources").setMembers(members, LengthOf(members));
     const Graphics::GpuGraphResourceSetId resourceSet = graph.importResourceSet(resourceSetDesc);
     ASSERT_TRUE(resourceSet.valid());
     EXPECT_EQ(graph.importResourceSet(resourceSetDesc), resourceSet);
 
     const Graphics::GpuGraphResourceId duplicateMembers[] = { textureA, textureA };
-    EXPECT_FALSE(graph.importResourceSet(
-        Graphics::GpuGraphResourceSetDesc{}
-            .setIdentity(Name("tests/task_graph/duplicate_resources"))
-            .setMarkerLabel("Duplicate Resources")
-            .setMembers(duplicateMembers, LengthOf(duplicateMembers))
-    ).valid());
+    EXPECT_FALSE(graph.importResourceSet(Graphics::GpuGraphResourceSetDesc{}.setIdentity(Name("tests/task_graph/duplicate_resources")).setMarkerLabel("Duplicate Resources").setMembers(duplicateMembers, LengthOf(duplicateMembers))).valid());
 
-    const Graphics::GpuTaskResourceSetUse writeSetUse{
-        .resourceSet = resourceSet,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskResourceSetUse readSetUse{
-        .resourceSet = resourceSet,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
-    const Graphics::GpuTaskId writer = AddTask(
-        graph,
-        Name("tests/task_graph/resource_set_writer"),
-        "Resource Set Writer",
-        nullptr,
-        0u,
-        nullptr,
-        0u,
-        &writeSetUse,
-        1u
-    );
-    const Graphics::GpuTaskId reader = AddTask(
-        graph,
-        Name("tests/task_graph/resource_set_reader"),
-        "Resource Set Reader",
-        nullptr,
-        0u,
-        nullptr,
-        0u,
-        &readSetUse,
-        1u
-    );
+    const Graphics::GpuTaskResourceSetUse writeSetUse{ .resourceSet = resourceSet, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskResourceSetUse readSetUse{ .resourceSet = resourceSet, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
+    const Graphics::GpuTaskId writer = AddTask(graph, Name("tests/task_graph/resource_set_writer"), "Resource Set Writer", nullptr, 0u, nullptr, 0u, &writeSetUse, 1u);
+    const Graphics::GpuTaskId reader = AddTask(graph, Name("tests/task_graph/resource_set_reader"), "Resource Set Reader", nullptr, 0u, nullptr, 0u, &readSetUse, 1u);
     ASSERT_TRUE(writer.valid());
     ASSERT_TRUE(reader.valid());
 
@@ -122,13 +71,7 @@ TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
     EXPECT_EQ(edge->hazard, Graphics::GpuTaskHazardType::ReadAfterWrite);
     ASSERT_EQ(analysis.inferredEdges().size(), LengthOf(members));
     for(const Graphics::GpuGraphResourceId member : members){
-        EXPECT_TRUE(HasInferredHazard(
-            analysis,
-            writer,
-            reader,
-            member,
-            Graphics::GpuTaskHazardType::ReadAfterWrite
-        ));
+        EXPECT_TRUE(HasInferredHazard(analysis, writer, reader, member, Graphics::GpuTaskHazardType::ReadAfterWrite));
     }
 
     graph.reset();
@@ -137,54 +80,22 @@ TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
 
         EXPECT_FALSE(declarations.validResourceSet(resourceSet));
     }
-    const Graphics::GpuTaskResourceSetUse staleSetUse{
-        .resourceSet = resourceSet,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
-    EXPECT_FALSE(AddTask(
-        graph,
-        Name("tests/task_graph/stale_resource_set"),
-        "Stale Resource Set",
-        nullptr,
-        0u,
-        nullptr,
-        0u,
-        &staleSetUse,
-        1u
-    ).valid());
+    const Graphics::GpuTaskResourceSetUse staleSetUse{ .resourceSet = resourceSet, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
+    EXPECT_FALSE(AddTask(graph, Name("tests/task_graph/stale_resource_set"), "Stale Resource Set", nullptr, 0u, nullptr, 0u, &staleSetUse, 1u).valid());
 }
 
 TEST(GpuTaskGraph, RejectsMalformedBufferRangesAndDetectsTextureOverlap){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuGraphResourceDesc bufferDesc;
-    bufferDesc
-        .setIdentity(Name("tests/task_graph/range_buffer"))
-        .setMarkerLabel("Range Buffer")
-        .setType(Graphics::GpuGraphResourceType::Buffer)
-    ;
+    bufferDesc.setIdentity(Name("tests/task_graph/range_buffer")).setMarkerLabel("Range Buffer").setType(Graphics::GpuGraphResourceType::Buffer);
     const Graphics::GpuGraphResourceId buffer = graph.importResource(bufferDesc);
     ASSERT_TRUE(buffer.valid());
 
     Graphics::GpuTaskResourceRange zeroBufferRange;
     zeroBufferRange.bufferRange = Graphics::BufferRange(0u, 0u);
-    const Graphics::GpuTaskResourceUse zeroBufferUse{
-        .resource = buffer,
-        .range = zeroBufferRange,
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
-    ASSERT_TRUE(AddTask(
-        graph,
-        Name("tests/task_graph/zero_buffer_range"),
-        "Zero Buffer Range",
-        nullptr,
-        0u,
-        &zeroBufferUse,
-        1u
-    ).valid());
+    const Graphics::GpuTaskResourceUse zeroBufferUse{ .resource = buffer, .range = zeroBufferRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
+    ASSERT_TRUE(AddTask(graph, Name("tests/task_graph/zero_buffer_range"), "Zero Buffer Range", nullptr, 0u, &zeroBufferUse, 1u).valid());
     Graphics::GpuTaskGraphAnalysis zeroRangeAnalysis(testArena.arena);
     EXPECT_FALSE(Analyze(graph, zeroRangeAnalysis));
     EXPECT_EQ(zeroRangeAnalysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
@@ -194,68 +105,25 @@ TEST(GpuTaskGraph, RejectsMalformedBufferRangesAndDetectsTextureOverlap){
     ASSERT_TRUE(overflowBuffer.valid());
     Graphics::GpuTaskResourceRange overflowBufferRange;
     overflowBufferRange.bufferRange = Graphics::BufferRange(Limit<u64>::s_Max - 3u, 4u);
-    const Graphics::GpuTaskResourceUse overflowBufferUse{
-        .resource = overflowBuffer,
-        .range = overflowBufferRange,
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
-    ASSERT_TRUE(AddTask(
-        graph,
-        Name("tests/task_graph/overflow_buffer_range"),
-        "Overflow Buffer Range",
-        nullptr,
-        0u,
-        &overflowBufferUse,
-        1u
-    ).valid());
+    const Graphics::GpuTaskResourceUse overflowBufferUse{ .resource = overflowBuffer, .range = overflowBufferRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
+    ASSERT_TRUE(AddTask(graph, Name("tests/task_graph/overflow_buffer_range"), "Overflow Buffer Range", nullptr, 0u, &overflowBufferUse, 1u).valid());
     Graphics::GpuTaskGraphAnalysis overflowRangeAnalysis(testArena.arena);
     EXPECT_FALSE(Analyze(graph, overflowRangeAnalysis));
     EXPECT_EQ(overflowRangeAnalysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
 
     graph.reset();
     Graphics::GpuGraphResourceDesc textureDesc;
-    textureDesc
-        .setIdentity(Name("tests/task_graph/overlap_texture"))
-        .setMarkerLabel("Overlap Texture")
-        .setType(Graphics::GpuGraphResourceType::Texture)
-    ;
+    textureDesc.setIdentity(Name("tests/task_graph/overlap_texture")).setMarkerLabel("Overlap Texture").setType(Graphics::GpuGraphResourceType::Texture);
     const Graphics::GpuGraphResourceId texture = graph.importResource(textureDesc);
     ASSERT_TRUE(texture.valid());
     Graphics::GpuTaskResourceRange firstTextureRange;
     firstTextureRange.textureSubresources = Graphics::TextureSubresourceSet(0u, s_ExpectedDualCount, 0u, 1u);
     Graphics::GpuTaskResourceRange secondTextureRange;
     secondTextureRange.textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u);
-    const Graphics::GpuTaskResourceUse firstTextureUse{
-        .resource = texture,
-        .range = firstTextureRange,
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskResourceUse secondTextureUse{
-        .resource = texture,
-        .range = secondTextureRange,
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/overlap_texture_writer"),
-        "Overlap Texture Writer",
-        nullptr,
-        0u,
-        &firstTextureUse,
-        1u
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/overlap_texture_reader"),
-        "Overlap Texture Reader",
-        nullptr,
-        0u,
-        &secondTextureUse,
-        1u
-    );
+    const Graphics::GpuTaskResourceUse firstTextureUse{ .resource = texture, .range = firstTextureRange, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskResourceUse secondTextureUse{ .resource = texture, .range = secondTextureRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/overlap_texture_writer"), "Overlap Texture Writer", nullptr, 0u, &firstTextureUse, 1u);
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/overlap_texture_reader"), "Overlap Texture Reader", nullptr, 0u, &secondTextureUse, 1u);
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     Graphics::GpuTaskGraphAnalysis overlapAnalysis(testArena.arena);
@@ -287,24 +155,8 @@ TEST(GpuTaskGraph, InfersRawWarAndWawDependenciesWithoutReadReadEdges){
         Graphics::GpuTaskResourceUse{ .resource = wawResource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
         Graphics::GpuTaskResourceUse{ .resource = readResource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
     };
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/first"),
-        "First",
-        nullptr,
-        0u,
-        firstUses,
-        LengthOf(firstUses)
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/second"),
-        "Second",
-        nullptr,
-        0u,
-        secondUses,
-        LengthOf(secondUses)
-    );
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/first"), "First", nullptr, 0u, firstUses, LengthOf(firstUses));
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/second"), "Second", nullptr, 0u, secondUses, LengthOf(secondUses));
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
 
@@ -313,44 +165,22 @@ TEST(GpuTaskGraph, InfersRawWarAndWawDependenciesWithoutReadReadEdges){
     ASSERT_EQ(analysis.edges().size(), 1u);
     const Graphics::GpuTaskDependencyEdge* const edge = FindEdge(analysis, first, second);
     ASSERT_NE(edge, nullptr);
-    // A task pair has one execution edge even when three resource hazards establish it. The task/resource telemetry
-    // retains the individual resource uses; the edge preserves the first deterministic reason.
+    // A task pair has one execution edge even when three resource hazards establish it.
+    // The task/resource telemetry retains the individual resource uses; the edge preserves the first deterministic reason.
     EXPECT_EQ(edge->hazard, Graphics::GpuTaskHazardType::ReadAfterWrite);
     EXPECT_EQ(edge->resource, rawResource);
     EXPECT_EQ(analysis.inferredEdgeCount(), 1u);
     ASSERT_EQ(analysis.inferredEdges().size(), 3u);
-    EXPECT_TRUE(HasInferredHazard(
-        analysis,
-        first,
-        second,
-        rawResource,
-        Graphics::GpuTaskHazardType::ReadAfterWrite
-    ));
-    EXPECT_TRUE(HasInferredHazard(
-        analysis,
-        first,
-        second,
-        warResource,
-        Graphics::GpuTaskHazardType::WriteAfterRead
-    ));
-    EXPECT_TRUE(HasInferredHazard(
-        analysis,
-        first,
-        second,
-        wawResource,
-        Graphics::GpuTaskHazardType::WriteAfterWrite
-    ));
+    EXPECT_TRUE(HasInferredHazard(analysis, first, second, rawResource, Graphics::GpuTaskHazardType::ReadAfterWrite));
+    EXPECT_TRUE(HasInferredHazard(analysis, first, second, warResource, Graphics::GpuTaskHazardType::WriteAfterRead));
+    EXPECT_TRUE(HasInferredHazard(analysis, first, second, wawResource, Graphics::GpuTaskHazardType::WriteAfterWrite));
 }
 
 TEST(GpuTaskGraph, KeepsTextureSubresourcesAndBufferRangesIndependent){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuGraphResourceDesc textureDesc;
-    textureDesc
-        .setIdentity(Name("tests/task_graph/texture"))
-        .setMarkerLabel("Texture")
-        .setType(Graphics::GpuGraphResourceType::Texture)
-    ;
+    textureDesc.setIdentity(Name("tests/task_graph/texture")).setMarkerLabel("Texture").setType(Graphics::GpuGraphResourceType::Texture);
     const Graphics::GpuGraphResourceId texture = graph.importResource(textureDesc);
     ASSERT_TRUE(texture.valid());
 
@@ -358,18 +188,8 @@ TEST(GpuTaskGraph, KeepsTextureSubresourcesAndBufferRangesIndependent){
     firstTextureRange.textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
     Graphics::GpuTaskResourceRange secondTextureRange;
     secondTextureRange.textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u);
-    const Graphics::GpuTaskResourceUse firstTextureUse{
-        .resource = texture,
-        .range = firstTextureRange,
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskResourceUse secondTextureUse{
-        .resource = texture,
-        .range = secondTextureRange,
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
+    const Graphics::GpuTaskResourceUse firstTextureUse{ .resource = texture, .range = firstTextureRange, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskResourceUse secondTextureUse{ .resource = texture, .range = secondTextureRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
     ASSERT_TRUE(AddTask(graph, Name("tests/task_graph/mip_zero"), "Mip Zero", nullptr, 0u, &firstTextureUse, 1u).valid());
     ASSERT_TRUE(AddTask(graph, Name("tests/task_graph/mip_one"), "Mip One", nullptr, 0u, &secondTextureUse, 1u).valid());
 
@@ -379,29 +199,15 @@ TEST(GpuTaskGraph, KeepsTextureSubresourcesAndBufferRangesIndependent){
 
     graph.reset();
     Graphics::GpuGraphResourceDesc bufferDesc;
-    bufferDesc
-        .setIdentity(Name("tests/task_graph/buffer"))
-        .setMarkerLabel("Buffer")
-        .setType(Graphics::GpuGraphResourceType::Buffer)
-    ;
+    bufferDesc.setIdentity(Name("tests/task_graph/buffer")).setMarkerLabel("Buffer").setType(Graphics::GpuGraphResourceType::Buffer);
     const Graphics::GpuGraphResourceId buffer = graph.importResource(bufferDesc);
     ASSERT_TRUE(buffer.valid());
     Graphics::GpuTaskResourceRange firstBufferRange;
     firstBufferRange.bufferRange = Graphics::BufferRange(0u, 16u);
     Graphics::GpuTaskResourceRange secondBufferRange;
     secondBufferRange.bufferRange = Graphics::BufferRange(16u, 16u);
-    const Graphics::GpuTaskResourceUse firstBufferUse{
-        .resource = buffer,
-        .range = firstBufferRange,
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskResourceUse secondBufferUse{
-        .resource = buffer,
-        .range = secondBufferRange,
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
+    const Graphics::GpuTaskResourceUse firstBufferUse{ .resource = buffer, .range = firstBufferRange, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskResourceUse secondBufferUse{ .resource = buffer, .range = secondBufferRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
     const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/buffer_first"), "Buffer First", nullptr, 0u, &firstBufferUse, 1u);
     const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/buffer_second"), "Buffer Second", nullptr, 0u, &secondBufferUse, 1u);
     ASSERT_TRUE(first.valid());
@@ -417,29 +223,11 @@ TEST(GpuTaskGraph, DeduplicatesExplicitAndInferredEdgesAndProducesStableOrder){
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId resource = AddHazardDomain(graph, Name("tests/task_graph/dedup_resource"), "Dedup Resource");
     ASSERT_TRUE(resource.valid());
-    const Graphics::GpuTaskResourceUse writerUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskResourceUse readerUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
+    const Graphics::GpuTaskResourceUse writerUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskResourceUse readerUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
     const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/ordered_first"), "Ordered First", nullptr, 0u, &writerUse, 1u);
     const Graphics::GpuTaskId independent = AddTask(graph, Name("tests/task_graph/ordered_independent"), "Ordered Independent");
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/ordered_second"),
-        "Ordered Second",
-        &first,
-        1u,
-        &readerUse,
-        1u
-    );
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/ordered_second"), "Ordered Second", &first, 1u, &readerUse, 1u);
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(independent.valid());
     ASSERT_TRUE(second.valid());
@@ -450,13 +238,7 @@ TEST(GpuTaskGraph, DeduplicatesExplicitAndInferredEdgesAndProducesStableOrder){
     EXPECT_EQ(analysis.explicitEdgeCount(), 1u);
     EXPECT_EQ(analysis.inferredEdgeCount(), 1u);
     ASSERT_EQ(analysis.inferredEdges().size(), 1u);
-    EXPECT_TRUE(HasInferredHazard(
-        analysis,
-        first,
-        second,
-        resource,
-        Graphics::GpuTaskHazardType::ReadAfterWrite
-    ));
+    EXPECT_TRUE(HasInferredHazard(analysis, first, second, resource, Graphics::GpuTaskHazardType::ReadAfterWrite));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0], first);
     EXPECT_EQ(analysis.topologicalOrder()[1], independent);
@@ -466,11 +248,7 @@ TEST(GpuTaskGraph, DeduplicatesExplicitAndInferredEdgesAndProducesStableOrder){
 TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId handoff = AddHazardDomain(
-        graph,
-        Name("tests/task_graph/transitive_reduction_handoff"),
-        "Transitive Reduction Handoff"
-    );
+    const Graphics::GpuGraphResourceId handoff = AddHazardDomain(graph, Name("tests/task_graph/transitive_reduction_handoff"), "Transitive Reduction Handoff");
     ASSERT_TRUE(handoff.valid());
 
     const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
@@ -480,19 +258,9 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Graphics::GpuTaskCostHint::Medium;
     firstScheduling.frontierScoredMergeDomain = mergeDomain;
-    const Graphics::GpuTaskResourceUse firstUse{
-        .resource = handoff,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
+    const Graphics::GpuTaskResourceUse firstUse{ .resource = handoff, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
     Graphics::GpuTaskDesc firstDesc;
-    firstDesc
-        .setIdentity(Name("tests/task_graph/transitive_reduction_first"))
-        .setMarkerLabel("Transitive Reduction First")
-        .setScheduling(firstScheduling)
-        .setResourceUses(&firstUse, 1u)
-    ;
+    firstDesc.setIdentity(Name("tests/task_graph/transitive_reduction_first")).setMarkerLabel("Transitive Reduction First").setScheduling(firstScheduling).setResourceUses(&firstUse, 1u);
     const Graphics::GpuTaskId first = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(first.valid());
 
@@ -500,28 +268,13 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     secondScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
     secondScheduling.frontierScoredMergeDomain = mergeDomain;
     Graphics::GpuTaskDesc secondDesc;
-    secondDesc
-        .setIdentity(Name("tests/task_graph/transitive_reduction_second"))
-        .setMarkerLabel("Transitive Reduction Second")
-        .setScheduling(secondScheduling)
-        .setDependencies(&first, 1u)
-    ;
+    secondDesc.setIdentity(Name("tests/task_graph/transitive_reduction_second")).setMarkerLabel("Transitive Reduction Second").setScheduling(secondScheduling).setDependencies(&first, 1u);
     const Graphics::GpuTaskId second = graph.addTask(secondDesc, graphicsCommands);
     ASSERT_TRUE(second.valid());
 
-    const Graphics::GpuTaskResourceUse thirdUse{
-        .resource = handoff,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
+    const Graphics::GpuTaskResourceUse thirdUse{ .resource = handoff, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
     Graphics::GpuTaskDesc thirdDesc;
-    thirdDesc
-        .setIdentity(Name("tests/task_graph/transitive_reduction_third"))
-        .setMarkerLabel("Transitive Reduction Third")
-        .setDependencies(&second, 1u)
-        .setResourceUses(&thirdUse, 1u)
-    ;
+    thirdDesc.setIdentity(Name("tests/task_graph/transitive_reduction_third")).setMarkerLabel("Transitive Reduction Third").setDependencies(&second, 1u).setResourceUses(&thirdUse, 1u);
     const Graphics::GpuTaskId third = graph.addTask(thirdDesc, computeCommands);
     ASSERT_TRUE(third.valid());
 
@@ -540,22 +293,10 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     EXPECT_EQ(analysis.schedulingEdges()[1u].producer, second);
     EXPECT_EQ(analysis.schedulingEdges()[1u].consumer, third);
     ASSERT_EQ(analysis.inferredEdges().size(), 1u);
-    EXPECT_TRUE(HasInferredHazard(
-        analysis,
-        first,
-        third,
-        handoff,
-        Graphics::GpuTaskHazardType::ReadAfterWrite
-    ));
+    EXPECT_TRUE(HasInferredHazard(analysis, first, third, handoff, Graphics::GpuTaskHazardType::ReadAfterWrite));
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     Graphics::GpuTaskGraphAnalysis separateAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments separateAssignments(testArena.arena);
     Graphics::GpuCompiledGraph separateGraph(testArena.arena);
@@ -591,10 +332,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     ASSERT_TRUE(scoredThirdPacket.valid());
     EXPECT_EQ(scoredFirstPacket, scoredSecondPacket);
     EXPECT_NE(scoredFirstPacket, scoredThirdPacket);
-    EXPECT_EQ(
-        compiledPlan.packetizationDecisionForTask(second),
-        Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
-    );
+    EXPECT_EQ(compiledPlan.packetizationDecisionForTask(second), Graphics::GpuTaskPacketizationDecision::MergedFrontierScored);
     ASSERT_EQ(compiledPlan.packet(scoredThirdPacket).plan->dependencyCount, 1u);
     EXPECT_EQ(compiledPlan.packet(scoredThirdPacket).dependencies[0u].producer, scoredFirstPacket);
 }
@@ -603,18 +341,8 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
 TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/scheduling_adjacency_first"),
-        "Scheduling Adjacency First"
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/scheduling_adjacency_second"),
-        "Scheduling Adjacency Second",
-        &first,
-        1u
-    );
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/scheduling_adjacency_first"), "Scheduling Adjacency First");
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/scheduling_adjacency_second"), "Scheduling Adjacency Second", &first, 1u);
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
 
@@ -635,17 +363,10 @@ TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
         declaredTaskCount = static_cast<u32>(declarations.taskCount());
         graphGeneration = declarations.generation();
     }
-    const Graphics::GpuTaskId outOfRangeTask{
-        .generation = graphGeneration,
-        .index = static_cast<u32>(declaredTaskCount),
-        };
+    const Graphics::GpuTaskId outOfRangeTask{ .generation = graphGeneration, .index = static_cast<u32>(declaredTaskCount), };
     const Graphics::GpuTaskId staleTask{ .generation = graphGeneration + 1u, .index = static_cast<u32>(first.index) };
     Graphics::GpuTaskGraph foreignGraph(testArena.arena);
-    const Graphics::GpuTaskId foreignTask = AddTask(
-        foreignGraph,
-        Name("tests/task_graph/scheduling_adjacency_foreign"),
-        "Scheduling Adjacency Foreign"
-    );
+    const Graphics::GpuTaskId foreignTask = AddTask(foreignGraph, Name("tests/task_graph/scheduling_adjacency_foreign"), "Scheduling Adjacency Foreign");
     ASSERT_TRUE(foreignTask.valid());
     EXPECT_TRUE(analysis.schedulingConsumers({}).empty());
     EXPECT_TRUE(analysis.schedulingConsumers(outOfRangeTask).empty());
@@ -679,13 +400,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         char taskIndexBuffer[32u] = {};
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
             const Graphics::GpuTaskId* const dependency = taskIndex >= s_ExpectedDualCount ? &tasks[taskIndex - s_ExpectedDualCount] : nullptr;
-            tasks[taskIndex] = AddTask(
-                graph,
-                DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
-                "Packed Reachability Task",
-                dependency,
-                dependency ? 1u : 0u
-            );
+            tasks[taskIndex] = AddTask(graph, DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)), "Packed Reachability Task", dependency, dependency ? 1u : 0u);
             ASSERT_TRUE(tasks[taskIndex].valid());
             EXPECT_EQ(tasks[taskIndex].index, taskIndex);
         }
@@ -698,11 +413,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         {
             const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
-                declarations,
-                analysis,
-                reachability
-            ));
+            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
             graphGeneration = declarations.generation();
         }
 
@@ -744,11 +455,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
             ASSERT_TRUE(Analyze(emptyGraph, emptyAnalysis));
             const Graphics::GpuTaskGraph::DeclarationReadView declarations(emptyGraph);
 
-            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
-                declarations,
-                emptyAnalysis,
-                reachability
-            ));
+            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, emptyAnalysis, reachability));
             EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[lastEvenTask]));
             EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[lastOddTask]));
         }
@@ -758,45 +465,12 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
 TEST(GpuTaskGraph, TracksOnlyTheNearestWholeResourceWriters){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId resource = AddHazardDomain(
-        graph,
-        Name("tests/task_graph/nearest_writer_resource"),
-        "Nearest Writer Resource"
-    );
+    const Graphics::GpuGraphResourceId resource = AddHazardDomain(graph, Name("tests/task_graph/nearest_writer_resource"), "Nearest Writer Resource");
     ASSERT_TRUE(resource.valid());
-    const Graphics::GpuTaskResourceUse writerUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/nearest_writer_first"),
-        "Nearest Writer First",
-        nullptr,
-        0u,
-        &writerUse,
-        1u
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/nearest_writer_second"),
-        "Nearest Writer Second",
-        nullptr,
-        0u,
-        &writerUse,
-        1u
-    );
-    const Graphics::GpuTaskId third = AddTask(
-        graph,
-        Name("tests/task_graph/nearest_writer_third"),
-        "Nearest Writer Third",
-        nullptr,
-        0u,
-        &writerUse,
-        1u
-    );
+    const Graphics::GpuTaskResourceUse writerUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/nearest_writer_first"), "Nearest Writer First", nullptr, 0u, &writerUse, 1u);
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/nearest_writer_second"), "Nearest Writer Second", nullptr, 0u, &writerUse, 1u);
+    const Graphics::GpuTaskId third = AddTask(graph, Name("tests/task_graph/nearest_writer_third"), "Nearest Writer Third", nullptr, 0u, &writerUse, 1u);
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
@@ -807,71 +481,27 @@ TEST(GpuTaskGraph, TracksOnlyTheNearestWholeResourceWriters){
     EXPECT_NE(FindEdge(analysis, second, third), nullptr);
     EXPECT_EQ(FindEdge(analysis, first, third), nullptr);
     ASSERT_EQ(analysis.inferredEdges().size(), s_ExpectedDualCount);
-    EXPECT_TRUE(HasInferredHazard(
-        analysis,
-        first,
-        second,
-        resource,
-        Graphics::GpuTaskHazardType::WriteAfterWrite
-    ));
-    EXPECT_TRUE(HasInferredHazard(
-        analysis,
-        second,
-        third,
-        resource,
-        Graphics::GpuTaskHazardType::WriteAfterWrite
-    ));
+    EXPECT_TRUE(HasInferredHazard(analysis, first, second, resource, Graphics::GpuTaskHazardType::WriteAfterWrite));
+    EXPECT_TRUE(HasInferredHazard(analysis, second, third, resource, Graphics::GpuTaskHazardType::WriteAfterWrite));
 }
 
 TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId firstResource = AddHazardDomain(
-        graph,
-        Name("tests/task_graph/explicit_first_resource"),
-        "Explicit First Resource"
-    );
-    const Graphics::GpuGraphResourceId secondResource = AddHazardDomain(
-        graph,
-        Name("tests/task_graph/explicit_second_resource"),
-        "Explicit Second Resource"
-    );
+    const Graphics::GpuGraphResourceId firstResource = AddHazardDomain(graph, Name("tests/task_graph/explicit_first_resource"), "Explicit First Resource");
+    const Graphics::GpuGraphResourceId secondResource = AddHazardDomain(graph, Name("tests/task_graph/explicit_second_resource"), "Explicit Second Resource");
     ASSERT_TRUE(firstResource.valid());
     ASSERT_TRUE(secondResource.valid());
 
-    const Graphics::GpuTaskResourceUse firstUses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = firstResource,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        },
-    };
+    const Graphics::GpuTaskResourceUse firstUses[] = { Graphics::GpuTaskResourceUse{ .resource = firstResource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, }, };
     const Graphics::GpuTaskResourceUse secondUses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = firstResource,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = secondResource,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        },
+        Graphics::GpuTaskResourceUse{ .resource = firstResource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, },
+        Graphics::GpuTaskResourceUse{ .resource = secondResource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, },
     };
-    const Graphics::GpuTaskResourceUse thirdUses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = secondResource,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-    };
+    const Graphics::GpuTaskResourceUse thirdUses[] = { Graphics::GpuTaskResourceUse{ .resource = secondResource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, }, };
 
-    // The explicit third -> first edge has to order both inferred resource hazards. Pair-local declaration order
-    // would instead infer first -> second -> third and invent a cycle with this valid explicit edge.
+    // The explicit third -> first edge has to order both inferred resource hazards.
+    // Pair-local declaration order would instead infer first -> second -> third and invent a cycle with this valid explicit edge.
     u64 graphGeneration = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -879,33 +509,9 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
         graphGeneration = declarations.generation();
     }
     const Graphics::GpuTaskId futureThird{ .generation = graphGeneration, .index = s_ExpectedDualCount };
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/explicit_first"),
-        "Explicit First",
-        &futureThird,
-        1u,
-        firstUses,
-        LengthOf(firstUses)
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/explicit_second"),
-        "Explicit Second",
-        nullptr,
-        0u,
-        secondUses,
-        LengthOf(secondUses)
-    );
-    const Graphics::GpuTaskId third = AddTask(
-        graph,
-        Name("tests/task_graph/explicit_third"),
-        "Explicit Third",
-        nullptr,
-        0u,
-        thirdUses,
-        LengthOf(thirdUses)
-    );
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/explicit_first"), "Explicit First", &futureThird, 1u, firstUses, LengthOf(firstUses));
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/explicit_second"), "Explicit Second", nullptr, 0u, secondUses, LengthOf(secondUses));
+    const Graphics::GpuTaskId third = AddTask(graph, Name("tests/task_graph/explicit_third"), "Explicit Third", nullptr, 0u, thirdUses, LengthOf(thirdUses));
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
@@ -921,10 +527,7 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     EXPECT_EQ(analysis.topologicalOrder()[2], first);
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
@@ -965,20 +568,8 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
         graphGeneration = declarations.generation();
     }
     const Graphics::GpuTaskId futureSecond{ .generation = graphGeneration, .index = 1u };
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/cycle_first"),
-        "Cycle First",
-        &futureSecond,
-        1u
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/cycle_second"),
-        "Cycle Second",
-        &first,
-        1u
-    );
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/cycle_first"), "Cycle First", &futureSecond, 1u);
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/cycle_second"), "Cycle Second", &first, 1u);
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
 
@@ -993,19 +584,11 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     EXPECT_EQ(cycleAnalysis.diagnostic().relatedTask, cycleAnalysis.cycleEdges()[0].producer);
 
     graph.reset();
-    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/external"))
-            .setMarkerLabel("Prior Frame")
-    );
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/external")).setMarkerLabel("Prior Frame"));
     ASSERT_TRUE(completion.valid());
     const Graphics::GpuTaskId task = [&](){
         Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(Name("tests/task_graph/external_consumer"))
-            .setMarkerLabel("External Consumer")
-            .setExternalDependencies(&completion, 1u)
-        ;
+        desc.setIdentity(Name("tests/task_graph/external_consumer")).setMarkerLabel("External Consumer").setExternalDependencies(&completion, 1u);
         return graph.addTask(desc);
     }();
     ASSERT_TRUE(task.valid());
@@ -1024,11 +607,7 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
         EXPECT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, telemetryScratchArena));
     }
 
-    EXPECT_TRUE(graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/late_external"))
-            .setMarkerLabel("Late External")
-    ).valid());
+    EXPECT_TRUE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/late_external")).setMarkerLabel("Late External")).valid());
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.valid());
@@ -1049,28 +628,13 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
     }
     const Name taskBaseName("tests/task_graph/deep_cycle_task_");
     char taskIndexBuffer[32u] = {};
-    const Graphics::GpuTaskId futureLast{
-        .generation = graphGeneration,
-        .index = static_cast<u32>(s_TaskCount - 1u),
-        };
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer)),
-        "Deep Cycle Task",
-        &futureLast,
-        1u
-    );
+    const Graphics::GpuTaskId futureLast{ .generation = graphGeneration, .index = static_cast<u32>(s_TaskCount - 1u), };
+    const Graphics::GpuTaskId first = AddTask(graph, DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer)), "Deep Cycle Task", &futureLast, 1u);
     ASSERT_TRUE(first.valid());
 
     Graphics::GpuTaskId previous = first;
     for(usize taskIndex = 1u; taskIndex < s_TaskCount; ++taskIndex){
-        const Graphics::GpuTaskId current = AddTask(
-            graph,
-            DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
-            "Deep Cycle Task",
-            &previous,
-            1u
-        );
+        const Graphics::GpuTaskId current = AddTask(graph, DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)), "Deep Cycle Task", &previous, 1u);
         ASSERT_TRUE(current.valid());
         previous = current;
     }

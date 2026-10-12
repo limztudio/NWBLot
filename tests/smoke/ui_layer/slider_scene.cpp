@@ -46,10 +46,7 @@ bool UiSliderSmokeScene::paint(Impl::UiPaintContext& context){
     const f32 leftWidth = Max(280.0f, (context.display.logicalWidth - 96.0f) * 0.5f);
     const f32 right = 24.0f + leftWidth + 32.0f;
     const f32 rightWidth = Max(240.0f, context.display.logicalWidth - right - 24.0f);
-    if(
-        !paintMain(ui, { 24.0f, 24.0f, leftWidth, 220.0f })
-        || !paintOther(ui, { right, 24.0f, rightWidth, 180.0f }) || !paintPopup(ui, right) || ui.failed()
-    )
+    if(!paintMain(ui, { 24.0f, 24.0f, leftWidth, 220.0f }) || !paintOther(ui, { right, 24.0f, rightWidth, 180.0f }) || !paintPopup(ui, right) || ui.failed())
         return false;
     observeState(context);
     paintMarkers(context);
@@ -175,11 +172,7 @@ bool IsUiLayerSliderSkinSmokeEnabled(){
 }
 
 SharedUiSliderSmokeScene CreateUiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiSliderSmokeScene(
-        NewArenaObject<RefCounter<UiSliderSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiSliderSmokeScene(NewArenaObject<RefCounter<UiSliderSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

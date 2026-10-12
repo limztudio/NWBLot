@@ -35,10 +35,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     if(outFailedPacket)
         *outFailedPacket = {};
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
-    GpuRecordedGraph::ArtifactOperation artifactOperation(
-        recordedGraph,
-        GpuRecordedGraph::ArtifactOperationMode::Read
-    );
+    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Read);
     if(!artifactOperation.valid()){
         return false;
     }
@@ -51,13 +48,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     if(!declarationAccess.valid())
         return false;
 
-    SubmissionAttemptExceptionScope preflightExceptionScope(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        transaction,
-        outFailedPacket
-    );
+    SubmissionAttemptExceptionScope preflightExceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
     if(planAccess.validPacketRange(range))
         preflightExceptionScope.setFailedPacket(range.first);
 
@@ -65,66 +56,35 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     if(
         !planAccess.validFor(declarationAccess)
         || !planAccess.validPacketRange(range)
-        || !recordedGraph.validForWithinArtifactOperation(
-            graph,
-            declarationAccess,
-            compiledGraph,
-            planAccess,
-            artifactOperation
-        )
+        || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
         || !transaction.validFor(planAccess)
         || !GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(declarationAccess, planAccess, range)
-        || !acceptedCallbacks.resolve(
-            declarationAccess,
-            planAccess,
-            range,
-            taskAcceptedCallbacks,
-            taskAcceptedCallbackCount
-        )
+        || !acceptedCallbacks.resolve(declarationAccess, planAccess, range, taskAcceptedCallbacks, taskAcceptedCallbackCount)
     )
         return false;
 
     GpuTaskSubmissionDetail::TaskSubmissionBindings bindings(scratchArena);
-    if(!bindings.resolve(
-        declarationAccess,
-        planAccess,
-        range,
-        taskTimingTickets,
-        taskTimingTicketCount,
-        taskSubmissionHooks,
-        taskSubmissionHookCount
-    ))
+    if(!bindings.resolve(declarationAccess, planAccess, range, taskTimingTickets, taskTimingTicketCount, taskSubmissionHooks, taskSubmissionHookCount))
         return false;
 
     if(!bindings.timingTickets.empty()){
         for(usize ownerIndex = 0u; ownerIndex < planAccess.packetCount(); ++ownerIndex){
             const GpuSubmissionPacketId ownerPacket = planAccess.packetIdAt(ownerIndex);
-            if(!bindings.validateOwnedTimingTicket(
-                ownerPacket,
-                recordedGraph.packetTimingTicket(ownerPacket, artifactOperation)
-            ))
+            if(!bindings.validateOwnedTimingTicket(ownerPacket, recordedGraph.packetTimingTicket(ownerPacket, artifactOperation)))
                 return false;
         }
     }
 
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-    const u64 recordingAttemptGeneration =
-        recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation)
-    ;
+    const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation);
     for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
         const GpuCompiledPacketView packetView = planAccess.packet(packet);
         if(!packetView.valid())
             return false;
         const GpuSubmissionPacket& packetPlan = *packetView.plan;
-        GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(
-            packet,
-            artifactOperation
-        );
-        if(
-            packetPlan.recordsTiming != static_cast<bool>(ownedTimingTicket)
-            || !graph.packetReadyForSubmission(compiledGraph, planAccess, packet, recordingAttemptGeneration)
-        )
+        GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packet, artifactOperation);
+        if(packetPlan.recordsTiming != static_cast<bool>(ownedTimingTicket) || !graph.packetReadyForSubmission(compiledGraph, planAccess, packet, recordingAttemptGeneration))
             return false;
     }
     Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };
@@ -138,28 +98,9 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         if(!packetView.valid())
             return false;
         const QueueSubmissionPreSubmitHook* const preSubmitHook = bindings.collectPacket(packet, resolvedTimingTickets);
-        SubmissionAttemptExceptionScope packetExceptionScope(
-            graph,
-            compiledGraph,
-            recordedGraph,
-            transaction,
-            outFailedPacket
-        );
+        SubmissionAttemptExceptionScope packetExceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
         packetExceptionScope.setFailedPacket(packet);
-        if(!submitPacketWithinSubmissionOperation(
-            graph,
-            compiledGraph,
-            planAccess,
-            recordedGraph,
-            artifactOperation,
-            packet,
-            transaction,
-            scratchArena,
-            resolvedTimingTickets.data(),
-            resolvedTimingTickets.size(),
-            preSubmitHook,
-            acceptedCallbacks
-        )){
+        if(!submitPacketWithinSubmissionOperation(graph, compiledGraph, planAccess, recordedGraph, artifactOperation, packet, transaction, scratchArena, resolvedTimingTickets.data(), resolvedTimingTickets.size(), preSubmitHook, acceptedCallbacks)){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;

@@ -16,16 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbCsgAnalyticCutterInterval(
-    const uint shapeType,
-    const float4 worldToShapeRow0,
-    const float4 worldToShapeRow1,
-    const float4 worldToShapeRow2,
-    const float4 parameter0,
-    const float3 rayOrigin,
-    const float3 rayDirection,
-    out float2 interval
-){
+bool nwbCsgAnalyticCutterInterval(const uint shapeType, const float4 worldToShapeRow0, const float4 worldToShapeRow1, const float4 worldToShapeRow2, const float4 parameter0, const float3 rayOrigin, const float3 rayDirection, out float2 interval){
     interval = float2(1.0, 0.0);
     const float4 point = float4(rayOrigin, 1.0);
     const float3 origin = float3(dot(worldToShapeRow0, point), dot(worldToShapeRow1, point), dot(worldToShapeRow2, point));
@@ -43,15 +34,7 @@ bool nwbCsgAnalyticCutterInterval(
     return false;
 }
 
-bool nwbCsgAnalyticCutterNormal(
-    const uint shapeType,
-    const float4 worldToShapeRow0,
-    const float4 worldToShapeRow1,
-    const float4 worldToShapeRow2,
-    const float4 parameter0,
-    const float3 worldPosition,
-    out float3 normal
-){
+bool nwbCsgAnalyticCutterNormal(const uint shapeType, const float4 worldToShapeRow0, const float4 worldToShapeRow1, const float4 worldToShapeRow2, const float4 parameter0, const float3 worldPosition, out float3 normal){
     normal = float3(0.0, 0.0, 1.0);
     const float4 point = float4(worldPosition, 1.0);
     const float3 local = float3(dot(worldToShapeRow0, point), dot(worldToShapeRow1, point), dot(worldToShapeRow2, point));

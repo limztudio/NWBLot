@@ -33,53 +33,25 @@ namespace __hidden_texture_transfer_staging{
     const u64 stagingTotalByteSize,
     const u32 requiredOffsetAlignment
 ){
-    const auto range = VulkanDetail::BuildStagingTextureRange(
-        stagingSlice,
-        stagingMipLayout,
-        stagingFormatLayout,
-        stagingArrayByteSize,
-        stagingTotalByteSize,
-        requiredOffsetAlignment,
-        false
-    );
+    const auto range = VulkanDetail::BuildStagingTextureRange(stagingSlice, stagingMipLayout, stagingFormatLayout, stagingArrayByteSize, stagingTotalByteSize, requiredOffsetAlignment, false);
     if(!range)
         return MakeUnexpected(Failure{});
-    if(
-        (range->byteOffset % s_BufferAlignmentBytes) != 0u
-        || (range->byteOffset % stagingFormatLayout.bytesPerBlock) != 0u
-    )
+    if((range->byteOffset % s_BufferAlignmentBytes) != 0u || (range->byteOffset % stagingFormatLayout.bytesPerBlock) != 0u)
         return MakeUnexpected(Failure{});
 
     VkBufferImageCopy region{};
     region.bufferOffset = range->byteOffset;
     region.bufferRowLength = range->bufferRowLength;
     region.bufferImageHeight = range->bufferImageHeight;
-    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(
-        aspectMask,
-        imageSlice.mipLevel,
-        imageSlice.arraySlice
-    );
-    region.imageOffset = {
-        static_cast<i32>(imageSlice.x),
-        static_cast<i32>(imageSlice.y),
-        static_cast<i32>(imageSlice.z),
-    };
+    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspectMask, imageSlice.mipLevel, imageSlice.arraySlice);
+    region.imageOffset = { static_cast<i32>(imageSlice.x), static_cast<i32>(imageSlice.y), static_cast<i32>(imageSlice.z), };
     region.imageExtent = { imageSlice.width, imageSlice.height, imageSlice.depth };
     return region;
 }
 
-[[nodiscard]] inline bool IsWholeImageSubresourceCopy(
-    const TextureDesc& imageDesc,
-    const VkBufferImageCopy& region
-)noexcept{
+[[nodiscard]] inline bool IsWholeImageSubresourceCopy(const TextureDesc& imageDesc, const VkBufferImageCopy& region)noexcept{
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(imageDesc, region.imageSubresource.mipLevel);
-    return region.imageOffset.x == 0
-        && region.imageOffset.y == 0
-        && region.imageOffset.z == 0
-        && region.imageExtent.width == mipExtent.width
-        && region.imageExtent.height == mipExtent.height
-        && region.imageExtent.depth == mipExtent.depth
-    ;
+    return region.imageOffset.x == 0 && region.imageOffset.y == 0 && region.imageOffset.z == 0 && region.imageExtent.width == mipExtent.width && region.imageExtent.height == mipExtent.height && region.imageExtent.depth == mipExtent.depth;
 }
 
 
@@ -92,146 +64,72 @@ namespace __hidden_texture_transfer_staging{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::copyTexture(
-    StagingTexture& dest,
-    const TextureSlice& destSlice,
-    Texture& src,
-    const TextureSlice& srcSlice
-){
+void CommandList::copyTexture(StagingTexture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
     constexpr TStringView s_OperationName = NWB_TEXT("copy texture to staging texture");
-    if(!validateStagingTextureCopyResources(
-        dest,
-        src,
-        CpuAccessMode::Read,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        s_OperationName
-    ))
+    if(!validateStagingTextureCopyResources(dest, src, CpuAccessMode::Read, VK_IMAGE_USAGE_TRANSFER_SRC_BIT, s_OperationName))
         return;
-    if(!validateTextureForGpuState(
-        &src,
-        ResourceStates::CopySource,
-        s_OperationName,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-    ))
+    if(!validateTextureForGpuState(&src, ResourceStates::CopySource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
         return;
 
-    const auto region = prepareStagingTextureCopy(
-        dest,
-        destSlice,
-        src,
-        srcSlice
-    );
+    const auto region = prepareStagingTextureCopy(dest, destSlice, src, srcSlice);
     if(!region){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
         return;
     }
-    const bool depthStencilCopy =
-        (src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
-    ;
+    const bool depthStencilCopy = (src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
     if(depthStencilCopy){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
     else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src.m_creationDesc, *region)){
-        if(!recordAndValidateAnyCommandCapability(
-            GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
-            s_OperationName
-        ))
+        if(!recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
     else if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, s_OperationName))
         return;
 
     endActiveRenderPass();
-    setTextureState(
-        &src,
-        TextureSubresourceSet(region->imageSubresource.mipLevel, 1u, region->imageSubresource.baseArrayLayer, 1u),
-        ResourceStates::CopySource
-    );
+    setTextureState(&src, TextureSubresourceSet(region->imageSubresource.mipLevel, 1u, region->imageSubresource.baseArrayLayer, 1u), ResourceStates::CopySource);
     if(m_commandRecordingFailed)
         return;
 
     registerHostReadbackStagingTexture(dest);
-    m_context.deviceDispatch.vkCmdCopyImageToBuffer(
-        m_currentCmdBuf->m_cmdBuf,
-        src.m_image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dest.m_buffer,
-        1,
-        &*region
-    );
+    m_context.deviceDispatch.vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, src.m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest.m_buffer, 1, &*region);
 
     retainResource(&src);
     retainResource(&dest);
 }
 
-void CommandList::copyTexture(
-    Texture& dest,
-    const TextureSlice& destSlice,
-    StagingTexture& src,
-    const TextureSlice& srcSlice
-){
+void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, StagingTexture& src, const TextureSlice& srcSlice){
     constexpr TStringView s_OperationName = NWB_TEXT("copy staging texture to texture");
-    if(!validateStagingTextureCopyResources(
-        src,
-        dest,
-        CpuAccessMode::Write,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        s_OperationName
-    ))
+    if(!validateStagingTextureCopyResources(src, dest, CpuAccessMode::Write, VK_IMAGE_USAGE_TRANSFER_DST_BIT, s_OperationName))
         return;
-    if(!validateTextureForGpuState(
-        &dest,
-        ResourceStates::CopyDest,
-        s_OperationName,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT
-    ))
+    if(!validateTextureForGpuState(&dest, ResourceStates::CopyDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
         return;
 
-    const auto region = prepareStagingTextureCopy(
-        src,
-        srcSlice,
-        dest,
-        destSlice
-    );
+    const auto region = prepareStagingTextureCopy(src, srcSlice, dest, destSlice);
     if(!region){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
         return;
     }
-    const bool depthStencilCopy =
-        (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
-    ;
+    const bool depthStencilCopy = (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
     if(depthStencilCopy){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
     else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest.m_creationDesc, *region)){
-        if(!recordAndValidateAnyCommandCapability(
-            GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
-            s_OperationName
-        ))
+        if(!recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
     else if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, s_OperationName))
         return;
 
     endActiveRenderPass();
-    setTextureState(
-        &dest,
-        TextureSubresourceSet(region->imageSubresource.mipLevel, 1u, region->imageSubresource.baseArrayLayer, 1u),
-        ResourceStates::CopyDest
-    );
+    setTextureState(&dest, TextureSubresourceSet(region->imageSubresource.mipLevel, 1u, region->imageSubresource.baseArrayLayer, 1u), ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
 
-    m_context.deviceDispatch.vkCmdCopyBufferToImage(
-        m_currentCmdBuf->m_cmdBuf,
-        src.m_buffer,
-        dest.m_image,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &*region
-    );
+    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &*region);
 
     retainResource(&dest);
     retainResource(&src);
@@ -241,13 +139,7 @@ void CommandList::copyTexture(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::validateStagingTextureCopyResources(
-    StagingTexture& stagingTexture,
-    Texture& texture,
-    const CpuAccessMode::Enum requiredCpuAccess,
-    const VkImageUsageFlags requiredImageUsage,
-    const TStringView operationName
-){
+bool CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, const CpuAccessMode::Enum requiredCpuAccess, const VkImageUsageFlags requiredImageUsage, const TStringView operationName){
     if(!validateCommandRecordingScope(operationName))
         return false;
 
@@ -271,11 +163,7 @@ bool CommandList::validateStagingTextureCopyResources(
         rejectCommandRecording(operationName, NWB_TEXT("staging texture and texture must belong to this device"));
         return false;
     }
-    if(
-        stagingTexture.m_buffer == VK_NULL_HANDLE
-        || !stagingTexture.m_allocation
-        || texture.m_image == VK_NULL_HANDLE
-    ){
+    if(stagingTexture.m_buffer == VK_NULL_HANDLE || !stagingTexture.m_allocation || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(operationName, NWB_TEXT("staging buffer and image handles must be non-null"));
         return false;
     }
@@ -309,18 +197,9 @@ bool CommandList::validateStagingTextureCopyResources(
     if(
         stagingTexture.m_admittedQueueFamilies.empty()
         || stagingTexture.m_admittedQueueFamilies.size() > Limit<u32>::s_Max
-        || (
-            stagingTexture.m_creationSharingMode != VK_SHARING_MODE_EXCLUSIVE
-            && stagingTexture.m_creationSharingMode != VK_SHARING_MODE_CONCURRENT
-        )
-        || (
-            stagingTexture.m_creationSharingMode == VK_SHARING_MODE_EXCLUSIVE
-            && stagingTexture.m_admittedQueueFamilies.size() != 1u
-        )
-        || (
-            stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT
-            && stagingTexture.m_admittedQueueFamilies.size() < 2u
-        )
+        || (stagingTexture.m_creationSharingMode != VK_SHARING_MODE_EXCLUSIVE && stagingTexture.m_creationSharingMode != VK_SHARING_MODE_CONCURRENT)
+        || (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_EXCLUSIVE && stagingTexture.m_admittedQueueFamilies.size() != 1u)
+        || (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT && stagingTexture.m_admittedQueueFamilies.size() < 2u)
     ){
         rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable sharing provenance"));
         return false;
@@ -337,25 +216,14 @@ bool CommandList::validateStagingTextureCopyResources(
         rejectCommandRecording(operationName, NWB_TEXT("exact command queue family was not admitted at creation"));
         return false;
     }
-    if(
-        stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT
-        && !ResourceQueueSharing::IncludesQueueClass(
-            stagingTexture.m_creationQueueSharing,
-            exactQueue->queueClass
-        )
-    ){
+    if(stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT && !ResourceQueueSharing::IncludesQueueClass(stagingTexture.m_creationQueueSharing, exactQueue->queueClass)){
         rejectCommandRecording(operationName, NWB_TEXT("exact command queue class was not admitted at creation"));
         return false;
     }
     return true;
 }
 
-Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(
-    StagingTexture& stagingResource,
-    const TextureSlice& stagingSlice,
-    Texture& textureResource,
-    const TextureSlice& textureSlice
-)const{
+Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const{
     const TextureDesc& stagingDesc = stagingResource.m_creationDesc;
     const TextureDesc& textureDesc = textureResource.m_creationDesc;
     if(textureDesc.sampleCount != 1)
@@ -393,11 +261,7 @@ Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(
     if(!resolvedStaging || !resolvedTexture)
         return MakeUnexpected(Failure{});
 
-    if(
-        resolvedStaging->width != resolvedTexture->width
-        || resolvedStaging->height != resolvedTexture->height
-        || resolvedStaging->depth != resolvedTexture->depth
-    )
+    if(resolvedStaging->width != resolvedTexture->width || resolvedStaging->height != resolvedTexture->height || resolvedStaging->depth != resolvedTexture->depth)
         return MakeUnexpected(Failure{});
 
     if(resolvedStaging->mipLevel >= stagingResource.m_mipLayouts.size())

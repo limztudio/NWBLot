@@ -32,18 +32,14 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
     parser.add_argument("--asset-root", type=Path, action="extend", nargs="+", required=True)
-    parser.add_argument("--input", type=Path, action="extend", nargs="+",
-                        help="Explicit .nwb files or directories; defaults to all asset roots")
+    parser.add_argument("--input", type=Path, action="extend", nargs="+", help="Explicit .nwb files or directories; defaults to all asset roots")
     parser.add_argument("-o", "--output", "--output-directory", type=Path, required=True)
     parser.add_argument("--cache-directory", type=Path)
-    parser.add_argument("--build-directory", type=Path,
-                        help="Persistent directory for standalone .nwba artifacts")
+    parser.add_argument("--build-directory", type=Path, help="Persistent directory for standalone .nwba artifacts")
     parser.add_argument("--configuration", help="Asset configuration label; defaults to the selected --config")
     parser.add_argument("--asset-type", default="graphics")
-    parser.add_argument("--include-skin-dependencies", action="store_true",
-                        help="Include textures referenced by selected UI skins")
-    parser.add_argument("--tool-directory", type=Path,
-                        help="Directory containing the three built pipeline executables")
+    parser.add_argument("--include-skin-dependencies", action="store_true", help="Include textures referenced by selected UI skins")
+    parser.add_argument("--tool-directory", type=Path, help="Directory containing the three built pipeline executables")
     parser.add_argument("--dependency-computer", type=Path)
     parser.add_argument("--asset-builder", type=Path)
     parser.add_argument("--asset-gatherer", type=Path)
@@ -60,11 +56,7 @@ def resolve_path(root: Path, path: Path) -> Path:
 
 def resolve_tools(options: argparse.Namespace, settings: ROOT_LAUNCHER.LaunchSettings) -> tuple[Path, Path, Path]:
     tools = []
-    for target, explicit in (
-        ("nwb_dependency_computer", options.dependency_computer),
-        ("nwb_asset_builder", options.asset_builder),
-        ("nwb_asset_gatherer", options.asset_gatherer),
-    ):
+    for target, explicit in (("nwb_dependency_computer", options.dependency_computer), ("nwb_asset_builder", options.asset_builder), ("nwb_asset_gatherer", options.asset_gatherer),):
         if explicit is None and options.tool_directory is not None:
             name = ROOT_LAUNCHER.target_default_executable_base_name(target)
             candidate = resolve_path(settings.root, options.tool_directory) / ROOT_LAUNCHER.executable_name(name, settings.platform_name)
@@ -126,17 +118,7 @@ def run_stage(executable: Path, arguments: list[str], repo_root: Path) -> None:
     subprocess.run([str(executable), *arguments], cwd=repo_root, check=True)
 
 
-def pipeline_commands(
-    options: argparse.Namespace,
-    repo_root: Path,
-    roots: list[Path],
-    output: Path,
-    cache: Path,
-    built: Path,
-    configuration: str,
-    tools: tuple[Path, Path, Path],
-    workspace: Path,
-) -> list[tuple[Path, list[str]]]:
+def pipeline_commands(options: argparse.Namespace, repo_root: Path, roots: list[Path], output: Path, cache: Path, built: Path, configuration: str, tools: tuple[Path, Path, Path], workspace: Path,) -> list[tuple[Path, list[str]]]:
     dependency, builder, gatherer = tools
     initial_list = workspace / "inputs.list"
     dependency_list = workspace / "dependencies.list"
@@ -145,22 +127,14 @@ def pipeline_commands(
         dependency_arguments.extend(["--include-skin-dependencies", "--repo-root", str(repo_root)])
         for root in roots:
             dependency_arguments.extend(["--asset-root", str(root)])
-    builder_arguments = [
-        "--input-list", str(dependency_list), "--repo-root", str(repo_root),
-        "--output-directory", str(built), "--cache-directory", str(cache),
-        "--asset-type", options.asset_type,
-    ]
+    builder_arguments = ["--input-list", str(dependency_list), "--repo-root", str(repo_root), "--output-directory", str(built), "--cache-directory", str(cache), "--asset-type", options.asset_type,]
     for root in roots:
         builder_arguments.extend(["--asset-root", str(root)])
     gatherer_arguments = ["--input-list", str(built / "assets.list"), "--output-directory", str(output)]
     if configuration:
         builder_arguments.extend(["--configuration", configuration])
         gatherer_arguments.extend(["--configuration", configuration])
-    return [
-        (dependency, dependency_arguments),
-        (builder, builder_arguments),
-        (gatherer, gatherer_arguments),
-    ]
+    return [(dependency, dependency_arguments), (builder, builder_arguments), (gatherer, gatherer_arguments),]
 
 
 def cook(options: argparse.Namespace) -> None:

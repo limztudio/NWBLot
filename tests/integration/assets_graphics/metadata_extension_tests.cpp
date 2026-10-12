@@ -391,8 +391,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
     CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__)
-        / "__build_obj" / "metadata_registry_storage";
+    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__) / "__build_obj" / "metadata_registry_storage";
     ASSERT_TRUE(EnsureDirectories(root));
     DiscoveredNwbFileVector files(fixtureArena);
     constexpr usize s_SamplerCount = 65u;

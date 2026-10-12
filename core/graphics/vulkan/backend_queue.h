@@ -51,15 +51,9 @@ public:
 
 
 public:
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(
-        u64 recordingWorkerDomain = 0u,
-        u32 recordingWorkerIndex = 0u
-    );
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u64 recordingWorkerDomain = 0u, u32 recordingWorkerIndex = 0u);
     [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
-    [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(
-        u64 recordingWorkerDomain,
-        u32 recordingWorkerIndex
-    )const noexcept;
+    [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
 
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
@@ -132,42 +126,23 @@ private:
     [[nodiscard]] u64 nextRecordingID()noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     [[nodiscard]] bool validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const;
-    void transitionCommandBufferState(
-        TrackedCommandBuffer& commandBuffer,
-        TrackedCommandBufferArenaState::Enum nextState
-    );
-    void commitCommandBufferStateTransition(
-        TrackedCommandBuffer& commandBuffer,
-        TrackedCommandBufferArenaState::Enum nextState
-    )noexcept;
+    void transitionCommandBufferState(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState);
+    void commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState)noexcept;
     void unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
-    // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline
-    // has completed their submission, then preserves each worker-affine lease in its own reusable pool.
+    // Requires m_mutex.
+    // Releases native command-buffer resource/staging references only after the queue timeline has completed their submission, then preserves each worker-affine lease in its own reusable pool.
     void collectCompletedCommandBuffers();
-    // Default/direct lease zero stays private per command buffer because external callers may record it from
-    // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
-    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(
-        VkCommandPool commandPool,
-        Futex* sharedCommandPoolMutex,
-        u64 recordingWorkerDomain,
-        u32 recordingWorkerIndex
-    );
+    // Default/direct lease zero stays private per command buffer because external callers may record it from unrelated threads.
+    // Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
+    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(VkCommandPool commandPool, Futex* sharedCommandPoolMutex, u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
     [[nodiscard]] WorkerCommandArena* getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateDirectCommandBuffer();
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas()noexcept;
     void clearPendingSemaphores()noexcept;
-    [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(
-        CommandBufferList& source,
-        CommandBufferList::iterator commandBuffer
-    );
-    [[nodiscard]] bool coversTimerQueryPrerequisite(
-        const QueueSubmissionToken& prerequisite,
-        bool prerequisiteObservedComplete,
-        const SubmissionWait* localWaits,
-        usize localWaitCount
-    )const noexcept;
+    [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(CommandBufferList& source, CommandBufferList::iterator commandBuffer);
+    [[nodiscard]] bool coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, bool prerequisiteObservedComplete, const SubmissionWait* localWaits, usize localWaitCount)const noexcept;
 
 
 private:
@@ -191,11 +166,10 @@ private:
     Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
     Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
     Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
-    // Successful ALL_COMMANDS waits cover later commands on this exact queue. Zero-valued entries only reserve
-    // owned tracking-semaphore identity before the native call; coverage advances solely on acceptance.
+    // Successful ALL_COMMANDS waits cover later commands on this exact queue.
+    // Zero-valued entries only reserve owned tracking-semaphore identity before the native call; coverage advances solely on acceptance.
     Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;
-    // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without
-    // allocation or deallocation after vkQueueSubmit2 accepts the submission.
+    // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without allocation or deallocation after vkQueueSubmit2 accepts the submission.
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
     Vector<TrackedCommandBuffer*, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;
@@ -213,8 +187,8 @@ private:
     CommandBufferList m_commandBuffersInFlight;
     CommandBufferList m_commandBuffersPool;
     Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
-    // Published worker nodes are append-only while the queue is usable. Device teardown joins recording clients
-    // before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
+    // Published worker nodes are append-only while the queue is usable.
+    // Device teardown joins recording clients before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
     Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;
 
     Atomic<u64> m_explicitWorkerArenaCount = 0u;

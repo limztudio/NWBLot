@@ -28,11 +28,7 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Assets::ResolvedCookPaths> ResolveCookPaths(
-    const AssetBuildOptions& options,
-    Assets::AssetArena& arena,
-    Assets::ScratchArena& scratchArena
-){
+Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Assets::AssetArena& arena, Assets::ScratchArena& scratchArena){
     if(options.assetRoots.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: no asset roots specified"));
         return MakeUnexpected(Failure{});
@@ -54,18 +50,12 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(
     paths.assetRoots.reserve(options.assetRoots.size());
     for(const AssetBuildRoot& assetRoot : options.assetRoots){
         if(assetRoot.virtualRoot.view() != Assets::s_EngineVirtualRoot && assetRoot.virtualRoot.view() != Assets::s_ProjectVirtualRoot){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'")
-                , StringConvert(assetRoot.path)
-                , StringConvert(assetRoot.virtualRoot.view())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'"), StringConvert(assetRoot.path), StringConvert(assetRoot.virtualRoot.view()));
             return MakeUnexpected(Failure{});
         }
         auto resolvedAssetRoot = ResolveAbsolutePath(arena, paths.repoRoot, AStringView(assetRoot.path));
         if(!resolvedAssetRoot){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root '{}': {}")
-                , StringConvert(assetRoot.path)
-                , StringConvert(resolvedAssetRoot.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root '{}': {}"), StringConvert(assetRoot.path), StringConvert(resolvedAssetRoot.error().message()));
             return MakeUnexpected(Failure{});
         }
         paths.assetRoots.emplace_back(Move(*resolvedAssetRoot), assetRoot.virtualRoot);
@@ -73,10 +63,7 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(
 
     auto outputDirectory = ResolveAbsolutePath(arena, paths.repoRoot, AStringView(options.outputDirectory));
     if(!outputDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve output directory '{}': {}")
-            , StringConvert(options.outputDirectory)
-            , StringConvert(outputDirectory.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve output directory '{}': {}"), StringConvert(options.outputDirectory), StringConvert(outputDirectory.error().message()));
         return MakeUnexpected(Failure{});
     }
     paths.outputDirectory = Move(*outputDirectory);
@@ -89,19 +76,13 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(
     const AStringView cacheText = requestedCacheDirectory.empty() ? AStringView(defaultCacheDirectoryText) : AStringView(requestedCacheDirectory);
     auto cacheDirectory = ResolveAbsolutePath(arena, paths.repoRoot, cacheText);
     if(!cacheDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve cache directory '{}': {}")
-            , StringConvert(cacheText)
-            , StringConvert(cacheDirectory.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve cache directory '{}': {}"), StringConvert(cacheText), StringConvert(cacheDirectory.error().message()));
         return MakeUnexpected(Failure{});
     }
     paths.cacheDirectory = Move(*cacheDirectory);
     const auto created = EnsureDirectories(paths.cacheDirectory);
     if(!created){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
-            , PathToString<tchar>(paths.cacheDirectory)
-            , StringConvert(created.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}"), PathToString<tchar>(paths.cacheDirectory), StringConvert(created.error().message()));
         return MakeUnexpected(Failure{});
     }
     return paths;

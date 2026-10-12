@@ -41,10 +41,7 @@ bool nwbReflectionBuildScreenRay(const NwbReflectionSurface surface, out NwbRefl
     ray = (NwbReflectionScreenRay)0;
     ray.worldOrigin = surface.position + surface.normal * surface.bias;
     const float4 firstClip = mul(g_NwbReflectionView.worldToClip, float4(ray.worldOrigin, 1.0));
-    const float4 lastClip = mul(
-        g_NwbReflectionView.worldToClip,
-        float4(ray.worldOrigin + surface.direction * g_NwbReflectionParameters.maxRayDistance, 1.0)
-    );
+    const float4 lastClip = mul(g_NwbReflectionView.worldToClip, float4(ray.worldOrigin + surface.direction * g_NwbReflectionParameters.maxRayDistance, 1.0));
     if(!all(isfinite(firstClip)) || !all(isfinite(lastClip)))
         return false;
 
@@ -193,14 +190,7 @@ bool nwbReflectionValidateScreenHit(
 
 
 // The caller applies the receiver's Fresnel once and blends the raw cached radiance with its environment by confidence. A failed or uncertain screen query may enter the caller's existing bounded hardware queue.
-bool nwbReflectionTraceScreen(
-    const uint2 pixel,
-    const NwbReflectionSurface surface,
-    out half3 radiance,
-    out half confidence,
-    out uint iterations,
-    out bool limited
-){
+bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surface, out half3 radiance, out half confidence, out uint iterations, out bool limited){
     radiance = half3(0.0h);
     confidence = half(0.0h);
     iterations = 0u;
@@ -236,10 +226,7 @@ bool nwbReflectionTraceScreen(
             return false;
         const float exitDepth = ray.screenOrigin.z + ray.screenDirection.z * cellExit;
         // Both ray directions can skip cells disjoint from the represented visible-depth interval. The maximum permits camera-facing rays to cross a panel's interior efficiently without inferring hidden geometry.
-        const bool empty = depthInterval.x >= 1.0
-            || max(position.z, exitDepth) < depthInterval.x - NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF
-            || min(position.z, exitDepth) > depthInterval.y + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF
-        ;
+        const bool empty = depthInterval.x >= 1.0 || max(position.z, exitDepth) < depthInterval.x - NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF || min(position.z, exitDepth) > depthInterval.y + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF;
         if(empty){
             parameter = cellExit + ray.parameterEpsilon;
             mip = min(mip + 1u, lastMip);
@@ -258,8 +245,7 @@ bool nwbReflectionTraceScreen(
         }
     }
     const float3 remainingPosition = ray.screenOrigin + ray.screenDirection * parameter;
-    limited = isfinite(parameter) && parameter < 1.0 && all(isfinite(remainingPosition))
-        && all(remainingPosition.xy >= 0.0) && all(remainingPosition.xy < 1.0);
+    limited = isfinite(parameter) && parameter < 1.0 && all(isfinite(remainingPosition)) && all(remainingPosition.xy >= 0.0) && all(remainingPosition.xy < 1.0);
     return false;
 }
 

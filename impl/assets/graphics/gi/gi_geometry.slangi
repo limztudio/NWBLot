@@ -51,24 +51,11 @@ float3 nwbGiTransformNormal(const float3x4 worldToObject, const float3 objectNor
 #if NWB_GI_CSG_ENABLED
 void nwbGiReportGeometryFailure(const uint failure){
     uint previous;
-    InterlockedOr(
-        g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot][NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE],
-        failure, previous
-    );
+    InterlockedOr(g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot][NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE], failure, previous);
 }
 
-NwbGiGeometryHit nwbGiCsgGeometryHit(
-    const uint contextSlot,
-    const uint materialSlot,
-    const uint instanceIndex,
-    const float3 origin,
-    const float3 direction,
-    const float minimum,
-    const float maximum
-){
-    const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(
-        contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum
-    ).boundary;
+NwbGiGeometryHit nwbGiCsgGeometryHit(const uint contextSlot, const uint materialSlot, const uint instanceIndex, const float3 origin, const float3 direction, const float minimum, const float maximum){
+    const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum).boundary;
     NwbGiGeometryHit geometry = nwbGiEmptyGeometryHit(maximum);
     if(boundary.failure != 0u){
         nwbGiReportGeometryFailure(boundary.failure);
@@ -101,13 +88,7 @@ NwbGiGeometryHit nwbGiCsgGeometryHit(
 }
 #endif
 
-NwbGiTraceHit nwbGiReconstructHit(
-    const NwbGiGeometryHit geometry,
-    const uint materialSlot,
-    const float3x4 worldToObject,
-    const float3 origin,
-    const float3 direction
-){
+NwbGiTraceHit nwbGiReconstructHit(const NwbGiGeometryHit geometry, const uint materialSlot, const float3x4 worldToObject, const float3 origin, const float3 direction){
     NwbGiTraceHit closest;
     closest.hit = geometry.hit;
     closest.t = geometry.distance;
@@ -138,15 +119,9 @@ NwbGiTraceHit nwbGiReconstructHit(
 #endif
     {
         const uint triangleBase = geometry.primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-        const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(
-            nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES)
-        );
-        const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(
-            nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES)
-        );
-        const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(
-            nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES)
-        );
+        const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+        const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+        const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
         const float3 weights = float3(1.0 - geometry.barycentrics.x - geometry.barycentrics.y, geometry.barycentrics.x, geometry.barycentrics.y);
         const float3 objectNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
         surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;

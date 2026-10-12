@@ -20,13 +20,7 @@ bool PaintBuilder::prepareSdfPages(const SharedSdfAtlasPage* const pages, const 
     return prepareImages(nullptr, 0u, pages, count);
 }
 
-bool PaintBuilder::drawSdfGlyph(
-    const SharedSdfAtlasPage& page,
-    const u32 channel,
-    const Rect& rectangle,
-    const Rect& uv,
-    const Color& tint
-){
+bool PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
     if(
         !page || channel >= page->binding().channelCount || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)

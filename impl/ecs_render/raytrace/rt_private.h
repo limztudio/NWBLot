@@ -461,9 +461,8 @@ static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalConvergedPhaseCount)
 // Resolve exposure; photon-count changes preserve brightness.
 inline constexpr f32 s_CausticIntensity = 2.0f;
 
-// Resolve exposure on SIMD lanes; photon-count changes preserve brightness. Decay path is
-// VectorNegativeMultiplySubtract(decay, intensity, intensity) = intensity * (1 - decay); the temporal gate is a
-// lane select, so both candidates stay on lanes and no scalar branch computes the surviving candidate.
+// Resolve exposure on SIMD lanes; photon-count changes preserve brightness.
+// Decay path is VectorNegativeMultiplySubtract(decay, intensity, intensity) = intensity * (1 - decay); the temporal gate is a lane select, so both candidates stay on lanes and no scalar branch computes the surviving candidate.
 [[nodiscard]] NWB_INLINE f32 EffectiveCausticIntensity(const f32 temporalDecay)noexcept{
     const SIMDVectorSingle decayLanes = VectorReplicate(temporalDecay);
     const SIMDVectorSingle intensityLanes = VectorReplicate(s_CausticIntensity);
@@ -496,46 +495,14 @@ struct RenderableRayTracingMeshResources{
     ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
 };
 
-[[nodiscard]] Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(
-    MeshSystem& meshSystem,
-    RendererMeshSystem& rendererMeshSystem,
-    Core::ECS::EntityID entity
-);
+[[nodiscard]] Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, Core::ECS::EntityID entity);
 [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass);
-[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer,
-    Core::GpuDescriptorClass::Enum descriptorClass,
-    bool writable
-);
-[[nodiscard]] bool EnsureHeapBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer,
-    Core::GpuDescriptorClass::Enum descriptorClass,
-    bool writable,
-    Core::GpuDescriptorHandle& inOutHandle
-);
-[[nodiscard]] bool ReplaceHeapBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer,
-    Core::GpuDescriptorClass::Enum descriptorClass,
-    bool writable,
-    Core::GpuDescriptorHandle& inOutHandle
-);
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable);
+[[nodiscard]] bool EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
+[[nodiscard]] bool ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle);
-u32 BuildSceneBvhNode(
-    u32* indices,
-    const u32 lo,
-    const u32 hi,
-    const SceneBvhPrimitiveCalculation* primitiveBounds,
-    Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes,
-    const NotNull<const u32*> instanceLeafCost
-);
-[[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(
-    const MaterialSurfaceInfo& materialInfo,
-    const u32 materialConstantByteOffset,
-    const u32 meshInstanceIndex
-)noexcept;
+u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPrimitiveCalculation* primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const NotNull<const u32*> instanceLeafCost);
+[[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(const MaterialSurfaceInfo& materialInfo, const u32 materialConstantByteOffset, const u32 meshInstanceIndex)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

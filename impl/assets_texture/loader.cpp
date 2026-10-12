@@ -33,10 +33,7 @@ namespace __hidden_texture_loader{
 
 
 static_assert(sizeof(basist::half_float) == sizeof(u16), "Basis HDR output must use 16-bit half components");
-static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport =
-    Core::FormatSupport::Texture
-    | Core::FormatSupport::ShaderSample
-;
+static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
 
 Futex s_BasisTranscoderInitializationMutex;
 Atomic<bool> s_BasisTranscoderInitialized = false;
@@ -61,20 +58,12 @@ static void InitializeBasisTranscoder(){
     return (device.queryFormatSupport(format) & s_RequiredTextureFormatSupport) == s_RequiredTextureFormatSupport;
 }
 
-[[nodiscard]] static Core::Format::Enum PickColorSpaceFormat(
-    Core::Device& device,
-    const TextureColorSpace::Enum colorSpace,
-    const Core::Format::Enum srgbFormat,
-    const Core::Format::Enum linearFormat
-){
+[[nodiscard]] static Core::Format::Enum PickColorSpaceFormat(Core::Device& device, const TextureColorSpace::Enum colorSpace, const Core::Format::Enum srgbFormat, const Core::Format::Enum linearFormat){
     const Core::Format::Enum format = colorSpace == TextureColorSpace::Srgb ? srgbFormat : linearFormat;
     return SupportsTextureFormat(device, format) ? format : Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] static Core::Format::Enum SelectUploadFormat(
-    Core::Device& device,
-    const Texture& textureAsset
-){
+[[nodiscard]] static Core::Format::Enum SelectUploadFormat(Core::Device& device, const Texture& textureAsset){
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4){
         if(textureAsset.alphaMode() == TextureAlphaMode::Opaque){
             if(SupportsTextureFormat(device, Core::Format::ASTC_4x4_FLOAT))
@@ -87,40 +76,22 @@ static void InitializeBasisTranscoder(){
     if(textureAsset.payloadFormat() != TexturePayloadFormat::UastcLdr4x4)
         return Core::Format::UNKNOWN;
 
-    const Core::Format::Enum astcFormat = PickColorSpaceFormat(
-        device,
-        textureAsset.colorSpace(),
-        Core::Format::ASTC_4x4_UNORM_SRGB,
-        Core::Format::ASTC_4x4_UNORM
-    );
+    const Core::Format::Enum astcFormat = PickColorSpaceFormat(device, textureAsset.colorSpace(), Core::Format::ASTC_4x4_UNORM_SRGB, Core::Format::ASTC_4x4_UNORM);
     if(astcFormat != Core::Format::UNKNOWN)
         return astcFormat;
 
-    const Core::Format::Enum bcFormat = PickColorSpaceFormat(
-        device,
-        textureAsset.colorSpace(),
-        Core::Format::BC7_UNORM_SRGB,
-        Core::Format::BC7_UNORM
-    );
+    const Core::Format::Enum bcFormat = PickColorSpaceFormat(device, textureAsset.colorSpace(), Core::Format::BC7_UNORM_SRGB, Core::Format::BC7_UNORM);
     if(bcFormat != Core::Format::UNKNOWN)
         return bcFormat;
 
-    return PickColorSpaceFormat(
-        device,
-        textureAsset.colorSpace(),
-        Core::Format::RGBA8_UNORM_SRGB,
-        Core::Format::RGBA8_UNORM
-    );
+    return PickColorSpaceFormat(device, textureAsset.colorSpace(), Core::Format::RGBA8_UNORM_SRGB, Core::Format::RGBA8_UNORM);
 }
 
 [[nodiscard]] static Core::Format::Enum SelectRgbaUploadFormat(Core::Device& device, const TextureColorSpace::Enum colorSpace){
     return PickColorSpaceFormat(device, colorSpace, Core::Format::RGBA8_UNORM_SRGB, Core::Format::RGBA8_UNORM);
 }
 
-[[nodiscard]] static Core::Format::Enum SelectHdrOpaqueUploadFallback(
-    Core::Device& device,
-    const Core::Format::Enum failedFormat
-){
+[[nodiscard]] static Core::Format::Enum SelectHdrOpaqueUploadFallback(Core::Device& device, const Core::Format::Enum failedFormat){
     if(failedFormat == Core::Format::ASTC_4x4_FLOAT && SupportsTextureFormat(device, Core::Format::BC6H_UFLOAT))
         return Core::Format::BC6H_UFLOAT;
     if(failedFormat != Core::Format::RGBA16_FLOAT && SupportsTextureFormat(device, Core::Format::RGBA16_FLOAT))
@@ -128,17 +99,8 @@ static void InitializeBasisTranscoder(){
     return Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(
-    Core::Device& device,
-    const Core::Format::Enum failedFormat,
-    const TextureColorSpace::Enum colorSpace
-){
-    const Core::Format::Enum bcFormat = PickColorSpaceFormat(
-        device,
-        colorSpace,
-        Core::Format::BC7_UNORM_SRGB,
-        Core::Format::BC7_UNORM
-    );
+[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(Core::Device& device, const Core::Format::Enum failedFormat, const TextureColorSpace::Enum colorSpace){
+    const Core::Format::Enum bcFormat = PickColorSpaceFormat(device, colorSpace, Core::Format::BC7_UNORM_SRGB, Core::Format::BC7_UNORM);
     if(Core::Format::IsAstc4x4LdrFormat(failedFormat) && bcFormat != Core::Format::UNKNOWN)
         return bcFormat;
 
@@ -177,22 +139,8 @@ static void InitializeBasisTranscoder(){
     return SelectHdrOpaqueUploadFallback(device, failedFormat);
 }
 
-[[nodiscard]] static Core::GraphicsRuntime::TextureUploadRegion MakeMipUploadRegion(
-    const u8* data,
-    const usize dataSize,
-    const u32 rowPitch,
-    const u32 sliceByteCount,
-    const u32 arraySlice,
-    const u32 mipLevel
-)noexcept{
-    return Core::GraphicsRuntime::TextureUploadRegion{
-        .data = data,
-        .dataSize = dataSize,
-        .rowPitch = rowPitch,
-        .depthPitch = sliceByteCount,
-        .arraySlice = arraySlice,
-        .mipLevel = mipLevel,
-    };
+[[nodiscard]] static Core::GraphicsRuntime::TextureUploadRegion MakeMipUploadRegion(const u8* data, const usize dataSize, const u32 rowPitch, const u32 sliceByteCount, const u32 arraySlice, const u32 mipLevel)noexcept{
+    return Core::GraphicsRuntime::TextureUploadRegion{ .data = data, .dataSize = dataSize, .rowPitch = rowPitch, .depthPitch = sliceByteCount, .arraySlice = arraySlice, .mipLevel = mipLevel, };
 }
 
 [[nodiscard]] static Core::TextureDimension::Enum ToCoreTextureDimension(const TextureDimension::Enum dimension)noexcept{
@@ -223,13 +171,7 @@ static void InitializeBasisTranscoder(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TextureAssetLoader::Create(
-    TextureGpuResource& outResource,
-    const Texture& textureAsset,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    const TStringView ownerName
-){
+bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName){
     const TStringView owner = ownerName;
     NWB_ASSERT(!outResource.valid());
     if(outResource.valid())
@@ -244,19 +186,13 @@ bool TextureAssetLoader::Create(
     Core::Device& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap")
-            , owner
-            , StringConvert(textureAsset.virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap"), owner, StringConvert(textureAsset.virtualPath().resolvedText()));
         return false;
     }
 
     Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(device, textureAsset);
     if(format == Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'")
-            , owner
-            , StringConvert(textureAsset.virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'"), owner, StringConvert(textureAsset.virtualPath().resolvedText()));
         return false;
     }
 
@@ -276,43 +212,19 @@ bool TextureAssetLoader::Create(
         .setInitialState(Core::ResourceStates::ShaderResource)
         .setKeepInitialState(true)
         // Static decoded assets are immediately sampled by Graphics/Compute, while sizeable batches may use a dedicated Transfer producer.  Declare all three consumer/producer transports before creation so the graph-owned upload can choose the automatic Transfer -> Compute -> Graphics route safely.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        .setName(imageName)
-    ;
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName(imageName);
     if(textureAsset.dimension() == TextureDimension::TextureCube)
         textureDesc.setArraySize(TextureFormat::s_TextureCubeFaceCount);
     else if(textureAsset.dimension() == TextureDimension::Texture3D)
         textureDesc.setDepth(textureAsset.depth());
 
     Core::TextureHandle texture = graphics.createTexture(textureDesc);
-    if(
-        !texture
-        && textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4
-        && Core::Format::IsLdrCompressedFormat(format)
-    ){
+    if(!texture && textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && Core::Format::IsLdrCompressedFormat(format)){
         const TextureColorSpace::Enum colorSpace = textureAsset.colorSpace();
-        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(
-            graphics,
-            textureDesc,
-            device,
-            format,
-            &__hidden_texture_loader::SelectLdrFallbackThunk,
-            &colorSpace
-        );
+        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(graphics, textureDesc, device, format, &__hidden_texture_loader::SelectLdrFallbackThunk, &colorSpace);
     }
-    if(
-        !texture
-        && textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4
-        && textureAsset.alphaMode() == TextureAlphaMode::Opaque
-    ){
-        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(
-            graphics,
-            textureDesc,
-            device,
-            format,
-            &__hidden_texture_loader::SelectHdrOpaqueFallbackThunk,
-            nullptr
-        );
+    if(!texture && textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4 && textureAsset.alphaMode() == TextureAlphaMode::Opaque){
+        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(graphics, textureDesc, device, format, &__hidden_texture_loader::SelectHdrOpaqueFallbackThunk, nullptr);
     }
     if(!texture){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), owner, StringConvert(imageName.resolvedText()));
@@ -326,13 +238,7 @@ bool TextureAssetLoader::Create(
     Vector<TextureDecodedMipUpload, Core::Alloc::ScratchArena> decodedMips{scratchArena};
     decodedMips.reserve(textureAsset.mipLevels().size());
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
-        auto decoded = mipDecoder.decode(
-            textureAsset,
-            textureAsset.mipLevels()[mipIndex],
-            static_cast<u32>(mipIndex),
-            format,
-            scratchArena
-        );
+        auto decoded = mipDecoder.decode(textureAsset, textureAsset.mipLevels()[mipIndex], static_cast<u32>(mipIndex), format, scratchArena);
         if(!decoded)
             return false;
         decodedMips.push_back(Move(*decoded));
@@ -347,29 +253,13 @@ bool TextureAssetLoader::Create(
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
         const TextureMipLevel& mip = textureAsset.mipLevels()[mipIndex];
         const TextureDecodedMipUpload& decoded = decodedMips[mipIndex];
-        if(
-            decoded.bytes.empty()
-            || decoded.rowPitch == 0u
-            || decoded.sliceByteCount == 0u
-            || mip.sliceCount == 0u
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: decoded texture '{}' mip {} has an empty upload region")
-                , owner
-                , StringConvert(imageName.resolvedText())
-                , static_cast<u32>(mipIndex)
-            );
+        if(decoded.bytes.empty() || decoded.rowPitch == 0u || decoded.sliceByteCount == 0u || mip.sliceCount == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: decoded texture '{}' mip {} has an empty upload region"), owner, StringConvert(imageName.resolvedText()), static_cast<u32>(mipIndex));
             return false;
         }
 
         if(textureAsset.dimension() == TextureDimension::Texture3D){
-            uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(
-                decoded.bytes.data(),
-                decoded.bytes.size(),
-                decoded.rowPitch,
-                decoded.sliceByteCount,
-                0u,
-                static_cast<u32>(mipIndex)
-            ));
+            uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(decoded.bytes.data(), decoded.bytes.size(), decoded.rowPitch, decoded.sliceByteCount, 0u, static_cast<u32>(mipIndex)));
             continue;
         }
 
@@ -393,13 +283,7 @@ bool TextureAssetLoader::Create(
     }
     ScopeExit releaseDescriptor([&heap, sampledImageHandle]()noexcept{ heap.free(sampledImageHandle); });
 
-    if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::TextureSrv(
-        0u,
-        texture.get(),
-        format,
-        Core::s_AllSubresources,
-        textureDimension
-    ))){
+    if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, textureDimension))){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.resolvedText()));
         return false;
     }
@@ -427,25 +311,14 @@ bool TextureAssetLoader::Create(
     return true;
 }
 
-bool TextureAssetLoader::Load(
-    TextureGpuResource& outResource,
-    const Core::Assets::AssetRef<Texture>& textureAsset,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    const TStringView ownerName
-){
+bool TextureAssetLoader::Load(TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
     const TStringView owner = ownerName;
     if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, Texture::s_AssetTypeText))
         return outResource.valid();
 
     const Name& textureVirtualPath = textureAsset.name();
 
-    auto loadedAsset = assetManager.loadTypedSync<Texture>(
-        textureVirtualPath,
-        owner,
-        Texture::s_AssetTypeText
-    );
+    auto loadedAsset = assetManager.loadTypedSync<Texture>(textureVirtualPath, owner, Texture::s_AssetTypeText);
     const Texture* loadedTexture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedTexture)
         return false;

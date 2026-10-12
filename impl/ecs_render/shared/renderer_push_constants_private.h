@@ -77,12 +77,7 @@ struct SceneLightGpuData{
     // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
     Float4 params = Float4(0.f, 0.f, -1.f, -1.f);
     // Soft-shadow source size: x = angular radius, y = punctual radius; z/w reserved.
-    Float4 params2 = Float4(
-        NWB::Impl::Scene::LightDefaults::s_DirectionalAngularRadius,
-        NWB::Impl::Scene::LightDefaults::s_PunctualSourceRadius,
-        0.f,
-        0.f
-    );
+    Float4 params2 = Float4(NWB::Impl::Scene::LightDefaults::s_DirectionalAngularRadius, NWB::Impl::Scene::LightDefaults::s_PunctualSourceRadius, 0.f, 0.f);
 };
 
 static_assert(sizeof(MeshFrameHeapSlots) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_COUNT, "Mesh frame heap-slot payload must stay a uint4");
@@ -99,30 +94,12 @@ static_assert(offsetof(ShaderDrivenPushConstants, frameHeapSlots) == sizeof(u32)
 static_assert(sizeof(TransparentDrawPushConstants) == NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
-static_assert(
-    offsetof(EmulatedVertex, position) == NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET,
-    "EmulatedVertex position offset must match the mesh emulation shader"
-);
-static_assert(
-    offsetof(EmulatedVertex, normal) == NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET,
-    "EmulatedVertex normal offset must match the mesh emulation shader"
-);
-static_assert(
-    offsetof(EmulatedVertex, tangent) == NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET,
-    "EmulatedVertex tangent offset must match the mesh emulation shader"
-);
-static_assert(
-    offsetof(EmulatedVertex, uv0) == NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET,
-    "EmulatedVertex uv0 offset must match the mesh emulation shader"
-);
-static_assert(
-    offsetof(EmulatedVertex, color) == NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET,
-    "EmulatedVertex color offset must match the mesh emulation shader"
-);
-static_assert(
-    offsetof(EmulatedVertex, worldPosition) == NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET,
-    "EmulatedVertex world-position offset must match the mesh emulation shader"
-);
+static_assert(offsetof(EmulatedVertex, position) == NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "EmulatedVertex position offset must match the mesh emulation shader");
+static_assert(offsetof(EmulatedVertex, normal) == NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "EmulatedVertex normal offset must match the mesh emulation shader");
+static_assert(offsetof(EmulatedVertex, tangent) == NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "EmulatedVertex tangent offset must match the mesh emulation shader");
+static_assert(offsetof(EmulatedVertex, uv0) == NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "EmulatedVertex uv0 offset must match the mesh emulation shader");
+static_assert(offsetof(EmulatedVertex, color) == NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "EmulatedVertex color offset must match the mesh emulation shader");
+static_assert(offsetof(EmulatedVertex, worldPosition) == NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "EmulatedVertex world-position offset must match the mesh emulation shader");
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
 static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT, "SceneShadingGpuData layout must match the shading shaders");
 static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
@@ -159,12 +136,7 @@ NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     if(!viewportState.scissorRects.empty())
         scissorRect = viewportState.scissorRects[0];
 
-    pushConstants.scissorRect = Float4(
-        static_cast<f32>(scissorRect.minX),
-        static_cast<f32>(scissorRect.minY),
-        static_cast<f32>(scissorRect.maxX),
-        static_cast<f32>(scissorRect.maxY)
-    );
+    pushConstants.scissorRect = Float4(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY));
     return pushConstants;
 }
 
@@ -181,14 +153,7 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const bool refractionCapture = false
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(
-        meshletCount,
-        instanceIndex,
-        materialConstantByteOffset,
-        viewportState,
-        frameHeapSlots,
-        dispatchFlags
-    );
+    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, frameHeapSlots, dispatchFlags);
     pushConstants.avboit = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
     pushConstants.avboit.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_CSG_CONTEXT] = csgContextHeapSlot;
     if(refractionCapture)
@@ -205,14 +170,7 @@ NWB_INLINE void SetShaderDrivenPushConstants(
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags
 ){
-    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(
-        meshletCount,
-        instanceIndex,
-        materialConstantByteOffset,
-        viewportState,
-        frameHeapSlots,
-        dispatchFlags
-    );
+    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, frameHeapSlots, dispatchFlags);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
@@ -229,34 +187,12 @@ NWB_INLINE void SetTransparentDrawPushConstants(
     const u32 csgContextHeapSlot = 0u,
     const bool refractionCapture = false
 ){
-    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(
-        meshletCount,
-        instanceIndex,
-        materialConstantByteOffset,
-        viewportState,
-        targets,
-        frameHeapSlots,
-        dispatchFlags,
-        hdr10OutputActive,
-        csgContextHeapSlot,
-        refractionCapture
-    );
+    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, targets, frameHeapSlots, dispatchFlags, hdr10OutputActive, csgContextHeapSlot, refractionCapture);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
-NWB_INLINE void SetEmulatedVertexAttribute(
-    Core::VertexAttributeDesc& attribute,
-    const Core::Format::Enum format,
-    const u32 offsetByteCount,
-    const AStringView name
-){
-    attribute
-        .setFormat(format)
-        .setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
-        .setOffset(offsetByteCount)
-        .setElementStride(s_EmulatedVertexStride)
-        .setName(Name(name))
-    ;
+NWB_INLINE void SetEmulatedVertexAttribute(Core::VertexAttributeDesc& attribute, const Core::Format::Enum format, const u32 offsetByteCount, const AStringView name){
+    attribute.setFormat(format).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(Name(name));
 }
 
 

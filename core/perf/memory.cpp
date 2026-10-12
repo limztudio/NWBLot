@@ -60,11 +60,7 @@ MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName, const MemoryS
     return scope;
 }
 
-void MemoryRecorder::recordSnapshot(
-    const MemoryScopeId scope,
-    const ::ArenaMemoryStats& stats,
-    const u64 frameIndex
-)noexcept{
+void MemoryRecorder::recordSnapshot(const MemoryScopeId scope, const ::ArenaMemoryStats& stats, const u64 frameIndex)noexcept{
     if(!m_enabled)
         return;
 
@@ -79,12 +75,7 @@ void MemoryRecorder::recordSnapshot(
     record->lastDelta = Difference(record->lastSnapshot, record->previousSnapshot);
 }
 
-void MemoryRecorder::recordSnapshot(
-    const Name& scopeName,
-    const ::ArenaMemoryStats& stats,
-    const u64 frameIndex,
-    const MemorySource::Enum source
-)noexcept{
+void MemoryRecorder::recordSnapshot(const Name& scopeName, const ::ArenaMemoryStats& stats, const u64 frameIndex, const MemorySource::Enum source)noexcept{
     if(!m_enabled || !scopeName)
         return;
 

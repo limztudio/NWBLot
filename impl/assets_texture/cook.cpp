@@ -56,10 +56,7 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     }
 
     usize reserveBytes = sizeof(TextureBinaryPayload::HeaderBinary);
-    if(
-        !AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinary))
-        || !AddBinaryReserveBytes(reserveBytes, texture.payloadBytes().size())
-    ){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinary)) || !AddBinaryReserveBytes(reserveBytes, texture.payloadBytes().size())){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetCodec::serialize failed: cooked payload size overflows"));
         return false;
     }
@@ -74,18 +71,11 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     header.height = texture.height();
     header.depth = texture.depth();
     header.mipCount = static_cast<u32>(mipBinaries.size());
-    header.alphaInfo = static_cast<u32>(texture.alphaMode())
-        | (static_cast<u32>(texture.alphaConstantUnorm8()) << TextureBinaryPayload::s_AlphaInfoConstantShift)
-    ;
+    header.alphaInfo = static_cast<u32>(texture.alphaMode()) | (static_cast<u32>(texture.alphaConstantUnorm8()) << TextureBinaryPayload::s_AlphaInfoConstantShift);
     header.payloadFormat = static_cast<u32>(texture.payloadFormat());
     header.payloadByteCount = static_cast<u64>(texture.payloadBytes().size());
     AppendPOD(outBinary, header);
-    if(!Core::Assets::AppendVectorPayload(
-        outBinary,
-        mipBinaries,
-        NWB_TEXT("TextureAssetCodec::serialize"),
-        NWB_TEXT("mip levels")
-    ))
+    if(!Core::Assets::AppendVectorPayload(outBinary, mipBinaries, NWB_TEXT("TextureAssetCodec::serialize"), NWB_TEXT("mip levels")))
         return false;
 
     BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, texture.payloadBytes().data(), texture.payloadBytes().size());

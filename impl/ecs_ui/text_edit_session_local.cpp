@@ -22,10 +22,7 @@ Core::TextInputPollResult::Enum UiTextEditSession::pollOwned(Core::TextInputEven
     return m_service.poll(m_token, event);
 }
 
-Core::TextInputAdmission::Enum UiTextEditSession::adoptLocal(
-    const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret,
-    const Core::TextInputChangeCause::Enum cause
-){
+Core::TextInputAdmission::Enum UiTextEditSession::adoptLocal(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret, const Core::TextInputChangeCause::Enum cause){
     if(!m_service.isOwnerThread())
         return Core::TextInputAdmission::WrongThread;
     if(!m_token.valid() || !(m_owner == owner) || m_service.activeSession() != m_token)

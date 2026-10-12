@@ -83,17 +83,13 @@ struct DecodeTask{
     };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        Core::GpuTimingSubmissionTicket* ticket = payload.rebindableTimingTicket
-            ? *payload.rebindableTimingTicket : payload.timingTicket;
+        Core::GpuTimingSubmissionTicket* ticket = payload.rebindableTimingTicket ? *payload.rebindableTimingTicket : payload.timingTicket;
         Optional<Core::GpuTimingSubmissionTicket::RecordingScope> timing;
         if(ticket)
             timing.emplace(*ticket);
         commandList.endRenderPass();
         const Core::ViewportState viewport;
-        const MaterialPassDrawContext context{
-            commandList, nullptr, nullptr, viewport, nullptr, payload.frameBindings,
-            MaterialPipelinePass::Opaque, true, true, true,
-        };
+        const MaterialPassDrawContext context{ commandList, nullptr, nullptr, viewport, nullptr, payload.frameBindings, MaterialPipelinePass::Opaque, true, true, true, };
         if(!payload.materialSystem.recordObjectGeometryDecode(context, payload.draw))
             return false;
         commandList.setBufferState(payload.draw.meshResources.objectGeometryCache.buffer.get(), ECSRenderDetail::s_ObjectGeometryRasterState);
@@ -103,10 +99,7 @@ struct DecodeTask{
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken&){
         // A replaced generation may reject content publication after accepted work; its output state still belongs to the mesh owner.
-        if(!payload.meshSystem.confirmObjectGeometryCache(
-            payload.draw.meshKey, payload.draw.meshResources.sourceBuffers,
-            payload.draw.meshResources.objectGeometryCache, payload.draw.meshResources.runtimeMesh
-        ))
+        if(!payload.meshSystem.confirmObjectGeometryCache(payload.draw.meshKey, payload.draw.meshResources.sourceBuffers, payload.draw.meshResources.objectGeometryCache, payload.draw.meshResources.runtimeMesh))
             return;
     }
 };
@@ -128,12 +121,7 @@ struct ReadyTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(
-    Core::GpuTaskGraph& graph,
-    RendererMaterialSystem& materialSystem,
-    RendererMeshSystem& meshSystem,
-    Core::Alloc::ScratchArena& arena
-)
+ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_meshSystem(meshSystem)
@@ -164,8 +152,7 @@ bool ObjectGeometryCacheGraph::prepare(
         if(!draw.pipelineResources.indexedPipeline || !draw.pipelineResources.objectGeometryDecodePipeline)
             return false;
         const auto& cache = draw.meshResources.objectGeometryCache;
-        if(!cache.valid() || draw.pipelineResources.objectGeometryDecodePipeline != cache.decoderPipeline
-            || !frameBindings.bindingValid() || draw.instanceIndex >= frameBindings.instanceBufferCapacity)
+        if(!cache.valid() || draw.pipelineResources.objectGeometryDecodePipeline != cache.decoderPipeline || !frameBindings.bindingValid() || draw.instanceIndex >= frameBindings.instanceBufferCapacity)
             return false;
         Entry* retained = nullptr;
         for(Entry& entry : m_entries){
@@ -177,11 +164,8 @@ bool ObjectGeometryCacheGraph::prepare(
             }
         }
         if(!retained){
-            Core::GpuGraphResourceDesc bufferDesc = BufferResourceDesc(
-                cache.buffer->getCreationDescription().debugName, "Object Geometry Cache"
-            );
-            bufferDesc.setInitialState(cache.initialized ? ECSRenderDetail::s_ObjectGeometryRasterState : Core::ResourceStates::Common)
-                .setExternalFinalState(ECSRenderDetail::s_ObjectGeometryRasterState);
+            Core::GpuGraphResourceDesc bufferDesc = BufferResourceDesc(cache.buffer->getCreationDescription().debugName, "Object Geometry Cache");
+            bufferDesc.setInitialState(cache.initialized ? ECSRenderDetail::s_ObjectGeometryRasterState : Core::ResourceStates::Common).setExternalFinalState(ECSRenderDetail::s_ObjectGeometryRasterState);
             Entry entry{draw, m_graph.importBuffer(cache.buffer, bufferDesc), {}};
             if(!entry.resource.valid())
                 return false;
@@ -203,17 +187,12 @@ bool ObjectGeometryCacheGraph::prepare(
                 }
                 if(!instances.valid())
                     return false;
-                uses.push_back(ReadBufferUse(instances, Core::BufferRange(
-                    static_cast<u64>(draw.instanceIndex) * sizeof(InstanceGpuData), sizeof(InstanceGpuData)
-                )));
+                uses.push_back(ReadBufferUse(instances, Core::BufferRange(static_cast<u64>(draw.instanceIndex) * sizeof(InstanceGpuData), sizeof(InstanceGpuData))));
                 uses.push_back(WriteUse(entry.resource, Core::ResourceStates::UnorderedAccess));
                 uses.push_back(ReadUse(entry.resource, ECSRenderDetail::s_ObjectGeometryRasterState));
-                Core::GpuTaskDesc desc = TaskDesc(ToName(StringFormat(scratchArena,
-                    "render.object_geometry.decode_{}", m_entries.size())), "Object Geometry Decode");
+                Core::GpuTaskDesc desc = TaskDesc(ToName(StringFormat(scratchArena, "render.object_geometry.decode_{}", m_entries.size())), "Object Geometry Decode");
                 desc.setDependencies(&dependency, 1u).setResourceUses(uses.data(), uses.size());
-                entry.producer = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{
-                    m_materialSystem, m_meshSystem, targets, draw, frameBindings, timingTicket, rebindableTimingTicket,
-                });
+                entry.producer = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, targets, draw, frameBindings, timingTicket, rebindableTimingTicket, });
                 if(!entry.producer.valid())
                     return false;
                 dependency = entry.producer;
@@ -243,8 +222,7 @@ bool ObjectGeometryCacheGraph::prepare(
         containsDependency = containsDependency || producer == dependency;
     if(!containsDependency)
         producers.push_back(dependency);
-    Core::GpuTaskDesc ready = TaskDesc(ToName(StringFormat(scratchArena,
-        "render.object_geometry.ready_{}", m_phaseCount++)), "Object Geometry Ready");
+    Core::GpuTaskDesc ready = TaskDesc(ToName(StringFormat(scratchArena, "render.object_geometry.ready_{}", m_phaseCount++)), "Object Geometry Ready");
     ready.setDependencies(producers.data(), producers.size()).setResourceUses(cacheReads.data(), cacheReads.size());
     dependency = m_graph.addTask<ReadyTask>(ready, ReadyTask::Payload{});
     if(!dependency.valid())

@@ -26,8 +26,7 @@ bool SelectablePainter::Paint(
     const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor
 ){
     const Name& preferred = !flags.enabled ? style.disabled : flags.selected ? style.selected : flags.hover ? style.hover : style.normal;
-    const Name& fallback = !flags.enabled ? style.disabledFallback : flags.selected ? style.selectedFallback
-        : flags.hover ? style.hoverFallback : style.fallback;
+    const Name& fallback = !flags.enabled ? style.disabledFallback : flags.selected ? style.selectedFallback : flags.hover ? style.hoverFallback : style.fallback;
     const UiSkinRegion* region = skin.findRegion(preferred);
     if(!region)
         region = skin.findRegion(fallback);
@@ -39,8 +38,7 @@ bool SelectablePainter::Paint(
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
     const f32 verticalOffset = NumericSimd::Max(0.0f, NumericSimd::Multiply(NumericSimd::Subtract(bounds.height, layout.measure().y), 0.5f));
-    const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.x, bounds.y),
-        VectorSet(style.padding.left, verticalOffset, style.padding.left, verticalOffset));
+    const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.x, bounds.y), VectorSet(style.padding.left, verticalOffset, style.padding.left, verticalOffset));
     const Point origin{ VectorGetX(textOrigin), VectorGetY(textOrigin) };
     if(painted)
         painted = text.paint(paint, layout, origin, flags.enabled ? textColor : disabledTextColor);
@@ -49,9 +47,7 @@ bool SelectablePainter::Paint(
     return painted && rowPopped && clipPopped;
 }
 
-bool Builder::selectable(
-    const AStringView stableKey, const StringView text, const bool selected, const WidgetOptions& options
-){
+bool Builder::selectable(const AStringView stableKey, const StringView text, const bool selected, const WidgetOptions& options){
     Item* item = addItem(stableKey, text, WidgetKind::Selectable, options);
     if(!item)
         return false;
@@ -63,10 +59,7 @@ bool Builder::selectable(
 bool Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
-    if(!SelectablePainter::Paint(
-        m_paint, m_text, *m_skin, item.text, box.rectangle, visibleClip(box.clip), item.selectableStyle, flags,
-        item.style.text, item.style.disabledText
-    ))
+    if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, item.text, box.rectangle, visibleClip(box.clip), item.selectableStyle, flags, item.style.text, item.style.disabledText))
         return false;
     HitTarget target;
     target.rectangle = box.rectangle;

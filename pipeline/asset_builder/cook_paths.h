@@ -19,11 +19,7 @@ NWB_ASSET_BUILDER_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<Core::Assets::ResolvedCookPaths> ResolveCookPaths(
-    const AssetBuildOptions& options,
-    Core::Assets::AssetArena& arena,
-    Core::Assets::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<Core::Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Core::Assets::AssetArena& arena, Core::Assets::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

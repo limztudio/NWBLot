@@ -22,8 +22,7 @@ struct NwbCausticGeometryDownsamplePushConstants{
     uint outputStorageSlot;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbCausticGeometryDownsamplePushConstants> g_NwbCausticGeometryDownsamplePushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbCausticGeometryDownsamplePushConstants> g_NwbCausticGeometryDownsamplePushConstants;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,10 +35,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     // Top-left full-res texel of this half-res pixel's 2x2 block (clamped), matching the resolve's half->full point sample.
-    const int2 full = int2(
-        min((int)halfTexel.x * 2, (int)g_NwbCausticGeometryDownsamplePushConstants.width - 1),
-        min((int)halfTexel.y * 2, (int)g_NwbCausticGeometryDownsamplePushConstants.height - 1)
-    );
+    const int2 full = int2(min((int)halfTexel.x * 2, (int)g_NwbCausticGeometryDownsamplePushConstants.width - 1), min((int)halfTexel.y * 2, (int)g_NwbCausticGeometryDownsamplePushConstants.height - 1));
 
     // This copy is RGBA16F -> RGBA16F. Keep the world-position transport as native half and widen only at the typed storage boundary, which avoids retaining a redundant float payload in this pure copy path.
     const half3 world = half3(nwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz);

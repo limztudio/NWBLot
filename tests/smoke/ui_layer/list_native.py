@@ -32,8 +32,7 @@ class ListNativeInput(EditNativeInput):
             if not self.backend.user32.ClientToScreen(ctypes.c_void_p(self.handle), ctypes.byref(point)):
                 raise SmokeFailure("ClientToScreen failed for the positioned list wheel event")
             delta = int(steps) * 120
-            self._post(0x020A, (delta & 0xFFFF) << 16,
-                ((int(point.y) & 0xFFFF) << 16) | (int(point.x) & 0xFFFF))
+            self._post(0x020A, (delta & 0xFFFF) << 16, ((int(point.y) & 0xFFFF) << 16) | (int(point.x) & 0xFFFF))
         else:
             for _ in range(abs(int(steps))):
                 for down in (True, False):

@@ -80,15 +80,14 @@ private:
         u32 epoch = 0u;
         CommandQueue::Enum queueClass = CommandQueue::kCount;
         QueryState state = QueryState::Available;
-        // A recovery endpoint completes an accepted begin after a later frame packet was rejected. The query must
-        // still retire on the device timeline, but it must not publish a partial frame sample as a valid frame time.
+        // A recovery endpoint completes an accepted begin after a later frame packet was rejected.
+        // The query must still retire on the device timeline, but it must not publish a partial frame sample as a valid frame time.
         bool publishSample = true;
-        // Set while a frame-preamble command list contains a reset for this pool. It becomes deviceReady only after
-        // that command list has been submitted successfully.
+        // Set while a frame-preamble command list contains a reset for this pool.
+        // It becomes deviceReady only after that command list has been submitted successfully.
         bool frameResetRecorded = false;
-        // False until this pool has been reset on the DEVICE timeline by recordFrameReset() at a frame open. Recording
-        // only consumes pools declared during preparation; positions without native reset capability must use pools
-        // that have already passed through recordFrameReset().
+        // False until this pool has been reset on the DEVICE timeline by recordFrameReset() at a frame open.
+        // Recording only consumes pools declared during preparation; positions without native reset capability must use pools that have already passed through recordFrameReset().
         bool deviceReady = false;
         bool retirementNotificationPending = false;
     };
@@ -98,11 +97,7 @@ private:
 
 
 public:
-    explicit GpuTimingAccumulator(
-        Alloc::GlobalArena& arena,
-        const Name& scopeName,
-        const Perf::TimingScopeId timingScope
-    )
+    explicit GpuTimingAccumulator(Alloc::GlobalArena& arena, const Name& scopeName, const Perf::TimingScopeId timingScope)
         : m_queries(arena)
         , m_scopeName(scopeName)
         , m_timingScope(timingScope)
@@ -127,25 +122,12 @@ public:
     void discardFrameReset()noexcept;
     void requestQueries(u32 queryCount)noexcept;
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
-    [[nodiscard]] Expected<QueryBegin> beginQuery(
-        CommandList& commandList,
-        u64 frameIndex,
-        u32 epoch,
-        u64 performanceCaptureEpoch,
-        GpuTimingSampleAttribution attribution
-    );
+    [[nodiscard]] Expected<QueryBegin> beginQuery(CommandList& commandList, u64 frameIndex, u32 epoch, u64 performanceCaptureEpoch, GpuTimingSampleAttribution attribution);
     [[nodiscard]] QueryEndResult endQuery(CommandList& commandList, const GpuTimingScope& scope);
-    [[nodiscard]] QueryEndResult endQueryFromExistingClaim(
-        CommandList& commandList,
-        const GpuTimingScope& scope
-    )noexcept;
+    [[nodiscard]] QueryEndResult endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept;
     [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const noexcept;
-    [[nodiscard]] bool confirmQuery(
-        const GpuTimingScope& scope,
-        const QueueSubmissionToken& token,
-        bool publishSample
-    )noexcept;
+    [[nodiscard]] bool confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, bool publishSample)noexcept;
     [[nodiscard]] bool prepareQueryForRecovery(const GpuTimingScope& scope);
     [[nodiscard]] bool discardQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit);
     [[nodiscard]] bool abandonQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit)noexcept;
@@ -227,10 +209,7 @@ private:
     using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
     using AccumulatorMap = HashMap<Name, AccumulatorPtr, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
     using SampleListenerRecord = RefCounter<SampleListenerRecordData>;
-    using SampleListenerRecordPtr = RefCountPtr<
-        SampleListenerRecord,
-        ::ArenaRefDeleter<SampleListenerRecord, Alloc::GlobalArena>
-    >;
+    using SampleListenerRecordPtr = RefCountPtr< SampleListenerRecord, ::ArenaRefDeleter<SampleListenerRecord, Alloc::GlobalArena> >;
     using SampleListenerVector = Vector<SampleListenerRecordPtr, Alloc::GlobalArena>;
     using FeedbackScopeDemandVector = Vector<FeedbackScopeDemand, Alloc::GlobalArena>;
     using SampleDispatch = GpuTimingAccumulator::SampleDispatch;
@@ -247,52 +226,42 @@ public:
 
 public:
     void setQueryCollectionEnabled(bool enabled);
-    // Every valid registration receives attributed samples captured in a dispatch batch. New listeners begin with
-    // the next batch; removing one registration never replaces or clears another consumer.
+    // Every valid registration receives attributed samples captured in a dispatch batch.
+    // New listeners begin with the next batch; removing one registration never replaces or clears another consumer.
     [[nodiscard]] GpuTimingSampleSubscription subscribeSampleListener(const GpuTimingSampleListener& listener);
-    // This callback-free operation defers any resulting attribution retirement to collect(), preserving its
-    // no-throw lifetime boundary while another listener remains subscribed.
+    // This callback-free operation defers any resulting attribution retirement to collect(), preserving its no-throw lifetime boundary while another listener remains subscribed.
     void unsubscribeSampleListener(const GpuTimingSampleSubscription& subscription)noexcept;
-    // Atomically replaces one listener's feedback-only query scopes. Names are copied and must be valid and unique.
+    // Atomically replaces one listener's feedback-only query scopes.
+    // Names are copied and must be valid and unique.
     // Broad Perf capture still enables every prepared scope; feedback demand only enables its named query scopes.
-    [[nodiscard]] bool setFeedbackCollectionScopes(
-        const GpuTimingSampleSubscription& subscription,
-        NotNull<const Name*> scopeNames,
-        usize scopeCount
-    );
+    [[nodiscard]] bool setFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, NotNull<const Name*> scopeNames, usize scopeCount);
     [[nodiscard]] bool clearFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription);
     // Globally unique attribution identities remain unique across recorder reset, destruction, and recreation.
     // Allocation is lock-free so packet-recording workers can issue identities without taking listener/query locks.
     [[nodiscard]] GpuTimingSampleAttribution allocateSampleAttribution()noexcept;
     [[nodiscard]] bool queryCollectionEnabled()const;
-    // True when either normal Perf capture or an adaptive feedback consumer needs query pools to be materialized
-    // and reset for the current frame.
+    // True when either normal Perf capture or an adaptive feedback consumer needs query pools to be materialized and reset for the current frame.
     [[nodiscard]] bool collectionActive()const;
     [[nodiscard]] GpuTimingRecorderStatistics statistics(const Device& device)const;
     void resetQueries();
     void collect(Device& device);
     void collect(Device& device, u64 publishFrameIndex);
     void beginFrame(u64 frameIndex);
-    // Declares the capacity a scope needs. When capture is inactive this records the request without allocating GPU
-    // query pools, so a later capture activation can materialize them before its first frame preamble.
+    // Declares the capacity a scope needs.
+    // When capture is inactive this records the request without allocating GPU query pools, so a later capture activation can materialize them before its first frame preamble.
     [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device& device, u32 queryCount);
-    // Declares the capacity a scope needs without touching the device. Packet recording runs inside the
-    // render/submission path, so it must use this: GPU query pools are created only in the frame preamble
-    // via materializeRequestedQueries(). A newly declared scope skips its samples until the next preamble
-    // materializes its pool (see QueryCapacityUnavailable).
+    // Declares the capacity a scope needs without touching the device.
+    // Packet recording runs inside the render/submission path, so it must use this: GPU query pools are created only in the frame preamble via materializeRequestedQueries().
+    // A newly declared scope skips its samples until the next preamble materializes its pool (see QueryCapacityUnavailable).
     [[nodiscard]] bool requestScopeQueries(const Name& scopeName, u32 queryCount);
-    // Publishes the timestamp intersection of an unordered pair of packet envelopes. Reversed exact duplicates are
-    // idempotent. An output name is exclusive: it cannot be an input or query scope, and an input cannot later become
-    // an output. A zero-valued sample means both packets completed but did not overlap; no sample is published when
-    // either packet was rejected.
-    [[nodiscard]] bool prepareOverlapMetric(
-        const Name& firstScope,
-        const Name& secondScope,
-        const Name& outputScope
-    );
-    // Correlates one compiler-selected packet envelope by source frame. Inputs and output mappings are copied before
-    // returning because graph plans and caller scratch storage may be rebuilt immediately. Publication requires one
-    // accepted comparable range for every declared packet; queue idle covers internal holes only.
+    // Publishes the timestamp intersection of an unordered pair of packet envelopes.
+    // Reversed exact duplicates are idempotent.
+    // An output name is exclusive: it cannot be an input or query scope, and an input cannot later become an output.
+    // A zero-valued sample means both packets completed but did not overlap; no sample is published when either packet was rejected.
+    [[nodiscard]] bool prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope);
+    // Correlates one compiler-selected packet envelope by source frame.
+    // Inputs and output mappings are copied before returning because graph plans and caller scratch storage may be rebuilt immediately.
+    // Publication requires one accepted comparable range for every declared packet; queue idle covers internal holes only.
     [[nodiscard]] bool preparePacketEnvelopeMetrics(
         u64 sourceFrameIndex,
         NotNull<const GpuPacketEnvelopeMetricScope*> scopeInputs,
@@ -301,48 +270,30 @@ public:
         NotNull<const GpuPacketEnvelopeMetricQueueOutput*> queueOutputInputs,
         usize queueOutputCount
     );
-    // Materializes every declared scope during Graphics' frame preamble. Capture can be toggled on at runtime, but
-    // recording never creates a query pool: scopes and their capacity must be declared through requestScopeQueries().
+    // Materializes every declared scope during Graphics' frame preamble.
+    // Capture can be toggled on at runtime, but recording never creates a query pool: scopes and their capacity must be declared through requestScopeQueries().
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
-    // Device-timeline reset of available timer pools onto a reset-capable list (frame preamble). Ordered external
-    // reset replaces the unorderable host-side reset. confirmFrameReset() only after successful submit.
+    // Device-timeline reset of available timer pools onto a reset-capable list (frame preamble).
+    // Ordered external reset replaces the unorderable host-side reset.
+    // confirmFrameReset() only after successful submit.
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
     void discardFrameReset();
 
 
 private:
-    [[nodiscard]] bool replaceFeedbackCollectionScopes(
-        const GpuTimingSampleSubscription& subscription,
-        const Name* scopeNames,
-        usize scopeCount
-    );
+    [[nodiscard]] bool replaceFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Name* scopeNames, usize scopeCount);
     [[nodiscard]] usize findFeedbackScopeDemandLocked(const Name& scopeName)const noexcept;
     [[nodiscard]] bool feedbackScopeDemandedLocked(const Name& scopeName)const noexcept;
     void addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
     void removeFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
-    [[nodiscard]] Expected<GpuTimingScope> beginScope(
-        const Name& scopeName,
-        Device& device,
-        CommandList& commandList,
-        GpuTimingSampleAttribution attribution,
-        bool requiresComparableTimestamps
-    );
-    [[nodiscard]] Expected<GpuTimingScope> beginDeferredScope(
-        const Name& scopeName,
-        Device& device,
-        CommandList& commandList,
-        GpuTimingSampleAttribution attribution
-    );
+    [[nodiscard]] Expected<GpuTimingScope> beginScope(const Name& scopeName, Device& device, CommandList& commandList, GpuTimingSampleAttribution attribution, bool requiresComparableTimestamps);
+    [[nodiscard]] Expected<GpuTimingScope> beginDeferredScope(const Name& scopeName, Device& device, CommandList& commandList, GpuTimingSampleAttribution attribution);
     void endScope(CommandList& commandList, GpuTimingScope& scope);
     void endScopeFromOpeningCommandList(CommandList& commandList, GpuTimingScope& scope)noexcept;
     [[nodiscard]] bool recordDeferredScopeEnd(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool validateScopeSubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token);
-    [[nodiscard]] bool confirmScope(
-        const GpuTimingScope& scope,
-        const QueueSubmissionToken& token,
-        bool publishSample
-    )noexcept;
+    [[nodiscard]] bool confirmScope(const GpuTimingScope& scope, const QueueSubmissionToken& token, bool publishSample)noexcept;
     [[nodiscard]] bool prepareDeferredScopeForRecovery(const GpuTimingScope& scope);
     void discardScope(GpuTimingScope& scope);
     void abandonScopeWithoutCallbacks(GpuTimingScope& scope)noexcept;
@@ -350,17 +301,9 @@ private:
     [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const noexcept;
     [[nodiscard]] GpuTimingAccumulator* findAccumulator(const GpuTimingScope& scope)noexcept;
     [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
-    [[nodiscard]] bool collectLocked(
-        Device& device,
-        u64 subscriptionIdentityLimit,
-        SampleDispatchVector& completedSamples,
-        GpuTimingSinkSampleVector& performanceSamples,
-        Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] bool collectLocked(Device& device, u64 subscriptionIdentityLimit, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool submissionCompleted(Device& device, const QueueSubmissionToken& token);
-    [[nodiscard]] SampleListenerRecordPtr findSampleListenerLocked(
-        const GpuTimingSampleSubscription& subscription
-    )noexcept;
+    [[nodiscard]] SampleListenerRecordPtr findSampleListenerLocked(const GpuTimingSampleSubscription& subscription)noexcept;
     [[nodiscard]] u64 sampleSubscriptionIdentityLimitLocked()const noexcept;
     void publishSampleSubscriptionIdentityLimitLocked()noexcept;
     void eraseSampleListenerLocked(SampleListenerRecord& record)noexcept;
@@ -387,17 +330,17 @@ private:
     Vector<QueueCompletion, Alloc::GlobalArena> m_queueCompletions;
     SampleListenerVector m_sampleListeners;
     FeedbackScopeDemandVector m_feedbackScopeDemands;
-    // Callbacks execute outside this registration lock. Whenever both state locks are needed, acquire this lock
-    // first and m_mutex second; no path retains m_mutex while acquiring this lock.
+    // Callbacks execute outside this registration lock.
+    // Whenever both state locks are needed, acquire this lock first and m_mutex second; no path retains m_mutex while acquiring this lock.
     Futex m_sampleListenerMutex;
-    // A separate recursive gate preserves caller-owned context lifetime while allowing a callback to synchronously
-    // dispatch or remove registrations. No path acquires it while retaining either recorder state lock.
+    // A separate recursive gate preserves caller-owned context lifetime while allowing a callback to synchronously dispatch or remove registrations.
+    // No path acquires it while retaining either recorder state lock.
     RecursiveMutex m_sampleCallbackMutex;
-    // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and
-    // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
+    // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and recorder-map access.
+    // Worker command-list recordings may share a ticket and begin timing scopes concurrently.
     mutable Futex m_mutex;
-    // Serializes collection batches through external sink publication without retaining recorder state locks. The
-    // sink may therefore inspect ordinary recorder state, while concurrent collectors preserve sample/frame order.
+    // Serializes collection batches through external sink publication without retaining recorder state locks.
+    // The sink may therefore inspect ordinary recorder state, while concurrent collectors preserve sample/frame order.
     Futex m_collectionMutex;
     Atomic<u64> m_sampleSubscriptionIdentityLimit{ 0u };
     u64 m_performanceCaptureEpoch = 1u;
@@ -415,7 +358,8 @@ private:
 
 
 // One ticket owns timestamp queries for one complete queue submission (scope endpoints may span primaries).
-// Abort/reject releases slots; success retains until collect(). Ticket must outlive all scopes under it.
+// Abort/reject releases slots; success retains until collect().
+// Ticket must outlive all scopes under it.
 class GpuTimingSubmissionTicket final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
     friend class GpuRecordedGraph;
@@ -459,13 +403,7 @@ private:
 
 private:
     template<class ExecutionQueue>
-    [[nodiscard]] NWB_INLINE QueueSubmissionToken submitToQueue(
-        Device& device,
-        CommandList* const* commandLists,
-        usize commandListCount,
-        const ExecutionQueue& executionQueue,
-        const QueueSubmissionDesc& submitDesc
-    );
+    [[nodiscard]] NWB_INLINE QueueSubmissionToken submitToQueue(Device& device, CommandList* const* commandLists, usize commandListCount, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc);
 
 
 public:
@@ -488,65 +426,32 @@ public:
 
 
 public:
-    // Validates that every supplied command list still owns a ready command buffer, submits them together in their
-    // supplied order, and resolves every timing scope recorded under this ticket. A partial split submission is
-    // rejected before reaching Vulkan so a cross-list timing scope can never be left waiting for a missing endpoint.
-    [[nodiscard]] bool submit(
-        Device& device,
-        CommandList* const* commandLists,
-        usize commandListCount,
-        CommandQueue::Enum executionQueue = CommandQueue::Graphics
-    );
-    // Confirms the ticket only when Vulkan accepts this exact submission and returns the completion token consumed by
-    // a dependent queue. A rejected submission discards its query reservations.
-    [[nodiscard]] QueueSubmissionToken submit(
-        Device& device,
-        CommandList* const* commandLists,
-        usize commandListCount,
-        CommandQueue::Enum executionQueue,
-        const QueueSubmissionDesc& submitDesc
-    );
-    [[nodiscard]] QueueSubmissionToken submit(
-        Device& device,
-        CommandList* const* commandLists,
-        usize commandListCount,
-        const GpuPhysicalQueueId& executionQueue,
-        const QueueSubmissionDesc& submitDesc
-    );
+    // Validates that every supplied command list still owns a ready command buffer, submits them together in their supplied order, and resolves every timing scope recorded under this ticket.
+    // A partial split submission is rejected before reaching Vulkan so a cross-list timing scope can never be left waiting for a missing endpoint.
+    [[nodiscard]] bool submit(Device& device, CommandList* const* commandLists, usize commandListCount, CommandQueue::Enum executionQueue = CommandQueue::Graphics);
+    // Confirms the ticket only when Vulkan accepts this exact submission and returns the completion token consumed by a dependent queue.
+    // A rejected submission discards its query reservations.
+    [[nodiscard]] QueueSubmissionToken submit(Device& device, CommandList* const* commandLists, usize commandListCount, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] QueueSubmissionToken submit(Device& device, CommandList* const* commandLists, usize commandListCount, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
     // Explicitly releases all timing scopes when a caller elects not to submit its recorded command lists.
     void discard();
 
 
 private:
-    // Rejects incomplete batches before they can partially submit a split timing scope. Invalid command-list input
-    // releases reservations. Successful preparation atomically blocks recording and any competing submission until
-    // the caller either resolves the native attempt or rolls preparation back before reaching the device.
-    [[nodiscard]] bool prepareSubmission(
-        CommandList* const* commandLists,
-        usize commandListCount,
-        Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens
-    );
-    [[nodiscard]] bool prepareSubmissionAfterCommandListValidation(
-        CommandList* const* commandLists,
-        usize commandListCount,
-        Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens
-    );
+    // Rejects incomplete batches before they can partially submit a split timing scope.
+    // Invalid command-list input releases reservations.
+    // Successful preparation atomically blocks recording and any competing submission until the caller either resolves the native attempt or rolls preparation back before reaching the device.
+    [[nodiscard]] bool prepareSubmission(CommandList* const* commandLists, usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
+    [[nodiscard]] bool prepareSubmissionAfterCommandListValidation(CommandList* const* commandLists, usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
     [[nodiscard]] bool prepareSubmissionState(Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
-    [[nodiscard]] ScopeEndpointValidationResult validateScopePublicationEndpoints(
-        CommandList* const* commandLists,
-        usize commandListCount
-    )noexcept;
+    [[nodiscard]] ScopeEndpointValidationResult validateScopePublicationEndpoints(CommandList* const* commandLists, usize commandListCount)noexcept;
     [[nodiscard]] bool resetForRecordingReuse(GpuTimingRecorder& recorder)noexcept;
     void rollbackPreparedSubmission()noexcept;
     void discardPreparedSubmission()noexcept;
     void abandonWithoutCallbacks()noexcept;
     [[nodiscard]] bool resolveSubmission(const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] usize reserveScopePublication();
-    [[nodiscard]] bool bindScopePublication(
-        usize publicationIndex,
-        const GpuTimingScope& scope,
-        const CommandList& commandList
-    )noexcept;
+    [[nodiscard]] bool bindScopePublication(usize publicationIndex, const GpuTimingScope& scope, const CommandList& commandList)noexcept;
     void cancelScopePublication(usize publicationIndex)noexcept;
     [[nodiscard]] bool publishScope(const GpuTimingScope& scope, const CommandList& commandList)noexcept;
     [[nodiscard]] bool trackSubmissionPrerequisite(const QueueSubmissionToken& token);
@@ -570,8 +475,8 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Whole-frame timestamp across accepted submissions; pending only once the ending packet is accepted. Rejected tail:
-// recovery end with publishSample=false so no partial duration reports.
+// Whole-frame timestamp across accepted submissions; pending only once the ending packet is accepted.
+// Rejected tail: recovery end with publishSample=false so no partial duration reports.
 class GpuTimingFrameTransaction final : NoCopy{
 private:
     enum class State : u8{
@@ -590,22 +495,16 @@ public:
 
 
 public:
-    // Must run inside a GpuTimingSubmissionTicket::RecordingScope for the submission that records the begin
-    // timestamp. A disabled or under-reserved timing recorder is a valid no-op transaction.
-    [[nodiscard]] bool begin(
-        const GpuTimingScopeDefinition& scopeDefinition,
-        Device& device,
-        CommandList& commandList,
-        GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution
-    );
-    // Records the end timestamp but deliberately keeps the query reservation private until the containing submission
-    // is accepted. This permits a replacement recovery endpoint when a pre-recorded final packet is rejected.
+    // Must run inside a GpuTimingSubmissionTicket::RecordingScope for the submission that records the begin timestamp.
+    // A disabled or under-reserved timing recorder is a valid no-op transaction.
+    [[nodiscard]] bool begin(const GpuTimingScopeDefinition& scopeDefinition, Device& device, CommandList& commandList, GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution);
+    // Records the end timestamp but deliberately keeps the query reservation private until the containing submission is accepted.
+    // This permits a replacement recovery endpoint when a pre-recorded final packet is rejected.
     [[nodiscard]] bool recordEnd(CommandList& commandList);
     [[nodiscard]] bool confirmBeginSubmission(const QueueSubmissionToken& token);
     [[nodiscard]] bool confirmEndSubmission(const QueueSubmissionToken& token, bool publishSample);
     [[nodiscard]] bool needsRetirement()const noexcept;
-    // Discards the endpoint recorded in a packet that will not be submitted, allowing a recovery command list to
-    // write the replacement endpoint after the accepted begin.
+    // Discards the endpoint recorded in a packet that will not be submitted, allowing a recovery command list to write the replacement endpoint after the accepted begin.
     [[nodiscard]] bool prepareForRecovery();
     void discard();
 
@@ -630,24 +529,17 @@ public:
     GpuTimingMeasure(GpuTimingMeasure&&) = delete;
     GpuTimingMeasure& operator=(GpuTimingMeasure&&) = delete;
 
-    // Defined out-of-line: the ctor/dtor own an exact CommandList marker lease, and CommandList is only forward-declared
-    // in this header (the marker calls need the complete type, available in the .cpp).
-    GpuTimingMeasure(
-        GpuTimingRecorder& recorder,
-        const GpuTimingScopeDefinition& scopeDefinition,
-        Device& device,
-        CommandList& commandList,
-        GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution
-    );
+    // Defined out-of-line: the ctor/dtor own an exact CommandList marker lease, and CommandList is only forward-declared in this header (the marker calls need the complete type, available in the .cpp).
+    GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingScopeDefinition& scopeDefinition, Device& device, CommandList& commandList, GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution);
     ~GpuTimingMeasure()noexcept;
 
 
 public:
-    // A timing scope may span ordered primary command buffers. Close only its exact debug-marker lease on the command
-    // list that opened it before that list is closed, then emit the ending timestamp on the later command list.
+    // A timing scope may span ordered primary command buffers.
+    // Close only its exact debug-marker lease on the command list that opened it before that list is closed, then emit the ending timestamp on the later command list.
     [[nodiscard]] bool finishMarker();
-    // Recording failure recovery can reset the command list's marker stack before this object unwinds. Relinquish
-    // marker ownership in that path so the destructor does not emit an unmatched marker end after recovery.
+    // Recording failure recovery can reset the command list's marker stack before this object unwinds.
+    // Relinquish marker ownership in that path so the destructor does not emit an unmatched marker end after recovery.
     void abandonMarker()noexcept;
     void finishTiming(CommandList& commandList);
     // Discards a started scope when its producer command buffer cannot be finalized or submitted.
@@ -670,8 +562,9 @@ inline void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>* const timing){
     timing->reset();
 }
 
-// Closes only the marker half of a split scope before its ending timestamp is published. A marker failure discards
-// that unpublished timing scope. After finishTiming(), callers must instead roll back through the owning ticket.
+// Closes only the marker half of a split scope before its ending timestamp is published.
+// A marker failure discards that unpublished timing scope.
+// After finishTiming(), callers must instead roll back through the owning ticket.
 [[nodiscard]] inline bool FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>* const timing){
     if(!timing || !timing->has_value())
         return false;

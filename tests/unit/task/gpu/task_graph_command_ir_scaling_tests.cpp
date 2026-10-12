@@ -36,9 +36,7 @@ using TaskGraphTestUtils::TestArena;
         const Graphics::GpuTaskId task{ .generation = s_CommandIrTask.generation, .index = static_cast<u32>(index) };
         const Graphics::GpuSubmissionPacketId packet{ .generation = s_CommandIrPacket.generation, .index = static_cast<u32>(index / 64u) };
         if(index % 2u == 0u){
-            if(!capture.captureCopyBuffer(
-                task, packet, s_CommandIrQueue, s_CommandIrSource, index * 16u, s_CommandIrDestination, index * 32u, 64u
-            ))
+            if(!capture.captureCopyBuffer(task, packet, s_CommandIrQueue, s_CommandIrSource, index * 16u, s_CommandIrDestination, index * 32u, 64u))
                 return false;
         }
         else if(!capture.captureClearBuffer(task, packet, s_CommandIrQueue, s_CommandIrDestination, static_cast<u32>(index)))
@@ -153,9 +151,7 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
     EXPECT_FALSE(capture.beginRecordingAttempt(32u));
     const Graphics::GpuSubmissionPacketId otherPlan{ .generation = s_CommandIrPacket.generation + 1u, .index = 0u };
     EXPECT_FALSE(capture.captureClearBuffer(s_CommandIrTask, otherPlan, s_CommandIrQueue, s_CommandIrDestination, 5u));
-    EXPECT_FALSE(capture.captureCopyBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 0u, s_CommandIrDestination, 0u, 0u
-    ));
+    EXPECT_FALSE(capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 0u, s_CommandIrDestination, 0u, 0u));
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
     ASSERT_EQ(capture.commandBytes().size(), original.size());
     EXPECT_EQ(NWB_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);

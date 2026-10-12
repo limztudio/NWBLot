@@ -18,9 +18,7 @@ sys.path.insert(0, str(ROOT))
 import launcher  # noqa: E402
 from launcher import repository_windows_process  # noqa: E402
 
-NAME_SYMBOL_CAPTURE_SPEC = importlib.util.spec_from_file_location(
-    "nwb_test_generate_name_symbols", ROOT / "tests" / "name_symbols" / "generate_name_symbols.py"
-)
+NAME_SYMBOL_CAPTURE_SPEC = importlib.util.spec_from_file_location("nwb_test_generate_name_symbols", ROOT / "tests" / "name_symbols" / "generate_name_symbols.py")
 if NAME_SYMBOL_CAPTURE_SPEC is None or NAME_SYMBOL_CAPTURE_SPEC.loader is None:
     raise ImportError("Could not load the test-owned name-symbol capture helper")
 generate_name_symbols = importlib.util.module_from_spec(NAME_SYMBOL_CAPTURE_SPEC)
@@ -124,10 +122,7 @@ LIT_CHILD_STDOUT = "launcher child help"
 LIT_CHILD_STDERR = "launcher child error"
 LIT_PYTHON_COMMAND = "-c"
 LIT_READ_WRITE_TEXT = "w+"
-LIT_CHILD_STREAMS_PROGRAM = (
-    f"import sys; print({LIT_CHILD_STDOUT!r}, flush=True); "
-    f"print({LIT_CHILD_STDERR!r}, file=sys.stderr, flush=True); sys.exit(23)"
-)
+LIT_CHILD_STREAMS_PROGRAM = (f"import sys; print({LIT_CHILD_STDOUT!r}, flush=True); " f"print({LIT_CHILD_STDERR!r}, file=sys.stderr, flush=True); sys.exit(23)")
 
 
 class FakeWindowsProcessApi:
@@ -226,21 +221,13 @@ class FakeBoundedProcessApi:
 
 class LauncherPlatformTests(unittest.TestCase):
     def test_host_architecture_uses_native_windows_machine_under_emulation(self):
-        with (
-            mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
-            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64),
-            mock.patch.object(launcher.HostProbe, LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME, return_value=LIT_ARM64_2),
-            mock.patch.dict(os.environ, {}, clear=True),
-        ):
+        with (mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2), mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64), mock.patch.object(launcher.HostProbe, LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME, return_value=LIT_ARM64_2),
+            mock.patch.dict(os.environ, {}, clear=True),):
             self.assertEqual(LIT_ARM64, launcher.host_arch_name())
 
     def test_missing_native_windows_api_rejects_environment_and_process_guesses(self):
-        with (
-            mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
-            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64) as machine,
-            mock.patch.object(ctypes, LIT_WINDOWS_DLL, return_value=mock.Mock(spec=()), create=True),
-            mock.patch.dict(os.environ, {LIT_WINDOWS_ENV_ARCH6432: LIT_ARM64_2}, clear=True),
-        ):
+        with (mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2), mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64) as machine, mock.patch.object(ctypes, LIT_WINDOWS_DLL, return_value=mock.Mock(spec=()), create=True),
+            mock.patch.dict(os.environ, {LIT_WINDOWS_ENV_ARCH6432: LIT_ARM64_2}, clear=True),):
             with self.assertRaisesRegex(SystemExit, launcher.WINDOWS_WOW64_PROC2):
                 launcher.host_arch_name()
             machine.assert_not_called()
@@ -250,13 +237,8 @@ class LauncherPlatformTests(unittest.TestCase):
         kernel32.GetCurrentProcess.return_value = 1
         query = getattr(kernel32, launcher.WINDOWS_WOW64_PROC2)
         query.return_value = 0
-        with (
-            mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
-            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64) as machine,
-            mock.patch.object(ctypes, LIT_WINDOWS_DLL, return_value=kernel32, create=True),
-            mock.patch.object(ctypes, LIT_WINDOWS_LAST_ERROR, return_value=87, create=True),
-            mock.patch.dict(os.environ, {LIT_WINDOWS_ENV_ARCH6432: LIT_AMD64}, clear=True),
-        ):
+        with (mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2), mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64) as machine, mock.patch.object(ctypes, LIT_WINDOWS_DLL, return_value=kernel32, create=True),
+            mock.patch.object(ctypes, LIT_WINDOWS_LAST_ERROR, return_value=87, create=True), mock.patch.dict(os.environ, {LIT_WINDOWS_ENV_ARCH6432: LIT_AMD64}, clear=True),):
             with self.assertRaisesRegex(SystemExit, "Windows error 87"):
                 launcher.host_arch_name()
 
@@ -282,16 +264,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 launcher.query_windows_native_machine_name()
 
     def test_explicit_architecture_must_match_configure_preset(self):
-        args = argparse.Namespace(
-            repo_root=Path(os.sep) / LIT_REPO,
-            platform=LIT_WINDOWS,
-            arch=LIT_ARM64,
-            domain=None,
-            configure_preset="windows-clang-x64",
-            build_dir=None,
-            config=LIT_DBG,
-            cmake=None,
-        )
+        args = argparse.Namespace(repo_root=Path(os.sep) / LIT_REPO, platform=LIT_WINDOWS, arch=LIT_ARM64, domain=None, configure_preset="windows-clang-x64", build_dir=None, config=LIT_DBG, cmake=None,)
         with self.assertRaisesRegex(SystemExit, "conflicts with configure preset"):
             launcher.resolve_launch_settings(args, LIT_FULL)
 
@@ -299,22 +272,9 @@ class LauncherPlatformTests(unittest.TestCase):
     def test_windows_kill_existing_matches_exact_image_not_same_basename(self):
         x64_image = r"C:\Build\x64\viewer.exe"
         arm64_image = r"C:\Build\arm64\viewer.exe"
-        api = FakeWindowsProcessApi(
-            {
-                101: x64_image,
-                202: r"c:\build\ARM64\viewer.exe",
-            },
-            {202: [True]},
-        )
+        api = FakeWindowsProcessApi({ 101: x64_image, 202: r"c:\build\ARM64\viewer.exe", }, {202: [True]},)
 
-        results = repository_windows_process.stop_processes_by_image_path(
-            arm64_image,
-            3.0,
-            2.0,
-            api=api,
-            resolve_path=lambda path: path,
-            current_process_id=999,
-        )
+        results = repository_windows_process.stop_processes_by_image_path(arm64_image, 3.0, 2.0, api=api, resolve_path=lambda path: path, current_process_id=999,)
 
         self.assertEqual((202,), tuple(result.pid for result in results))
         self.assertIn((LIT_CLOSE, 202), api.events)
@@ -322,19 +282,9 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertFalse(any(event[0] == LIT_FORCE for event in api.events))
 
     def test_windows_existing_forced_shutdown_uses_retained_process_handle(self):
-        api = FakeWindowsProcessApi(
-            {202: LIT_C_BUILD_ARM64_VIEWER_EXE},
-            {202: [False, True]},
-        )
+        api = FakeWindowsProcessApi({202: LIT_C_BUILD_ARM64_VIEWER_EXE}, {202: [False, True]},)
 
-        results = repository_windows_process.stop_processes_by_image_path(
-            LIT_C_BUILD_ARM64_VIEWER_EXE,
-            3.0,
-            2.0,
-            api=api,
-            resolve_path=lambda path: path,
-            current_process_id=999,
-        )
+        results = repository_windows_process.stop_processes_by_image_path(LIT_C_BUILD_ARM64_VIEWER_EXE, 3.0, 2.0, api=api, resolve_path=lambda path: path, current_process_id=999,)
 
         retained_handle = api.handles[202]
         self.assertTrue(results[0].forced)
@@ -344,13 +294,7 @@ class LauncherPlatformTests(unittest.TestCase):
         events = []
         process = FakeSpawnedProcess(302, 0, events)
 
-        result = repository_windows_process.run_bounded_process(
-            process,
-            8.0,
-            4.0,
-            2.0,
-            api=FakeBoundedProcessApi([False, True], events, can_terminate=False),
-        )
+        result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0, api=FakeBoundedProcessApi([False, True], events, can_terminate=False),)
 
         self.assertEqual(0, result.exit_code)
         self.assertFalse(result.forced)
@@ -361,13 +305,7 @@ class LauncherPlatformTests(unittest.TestCase):
         process = FakeSpawnedProcess(306, 0, events)
 
         with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "did not grant terminate access"):
-            repository_windows_process.run_bounded_process(
-                process,
-                8.0,
-                4.0,
-                2.0,
-                api=FakeBoundedProcessApi([False, False, False], events, can_terminate=False),
-            )
+            repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0, api=FakeBoundedProcessApi([False, False, False], events, can_terminate=False),)
 
         retained_handle = next(event[2] for event in events if event[0] == LIT_OPEN)
         self.assertIn((LIT_FORCE, retained_handle), events)
@@ -378,13 +316,7 @@ class LauncherPlatformTests(unittest.TestCase):
         events = []
         process = FakeSpawnedProcess(304, 23, events)
 
-        result = repository_windows_process.run_bounded_process(
-            process,
-            8.0,
-            4.0,
-            2.0,
-            api=FakeBoundedProcessApi([False, True], events),
-        )
+        result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0, api=FakeBoundedProcessApi([False, True], events),)
 
         self.assertEqual(23, result.exit_code)
         self.assertFalse(result.forced)
@@ -396,42 +328,18 @@ class LauncherPlatformTests(unittest.TestCase):
         events = []
         process = FakeSpawnedProcess(404, 7, events)
 
-        result = repository_windows_process.run_bounded_process(
-            process,
-            9.0,
-            5.0,
-            2.0,
-            api=FakeBoundedProcessApi([False, False, True], events),
-        )
+        result = repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0, api=FakeBoundedProcessApi([False, False, True], events),)
 
         self.assertEqual(7, result.exit_code)
         self.assertTrue(result.forced)
-        self.assertEqual(
-            [
-                (LIT_OPEN, 404, mock.ANY),
-                (LIT_NATIVE_WAIT, mock.ANY, 9.0),
-                (LIT_CLOSE, 404),
-                (LIT_NATIVE_WAIT, mock.ANY, 5.0),
-                (LIT_FORCE, mock.ANY),
-                (LIT_NATIVE_WAIT, mock.ANY, 2.0),
-                (LIT_WAIT, None),
-                (LIT_RELEASE, mock.ANY),
-            ],
-            events,
-        )
+        self.assertEqual([(LIT_OPEN, 404, mock.ANY), (LIT_NATIVE_WAIT, mock.ANY, 9.0), (LIT_CLOSE, 404), (LIT_NATIVE_WAIT, mock.ANY, 5.0), (LIT_FORCE, mock.ANY), (LIT_NATIVE_WAIT, mock.ANY, 2.0), (LIT_WAIT, None), (LIT_RELEASE, mock.ANY),], events,)
 
     def test_windows_bounded_shutdown_rejects_success_status_after_forced_termination(self):
         events = []
         process = FakeSpawnedProcess(405, 0, events)
 
         with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "forced process .* successful"):
-            repository_windows_process.run_bounded_process(
-                process,
-                9.0,
-                5.0,
-                2.0,
-                api=FakeBoundedProcessApi([False, False, True], events),
-            )
+            repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0, api=FakeBoundedProcessApi([False, False, True], events),)
 
         grace_wait_index = next(index for index, event in enumerate(events) if event[0] == LIT_NATIVE_WAIT and event[2] == 5.0)
         force_index = next(index for index, event in enumerate(events) if event[0] == LIT_FORCE)
@@ -440,64 +348,23 @@ class LauncherPlatformTests(unittest.TestCase):
     def test_launcher_propagates_bounded_windows_process_exit_status(self):
         events = []
         process = FakeSpawnedProcess(406, 23, events)
-        args = argparse.Namespace(
-            kill_existing=False,
-            dry_run=False,
-            gpudbg=False,
-            detach=False,
-            run_seconds=9.0,
-        )
+        args = argparse.Namespace(kill_existing=False, dry_run=False, gpudbg=False, detach=False, run_seconds=9.0,)
         run_result = repository_windows_process.WindowsBoundedRunResult(406, 23, True, True, False)
 
-        with (
-            mock.patch.object(subprocess, LIT_POPEN, return_value=process),
-            mock.patch.object(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS),
-            mock.patch.object(repository_windows_process, "run_bounded_process", return_value=run_result) as bounded,
-            mock.patch.object(launcher, "terminate_process") as generic_terminate,
-        ):
-            exit_code = launcher.launch_process(
-                args,
-                Path(LIT_C_BUILD_ARM64_VIEWER_EXE),
-                Path(r"C:\build\arm64"),
-                {},
-                (),
-                paths_validated=True,
-            )
+        with (mock.patch.object(subprocess, LIT_POPEN, return_value=process), mock.patch.object(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS),
+            mock.patch.object(repository_windows_process, "run_bounded_process", return_value=run_result) as bounded, mock.patch.object(launcher, "terminate_process") as generic_terminate,):
+            exit_code = launcher.launch_process(args, Path(LIT_C_BUILD_ARM64_VIEWER_EXE), Path(r"C:\build\arm64"), {}, (), paths_validated=True,)
 
         self.assertEqual(23, exit_code)
-        bounded.assert_called_once_with(
-            process,
-            9.0,
-            launcher.APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS,
-            launcher.APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
-        )
+        bounded.assert_called_once_with(process, 9.0, launcher.APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, launcher.APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,)
         generic_terminate.assert_not_called()
 
     def test_owned_child_output_reaches_redirected_parent_streams(self):
-        args = argparse.Namespace(
-            kill_existing=False,
-            dry_run=False,
-            gpudbg=False,
-            detach=False,
-            run_seconds=None,
-        )
+        args = argparse.Namespace(kill_existing=False, dry_run=False, gpudbg=False, detach=False, run_seconds=None,)
 
-        with (
-            tempfile.TemporaryDirectory() as temp_dir,
-            tempfile.TemporaryFile(mode=LIT_READ_WRITE_TEXT, encoding=LIT_UTF_8) as stdout,
-            tempfile.TemporaryFile(mode=LIT_READ_WRITE_TEXT, encoding=LIT_UTF_8) as stderr,
-        ):
-            with (
-                mock.patch.object(sys, LIT_STDOUT, stdout),
-                mock.patch.object(sys, LIT_STDERR, stderr),
-            ):
-                exit_code = launcher.launch_process(
-                    args,
-                    Path(sys.executable),
-                    Path(temp_dir),
-                    os.environ.copy(),
-                    (LIT_PYTHON_COMMAND, LIT_CHILD_STREAMS_PROGRAM),
-                )
+        with (tempfile.TemporaryDirectory() as temp_dir, tempfile.TemporaryFile(mode=LIT_READ_WRITE_TEXT, encoding=LIT_UTF_8) as stdout, tempfile.TemporaryFile(mode=LIT_READ_WRITE_TEXT, encoding=LIT_UTF_8) as stderr,):
+            with (mock.patch.object(sys, LIT_STDOUT, stdout), mock.patch.object(sys, LIT_STDERR, stderr),):
+                exit_code = launcher.launch_process(args, Path(sys.executable), Path(temp_dir), os.environ.copy(), (LIT_PYTHON_COMMAND, LIT_CHILD_STREAMS_PROGRAM),)
 
             stdout.seek(0)
             stderr.seek(0)
@@ -526,16 +393,9 @@ class LauncherPlatformTests(unittest.TestCase):
     def test_directory_discovery_only_returns_direct_children(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            paths = (
-                root / LIT_TESTS / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_COMMAND_IR / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_HARDWARE_SHADOW_BOUNDARY / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_TRANSFER_QUEUE / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,
-            )
+            paths = (root / LIT_TESTS / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_COMMAND_IR / LIT_LAUNCH_PY,
+                root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_HARDWARE_SHADOW_BOUNDARY / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_TRANSFER_QUEUE / LIT_LAUNCH_PY,
+                root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,)
             for path in paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding=LIT_UTF_8)
@@ -551,11 +411,8 @@ class LauncherPlatformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             category = root / LIT_TESTS
-            authored = (category / LIT_LAUNCH_PY, category / LIT_SMOKE / LIT_LAUNCH_PY,
-                category / "group" / LIT_LAUNCH_PY, category / "group" / "source" / LIT_LAUNCH_PY)
-            generated = tuple(path for artifact in launcher.LAUNCHER_ARTIFACT_DIRECTORIES for path in (
-                category / artifact / LIT_LAUNCH_PY,
-                category / artifact / "frozen" / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,
+            authored = (category / LIT_LAUNCH_PY, category / LIT_SMOKE / LIT_LAUNCH_PY, category / "group" / LIT_LAUNCH_PY, category / "group" / "source" / LIT_LAUNCH_PY)
+            generated = tuple(path for artifact in launcher.LAUNCHER_ARTIFACT_DIRECTORIES for path in (category / artifact / LIT_LAUNCH_PY, category / artifact / "frozen" / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,
                 category / LIT_SMOKE / artifact / "old" / LIT_LAUNCH_PY))
             for path in (*authored, *generated):
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -576,10 +433,7 @@ class LauncherPlatformTests(unittest.TestCase):
             for category in (root / LIT_TESTS, root / LIT_UTILITIES):
                 category.mkdir(parents=True)
                 (category / LIT_LAUNCH_PY).write_text("", encoding=LIT_UTF_8)
-            for path in (
-                root / LIT_TESTS / LIT_SAME_NAME / LIT_LAUNCH_PY,
-                root / LIT_UTILITIES / LIT_SAME_NAME / LIT_LAUNCH_PY,
-            ):
+            for path in (root / LIT_TESTS / LIT_SAME_NAME / LIT_LAUNCH_PY, root / LIT_UTILITIES / LIT_SAME_NAME / LIT_LAUNCH_PY,):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding=LIT_UTF_8)
 
@@ -593,35 +447,23 @@ class LauncherPlatformTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text("", encoding=LIT_UTF_8)
 
-            with self.assertRaisesRegex(
-                SystemExit,
-                LIT_A + re.escape(f"missing category launcher: {Path('utilities') / 'launch.py'}") + LIT_Z,
-            ):
+            with self.assertRaisesRegex(SystemExit, LIT_A + re.escape(f"missing category launcher: {Path('utilities') / 'launch.py'}") + LIT_Z,):
                 launcher.discover_repo_launchers(root)
 
     def test_nested_leaf_requires_an_intermediate_router(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            for path in (
-                root / LIT_TESTS / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY,
-            ):
+            for path in (root / LIT_TESTS / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY,):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding=LIT_UTF_8)
 
-            with self.assertRaisesRegex(
-                SystemExit,
-                LIT_A + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launch.py'}") + LIT_Z,
-            ):
+            with self.assertRaisesRegex(SystemExit, LIT_A + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launch.py'}") + LIT_Z,):
                 launcher.discover_repo_launchers(root)
 
 
 class LauncherProcessStopTests(unittest.TestCase):
     def test_no_matching_posix_process_does_not_prevent_launch(self):
-        with (
-            mock.patch("launcher.process.shutil.which", return_value="/usr/bin/pkill"),
-            mock.patch.object(subprocess, "run", return_value=mock.Mock(returncode=1)),
-        ):
+        with (mock.patch("launcher.process.shutil.which", return_value="/usr/bin/pkill"), mock.patch.object(subprocess, "run", return_value=mock.Mock(returncode=1)),):
             launcher.stop_existing_process(Path("absent-application"), launcher.PLATFORM_LINUX)
 
     def test_posix_stop_failure_prevents_another_application_and_bounds_diagnostic(self):
@@ -633,13 +475,8 @@ class LauncherProcessStopTests(unittest.TestCase):
                     options["stderr"].write(diagnostic)
                     return mock.Mock(returncode=exit_code)
 
-                with (
-                    mock.patch("launcher.process.shutil.which", return_value="/usr/bin/pkill"),
-                    mock.patch.object(subprocess, "run", side_effect=fail_stop),
-                    mock.patch.object(launcher, "validate_launch_paths"),
-                    mock.patch.object(launcher, "host_platform_name", return_value=launcher.PLATFORM_LINUX),
-                    mock.patch.object(subprocess, "Popen") as spawn,
-                ):
+                with (mock.patch("launcher.process.shutil.which", return_value="/usr/bin/pkill"), mock.patch.object(subprocess, "run", side_effect=fail_stop), mock.patch.object(launcher, "validate_launch_paths"),
+                    mock.patch.object(launcher, "host_platform_name", return_value=launcher.PLATFORM_LINUX), mock.patch.object(subprocess, "Popen") as spawn,):
                     with self.assertRaisesRegex(SystemExit, "permission denied") as failure:
                         launcher.launch_process(args, Path("application"), ROOT, {}, [])
                     self.assertNotIn("UNBOUNDED_TAIL", str(failure.exception))
@@ -656,14 +493,8 @@ class LauncherProcessStopTests(unittest.TestCase):
                 args = argparse.Namespace(dry_run=False, kill_existing=True, detach=detach)
                 profile_process = mock.Mock()
                 session = launcher.ProfileSession(12345, Path("logserver"), profile_process)
-                with (
-                    mock.patch.object(launcher, "validate_launch_paths"),
-                    mock.patch.object(launcher, "start_profile_session", return_value=session) as start_profile,
-                    mock.patch.object(launcher, "host_platform_name", return_value=launcher.PLATFORM_LINUX),
-                    mock.patch.object(launcher, "stop_existing_process", side_effect=SystemExit("requested stop refused")),
-                    mock.patch.object(launcher, "terminate_process") as terminate,
-                    mock.patch.object(subprocess, "Popen") as spawn,
-                ):
+                with (mock.patch.object(launcher, "validate_launch_paths"), mock.patch.object(launcher, "start_profile_session", return_value=session) as start_profile, mock.patch.object(launcher, "host_platform_name", return_value=launcher.PLATFORM_LINUX),
+                    mock.patch.object(launcher, "stop_existing_process", side_effect=SystemExit("requested stop refused")), mock.patch.object(launcher, "terminate_process") as terminate, mock.patch.object(subprocess, "Popen") as spawn,):
                     with self.assertRaisesRegex(SystemExit, "requested stop refused"):
                         launcher.launch_with_optional_profile(args, mock.sentinel.settings, Path("application"), ROOT, {}, [])
                     start_profile.assert_called_once_with(args, mock.sentinel.settings, ROOT, {})
@@ -676,10 +507,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.arguments = [
-            LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS, LIT_ARCH, LIT_ARM64,
-            LIT_DOMAIN, LIT_FULL, LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64, LIT_CONFIG, LIT_OPT,
-        ]
+        self.arguments = [LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS, LIT_ARCH, LIT_ARM64, LIT_DOMAIN, LIT_FULL, LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64, LIT_CONFIG, LIT_OPT,]
         self.patch(launcher, "repo_root", return_value=self.root)
         self.patch(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS)
         self.patch(launcher, "cmake_command", return_value=(LIT_CMAKE_EXECUTABLE,))
@@ -690,13 +518,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         output_patch = mock.patch(LIT_BUILTINS_PRINT)
         self.output = output_patch.start()
         self.addCleanup(output_patch.stop)
-        self.forbidden = [
-            self.patch(launcher, operation, side_effect=AssertionError(LIT_FORBIDDEN_LAUNCH))
-            for operation in (
-                "resolve_executable_path", "resolve_working_directory", "start_profile_session",
-                "launch_with_optional_profile",
-            )
-        ]
+        self.forbidden = [self.patch(launcher, operation, side_effect=AssertionError(LIT_FORBIDDEN_LAUNCH)) for operation in ("resolve_executable_path", "resolve_working_directory", "start_profile_session", "launch_with_optional_profile",)]
         self.popen = self.patch(subprocess, LIT_POPEN, side_effect=AssertionError(LIT_FORBIDDEN_LAUNCH))
 
     def patch(self, owner, name, **kwargs):
@@ -714,9 +536,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         self.assertNotEqual(Path.cwd(), self.root)
 
         with mock.patch.object(launcher, "ensure_file_api_query") as query:
-            self.assertEqual(0, launcher.main([
-                LIT_BUILD, LIT_LIBRARY_TARGET, *self.arguments, LIT_BUILD_DIR, str(relative),
-            ]))
+            self.assertEqual(0, launcher.main([LIT_BUILD, LIT_LIBRARY_TARGET, *self.arguments, LIT_BUILD_DIR, str(relative),]))
 
         query.assert_called_once_with(custom)
         commands = [call.args[0] for call in self.process.call_args_list]
@@ -728,9 +548,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         self.popen.assert_not_called()
 
     def test_project_build_only_does_not_require_an_application_executable(self):
-        specification = importlib.util.spec_from_file_location(
-            "nwb_test_testbed_launcher", ROOT / LIT_COOLSTUFF / "Testbed" / LIT_LAUNCH_PY,
-        )
+        specification = importlib.util.spec_from_file_location("nwb_test_testbed_launcher", ROOT / LIT_COOLSTUFF / "Testbed" / LIT_LAUNCH_PY,)
         project = importlib.util.module_from_spec(specification)
         specification.loader.exec_module(project)
 
@@ -743,17 +561,12 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
 
     def test_build_dry_run_leaves_cold_custom_directories_and_processes_untouched(self):
         custom = self.root / LIT_COLD_CUSTOM_BUILD
-        invocations = (
-            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET],
-            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],
-        )
+        invocations = ([LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET], [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],)
         for invocation in invocations:
             with self.subTest(command=invocation):
                 self.output.reset_mock()
                 before = tuple(self.root.rglob("*"))
-                self.assertEqual(0, launcher.main([
-                    *invocation, *self.arguments, LIT_BUILD_DIR, str(custom), LIT_DRY_RUN,
-                ]))
+                self.assertEqual(0, launcher.main([*invocation, *self.arguments, LIT_BUILD_DIR, str(custom), LIT_DRY_RUN,]))
                 self.assertEqual(before, tuple(self.root.rglob("*")))
                 self.assertFalse(custom.exists())
                 self.query.assert_not_called()
@@ -761,11 +574,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
                 self.popen.assert_not_called()
 
     def test_configuration_failure_prevents_build_and_launch(self):
-        invocations = (
-            [LIT_BUILD, LIT_LIBRARY_TARGET],
-            [LIT_RUN, LIT_TESTBED],
-            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],
-        )
+        invocations = ([LIT_BUILD, LIT_LIBRARY_TARGET], [LIT_RUN, LIT_TESTBED], [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],)
         for invocation in invocations:
             with self.subTest(command=invocation):
                 self.process.reset_mock()
@@ -780,11 +589,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
                 self.popen.assert_not_called()
 
     def test_target_build_failure_prevents_profile_build_and_launch(self):
-        invocations = (
-            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET],
-            [LIT_RUN, LIT_TESTBED],
-            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],
-        )
+        invocations = ([LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET], [LIT_RUN, LIT_TESTBED], [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],)
         for invocation in invocations:
             with self.subTest(command=invocation):
                 self.process.reset_mock()
@@ -799,14 +604,8 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
                 self.popen.assert_not_called()
 
     def test_conflicting_or_malformed_build_arguments_fail_before_side_effects(self):
-        invocations = (
-            [LIT_BUILD],
-            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_SKIP_BUILD],
-            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_WITH_PROFILE],
-            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_EMPTY, "application argument"],
-            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_SKIP_BUILD],
-            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_EMPTY, "application argument"],
-        )
+        invocations = ([LIT_BUILD], [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_SKIP_BUILD], [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_WITH_PROFILE],
+            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_EMPTY, "application argument"], [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_SKIP_BUILD], [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_EMPTY, "application argument"],)
         with mock.patch.object(sys, "stderr"):
             for invocation in invocations:
                 with self.subTest(command=invocation):
@@ -849,21 +648,12 @@ class LauncherDryRunDomainTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.custom = self.root / LIT_COLD_CUSTOM_BUILD
-        self.arguments = [
-            LIT_RUN, LIT_TESTBED, LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS,
-            LIT_ARCH, LIT_ARM64, LIT_CONFIG, LIT_OPT, LIT_BUILD_DIR, str(self.custom), LIT_DRY_RUN,
-        ]
+        self.arguments = [LIT_RUN, LIT_TESTBED, LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS, LIT_ARCH, LIT_ARM64, LIT_CONFIG, LIT_OPT, LIT_BUILD_DIR, str(self.custom), LIT_DRY_RUN,]
         output_patch = mock.patch(LIT_BUILTINS_PRINT)
         self.output = output_patch.start()
         self.addCleanup(output_patch.stop)
-        for owner, operation, options in (
-            (launcher, "cmake_command", {"return_value": (LIT_CMAKE_EXECUTABLE,)}),
-            (launcher, LIT_HOST_PLATFORM_NAME, {"return_value": LIT_WINDOWS}),
-            (launcher, "host_arch_name", {"return_value": LIT_ARM64}),
-            (launcher, "ensure_file_api_query", {"wraps": launcher.ensure_file_api_query}),
-            (subprocess, LIT_RUN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
-            (subprocess, LIT_POPEN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
-        ):
+        for owner, operation, options in ((launcher, "cmake_command", {"return_value": (LIT_CMAKE_EXECUTABLE,)}), (launcher, LIT_HOST_PLATFORM_NAME, {"return_value": LIT_WINDOWS}), (launcher, "host_arch_name", {"return_value": LIT_ARM64}),
+            (launcher, "ensure_file_api_query", {"wraps": launcher.ensure_file_api_query}), (subprocess, LIT_RUN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}), (subprocess, LIT_POPEN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),):
             patcher = mock.patch.object(owner, operation, **options)
             result = patcher.start()
             self.addCleanup(patcher.stop)
@@ -892,12 +682,7 @@ class LauncherDryRunDomainTests(unittest.TestCase):
         self.assertEqual(before, after)
 
     def test_cold_custom_directory_preview_uses_selected_preset_instead_of_directory_name(self):
-        cases = (
-            (LIT_FULL, []),
-            (LIT_FULL, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64]),
-            (LIT_ENGINE, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ENGINE_ARM64]),
-            (LIT_TESTBED, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_TESTBED_ARM64]),
-        )
+        cases = ((LIT_FULL, []), (LIT_FULL, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64]), (LIT_ENGINE, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ENGINE_ARM64]), (LIT_TESTBED, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_TESTBED_ARM64]),)
         for expected_domain, arguments in cases:
             with self.subTest(domain=expected_domain, arguments=arguments):
                 self.assert_preview_uses_domain(expected_domain, arguments)
@@ -906,10 +691,7 @@ class LauncherDryRunDomainTests(unittest.TestCase):
     def test_cache_and_explicit_domain_override_the_custom_directory_preset_fallback(self):
         self.custom.mkdir()
         (self.custom / LIT_CMAKECACHE_TXT).write_text("NWB_OUTPUT_DOMAIN:STRING=testbed\n", encoding=LIT_UTF_8)
-        cases = (
-            (LIT_TESTBED, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64]),
-            (LIT_ENGINE, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64, LIT_DOMAIN, LIT_ENGINE]),
-        )
+        cases = ((LIT_TESTBED, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64]), (LIT_ENGINE, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64, LIT_DOMAIN, LIT_ENGINE]),)
         for expected_domain, arguments in cases:
             with self.subTest(domain=expected_domain):
                 self.assert_preview_uses_domain(expected_domain, arguments)
@@ -920,44 +702,16 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.settings = launcher.LaunchSettings(
-            root=self.root,
-            platform_name=LIT_WINDOWS,
-            arch=LIT_ARM64,
-            domain=LIT_FULL,
-            config=LIT_OPT,
-            configure_preset=LIT_WINDOWS_CLANG_ARM64,
-            build_dir=self.root / LIT_CMAKE / LIT_BUILD,
-            cmake=(LIT_CMAKE_EXECUTABLE,),
-        )
+        self.settings = launcher.LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD, cmake=(LIT_CMAKE_EXECUTABLE,),)
         self.reply = self.settings.build_dir / launcher.FILE_API_DIR_CMAKE / launcher.FILE_API_DIR_API / launcher.FILE_API_DIR_V1 / launcher.FILE_API_DIR_REPLY
         self.reply.mkdir(parents=True)
         self.actual = self.settings.build_dir / LIT_ACTUAL_EXECUTABLE
 
     def write_target_metadata(self, target_type, artifacts):
-        documents = {
-            LIT_METADATA_INDEX: {
-                launcher.FILE_API_OBJECTS_KEY: [{
-                    launcher.FILE_API_KIND_KEY: launcher.FILE_API_KIND_CODEMODEL,
-                    launcher.FILE_API_VERSION_KEY: {launcher.FILE_API_VERSION_MAJOR: launcher.FILE_API_CODEMODEL_VERSION},
-                    launcher.FILE_API_JSON_FILE_KEY: LIT_METADATA_CODEMODEL,
-                }],
-            },
-            LIT_METADATA_CODEMODEL: {
-                launcher.FILE_API_CONFIGURATIONS_KEY: [{
-                    launcher.FILE_API_NAME_KEY: self.settings.config,
-                    launcher.FILE_API_TARGETS_KEY: [{
-                        launcher.FILE_API_NAME_KEY: LIT_TESTBED,
-                        launcher.FILE_API_JSON_FILE_KEY: LIT_METADATA_TARGET,
-                    }],
-                }],
-            },
-            LIT_METADATA_TARGET: {
-                launcher.FILE_API_NAME_KEY: LIT_TESTBED,
-                launcher.FILE_API_TYPE_KEY: target_type,
-                launcher.FILE_API_ARTIFACTS_KEY: [{launcher.FILE_API_PATH_KEY: str(path)} for path in artifacts],
-            },
-        }
+        documents = { LIT_METADATA_INDEX: { launcher.FILE_API_OBJECTS_KEY: [{ launcher.FILE_API_KIND_KEY: launcher.FILE_API_KIND_CODEMODEL, launcher.FILE_API_VERSION_KEY: {launcher.FILE_API_VERSION_MAJOR: launcher.FILE_API_CODEMODEL_VERSION},
+                    launcher.FILE_API_JSON_FILE_KEY: LIT_METADATA_CODEMODEL, }], }, LIT_METADATA_CODEMODEL: { launcher.FILE_API_CONFIGURATIONS_KEY: [{ launcher.FILE_API_NAME_KEY: self.settings.config, launcher.FILE_API_TARGETS_KEY: [{
+                        launcher.FILE_API_NAME_KEY: LIT_TESTBED, launcher.FILE_API_JSON_FILE_KEY: LIT_METADATA_TARGET, }], }], }, LIT_METADATA_TARGET: { launcher.FILE_API_NAME_KEY: LIT_TESTBED, launcher.FILE_API_TYPE_KEY: target_type,
+                launcher.FILE_API_ARTIFACTS_KEY: [{launcher.FILE_API_PATH_KEY: str(path)} for path in artifacts], }, }
         for name, document in documents.items():
             (self.reply / name).write_text(json.dumps(document), encoding=LIT_UTF_8)
 
@@ -1014,18 +768,11 @@ class NameSymbolCaptureBoundaryTests(unittest.TestCase):
             fresh_bytes = b"freshly captured symbols"
             stale.write_bytes(stale_bytes)
             published.write_bytes(published_bytes)
-            arguments = [
-                "--source-dir", str(root), LIT_CONFIGURE_PRESET, "unused", "--build-preset", "unused",
-                LIT_BUILD_DIR, str(root / LIT_BUILD), LIT_CONFIG, LIT_OPT,
-                "--buildmode-bin-dir", str(capture), "--dest", str(destination), "--run", "probe", LIT_SKIP_BUILD,
-            ]
+            arguments = ["--source-dir", str(root), LIT_CONFIGURE_PRESET, "unused", "--build-preset", "unused", LIT_BUILD_DIR, str(root / LIT_BUILD), LIT_CONFIG, LIT_OPT,
+                "--buildmode-bin-dir", str(capture), "--dest", str(destination), "--run", "probe", LIT_SKIP_BUILD,]
             removal_error = PermissionError("sidecar is locked")
-            with (
-                mock.patch.object(generate_name_symbols.os, "remove", side_effect=removal_error) as remove,
-                mock.patch.object(generate_name_symbols, "run_workloads") as workloads,
-                mock.patch.object(generate_name_symbols, "collect_sidecars", wraps=generate_name_symbols.collect_sidecars) as collect,
-                mock.patch.object(generate_name_symbols, "log") as log,
-            ):
+            with (mock.patch.object(generate_name_symbols.os, "remove", side_effect=removal_error) as remove, mock.patch.object(generate_name_symbols, "run_workloads") as workloads,
+                mock.patch.object(generate_name_symbols, "collect_sidecars", wraps=generate_name_symbols.collect_sidecars) as collect, mock.patch.object(generate_name_symbols, "log") as log,):
                 self.assertEqual(1, generate_name_symbols.main(arguments))
                 remove.assert_called_once_with(str(stale))
                 workloads.assert_not_called()
@@ -1039,10 +786,7 @@ class NameSymbolCaptureBoundaryTests(unittest.TestCase):
                 self.assertFalse(stale.exists())
                 stale.write_bytes(fresh_bytes)
 
-            with (
-                mock.patch.object(generate_name_symbols, "run_workloads", side_effect=capture_fresh_sidecar) as workloads,
-                mock.patch.object(generate_name_symbols, "log"),
-            ):
+            with (mock.patch.object(generate_name_symbols, "run_workloads", side_effect=capture_fresh_sidecar) as workloads, mock.patch.object(generate_name_symbols, "log"),):
                 self.assertEqual(0, generate_name_symbols.main(arguments))
                 workloads.assert_called_once()
             self.assertEqual(fresh_bytes, published.read_bytes())
@@ -1058,16 +802,8 @@ class PipelineLauncherTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.settings = launcher.LaunchSettings(
-            root=self.root,
-            platform_name=LIT_WINDOWS,
-            arch=LIT_ARM64,
-            domain=LIT_FULL,
-            config=LIT_OPT,
-            configure_preset=LIT_WINDOWS_CLANG_ARM64,
-            build_dir=self.root / LIT_CMAKE / LIT_BUILD / LIT_WINDOWS_CLANG_ARM64,
-            cmake=("cmake",),
-        )
+        self.settings = launcher.LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD / LIT_WINDOWS_CLANG_ARM64,
+            cmake=("cmake",),)
         self.environment = {"NWB_TEST_ENVIRONMENT": LIT_PIPELINE}
         self.asset_roots = [self.root / "first assets", self.root / "second assets"]
         for index, asset_root in enumerate(self.asset_roots):
@@ -1075,16 +811,10 @@ class PipelineLauncherTests(unittest.TestCase):
             (asset_root / f"asset-{index}.nwb").write_text("", encoding=LIT_UTF_8)
         self.cache = self.root / "asset cache"
         self.output = self.root / LIT_RUNTIME_RESOURCES
-        self.arguments = [
-            LIT_REPO_ROOT, str(self.root), "--platform", LIT_WINDOWS, "--arch", LIT_ARM64, LIT_CONFIG, LIT_OPT,
-            LIT_ASSET_ROOT, *(str(path) for path in self.asset_roots),
-            LIT_OUTPUT_DIRECTORY, str(self.output), LIT_CACHE_DIRECTORY, str(self.cache),
-        ]
-        self.tool_paths = {
-            "nwb_dependency_computer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_DEPENDENCY_COMPUTER_EXE,
-            LIT_NWB_ASSET_BUILDER: self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_BUILDER_EXE,
-            "nwb_asset_gatherer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_GATHERER_EXE,
-        }
+        self.arguments = [LIT_REPO_ROOT, str(self.root), "--platform", LIT_WINDOWS, "--arch", LIT_ARM64, LIT_CONFIG, LIT_OPT, LIT_ASSET_ROOT, *(str(path) for path in self.asset_roots),
+            LIT_OUTPUT_DIRECTORY, str(self.output), LIT_CACHE_DIRECTORY, str(self.cache),]
+        self.tool_paths = { "nwb_dependency_computer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_DEPENDENCY_COMPUTER_EXE, LIT_NWB_ASSET_BUILDER: self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_BUILDER_EXE,
+            "nwb_asset_gatherer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_GATHERER_EXE, }
         for path in self.tool_paths.values():
             path.parent.mkdir(exist_ok=True)
             path.touch()
@@ -1104,10 +834,7 @@ class PipelineLauncherTests(unittest.TestCase):
     def prepare_pipeline_build(self):
         configure = self.patch(launcher, "maybe_configure")
         build = self.patch(launcher, "build_target")
-        resolve = self.patch(
-            launcher, "resolve_executable_path",
-            side_effect=lambda settings, target, override, base_name, dry_run: override or self.tool_paths[target],
-        )
+        resolve = self.patch(launcher, "resolve_executable_path", side_effect=lambda settings, target, override, base_name, dry_run: override or self.tool_paths[target],)
         return configure, build, resolve
 
 

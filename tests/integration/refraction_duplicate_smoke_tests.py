@@ -9,9 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from refraction_duplicate_smoke import (  # noqa: E402
-    MATCHES, MAXIMUM_CHANNEL_ERROR, MINIMUM_DISTINCT_PIXELS, RETAINED_CASES,
-    pixel_difference, require_distinct, require_match, validate_captures,
-)
+    MATCHES, MAXIMUM_CHANNEL_ERROR, MINIMUM_DISTINCT_PIXELS, RETAINED_CASES, pixel_difference, require_distinct, require_match, validate_captures,)
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
 LIT_DOES_NOT_MATCH = "does not match"

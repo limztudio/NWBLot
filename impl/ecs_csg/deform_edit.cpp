@@ -26,22 +26,8 @@ CsgDeformViability CheckCsgDeformCutsViability(
 ){
     CsgDeformVertexVector<Core::Alloc::ScratchArena> vertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> triangles(scratchArena);
-    const auto result = CsgDeformPipeline::RebuildSequentialCuts(
-        scratchArena,
-        inputVertices,
-        inputVertexCount,
-        inputTriangles,
-        inputTriangleCount,
-        cuts,
-        cutCount,
-        options,
-        vertices,
-        triangles
-    );
-    return result
-        ? CsgDeformViability{ true, CsgDeformViabilityReason::Ok }
-        : CsgDeformViability{ false, result.error().reason }
-    ;
+    const auto result = CsgDeformPipeline::RebuildSequentialCuts(scratchArena, inputVertices, inputVertexCount, inputTriangles, inputTriangleCount, cuts, cutCount, options, vertices, triangles);
+    return result ? CsgDeformViability{ true, CsgDeformViabilityReason::Ok } : CsgDeformViability{ false, result.error().reason };
 }
 
 Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
@@ -56,18 +42,7 @@ Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
     CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
 ){
-    return CsgDeformPipeline::RebuildSequentialCuts(
-        scratchArena,
-        inputVertices,
-        inputVertexCount,
-        inputTriangles,
-        inputTriangleCount,
-        cuts,
-        cutCount,
-        options,
-        outVertices,
-        outTriangles
-    );
+    return CsgDeformPipeline::RebuildSequentialCuts(scratchArena, inputVertices, inputVertexCount, inputTriangles, inputTriangleCount, cuts, cutCount, options, outVertices, outTriangles);
 }
 
 Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
@@ -90,18 +65,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
     CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
-    const auto preview = PreviewCsgDeformCuts(
-        scratchArena,
-        inputVertices,
-        inputVertexCount,
-        inputTriangles,
-        inputTriangleCount,
-        cuts,
-        cutCount,
-        options,
-        previewVertices,
-        previewTriangles
-    );
+    const auto preview = PreviewCsgDeformCuts(scratchArena, inputVertices, inputVertexCount, inputTriangles, inputTriangleCount, cuts, cutCount, options, previewVertices, previewTriangles);
     if(!preview)
         return MakeUnexpected(preview.error());
     outVertices.reserve(previewVertices.size());

@@ -43,20 +43,8 @@ struct SkinCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(
-    const Path& assetRoot,
-    AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-);
-[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(
-    Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena
-);
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
 [[nodiscard]] Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena);
 
 

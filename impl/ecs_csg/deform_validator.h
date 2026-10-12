@@ -27,15 +27,8 @@ public:
     [[nodiscard]] static SIMDVectorSingle AbsDivideVec(const SIMDVectorSingle numerator, const SIMDVectorSingle denominator)noexcept;
     [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept;
     [[nodiscard]] static bool ValidOptions(const CsgDeformBuildOptions& options)noexcept;
-    [[nodiscard]] static bool ValidTopology(
-        NotNull<const CsgDeformTriangle*> triangles,
-        const usize triangleCount,
-        const usize vertexCount
-    )noexcept;
-    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> FiniteInput(
-        NotNull<const CsgDeformVertex*> vertices,
-        const usize vertexCount
-    )noexcept;
+    [[nodiscard]] static bool ValidTopology(NotNull<const CsgDeformTriangle*> triangles, const usize triangleCount, const usize vertexCount)noexcept;
+    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> FiniteInput(NotNull<const CsgDeformVertex*> vertices, const usize vertexCount)noexcept;
 
 
 public:

@@ -39,12 +39,7 @@ public:
 
 
 public:
-    GpuRenderer(
-        Core::Alloc::GlobalArena& arena,
-        Core::GraphicsRuntime& graphics,
-        Core::Assets::AssetManager& assetManager,
-        ShaderPathResolveCallback shaderPathResolver
-    );
+    GpuRenderer(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver);
     virtual ~GpuRenderer()override;
 
 

@@ -74,11 +74,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     const bool currentBindlessSlotsGraphOwned = !deferredTargets.bindless.slotsUploaded;
     if(currentBindlessSlotsGraphOwned){
-        const Core::GpuUploadBlobId bindlessSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-            &deferredTargets.bindless.slots,
-            sizeof(deferredTargets.bindless.slots),
-            alignof(DeferredBindlessResourceSlots)
-        );
+        const Core::GpuUploadBlobId bindlessSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(&deferredTargets.bindless.slots, sizeof(deferredTargets.bindless.slots), alignof(DeferredBindlessResourceSlots));
         if(!bindlessSlotsBlob.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain deferred bindless selector upload data"));
             return false;
@@ -89,20 +85,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         uploadScheduling.forceSubmissionBoundary = false;
         uploadScheduling.allowPacketMerge = true;
         Core::GpuTaskDesc uploadDesc;
-        uploadDesc
-            .setIdentity(Name("render.deferred.bindless_slots_upload"))
-            .setMarkerLabel("Deferred Bindless Slots Upload")
-            .setScheduling(uploadScheduling)
-        ;
+        uploadDesc.setIdentity(Name("render.deferred.bindless_slots_upload")).setMarkerLabel("Deferred Bindless Slots Upload").setScheduling(uploadScheduling);
         m_deferredBindlessSlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             uploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = bindlessSlotsBlob,
                 .destination = currentBindlessSlots,
                 // Selector persists across packet closes; upload publishes ConstantBuffer.
-                .finalState = Core::ResourceStates::ConstantBuffer,
-            }
-        );
+                .finalState = Core::ResourceStates::ConstantBuffer, });
         if(!m_deferredBindlessSlotsUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred bindless selector upload"));
             return false;
@@ -115,11 +105,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot ray-trace material-context selector"));
         return false;
     }
-    const Core::GpuUploadBlobId rayTraceMaterialContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-        &*rayTraceMaterialContextSlots,
-        sizeof(*rayTraceMaterialContextSlots),
-        alignof(RayTraceMaterialContextSlots)
-    );
+    const Core::GpuUploadBlobId rayTraceMaterialContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(&*rayTraceMaterialContextSlots, sizeof(*rayTraceMaterialContextSlots), alignof(RayTraceMaterialContextSlots));
     if(!rayTraceMaterialContextSlotsBlob.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain ray-trace material-context selector upload data"));
         return false;
@@ -135,15 +121,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             const auto& token = rayTracingResources.csgTraceContextReadSubmissionTokens[index];
             if(!token.valid())
                 continue;
-            const AString<Core::Alloc::ScratchArena> completionName = StringFormat(
-                scratchArena, "render.raytrace.csg_queue_{}.read_complete", token.physicalQueueIndex
-            );
+            const AString<Core::Alloc::ScratchArena> completionName = StringFormat(scratchArena, "render.raytrace.csg_queue_{}.read_complete", token.physicalQueueIndex);
             Core::GpuExternalCompletionDesc readCompleteDesc;
-            readCompleteDesc
-                .setIdentity(ToName(completionName))
-                .setMarkerLabel("Prior CSG Ray Read Complete")
-                .setToken(token)
-            ;
+            readCompleteDesc.setIdentity(ToName(completionName)).setMarkerLabel("Prior CSG Ray Read Complete").setToken(token);
             const Core::GpuExternalCompletionId readComplete = m_deferredLightingTaskGraph.importExternalCompletion(readCompleteDesc);
             if(!readComplete.valid())
                 return false;
@@ -151,10 +131,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         }
     }
 
-    const Core::GpuTaskId* const materialContextUploadDependencies = currentBindlessSlotsGraphOwned
-        ? &m_deferredBindlessSlotsUploadTask
-        : nullptr
-    ;
+    const Core::GpuTaskId* const materialContextUploadDependencies = currentBindlessSlotsGraphOwned ? &m_deferredBindlessSlotsUploadTask : nullptr;
     const usize materialContextUploadDependencyCount = currentBindlessSlotsGraphOwned ? 1u : 0u;
     Core::GpuTaskSchedulingHint materialContextUploadScheduling;
     materialContextUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -168,17 +145,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         .setScheduling(materialContextUploadScheduling)
         .setDependencies(materialContextUploadDependencies, materialContextUploadDependencyCount)
         // Old CSG rays read this persistent selector as well as their retained context buffer.
-        .setExternalDependencies(csgReadCompletions.data(), csgReadCompletions.size())
-    ;
+        .setExternalDependencies(csgReadCompletions.data(), csgReadCompletions.size());
     m_rayTraceMaterialContextSlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
         materialContextUploadDesc,
         Core::GpuUploadBufferTaskDesc{
             .source = rayTraceMaterialContextSlotsBlob,
             .destination = materialContextSlots,
             // Selector buffers publish Common; Shadow Preparation owns the next transition.
-            .finalState = Core::ResourceStates::Common,
-        }
-    );
+            .finalState = Core::ResourceStates::Common, });
     if(!m_rayTraceMaterialContextSlotsUploadTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare ray-trace material-context selector upload"));
         return false;
@@ -193,11 +167,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             : Name("render.software_caustics.emission_targets")
     ;
     const Core::GpuGraphResourceId causticEmissionTargets = rayTracingResources.causticEmissionTargetBuffer
-        ? importBuffer(
-            rayTracingResources.causticEmissionTargetBuffer,
-            causticEmissionTargetsIdentity,
-            "Caustic Emission Targets"
-        )
+        ? importBuffer(rayTracingResources.causticEmissionTargetBuffer, causticEmissionTargetsIdentity, "Caustic Emission Targets")
         : Core::GpuGraphResourceId{}
     ;
     if(rayTracingResources.causticEmissionTargetBuffer && !causticEmissionTargets.valid()){
@@ -205,9 +175,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
 
-    const auto causticEmissionTargetsBlob = m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(
-        m_deferredLightingTaskGraph
-    );
+    const auto causticEmissionTargetsBlob = m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(m_deferredLightingTaskGraph);
     if(!causticEmissionTargetsBlob){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted caustic emission-target upload data"));
         return false;
@@ -238,14 +206,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setDependencies(&shadowPrepareDependency, 1u)
             .setExternalDependencies(csgReadCompletions.data(), csgReadCompletions.size())
         ;
-        m_csgTraceContextUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            csgUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = *csgTraceContextBlob,
-                .destination = csgTraceContext,
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
+        m_csgTraceContextUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(csgUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = *csgTraceContextBlob, .destination = csgTraceContext, .finalState = Core::ResourceStates::Common, });
         if(!m_csgTraceContextUploadTask.valid())
             return false;
         shadowPrepareDependency = m_csgTraceContextUploadTask;
@@ -262,21 +223,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         causticEmissionTargetsUploadScheduling.allowPacketMerge = true;
         causticEmissionTargetsUploadScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc causticEmissionTargetsUploadDesc;
-        causticEmissionTargetsUploadDesc
-            .setIdentity(Name("render.raytrace.caustic_emission_targets_upload"))
-            .setMarkerLabel("Caustic Emission Targets Upload")
-            .setScheduling(causticEmissionTargetsUploadScheduling)
-            .setDependencies(&shadowPrepareDependency, 1u)
-        ;
+        causticEmissionTargetsUploadDesc.setIdentity(Name("render.raytrace.caustic_emission_targets_upload")).setMarkerLabel("Caustic Emission Targets Upload").setScheduling(causticEmissionTargetsUploadScheduling).setDependencies(&shadowPrepareDependency, 1u);
         m_causticEmissionTargetsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             causticEmissionTargetsUploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = *causticEmissionTargetsBlob,
                 .destination = causticEmissionTargets,
                 // Buffer publishes Common; Shadow Preparation owns the SRV handoff.
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
+                .finalState = Core::ResourceStates::Common, });
         if(!m_causticEmissionTargetsUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare caustic emission-target upload"));
             return false;
@@ -284,23 +238,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_causticEmissionTargetsUploadTask;
     }
 
-    const Core::GpuGraphResourceId surfelFrameConstants = rayTracingResources.surfelFrameConstantsBuffer
-        ? importBuffer(
-            rayTracingResources.surfelFrameConstantsBuffer,
-            Name("render.surfel_gi.constants"),
-            "Surfel Constants"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
+    const Core::GpuGraphResourceId surfelFrameConstants = rayTracingResources.surfelFrameConstantsBuffer ? importBuffer(rayTracingResources.surfelFrameConstantsBuffer, Name("render.surfel_gi.constants"), "Surfel Constants") : Core::GpuGraphResourceId{};
     if(rayTracingResources.surfelFrameConstantsBuffer && !surfelFrameConstants.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted surfel constants"));
         return false;
     }
 
-    const auto surfelFrameConstantsBlob = m_raytracingSystem.retainPreparedSurfelFrameConstantsUpload(
-        m_deferredLightingTaskGraph,
-        deferredTargets
-    );
+    const auto surfelFrameConstantsBlob = m_raytracingSystem.retainPreparedSurfelFrameConstantsUpload(m_deferredLightingTaskGraph, deferredTargets);
     if(!surfelFrameConstantsBlob){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted surfel-frame constants upload data"));
         return false;
@@ -317,21 +261,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         surfelFrameConstantsUploadScheduling.allowPacketMerge = true;
         surfelFrameConstantsUploadScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc surfelFrameConstantsUploadDesc;
-        surfelFrameConstantsUploadDesc
-            .setIdentity(Name("render.surfel_gi.constants_upload"))
-            .setMarkerLabel("Surfel Frame Constants Upload")
-            .setScheduling(surfelFrameConstantsUploadScheduling)
-            .setDependencies(&shadowPrepareDependency, 1u)
-        ;
+        surfelFrameConstantsUploadDesc.setIdentity(Name("render.surfel_gi.constants_upload")).setMarkerLabel("Surfel Frame Constants Upload").setScheduling(surfelFrameConstantsUploadScheduling).setDependencies(&shadowPrepareDependency, 1u);
         m_surfelFrameConstantsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             surfelFrameConstantsUploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = *surfelFrameConstantsBlob,
                 .destination = surfelFrameConstants,
                 // Buffer publishes Common; Shadow Preparation owns the CB handoff.
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
+                .finalState = Core::ResourceStates::Common, });
         if(!m_surfelFrameConstantsUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare surfel-frame constants upload"));
             return false;
@@ -340,41 +277,23 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
     const Core::GpuGraphResourceId shadowInstanceMaterials = rayTracingResources.shadowInstanceMaterialBuffer
-        ? importBuffer(
-            rayTracingResources.shadowInstanceMaterialBuffer,
-            Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
-            RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel
-        )
+        ? importBuffer(rayTracingResources.shadowInstanceMaterialBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName), RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel)
         : Core::GpuGraphResourceId{}
     ;
     const Core::GpuGraphResourceId shadowInstances = rayTracingResources.shadowInstanceBuffer
-        ? importBuffer(
-            rayTracingResources.shadowInstanceBuffer,
-            Name(RendererFramePipelineDetail::s_SceneShadowInstancesName),
-            RendererFramePipelineDetail::s_SceneShadowInstancesLabel
-        )
+        ? importBuffer(rayTracingResources.shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel)
         : Core::GpuGraphResourceId{}
     ;
     const Core::GpuGraphResourceId shadowMaterialTyped = rayTracingResources.shadowMaterialTypedBuffer
-        ? importBuffer(
-            rayTracingResources.shadowMaterialTypedBuffer,
-            Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName),
-            RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel
-        )
+        ? importBuffer(rayTracingResources.shadowMaterialTypedBuffer, Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName), RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel)
         : Core::GpuGraphResourceId{}
     ;
-    if(
-        (rayTracingResources.shadowInstanceMaterialBuffer && !shadowInstanceMaterials.valid())
-        || (rayTracingResources.shadowInstanceBuffer && !shadowInstances.valid())
-        || (rayTracingResources.shadowMaterialTypedBuffer && !shadowMaterialTyped.valid())
-    ){
+    if((rayTracingResources.shadowInstanceMaterialBuffer && !shadowInstanceMaterials.valid()) || (rayTracingResources.shadowInstanceBuffer && !shadowInstances.valid()) || (rayTracingResources.shadowMaterialTypedBuffer && !shadowMaterialTyped.valid())){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow material-context buffers"));
         return false;
     }
 
-    const auto shadowMaterialContextUploads = m_raytracingSystem.retainPreparedShadowMaterialContextUploads(
-        m_deferredLightingTaskGraph
-    );
+    const auto shadowMaterialContextUploads = m_raytracingSystem.retainPreparedShadowMaterialContextUploads(m_deferredLightingTaskGraph);
     if(!shadowMaterialContextUploads){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow material-context upload data"));
         return false;
@@ -383,10 +302,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const Core::GpuUploadBlobId shadowInstancesBlob = shadowMaterialContextUploads->instance;
     const Core::GpuUploadBlobId shadowMaterialTypedBlob = shadowMaterialContextUploads->materialTyped;
     const bool shadowMaterialContextBatchGraphOwned = shadowInstanceMaterialsBlob.valid();
-    if(
-        shadowMaterialContextBatchGraphOwned != shadowInstancesBlob.valid()
-        || shadowMaterialContextBatchGraphOwned != shadowMaterialTypedBlob.valid()
-    ){
+    if(shadowMaterialContextBatchGraphOwned != shadowInstancesBlob.valid() || shadowMaterialContextBatchGraphOwned != shadowMaterialTypedBlob.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: incomplete frozen shadow material-context upload batch"));
         return false;
     }
@@ -411,11 +327,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         ;
         m_shadowInstanceMaterialUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             shadowInstanceMaterialsUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = shadowInstanceMaterialsBlob,
-                .destination = shadowInstanceMaterials,
-                .finalState = Core::ResourceStates::Common,
-            }
+            Core::GpuUploadBufferTaskDesc{ .source = shadowInstanceMaterialsBlob, .destination = shadowInstanceMaterials, .finalState = Core::ResourceStates::Common, }
         );
         if(!m_shadowInstanceMaterialUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow instance-material upload"));
@@ -423,39 +335,18 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         }
 
         Core::GpuTaskDesc shadowInstancesUploadDesc;
-        shadowInstancesUploadDesc
-            .setIdentity(Name("render.deferred_effects.shadow_instances_upload"))
-            .setMarkerLabel("Shadow Instances Upload")
-            .setScheduling(shadowMaterialContextUploadScheduling)
-            .setDependencies(&m_shadowInstanceMaterialUploadTask, 1u)
-        ;
-        m_shadowInstanceUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            shadowInstancesUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = shadowInstancesBlob,
-                .destination = shadowInstances,
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
+        shadowInstancesUploadDesc.setIdentity(Name("render.deferred_effects.shadow_instances_upload")).setMarkerLabel("Shadow Instances Upload").setScheduling(shadowMaterialContextUploadScheduling).setDependencies(&m_shadowInstanceMaterialUploadTask, 1u);
+        m_shadowInstanceUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(shadowInstancesUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = shadowInstancesBlob, .destination = shadowInstances, .finalState = Core::ResourceStates::Common, });
         if(!m_shadowInstanceUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow instance upload"));
             return false;
         }
 
         Core::GpuTaskDesc shadowMaterialTypedUploadDesc;
-        shadowMaterialTypedUploadDesc
-            .setIdentity(Name("render.deferred_effects.material_typed_upload"))
-            .setMarkerLabel("Shadow Typed Materials Upload")
-            .setScheduling(shadowMaterialContextUploadScheduling)
-            .setDependencies(&m_shadowInstanceUploadTask, 1u)
-        ;
+        shadowMaterialTypedUploadDesc.setIdentity(Name("render.deferred_effects.material_typed_upload")).setMarkerLabel("Shadow Typed Materials Upload").setScheduling(shadowMaterialContextUploadScheduling).setDependencies(&m_shadowInstanceUploadTask, 1u);
         m_shadowMaterialTypedUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             shadowMaterialTypedUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = shadowMaterialTypedBlob,
-                .destination = shadowMaterialTyped,
-                .finalState = Core::ResourceStates::Common,
-            }
+            Core::GpuUploadBufferTaskDesc{ .source = shadowMaterialTypedBlob, .destination = shadowMaterialTyped, .finalState = Core::ResourceStates::Common, }
         );
         if(!m_shadowMaterialTypedUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow typed-material upload"));
@@ -464,33 +355,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_shadowMaterialTypedUploadTask;
     }
 
-    const Core::GpuGraphResourceId sceneBvhNodes = rayTracingResources.sceneBvhNodeBuffer
-        ? importBuffer(
-            rayTracingResources.sceneBvhNodeBuffer,
-            Name("render.shadow_visibility.scene_bvh_nodes"),
-            "Scene BVH Nodes"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    const Core::GpuGraphResourceId sceneBvhInstances = rayTracingResources.sceneInstanceBuffer
-        ? importBuffer(
-            rayTracingResources.sceneInstanceBuffer,
-            Name("render.shadow_visibility.scene_instances"),
-            "Scene Instances"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    if(
-        (rayTracingResources.sceneBvhNodeBuffer && !sceneBvhNodes.valid())
-        || (rayTracingResources.sceneInstanceBuffer && !sceneBvhInstances.valid())
-    ){
+    const Core::GpuGraphResourceId sceneBvhNodes = rayTracingResources.sceneBvhNodeBuffer ? importBuffer(rayTracingResources.sceneBvhNodeBuffer, Name("render.shadow_visibility.scene_bvh_nodes"), "Scene BVH Nodes") : Core::GpuGraphResourceId{};
+    const Core::GpuGraphResourceId sceneBvhInstances = rayTracingResources.sceneInstanceBuffer ? importBuffer(rayTracingResources.sceneInstanceBuffer, Name("render.shadow_visibility.scene_instances"), "Scene Instances") : Core::GpuGraphResourceId{};
+    if((rayTracingResources.sceneBvhNodeBuffer && !sceneBvhNodes.valid()) || (rayTracingResources.sceneInstanceBuffer && !sceneBvhInstances.valid())){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted software scene-BVH buffers"));
         return false;
     }
 
-    const auto sceneBvhUploads = m_raytracingSystem.retainPreparedSceneBvhUploads(
-        m_deferredLightingTaskGraph
-    );
+    const auto sceneBvhUploads = m_raytracingSystem.retainPreparedSceneBvhUploads(m_deferredLightingTaskGraph);
     if(!sceneBvhUploads){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted software scene-BVH upload data"));
         return false;
@@ -515,40 +387,24 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         sceneBvhUploadScheduling.mergeWithPrevious = true;
 
         Core::GpuTaskDesc sceneBvhNodesUploadDesc;
-        sceneBvhNodesUploadDesc
-            .setIdentity(Name("render.shadow_visibility.scene_bvh_nodes_upload"))
-            .setMarkerLabel("Scene BVH Nodes Upload")
-            .setScheduling(sceneBvhUploadScheduling)
-            .setDependencies(&shadowPrepareDependency, 1u)
-        ;
+        sceneBvhNodesUploadDesc.setIdentity(Name("render.shadow_visibility.scene_bvh_nodes_upload")).setMarkerLabel("Scene BVH Nodes Upload").setScheduling(sceneBvhUploadScheduling).setDependencies(&shadowPrepareDependency, 1u);
         m_sceneBvhNodesUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             sceneBvhNodesUploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = sceneBvhNodesBlob,
                 .destination = sceneBvhNodes,
                 // Scene-BVH storage publishes Common; Shadow Preparation owns the SRV handoff.
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
+                .finalState = Core::ResourceStates::Common, });
         if(!m_sceneBvhNodesUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare software scene-BVH node upload"));
             return false;
         }
 
         Core::GpuTaskDesc sceneBvhInstancesUploadDesc;
-        sceneBvhInstancesUploadDesc
-            .setIdentity(Name("render.shadow_visibility.scene_instances_upload"))
-            .setMarkerLabel("Scene BVH Instances Upload")
-            .setScheduling(sceneBvhUploadScheduling)
-            .setDependencies(&m_sceneBvhNodesUploadTask, 1u)
-        ;
+        sceneBvhInstancesUploadDesc.setIdentity(Name("render.shadow_visibility.scene_instances_upload")).setMarkerLabel("Scene BVH Instances Upload").setScheduling(sceneBvhUploadScheduling).setDependencies(&m_sceneBvhNodesUploadTask, 1u);
         m_sceneBvhInstancesUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             sceneBvhInstancesUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = sceneBvhInstancesBlob,
-                .destination = sceneBvhInstances,
-                .finalState = Core::ResourceStates::Common,
-            }
+            Core::GpuUploadBufferTaskDesc{ .source = sceneBvhInstancesBlob, .destination = sceneBvhInstances, .finalState = Core::ResourceStates::Common, }
         );
         if(!m_sceneBvhInstancesUploadTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare software scene-BVH instance upload"));
@@ -580,26 +436,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
         return false;
     }
-    const bool meshBlasGeometryBuildInputStatesGraphOwned =
-        meshBlasBuildsGraphOwned
-        && !softwareTraceResourcesPrepared
-        && !meshSwBvhBuildsGraphOwned
-    ;
+    const bool meshBlasGeometryBuildInputStatesGraphOwned = meshBlasBuildsGraphOwned && !softwareTraceResourcesPrepared && !meshSwBvhBuildsGraphOwned;
     // Software preparation uses typed sentinel clears before each mesh build.
-    const bool pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate =
-        meshSwBvhBuildsGraphOwned
-        && !m_raytracingSystem.shadowVisibilityHardwareSupported()
-    ;
+    const bool pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate = meshSwBvhBuildsGraphOwned && !m_raytracingSystem.shadowVisibilityHardwareSupported();
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
-    const ShadowPrepareGeometryInputs geometryInputs{
-        .blasBuilds = preparedMeshBlasBuilds,
-        .traceResources = shadowTraceGeometryResources,
-        .traceResourceCount = shadowTraceGeometryResourceCount,
-        .blasBuildsGraphOwned = meshBlasBuildsGraphOwned,
-    };
+    const ShadowPrepareGeometryInputs geometryInputs{ .blasBuilds = preparedMeshBlasBuilds, .traceResources = shadowTraceGeometryResources, .traceResourceCount = shadowTraceGeometryResourceCount, .blasBuildsGraphOwned = meshBlasBuildsGraphOwned, };
     ShadowPrepareGeometryResources geometryResources(geometryInputs, scratchArena);
     const auto& meshBlasGeometryBuildInputResources = geometryResources.m_blasBuildInputs;
     const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
@@ -607,18 +451,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
     m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
     constexpr usize s_ShadowPrepareResourceUseCapacity = 19u;
-    resourceUses.reserve(
-        s_ShadowPrepareResourceUseCapacity
-        + (csgTraceContext.valid() ? 1u : 0u)
-        + shadowTraceGeometryResourceCount
-        + softwareBvhBuildStateResourceCount
-        + liveMeshBlasGraphStates.size()
-        + preparedMeshBlasBuilds.size() * 2u
-    );
-    accelStructFinalizeResourceUses.reserve(
-        (sceneTlasBuildGraphOwned ? 1u : 0u)
-        + preparedMeshBlasBuilds.size()
-    );
+    resourceUses.reserve(s_ShadowPrepareResourceUseCapacity + (csgTraceContext.valid() ? 1u : 0u) + shadowTraceGeometryResourceCount + softwareBvhBuildStateResourceCount + liveMeshBlasGraphStates.size() + preparedMeshBlasBuilds.size() * 2u);
+    accelStructFinalizeResourceUses.reserve((sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuilds.size());
     resourceSetUses.reserve(3u);
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
     // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
@@ -651,14 +485,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
             const Name blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
             // First build knows native Common; retained storage imports the accepted binding.
-            const Core::ResourceStates::Mask blasInitialState = build.backingFresh
-                ? Core::ResourceStates::Common
-                : Core::ResourceStates::Unknown
-            ;
-            const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
-                build.blas,
-                AccelStructResourceDesc(blasIdentity, "Prepared Mesh BLAS").setInitialState(blasInitialState)
-            );
+            const Core::ResourceStates::Mask blasInitialState = build.backingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
+            const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(build.blas, AccelStructResourceDesc(blasIdentity, "Prepared Mesh BLAS").setInitialState(blasInitialState));
             resourcesImported = resourcesImported && blas.valid();
             if(blas.valid()){
                 // Typed acceleration-structure uses lower through their backing allocation.
@@ -673,10 +501,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             Core::GpuGraphResourceSetDesc{}
                 .setIdentity(Name("render.shadow_prepare.blas_geometry_build_inputs"))
                 .setMarkerLabel("Shadow Prepare BLAS Geometry Build Inputs")
-                .setMembers(
-                    meshBlasGeometryBuildInputResources.data(),
-                    meshBlasGeometryBuildInputResources.size()
-                )
+                .setMembers(meshBlasGeometryBuildInputResources.data(), meshBlasGeometryBuildInputResources.size())
         );
     }
     const bool meshBlasGeometryBuildInputSetGraphOwned = meshBlasGeometryBuildInputSet.valid();
@@ -684,12 +509,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         for(const Core::GpuGraphResourceId resource : meshBlasGeometryBuildInputResources)
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::AccelStructBuildInput));
     }
-    const Core::GpuTaskResourceSetUse meshBlasGeometryBuildInputSetUse{
-        .resourceSet = meshBlasGeometryBuildInputSet,
-        .range = {},
-        .requiredState = Core::ResourceStates::AccelStructBuildInput,
-        .access = Core::GpuTaskResourceAccess::ReadWrite,
-    };
+    const Core::GpuTaskResourceSetUse meshBlasGeometryBuildInputSetUse{ .resourceSet = meshBlasGeometryBuildInputSet, .range = {}, .requiredState = Core::ResourceStates::AccelStructBuildInput, .access = Core::GpuTaskResourceAccess::ReadWrite, };
     if(meshBlasGeometryBuildInputSetGraphOwned)
         resourceSetUses.push_back(meshBlasGeometryBuildInputSetUse);
     if(!geometryResources.gatherRemainingTraceResources())
@@ -703,10 +523,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             Core::GpuGraphResourceSetDesc{}
                 .setIdentity(Name("render.shadow_prepare_trace_geometry"))
                 .setMarkerLabel("Shadow Prepare Trace Geometry")
-                .setMembers(
-                    shadowPrepareTraceGeometryResources.data(),
-                    shadowPrepareTraceGeometryResources.size()
-                )
+                .setMembers(shadowPrepareTraceGeometryResources.data(), shadowPrepareTraceGeometryResources.size())
         );
     }
     const bool shadowPrepareTraceGeometryStatesGraphOwned = shadowPrepareTraceGeometrySet.valid();
@@ -714,12 +531,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         for(const Core::GpuGraphResourceId resource : shadowPrepareTraceGeometryResources)
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
     }
-    const Core::GpuTaskResourceSetUse shadowPrepareTraceGeometrySetUse{
-        .resourceSet = shadowPrepareTraceGeometrySet,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::ReadWrite,
-    };
+    const Core::GpuTaskResourceSetUse shadowPrepareTraceGeometrySetUse{ .resourceSet = shadowPrepareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::ReadWrite, };
     if(shadowPrepareTraceGeometryStatesGraphOwned)
         resourceSetUses.push_back(shadowPrepareTraceGeometrySetUse);
     for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
@@ -739,18 +551,10 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     if(!softwareBvhBuildStateStatesGraphOwned){
         for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
             // Parent links and scratch keep native UAV state; they are state-only resources.
-            resourceUses.push_back(ReadWriteUse(
-                softwareBvhBuildStateResources[resourceIndex],
-                Core::ResourceStates::UnorderedAccess
-            ));
+            resourceUses.push_back(ReadWriteUse(softwareBvhBuildStateResources[resourceIndex], Core::ResourceStates::UnorderedAccess));
         }
     }
-    const Core::GpuTaskResourceSetUse softwareBvhBuildStateSetUse{
-        .resourceSet = softwareBvhBuildStateSet,
-        .range = {},
-        .requiredState = Core::ResourceStates::UnorderedAccess,
-        .access = Core::GpuTaskResourceAccess::ReadWrite,
-    };
+    const Core::GpuTaskResourceSetUse softwareBvhBuildStateSetUse{ .resourceSet = softwareBvhBuildStateSet, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::ReadWrite, };
     if(softwareBvhBuildStateStatesGraphOwned)
         resourceSetUses.push_back(softwareBvhBuildStateSetUse);
 
@@ -781,14 +585,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             continue;
 
         const Name blasIdentity = DeriveName(state.meshName, AStringView(":blas"));
-        const Core::ResourceStates::Mask blasInitialState = state.backingFresh
-            ? Core::ResourceStates::Common
-            : Core::ResourceStates::Unknown
-        ;
-        const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
-            state.blas,
-            AccelStructResourceDesc(blasIdentity, "Mesh BLAS").setInitialState(blasInitialState)
-        );
+        const Core::ResourceStates::Mask blasInitialState = state.backingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
+        const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(state.blas, AccelStructResourceDesc(blasIdentity, "Mesh BLAS").setInitialState(blasInitialState));
         resourcesImported = resourcesImported && blas.valid();
         if(blas.valid()){
             if(state.nativeBuildsBlas){
@@ -828,26 +626,10 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         buildScheduling.cost = Core::GpuTaskCostHint::Large;
 
         Core::GpuTaskId buildDependency = shadowPrepareDependency;
-        const auto addPureSoftwareBvhClear = [&](
-            const Name identity,
-            const AStringView label,
-            const Core::GpuGraphResourceId destination,
-            const u32 clearValue
-        ){
+        const auto addPureSoftwareBvhClear = [&](const Name identity, const AStringView label, const Core::GpuGraphResourceId destination, const u32 clearValue){
             Core::GpuTaskDesc clearDesc;
-            clearDesc
-                .setIdentity(identity)
-                .setMarkerLabel(label)
-                .setScheduling(clearScheduling)
-                .setDependencies(&buildDependency, 1u)
-            ;
-            return m_deferredLightingTaskGraph.addClearBufferTask(
-                clearDesc,
-                Core::GpuClearBufferTaskDesc{
-                    .destination = destination,
-                    .clearValue = clearValue,
-                }
-            );
+            clearDesc.setIdentity(identity).setMarkerLabel(label).setScheduling(clearScheduling).setDependencies(&buildDependency, 1u);
+            return m_deferredLightingTaskGraph.addClearBufferTask(clearDesc, Core::GpuClearBufferTaskDesc{ .destination = destination, .clearValue = clearValue, });
         };
         const auto appendPureSoftwareBvhClear = [&](const Core::GpuTaskId clearTask){
             if(!clearTask.valid())
@@ -861,29 +643,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         for(const PreparedMeshSwBvhGraphResources& resources : pureSoftwareMeshSwBvhGraphResources){
             const PreparedMeshSwBvhBuild& build = resources.build;
             if(!build.performRefit){
-                if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(
-                    DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_keys_clear")),
-                    "Shadow Prepare SW-BVH Sort-Key Clear",
-                    resources.sortKeys,
-                    BvhNodeIndex::Invalid
-                ))
-                    || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(
-                        DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_parent_clear")),
-                        "Shadow Prepare SW-BVH Parent Clear",
-                        resources.parent,
-                        BvhNodeIndex::Invalid
-                    ))
+                if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_keys_clear")), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid))
+                    || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_parent_clear")), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid))
                 ){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
                     return false;
                 }
             }
-            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(
-                DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_counter_clear")),
-                "Shadow Prepare SW-BVH Counter Clear",
-                resources.visitCounter,
-                0u
-            ))){
+            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_counter_clear")), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u))){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
                 return false;
             }
@@ -907,14 +674,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             ;
             const Core::GpuTaskId buildTask = m_deferredLightingTaskGraph.addTask<
                 ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask
-            >(
-                buildDesc,
-                ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{
-                    .raytracingSystem = m_raytracingSystem,
-                    .build = build,
-                    .timingTicket = timingTicket,
-                }
-            );
+            >(buildDesc, ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{ .raytracingSystem = m_raytracingSystem, .build = build, .timingTicket = timingTicket, });
             if(!buildTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
                 return false;
@@ -922,10 +682,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             buildDependency = buildTask;
             m_deferredShadowPrepareSoftwareBvhBuildLastTask = buildTask;
         }
-        if(
-            !m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()
-            || !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
-        ){
+        if(!m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid() || !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH graph chain has no task bounds"));
             return false;
         }
@@ -934,14 +691,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     if(const auto& sceneRefit = m_raytracingSystem.preparedSceneSwBvhRefit(); sceneRefit){
         // A scene refit requires every frozen mesh build to be declared before it.
-        if(
-            !m_raytracingSystem.preparedMeshSwBvhBuildPlanFrozen()
-            || (!preparedMeshSwBvhBuilds.empty() && !pureSoftwareMeshSwBvhBuildsGraphOwned)
-        )
+        if(!m_raytracingSystem.preparedMeshSwBvhBuildPlanFrozen() || (!preparedMeshSwBvhBuilds.empty() && !pureSoftwareMeshSwBvhBuildsGraphOwned))
             return false;
-        const SoftwareSceneRefitGraphTasks refitTasks = DeclareSoftwareSceneRefit(
-            m_deferredLightingTaskGraph, sceneRefit, sceneBvhNodes, shadowPrepareDependency, scratchArena
-        );
+        const SoftwareSceneRefitGraphTasks refitTasks = DeclareSoftwareSceneRefit(m_deferredLightingTaskGraph, sceneRefit, sceneBvhNodes, shadowPrepareDependency, scratchArena);
         m_deferredShadowPrepareSceneRefitTask = refitTasks.refit;
         m_sceneBvhRefitInputsUploadTask = refitTasks.inputUpload;
         if(!m_deferredShadowPrepareSceneRefitTask.valid() || !m_sceneBvhRefitInputsUploadTask.valid())
@@ -954,24 +706,18 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
-    // A pure-software per-mesh chain is an explicit immediate predecessor of this semantic endpoint. Retain the
-    // complete accepting packet even when later trace consumers form a FrontierSafe consumer frontier.
+    // A pure-software per-mesh chain is an explicit immediate predecessor of this semantic endpoint. Retain the complete accepting packet even when later trace consumers form a FrontierSafe consumer frontier.
     scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned || m_deferredShadowPrepareSceneRefitTask.valid();
     const Core::GpuTaskId* const dependencies = &shadowPrepareDependency;
     constexpr usize dependencyCount = 1u;
-    const Core::GpuTaskExternalStateSource shadowPrepareStateSource{
-        .states = m_shadowPreparePersistentState.source(),
-    };
+    const Core::GpuTaskExternalStateSource shadowPrepareStateSource{ .states = m_shadowPreparePersistentState.source(), };
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_prepare"))
         .setMarkerLabel("Shadow Preparation")
         .setScheduling(scheduling)
         .setDependencies(dependencies, dependencyCount)
-        .setExternalStateSources(
-            shadowPrepareStateSource.states ? &shadowPrepareStateSource : nullptr,
-            shadowPrepareStateSource.states ? 1u : 0u
-        )
+        .setExternalStateSources(shadowPrepareStateSource.states ? &shadowPrepareStateSource : nullptr, shadowPrepareStateSource.states ? 1u : 0u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(resourceSetUses.data(), resourceSetUses.size())
     ;
@@ -999,14 +745,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
     const bool accelStructBuildStatesGraphOwned = sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
     if(accelStructBuildStatesGraphOwned){
-        const usize expectedFinalizeResourceUseCount =
-            (sceneTlasBuildGraphOwned ? 1u : 0u)
-            + preparedMeshBlasBuilds.size()
-        ;
-        if(
-            (sceneTlasBuildGraphOwned && !sceneTlas.valid())
-            || accelStructFinalizeResourceUses.size() != expectedFinalizeResourceUseCount
-        ){
+        const usize expectedFinalizeResourceUseCount = (sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuilds.size();
+        if((sceneTlasBuildGraphOwned && !sceneTlas.valid()) || accelStructFinalizeResourceUses.size() != expectedFinalizeResourceUseCount){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen acceleration-structure build has no final-state graph resources"));
             return false;
         }
@@ -1024,19 +764,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             );
         }
         const bool accelStructFinalizeSetGraphOwned = accelStructFinalizeSet.valid();
-        const Core::GpuTaskResourceSetUse accelStructFinalizeSetUse{
-            .resourceSet = accelStructFinalizeSet,
-            .range = {},
-            .requiredState = Core::ResourceStates::AccelStructRead,
-            .access = Core::GpuTaskResourceAccess::Read,
-        };
+        const Core::GpuTaskResourceSetUse accelStructFinalizeSetUse{ .resourceSet = accelStructFinalizeSet, .range = {}, .requiredState = Core::ResourceStates::AccelStructRead, .access = Core::GpuTaskResourceAccess::Read, };
         Core::GpuTaskSchedulingHint accelStructFinalizeScheduling;
         accelStructFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accelStructFinalizeScheduling.forceSubmissionBoundary = false;
         accelStructFinalizeScheduling.allowPacketMerge = true;
         accelStructFinalizeScheduling.mergeWithPrevious = true;
-        // Shadow Preparation has direct later Compute consumers. Keep these Read finalizers in the same accepting
-        // packet so those consumers wait on every completed build and its typed backing state together.
+        // Shadow Preparation has direct later Compute consumers. Keep these Read finalizers in the same accepting packet so those consumers wait on every completed build and its typed backing state together.
         accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc accelStructFinalizeDesc;
         accelStructFinalizeDesc
@@ -1044,23 +778,11 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
             .setScheduling(accelStructFinalizeScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
-            // The immutable typed final-state collection expands to the same compiler inputs. Retain the
-            // individual declarations when members cannot form a complete unique set.
-            .setResourceUses(
-                accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(),
-                accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size()
-            )
-            .setResourceSetUses(
-                accelStructFinalizeSetGraphOwned ? &accelStructFinalizeSetUse : nullptr,
-                accelStructFinalizeSetGraphOwned ? 1u : 0u
-            )
+            // The immutable typed final-state collection expands to the same compiler inputs. Retain the individual declarations when members cannot form a complete unique set.
+            .setResourceUses(accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(), accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size())
+            .setResourceSetUses(accelStructFinalizeSetGraphOwned ? &accelStructFinalizeSetUse : nullptr, accelStructFinalizeSetGraphOwned ? 1u : 0u)
         ;
-        m_deferredShadowPrepareAccelStructFinalizeTask = m_deferredLightingTaskGraph.addTask<
-            ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask
-        >(
-            accelStructFinalizeDesc,
-            ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{}
-        );
+        m_deferredShadowPrepareAccelStructFinalizeTask = m_deferredLightingTaskGraph.addTask< ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask >(accelStructFinalizeDesc, ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{});
         if(!m_deferredShadowPrepareAccelStructFinalizeTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
             return false;

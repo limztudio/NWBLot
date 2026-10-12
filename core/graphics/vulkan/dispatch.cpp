@@ -53,12 +53,7 @@ void LoadVolkInstanceDispatch(VolkInstanceTable& instanceDispatch, const VkInsta
     volkLoadInstanceTable(&instanceDispatch, instance);
 }
 
-void LoadVolkDeviceDispatch(
-    VolkInstanceTable& instanceDispatch,
-    VolkDeviceTable& deviceDispatch,
-    const VkInstance instance,
-    const VkDevice device
-)noexcept{
+void LoadVolkDeviceDispatch(VolkInstanceTable& instanceDispatch, VolkDeviceTable& deviceDispatch, const VkInstance instance, const VkDevice device)noexcept{
     NWB_ASSERT(instance != VK_NULL_HANDLE);
     NWB_ASSERT(device != VK_NULL_HANDLE);
     ScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());

@@ -14,12 +14,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-BackendContext::BackendContext(
-    const DeviceCreationParameters& params,
-    SwapChainRuntimeState& swapChainState,
-    GraphicsAllocator& allocator,
-    CpuTaskScheduler& cpuScheduler
-)
+BackendContext::BackendContext(const DeviceCreationParameters& params, SwapChainRuntimeState& swapChainState, GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler)
     : m_deviceParams(params)
     , m_swapChainState(swapChainState)
     , m_allocator(allocator)

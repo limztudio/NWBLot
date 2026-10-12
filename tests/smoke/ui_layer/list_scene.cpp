@@ -113,16 +113,11 @@ bool UiListSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i
 }
 
 void UiListSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiListSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiListSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u64, 12u> UiListSmokeScene::values()const{
@@ -148,12 +143,7 @@ Impl::Ui::Rect UiListSmokeScene::selectedRow()const{
 void UiListSmokeScene::observeState(){
     const auto current = values();
     const auto& placement = m_state.placement();
-    if(
-        m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && placement.offset == m_lastPlacement.offset
-        && SameSmokeRect(placement.bounds, m_lastPlacement.bounds)
-        && SameSmokeRect(placement.thumb, m_lastPlacement.thumb)
-    )
+    if(m_sequence != 0u && !m_displayChanged && current == m_lastValues && placement.offset == m_lastPlacement.offset && SameSmokeRect(placement.bounds, m_lastPlacement.bounds) && SameSmokeRect(placement.thumb, m_lastPlacement.thumb))
         return;
     ++m_sequence;
     m_lastValues = current;
@@ -198,11 +188,7 @@ bool IsUiLayerListSkinSmokeEnabled(){
 }
 
 SharedUiListSmokeScene CreateUiListSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiListSmokeScene(
-        NewArenaObject<RefCounter<UiListSmokeScene>>(arena, input),
-        ArenaRefDeleter<RefCounter<UiListSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiListSmokeScene(NewArenaObject<RefCounter<UiListSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiListSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

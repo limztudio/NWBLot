@@ -38,10 +38,7 @@ static RunClass::Enum Classify(const AStringView text, const usize offset)noexce
     const u32 scalar = decoded->codePoint;
     if(IsWhitespace(scalar))
         return RunClass::Whitespace;
-    if(
-        (scalar >= 0x21u && scalar <= 0x2Fu) || (scalar >= 0x3Au && scalar <= 0x40u)
-        || (scalar >= 0x5Bu && scalar <= 0x60u) || (scalar >= 0x7Bu && scalar <= 0x7Eu)
-    )
+    if((scalar >= 0x21u && scalar <= 0x2Fu) || (scalar >= 0x3Au && scalar <= 0x40u) || (scalar >= 0x5Bu && scalar <= 0x60u) || (scalar >= 0x7Bu && scalar <= 0x7Eu))
         return RunClass::Punctuation;
     return RunClass::Text;
 }

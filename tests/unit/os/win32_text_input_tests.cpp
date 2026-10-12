@@ -30,9 +30,7 @@ public:
         if(message == WM_NCCREATE){
             const auto* const creation = reinterpret_cast<const CREATESTRUCTW*>(lParam);
             SetLastError(ERROR_SUCCESS);
-            const LONG_PTR previous = SetWindowLongPtrW(
-                window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(creation->lpCreateParams)
-            );
+            const LONG_PTR previous = SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(creation->lpCreateParams));
             if(previous == 0 && GetLastError() != ERROR_SUCCESS)
                 return FALSE;
         }
@@ -274,8 +272,7 @@ TEST_F(Win32TextInputFixture, BridgeRejectsUnsupportedForeignServiceBeforeDownca
 
 TEST_F(Win32TextInputFixture, ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags){
     ASSERT_TRUE(m_service->end(m_token));
-    const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW
-        | (ISC_SHOWUICANDIDATEWINDOW << 2u) | (1u << 20u));
+    const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (ISC_SHOWUICANDIDATEWINDOW << 2u) | (1u << 20u));
     const usize before = m_contextForwardCount;
     const LRESULT inactiveResult = SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
     EXPECT_EQ(m_contextForwardCount, before + 1u);

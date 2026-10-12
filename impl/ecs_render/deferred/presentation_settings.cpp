@@ -15,11 +15,7 @@ NWB_IMPL_BEGIN
 
 
 bool ValidatePresentationSettings(const PresentationSettings& settings)noexcept{
-    return
-        settings.toneMap <= PresentationToneMap::Reinhard
-        && IsFinite(settings.exposure) && settings.exposure >= 0.f
-        && IsFinite(settings.shoulder) && settings.shoulder > 0.f
-    ;
+    return settings.toneMap <= PresentationToneMap::Reinhard && IsFinite(settings.exposure) && settings.exposure >= 0.f && IsFinite(settings.shoulder) && settings.shoulder > 0.f;
 }
 
 

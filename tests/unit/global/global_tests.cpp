@@ -329,10 +329,7 @@ TEST(Global, Vector3TryNormalizeRejectsInvalidValues){
 }
 
 TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
-    constexpr AStringView s_Maps =
-        "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n"
-        "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n"
-    ;
+    constexpr AStringView s_Maps = "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n" "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n";
     Vector<LinuxProcessMemoryMapEntry> entries;
     ParseLinuxProcessMemoryMaps(s_Maps, entries);
     ASSERT_EQ(entries.size(), s_ExpectedDualCount);
@@ -367,10 +364,7 @@ TEST(Global, GlobalArenaReallocationPreservesAlignment){
 }
 
 TEST(Global, PersistentArenaReallocationPreservesAlignment){
-    NWB::Core::Alloc::PersistentArena arena(
-        NWB::Tests::s_TestArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(16u * 1024u)
-    );
+    NWB::Core::Alloc::PersistentArena arena(NWB::Tests::s_TestArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(16u * 1024u));
     VerifyAlignedReallocation(arena);
 }
 
@@ -479,11 +473,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     const usize executableNameLength = executableNameText.size();
     searchPathText += s_TRAILING_SUFFIX;
     executableNameText += s_TRAILING_SUFFIX;
-    ASSERT_TRUE(ExecutableAvailableInPath(
-        testArena.arena,
-        AStringView(searchPathText).substr(0u, searchPathLength),
-        AStringView(executableNameText).substr(0u, executableNameLength)
-    ));
+    ASSERT_TRUE(ExecutableAvailableInPath(testArena.arena, AStringView(searchPathText).substr(0u, searchPathLength), AStringView(executableNameText).substr(0u, executableNameLength)));
 
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/bounded_process");
     const auto outputPath = root / "combined output.txt";
@@ -493,16 +483,8 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     const usize executableLength = executableText.size();
     outputPathText += s_TRAILING_SUFFIX;
     executableText += s_TRAILING_SUFFIX;
-    const AStringView arguments[]{
-        AStringView(executableText).substr(0u, executableLength),
-        "/c",
-        "echo stdout&echo stderr 1>&2&exit /b 23"
-    };
-    const auto exitCode = RunProcessRedirectedToFile(
-        testArena.arena,
-        arguments,
-        AStringView(outputPathText).substr(0u, outputPathLength)
-    );
+    const AStringView arguments[]{ AStringView(executableText).substr(0u, executableLength), "/c", "echo stdout&echo stderr 1>&2&exit /b 23" };
+    const auto exitCode = RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText).substr(0u, outputPathLength));
     ASSERT_TRUE(exitCode);
     EXPECT_EQ(*exitCode, 23);
     ::AString<NWB::Core::Alloc::GlobalArena> output(testArena.arena);
@@ -774,10 +756,7 @@ TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance)
 
 TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
     NWB::Core::Alloc::GlobalArena arena(Name{"tests/path/native_component_views"});
-    const Path<NWB::Core::Alloc::GlobalArena> path(
-        arena,
-        "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_í•œê¸€_ðŸ˜€/Third_component"
-    );
+    const Path<NWB::Core::Alloc::GlobalArena> path(arena, "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_í•œê¸€_ðŸ˜€/Third_component");
     const TStringView native = path.native();
     const ArenaMemoryStats before = arena.memoryStats();
     TStringView retained;
@@ -835,11 +814,7 @@ TEST(Global, TextUtilitiesRejectNullShortAndOverflowingInput){
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
-    const AStringView argv[] = {
-        s_BIN_SH,
-        s_C,
-        "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done"
-    };
+    const AStringView argv[] = { s_BIN_SH, s_C, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
     EXPECT_FALSE(CaptureProcessOutput(testArena.arena, output, argv, 16u, 64u, 250u));
@@ -865,11 +840,7 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
 }
 
 TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
-    const AStringView argv[] = {
-        s_BIN_SH,
-        s_C,
-        "while :; do printf x; done"
-    };
+    const AStringView argv[] = { s_BIN_SH, s_C, "while :; do printf x; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
     const u64 startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
@@ -887,11 +858,7 @@ TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
-    const AStringView argv[] = {
-        s_BIN_SH,
-        s_C,
-        AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u)
-    };
+    const AStringView argv[] = { s_BIN_SH, s_C, AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u) };
     const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
     const auto exitCode = RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText));
     ASSERT_TRUE(exitCode);
@@ -1133,14 +1100,7 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
             const u32 messageCount = logger.messageCount();
             const u32 errorCount = logger.errorCount();
             const NWB::Core::Common::LogType::Enum lastType = logger.lastType();
-            if(
-                messageCount > s_ExpectedMessageCount
-                || errorCount > s_ExpectedErrorCount
-                || (
-                    lastType != NWB::Core::Common::LogType::Info
-                    && lastType != NWB::Core::Common::LogType::Error
-                )
-            )
+            if(messageCount > s_ExpectedMessageCount || errorCount > s_ExpectedErrorCount || (lastType != NWB::Core::Common::LogType::Info && lastType != NWB::Core::Common::LogType::Error))
                 invalidObservation.store(true, MemoryOrder::relaxed);
             if(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE))
                 sawConcurrentMessage = true;
@@ -1154,15 +1114,8 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
         writers[threadIndex] = Thread([&logger, &startGate, &activeWriters](){
             startGate.arrive_and_wait();
             for(u32 messageIndex = 0u; messageIndex < s_MessagesPerThread; ++messageIndex){
-                const NWB::Core::Common::LogType::Enum type = (messageIndex & 1u) == 0u
-                    ? NWB::Core::Common::LogType::Info
-                    : NWB::Core::Common::LogType::Error
-                ;
-                NWB::Core::Common::LoggerDetail::EnqueueMessage(
-                    logger,
-                    type,
-                    s_PARALLEL_LOGGER_MESSAGE
-                );
+                const NWB::Core::Common::LogType::Enum type = (messageIndex & 1u) == 0u ? NWB::Core::Common::LogType::Info : NWB::Core::Common::LogType::Error;
+                NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, type, s_PARALLEL_LOGGER_MESSAGE);
             }
             activeWriters.fetch_sub(1u, MemoryOrder::release);
         });

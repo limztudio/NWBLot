@@ -25,11 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphAvboitOccupancyUploadChain::FrameGraphAvboitOccupancyUploadChain(
-    Core::GpuTaskGraph& graph,
-    RendererMaterialSystem& materialSystem,
-    RendererCsgSystem& csgSystem
-)
+FrameGraphAvboitOccupancyUploadChain::FrameGraphAvboitOccupancyUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem){
@@ -102,8 +98,7 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
 #if defined(NWB_DEBUG)
             occupancyMaterialTypedRanges,
 #endif
-            occupancyMaterialTypedBytes
-        );
+            occupancyMaterialTypedBytes);
         if(!occupancyUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
             return MakeUnexpected(Failure{});
@@ -116,21 +111,10 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
         }
         if(occupancyUploadResult->hasDrawItems){
 
-            const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = {
-                &occupancyDrawItems.regular,
-                &occupancyDrawItems.csg,
-            };
-            AvboitGeometryPreparationBuilder occupancyGeometryPreparationBuilder(
-                m_graph,
-                m_materialSystem,
-                occupancyMaterialGeometryScratch
-            );
+            const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = { &occupancyDrawItems.regular, &occupancyDrawItems.csg, };
+            AvboitGeometryPreparationBuilder occupancyGeometryPreparationBuilder(m_graph, m_materialSystem, occupancyMaterialGeometryScratch);
             auto occupancyGeometryPreparationResult = occupancyGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{
-                    .drawItemSets = occupancyMaterialGeometryDrawSets,
-                    .drawItemSetCount = LengthOf(occupancyMaterialGeometryDrawSets),
-                    .phase = AvboitGeometryPhase::Occupancy,
-                }
+                AvboitGeometryPreparationInputs{ .drawItemSets = occupancyMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(occupancyMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Occupancy, }
             );
             if(!occupancyGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
@@ -150,16 +134,10 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
                 return MakeUnexpected(Failure{});
             }
             NWB_ASSERT(occupancyInstanceData.size() == occupancyMaterialTypedRanges.size());
-            ECSRenderDetail::AssertMaterialTypedUploadRanges(
-                occupancyMaterialTypedRanges,
-                occupancyMaterialTypedBytes
-            );
+            ECSRenderDetail::AssertMaterialTypedUploadRanges(occupancyMaterialTypedRanges, occupancyMaterialTypedBytes);
 #endif
 
-            AvboitMaterialUploadBuilder occupancyMaterialUploadBuilder(
-                m_graph,
-                m_csgSystem
-            );
+            AvboitMaterialUploadBuilder occupancyMaterialUploadBuilder(m_graph, m_csgSystem);
             auto occupancyCsgStreamsUploadedResult = occupancyMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
                     .targets = &deferredTargets,
@@ -185,12 +163,7 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
             }
             occupancyCsgStreamsUploaded = *occupancyCsgStreamsUploadedResult;
 
-            avboitOccupancyPayload.occupancySnapshot.capture(
-                occupancyDrawItems,
-                occupancyCsgFrameData,
-                occupancyInstanceData.size(),
-                occupancyMaterialTypedBytes.size()
-            );
+            avboitOccupancyPayload.occupancySnapshot.capture(occupancyDrawItems, occupancyCsgFrameData, occupancyInstanceData.size(), occupancyMaterialTypedBytes.size());
             avboitOccupancyPayload.occupancyPhasePrepared = true;
             avboitOccupancyPayload.occupancyStreamsUploaded = true;
             // A phase owns one alias-free stream; mixed work keeps local interleaving.
@@ -218,25 +191,16 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
             occupancySharedComputeEmulationPlan = occupancyComputeEmulationCaptureResult->sharedPlan;
             occupancySharedComputeEmulationInstanceCount = occupancyComputeEmulationCaptureResult->sharedInstanceCount;
             occupancySharedComputeEmulationMaterialTypedByteCount = occupancyComputeEmulationCaptureResult->sharedMaterialTypedByteCount;
-            if(occupancyRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
-                occupancyDrawItems, occupancyInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitOccupancy
-            ))
+            if(occupancyRegularComputeEmulationPlanCaptured && generatedGeometry.matches(occupancyDrawItems, occupancyInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitOccupancy))
                 occupancyReusedGeometryProducer = generatedGeometry.producerTask();
             else{
                 generatedGeometry.reset();
-                occupancyProducesReusableGeometry = occupancyRegularComputeEmulationPlanCaptured && generatedGeometry.capture(
-                    occupancyDrawItems, occupancyInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitOccupancy
-                );
+                occupancyProducesReusableGeometry = occupancyRegularComputeEmulationPlanCaptured && generatedGeometry.capture(occupancyDrawItems, occupancyInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitOccupancy);
             }
         }
         else{
             // Graph phase stays authoritative for empty sets; retain snapshot to skip native re-gather.
-            avboitOccupancyPayload.occupancySnapshot.capture(
-                occupancyDrawItems,
-                occupancyCsgFrameData,
-                occupancyInstanceData.size(),
-                occupancyMaterialTypedBytes.size()
-            );
+            avboitOccupancyPayload.occupancySnapshot.capture(occupancyDrawItems, occupancyCsgFrameData, occupancyInstanceData.size(), occupancyMaterialTypedBytes.size());
             avboitOccupancyPayload.occupancyPhasePrepared = true;
         }
     }

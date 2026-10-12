@@ -103,17 +103,9 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
     return ui->wantsPointer();
 }
 
-static void ResolveFlyCameraAnglesFromRotation(
-    const SIMDVectorSingle rotation,
-    f32& outYawRadians,
-    f32& outPitchRadians
-){
+static void ResolveFlyCameraAnglesFromRotation(const SIMDVectorSingle rotation, f32& outYawRadians, f32& outPitchRadians){
     const SIMDVectorSingle localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    const SIMDVectorSingle forwardVector = Vector3NormalizeOr(
-        Vector3Rotate(localForward, rotation),
-        localForward,
-        s_CameraMoveEpsilon
-    );
+    const SIMDVectorSingle forwardVector = Vector3NormalizeOr(Vector3Rotate(localForward, rotation), localForward, s_CameraMoveEpsilon);
     const SIMDVectorSingle clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
     const f32 yawRadians = VectorGetX(VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector)));
     const f32 pitchRadians = VectorGetX(VectorNegate(VectorASin(VectorSplatY(clampedForward))));
@@ -147,11 +139,7 @@ static void ResolveFlyCameraInput(
     const f32 safeForwardAxis = VectorGetY(sanitizedAxes);
     const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
-    const SIMDVectorSingle updatedAngles = VectorMultiplyAddExpression(
-        VectorSet(safeMouseDeltaX, safeMouseDeltaY, 0.0f, 0.0f),
-        VectorReplicate(s_FlyCameraMouseSensitivityRadiansPerPixel),
-        VectorSet(yawRadians, pitchRadians, 0.0f, 0.0f)
-    );
+    const SIMDVectorSingle updatedAngles = VectorMultiplyAddExpression(VectorSet(safeMouseDeltaX, safeMouseDeltaY, 0.0f, 0.0f), VectorReplicate(s_FlyCameraMouseSensitivityRadiansPerPixel), VectorSet(yawRadians, pitchRadians, 0.0f, 0.0f));
     yawRadians = VectorGetX(updatedAngles);
     if(!IsFinite(yawRadians))
         yawRadians = 0.0f;
@@ -166,17 +154,11 @@ static void ResolveFlyCameraInput(
         const SIMDVectorSingle boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? 0xFFFFFFFFu : 0u));
         const SIMDVectorSingle speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
         const SIMDVectorSingle speedDeltaLanes = VectorMultiply(speedLanes, VectorReplicate(safeDelta));
-        const SIMDVectorSingle moveScale = VectorMultiply(
-            speedDeltaLanes,
-            VectorReciprocalSqrt(moveLengthSqVector)
-        );
+        const SIMDVectorSingle moveScale = VectorMultiply(speedDeltaLanes, VectorReciprocalSqrt(moveLengthSqVector));
         if(!VectorIsFinite(moveScale, VectorComponentMask::s_XYZW))
             return;
 
-        const SIMDVectorSingle localMove = VectorMultiply(
-            VectorSet(safeRightAxis, 0.0f, safeForwardAxis, 0.0f),
-            moveScale
-        );
+        const SIMDVectorSingle localMove = VectorMultiply(VectorSet(safeRightAxis, 0.0f, safeForwardAxis, 0.0f), moveScale);
         const SIMDVectorSingle worldMove = Vector3Rotate(localMove, outRotation);
         if(!Vector3IsFinite(worldMove))
             return;
@@ -187,15 +169,7 @@ static void ResolveFlyCameraInput(
     }
 }
 
-static void ApplyFlyCameraInputToMainCamera(
-    NWB::Core::ECS::World& world,
-    const f32 rightAxis,
-    const f32 forwardAxis,
-    const bool boosted,
-    const f32 mouseDeltaX,
-    const f32 mouseDeltaY,
-    const f32 delta
-){
+static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const f32 rightAxis, const f32 forwardAxis, const bool boosted, const f32 mouseDeltaX, const f32 mouseDeltaY, const f32 delta){
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
     NWB_ASSERT(cameraView.valid());
 
@@ -204,28 +178,12 @@ static void ApplyFlyCameraInputToMainCamera(
     ResolveFlyCameraAnglesFromRotation(LoadFloat(cameraView.transform->rotation), yawRadians, pitchRadians);
     SIMDVectorSingle resolvedRotation;
     SIMDVectorSingle resolvedPosition;
-    ResolveFlyCameraInput(
-        LoadFloat(cameraView.transform->position),
-        yawRadians,
-        pitchRadians,
-        rightAxis,
-        forwardAxis,
-        boosted,
-        mouseDeltaX,
-        mouseDeltaY,
-        delta,
-        resolvedRotation,
-        resolvedPosition
-    );
+    ResolveFlyCameraInput(LoadFloat(cameraView.transform->position), yawRadians, pitchRadians, rightAxis, forwardAxis, boosted, mouseDeltaX, mouseDeltaY, delta, resolvedRotation, resolvedPosition);
     StoreFloat(resolvedRotation, cameraView.transform->rotation);
     StoreFloat(resolvedPosition, cameraView.transform->position);
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateModelEntity(
-    NWB::Core::ECS::World& world,
-    const TestbedModelRef& model,
-    const TestbedMaterialRef& material
-){
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateModelEntity(NWB::Core::ECS::World& world, const TestbedModelRef& model, const TestbedMaterialRef& material){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
     transform.position = Float4(0.0f, 0.0f, 0.0f);
@@ -288,11 +246,7 @@ void Project::destroyWorld(){
 bool Project::onStartup(){
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-    const Float4 cameraPosition(
-        0.0f,
-        __hidden_runtime::s_CharacterCameraTargetY,
-        __hidden_runtime::s_CameraStartDepth
-    );
+    const Float4 cameraPosition(0.0f, __hidden_runtime::s_CharacterCameraTargetY, __hidden_runtime::s_CameraStartDepth);
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
     NWB_ASSERT(activeCamera.camera.valid());
@@ -306,13 +260,7 @@ bool Project::onStartup(){
         __hidden_runtime::s_DefaultDirectionalLightColor,
         __hidden_runtime::s_DefaultDirectionalLightIntensity
     );
-    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(
-        *m_world,
-        __hidden_runtime::s_PointLightPosition,
-        __hidden_runtime::s_PointLightColor,
-        __hidden_runtime::s_PointLightIntensity,
-        __hidden_runtime::s_PointLightRange
-    );
+    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, __hidden_runtime::s_PointLightPosition, __hidden_runtime::s_PointLightColor, __hidden_runtime::s_PointLightIntensity, __hidden_runtime::s_PointLightRange);
     if(!directionalLight.valid() || !pointLight.valid())
         return false;
 
@@ -340,10 +288,7 @@ bool Project::createDefaultScene(){
         drawCustomUiControls(context);
     };
 
-    NWB_LOGGER_ESSENTIAL_INFO(
-        __hidden_runtime::s_StartupSceneText,
-        __hidden_runtime::s_DefaultSceneDescription
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_StartupSceneText, __hidden_runtime::s_DefaultSceneDescription);
     return true;
 }
 
@@ -417,31 +362,11 @@ void Project::updateMainCamera(const f32 delta){
     }
 
     const bool keyboardCaptured = __hidden_runtime::UiWantsKeyboardCapture(*m_world);
-    const f32 rightAxis = keyboardCaptured
-        ? 0.0f
-        : __hidden_runtime::KeyAxis(
-            keyPressed(NWB::Core::Key::A),
-            keyPressed(NWB::Core::Key::D)
-        )
-    ;
-    const f32 forwardAxis = keyboardCaptured
-        ? 0.0f
-        : __hidden_runtime::KeyAxis(
-            keyPressed(NWB::Core::Key::S),
-            keyPressed(NWB::Core::Key::W)
-        )
-    ;
+    const f32 rightAxis = keyboardCaptured ? 0.0f : __hidden_runtime::KeyAxis(keyPressed(NWB::Core::Key::A), keyPressed(NWB::Core::Key::D));
+    const f32 forwardAxis = keyboardCaptured ? 0.0f : __hidden_runtime::KeyAxis(keyPressed(NWB::Core::Key::S), keyPressed(NWB::Core::Key::W));
     const bool boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
-    __hidden_runtime::ApplyFlyCameraInputToMainCamera(
-        *m_world,
-        rightAxis,
-        forwardAxis,
-        boosted,
-        mouseDeltaX,
-        mouseDeltaY,
-        delta
-    );
+    __hidden_runtime::ApplyFlyCameraInputToMainCamera(*m_world, rightAxis, forwardAxis, boosted, mouseDeltaX, mouseDeltaY, delta);
 }
 
 void Project::windowFocusUpdate(const bool focused){

@@ -168,16 +168,11 @@ bool UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const 
 }
 
 void UiPopupSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u32, 12u> UiPopupSmokeScene::values()const{
@@ -190,11 +185,7 @@ Array<u32, 12u> UiPopupSmokeScene::values()const{
 void UiPopupSmokeScene::observeState(){
     const auto current = values();
     const auto& placement = m_popup.placement();
-    if(
-        m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && SameSmokeRect(placement.bounds, m_lastPlacement.bounds)
-        && SameSmokeRect(placement.viewport, m_lastPlacement.viewport)
-    )
+    if(m_sequence != 0u && !m_displayChanged && current == m_lastValues && SameSmokeRect(placement.bounds, m_lastPlacement.bounds) && SameSmokeRect(placement.viewport, m_lastPlacement.viewport))
         return;
     ++m_sequence;
     m_lastValues = current;
@@ -210,8 +201,7 @@ void UiPopupSmokeScene::observeState(){
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("modal"), __hidden_ui_popup_smoke::s_ModalTrigger);
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("outside"), m_outsideEdit.placement.bounds);
-    const Impl::Ui::Rect first{ placement.bounds.x + 8.0f, placement.bounds.y + 36.0f,
-        placement.bounds.width - 16.0f, 32.0f };
+    const Impl::Ui::Rect first{ placement.bounds.x + 8.0f, placement.bounds.y + 36.0f, placement.bounds.width - 16.0f, 32.0f };
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("first"), first);
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("second"), { first.x, first.y + 40.0f, first.width, first.height });
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("check"), { first.x, first.y + 80.0f, first.width, first.height });
@@ -241,11 +231,7 @@ bool IsUiLayerPopupSkinSmokeEnabled(){
 }
 
 SharedUiPopupSmokeScene CreateUiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiPopupSmokeScene(
-        NewArenaObject<RefCounter<UiPopupSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiPopupSmokeScene(NewArenaObject<RefCounter<UiPopupSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

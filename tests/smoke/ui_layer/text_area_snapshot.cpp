@@ -76,8 +76,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     current.rectangles[2u] = placement.clip;
     current.rectangles[3u] = placement.caret;
     for(u32 index = 0u; index < 6u; ++index){
-        current.rectangles[4u + index] = { placement.bounds.x + static_cast<f32>(index % 3u) * 120.0f,
-            placement.bounds.y - (index < 3u ? 76.0f : 38.0f), 112.0f, 30.0f };
+        current.rectangles[4u + index] = { placement.bounds.x + static_cast<f32>(index % 3u) * 120.0f, placement.bounds.y - (index < 3u ? 76.0f : 38.0f), 112.0f, 30.0f };
     }
     current.rectangles[10u] = { placement.bounds.x, placement.bounds.y + placement.bounds.height + 8.0f, 160.0f, 30.0f };
     current.rectangles[11u] = scrollbars.horizontal.track;
@@ -117,17 +116,13 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     for(usize index = 0u; index < current.selections.size(); ++index)
         changed |= !SameSmokeRect(current.selections[index], m_snapshot.selections[index]);
     const auto& previous = m_snapshot.display;
-    const bool displayChanged = context.display.logicalWidth != previous.logicalWidth
-        || context.display.logicalHeight != previous.logicalHeight || context.display.pixelScaleX != previous.pixelScaleX
-        || context.display.pixelScaleY != previous.pixelScaleY;
+    const bool displayChanged = context.display.logicalWidth != previous.logicalWidth || context.display.logicalHeight != previous.logicalHeight || context.display.pixelScaleX != previous.pixelScaleX || context.display.pixelScaleY != previous.pixelScaleY;
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)
         return true;
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: display logical={}x{} scale={}x{}")
-            , current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
     }
     const auto& value = current.values;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
@@ -143,9 +138,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
         LogSmokeRect(NWB_TEXT("UiTextAreaSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
     for(u32 index = 0u; index < current.selectionCount; ++index){
         const Rect& rectangle = current.selections[index];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}")
-            , current.sequence, index, rectangle.x, rectangle.y, rectangle.width, rectangle.height
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}"), current.sequence, index, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
     }
     return true;
 }

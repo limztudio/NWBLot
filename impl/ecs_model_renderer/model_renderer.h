@@ -20,13 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void ApplyModelObjectRenderer(
-    Core::ECS::World& world,
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::Entity& entity,
-    const Core::ECS::EntityID owner,
-    const Core::Assets::AssetRef<Material>& material
-){
+inline void ApplyModelObjectRenderer(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material){
     Core::Assets::AssetRef<Material> resolvedMaterial = material;
     bool visible = true;
     if(const RendererComponent* ownerRenderer = world.tryGetComponent<RendererComponent>(owner)){
@@ -61,11 +55,7 @@ inline void ApplyModelObjectRenderer(
         { Core::ECS::ComponentType<MaterialInstanceComponent>(), Core::ECS::AccessMode::Write },
     };
 
-    return ModelObjectRendererHooks{
-        &ApplyModelObjectRenderer,
-        s_Accesses,
-        LengthOf(s_Accesses)
-    };
+    return ModelObjectRendererHooks{ &ApplyModelObjectRenderer, s_Accesses, LengthOf(s_Accesses) };
 }
 
 

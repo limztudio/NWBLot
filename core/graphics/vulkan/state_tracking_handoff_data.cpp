@@ -38,18 +38,10 @@ void RetainSelectedStates(StateVector& states, const Predicate& selected){
 }
 
 
-[[nodiscard]] static bool OwnershipMatches(
-    const GpuPhysicalQueueId ownerQueue,
-    const GpuPhysicalQueueId releaseDestinationQueue,
-    const GpuPhysicalQueueId expectedOwnerQueue,
-    const GpuPhysicalQueueId expectedReleaseDestinationQueue
-)noexcept{
+[[nodiscard]] static bool OwnershipMatches(const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue)noexcept{
     if(ownerQueue != expectedOwnerQueue)
         return false;
-    return expectedOwnerQueue == expectedReleaseDestinationQueue
-        ? !releaseDestinationQueue.valid()
-        : releaseDestinationQueue == expectedReleaseDestinationQueue
-    ;
+    return expectedOwnerQueue == expectedReleaseDestinationQueue ? !releaseDestinationQueue.valid() : releaseDestinationQueue == expectedReleaseDestinationQueue;
 }
 
 
@@ -62,20 +54,8 @@ void RetainSelectedStates(StateVector& states, const Predicate& selected){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandListResourceStateHandoff::buildResourceSubset(
-    const CommandListResourceStateHandoff& source,
-    Texture* const* textures,
-    const usize textureCount,
-    Buffer* const* buffers,
-    const usize bufferCount,
-    Alloc::ScratchArena& scratchArena
-){
-    if(
-        !source.valid()
-        || source.m_deviceGeneration == 0u
-        || (textureCount != 0u && !textures)
-        || (bufferCount != 0u && !buffers)
-    )
+bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResourceStateHandoff& source, Texture* const* textures, const usize textureCount, Buffer* const* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
+    if(!source.valid() || source.m_deviceGeneration == 0u || (textureCount != 0u && !textures) || (bufferCount != 0u && !buffers))
         return false;
 
     CommandListResourceSelection selection(scratchArena);
@@ -90,10 +70,7 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     return buildResourceSubset(source, selection);
 }
 
-bool CommandListResourceStateHandoff::buildResourceSubset(
-    const CommandListResourceStateHandoff& source,
-    const CommandListResourceSelection& selection
-){
+bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection){
     if(!source.valid() || source.m_deviceGeneration == 0u || !selection.valid())
         return false;
 
@@ -188,42 +165,23 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     return true;
 }
 
-bool CommandListResourceStateHandoff::buildTextureSubset(
-    const CommandListResourceStateHandoff& source,
-    Texture* const texture,
-    Alloc::ScratchArena& scratchArena
-){
+bool CommandListResourceStateHandoff::buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* const texture, Alloc::ScratchArena& scratchArena){
     Texture* const textures[] = { texture };
     return buildResourceSubset(source, textures, 1u, nullptr, 0u, scratchArena);
 }
 
-bool CommandListResourceStateHandoff::buildTextureRangeSubset(
-    const CommandListResourceStateHandoff& source,
-    Texture* const texture,
-    const TextureSubresourceSet subresources
-){
-    if(
-        !source.valid()
-        || source.m_deviceGeneration == 0u
-        || !texture
-    )
+bool CommandListResourceStateHandoff::buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* const texture, const TextureSubresourceSet subresources){
+    if(!source.valid() || source.m_deviceGeneration == 0u || !texture)
         return false;
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture->getCreationDescription(),
-        TextureSubresourceMipResolve::Range
-    );
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->getCreationDescription(), TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
         return false;
 
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const auto contains = [&](const MipLevel mipLevel, const ArraySlice arraySlice){
-        return mipLevel >= resolvedSubresources.baseMipLevel
-            && mipLevel < mipEnd
-            && arraySlice >= resolvedSubresources.baseArraySlice
-            && arraySlice < arrayEnd
-        ;
+        return mipLevel >= resolvedSubresources.baseMipLevel && mipLevel < mipEnd && arraySlice >= resolvedSubresources.baseArraySlice && arraySlice < arrayEnd;
     };
 
     usize textureStateCount = 0u;
@@ -270,11 +228,7 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
     return true;
 }
 
-bool CommandListResourceStateHandoff::buildBufferRangeSubset(
-    const CommandListResourceStateHandoff& source,
-    Buffer* const buffer,
-    const BufferRange range
-){
+bool CommandListResourceStateHandoff::buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* const buffer, const BufferRange range){
     if(!source.valid() || source.m_deviceGeneration == 0u || !buffer)
         return false;
 
@@ -286,10 +240,7 @@ bool CommandListResourceStateHandoff::buildBufferRangeSubset(
     for(const BufferState& state : source.m_bufferStates){
         if(state.buffer != buffer || !state.range.overlaps(resolvedRange))
             continue;
-        if(
-            state.releaseDestinationQueue.valid()
-            && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription()))
-        )
+        if(state.releaseDestinationQueue.valid() && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription())))
             return false;
         ++bufferStateCount;
     }
@@ -334,24 +285,11 @@ bool CommandListResourceStateHandoff::buildBufferRangeSubset(
     return true;
 }
 
-bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
-    Texture* const texture,
-    const TextureSubresourceSet subresources,
-    const GpuPhysicalQueueId expectedOwnerQueue,
-    const GpuPhysicalQueueId expectedReleaseDestinationQueue
-)const{
-    if(
-        !m_valid
-        || m_deviceGeneration == 0u
-        || !texture
-        || !expectedOwnerQueue.valid()
-    )
+bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* const texture, const TextureSubresourceSet subresources, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue)const{
+    if(!m_valid || m_deviceGeneration == 0u || !texture || !expectedOwnerQueue.valid())
         return false;
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture->getCreationDescription(),
-        TextureSubresourceMipResolve::Range
-    );
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->getCreationDescription(), TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
         return false;
 
@@ -359,15 +297,7 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
     for(const PermanentTextureState& state : m_permanentTextureStates){
         if(state.texture != texture)
             continue;
-        if(
-            permanentState
-            || !__hidden_command_list_state_handoff::OwnershipMatches(
-                state.ownerQueue,
-                state.releaseDestinationQueue,
-                expectedOwnerQueue,
-                expectedReleaseDestinationQueue
-            )
-        )
+        if(permanentState || !__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
             return false;
         permanentState = &state;
     }
@@ -380,21 +310,9 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
             const ArraySlice arraySlice = resolvedSubresources.baseArraySlice + arrayOffset;
             const TextureState* matchingState = nullptr;
             for(const TextureState& state : m_textureStates){
-                if(
-                    state.texture != texture
-                    || state.mipLevel != mipLevel
-                    || state.arraySlice != arraySlice
-                )
+                if(state.texture != texture || state.mipLevel != mipLevel || state.arraySlice != arraySlice)
                     continue;
-                if(
-                    matchingState
-                    || !__hidden_command_list_state_handoff::OwnershipMatches(
-                        state.ownerQueue,
-                        state.releaseDestinationQueue,
-                        expectedOwnerQueue,
-                        expectedReleaseDestinationQueue
-                    )
-                )
+                if(matchingState || !__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
                     return false;
                 matchingState = &state;
             }
@@ -405,18 +323,8 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
     return true;
 }
 
-bool CommandListResourceStateHandoff::coversBufferWithOwnership(
-    Buffer* const buffer,
-    const GpuPhysicalQueueId expectedOwnerQueue,
-    const GpuPhysicalQueueId expectedReleaseDestinationQueue,
-    const BufferRange range
-)const{
-    if(
-        !m_valid
-        || m_deviceGeneration == 0u
-        || !buffer
-        || !expectedOwnerQueue.valid()
-    )
+bool CommandListResourceStateHandoff::coversBufferWithOwnership(Buffer* const buffer, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue, const BufferRange range)const{
+    if(!m_valid || m_deviceGeneration == 0u || !buffer || !expectedOwnerQueue.valid())
         return false;
 
     const BufferRange resolvedRange = range.resolve(buffer->getCreationDescription());
@@ -427,15 +335,7 @@ bool CommandListResourceStateHandoff::coversBufferWithOwnership(
     for(const BufferState& state : m_permanentBufferStates){
         if(state.buffer != buffer)
             continue;
-        if(
-            permanentState
-            || !__hidden_command_list_state_handoff::OwnershipMatches(
-                state.ownerQueue,
-                state.releaseDestinationQueue,
-                expectedOwnerQueue,
-                expectedReleaseDestinationQueue
-            )
-        )
+        if(permanentState || !__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
             return false;
         permanentState = &state;
     }
@@ -448,17 +348,9 @@ bool CommandListResourceStateHandoff::coversBufferWithOwnership(
         for(const BufferState& state : m_bufferStates){
             if(state.buffer != buffer || !state.range.overlaps(resolvedRange))
                 continue;
-            if(
-                state.releaseDestinationQueue.valid()
-                && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription()))
-            )
+            if(state.releaseDestinationQueue.valid() && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription())))
                 return false;
-            if(!__hidden_command_list_state_handoff::OwnershipMatches(
-                state.ownerQueue,
-                state.releaseDestinationQueue,
-                expectedOwnerQueue,
-                expectedReleaseDestinationQueue
-            ))
+            if(!__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
                 return false;
             if(state.range.byteOffset > coveredEnd || state.range.end() <= coveredEnd)
                 continue;
@@ -470,11 +362,7 @@ bool CommandListResourceStateHandoff::coversBufferWithOwnership(
             return false;
         const u64 nextCoveredEnd = Min(matchingState->range.end(), resolvedRange.end());
         for(const BufferState& state : m_bufferStates){
-            if(
-                &state != matchingState
-                && state.buffer == buffer
-                && state.range.overlaps(BufferRange(coveredEnd, nextCoveredEnd - coveredEnd))
-            )
+            if(&state != matchingState && state.buffer == buffer && state.range.overlaps(BufferRange(coveredEnd, nextCoveredEnd - coveredEnd)))
                 return false;
         }
         coveredEnd = nextCoveredEnd;
@@ -529,13 +417,7 @@ bool CommandListResourceStateHandoff::equivalentTo(const CommandListResourceStat
     }
 
     const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs)noexcept{
-        return lhs.buffer == rhs.buffer
-            && lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-            && lhs.range == rhs.range
-        ;
+        return lhs.buffer == rhs.buffer && lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue && lhs.range == rhs.range;
     };
     for(usize stateIndex = 0u; stateIndex < m_bufferStates.size(); ++stateIndex){
         if(!sameBufferState(m_bufferStates[stateIndex], snapshot.m_bufferStates[stateIndex]))
@@ -543,12 +425,7 @@ bool CommandListResourceStateHandoff::equivalentTo(const CommandListResourceStat
     }
 
     const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs)noexcept{
-        return lhs.texture == rhs.texture
-            && lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
+        return lhs.texture == rhs.texture && lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
     for(usize stateIndex = 0u; stateIndex < m_permanentTextureStates.size(); ++stateIndex){
         if(!samePermanentTextureState(m_permanentTextureStates[stateIndex], snapshot.m_permanentTextureStates[stateIndex]))
@@ -593,11 +470,7 @@ bool CommandListResourceStateHandoff::hasPendingBufferReleases()const noexcept{
 }
 
 bool CommandListResourceStateHandoff::empty()const noexcept{
-    return m_textureStates.empty()
-        && m_bufferStates.empty()
-        && m_permanentTextureStates.empty()
-        && m_permanentBufferStates.empty()
-    ;
+    return m_textureStates.empty() && m_bufferStates.empty() && m_permanentTextureStates.empty() && m_permanentBufferStates.empty();
 }
 
 

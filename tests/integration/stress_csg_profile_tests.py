@@ -23,14 +23,12 @@ LIT_PRECEDE = "precede"
 LIT_MAIN = "__main__"
 
 
-PROFILE = (smoke.CSG_PROFILE + "profile=waist_bands receivers=20 transparent=10 opaque=10 cutters=2 "
-    "half_x=4.5 half_y=0.08 half_z=0.65 center_y=0.9 amplitude_y=0.1 front_z=-0.55 back_z=0.55 motion=crowd_yaw")
+PROFILE = (smoke.CSG_PROFILE + "profile=waist_bands receivers=20 transparent=10 opaque=10 cutters=2 " "half_x=4.5 half_y=0.08 half_z=0.65 center_y=0.9 amplitude_y=0.1 front_z=-0.55 back_z=0.55 motion=crowd_yaw")
 DISABLED = "Loader: hardware ray tracing disabled before device creation"
 
 
 def csg_log(hardware=True):
-    capability = (smoke.CSG_DEVICE + f"meshlets=0 rayquery={int(hardware)} raypipeline={int(hardware)} "
-        f"accelstruct={int(hardware)} wavelanes=64 renderer=fixture")
+    capability = (smoke.CSG_DEVICE + f"meshlets=0 rayquery={int(hardware)} raypipeline={int(hardware)} " f"accelstruct={int(hardware)} wavelanes=64 renderer=fixture")
     dispatch = smoke.CSG_DISPATCH + f"(hardware_compose={int(hardware)}, 25 instances)"
     setup = capability + LIT_N + PROFILE + LIT_N + dispatch
     if not hardware:
@@ -57,8 +55,7 @@ class StressCsgProfileTests(unittest.TestCase):
 
     def test_cli_requires_complete_twenty_body_map_profile(self):
         arguments = self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS]
-        for extra in (["--characters-per-class", "5"], ["--software-shadow-backend", "trace"],
-            [LIT_CSG_PROFILE, "unknown"]):
+        for extra in (["--characters-per-class", "5"], ["--software-shadow-backend", "trace"], [LIT_CSG_PROFILE, "unknown"]):
             with self.subTest(extra=extra), patch("sys.stderr"), self.assertRaises(SystemExit):
                 smoke.parse_args(arguments + extra)
 
@@ -89,10 +86,8 @@ class StressCsgProfileTests(unittest.TestCase):
         args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS])
         original = csg_log()
         for text in (valid_log(), original.replace(PROFILE, ""), original.replace(PROFILE, PROFILE + LIT_N + PROFILE),
-            original.replace("receivers=20", "receivers=10"), original.replace("transparent=10 opaque=10 cutters=2", "transparent=9 opaque=10 cutters=2"),
-            original.replace("cutters=2", "cutters=1"), original.replace("half_y=0.08", "half_y=0"),
-            original.replace("amplitude_y=0.1", "amplitude_y=nan"), original.replace("25 instances", "19 instances"),
-            original.replace("hardware_compose=1", "hardware_compose=0"), original.replace(smoke.CSG_DISPATCH, "NotDispatched: "),
+            original.replace("receivers=20", "receivers=10"), original.replace("transparent=10 opaque=10 cutters=2", "transparent=9 opaque=10 cutters=2"), original.replace("cutters=2", "cutters=1"), original.replace("half_y=0.08", "half_y=0"),
+            original.replace("amplitude_y=0.1", "amplitude_y=nan"), original.replace("25 instances", "19 instances"), original.replace("hardware_compose=1", "hardware_compose=0"), original.replace(smoke.CSG_DISPATCH, "NotDispatched: "),
             original.replace(smoke.CSG_DEVICE, "NotCapabilities: ")):
             with self.subTest(text=text[:100]), self.assertRaises(smoke.SmokeFailure):
                 smoke.verify_csg_profile(text, args)

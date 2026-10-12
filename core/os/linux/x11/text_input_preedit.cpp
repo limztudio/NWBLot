@@ -57,10 +57,7 @@ Bool X11TextInputService::OnPreeditDraw(XIC context, const XPointer data, const 
         if(draw.text)
             valid = service.convertPreeditText(*draw.text);
         if(valid){
-            valid = service.m_preedit.replace(
-                static_cast<usize>(draw.chg_first), static_cast<usize>(draw.chg_length),
-                service.m_insertion, static_cast<usize>(draw.caret)
-            );
+            valid = service.m_preedit.replace(static_cast<usize>(draw.chg_first), static_cast<usize>(draw.chg_length), service.m_insertion, static_cast<usize>(draw.caret));
         }
     }
     if(!valid)
@@ -150,9 +147,7 @@ bool X11TextInputService::convertPreeditText(const XIMText& text){
 }
 
 void X11TextInputService::publishPreedit(){
-    const TextInputAdmission::Enum status = emitPreedit(
-        m_nativeToken, m_preedit.text(), m_preedit.caretByte(), m_preedit.caretByte(), m_caretVisible
-    );
+    const TextInputAdmission::Enum status = emitPreedit(m_nativeToken, m_preedit.text(), m_preedit.caretByte(), m_preedit.caretByte(), m_caretVisible);
     if(status != TextInputAdmission::Accepted && status != TextInputAdmission::InvalidSession)
         nativeFailure();
 }

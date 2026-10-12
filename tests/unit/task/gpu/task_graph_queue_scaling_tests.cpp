@@ -76,26 +76,16 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
     }
 
     Graphics::GpuTaskGraph partialGraph(testArena.arena);
-    const Graphics::GpuTaskId producer = AddTask(
-        partialGraph, Name("tests/queue_scaling/partial/producer"), "Partial Producer"
-    );
-    const Graphics::GpuTaskId consumer = AddTask(
-        partialGraph, Name("tests/queue_scaling/partial/consumer"), "Partial Consumer", &producer, 1u
-    );
-    const Graphics::GpuTaskId independent = AddTask(
-        partialGraph, Name("tests/queue_scaling/partial/independent"), "Independent"
-    );
+    const Graphics::GpuTaskId producer = AddTask(partialGraph, Name("tests/queue_scaling/partial/producer"), "Partial Producer");
+    const Graphics::GpuTaskId consumer = AddTask(partialGraph, Name("tests/queue_scaling/partial/consumer"), "Partial Consumer", &producer, 1u);
+    const Graphics::GpuTaskId independent = AddTask(partialGraph, Name("tests/queue_scaling/partial/independent"), "Independent");
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
     ASSERT_TRUE(independent.valid());
     Graphics::GpuTaskGraphAnalysis partialAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(partialGraph, partialAnalysis));
     const Graphics::GpuTaskGraph::DeclarationReadView partialDeclarations(partialGraph);
-    ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
-        partialDeclarations,
-        partialAnalysis,
-        reachability
-    ));
+    ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(partialDeclarations, partialAnalysis, reachability));
     EXPECT_TRUE(reachability.reaches(producer, consumer));
     EXPECT_FALSE(reachability.reaches(consumer, producer));
     EXPECT_TRUE(reachability.transitivelyIndependent(producer, independent));
@@ -104,11 +94,7 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
     ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
     EXPECT_TRUE(reachability.reaches(tasks[0u], tasks[s_TaskCount - 1u]));
     EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[s_TaskCount - 1u]));
-    EXPECT_FALSE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
-        declarations,
-        partialAnalysis,
-        reachability
-    ));
+    EXPECT_FALSE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, partialAnalysis, reachability));
     EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[s_TaskCount - 1u]));
     EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[s_TaskCount - 1u]));
 }
@@ -137,16 +123,7 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
         scheduling.mergeWithPrevious = taskIndex == 1u;
         scheduling.preserveSameClassQueueWithDirectDependency = taskIndex == 6u;
         const Graphics::GpuTaskId dependency = taskIndex == 1u ? tasks[0u] : taskIndex == 6u ? tasks[2u] : Graphics::GpuTaskId{};
-        tasks[taskIndex] = AddTaskWithCommands(
-            graph,
-            identity,
-            "Weighted Prefix Task",
-            GraphicsCommands(),
-            scheduling,
-            {},
-            dependency.valid() ? &dependency : nullptr,
-            dependency.valid() ? 1u : 0u
-        );
+        tasks[taskIndex] = AddTaskWithCommands(graph, identity, "Weighted Prefix Task", GraphicsCommands(), scheduling, {}, dependency.valid() ? &dependency : nullptr, dependency.valid() ? 1u : 0u);
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
     Graphics::GpuPhysicalQueueInfo firstAuxiliary = GraphicsQueue(7u);

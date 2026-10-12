@@ -29,8 +29,7 @@ struct NwbShadowRqPushConstants{
     uint visibilityStorageSlot;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbShadowRqPushConstants> g_NwbShadowRqPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbShadowRqPushConstants> g_NwbShadowRqPushConstants;
 
 #define NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT g_NwbShadowRqPushConstants.deferredResourcesHeapSlot
 #define NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT g_NwbShadowRqPushConstants.visibilityStorageSlot

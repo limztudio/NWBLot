@@ -52,12 +52,7 @@ static void WriteU32LE(u8* const destination, const u32 value){
 }
 
 static bool IsSupportedSdrFormat(const Core::Format::Enum format){
-    return
-        format == Core::Format::RGBA8_UNORM
-        || format == Core::Format::RGBA8_UNORM_SRGB
-        || format == Core::Format::BGRA8_UNORM
-        || format == Core::Format::BGRA8_UNORM_SRGB
-    ;
+    return format == Core::Format::RGBA8_UNORM || format == Core::Format::RGBA8_UNORM_SRGB || format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
 }
 
 static bool IsBgraFormat(const Core::Format::Enum format)noexcept{
@@ -91,20 +86,11 @@ struct FramebufferCapture::ReadbackTask{
         u64 graphicsFrameIndex = 0u;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.source || !payload.destination || !payload.completionState || context.commandIrCapture)
             return false;
 
-        commandList.copyTexture(
-            *payload.destination,
-            payload.destinationSlice,
-            *payload.source,
-            payload.sourceSlice
-        );
+        commandList.copyTexture(*payload.destination, payload.destinationSlice, *payload.source, payload.sourceSlice);
         return !commandList.commandRecordingFailed();
     }
 
@@ -125,12 +111,7 @@ struct FramebufferCapture::ReadbackTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FramebufferCapture::FramebufferCapture(
-    ProjectRuntimeContext& context,
-    const AStringView outputPath,
-    const u32 captureFrameCount,
-    const FramebufferCaptureOptions options
-)
+FramebufferCapture::FramebufferCapture(ProjectRuntimeContext& context, const AStringView outputPath, const u32 captureFrameCount, const FramebufferCaptureOptions options)
     : Core::IRenderPass(context.graphics)
     , m_context(context)
     , m_options(options)
@@ -210,10 +191,7 @@ void FramebufferCapture::update(){
         requestTerminalQuit();
         return;
     }
-    const Core::GpuPhysicalQueueId physicalQueue{
-        .index = acceptedToken.physicalQueueIndex,
-        .deviceGeneration = acceptedToken.deviceGeneration,
-    };
+    const Core::GpuPhysicalQueueId physicalQueue{ .index = acceptedToken.physicalQueueIndex, .deviceGeneration = acceptedToken.deviceGeneration, };
     if(device.queueGetCompletedInstance(physicalQueue) < acceptedToken.value)
         return;
     if(!m_readback){
@@ -282,9 +260,7 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
 
     if(!getGraphics().isSwapChainReadbackAvailable()){
         m_skipped = true;
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"));
         return true;
     }
     if(!frame.valid()){
@@ -301,10 +277,7 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
     if(m_preparedFrameCount < m_captureFrameCount)
         return true;
     const Core::TextureDesc& description = frame.backBuffer.texture->getCreationDescription();
-    if(
-        (m_options.requiredWidth != 0u && description.width != m_options.requiredWidth)
-        || (m_options.requiredHeight != 0u && description.height != m_options.requiredHeight)
-    )
+    if((m_options.requiredWidth != 0u && description.width != m_options.requiredWidth) || (m_options.requiredHeight != 0u && description.height != m_options.requiredHeight))
         return true;
     if(m_options.shouldCapture && !m_options.shouldCapture(m_options.predicateContext, graphicsFrame))
         return true;
@@ -320,22 +293,10 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
 }
 
 bool FramebufferCapture::hasTaskGraphPresentationWork()const{
-    return
-        m_taskGraphPresentationPrepared
-        && m_readback
-        && !m_completionState->acceptedToken.valid()
-        && !m_captureReady
-        && !m_skipped
-        && !m_failed
-    ;
+    return m_taskGraphPresentationPrepared && m_readback && !m_completionState->acceptedToken.valid() && !m_captureReady && !m_skipped && !m_failed;
 }
 
-Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
-    Core::GpuTaskGraph& graph,
-    const Core::AcquiredPresentationFrame& frame,
-    const Core::GpuGraphResourceId backbuffer,
-    const Core::GpuTaskId previousTask
-){
+Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, const Core::GpuGraphResourceId backbuffer, const Core::GpuTaskId previousTask){
     u64 graphGeneration = 0u;
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -345,12 +306,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
         m_taskGraphPresentationClaimed = false;
         m_preparedGraphGeneration = 0u;
     }
-    if(
-        !m_taskGraphPresentationPrepared
-        || m_taskGraphPresentationClaimed
-        || !m_readback
-        || m_completionState->acceptedToken.valid()
-    )
+    if(!m_taskGraphPresentationPrepared || m_taskGraphPresentationClaimed || !m_readback || m_completionState->acceptedToken.valid())
         return {};
     if(
         !frame.valid()
@@ -385,36 +341,13 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
 
     Core::GpuTaskDesc taskDesc;
     const Core::GpuTaskResourceUse resourceUses[] = {
-        {
-            .resource = backbuffer,
-            .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) },
-            .requiredState = Core::ResourceStates::CopySource,
-            .access = Core::GpuTaskResourceAccess::Read,
-        },
-        {
-            .resource = stagingHazard,
-            .range = {},
-            .requiredState = Core::ResourceStates::Unknown,
-            .access = Core::GpuTaskResourceAccess::Write,
-        },
+        { .resource = backbuffer, .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, },
+        { .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write, },
     };
-    taskDesc
-        .setIdentity(Name("tests.smoke.framebuffer_capture"))
-        .setMarkerLabel("Framebuffer Capture Readback")
-        .setScheduling(scheduling)
-        .setDependencies(&previousTask, 1u)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
-    ;
+    taskDesc.setIdentity(Name("tests.smoke.framebuffer_capture")).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(&previousTask, 1u).setResourceUses(resourceUses, LengthOf(resourceUses));
     const Core::GpuTaskId readbackTask = graph.addTask<ReadbackTask>(
         taskDesc,
-        ReadbackTask::Payload{
-            .source = frame.backBuffer.texture,
-            .sourceSlice = {},
-            .destination = m_readback,
-            .destinationSlice = {},
-            .completionState = m_completionState,
-            .graphicsFrameIndex = m_lastCountedGraphicsFrame,
-        }
+        ReadbackTask::Payload{ .source = frame.backBuffer.texture, .sourceSlice = {}, .destination = m_readback, .destinationSlice = {}, .completionState = m_completionState, .graphicsFrameIndex = m_lastCountedGraphicsFrame, }
     );
     if(!readbackTask.valid()){
         markFailed(NWB_TEXT("failed to declare the framebuffer readback task"));
@@ -477,15 +410,7 @@ bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
         markFailed(NWB_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
         return false;
     }
-    if(
-        description.width == 0u
-        || description.height == 0u
-        || description.depth != 1u
-        || description.arraySize != 1u
-        || description.mipLevels != 1u
-        || description.sampleCount != 1u
-        || description.dimension != Core::TextureDimension::Texture2D
-    ){
+    if(description.width == 0u || description.height == 0u || description.depth != 1u || description.arraySize != 1u || description.mipLevels != 1u || description.sampleCount != 1u || description.dimension != Core::TextureDimension::Texture2D){
         markFailed(NWB_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
         return false;
     }
@@ -502,11 +427,7 @@ bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
     return true;
 }
 
-bool FramebufferCapture::writeCapture(
-    const u8* const sourceBytes,
-    const usize sourceRowPitch,
-    Core::Alloc::ScratchArena& scratchArena
-){
+bool FramebufferCapture::writeCapture(const u8* const sourceBytes, const usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena){
     const u32 width = m_captureDescription.width;
     const u32 height = m_captureDescription.height;
     if(width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
@@ -534,14 +455,8 @@ bool FramebufferCapture::writeCapture(
     bitmapBytes[0] = static_cast<u8>('B');
     bitmapBytes[1] = static_cast<u8>('M');
     __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 2u, static_cast<u32>(bitmapFileBytes));
-    __hidden_framebuffer_capture::WriteU32LE(
-        bitmapBytes.data() + 10u,
-        static_cast<u32>(__hidden_framebuffer_capture::s_BitmapPixelOffset)
-    );
-    __hidden_framebuffer_capture::WriteU32LE(
-        bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapFileHeaderSize,
-        static_cast<u32>(__hidden_framebuffer_capture::s_BitmapInfoHeaderSize)
-    );
+    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 10u, static_cast<u32>(__hidden_framebuffer_capture::s_BitmapPixelOffset));
+    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapFileHeaderSize, static_cast<u32>(__hidden_framebuffer_capture::s_BitmapInfoHeaderSize));
     __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 18u, width);
     __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 22u, height);
     __hidden_framebuffer_capture::WriteU16LE(bitmapBytes.data() + 26u, 1u);
@@ -555,10 +470,7 @@ bool FramebufferCapture::writeCapture(
         if(!sourceRowOffset)
             return false;
         const u8* const sourceRow = sourceBytes + *sourceRowOffset;
-        u8* const bitmapRow = bitmapBytes.data()
-            + __hidden_framebuffer_capture::s_BitmapPixelOffset
-            + static_cast<usize>(bitmapY) * bitmapRowPitch
-        ;
+        u8* const bitmapRow = bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapPixelOffset + static_cast<usize>(bitmapY) * bitmapRowPitch;
         for(u32 x = 0u; x < width; ++x){
             const u8* const sourcePixel = sourceRow + static_cast<usize>(x) * __hidden_framebuffer_capture::s_SourceBytesPerPixel;
             u8* const bitmapPixel = bitmapRow + static_cast<usize>(x) * __hidden_framebuffer_capture::s_BitmapBytesPerPixel;

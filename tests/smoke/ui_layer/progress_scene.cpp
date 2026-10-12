@@ -47,11 +47,7 @@ bool UiProgressSmokeScene::paint(Impl::UiPaintContext& context){
     const f32 width = Max(300.0f, context.display.logicalWidth * 0.5f - 40.0f);
     const f32 right = 24.0f + width + 32.0f;
     const f32 otherWidth = Max(220.0f, context.display.logicalWidth - right - 24.0f);
-    if(
-        !paintMain(ui, { 24.0f, 24.0f, width, 360.0f })
-        || !paintFrozen(ui, { right, 24.0f, otherWidth, 120.0f })
-        || !paintExternal(context, { right, 176.0f, otherWidth, 84.0f }) || !paintPopups(ui, right) || ui.failed()
-    )
+    if(!paintMain(ui, { 24.0f, 24.0f, width, 360.0f }) || !paintFrozen(ui, { right, 24.0f, otherWidth, 120.0f }) || !paintExternal(context, { right, 176.0f, otherWidth, 84.0f }) || !paintPopups(ui, right) || ui.failed())
         return false;
     observeState(context);
     paintMarkers(context);
@@ -93,8 +89,7 @@ bool UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect
     for(usize index = 0u; index < s_Keys.size(); ++index){
         if(!ui.progress(s_Keys[index], s_Fractions[index]))
             return false;
-        m_declared.rectangles[index + 2u] = { bounds.x + 8.0f, bounds.y + 68.0f + static_cast<f32>(index) * 40.0f,
-            bounds.width - 16.0f, 32.0f };
+        m_declared.rectangles[index + 2u] = { bounds.x + 8.0f, bounds.y + 68.0f + static_cast<f32>(index) * 40.0f, bounds.width - 16.0f, 32.0f };
     }
     if(ui.button("after", "After progress", button))
         ++m_afterClicks;
@@ -188,11 +183,7 @@ bool IsUiLayerProgressSkinSmokeEnabled(){
 }
 
 SharedUiProgressSmokeScene CreateUiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiProgressSmokeScene(
-        NewArenaObject<RefCounter<UiProgressSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiProgressSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiProgressSmokeScene(NewArenaObject<RefCounter<UiProgressSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiProgressSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

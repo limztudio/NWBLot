@@ -30,8 +30,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     if(any(uint2(pixel) >= uint2(peelWidth, peelHeight)))
         return half3(half(spanState), 0.0h, 0.0h);
     uint selectedPeelId = 0u;
-    [unroll]
-    for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
+    [unroll] for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
         if(layer >= peelLayers)
             break;
         selectedPeelId = nwbHeapStorageImage2DArrayUint(peelIdSlot).Load(int3(pixel, int(layer)));
@@ -47,8 +46,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     bool hasBack = false;
     float frontDepth = 0.0;
     float backDepth = 0.0;
-    [unroll]
-    for(uint index = 0u; index < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++index){
+    [unroll] for(uint index = 0u; index < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++index){
         if(index >= count)
             break;
         const uint4 data = nwbHeapStorageImage2DArrayUint4(eventDataSlot).Load(int3(pixel, int(index)));

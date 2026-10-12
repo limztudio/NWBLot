@@ -11,44 +11,18 @@ import sys
 from types import SimpleNamespace
 from uuid import uuid4
 
-from window_capture_smoke import (
-    STRICT_LOG_FAILURE_MESSAGES,
-    SmokeFailure,
-    SmokeSkip,
-    build_launch_environment,
-    launch_logserver,
-    launch_testbed,
-    require_normal_process_exit,
-    shutdown_logserver_and_collect,
-    terminate_process,
-    validate_expected_log_text,
-)
+from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
 
 
 EXPECTED_COUNTS = (1050, 2550, 512, 4112)
-MANIFEST = re.compile(
-    r"AvboitDepthWarpProbe: manifest boundary=(\d+) exhaustive=(\d+) randomized=(\d+) total=(\d+) seed=0x6b47c2d1"
-)
-COMPLETION = re.compile(
-    r"AvboitDepthWarpProbe: passed (\d+) cases with full LUT/control comparison and sentinel tails"
-)
+MANIFEST = re.compile(r"AvboitDepthWarpProbe: manifest boundary=(\d+) exhaustive=(\d+) randomized=(\d+) total=(\d+) seed=0x6b47c2d1")
+COMPLETION = re.compile(r"AvboitDepthWarpProbe: passed (\d+) cases with full LUT/control comparison and sentinel tails")
 SHUTDOWN = "AvboitDepthWarpProbe: shutdown completed=1"
 
 
 def validate_runtime_log(text):
-    validate_expected_log_text(
-        text,
-        (
-            "Loader: GPU debug validation enabled",
-            "Vulkan GPU debug: instance setup",
-            "validation layer enabled: yes",
-            "debug utils extension enabled: yes",
-            "GraphicsRuntime: created device '",
-            "Loader: project startup complete",
-            SHUTDOWN,
-        ),
-        STRICT_LOG_FAILURE_MESSAGES,
-    )
+    validate_expected_log_text(text, ("Loader: GPU debug validation enabled", "Vulkan GPU debug: instance setup", "validation layer enabled: yes", "debug utils extension enabled: yes", "GraphicsRuntime: created device '", "Loader: project startup complete",
+            SHUTDOWN,), STRICT_LOG_FAILURE_MESSAGES,)
     manifests = list(MANIFEST.finditer(text))
     completions = list(COMPLETION.finditer(text))
     if len(manifests) != 1 or tuple(map(int, manifests[0].groups())) != EXPECTED_COUNTS:
@@ -61,14 +35,7 @@ def validate_runtime_log(text):
     shutdown = text.index(SHUTDOWN)
     if not manifests[0].start() < startup < completions[0].start() < shutdown:
         raise SmokeFailure("depth-warp probe manifest, startup, completion and shutdown order is invalid")
-    return {
-        "boundary_cases": EXPECTED_COUNTS[0],
-        "exhaustive_cases": EXPECTED_COUNTS[1],
-        "randomized_cases": EXPECTED_COUNTS[2],
-        "passed_cases": EXPECTED_COUNTS[3],
-        "gpu_validation_enabled": True,
-        "full_output_and_sentinel_validation": True,
-    }
+    return { "boundary_cases": EXPECTED_COUNTS[0], "exhaustive_cases": EXPECTED_COUNTS[1], "randomized_cases": EXPECTED_COUNTS[2], "passed_cases": EXPECTED_COUNTS[3], "gpu_validation_enabled": True, "full_output_and_sentinel_validation": True, }
 
 
 def write_json(path, value):
@@ -76,23 +43,9 @@ def write_json(path, value):
 
 
 def acquire(args, output):
-    launch = SimpleNamespace(
-        executable=args.executable,
-        working_directory=args.working_directory,
-        logserver_executable=args.logserver_executable,
-        no_logserver=False,
-        log_port=0,
-        timeout=args.timeout,
-        application_arg=["--gpudbg"],
-        software_vulkan="off",
-    )
+    launch = SimpleNamespace(executable=args.executable, working_directory=args.working_directory, logserver_executable=args.logserver_executable, no_logserver=False, log_port=0, timeout=args.timeout, application_arg=["--gpudbg"], software_vulkan="off",)
     environment = build_launch_environment(launch)
-    write_json(output / "launch.json", {
-        "executable": str(args.executable),
-        "working_directory": str(args.working_directory),
-        "logserver_executable": str(args.logserver_executable),
-        "application_args": launch.application_arg,
-        "timeout_seconds": args.timeout,
+    write_json(output / "launch.json", { "executable": str(args.executable), "working_directory": str(args.working_directory), "logserver_executable": str(args.logserver_executable), "application_args": launch.application_arg, "timeout_seconds": args.timeout,
     })
     process = logserver = log_directory = None
     baseline, pattern = {}, ""

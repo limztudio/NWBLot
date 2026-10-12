@@ -42,12 +42,7 @@ TEST(OutputLayer, MissingContributorInvalidTokenAndZeroGenerationCannotPublishAc
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, 17u, {});
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, {});
     EXPECT_EQ(contributor.m_acceptanceCount, 0u);
-    const Core::QueueSubmissionToken consumerToken{
-        .value = 101u,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 3u,
-        .queue = Core::CommandQueue::Graphics,
-    };
+    const Core::QueueSubmissionToken consumerToken{ .value = 101u, .physicalQueueIndex = 0u, .deviceGeneration = 3u, .queue = Core::CommandQueue::Graphics, };
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, consumerToken);
     EXPECT_EQ(contributor.m_acceptanceCount, 1u);
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 0u, consumerToken);

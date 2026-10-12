@@ -24,8 +24,7 @@ struct NwbMeshObjectVertex{
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // The object cache shares the canonical StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWStructuredBuffer<NwbMeshObjectVertex, Std430DataLayout> g_NwbHeapMeshObjectVertexBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbMeshObjectVertex, Std430DataLayout> g_NwbHeapMeshObjectVertexBuffers[];
 #pragma warning(pop)
 
 
@@ -67,11 +66,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
     for(uint primitiveIndex = groupThreadID.x; primitiveIndex < primitiveCount; primitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
         const uint primitiveBase = meshlet.primitiveOffset + primitiveIndex * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
-        const uint3 localIndices = uint3(
-            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase),
-            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 1u),
-            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 2u)
-        );
+        const uint3 localIndices = uint3(nwbMeshLoadMeshletPrimitiveIndex(primitiveBase), nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 1u), nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 2u));
         const uint3 indices = localIndices + (NWB_MESH_OBJECT_FIRST_VERTEX_INDEX + meshlet.localVertexOffset);
         nwbMeshStoreGeneratedIndices(primitiveBase, indices);
     }

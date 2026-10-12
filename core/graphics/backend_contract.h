@@ -24,14 +24,7 @@ namespace GraphicsContract{
 
 
 template<typename T>
-concept BackendApi = requires(
-    T& backend,
-    const T& constBackend,
-    const Common::FrameParam& frameParam,
-    const QueueSubmissionToken& submissionToken,
-    const QueueSubmissionPreSubmitHook& presentationClaim,
-    SwapChainTransitionTicket& transitionTicket
-){
+concept BackendApi = requires(T& backend, const T& constBackend, const Common::FrameParam& frameParam, const QueueSubmissionToken& submissionToken, const QueueSubmissionPreSubmitHook& presentationClaim, SwapChainTransitionTicket& transitionTicket){
     { constBackend.getDevice() }->SameAs<GraphicsBackend::Device*>;
     { constBackend.getRendererString() }->SameAs<TStringView>;
 
@@ -315,31 +308,19 @@ concept BufferApi = DescribedResourceApi<T, BufferDesc> && requires(const T& buf
 };
 
 template<typename T>
-concept TextureApi = DescribedResourceApi<T, TextureDesc> && requires(
-    T& texture,
-    TextureSubresourceSet subresources
-){
+concept TextureApi = DescribedResourceApi<T, TextureDesc> && requires(T& texture, TextureSubresourceSet subresources){
     { texture.getCreationDescription() }->SameAs<const TextureDesc&>;
     { texture.descriptionMatchesCreation() }->SameAs<bool>;
     { texture.getNativeView(ObjectType{}, Format::UNKNOWN, subresources, TextureDimension::Unknown, bool{}) }->SameAs<Object>;
 };
 
 template<typename T>
-concept ShaderApi = DescribedResourceApi<T, ShaderDesc> && requires(
-    const T& shader,
-    const void** bytecode,
-    usize* bytecodeSize
-){
+concept ShaderApi = DescribedResourceApi<T, ShaderDesc> && requires(const T& shader, const void** bytecode, usize* bytecodeSize){
     shader.getBytecode(bytecode, bytecodeSize);
 };
 
 template<typename T>
-concept ShaderLibraryApi = requires(
-    const T& constLibrary,
-    T& library,
-    const void** bytecode,
-    usize* bytecodeSize
-){
+concept ShaderLibraryApi = requires(const T& constLibrary, T& library, const void** bytecode, usize* bytecodeSize){
     constLibrary.getBytecode(bytecode, bytecodeSize);
     { library.getShader(AStringView{}, ShaderType::All) }->SameAs<ShaderHandle>;
 };
@@ -390,10 +371,7 @@ concept RayTracingPipelineApi = DescribedResourceApi<T, RayTracingPipelineDesc> 
 };
 
 template<typename T>
-concept RayTracingShaderTableApi = requires(
-    T& shaderTable,
-    AStringView exportName
-){
+concept RayTracingShaderTableApi = requires(T& shaderTable, AStringView exportName){
     { shaderTable.setRayGenerationShader(exportName) }->SameAs<bool>;
     { shaderTable.addMissShader(exportName) }->SameAs<u32>;
     { shaderTable.addHitGroup(exportName) }->SameAs<u32>;

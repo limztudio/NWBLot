@@ -74,11 +74,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
     if(header.segmentSize != m_segmentSize){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}")
-            , StringConvert(m_volumeName)
-            , header.segmentSize
-            , m_segmentSize
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}"), StringConvert(m_volumeName), header.segmentSize, m_segmentSize);
         return false;
     }
     if(header.metadataBytes <= sizeof(header) || header.metadataBytes >= m_segmentSize){
@@ -132,20 +128,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
     }
 
     if(header.indexBytes != *expectedIndexBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}")
-            , StringConvert(m_volumeName)
-            , header.indexBytes
-            , *expectedIndexBytes
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}"), StringConvert(m_volumeName), header.indexBytes, *expectedIndexBytes);
         return false;
     }
 
     Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_LoadMetadataScratch);
-    Vector<u8, Core::Alloc::ScratchArena> indexData(
-        static_cast<usize>(header.indexBytes),
-        0,
-        scratchArena
-    );
+    Vector<u8, Core::Alloc::ScratchArena> indexData(static_cast<usize>(header.indexBytes), 0, scratchArena);
     if(header.indexBytes > 0 && !readBytesLocked(static_cast<u64>(sizeof(header)), indexData.data(), header.indexBytes)){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "failed to read metadata index");
         return false;
@@ -247,11 +235,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     }
     totalMetaBytes = *totalMetaBytesResult;
     if(totalMetaBytes > m_metadataBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes")
-            , StringConvert(m_volumeName)
-            , totalMetaBytes
-            , m_metadataBytes
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes"), StringConvert(m_volumeName), totalMetaBytes, m_metadataBytes);
         return false;
     }
 

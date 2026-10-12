@@ -20,58 +20,38 @@ NWB_VULKAN_BEGIN
 
 bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     if(!m_currentCmdBuf){
-        NWB_LOGGER_CRITICAL_WARNING(
-            NWB_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable")
-        );
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable"));
         return false;
     }
 
     for(Texture* const texture : m_currentCmdBuf->m_resourceReferences.m_textures){
         if(!isTextureReadyForCommandQueue(texture)){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue")
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue"));
             return false;
         }
     }
-    for(
-        auto it = m_stateTracker.m_permanentTextureStates.begin();
-        it != m_stateTracker.m_permanentTextureStates.end();
-        ++it
-    ){
+    for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
         Texture* const texture = it.value().texture.get();
         if(!isTextureReadyForCommandQueue(texture)){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for this exact command queue")
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
         if(!heap || !heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue")
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue"));
             return false;
         }
     }
     for(Buffer* const buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
         if(!isBufferReadyForCommandQueue(buffer)){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue")
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue"));
             return false;
         }
     }
-    for(
-        auto it = m_stateTracker.m_permanentBufferStates.begin();
-        it != m_stateTracker.m_permanentBufferStates.end();
-        ++it
-    ){
+    for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         if(!isBufferReadyForCommandQueue(it.value().buffer.get())){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for this exact command queue")
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -88,11 +68,7 @@ void CommandList::collectHostReadbackBuffers(){
             }
         }
     }
-    for(
-        auto it = m_stateTracker.m_permanentBufferStates.begin();
-        it != m_stateTracker.m_permanentBufferStates.end();
-        ++it
-    ){
+    for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         Buffer* const buffer = it.value().buffer.get();
         if(buffer && VulkanDetail::HasBufferDeviceWriteState(it.value().state))
             registerHostReadbackBuffer(*buffer);
@@ -105,18 +81,12 @@ void CommandList::appendHostReadbackBarriers(){
 }
 
 void CommandList::registerHostReadbackBuffer(Buffer& buffer){
-    if(
-        buffer.m_creationDesc.cpuAccess == CpuAccessMode::Read
-        && m_hostReadbackBarrierTracker.registerBuffer(buffer.m_buffer)
-    )
+    if(buffer.m_creationDesc.cpuAccess == CpuAccessMode::Read && m_hostReadbackBarrierTracker.registerBuffer(buffer.m_buffer))
         retainResource(&buffer);
 }
 
 void CommandList::registerHostReadbackStagingTexture(StagingTexture& stagingTexture){
-    if(
-        stagingTexture.m_cpuAccess == CpuAccessMode::Read
-        && m_hostReadbackBarrierTracker.registerBuffer(stagingTexture.m_buffer)
-    )
+    if(stagingTexture.m_cpuAccess == CpuAccessMode::Read && m_hostReadbackBarrierTracker.registerBuffer(stagingTexture.m_buffer))
         retainResource(&stagingTexture);
 }
 
@@ -157,20 +127,12 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
     if(m_commandRecordingFailed)
         return false;
 
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Graphics)
-    ;
+    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
-    const bool validExactQueue = m_creationDesc.physicalQueue.valid()
-        && queueInfo
-        && queueInfo->id == m_creationDesc.physicalQueue
-        && queueInfo->queueClass == m_creationDesc.queueType
-        && (exactCapabilityBits & s_KnownCapabilityBits) != 0u
-    ;
+    const bool validExactQueue = m_creationDesc.physicalQueue.valid() && queueInfo && queueInfo->id == m_creationDesc.physicalQueue && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & s_KnownCapabilityBits) != 0u;
     if(validRecordingScope && validExactQueue)
         return true;
 
@@ -187,28 +149,20 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
     return false;
 }
 
-bool CommandList::recordAndValidateCommandCapability(
-    const GpuQueueCapability::Mask requiredCapabilities,
-    const TStringView operationName
-){
+bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mask requiredCapabilities, const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
 #if defined(NWB_DEBUG)
     // Diagnostics must record the attempted operation even when its physical queue rejects it.
     if(m_taskCapabilityTracking){
-        m_taskCapabilitiesUsed = static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(m_taskCapabilitiesUsed) | static_cast<u8>(requiredCapabilities)
-        );
+        m_taskCapabilitiesUsed = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(m_taskCapabilitiesUsed) | static_cast<u8>(requiredCapabilities));
     }
 #endif
 
     if(m_commandRecordingFailed)
         return false;
 
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Graphics)
-    ;
+    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
     const u8 requiredBits = static_cast<u8>(requiredCapabilities);
     if(!validateCommandRecordingScope(operationName))
         return false;
@@ -236,16 +190,10 @@ bool CommandList::recordAndValidateCommandCapability(
     return false;
 }
 
-bool CommandList::recordAndValidateAnyCommandCapability(
-    const GpuQueueCapability::Mask alternativeCapabilities,
-    const TStringView operationName
-){
+bool CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability::Mask alternativeCapabilities, const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Graphics)
-    ;
+    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
     const u8 alternativeBits = static_cast<u8>(alternativeCapabilities);
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
@@ -271,11 +219,7 @@ void CommandList::rejectCommandRecording(const TStringView operationName, const 
     if(!publicCommandStateAccessible())
         return;
     if(!m_commandRecordingFailed){
-        NWB_LOGGER_CRITICAL_WARNING(
-            NWB_TEXT("Vulkan: Rejecting {} command recording: {}"),
-            !operationName.empty() ? operationName : NWB_TEXT("unnamed command"),
-            !reason.empty() ? reason : NWB_TEXT("invalid command semantics")
-        );
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Rejecting {} command recording: {}"), !operationName.empty() ? operationName : NWB_TEXT("unnamed command"), !reason.empty() ? reason : NWB_TEXT("invalid command semantics"));
     }
     invalidateCommandRecording();
 }
@@ -300,10 +244,7 @@ void CommandList::discardInvalidCommandBuffer(){
         const VkResult invalidEndResult = m_context.deviceDispatch.vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
         m_isRecording = false;
         if(invalidEndResult != VK_SUCCESS){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Vulkan: Failed to end an invalidated command buffer before discarding it: {}"),
-                ResultToString(invalidEndResult)
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to end an invalidated command buffer before discarding it: {}"), ResultToString(invalidEndResult));
         }
     }
 

@@ -12,8 +12,7 @@ import re
 import subprocess
 import sys
 
-from reflection_smoke import (DEFAULT_RAY_BUDGET, SmokeFailure, analyze_panels, capture_environment,
-    in_panel_rectangle, marker_color, validate_frame)
+from reflection_smoke import (DEFAULT_RAY_BUDGET, SmokeFailure, analyze_panels, capture_environment, in_panel_rectangle, marker_color, validate_frame)
 from reflection_roughness_smoke import compare_exact_scene
 from reflection_smoke import parse_statistics, validate_statistics
 from refraction_gallery_smoke import png_rgb_bytes
@@ -109,40 +108,19 @@ class FeedbackCapture:
         return (953, 713) if self.extent == LIT_NPOT else (960, 720)
 
 
-PAIR_CASES = (
-    (LIT_OFFSCREEN, LIT_OFFSCREEN, {}),
-    (LIT_FLOOR, LIT_FLOOR, {}),
-    ("provisional", LIT_ONSCREEN, {LIT_HARDWARE_BUDGET: 64}),
-    ("zero_budget", LIT_FLOOR, {LIT_HARDWARE_BUDGET: 0}),
-    ("tight_budget", LIT_FLOOR, {LIT_HARDWARE_BUDGET: 64}),
-    (LIT_OPAQUE_GLASS, LIT_OPAQUE_GLASS, {}),
-    (LIT_NPOT, LIT_FLOOR, {"extent": LIT_NPOT}),
-    ("rough_guard", LIT_ROUGH_FURNACE, {"roughness": 1.0}),
-    ("screen_guard", LIT_FLOOR, {"mode": LIT_SCREEN}),
-    ("long_miss", LIT_FEEDBACK_LONG_MISS, {"screen_steps": 16}),
-)
-CAPTURES = tuple(FeedbackCapture(name + (LIT_FEEDBACK if enabled else LIT_BASELINE), case, enabled, **options)
-    for name, case, options in PAIR_CASES for enabled in (False, True)) + (
-    FeedbackCapture(LIT_LONG_MISS_GEOMETRY, LIT_FEEDBACK_LONG_MISS, False, mode=LIT_SCREEN, screen_steps=96),
-    FeedbackCapture(LIT_MUTATION_INITIAL, "feedback_boundary", True),
-    FeedbackCapture(LIT_MUTATION_CHANGED, LIT_FEEDBACK_MUTATION, True, mutation=True),
-    FeedbackCapture(LIT_MUTATION_FRESH, LIT_FEEDBACK_MUTATION, True, mutation=True, final_state=True),
-)
-DIAGNOSTICS_OFF_CAPTURES = tuple(FeedbackCapture(LIT_DIAGNOSTICS_OFF + case + (LIT_FEEDBACK if enabled else LIT_BASELINE),
-    case, enabled, diagnostics=False) for case in (LIT_OFFSCREEN, LIT_FLOOR, LIT_OPAQUE_GLASS) for enabled in (False, True))
+PAIR_CASES = ((LIT_OFFSCREEN, LIT_OFFSCREEN, {}), (LIT_FLOOR, LIT_FLOOR, {}), ("provisional", LIT_ONSCREEN, {LIT_HARDWARE_BUDGET: 64}), ("zero_budget", LIT_FLOOR, {LIT_HARDWARE_BUDGET: 0}), ("tight_budget", LIT_FLOOR, {LIT_HARDWARE_BUDGET: 64}),
+    (LIT_OPAQUE_GLASS, LIT_OPAQUE_GLASS, {}), (LIT_NPOT, LIT_FLOOR, {"extent": LIT_NPOT}), ("rough_guard", LIT_ROUGH_FURNACE, {"roughness": 1.0}), ("screen_guard", LIT_FLOOR, {"mode": LIT_SCREEN}), ("long_miss", LIT_FEEDBACK_LONG_MISS, {"screen_steps": 16}),)
+CAPTURES = tuple(FeedbackCapture(name + (LIT_FEEDBACK if enabled else LIT_BASELINE), case, enabled, **options) for name, case, options in PAIR_CASES for enabled in (False, True)) + (
+    FeedbackCapture(LIT_LONG_MISS_GEOMETRY, LIT_FEEDBACK_LONG_MISS, False, mode=LIT_SCREEN, screen_steps=96), FeedbackCapture(LIT_MUTATION_INITIAL, "feedback_boundary", True), FeedbackCapture(LIT_MUTATION_CHANGED, LIT_FEEDBACK_MUTATION, True, mutation=True),
+    FeedbackCapture(LIT_MUTATION_FRESH, LIT_FEEDBACK_MUTATION, True, mutation=True, final_state=True),)
+DIAGNOSTICS_OFF_CAPTURES = tuple(FeedbackCapture(LIT_DIAGNOSTICS_OFF + case + (LIT_FEEDBACK if enabled else LIT_BASELINE), case, enabled, diagnostics=False) for case in (LIT_OFFSCREEN, LIT_FLOOR, LIT_OPAQUE_GLASS) for enabled in (False, True))
 
 
 def spec_environment(spec):
     environment = capture_environment(spec.case, spec.mode, spec.hardware_budget)
-    environment.update({"NWB_REFLECTION_SMOKE_FEEDBACK": str(int(spec.enabled)),
-        "NWB_REFLECTION_SMOKE_SCREEN_STEPS": str(spec.screen_steps),
-        "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": str(spec.accepted_frames),
-        "NWB_REFLECTION_SMOKE_ROUGHNESS": str(spec.roughness),
-        "NWB_REFLECTION_SMOKE_TEMPORAL": "0", "NWB_REFLECTION_SMOKE_SPATIAL": "0",
-        "NWB_REFLECTION_SMOKE_DIAGNOSTICS": str(int(spec.diagnostics)), "NWB_REFLECTION_SMOKE_SEED": str(spec.seed),
-        "NWB_REFLECTION_SMOKE_FINAL_STATE": str(int(spec.final_state)),
-        "NWB_REFLECTION_SMOKE_POST_RESET_SAMPLES": "1",
-        "NWB_REFLECTION_SMOKE_FEEDBACK_CAPTURE": str(int(spec.diagnostics)), "NWB_REFLECTION_SMOKE_EXTENT": spec.extent,
+    environment.update({"NWB_REFLECTION_SMOKE_FEEDBACK": str(int(spec.enabled)), "NWB_REFLECTION_SMOKE_SCREEN_STEPS": str(spec.screen_steps), "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": str(spec.accepted_frames),
+        "NWB_REFLECTION_SMOKE_ROUGHNESS": str(spec.roughness), "NWB_REFLECTION_SMOKE_TEMPORAL": "0", "NWB_REFLECTION_SMOKE_SPATIAL": "0", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": str(int(spec.diagnostics)), "NWB_REFLECTION_SMOKE_SEED": str(spec.seed),
+        "NWB_REFLECTION_SMOKE_FINAL_STATE": str(int(spec.final_state)), "NWB_REFLECTION_SMOKE_POST_RESET_SAMPLES": "1", "NWB_REFLECTION_SMOKE_FEEDBACK_CAPTURE": str(int(spec.diagnostics)), "NWB_REFLECTION_SMOKE_EXTENT": spec.extent,
         "NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": "16"})
     return environment
 
@@ -151,8 +129,7 @@ def long_panel_projection(width, height, color, reflected):
     focal = height / (2.0 * math.tan(math.pi / 6.0))
     x = -1.7 if color == LIT_RED else 1.7
     y = -3.6 if reflected else 3.6
-    return (width * 0.5 + focal * x / 12.0, height * 0.5 - focal * (y - 1.4) / 12.0,
-        focal * 0.3 / 12.0, focal * 0.35 / 12.0)
+    return (width * 0.5 + focal * x / 12.0, height * 0.5 - focal * (y - 1.4) / 12.0, focal * 0.3 / 12.0, focal * 0.35 / 12.0)
 
 
 def analyze_long_miss_panels(frame):
@@ -170,8 +147,7 @@ def analyze_long_miss_panels(frame):
             centroid = (sum(x for x, _ in selected) / len(selected), sum(y for _, y in selected) / len(selected))
             if math.hypot(centroid[0] - projection[0], centroid[1] - projection[1]) > height * 0.012:
                 raise SmokeFailure(f"long SSR {color} {label} centroid is outside its projected position")
-            color_result[label] = {LIT_PIXELS: len(selected), "minimum_projected_area_pixels": math.ceil(minimum),
-                LIT_CENTROID: centroid, "expected_centroid": projection[:2]}
+            color_result[label] = {LIT_PIXELS: len(selected), "minimum_projected_area_pixels": math.ceil(minimum), LIT_CENTROID: centroid, "expected_centroid": projection[:2]}
         outside = sum(not any(in_panel_rectangle(point, projection, height * 0.008) for projection in projections) for point in points)
         if outside > max(16, len(points) * 0.03):
             raise SmokeFailure(f"long SSR {color} pixels appeared outside the actual/direct reflection geometry")
@@ -183,8 +159,8 @@ def analyze_long_miss_panels(frame):
 
 def compare_static_images(baseline, feedback, case):
     if case == LIT_ROUGH_FURNACE:
-        # A raw rough frame has a progressive sample index. Independently integrate its many pixel samples;
-        # do not pretend distinct completed source indices should have the same stochastic pixels.
+        # A raw rough frame has a progressive sample index.
+        # Independently integrate its many pixel samples; do not pretend distinct completed source indices should have the same stochastic pixels.
         from reflection_roughness_reference import analyze_furnace
         return {LIT_BASELINE_2: analyze_furnace(baseline, 1.0), LIT_FEEDBACK_2: analyze_furnace(feedback, 1.0)}
     if case == LIT_FEEDBACK_LONG_MISS:
@@ -194,9 +170,7 @@ def compare_static_images(baseline, feedback, case):
         results = []
         for frame in (baseline, feedback):
             width, height, rows = validate_frame(frame)
-            counts = {name: sum(marker_color(rows[y][x], LIT_RED) or marker_color(rows[y][x], LIT_GREEN)
-                for x, y in region_pixels(width, height, region))
-                for name, region in (("opaque", OPAQUE_REGION), ("glass", GLASS_REGION))}
+            counts = {name: sum(marker_color(rows[y][x], LIT_RED) or marker_color(rows[y][x], LIT_GREEN) for x, y in region_pixels(width, height, region)) for name, region in (("opaque", OPAQUE_REGION), ("glass", GLASS_REGION))}
             counts["foreground"] = sum(blue_foreground(rows[y][x]) for x, y in region_pixels(width, height, FOREGROUND_REGION))
             if min(counts.values()) < 100:
                 raise SmokeFailure("feedback opaque/glass composition lost a reflected region or its foreground control")
@@ -223,9 +197,7 @@ def compare_mutation_images(initial, changed, fresh):
         first, last = before[LIT_RED][label], after[LIT_RED][label]
         if abs(first[LIT_PIXELS] - last[LIT_PIXELS]) > max(4, first[LIT_PIXELS] * 0.01):
             raise SmokeFailure("feedback mutation changed the stationary red control")
-    return {"initial": before, "changed": after, "fresh": fresh_result,
-        "changed_equals_fresh": comparison, "expected_green_motion_pixels": expected_shift,
-        "measured_green_motion_pixels": measured_shift}
+    return {"initial": before, "changed": after, "fresh": fresh_result, "changed_equals_fresh": comparison, "expected_green_motion_pixels": expected_shift, "measured_green_motion_pixels": measured_shift}
 
 
 @dataclass(frozen=True)
@@ -258,13 +230,11 @@ def qualify_costly_misses(samples, minimum_mean_iterations=12.0, minimum_limit_f
     fraction = limited / attempts
     if mean < minimum_mean_iterations or fraction < minimum_limit_fraction:
         raise SmokeFailure("scene has not demonstrated costly unsuccessful SSR traversal; attempt count alone is insufficient")
-    return {"completed_observations": len(samples), "actual_attempts": attempts, "actual_iterations": iterations,
-        "mean_iterations_per_attempt": mean, "actual_step_limit_misses": limited, "step_limit_miss_fraction": fraction,
+    return {"completed_observations": len(samples), "actual_attempts": attempts, "actual_iterations": iterations, "mean_iterations_per_attempt": mean, "actual_step_limit_misses": limited, "step_limit_miss_fraction": fraction,
         "qualification": "measured traversal work only; GPU timing comparison remains separate"}
 
 
-FEEDBACK_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_FEEDBACK_SEQUENCE, LIT_EPOCH, LIT_START_GRAPHICS_FRAME,
-    LIT_PROBE_INDEX, LIT_REQUESTED, LIT_ENABLED, LIT_REUSED, LIT_RESET, LIT_REASON, LIT_SCHEDULING_VALID, LIT_POTENTIAL_RECEIVERS,
+FEEDBACK_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_FEEDBACK_SEQUENCE, LIT_EPOCH, LIT_START_GRAPHICS_FRAME, LIT_PROBE_INDEX, LIT_REQUESTED, LIT_ENABLED, LIT_REUSED, LIT_RESET, LIT_REASON, LIT_SCHEDULING_VALID, LIT_POTENTIAL_RECEIVERS,
     LIT_SCREEN_RETURNS, LIT_BYPASSED_PIXELS, LIT_PROBE_TILES, LIT_SCREEN_ITERATIONS, LIT_SCREEN_LIMIT_MISSES)
 
 
@@ -354,45 +324,31 @@ def validate_feedback(log_text, statistics, spec):
     stable = [sample for sample in feedback if joined[(sample[LIT_SEQUENCE], sample[LIT_GENERATION])]["frame"] >= 32]
     if len(stable) < 8:
         raise SmokeFailure("feedback capture needs at least eight completed steady observations")
-    return {LIT_CAPTURED_GRAPHICS_FRAME: source, "covering_completed_feedback": captured,
-        "exact_first_frame_counters_available": captured[LIT_GRAPHICS_FRAME] == source,
-        LIT_FEEDBACK_2: feedback, LIT_STABLE_FEEDBACK: stable, LIT_STATISTICS: statistics}
+    return {LIT_CAPTURED_GRAPHICS_FRAME: source, "covering_completed_feedback": captured, "exact_first_frame_counters_available": captured[LIT_GRAPHICS_FRAME] == source, LIT_FEEDBACK_2: feedback, LIT_STABLE_FEEDBACK: stable, LIT_STATISTICS: statistics}
 
 
 def validate_diagnostics_off(log_text, spec):
     if spec.diagnostics or spec.case not in (LIT_OFFSCREEN, LIT_FLOOR, LIT_OPAQUE_GLASS) or spec.mutation or spec.roughness:
         raise SmokeFailure("diagnostics-off image proof requires a supported frozen smooth scene")
-    if any(prefix in log_text for prefix in (LIT_REFLECTIONSMOKESTATISTICS, LIT_REFLECTIONSMOKEHISTORY,
-        LIT_REFLECTIONSMOKEFEEDBACK, LIT_REFLECTIONSMOKEOPTICS)):
+    if any(prefix in log_text for prefix in (LIT_REFLECTIONSMOKESTATISTICS, LIT_REFLECTIONSMOKEHISTORY, LIT_REFLECTIONSMOKEFEEDBACK, LIT_REFLECTIONSMOKEOPTICS)):
         raise SmokeFailure("diagnostics-off capture unexpectedly published completed reflection counters")
-    for message in (LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK.format(v=int(spec.enabled)),
-        LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP.format(v=spec.screen_steps)):
+    for message in (LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK.format(v=int(spec.enabled)), LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP.format(v=spec.screen_steps)):
         if message not in log_text:
             raise SmokeFailure("diagnostics-off capture lacks accepted typed settings")
     anchors = re.findall(LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA, log_text)
     if len(anchors) != 1 or int(anchors[0]) < max(64, spec.accepted_frames):
         raise SmokeFailure("diagnostics-off readback completed before its bounded Graphics warm-up")
-    return {LIT_DIAGNOSTICS: False, LIT_CAPTURED_GRAPHICS_FRAME: int(anchors[0]),
-        "requested_prepared_graphics_frames": max(64, spec.accepted_frames) + 1,
-        "completed_feedback_observations": None, "completed_feedback_counters": None,
-        "completion_evidence": "The framebuffer helper wrote pixels only after its ordered Graphics readback fence completed."
-            " This capture has no feedback statistics readback and makes no observation-count or counter claim."}
+    return {LIT_DIAGNOSTICS: False, LIT_CAPTURED_GRAPHICS_FRAME: int(anchors[0]), "requested_prepared_graphics_frames": max(64, spec.accepted_frames) + 1, "completed_feedback_observations": None, "completed_feedback_counters": None,
+        "completion_evidence": "The framebuffer helper wrote pixels only after its ordered Graphics readback fence completed." " This capture has no feedback statistics readback and makes no observation-count or counter claim."}
 
 
 def capture(args, spec):
     output = args.output_directory / (spec.name + LIT_BMP)
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count",
-        "1" if spec.diagnostics else str(max(64, spec.accepted_frames) + 1),
-        "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG)),
-        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created",
-        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: reflection mode {spec.mode}",
-        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK.format(v=int(spec.enabled)),
-        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP.format(v=spec.screen_steps),
-        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown",
-        LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: " + ("hardware" if spec.mode == LIT_HYBRID and spec.hardware_budget else "screen-space"),
-        LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1" if spec.diagnostics else str(max(64, spec.accepted_frames) + 1), "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG)),
+        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created", LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: reflection mode {spec.mode}", LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK.format(v=int(spec.enabled)),
+        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP.format(v=spec.screen_steps), LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown",
+        LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: " + ("hardware" if spec.mode == LIT_HYBRID and spec.hardware_budget else "screen-space"), LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
         "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
     if spec.diagnostics:
         command += [LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEFEEDBACK]
@@ -418,8 +374,7 @@ def capture(args, spec):
     if not spec.diagnostics:
         return validate_diagnostics_off(text, spec)
     statistics = parse_statistics(text)
-    validate_statistics(statistics, spec.case, spec.mode, spec.hardware_budget,
-        allow_zero_samples=spec.roughness > 0, extent=spec.dimensions)
+    validate_statistics(statistics, spec.case, spec.mode, spec.hardware_budget, allow_zero_samples=spec.roughness > 0, extent=spec.dimensions)
     return validate_feedback(text, statistics, spec)
 
 
@@ -453,11 +408,8 @@ def compare_work(baseline, feedback, spec):
                 raise SmokeFailure("feedback changed offscreen admitted hardware work")
     if bypass and not any(sample[LIT_PROBE_TILES] for sample in optimized):
         raise SmokeFailure("dormant feedback never issued a periodic tile probe")
-    return {"baseline_mean_attempts": before_attempts, "feedback_mean_attempts": after_attempts,
-        "feedback_bypassed_pixels_across_observations": bypass,
-        "feedback_probe_classes_across_observations": sum(sample[LIT_PROBE_TILES] for sample in optimized),
-        "baseline_mean_hierarchy_loads": sum(sample[LIT_SCREEN_ITERATIONS] for sample in original) / len(original),
-        "feedback_mean_hierarchy_loads": sum(sample[LIT_SCREEN_ITERATIONS] for sample in optimized) / len(optimized),
+    return {"baseline_mean_attempts": before_attempts, "feedback_mean_attempts": after_attempts, "feedback_bypassed_pixels_across_observations": bypass, "feedback_probe_classes_across_observations": sum(sample[LIT_PROBE_TILES] for sample in optimized),
+        "baseline_mean_hierarchy_loads": sum(sample[LIT_SCREEN_ITERATIONS] for sample in original) / len(original), "feedback_mean_hierarchy_loads": sum(sample[LIT_SCREEN_ITERATIONS] for sample in optimized) / len(optimized),
         "note": "Completed work counters; these are not GPU timings."}
 
 
@@ -469,20 +421,17 @@ def analyze_suite(directory, evidence, specs=CAPTURES):
     for case in (LIT_OFFSCREEN, LIT_FLOOR, LIT_OPAQUE_GLASS):
         first, second = LIT_DIAGNOSTICS_OFF + case + LIT_BASELINE, LIT_DIAGNOSTICS_OFF + case + LIT_FEEDBACK
         if first in available and second in available:
-            metrics[LIT_DIAGNOSTICS_OFF + case] = {LIT_IMAGES: compare_static_images(frame(first), frame(second), case),
-                LIT_DIAGNOSTICS: False, "work_counters": None,
+            metrics[LIT_DIAGNOSTICS_OFF + case] = {LIT_IMAGES: compare_static_images(frame(first), frame(second), case), LIT_DIAGNOSTICS: False, "work_counters": None,
                 LIT_SCOPE: "Frozen smooth image equivalence after completed framebuffer readbacks; no feedback counter evidence."}
     for prefix, case, _ in PAIR_CASES:
         first, second = prefix + LIT_BASELINE, prefix + LIT_FEEDBACK
         if first not in available or second not in available:
             continue
-        metrics[prefix] = {LIT_IMAGES: compare_static_images(frame(first), frame(second), case),
-            "completed_work": compare_work(evidence[first], evidence[second], available[second])}
+        metrics[prefix] = {LIT_IMAGES: compare_static_images(frame(first), frame(second), case), "completed_work": compare_work(evidence[first], evidence[second], available[second])}
     if LIT_LONG_MISS_BASELINE in available:
         original = evidence[LIT_LONG_MISS_BASELINE]
         stats = {(sample[LIT_SEQUENCE], sample[LIT_GENERATION]): sample for sample in original[LIT_STATISTICS]}
-        observations = [TraversalEvidence(stats[(sample[LIT_SEQUENCE], sample[LIT_GENERATION])][LIT_SCREEN_ATTEMPTS],
-            sample[LIT_SCREEN_ITERATIONS], sample[LIT_SCREEN_LIMIT_MISSES], available[LIT_LONG_MISS_BASELINE].screen_steps)
+        observations = [TraversalEvidence(stats[(sample[LIT_SEQUENCE], sample[LIT_GENERATION])][LIT_SCREEN_ATTEMPTS], sample[LIT_SCREEN_ITERATIONS], sample[LIT_SCREEN_LIMIT_MISSES], available[LIT_LONG_MISS_BASELINE].screen_steps)
             for sample in original[LIT_STABLE_FEEDBACK]]
         metrics["costly_miss_qualification"] = qualify_costly_misses(observations)
     if LIT_LONG_MISS_GEOMETRY in available:
@@ -496,12 +445,9 @@ def write_report(args, completed, evidence, metrics=None):
     diagnostics_off = bool(completed) and all(not spec.diagnostics for spec in completed)
     stem = "reflection_feedback_diagnostics_off" if diagnostics_off else "reflection_feedback"
     note = "Actual framebuffer readbacks. Diagnostic captures include completed feedback observations for budget guards, returns, probes, source-change invalidation and actual traversal work. The separate diagnostics-off suite checks frozen smooth images after the framebuffer completion fence and contains no feedback counter evidence. Counter reductions do not establish GPU speed; optimized benchmarks remain separate."
-    build_identity = {"executable_sha256": file_identity(args.executable)["sha256"],
-        "asset_volumes": authored_volume_hashes(args.working_directory)}
-    metadata = {"frame_source": "actual application framebuffer readback", "captures": [asdict(spec) for spec in completed],
-        "build_identity": build_identity, "temporal": False, "spatial_filter": False,
-        "fixed_delta_seconds": 0.016666667, "optical_queries": 16,
-        "completed_frame_evidence": evidence, "metrics": metrics, LIT_SCOPE: note,
+    build_identity = {"executable_sha256": file_identity(args.executable)["sha256"], "asset_volumes": authored_volume_hashes(args.working_directory)}
+    metadata = {"frame_source": "actual application framebuffer readback", "captures": [asdict(spec) for spec in completed], "build_identity": build_identity, "temporal": False, "spatial_filter": False,
+        "fixed_delta_seconds": 0.016666667, "optical_queries": 16, "completed_frame_evidence": evidence, "metrics": metrics, LIT_SCOPE: note,
         "analyzer_source_sha256_lf": hashlib.sha256(Path(__file__).read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest()}
     (args.output_directory / (stem + "_manifest.json")).write_text(json.dumps(metadata, indent=2) + LIT_N, encoding=LIT_UTF_8)
     cards = []
@@ -509,8 +455,7 @@ def write_report(args, completed, evidence, metrics=None):
         path = args.output_directory / (spec.name + LIT_BMP)
         png = png_rgb_bytes(read_bmp_24_rows(path))
         path.with_suffix(".png").write_bytes(png)
-        cards.append(f'<article><h2>{html.escape(spec.name)}</h2><a href="{spec.name}.bmp">Raw BMP</a> / '
-            f'<a href="{spec.name}.log">Completed-frame log</a><img alt="Actual {html.escape(spec.name)} capture" '
+        cards.append(f'<article><h2>{html.escape(spec.name)}</h2><a href="{spec.name}.bmp">Raw BMP</a> / ' f'<a href="{spec.name}.log">Completed-frame log</a><img alt="Actual {html.escape(spec.name)} capture" '
             f'src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
     document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection feedback evidence</title>'
     document += '<style>body{font:16px system-ui;background:#141922;color:#eee;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#8cf}pre{white-space:pre-wrap}</style>'

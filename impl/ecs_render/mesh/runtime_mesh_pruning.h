@@ -29,12 +29,7 @@ namespace ECSRenderDetail{
 
 // Release geometry before its cache entry is erased, in iteration order.
 template<typename ReleaseMesh>
-void PruneRuntimeMeshResources(
-    HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>& meshes,
-    const MeshSystem& meshSystem,
-    ReleaseMesh&& releaseMesh,
-    Core::Alloc::ScratchArena& scratchArena
-){
+void PruneRuntimeMeshResources(HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>& meshes, const MeshSystem& meshSystem, ReleaseMesh&& releaseMesh, Core::Alloc::ScratchArena& scratchArena){
     usize runtimeMeshCount = 0u;
     for(const auto& entry : meshes){
         if(entry.second.runtimeMesh)
@@ -69,12 +64,7 @@ void PruneRuntimeMeshResources(
 
 // Optional-system overload: prunes every runtime mesh when no MeshSystem is available.
 template<typename ReleaseMesh>
-void PruneRuntimeMeshResources(
-    HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>& meshes,
-    const MeshSystem* meshSystem,
-    ReleaseMesh&& releaseMesh,
-    Core::Alloc::ScratchArena& scratchArena
-){
+void PruneRuntimeMeshResources(HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>& meshes, const MeshSystem* meshSystem, ReleaseMesh&& releaseMesh, Core::Alloc::ScratchArena& scratchArena){
     Optional<RuntimeMeshRequestSet> requests;
     if(meshSystem){
         usize runtimeMeshCount = 0u;

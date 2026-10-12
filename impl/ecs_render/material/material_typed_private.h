@@ -115,10 +115,7 @@ struct MaterialTypedByteContentKeyEqual{
 // Used by the material draw pass and the shadow occluder packing alike.
 using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteContentKeyHasher, MaterialTypedByteContentKeyEqual>;
 
-[[nodiscard]] inline Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(
-    const usize currentByteCount,
-    const usize appendByteCount
-){
+[[nodiscard]] inline Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(const usize currentByteCount, const usize appendByteCount){
     MaterialTypedByteAppendRange appendRange;
     if(appendByteCount == 0u)
         return appendRange;
@@ -158,10 +155,7 @@ using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, Ma
 }
 
 template<typename DestinationByteVector, typename SourceByteVector>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(
-    DestinationByteVector& materialTypedBytes,
-    const SourceByteVector& typedBytes
-){
+[[nodiscard]] inline Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(DestinationByteVector& materialTypedBytes, const SourceByteVector& typedBytes){
     const auto appendRange = TryBuildMaterialTypedByteAppendRange(materialTypedBytes.size(), typedBytes.size());
     if(!appendRange)
         return MakeUnexpected(Failure{});
@@ -178,17 +172,11 @@ template<typename DestinationByteVector, typename SourceByteVector>
 }
 
 template<typename DestinationByteVector, typename SourceByteVector, typename MaterialTypedByteRangeMap>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(
-    DestinationByteVector& materialTypedBytes,
-    MaterialTypedByteRangeMap& rangeMap,
-    const SourceByteVector& typedBytes
-){
+[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(DestinationByteVector& materialTypedBytes, MaterialTypedByteRangeMap& rangeMap, const SourceByteVector& typedBytes){
     if(typedBytes.empty())
         return MaterialTypedByteRange{};
 
-    const MaterialTypedByteContentLookup lookup{
-        ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()), Span<const u8>(typedBytes.data(), typedBytes.size())
-    };
+    const MaterialTypedByteContentLookup lookup{ ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()), Span<const u8>(typedBytes.data(), typedBytes.size()) };
     const auto foundRange = rangeMap.find(lookup);
     if(foundRange != rangeMap.end())
         return foundRange.value();
@@ -212,23 +200,14 @@ template<typename DestinationByteVector, typename SourceByteVector, typename Mat
     return range.byteCount != 0u || range.byteOffset == 0u;
 }
 
-inline InstanceGpuData BuildInstanceGpuData(
-    const Core::ECS::EntityID entity,
-    const NWB::Impl::Scene::TransformComponent* transform,
-    const MaterialTypedInstanceRanges& materialTypedRanges
-)noexcept{
+inline InstanceGpuData BuildInstanceGpuData(const Core::ECS::EntityID entity, const NWB::Impl::Scene::TransformComponent* transform, const MaterialTypedInstanceRanges& materialTypedRanges)noexcept{
     NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.constantRange));
     NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.mutableRange));
 
     InstanceGpuData data;
     if(transform){
         data.rotation = transform->rotation;
-        data.translation = Float3UInt(
-            transform->position.x,
-            transform->position.y,
-            transform->position.z,
-            materialTypedRanges.mutableRange.byteOffset
-        );
+        data.translation = Float3UInt(transform->position.x, transform->position.y, transform->position.z, materialTypedRanges.mutableRange.byteOffset);
         data.scale = Float3UInt(transform->scale.x, transform->scale.y, transform->scale.z, entity.id);
     }
     else{
@@ -239,18 +218,10 @@ inline InstanceGpuData BuildInstanceGpuData(
 }
 
 template<typename MaterialTypedByteVector>
-[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(
-    const MaterialTypedByteVector& materialTypedBytes
-){
+[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(const MaterialTypedByteVector& materialTypedBytes){
     const usize uploadByteCount = materialTypedBytes.size();
-    NWB_ASSERT_MSG(
-        uploadByteCount != 0u,
-        NWB_TEXT("RendererSystem: material typed data upload is empty")
-    );
-    NWB_ASSERT_MSG(
-        (uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
-        NWB_TEXT("RendererSystem: material typed data upload is not word-aligned")
-    );
+    NWB_ASSERT_MSG(uploadByteCount != 0u, NWB_TEXT("RendererSystem: material typed data upload is empty"));
+    NWB_ASSERT_MSG((uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u, NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
 
     return uploadByteCount;
 }
@@ -265,43 +236,20 @@ template<typename MaterialTypedByteVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void AssertMaterialTypedUploadRange(
-    const MaterialTypedByteRange& range,
-    const usize uploadByteCount,
-    [[maybe_unused]] const TStringView rangeName
-){
+inline void AssertMaterialTypedUploadRange(const MaterialTypedByteRange& range, const usize uploadByteCount, [[maybe_unused]] const TStringView rangeName){
     if(range.byteCount == 0u){
-        NWB_ASSERT_MSG(
-            MaterialTypedByteRangeEmptyOffsetValid(range),
-            NWB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"),
-            rangeName
-        );
+        NWB_ASSERT_MSG(MaterialTypedByteRangeEmptyOffsetValid(range), NWB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"), rangeName);
         return;
     }
 
-    NWB_ASSERT_MSG(
-        ((range.byteOffset | range.byteCount) & static_cast<u32>(NWB_MATERIAL_TYPED_WORD_BYTES - 1u)) == 0u,
-        NWB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"),
-        rangeName
-    );
+    NWB_ASSERT_MSG(((range.byteOffset | range.byteCount) & static_cast<u32>(NWB_MATERIAL_TYPED_WORD_BYTES - 1u)) == 0u, NWB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"), rangeName);
 
     const usize byteOffset = static_cast<usize>(range.byteOffset);
-    NWB_ASSERT_MSG(
-        byteOffset <= uploadByteCount,
-        NWB_TEXT("RendererSystem: {} material typed byte range offset exceeds upload data"),
-        rangeName
-    );
-    NWB_ASSERT_MSG(
-        byteOffset <= uploadByteCount && static_cast<usize>(range.byteCount) <= uploadByteCount - byteOffset,
-        NWB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"),
-        rangeName
-    );
+    NWB_ASSERT_MSG(byteOffset <= uploadByteCount, NWB_TEXT("RendererSystem: {} material typed byte range offset exceeds upload data"), rangeName);
+    NWB_ASSERT_MSG(byteOffset <= uploadByteCount && static_cast<usize>(range.byteCount) <= uploadByteCount - byteOffset, NWB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"), rangeName);
 }
 
-inline void AssertMaterialTypedInstanceRange(
-    const MaterialTypedInstanceRanges& ranges,
-    const usize uploadByteCount
-){
+inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& ranges, const usize uploadByteCount){
     AssertMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, NWB_TEXT("constant"));
     AssertMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, NWB_TEXT("mutable"));
 }
@@ -324,22 +272,13 @@ private:
 };
 
 template<typename MaterialTypedByteVector>
-inline void AssertMaterialTypedUploadRanges(
-    const MaterialTypedInstanceRangeVector& instanceRanges,
-    const MaterialTypedByteVector& materialTypedBytes
-){
+inline void AssertMaterialTypedUploadRanges(const MaterialTypedInstanceRangeVector& instanceRanges, const MaterialTypedByteVector& materialTypedBytes){
     if(instanceRanges.empty())
         return;
 
     const usize uploadByteCount = materialTypedBytes.size();
-    NWB_ASSERT_MSG(
-        uploadByteCount != 0u,
-        NWB_TEXT("RendererSystem: material typed data upload is empty")
-    );
-    NWB_ASSERT_MSG(
-        (uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
-        NWB_TEXT("RendererSystem: material typed data upload is not word-aligned")
-    );
+    NWB_ASSERT_MSG(uploadByteCount != 0u, NWB_TEXT("RendererSystem: material typed data upload is empty"));
+    NWB_ASSERT_MSG((uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u, NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
 
     for(const MaterialTypedInstanceRanges& ranges : instanceRanges){
         AssertMaterialTypedInstanceRange(ranges, uploadByteCount);

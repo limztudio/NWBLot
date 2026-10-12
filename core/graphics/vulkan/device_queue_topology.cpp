@@ -44,18 +44,11 @@ u16 Device::getPhysicalQueueIndex(const CommandQueue::Enum queue)const noexcept{
 }
 
 GpuPhysicalQueueTopology Device::getPhysicalQueueTopology()const noexcept{
-    return GpuPhysicalQueueTopology{
-        .queues = m_physicalQueueInfos.empty() ? nullptr : m_physicalQueueInfos.data(),
-        .queueCount = m_physicalQueueInfos.size(),
-    };
+    return GpuPhysicalQueueTopology{ .queues = m_physicalQueueInfos.empty() ? nullptr : m_physicalQueueInfos.data(), .queueCount = m_physicalQueueInfos.size(), };
 }
 
 const GpuPhysicalQueueInfo* Device::getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept{
-    if(
-        !queue.valid()
-        || queue.deviceGeneration != m_deviceGeneration
-        || queue.index >= m_physicalQueueInfos.size()
-    )
+    if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration || queue.index >= m_physicalQueueInfos.size())
         return nullptr;
     const GpuPhysicalQueueInfo& info = m_physicalQueueInfos[queue.index];
     return info.id == queue ? &info : nullptr;
@@ -74,11 +67,7 @@ GpuQueueTimelineSnapshot Device::getQueueTimelineSnapshot(const GpuPhysicalQueue
     {
         ScopedLock lock(physicalQueue->m_mutex);
         result = physicalQueue->updateLastFinishedID();
-        snapshot = GpuQueueTimelineSnapshot{
-            .queue = queue,
-            .submittedValue = physicalQueue->m_lastSubmittedID,
-            .completedValue = physicalQueue->m_lastFinishedID,
-        };
+        snapshot = GpuQueueTimelineSnapshot{ .queue = queue, .submittedValue = physicalQueue->m_lastSubmittedID, .completedValue = physicalQueue->m_lastFinishedID, };
     }
     if(result == VK_ERROR_DEVICE_LOST)
         captureDeviceLoss("queue timeline snapshot");
@@ -96,28 +85,15 @@ GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQue
     return physicalQueue ? physicalQueue->commandArenaStatistics() : GpuCommandArenaStatistics{};
 }
 
-GpuCommandArenaWorkerStatistics Device::getCommandArenaWorkerStatistics(
-    const GpuPhysicalQueueId& queue,
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
-)const noexcept{
+GpuCommandArenaWorkerStatistics Device::getCommandArenaWorkerStatistics(const GpuPhysicalQueueId& queue, const u64 recordingWorkerDomain, const u32 recordingWorkerIndex)const noexcept{
     if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
         return {};
     const Queue* const physicalQueue = m_physicalQueues[queue.index];
-    return physicalQueue
-        ? physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex)
-        : GpuCommandArenaWorkerStatistics{}
-    ;
+    return physicalQueue ? physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex) : GpuCommandArenaWorkerStatistics{};
 }
 
-bool Device::matchesPhysicalQueueIdentity(
-    const CommandQueue::Enum queue,
-    const u16 physicalQueueIndex,
-    const u16 deviceGeneration
-)const noexcept{
-    const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(
-        GpuPhysicalQueueId{ .index = physicalQueueIndex, .deviceGeneration = deviceGeneration }
-    );
+bool Device::matchesPhysicalQueueIdentity(const CommandQueue::Enum queue, const u16 physicalQueueIndex, const u16 deviceGeneration)const noexcept{
+    const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(GpuPhysicalQueueId{ .index = physicalQueueIndex, .deviceGeneration = deviceGeneration });
     return info && info->queueClass == queue;
 }
 

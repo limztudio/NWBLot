@@ -33,34 +33,22 @@ public:
     [[nodiscard]] virtual TextInputBeginResult begin(const TextInputSessionDesc& desc)override final;
     [[nodiscard]] virtual bool end(TextInputSessionToken token)override final;
     [[nodiscard]] virtual TextInputAdmission::Enum updateCaret(TextInputSessionToken token, TextInputRect caret)override final;
-    [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(
-        TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte,
-        TextInputChangeCause::Enum cause = TextInputChangeCause::Other
-    )override final;
+    [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, TextInputChangeCause::Enum cause = TextInputChangeCause::Other)override final;
     [[nodiscard]] virtual TextInputPollResult::Enum poll(TextInputSessionToken token, TextInputEvent& event)override final;
     [[nodiscard]] virtual bool setFocused(bool focused)override final;
 
 
 protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(
-        TextInputSessionToken token, const TextInputSessionDesc& desc
-    );
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken token, const TextInputSessionDesc& desc);
     virtual void endNativeSession(TextInputSessionToken token);
     [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(TextInputRect caret);
-    virtual void updateNativeSurrounding(
-        AStringView text, usize anchorByte, usize caretByte, u64 revision, TextInputChangeCause::Enum cause
-    );
+    virtual void updateNativeSurrounding(AStringView text, usize anchorByte, usize caretByte, u64 revision, TextInputChangeCause::Enum cause);
 
 
 protected:
     [[nodiscard]] TextInputAdmission::Enum emitCommit(TextInputSessionToken token, AStringView text);
-    [[nodiscard]] TextInputAdmission::Enum emitPreedit(
-        TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, bool caretVisible = true
-    );
-    [[nodiscard]] TextInputAdmission::Enum emitDeleteSurrounding(
-        TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision,
-        TextInputDeletionBasis::Enum basis
-    );
+    [[nodiscard]] TextInputAdmission::Enum emitPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, bool caretVisible = true);
+    [[nodiscard]] TextInputAdmission::Enum emitDeleteSurrounding(TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision, TextInputDeletionBasis::Enum basis);
     [[nodiscard]] bool cancelSession(TextInputSessionToken token, TextInputCancelReason::Enum reason);
     [[nodiscard]] Alloc::GlobalArena& arena()const noexcept{ return m_arena; }
     [[nodiscard]] AStringView surroundingText()const noexcept{ return m_surrounding; }

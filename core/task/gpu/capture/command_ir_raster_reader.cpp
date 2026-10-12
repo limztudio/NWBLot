@@ -52,11 +52,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         const auto builtin = nextBuiltinTask();
         if(!builtin)
             return MakeUnexpected(builtin.error());
-        return GpuCommandIrDecodedRecord{
-            .opcode = __hidden_gpu_command_ir_raster_reader::BuiltinWireOpcode(builtin->opcode),
-            .builtin = *builtin,
-            .raster = {},
-        };
+        return GpuCommandIrDecodedRecord{ .opcode = __hidden_gpu_command_ir_raster_reader::BuiltinWireOpcode(builtin->opcode), .builtin = *builtin, .raster = {}, };
     }
 
     const usize recordOffset = m_cursor;
@@ -71,11 +67,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         const auto builtin = nextBuiltinTask();
         if(!builtin)
             return MakeUnexpected(builtin.error());
-        return GpuCommandIrDecodedRecord{
-            .opcode = __hidden_gpu_command_ir_raster_reader::BuiltinWireOpcode(builtin->opcode),
-            .builtin = *builtin,
-            .raster = {},
-        };
+        return GpuCommandIrDecodedRecord{ .opcode = __hidden_gpu_command_ir_raster_reader::BuiltinWireOpcode(builtin->opcode), .builtin = *builtin, .raster = {}, };
     }
 
     usize expectedByteSize = 0u;
@@ -124,20 +116,10 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             break;
         }
         const GpuCommandIrSetGraphicsStateRecord& record = *wireRecord;
-        valid = true
-            && record.pipelineIndex != Limit<u32>::s_Max
-            && record.colorAttachmentIndex != Limit<u32>::s_Max
-            && record.framebufferOwnerIndex != Limit<u32>::s_Max
-            && record.vertexBindingCount <= s_MaxVertexAttributes
-            && record.hasScissor <= 1u
-        ;
+        valid = true && record.pipelineIndex != Limit<u32>::s_Max && record.colorAttachmentIndex != Limit<u32>::s_Max && record.framebufferOwnerIndex != Limit<u32>::s_Max && record.vertexBindingCount <= s_MaxVertexAttributes && record.hasScissor <= 1u;
         if(!valid)
             break;
-        if(
-            record.blobSizeBytes != static_cast<u64>(record.vertexBindingCount) * sizeof(GpuCommandIrRasterVertexWire)
-            || record.blobOffsetBytes != m_nextBlobOffset
-            || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset
-        ){
+        if(record.blobSizeBytes != static_cast<u64>(record.vertexBindingCount) * sizeof(GpuCommandIrRasterVertexWire) || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
@@ -149,10 +131,8 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         raster.dynamicStencilRefValue = record.stencilRef;
         raster.hasScissor = record.hasScissor != 0u;
         raster.scissor = { record.scissor.minX, record.scissor.maxX, record.scissor.minY, record.scissor.maxY };
-        raster.blendConstantColor = { record.blendConstantColor.r, record.blendConstantColor.g,
-            record.blendConstantColor.b, record.blendConstantColor.a };
-        raster.viewport = { record.viewportMinX, record.viewportMaxX, record.viewportMinY,
-            record.viewportMaxY, record.viewportMinZ, record.viewportMaxZ };
+        raster.blendConstantColor = { record.blendConstantColor.r, record.blendConstantColor.g, record.blendConstantColor.b, record.blendConstantColor.a };
+        raster.viewport = { record.viewportMinX, record.viewportMaxX, record.viewportMinY, record.viewportMaxY, record.viewportMinZ, record.viewportMaxZ };
         raster.blobOffsetBytes = record.blobOffsetBytes;
         raster.blobSizeBytes = record.blobSizeBytes;
         if(record.indexResourceIndex != Limit<u32>::s_Max)
@@ -161,11 +141,8 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             && IsFinite(raster.blendConstantColor.r) && IsFinite(raster.blendConstantColor.g)
             && IsFinite(raster.blendConstantColor.b) && IsFinite(raster.blendConstantColor.a)
             && (!raster.hasScissor || (raster.scissor.minX < raster.scissor.maxX && raster.scissor.minY < raster.scissor.maxY))
-            && (raster.hasScissor || (record.scissor.minX == 0 && record.scissor.maxX == 0
-                && record.scissor.minY == 0 && record.scissor.maxY == 0))
-            && (raster.indexResource.valid()
-                ? (raster.indexFormat == Format::R16_UINT || raster.indexFormat == Format::R32_UINT)
-                : (raster.indexFormat == Format::UNKNOWN && raster.indexOffset == 0u))
+            && (raster.hasScissor || (record.scissor.minX == 0 && record.scissor.maxX == 0 && record.scissor.minY == 0 && record.scissor.maxY == 0))
+            && (raster.indexResource.valid() ? (raster.indexFormat == Format::R16_UINT || raster.indexFormat == Format::R32_UINT) : (raster.indexFormat == Format::UNKNOWN && raster.indexOffset == 0u))
         ;
         if(!valid)
             break;
@@ -198,9 +175,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             break;
         }
         const GpuCommandIrBindGraphicsHeapRecord& record = *wireRecord;
-        valid = true
-            && record.pipelineIndex != Limit<u32>::s_Max
-            && record.heapOwnerIndex != Limit<u32>::s_Max;
+        valid = true && record.pipelineIndex != Limit<u32>::s_Max && record.heapOwnerIndex != Limit<u32>::s_Max;
         raster.pipeline = { m_graphGeneration, record.pipelineIndex };
         raster.heapOwnerIndex = record.heapOwnerIndex;
         break;
@@ -213,14 +188,8 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             break;
         }
         const GpuCommandIrSetPushConstantsRecord& record = *wireRecord;
-        valid = true
-            && record.blobSizeBytes != 0u
-            && record.blobSizeBytes <= Limit<u32>::s_Max
-            && (record.blobSizeBytes & 3u) == 0u;
-        if(valid && (
-            record.blobOffsetBytes != m_nextBlobOffset
-            || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset
-        )){
+        valid = true && record.blobSizeBytes != 0u && record.blobSizeBytes <= Limit<u32>::s_Max && (record.blobSizeBytes & 3u) == 0u;
+        if(valid && (record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
@@ -238,8 +207,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         if(!valid)
             break;
         const GpuCommandIrDrawRecord& record = *wireRecord;
-        raster.drawArguments = { record.vertexCount, record.instanceCount, record.startIndexLocation,
-            record.startVertexLocation, record.startInstanceLocation };
+        raster.drawArguments = { record.vertexCount, record.instanceCount, record.startIndexLocation, record.startVertexLocation, record.startInstanceLocation };
         break;
     }
     case GpuCommandIrWireOpcode::EndRenderPass:{

@@ -29,12 +29,7 @@ struct GraphStamp{
 };
 
 [[nodiscard]] static Core::GpuGraphResourceDesc ResourceDescription(const Name& identity, Core::GpuGraphResourceType::Enum type){
-    return Core::GpuGraphResourceDesc{}
-        .setIdentity(identity)
-        .setMarkerLabel("Graph Import Index Resource")
-        .setType(type)
-        .setInitialState(Core::ResourceStates::Unknown)
-    ;
+    return Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Graph Import Index Resource").setType(type).setInitialState(Core::ResourceStates::Unknown);
 }
 
 [[nodiscard]] static Name IndexedName(const Name& prefix, const usize index){
@@ -71,14 +66,8 @@ struct ImportContext{
         resources.resize(count);
         sets.resize(count);
         for(usize index = 0u; index < count; ++index){
-            genericDescriptions[index] = ResourceDescription(
-                IndexedName(Name("tests/graph_import_index/generic"), index), Core::GpuGraphResourceType::HazardDomain
-            );
-            setDescriptions[index]
-                .setIdentity(IndexedName(Name("tests/graph_import_index/set"), index))
-                .setMarkerLabel("Graph Import Index Set")
-                .setMembers(&resources[index], 1u)
-            ;
+            genericDescriptions[index] = ResourceDescription(IndexedName(Name("tests/graph_import_index/generic"), index), Core::GpuGraphResourceType::HazardDomain);
+            setDescriptions[index].setIdentity(IndexedName(Name("tests/graph_import_index/set"), index)).setMarkerLabel("Graph Import Index Set").setMembers(&resources[index], 1u);
         }
     }
 };
@@ -102,12 +91,7 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
         context.resources[index] = context.graph.importResource(description);
         ASSERT_TRUE(context.resources[index].valid());
         EXPECT_EQ(context.resources[index].index, index);
-        context.sets[index] = context.graph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(identities.back())
-                .setMarkerLabel("Binary Identity Set")
-                .setMembers(&context.resources[index], 1u)
-        );
+        context.sets[index] = context.graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identities.back()).setMarkerLabel("Binary Identity Set").setMembers(&context.resources[index], 1u));
         ASSERT_TRUE(context.sets[index].valid());
         EXPECT_EQ(context.sets[index].index, index);
     }
@@ -116,12 +100,7 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
         const usize index = remaining - 1u;
         const Name equalIdentity(identities[index].identityHash());
         EXPECT_EQ(context.graph.importResource(ResourceDescription(equalIdentity, Core::GpuGraphResourceType::HazardDomain)), context.resources[index]);
-        EXPECT_EQ(context.graph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(equalIdentity)
-                .setMarkerLabel("Later Binary Identity Label")
-                .setMembers(&context.resources[index], 1u)
-        ), context.sets[index]);
+        EXPECT_EQ(context.graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(equalIdentity).setMarkerLabel("Later Binary Identity Label").setMembers(&context.resources[index], 1u)), context.sets[index]);
     }
     ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, before));
     EXPECT_EQ(before.resources, s_Count);

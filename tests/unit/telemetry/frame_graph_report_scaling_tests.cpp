@@ -71,28 +71,13 @@ struct ReportFixture{
     {}
 
     void addUnmeasuredNode(){
-        nodes.push_back(Telemetry::FrameGraphNodeDesc{
-            .name = Name("tests/telemetry/report/task"),
-            .label = "Unmeasured task",
-            .kind = Telemetry::FrameGraphNodeKind::Pass,
-            .flags = 0u,
-            .queueAssignment = {},
-            .compiledTask = {},
-            .runtimeStatistics = {},
-        });
+        nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/task"), .label = "Unmeasured task", .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
     }
 
     void addOwner(const u32 packetCount, const u16 firstQueueIndex, const bool includeQueues = true){
         const u32 ownerIndex = static_cast<u32>(nodes.size());
         const Telemetry::FrameGraphRuntimeStatistics owner = OwnerStatistics(packetCount);
-        nodes.push_back(Telemetry::FrameGraphNodeDesc{
-            .name = Name("tests/telemetry/report/owner"),
-            .label = "Measured owner",
-            .kind = Telemetry::FrameGraphNodeKind::Pass,
-            .queueAssignment = {},
-            .compiledTask = {},
-            .runtimeStatistics = owner,
-        });
+        nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/owner"), .label = "Measured owner", .kind = Telemetry::FrameGraphNodeKind::Pass, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = owner, });
         if(includeQueues){
             const u32 queueCount = packetCount > 1u ? s_ExpectedDualCount : packetCount;
             for(u32 queueOffset = 0u; queueOffset < queueCount; ++queueOffset){
@@ -170,9 +155,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     fixture.addUnmeasuredNode();
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(
-        recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u
-    ));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
     Log::TelemetryReport report(testArena.arena);
     auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
     ASSERT_TRUE(reportResult2);
@@ -253,9 +236,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     fixture.addUnmeasuredNode();
     fixture.addOwner(3u, 1u);
     Telemetry::TelemetryBytes original(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
-        testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, original
-    ));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, original));
     Telemetry::EncodedFrameGraphPayloadHeader header;
     NWB_MEMCPY(&header, sizeof(header), original.data(), sizeof(header));
     ASSERT_EQ(header.queueAssignmentCount, 0u);
@@ -264,9 +245,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_EQ(header.runtimeStatisticsCount, 1u);
     ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
     ASSERT_EQ(header.packetSubmissionStatisticsCount, 3u);
-    const usize queueOffset = sizeof(header) + header.nodeCount * sizeof(Telemetry::EncodedFrameGraphNode)
-        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics)
-    ;
+    const usize queueOffset = sizeof(header) + header.nodeCount * sizeof(Telemetry::EncodedFrameGraphNode) + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics);
     const usize packetOffset = queueOffset + s_ExpectedDualCount * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics);
     ASSERT_LE(packetOffset + 3u * sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics), original.size());
     Telemetry::Recorder recorder(testArena.arena);

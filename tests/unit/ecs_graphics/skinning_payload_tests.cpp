@@ -326,12 +326,7 @@ TEST(SkinningPayload, InverseBindBoundsAndPartialFailuresLeaveNoActivePayload){
     ExpectEmptyRuntimePayload(payload);
 
     payload.jointMatrices.assign(1u, MatrixIdentity<Float34>());
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(
-        instance,
-        palette.joints,
-        palette.skinningMode,
-        payload.jointMatrices
-    ));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(instance, palette.joints, palette.skinningMode, payload.jointMatrices));
     EXPECT_TRUE(payload.jointMatrices.empty());
 
     palette.joints.pop_back();

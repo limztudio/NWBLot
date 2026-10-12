@@ -19,12 +19,7 @@ NWB_ASSET_BUILDER_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SelectBuildInputs(
-    const AssetBuildOptions& options,
-    const Core::Assets::ResolvedCookPaths& paths,
-    Core::Assets::DiscoveredNwbFileVector& files,
-    Core::Assets::ScratchArena& scratchArena
-);
+[[nodiscard]] bool SelectBuildInputs(const AssetBuildOptions& options, const Core::Assets::ResolvedCookPaths& paths, Core::Assets::DiscoveredNwbFileVector& files, Core::Assets::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

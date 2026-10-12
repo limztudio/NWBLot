@@ -60,10 +60,8 @@ struct NwbSceneLight{
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed views of the storage/uniform-buffer descriptor tables in bindless_heap.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbSceneLight, Std430DataLayout> g_NwbHeapSceneLightBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbHeapSceneShadingBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSceneLight, Std430DataLayout> g_NwbHeapSceneLightBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbHeapSceneShadingBuffers[];
 #pragma warning(pop)
 
 ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> nwbHeapSceneShading(const uint slot){

@@ -87,13 +87,7 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
     if(m_recordingAttemptActive)
         m_attemptPermanentTextures.push_back(&texture);
 
-    if(!m_permanentTextureStates.emplace(
-        &texture,
-        PermanentTextureStateValue{
-            TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena)),
-            state
-        }
-    ).second){
+    if(!m_permanentTextureStates.emplace(&texture, PermanentTextureStateValue{ TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena)), state }).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentTextures.pop_back();
         NWB_ASSERT(false);
@@ -111,13 +105,7 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     if(m_recordingAttemptActive)
         m_attemptPermanentBuffers.push_back(&buffer);
 
-    if(!m_permanentBufferStates.emplace(
-        &buffer,
-        PermanentBufferStateValue{
-            BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena)),
-            state
-        }
-    ).second){
+    if(!m_permanentBufferStates.emplace(&buffer, PermanentBufferStateValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena)), state }).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentBuffers.pop_back();
         NWB_ASSERT(false);
@@ -160,11 +148,7 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
     return state ? *state : ResourceStates::Unknown;
 }
 
-bool StateTracker::hasExplicitTextureSubresourceState(
-    Texture* const texture,
-    const ArraySlice arraySlice,
-    const MipLevel mipLevel
-)const{
+bool StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const{
     if(!texture)
         return false;
     if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
@@ -172,11 +156,7 @@ bool StateTracker::hasExplicitTextureSubresourceState(
     return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
 }
 
-Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(
-    Texture& texture,
-    ArraySlice arraySlice,
-    MipLevel mipLevel
-)const{
+Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
     const TextureDesc& desc = texture.getCreationDescription();
     if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
         return MakeUnexpected(Failure{});
@@ -184,20 +164,13 @@ Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(
     return getResolvedTransientTextureState(texture, arraySlice, mipLevel);
 }
 
-ResourceStates::Mask StateTracker::getResolvedTransientTextureState(
-    Texture& texture,
-    ArraySlice arraySlice,
-    MipLevel mipLevel
-)const{
+ResourceStates::Mask StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
     const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
     const auto existing = m_textureStates.find(key);
     if(existing != m_textureStates.end())
         return existing.value();
 
-    return texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel)
-        ? texture.m_creationDesc.initialState
-        : ResourceStates::Unknown
-    ;
+    return texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel) ? texture.m_creationDesc.initialState : ResourceStates::Unknown;
 }
 
 void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
@@ -210,11 +183,7 @@ void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet 
     beginTrackingTransientTexture(*texture, subresources, state);
 }
 
-void StateTracker::appendKeepInitialStateBarriers(
-    TrackedCommandBuffer& commandBuffer,
-    Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
-    Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers
-){
+void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandBuffer, Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers, Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers){
     for(auto it = m_textureStates.begin(); it != m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
         if(!key.texture)
@@ -251,18 +220,12 @@ void StateTracker::appendKeepInitialStateBarriers(
         const BufferDesc& desc = buffer->m_creationDesc;
         for(BufferRangeState& entry : it.value()){
             if(entry.state != desc.initialState){
-                bufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(
-                    buffer->m_buffer,
-                    entry.range,
-                    entry.state,
-                    desc.initialState,
-                    m_context.extensions.khrRayTracingPipeline
-                ));
+                bufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer->m_buffer, entry.range, entry.state, desc.initialState, m_context.extensions.khrRayTracingPipeline));
                 entry.state = desc.initialState;
             }
         }
-        // The retained resource flag describes the entire allocation. Restoring a partial native import must not
-        // claim that bytes whose state was never known have also reached the initial state.
+        // The retained resource flag describes the entire allocation.
+        // Restoring a partial native import must not claim that bytes whose state was never known have also reached the initial state.
         if(buffer->isRetainedStateKnown() || hasExplicitBufferState(buffer))
             commandBuffer.m_resourceReferences.appendBufferStateCommit(*buffer);
     }
@@ -279,10 +242,7 @@ bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const{
 }
 
 void StateTracker::beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture.m_creationDesc,
-        TextureSubresourceMipResolve::Range
-    );
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
     beginTrackingResolvedTransientTexture(texture, resolvedSubresources, state);
 }
 
@@ -308,13 +268,7 @@ void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableB
         return;
     }
 
-    if(!m_textureUavBarriers.emplace(
-        &texture,
-        TextureUavBarrierPolicyValue{
-            TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena)),
-            enableBarriers
-        }
-    ).second)
+    if(!m_textureUavBarriers.emplace(&texture, TextureUavBarrierPolicyValue{ TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
         NWB_ASSERT(false);
 }
 
@@ -325,13 +279,7 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
         return;
     }
 
-    if(!m_bufferUavBarriers.emplace(
-        &buffer,
-        BufferUavBarrierPolicyValue{
-            BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena)),
-            enableBarriers
-        }
-    ).second)
+    if(!m_bufferUavBarriers.emplace(&buffer, BufferUavBarrierPolicyValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
         NWB_ASSERT(false);
 }
 
@@ -378,10 +326,7 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
     if(!validateTextureForGpuState(texture, stateBits, s_OperationName))
         return;
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture->m_creationDesc,
-        TextureSubresourceMipResolve::Range
-    );
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_creationDesc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
         return;
@@ -412,11 +357,7 @@ ResourceStates::Mask CommandList::getPermanentBufferState(Buffer* buffer)const{
     return m_stateTracker.getPermanentBufferState(buffer);
 }
 
-bool CommandList::hasExplicitTextureSubresourceState(
-    Texture* const texture,
-    const ArraySlice arraySlice,
-    const MipLevel mipLevel
-)const{
+bool CommandList::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return false;

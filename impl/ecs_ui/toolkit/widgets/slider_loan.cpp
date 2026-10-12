@@ -27,8 +27,7 @@ void Builder::publishSliderResults(const bool valid){
             result.focused = frame->m_interactive && input.focus() == frame->m_widget.id;
             const WidgetId track = MakeWidgetId(frame->m_widget.id, "track");
             const WidgetId thumb = MakeWidgetId(frame->m_widget.id, "thumb");
-            result.dragging = frame->m_interactive && input.primaryDown()
-                && (input.capture() == track || input.capture() == thumb);
+            result.dragging = frame->m_interactive && input.primaryDown() && (input.capture() == track || input.capture() == thumb);
         }
         frame->m_state.m_result = result;
     }

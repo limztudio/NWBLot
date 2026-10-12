@@ -58,8 +58,7 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
 {
     m_app.add_option(s_PipelineInputOption.data(), m_inputs, "Input assets; accepts multiple paths and repeated options");
     m_app.add_option(s_PipelineInputListOption.data(), m_inputList, "UTF-8 newline-separated input paths");
-    m_app.add_option(s_PipelineOutputOption.data(), m_outputPath,
-        m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
+    m_app.add_option(s_PipelineOutputOption.data(), m_outputPath, m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
     if(m_tool == PipelineTool::DependencyComputer)
         m_app.add_flag(s_PipelineSkinDependenciesOption.data(), m_includeSkinDependencies, "Include the textures referenced by selected UI skins");
     if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::DependencyComputer){
@@ -92,15 +91,13 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));
         return MakeUnexpected(Failure{});
     }
-    if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size()))
-        || !options.assetType.assign(AStringView(m_assetType.data(), m_assetType.size()))){
+    if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size())) || !options.assetType.assign(AStringView(m_assetType.data(), m_assetType.size()))){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
         return MakeUnexpected(Failure{});
     }
     if(!m_inputList.empty()){
         NWB::Core::Assets::AssetString listPath(options.inputs.get_allocator().arena());
-        if(!__hidden_command_line::AssignText(m_inputList, listPath)
-            || !NWB::Core::Assets::ReadAssetInputList(Path(listPath.get_allocator().arena(), listPath), options.inputs, m_tool == PipelineTool::AssetGatherer))
+        if(!__hidden_command_line::AssignText(m_inputList, listPath) || !NWB::Core::Assets::ReadAssetInputList(Path(listPath.get_allocator().arena(), listPath), options.inputs, m_tool == PipelineTool::AssetGatherer))
             return MakeUnexpected(Failure{});
     }
     options.includeSkinDependencies = m_includeSkinDependencies;

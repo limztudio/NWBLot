@@ -34,8 +34,8 @@ class GpuTaskGraphExternalResourceHandoffSnapshot;
 struct GpuTaskGraphRuntimeStatistics;
 
 
-// Tasks describe semantic work. Packets are compiler-generated native-recording and submission units; a packet
-// contains one or more explicitly compatible tasks.
+// Tasks describe semantic work.
+// Packets are compiler-generated native-recording and submission units; a packet contains one or more explicitly compatible tasks.
 struct GpuSubmissionPacket{
     u32 taskOffset = 0u;
     u32 taskCount = 0u;
@@ -43,19 +43,18 @@ struct GpuSubmissionPacket{
     u32 dependencyCount = 0u;
     u32 externalDependencyOffset = 0u;
     u32 externalDependencyCount = 0u;
-    // Compiler-derived ready-frontier depth for native recording. Packets in one depth have no recorded-state-seed
-    // producer relationship, so the runtime may record opted-in packets concurrently while retaining deterministic
-    // compile-order submission.
+    // Compiler-derived ready-frontier depth for native recording.
+    // Packets in one depth have no recorded-state-seed producer relationship, so the runtime may record opted-in packets concurrently while retaining deterministic compile-order submission.
     u32 recordingFrontier = 0u;
     GpuPhysicalQueueId queue;
-    // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical
-    // queue directly from GpuGraphSubmissionTransaction. It is a graph runtime policy, not a renderer token ladder.
+    // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical queue directly from GpuGraphSubmissionTransaction.
+    // It is a graph runtime policy, not a renderer token ladder.
     bool joinsAcceptedQueueFrontier = false;
-    // Exact recovery role within the broader accepted-frontier packet class. This remains false for ordinary late
-    // finalization packets that need the same queue join but do not recover a partially accepted graph.
+    // Exact recovery role within the broader accepted-frontier packet class.
+    // This remains false for ordinary late finalization packets that need the same queue join but do not recover a partially accepted graph.
     bool isRecoverySubmission = false;
-    // Distinguishes compiler-selected envelope membership from task-local PacketOnly/Task policies. recordsTiming
-    // remains the combined native-ticket requirement so existing recording and submission paths stay coherent.
+    // Distinguishes compiler-selected envelope membership from task-local PacketOnly/Task policies.
+    // recordsTiming remains the combined native-ticket requirement so existing recording and submission paths stay coherent.
     bool recordsPacketEnvelopeTiming = false;
     bool recordsTiming = false;
 };
@@ -65,9 +64,9 @@ struct GpuPacketDependency{
     GpuSubmissionPacketId consumer;
 };
 
-// One lexically protected immutable packet plan. Every borrowed array belongs to the compiled graph retained by
-// GpuCompiledGraph::ReadView; callers must not store this value beyond that proof's lifetime. Invalid/stale packet
-// identities return an empty view instead of indexing plan storage in release builds.
+// One lexically protected immutable packet plan.
+// Every borrowed array belongs to the compiled graph retained by GpuCompiledGraph::ReadView; callers must not store this value beyond that proof's lifetime.
+// Invalid/stale packet identities return an empty view instead of indexing plan storage in release builds.
 struct GpuCompiledPacketView{
     GpuSubmissionPacketId id;
     const GpuSubmissionPacket* plan = nullptr;
@@ -76,17 +75,12 @@ struct GpuCompiledPacketView{
     const GpuExternalCompletionId* externalDependencies = nullptr;
 
     [[nodiscard]] bool valid()const noexcept{
-        return id.valid()
-            && plan
-            && (plan->taskCount == 0u || tasks)
-            && (plan->dependencyCount == 0u || dependencies)
-            && (plan->externalDependencyCount == 0u || externalDependencies)
-        ;
+        return id.valid() && plan && (plan->taskCount == 0u || tasks) && (plan->dependencyCount == 0u || dependencies) && (plan->externalDependencyCount == 0u || externalDependencies);
     }
 };
 
-// Explains each compiler packetization decision without exposing mutable compiler internals. Tooling can distinguish
-// deliberate lifecycle/timing boundaries from a merge that was rejected to preserve a cross-queue signal frontier.
+// Explains each compiler packetization decision without exposing mutable compiler internals.
+// Tooling can distinguish deliberate lifecycle/timing boundaries from a merge that was rejected to preserve a cross-queue signal frontier.
 namespace GpuTaskPacketizationDecision{
     enum Enum : u8{
         Unknown,
@@ -118,13 +112,13 @@ struct GpuCompiledTask{
     GpuPhysicalQueueId queue;
     GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
     GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
-    // Calibration and debug-override observations contribute route duration history without becoming the
-    // committed timing-feedback incumbent. Retain that decision so late query collection preserves policy dwell.
+    // Calibration and debug-override observations contribute route duration history without becoming the committed timing-feedback incumbent.
+    // Retain that decision so late query collection preserves policy dwell.
     bool recordsNonCommittingTimingSample = false;
 };
 
-// One checked task lookup and all of its borrowed compiler-owned lowering slices. Keep this value inside the
-// GpuCompiledGraph::ReadView lifetime that produced it.
+// One checked task lookup and all of its borrowed compiler-owned lowering slices.
+// Keep this value inside the GpuCompiledGraph::ReadView lifetime that produced it.
 struct GpuCompiledTaskView{
     const GpuCompiledTask* plan = nullptr;
     const GpuPacketStateSeed* prologueStateSeeds = nullptr;
@@ -132,27 +126,23 @@ struct GpuCompiledTaskView{
     const GpuCompiledBarrier* epilogueBarriers = nullptr;
 
     [[nodiscard]] bool valid()const noexcept{
-        return plan
-            && (plan->prologueStateSeedCount == 0u || prologueStateSeeds)
-            && (plan->prologueBarrierCount == 0u || prologueBarriers)
-            && (plan->epilogueBarrierCount == 0u || epilogueBarriers)
-        ;
+        return plan && (plan->prologueStateSeedCount == 0u || prologueStateSeeds) && (plan->prologueBarrierCount == 0u || prologueBarriers) && (plan->epilogueBarrierCount == 0u || epilogueBarriers);
     }
 };
 
-// One terminal declared range that contributes to an explicit graph-to-external release. Textures and buffers may
-// have disjoint terminal ranges recorded by different packets and physical queues. The runtime retains each
-// producer's acceptance token and exact exported range. Acceleration structures remain whole-allocation.
+// One terminal declared range that contributes to an explicit graph-to-external release.
+// Textures and buffers may have disjoint terminal ranges recorded by different packets and physical queues.
+// The runtime retains each producer's acceptance token and exact exported range.
+// Acceleration structures remain whole-allocation.
 struct GpuCompiledExternalResourceExportSource{
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;
     GpuTaskResourceRange range;
 };
 
-// Imported texture/buffer/AS graph-to-external release metadata.  `producerTask`/`sourceQueue` retain the
-// original one-producer convenience contract whenever every terminal range resolves to the same packet.  Callers
-// that need the complete contract must consume `sourceCount` entries through the checked export view's `.sources`
-// slice.
+// Imported texture/buffer/AS graph-to-external release metadata.
+// `producerTask`/`sourceQueue` retain the original one-producer convenience contract whenever every terminal range resolves to the same packet.
+// Callers that need the complete contract must consume `sourceCount` entries through the checked export view's `.sources` slice.
 struct GpuCompiledExternalResourceExport{
     GpuGraphResourceId resource;
     GpuTaskId producerTask;
@@ -163,8 +153,8 @@ struct GpuCompiledExternalResourceExport{
     ResourceStates::Mask finalState = ResourceStates::Unknown;
 };
 
-// One checked external-export lookup and its complete terminal-source slice. The source memory is borrowed from the
-// immutable compiled plan protected by the producing GpuCompiledGraph::ReadView.
+// One checked external-export lookup and its complete terminal-source slice.
+// The source memory is borrowed from the immutable compiled plan protected by the producing GpuCompiledGraph::ReadView.
 struct GpuCompiledExternalResourceExportView{
     const GpuCompiledExternalResourceExport* plan = nullptr;
     const GpuCompiledExternalResourceExportSource* sources = nullptr;
@@ -174,9 +164,8 @@ struct GpuCompiledExternalResourceExportView{
     }
 };
 
-// Immutable presentation completion resolved from a strict typed-texture declaration. It retains the semantic
-// producer/backbuffer pair along with the compiler-owned packet and exact physical queue shared by every backbuffer
-// user before the one native present signal.
+// Immutable presentation completion resolved from a strict typed-texture declaration.
+// It retains the semantic producer/backbuffer pair along with the compiler-owned packet and exact physical queue shared by every backbuffer user before the one native present signal.
 struct GpuCompiledPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -189,10 +178,9 @@ struct GpuCompiledPresentEndpoint{
 };
 
 
-// One semantic exclusive-ownership movement. Internal moves remain one record even though native lowering emits a
-// release and an acquire barrier; external routes deliberately leave the task and packet on the external side
-// invalid. Queue-family indices and sharing intent are captured by value so telemetry never has to reinterpret a
-// later topology or resource declaration.
+// One semantic exclusive-ownership movement.
+// Internal moves remain one record even though native lowering emits a release and an acquire barrier; external routes deliberately leave the task and packet on the external side invalid.
+// Queue-family indices and sharing intent are captured by value so telemetry never has to reinterpret a later topology or resource declaration.
 namespace GpuOwnershipTransferRoute{
     enum Enum : u8{
         Internal,
@@ -250,19 +238,9 @@ struct GpuCompiledOwnershipTransfer{
                 && sourcePacket.generation == destinationPacket.generation
             ;
         case GpuOwnershipTransferRoute::ExternalImport:
-            return !sourceTask.valid()
-                && destinationTask.valid()
-                && destinationTask.generation == resource.generation
-                && !sourcePacket.valid()
-                && destinationPacket.valid()
-            ;
+            return !sourceTask.valid() && destinationTask.valid() && destinationTask.generation == resource.generation && !sourcePacket.valid() && destinationPacket.valid();
         case GpuOwnershipTransferRoute::ExternalExport:
-            return sourceTask.valid()
-                && sourceTask.generation == resource.generation
-                && !destinationTask.valid()
-                && sourcePacket.valid()
-                && !destinationPacket.valid()
-            ;
+            return sourceTask.valid() && sourceTask.generation == resource.generation && !destinationTask.valid() && sourcePacket.valid() && !destinationPacket.valid();
         default:
             return false;
         }
@@ -270,9 +248,8 @@ struct GpuCompiledOwnershipTransfer{
 };
 
 
-// Immutable accepted-plan telemetry for one concrete task-graph plan. Core compiler counters and the sanitized
-// caller-provided declaration duration publish only after success; failed or superseded plans retain an empty
-// snapshot, so tooling never has to reconcile partial barrier/packet data with a later generation.
+// Immutable accepted-plan telemetry for one concrete task-graph plan.
+// Core compiler counters and the sanitized caller-provided declaration duration publish only after success; failed or superseded plans retain an empty snapshot, so tooling never has to reconcile partial barrier/packet data with a later generation.
 struct GpuTaskGraphCompileStatistics{
     static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
     static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
@@ -286,8 +263,7 @@ struct GpuTaskGraphCompileStatistics{
     usize resourceVersionCount = 0u;
     // Counts both producer-to-consumer dependencies and consumer-to-overwriter lifetime edges.
     usize resourceVersionEdgeCount = 0u;
-    // These are analysis categories, not a disjoint scheduling-edge partition: one task pair can have both an
-    // explicit declaration and inferred resource reason, so callers must not sum them as a final edge count.
+    // These are analysis categories, not a disjoint scheduling-edge partition: one task pair can have both an explicit declaration and inferred resource reason, so callers must not sum them as a final edge count.
     usize explicitDependencyCount = 0u;
     usize inferredDependencyCount = 0u;
     usize declaredExternalDependencyCount = 0u;
@@ -311,9 +287,9 @@ struct GpuTaskGraphCompileStatistics{
     usize ownershipReleaseBarrierCount = 0u;
     usize ownershipAcquireBarrierCount = 0u;
     usize stateExportBarrierCount = 0u;
-    // Logical ownership movements are distinct from the raw release/acquire marker counts above. Signature counts
-    // collapse fragmented ranges of the same route/task/queue handoff. Repeated signatures and the advice-resource
-    // count therefore identify actual repeated movement rather than texture-fragment fan-out.
+    // Logical ownership movements are distinct from the raw release/acquire marker counts above.
+    // Signature counts collapse fragmented ranges of the same route/task/queue handoff.
+    // Repeated signatures and the advice-resource count therefore identify actual repeated movement rather than texture-fragment fan-out.
     usize logicalOwnershipTransferCount = 0u;
     usize logicalOwnershipTransferSignatureCount = 0u;
     usize repeatedOwnershipTransferSignatureCount = 0u;
@@ -337,21 +313,19 @@ struct GpuTaskGraphCompileStatistics{
     f64 queueAssignmentSeconds = 0.0;
     f64 planningSeconds = 0.0;
     f64 totalSeconds = 0.0;
-    // Declaration structure is retained separately from resourceUseCount above, which remains the final
-    // materialized resource-use total after immutable resource-set expansion.
+    // Declaration structure is retained separately from resourceUseCount above, which remains the final materialized resource-use total after immutable resource-set expansion.
     usize resourceSetCount = 0u;
     usize resourceSetMemberCount = 0u;
     usize directResourceUseCount = 0u;
     usize declaredResourceSetUseCount = 0u;
     usize expandedResourceSetMemberUseCount = 0u;
-    // Payload bytes count only the graph-owned payload objects themselves; dynamic payload allocations remain
-    // owned by their individual payload types and are deliberately excluded.
+    // Payload bytes count only the graph-owned payload objects themselves; dynamic payload allocations remain owned by their individual payload types and are deliberately excluded.
     usize payloadObjectCount = 0u;
     usize payloadObjectBytes = 0u;
     usize uploadBlobCount = 0u;
     usize uploadBlobBytes = 0u;
-    // planningSeconds remains the umbrella duration. These detail buckets cover only their named core planning
-    // passes, so callers must not expect them to sum to planningSeconds.
+    // planningSeconds remains the umbrella duration.
+    // These detail buckets cover only their named core planning passes, so callers must not expect them to sum to planningSeconds.
     f64 packetizationSeconds = 0.0;
     f64 resourceStatePlanningSeconds = 0.0;
     f64 packetDependencyPlanningSeconds = 0.0;
@@ -361,9 +335,8 @@ struct GpuTaskGraphCompileStatistics{
 };
 
 
-// Immutable-by-value accepted-plan telemetry for one exact physical queue. Barrier counts belong to the compiled
-// task that lowers them: a cross-queue ownership release therefore belongs to its producer queue, while the
-// matching acquire belongs to its consumer queue.
+// Immutable-by-value accepted-plan telemetry for one exact physical queue.
+// Barrier counts belong to the compiled task that lowers them: a cross-queue ownership release therefore belongs to its producer queue, while the matching acquire belongs to its consumer queue.
 struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -386,13 +359,7 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     usize concurrentSharingAdviceResourceCount = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
-        return graphGeneration != 0u
-            && planGeneration != 0u
-            && deviceGeneration != 0u
-            && queue.valid()
-            && queue.deviceGeneration == deviceGeneration
-            && queueClass < CommandQueue::kCount
-        ;
+        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
 };
 
@@ -435,9 +402,8 @@ private:
     };
 
 public:
-    // Runtime entry points use a short nonblocking read claim while they derive packet identities or initialize
-    // plan-indexed storage before an exact graph attempt can provide the persistent immutable-plan lease. The view
-    // is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
+    // Runtime entry points use a short nonblocking read claim while they derive packet identities or initialize plan-indexed storage before an exact graph attempt can provide the persistent immutable-plan lease.
+    // The view is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
     class ReadView final : NoCopy{
         friend class GpuCompiledGraph;
 
@@ -452,8 +418,8 @@ public:
 
 
     public:
-        // Pointer- and slice-bearing results borrow immutable plan storage. They require a live lvalue ReadView and
-        // deliberately reject calls on a temporary proof.
+        // Pointer- and slice-bearing results borrow immutable plan storage.
+        // They require a live lvalue ReadView and deliberately reject calls on a temporary proof.
         [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
         [[nodiscard]] bool validFor(const GpuCompiledGraph& graph)const noexcept{ return m_graph == &graph; }
         [[nodiscard]] bool validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept;
@@ -466,14 +432,8 @@ public:
         [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
         [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
         [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
-        [[nodiscard]] GpuSubmissionPacketRange packetRange(
-            const GpuSubmissionPacketId& first,
-            const GpuSubmissionPacketId& last
-        )const noexcept;
-        [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(
-            const GpuTaskId& first,
-            const GpuTaskId& last
-        )const noexcept;
+        [[nodiscard]] GpuSubmissionPacketRange packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept;
+        [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(const GpuTaskId& first, const GpuTaskId& last)const noexcept;
         [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
         [[nodiscard]] GpuSubmissionPacketRange packetTimingEnvelopeRange()const noexcept;
         [[nodiscard]] GpuCompiledTaskView findTask(const GpuTaskId& task)const & noexcept;
@@ -496,18 +456,14 @@ public:
         const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const && = delete;
         [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const & noexcept;
         const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const && = delete;
-        [[nodiscard]] GpuCompiledExternalResourceExportView externalResourceExport(
-            const GpuGraphResourceId& resource
-        )const & noexcept;
+        [[nodiscard]] GpuCompiledExternalResourceExportView externalResourceExport(const GpuGraphResourceId& resource)const & noexcept;
         GpuCompiledExternalResourceExportView externalResourceExport(const GpuGraphResourceId& resource)const && = delete;
         [[nodiscard]] const GpuCompiledPresentEndpoint* presentEndpoint()const & noexcept;
         const GpuCompiledPresentEndpoint* presentEndpoint()const && = delete;
         [[nodiscard]] GpuTaskGraphCompileStatistics compileStatistics()const noexcept;
         [[nodiscard]] GpuCompiledExternalResourceExportView externalResourceExportAt(usize index)const & noexcept;
         GpuCompiledExternalResourceExportView externalResourceExportAt(usize index)const && = delete;
-        [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(
-            const GpuPhysicalQueueId& queue
-        )const noexcept;
+        [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept;
         [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const & noexcept;
         const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const && = delete;
         [[nodiscard]] GpuPhysicalQueueTopology queueTopology()const & noexcept;
@@ -537,8 +493,8 @@ public:
 
 
 public:
-    // An active graph attempt leases this exact immutable plan until every transaction packet resolves. Failed
-    // reset leaves packet storage, identities, topology, and statistics unchanged so explicit cleanup can continue.
+    // An active graph attempt leases this exact immutable plan until every transaction packet resolves.
+    // Failed reset leaves packet storage, identities, topology, and statistics unchanged so explicit cleanup can continue.
     [[nodiscard]] bool tryReset();
     void reset();
 
@@ -554,14 +510,8 @@ private:
     [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
-    [[nodiscard]] GpuSubmissionPacketRange packetRange(
-        const GpuSubmissionPacketId& first,
-        const GpuSubmissionPacketId& last
-    )const noexcept;
-    [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(
-        const GpuTaskId& first,
-        const GpuTaskId& last
-    )const noexcept;
+    [[nodiscard]] GpuSubmissionPacketRange packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept;
+    [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(const GpuTaskId& first, const GpuTaskId& last)const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange packetTimingEnvelopeRange()const noexcept{
         return validPacketRange(m_packetTimingEnvelopeRange) ? m_packetTimingEnvelopeRange : GpuSubmissionPacketRange{};
@@ -577,16 +527,10 @@ private:
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const noexcept;
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const noexcept;
-    [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExport(
-        const GpuGraphResourceId& resource
-    )const noexcept;
+    [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExport(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExportAt(usize index)const noexcept;
-    [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(
-        const GpuCompiledExternalResourceExport& exportInfo
-    )const noexcept;
-    [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(
-        const GpuPhysicalQueueId& queue
-    )const noexcept;
+    [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(const GpuCompiledExternalResourceExport& exportInfo)const noexcept;
+    [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology queueTopology()const noexcept;
 
@@ -601,44 +545,15 @@ private:
         u64 previousRecordingAttemptGeneration,
         const ReadView& planAccess
     )const noexcept;
-    [[nodiscard]] bool matchesRecordingAttempt(
-        const GpuTaskGraph& graph,
-        u64 expectedPlanGeneration,
-        u64 recordingAttemptGeneration
-    )const noexcept;
-    [[nodiscard]] bool resolveRecordingAttempt(
-        const GpuTaskGraph& graph,
-        u64 expectedPlanGeneration,
-        u64 recordingAttemptGeneration
-    )const noexcept;
-    [[nodiscard]] bool bindSubmissionTransaction(
-        const GpuTaskGraph& graph,
-        u64 expectedPlanGeneration,
-        u64 recordingAttemptGeneration,
-        const GpuGraphSubmissionBinding& submissionBinding
-    )const noexcept;
-    [[nodiscard]] bool matchesSubmissionTransaction(
-        const GpuTaskGraph& graph,
-        u64 expectedPlanGeneration,
-        u64 recordingAttemptGeneration,
-        const GpuGraphSubmissionBinding& submissionBinding
-    )const noexcept;
-    [[nodiscard]] bool resolveSubmissionTransaction(
-        const GpuTaskGraph& graph,
-        u64 expectedPlanGeneration,
-        u64 recordingAttemptGeneration,
-        const GpuGraphSubmissionBinding& submissionBinding
-    )const noexcept;
-    // Artifact reset already owns ArtifactOperation, then ReadView. Attempt-binding code never acquires either
-    // lock in reverse, so this final scalar comparison cannot form an artifact/plan/attempt ABBA cycle. `graphIdentity`
-    // is compared only as an opaque address; it is never dereferenced after the graph's lifetime may have ended.
-    [[nodiscard]] bool matchesActiveAttemptIdentity(
-        const GpuTaskGraph* graphIdentity,
-        u64 compiledObjectIdentity,
-        u64 expectedPlanGeneration,
-        u64 recordingAttemptGeneration,
-        const ReadView& planAccess
-    )const noexcept;
+    [[nodiscard]] bool matchesRecordingAttempt(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration)const noexcept;
+    [[nodiscard]] bool resolveRecordingAttempt(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration)const noexcept;
+    [[nodiscard]] bool bindSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+    [[nodiscard]] bool matchesSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+    [[nodiscard]] bool resolveSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+    // Artifact reset already owns ArtifactOperation, then ReadView.
+    // Attempt-binding code never acquires either lock in reverse, so this final scalar comparison cannot form an artifact/plan/attempt ABBA cycle.
+    // `graphIdentity` is compared only as an opaque address; it is never dereferenced after the graph's lifetime may have ended.
+    [[nodiscard]] bool matchesActiveAttemptIdentity(const GpuTaskGraph* graphIdentity, u64 compiledObjectIdentity, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const ReadView& planAccess)const noexcept;
 
 
 private:
@@ -679,8 +594,8 @@ private:
 };
 
 
-// Recording happens only after the compiler has selected a concrete physical queue and packet.  Task record thunks
-// receive immutable compiled metadata rather than a nullable renderer-specific context.
+// Recording happens only after the compiler has selected a concrete physical queue and packet.
+// Task record thunks receive immutable compiled metadata rather than a nullable renderer-specific context.
 struct GpuTaskRecordContext{
     const GpuTaskGraphDeclarationReadView& declarations;
     const GpuCompiledGraph::ReadView& compiledPlan;

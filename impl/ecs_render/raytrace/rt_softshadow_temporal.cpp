@@ -37,22 +37,12 @@ bool RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        resolve.m_combinedTemporal.m_shader,
-        AssetsGraphicsShadow::s_SoftReprojectMergeCombinedShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_CombinedShadowTemporal"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(resolve.m_combinedTemporal.m_shader, AssetsGraphicsShadow::s_SoftReprojectMergeCombinedShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowTemporal")){
         resolve.m_combinedTemporalFailed = true;
         return false;
     }
     Core::ComputePipelineDesc desc;
-    desc
-        .setComputeShader(resolve.m_combinedTemporal.m_shader)
-        .addBindingLayout(resolve.m_combinedTemporalBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    desc.setComputeShader(resolve.m_combinedTemporal.m_shader).addBindingLayout(resolve.m_combinedTemporalBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     resolve.m_combinedTemporal.m_pipeline = device.createComputePipeline(desc);
     resolve.m_combinedTemporalFailed = !resolve.m_combinedTemporal.m_pipeline;
     return !resolve.m_combinedTemporalFailed;

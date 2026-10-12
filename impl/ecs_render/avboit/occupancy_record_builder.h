@@ -61,12 +61,7 @@ struct AvboitOccupancyRecordResult{
 
 class AvboitOccupancyRecordBuilder final : NoCopy{
 public:
-    AvboitOccupancyRecordBuilder(
-        Core::GpuTaskGraph& graph,
-        Core::GraphicsRuntime& graphics,
-        RendererMaterialSystem& materialSystem,
-        RendererAvboitSystem& avboitSystem
-    );
+    AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem);
 
 
 public:

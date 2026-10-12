@@ -119,14 +119,10 @@ class RadioGroupFixture : public WidgetFixture{
 protected:
     virtual void SetUp()override;
     void configureRadioSkin(bool fallbackOnly = false);
-    [[nodiscard]] bool declare(const u64 generation, const RadioGroupOptions& options = {},
-        const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
-    [[nodiscard]] bool declareSource(u64 generation, const IListDataSource& source, RadioGroupState& state,
-        const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
-    [[nodiscard]] bool prepare(u64 generation, const RadioGroupOptions& options = {},
-        const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
-    [[nodiscard]] bool accept(u64 generation, const RadioGroupOptions& options = {},
-        const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] bool declare(const u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] bool declareSource(u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] bool prepare(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] bool accept(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
     [[nodiscard]] WidgetId host()const;
     [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 key, const RadioGroupState& state)const;
     [[nodiscard]] Point choicePoint(u64 key)const;

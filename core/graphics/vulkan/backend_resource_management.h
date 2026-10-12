@@ -78,10 +78,7 @@ class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
     friend class TrackedCommandBuffer;
 
 public:
-    AccelStruct(
-        const VulkanContext& context,
-        ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive
-    );
+    AccelStruct(const VulkanContext& context, ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive);
     ~AccelStruct()noexcept;
 
 
@@ -233,18 +230,14 @@ public:
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)const;
-    // Explicit state comes from this command list or an imported packet handoff. A keep-initial-state descriptor
-    // fallback deliberately does not count: graph lowering can still declare the first known graph state.
+    // Explicit state comes from this command list or an imported packet handoff.
+    // A keep-initial-state descriptor fallback deliberately does not count: graph lowering can still declare the first known graph state.
     [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const;
 
     void beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer);
-    void appendKeepInitialStateBarriers(
-        TrackedCommandBuffer& commandBuffer,
-        Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
-        Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers
-    );
+    void appendKeepInitialStateBarriers(TrackedCommandBuffer& commandBuffer, Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers, Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers);
 
     [[nodiscard]] bool isUavBarrierEnabledForTexture(Texture& texture)const;
     [[nodiscard]] bool isUavBarrierEnabledForBuffer(Buffer& buffer)const;

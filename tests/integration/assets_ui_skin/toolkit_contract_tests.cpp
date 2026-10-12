@@ -50,12 +50,7 @@ struct AuthoredSkin{
     bool complete;
 };
 
-[[nodiscard]] static Expected<AuthoredSkin> LoadAuthoredSkin(
-    ToolkitSkinArena& testArena,
-    const Path& assetRoot,
-    const Path& atlasPath,
-    const AStringView virtualRoot
-){
+[[nodiscard]] static Expected<AuthoredSkin> LoadAuthoredSkin(ToolkitSkinArena& testArena, const Path& assetRoot, const Path& atlasPath, const AStringView virtualRoot){
     Core::Assets::AssetString metadata(testArena.arena);
     if(!ReadTextFile(atlasPath, metadata))
         return MakeUnexpected(Failure{});
@@ -96,8 +91,7 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     const UiSkin& source = sourceResult->skin;
     EXPECT_TRUE(sourceResult->complete);
 
-    const Name required[]{ Name("window.title"), Name("checkbox.mark"), Name("list.row.selected"),
-        Name("combo.arrow"), Name("progress.fill"), Name("focus.overlay") };
+    const Name required[]{ Name("window.title"), Name("checkbox.mark"), Name("list.row.selected"), Name("combo.arrow"), Name("progress.fill"), Name("focus.overlay") };
     for(const Name& removed : required){
         UiSkin candidate(testArena.arena, source.virtualPath());
         CopyWithoutRegion(testArena, source, removed, candidate);
@@ -105,8 +99,7 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
         EXPECT_FALSE(ValidateUiSkinToolkitContract(candidate)) << removed.resolvedText();
     }
 
-    const Name optional[]{ Name("button.hover"), Name("checkbox.checked"), Name("edit.focused"),
-        Name("combo.open"), Name("slider.thumb.hover") };
+    const Name optional[]{ Name("button.hover"), Name("checkbox.checked"), Name("edit.focused"), Name("combo.open"), Name("slider.thumb.hover") };
     for(const Name& removed : optional){
         UiSkin candidate(testArena.arena, source.virtualPath());
         CopyWithoutRegion(testArena, source, removed, candidate);

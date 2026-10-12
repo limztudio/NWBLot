@@ -34,24 +34,12 @@ bool GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueue
 bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept{
     for(u32 slot = 0u; slot < m_resourceSlots.nextFresh; ++slot){
         const BufferHandle& retainedBuffer = m_resourceDescriptorBuffers[slot];
-        if(
-            retainedBuffer
-            && (
-                !m_device.isBufferReadyForGpuUse(retainedBuffer.get())
-                || !ResourceQueueAdmissionAdmitsQueue(retainedBuffer->getQueueAdmissionSnapshot(), queue)
-            )
-        )
+        if(retainedBuffer && (!m_device.isBufferReadyForGpuUse(retainedBuffer.get()) || !ResourceQueueAdmissionAdmitsQueue(retainedBuffer->getQueueAdmissionSnapshot(), queue)))
             return false;
     }
     for(u32 slot = 0u; slot < m_resourceSlots.nextFresh; ++slot){
         const TextureHandle& retainedTexture = m_resourceDescriptorTextures[slot];
-        if(
-            retainedTexture
-            && (
-                !m_device.isTextureReadyForGpuUse(retainedTexture.get())
-                || !ResourceQueueAdmissionAdmitsQueue(retainedTexture->getQueueAdmissionSnapshot(), queue)
-            )
-        )
+        if(retainedTexture && (!m_device.isTextureReadyForGpuUse(retainedTexture.get()) || !ResourceQueueAdmissionAdmitsQueue(retainedTexture->getQueueAdmissionSnapshot(), queue)))
             return false;
     }
     for(u32 slot = 0u; slot < m_accelStructSlots.nextFresh; ++slot){
@@ -60,11 +48,7 @@ bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQu
             continue;
 
         Buffer* const backingBuffer = retainedAccelStruct->getBackingBuffer();
-        if(
-            !m_device.isAccelStructReadyForGpuUse(retainedAccelStruct.get())
-            || !backingBuffer
-            || !ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), queue)
-        )
+        if(!m_device.isAccelStructReadyForGpuUse(retainedAccelStruct.get()) || !backingBuffer || !ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), queue))
             return false;
     }
     return true;
@@ -79,10 +63,7 @@ bool GpuDescriptorHeap::retainedResourcesReadyForQueue(const GpuPhysicalQueueId&
     return m_initialized && retainedResourcesReadyForQueueLocked(*queueInfo);
 }
 
-bool GpuDescriptorHeap::trackCommandBufferUseLocked(
-    TrackedCommandBuffer& commandBuffer,
-    const GpuPhysicalQueueId& physicalQueue
-){
+bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer, const GpuPhysicalQueueId& physicalQueue){
     if(!m_initialized || !m_device.getPhysicalQueueInfo(physicalQueue))
         return false;
 
@@ -100,26 +81,12 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(
         return false;
 
     commandBuffer.m_referencedDescriptorHeaps.push_back(this);
-    m_heapUses.push_back(HeapUse{
-        .commandBuffer = &commandBuffer,
-        .submissionToken = {},
-        .id = ++m_lastHeapUseID,
-        .physicalQueue = physicalQueue,
-    });
+    m_heapUses.push_back(HeapUse{ .commandBuffer = &commandBuffer, .submissionToken = {}, .id = ++m_lastHeapUseID, .physicalQueue = physicalQueue, });
     return true;
 }
 
-Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(
-    TrackedCommandBuffer& commandBuffer,
-    const QueueSubmissionToken& submissionToken
-){
-    if(
-        !submissionToken.valid()
-        || !submissionToken.hasPhysicalQueueIdentity()
-        || !m_device.matchesPhysicalQueueIdentity(
-            GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration }
-        )
-    ){
+Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken){
+    if(!submissionToken.valid() || !submissionToken.hasPhysicalQueueIdentity() || !m_device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration })){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
         return MakeUnexpected(Failure{});
     }
@@ -128,13 +95,8 @@ Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(
         HeapUse& heapUse = m_heapUses[heapUseIndex];
         if(heapUse.commandBuffer != &commandBuffer || heapUse.submissionToken.valid())
             continue;
-        if(!submissionToken.matchesPhysicalQueue(
-            heapUse.physicalQueue.index,
-            heapUse.physicalQueue.deviceGeneration
-        )){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: GpuDescriptorHeap command-buffer submission changed its exact physical queue.")
-            );
+        if(!submissionToken.matchesPhysicalQueue(heapUse.physicalQueue.index, heapUse.physicalQueue.deviceGeneration)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap command-buffer submission changed its exact physical queue."));
             return MakeUnexpected(Failure{});
         }
 
@@ -145,24 +107,13 @@ Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(
     return MakeUnexpected(Failure{});
 }
 
-void GpuDescriptorHeap::commitCommandBufferUseSubmissionLocked(
-    TrackedCommandBuffer& commandBuffer,
-    const QueueSubmissionToken& submissionToken,
-    const usize heapUseIndex
-)noexcept{
+void GpuDescriptorHeap::commitCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken, const usize heapUseIndex)noexcept{
     static_assert(IsTriviallyCopyable_V<QueueSubmissionToken>, "accepted descriptor-use publication must remain scalar-only");
     if(heapUseIndex >= m_heapUses.size())
         TerminateInvariant();
 
     HeapUse& heapUse = m_heapUses[heapUseIndex];
-    if(
-        heapUse.commandBuffer != &commandBuffer
-        || heapUse.submissionToken.valid()
-        || !submissionToken.matchesPhysicalQueue(
-            heapUse.physicalQueue.index,
-            heapUse.physicalQueue.deviceGeneration
-        )
-    )
+    if(heapUse.commandBuffer != &commandBuffer || heapUse.submissionToken.valid() || !submissionToken.matchesPhysicalQueue(heapUse.physicalQueue.index, heapUse.physicalQueue.deviceGeneration))
         TerminateInvariant();
 
     heapUse.submissionToken = submissionToken;
@@ -178,20 +129,11 @@ void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuf
 
 void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferGeneration)noexcept{
     NothrowScopedLock lock(m_mutex);
-    if(
-        !m_initialized
-        || descriptorBufferGeneration == 0u
-        || descriptorBufferGeneration != m_descriptorBufferGeneration
-        || m_activePendingRecordingLeaseCount == 0u
-    )
+    if(!m_initialized || descriptorBufferGeneration == 0u || descriptorBufferGeneration != m_descriptorBufferGeneration || m_activePendingRecordingLeaseCount == 0u)
         TerminateInvariant();
 
     if(m_activePendingRecordingLeaseCount == 1u){
-        if(
-            m_pendingRecordingCount > m_pendingRecording.size()
-            || m_retiredCount > m_retired.size()
-            || m_pendingRecordingCount > m_retired.size() - m_retiredCount
-        )
+        if(m_pendingRecordingCount > m_pendingRecording.size() || m_retiredCount > m_retired.size() || m_pendingRecordingCount > m_retired.size() - m_retiredCount)
             TerminateInvariant();
 
         for(usize pendingIndex = 0u; pendingIndex < m_pendingRecordingCount; ++pendingIndex){
@@ -201,12 +143,7 @@ void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferG
 
             SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
             const u32 slot = handle.slot();
-            if(
-                slot >= allocator.slotStates.size()
-                || slot >= allocator.allocatedClasses.size()
-                || allocator.slotStates[slot] != SlotState::PendingRecording
-                || allocator.allocatedClasses[slot] != static_cast<u8>(handle.descriptorClass())
-            )
+            if(slot >= allocator.slotStates.size() || slot >= allocator.allocatedClasses.size() || allocator.slotStates[slot] != SlotState::PendingRecording || allocator.allocatedClasses[slot] != static_cast<u8>(handle.descriptorClass()))
                 TerminateInvariant();
         }
     }
@@ -250,10 +187,7 @@ void GpuDescriptorHeap::collectRetired(){
                 }
             }
             if(!alreadyTracked)
-                completions.push_back(QueueCompletion{
-                    .queue = queue,
-                    .value = 0u,
-                });
+                completions.push_back(QueueCompletion{ .queue = queue, .value = 0u, });
         }
     }
 

@@ -33,11 +33,7 @@ using namespace GpuTaskGraphCompilerDetail;
     return lhs == rhs || (resource.type == GpuGraphResourceType::Texture && GraphicsBackend::AreTextureReadStatesCompatible(lhs, rhs));
 }
 
-[[nodiscard]] bool NativeClosePreservesState(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const ResourceStates::Mask state
-)noexcept{
+[[nodiscard]] bool NativeClosePreservesState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const ResourceStates::Mask state)noexcept{
     if(const Texture* const texture = graph.textureForResource(resource.id)){
         const TextureDesc& description = texture->getCreationDescription();
         return !description.keepInitialState || description.initialState == state;
@@ -53,12 +49,7 @@ using namespace GpuTaskGraphCompilerDetail;
     return !resource.hasBackendResource;
 }
 
-[[nodiscard]] bool PacketPreservesReadStateSource(
-    const GpuTaskGraphResourceStatePlan& plan,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    const TrackedCompiledResourceState& source
-)noexcept{
+[[nodiscard]] bool PacketPreservesReadStateSource(const GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& source)noexcept{
     if(!NativeClosePreservesState(plan.graph, resource, source.state))
         return false;
     const GpuSubmissionPacketId packetID = FindCompiledPacketForTask(plan.compiledPlan, source.task);
@@ -107,14 +98,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TaskPreservesReadState(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphTaskView& task,
-    const TaskResourceUseIndex& useHistory,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    const usize useIndex
-)noexcept{
+bool TaskPreservesReadState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const TaskResourceUseIndex& useHistory, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const usize useIndex)noexcept{
     if(!useHistory.validFor(task) || useIndex >= task.resourceUseCount || task.resourceUses[useIndex].resource != resource.id)
         return false;
     const GpuTaskResourceUse& entryUse = task.resourceUses[useIndex];
@@ -127,8 +111,7 @@ bool TaskPreservesReadState(
             return false;
         if(!RangesOverlap(resource, (*laterRange), range))
             continue;
-        if(laterUse.access != GpuTaskResourceAccess::Read
-            || !__hidden_gpu_task_graph_compiler_read_state_sources::ReadStatesCompatible(resource, entryUse.requiredState, laterUse.requiredState))
+        if(laterUse.access != GpuTaskResourceAccess::Read || !__hidden_gpu_task_graph_compiler_read_state_sources::ReadStatesCompatible(resource, entryUse.requiredState, laterUse.requiredState))
             return false;
     }
     return true;
@@ -170,17 +153,12 @@ const TrackedCompiledResourceState* FindConcurrentReadStateSource(
     if(previousState.readStateSourceIndex > previousStateIndex)
         return nullptr;
     // A propagated earlier index already passed the complete packet-close proof; only a new anchor scans its packet.
-    if(previousState.readStateSourceIndex == previousStateIndex
-        && !__hidden_gpu_task_graph_compiler_read_state_sources::PacketPreservesReadStateSource(plan, resource, source.range, source))
+    if(previousState.readStateSourceIndex == previousStateIndex && !__hidden_gpu_task_graph_compiler_read_state_sources::PacketPreservesReadStateSource(plan, resource, source.range, source))
         return nullptr;
     return &source;
 }
 
-ResourceStates::Mask ReadStateSourceSnapshotState(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const ResourceStates::Mask state
-)noexcept{
+ResourceStates::Mask ReadStateSourceSnapshotState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const ResourceStates::Mask state)noexcept{
     const Buffer* buffer = graph.bufferForResource(resource.id);
     if(const RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(resource.id))
         buffer = accelStruct->getBackingBuffer();
@@ -192,18 +170,11 @@ ResourceStates::Mask ReadStateSourceSnapshotState(
     return state;
 }
 
-bool AppendOverlappingReaderDependencies(
-    GpuTaskGraphResourceStatePlan& plan,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    const TrackedCompiledResourceState& previousState,
-    const GpuSubmissionPacketId& consumer
-){
+bool AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& previousState, const GpuSubmissionPacketId& consumer){
     // Exclusive sharing always chains overlapping readers through their latest state seeds.
     if(!ResourceUsesConcurrentQueueSharing(resource, plan.topology))
         return true;
-    if(previousState.resource != resource.id || previousState.access != GpuTaskResourceAccess::Read
-        || !RangeContains(resource, previousState.range, range))
+    if(previousState.resource != resource.id || previousState.access != GpuTaskResourceAccess::Read || !RangeContains(resource, previousState.range, range))
         return false;
     GpuTaskId newerOverlappingTask;
     bool mayBoundReadEpoch = true;
@@ -226,8 +197,7 @@ bool AppendOverlappingReaderDependencies(
         }
         if(!__hidden_gpu_task_graph_compiler_read_state_sources::ReadStatesCompatible(resource, reader.state, previousState.state)){
             // The newer covering read state already joined this older epoch. Partial or task-local changes need full history.
-            if(mayBoundReadEpoch && newerOverlappingTask.valid() && reader.task != newerOverlappingTask
-                && RangeContains(resource, reader.range, range))
+            if(mayBoundReadEpoch && newerOverlappingTask.valid() && reader.task != newerOverlappingTask && RangeContains(resource, reader.range, range))
                 return true;
             mayBoundReadEpoch = false;
         }

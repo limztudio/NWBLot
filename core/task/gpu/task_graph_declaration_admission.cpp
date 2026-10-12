@@ -20,15 +20,10 @@ GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& g
     : m_graph(graph)
     , m_declarationLock(graph.m_declarationMutex)
 {
-    // Mutation owns the recursive declaration gate before briefly taking lifecycle state. Teardown and recording
-    // take only the lifecycle gate and reject a nonzero claim count, so neither path waits back on this gate.
+    // Mutation owns the recursive declaration gate before briefly taking lifecycle state.
+    // Teardown and recording take only the lifecycle gate and reject a nonzero claim count, so neither path waits back on this gate.
     ScopedLock lock(m_graph.m_lifecycleMutex);
-    if(
-        m_graph.m_teardownInProgress
-        || m_graph.m_activeRecordingPlanGeneration != 0u
-        || m_graph.m_activeDeclarationReadCount != 0u
-        || m_graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max
-    )
+    if(m_graph.m_teardownInProgress || m_graph.m_activeRecordingPlanGeneration != 0u || m_graph.m_activeDeclarationReadCount != 0u || m_graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max)
         return;
 
     ++m_graph.m_activeDeclarationAccessCount;
@@ -73,23 +68,14 @@ GpuTaskGraphDeclarationReadView::~GpuTaskGraphDeclarationReadView()noexcept{
 }
 
 
-GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(
-    const GpuTaskGraph& graph,
-    TryAcquireTag
-)noexcept{
+GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph, TryAcquireTag)noexcept{
     acquire(graph);
 }
 
 void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept{
-    // Try-admission reads lifecycle state only; an unpublished mutation observes the read count and rejects first,
-    // so neither path waits back on the turnstile.
+    // Try-admission reads lifecycle state only; an unpublished mutation observes the read count and rejects first, so neither path waits back on the turnstile.
     NothrowScopedLock lock(graph.m_lifecycleMutex);
-    if(
-        graph.m_teardownInProgress
-        || graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max
-        || graph.m_activeDeclarationReadCount == Limit<u32>::s_Max
-        || graph.m_activeDeclarationAccessCount != graph.m_activeDeclarationReadCount
-    )
+    if(graph.m_teardownInProgress || graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max || graph.m_activeDeclarationReadCount == Limit<u32>::s_Max || graph.m_activeDeclarationAccessCount != graph.m_activeDeclarationReadCount)
         return;
 
     ++graph.m_activeDeclarationAccessCount;

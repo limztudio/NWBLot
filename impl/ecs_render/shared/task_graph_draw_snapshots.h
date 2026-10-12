@@ -24,8 +24,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opaque and transparent snapshots copy the same draw-item, receiver-range, and
-// cutter vectors between frame partitions and graph snapshots.
+// Opaque and transparent snapshots copy the same draw-item, receiver-range, and cutter vectors between frame partitions and graph snapshots.
 template<typename DestinationT, typename SourceT>
 inline void ReplaceSnapshotVector(DestinationT& destination, const SourceT& source){
     destination.reserve(source.size());
@@ -70,12 +69,7 @@ struct OpaqueMaterialPassGraphSnapshot{
         , csgCutters(arena)
     {}
 
-    void capture(
-        const MaterialPassDrawItemPartitions& drawItems,
-        const CsgFrameGpuData& csgFrameData,
-        const usize inInstanceCount,
-        const usize inMaterialTypedByteCount
-    ){
+    void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
         ReplaceSnapshotVector(regularMeshDrawItems, drawItems.regular.meshDrawItems);
         ReplaceSnapshotVector(regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
         ReplaceSnapshotVector(regularComputeDrawItems, drawItems.regular.computeDrawItems);
@@ -93,10 +87,7 @@ struct OpaqueMaterialPassGraphSnapshot{
         captured = true;
     }
 
-    void materialize(
-        MaterialPassDrawItemPartitions& outDrawItems,
-        CsgFrameGpuData& outCsgFrameData
-    )const{
+    void materialize(MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
         ReplaceSnapshotVector(outDrawItems.regular.meshDrawItems, regularMeshDrawItems);
         ReplaceSnapshotVector(outDrawItems.regular.indexedDrawItems, regularIndexedDrawItems);
         ReplaceSnapshotVector(outDrawItems.regular.computeDrawItems, regularComputeDrawItems);
@@ -136,12 +127,7 @@ struct TransparentCsgIntervalGraphSnapshot{
         , csgCutters(arena)
     {}
 
-    void capture(
-        const MaterialPassDrawItems& receiverSurfaceDrawItems,
-        const CsgFrameGpuData& csgFrameData,
-        const usize inInstanceCount,
-        const usize inMaterialTypedByteCount
-    ){
+    void capture(const MaterialPassDrawItems& receiverSurfaceDrawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
         ReplaceSnapshotVector(receiverSurfaceMeshDrawItems, receiverSurfaceDrawItems.meshDrawItems);
         ReplaceSnapshotVector(receiverSurfaceIndexedDrawItems, receiverSurfaceDrawItems.indexedDrawItems);
         ReplaceSnapshotVector(receiverSurfaceComputeDrawItems, receiverSurfaceDrawItems.computeDrawItems);
@@ -153,10 +139,7 @@ struct TransparentCsgIntervalGraphSnapshot{
         captured = true;
     }
 
-    void materialize(
-        MaterialPassDrawItems& outReceiverSurfaceDrawItems,
-        CsgFrameGpuData& outCsgFrameData
-    )const{
+    void materialize(MaterialPassDrawItems& outReceiverSurfaceDrawItems, CsgFrameGpuData& outCsgFrameData)const{
         ReplaceSnapshotVector(outReceiverSurfaceDrawItems.meshDrawItems, receiverSurfaceMeshDrawItems);
         ReplaceSnapshotVector(outReceiverSurfaceDrawItems.indexedDrawItems, receiverSurfaceIndexedDrawItems);
         ReplaceSnapshotVector(outReceiverSurfaceDrawItems.computeDrawItems, receiverSurfaceComputeDrawItems);
@@ -200,12 +183,7 @@ struct TransparentMaterialPassGraphSnapshot{
         , csgCutters(arena)
     {}
 
-    void capture(
-        const MaterialPassDrawItemPartitions& drawItems,
-        const CsgFrameGpuData& csgFrameData,
-        const usize inInstanceCount,
-        const usize inMaterialTypedByteCount
-    ){
+    void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
         ReplaceSnapshotVector(regularMeshDrawItems, drawItems.regular.meshDrawItems);
         ReplaceSnapshotVector(regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
         ReplaceSnapshotVector(regularComputeDrawItems, drawItems.regular.computeDrawItems);
@@ -220,10 +198,7 @@ struct TransparentMaterialPassGraphSnapshot{
         captured = true;
     }
 
-    void materialize(
-        MaterialPassDrawItemPartitions& outDrawItems,
-        CsgFrameGpuData& outCsgFrameData
-    )const{
+    void materialize(MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
         ReplaceSnapshotVector(outDrawItems.regular.meshDrawItems, regularMeshDrawItems);
         ReplaceSnapshotVector(outDrawItems.regular.indexedDrawItems, regularIndexedDrawItems);
         ReplaceSnapshotVector(outDrawItems.regular.computeDrawItems, regularComputeDrawItems);

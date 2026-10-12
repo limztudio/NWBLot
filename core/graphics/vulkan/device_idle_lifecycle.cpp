@@ -84,14 +84,10 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
         heapUseCount = m_gpuDescriptorHeap.m_heapUses.size();
     }
     if(activePendingRecordingLeaseCount != 0u){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} active GpuDescriptorHeap pending-recording leases.")
-            , activePendingRecordingLeaseCount
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} active GpuDescriptorHeap pending-recording leases."), activePendingRecordingLeaseCount);
     }
     if(heapUseCount != 0u){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} command buffers that still reference GpuDescriptorHeap.")
-            , heapUseCount
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} command buffers that still reference GpuDescriptorHeap."), heapUseCount);
     }
 
     bool descriptorLifecycleTransitioning = false;
@@ -100,9 +96,7 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
         descriptorLifecycleTransitioning = m_descriptorBufferManager.m_lifecycleTransitioning;
     }
     if(descriptorLifecycleTransitioning){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Device teardown is completing an interrupted descriptor-buffer lifecycle transition.")
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is completing an interrupted descriptor-buffer lifecycle transition."));
     }
 
     savePipelineCacheData();

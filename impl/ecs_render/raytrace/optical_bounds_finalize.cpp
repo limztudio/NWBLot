@@ -24,10 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalBoundsFinalizeSnapshot::RayTracingOpticalBoundsFinalizeSnapshot(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics
-)
+RayTracingOpticalBoundsFinalizeSnapshot::RayTracingOpticalBoundsFinalizeSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)
     : inputs(arena)
     , boundsBuffers(arena)
     , graphics(graphics)
@@ -37,10 +34,7 @@ RayTracingOpticalBoundsFinalizeSnapshot::RayTracingOpticalBoundsFinalizeSnapshot
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalBoundsFinalizeResources::RayTracingOpticalBoundsFinalizeResources(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics
-)
+RayTracingOpticalBoundsFinalizeResources::RayTracingOpticalBoundsFinalizeResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)
     : m_arena(arena)
     , m_graphics(graphics)
 {}
@@ -63,11 +57,7 @@ void RayTracingOpticalBoundsFinalizeResources::invalidate(){
     m_bindingLayout.reset();
 }
 
-RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::prepare(
-    const RayTracingOpticalSceneGather& gather,
-    const Core::GpuDescriptorHandle sourceDescriptor,
-    RendererShaderSystem& shaderSystem
-){
+RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::prepare(const RayTracingOpticalSceneGather& gather, const Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem){
     if(
         gather.runtimeBounds.empty() || !sourceDescriptor.valid()
         || gather.runtimeBounds.size() > Limit<u32>::s_Max / sizeof(RayTracingOpticalRuntimeInputGpu)
@@ -77,36 +67,20 @@ RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::
         return {};
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
-    const auto ensureBuffer = [&](
-        Core::BufferHandle& buffer,
-        Core::GpuDescriptorHandle& descriptor,
-        const usize byteSize,
-        const Name identity,
-        const bool output
-    ){
+    const auto ensureBuffer = [&](Core::BufferHandle& buffer, Core::GpuDescriptorHandle& descriptor, const usize byteSize, const Name identity, const bool output){
         if(buffer && buffer->getDeviceGeneration() != device.getDeviceGeneration())
             return false;
         if(buffer && buffer->getCreationDescription().byteSize >= byteSize && descriptor.valid())
             return true;
         Core::BufferDesc desc;
-        desc
-            .setByteSize(byteSize)
-            .setCanHaveRawViews(true)
-            .setCanHaveUAVs(output)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(identity)
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
+        desc.setByteSize(byteSize).setCanHaveRawViews(true).setCanHaveUAVs(output).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(identity).enableAutomaticStateTracking(Core::ResourceStates::Common);
         Core::BufferHandle replacement = m_graphics.createBuffer(desc);
         if(!replacement)
             return false;
         const Core::GpuDescriptorHandle slot = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!slot.valid())
             return false;
-        const Core::DescriptorWriteItem write = output
-            ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get())
-            : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get())
-        ;
+        const Core::DescriptorWriteItem write = output ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get()) : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get());
         if(!heap.write(slot, write)){
             heap.free(slot);
             return false;
@@ -117,23 +91,13 @@ RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::
         descriptor = slot;
         return true;
     };
-    const bool inputReady = ensureBuffer(
-        m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu),
-        Name("raytrace_optical_runtime_inputs"), false
-    );
-    const bool outputReady = inputReady && ensureBuffer(
-        m_outputBuffer, m_outputDescriptor,
-        NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES,
-        Name("raytrace_optical_resolved_scene"), true
-    );
+    const bool inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu), Name("raytrace_optical_runtime_inputs"), false);
+    const bool outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES, Name("raytrace_optical_resolved_scene"), true);
     if(!outputReady){
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize buffers"));
         return {};
     }
-    RayTracingOpticalBoundsFinalizeHandle snapshot(
-        NewArenaObject<RayTracingOpticalBoundsFinalizeControl>(m_arena, m_arena, m_graphics),
-        ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef
-    );
+    RayTracingOpticalBoundsFinalizeHandle snapshot(NewArenaObject<RayTracingOpticalBoundsFinalizeControl>(m_arena, m_arena, m_graphics), ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
     snapshot->inputBuffer = m_inputBuffer;
     snapshot->outputBuffer = m_outputBuffer;
     snapshot->pipeline = m_pipeline;
@@ -182,17 +146,10 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
             return false;
         }
     }
-    if(!shaderSystem.loadShader<ComputeShader>(
-        m_shader, Name("engine/graphics/raytrace/optical_bounds_finalize_cs"), ::__hidden_optical_shader::s_DefaultShaderVariant, Name("RayOpticalBoundsFinalize")
-    ))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, Name("engine/graphics/raytrace/optical_bounds_finalize_cs"), ::__hidden_optical_shader::s_DefaultShaderVariant, Name("RayOpticalBoundsFinalize")))
         return false;
     Core::ComputePipelineDesc desc;
-    desc
-        .setComputeShader(m_shader)
-        .addBindingLayout(m_bindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_pipeline = device.createComputePipeline(desc);
     if(!m_pipeline)
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize pipeline"));

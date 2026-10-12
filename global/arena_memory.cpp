@@ -39,10 +39,7 @@ namespace __hidden_arena_memory{
 inline constexpr usize s_OwnerBucketCount = 256u;
 inline constexpr usize s_HeapShardPadBytes = 80u;
 inline constexpr usize s_HeapShardMinBytes = 128u;
-constinit ArenaMemoryOwnerRecord s_HeapBacking{
-    .ownerName = Name("core/alloc/heap_backing"),
-    .source = ArenaMemorySource::HeapBacking,
-};
+constinit ArenaMemoryOwnerRecord s_HeapBacking{ .ownerName = Name("core/alloc/heap_backing"), .source = ArenaMemorySource::HeapBacking, };
 constinit Atomic<const ArenaMemoryOwnerRecord*> s_OwnerHead{ &s_HeapBacking };
 MallocMutex s_OwnerMutex;
 ArenaMemoryOwnerRecord* s_OwnerBuckets[s_OwnerBucketCount] = {};
@@ -75,8 +72,9 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
     total.deallocationCount += contribution.deallocationCount;
 }
 
-// Called with the lifecycle mutex held. Records use the uninstrumented CRT and remain available for late
-// static destruction and transient-arena history. Registration cannot recurse through global new.
+// Called with the lifecycle mutex held.
+// Records use the uninstrumented CRT and remain available for late static destruction and transient-arena history.
+// Registration cannot recurse through global new.
 [[nodiscard]] ArenaMemoryOwnerRecord& FindOrCreateOwner(const Name& ownerName){
     const usize bucketIndex = Hasher<Name>{}(ownerName) % s_OwnerBucketCount;
     for(ArenaMemoryOwnerRecord* record = s_OwnerBuckets[bucketIndex]; record; record = record->bucketNext){
@@ -101,8 +99,8 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
     if(threadShard)
         return *threadShard;
 
-    // The shard has no TLS destructor and outlives its writer, preserving cross-thread frees and exited-thread
-    // counters. Allocation failure uses the permanent atomic fallback without failing an otherwise valid free.
+    // The shard has no TLS destructor and outlives its writer, preserving cross-thread frees and exited-thread counters.
+    // Allocation failure uses the permanent atomic fallback without failing an otherwise valid free.
     void* const storage = std::malloc(sizeof(HeapMemoryShard));
     if(!storage){
         s_ThreadHeapShard = &s_HeapFallback;
@@ -162,8 +160,8 @@ ArenaMemoryStats ArenaMemoryOwnerRecord::snapshot()const noexcept{
 ArenaMemoryTracker::ArenaMemoryTracker(const Name& ownerName, const ArenaMemoryReservation::Enum reservation)
     : m_reservation(reservation)
 {
-    // Publish only after every counter and link member has been initialized. The same lock protects readers
-    // until retirement has copied the final counters and detached this tracker before member destruction.
+    // Publish only after every counter and link member has been initialized.
+    // The same lock protects readers until retirement has copied the final counters and detached this tracker before member destruction.
     ScopedLock lock(__hidden_arena_memory::s_OwnerMutex);
     __hidden_arena_memory::FindOrCreateOwner(ownerName).attach(*this);
 }
@@ -203,19 +201,13 @@ const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept{
     return __hidden_arena_memory::s_OwnerHead.load(MemoryOrder::acquire);
 }
 
-const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(
-    const ArenaMemoryOwnerRecord& record,
-    ArenaMemoryOwnerIdentity& outIdentity
-)noexcept{
+const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerIdentity& outIdentity)noexcept{
     outIdentity.ownerName = record.ownerName;
     outIdentity.source = record.source;
     return record.next;
 }
 
-const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(
-    const ArenaMemoryOwnerRecord& record,
-    ArenaMemoryOwnerSnapshot& outSnapshot
-)noexcept{
+const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerSnapshot& outSnapshot)noexcept{
     outSnapshot.ownerName = record.ownerName;
     outSnapshot.source = record.source;
     if(record.source == ArenaMemorySource::HeapBacking)

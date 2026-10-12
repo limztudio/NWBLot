@@ -51,8 +51,7 @@ protected:
         UiSkin::RegionVector regions(m_arena);
         for(const UiSkinRegion& region : m_skin.regions())
             regions.push_back(region);
-        const Name names[]{ Name("progress.track"), Name("progress.fill"),
-            Name("scrollbar.track"), Name("scrollbar.thumb.normal") };
+        const Name names[]{ Name("progress.track"), Name("progress.fill"), Name("scrollbar.track"), Name("scrollbar.thumb.normal") };
         for(u32 index = 0u; index < 4u; ++index){
             if((index < 2u && !preferred) || (index >= 2u && !fallback))
                 continue;
@@ -91,10 +90,7 @@ protected:
             for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-                if(
-                    first.texCoord.x < leftU || opposite.texCoord.x > rightU
-                    || first.texCoord.y < topV || opposite.texCoord.y > bottomV
-                )
+                if(first.texCoord.x < leftU || opposite.texCoord.x > rightU || first.texCoord.y < topV || opposite.texCoord.y > bottomV)
                     continue;
                 if(candidate.quads == 0u){
                     candidate.bounds.x = first.position.x;

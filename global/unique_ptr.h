@@ -137,7 +137,10 @@ public:
         : base_type(x.release(), Forward<deleter_type>(x.getDeleter()))
     {}
     template<typename U, typename E>
-    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept
+    UniquePtr(
+        UniquePtr<U, E>&& u,
+        typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0
+    )noexcept
         : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
     UniquePtr(const this_type&) = delete;
@@ -211,7 +214,10 @@ public:
         : base_type(x.release(), Forward<deleter_type>(x.getDeleter()))
     {}
     template<typename U, typename E>
-    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept
+    UniquePtr(
+        UniquePtr<U, E>&& u,
+        typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0
+    )noexcept
         : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
     UniquePtr(const this_type&) = delete;

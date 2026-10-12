@@ -65,23 +65,14 @@ SoftwareSceneRefitHandle SoftwareSceneRefitResources::prepare(
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const auto& sceneDesc = sceneNodes->getCreationDescription();
-    if(
-        sceneNodes->getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs
-        || sceneDesc.byteSize < static_cast<u64>(nodeCount) * __hidden_refit_shader::s_SoftwareNodeByteSize
-    )
+    if(sceneNodes->getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs || sceneDesc.byteSize < static_cast<u64>(nodeCount) * __hidden_refit_shader::s_SoftwareNodeByteSize)
         return {};
     const usize byteSize = instanceCount * sizeof(SoftwareSceneRefitInstanceGpu);
     if(m_inputBuffer && m_inputBuffer->getDeviceGeneration() != device.getDeviceGeneration())
         return {};
     if(!m_inputBuffer || m_inputBuffer->getCreationDescription().byteSize < byteSize){
         Core::BufferDesc desc;
-        desc
-            .setByteSize(byteSize)
-            .setCanHaveRawViews(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("software_scene_refit_inputs"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
+        desc.setByteSize(byteSize).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name("software_scene_refit_inputs")).enableAutomaticStateTracking(Core::ResourceStates::Common);
         Core::BufferHandle replacement = m_graphics.createBuffer(desc);
         if(!replacement)
             return {};
@@ -97,10 +88,7 @@ SoftwareSceneRefitHandle SoftwareSceneRefitResources::prepare(
         m_inputBuffer = Move(replacement);
         m_inputDescriptor = descriptor;
     }
-    SoftwareSceneRefitHandle snapshot(
-        NewArenaObject<SoftwareSceneRefitControl>(m_arena, m_arena, m_graphics),
-        ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef
-    );
+    SoftwareSceneRefitHandle snapshot(NewArenaObject<SoftwareSceneRefitControl>(m_arena, m_arena, m_graphics), ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
     snapshot->inputBuffer = m_inputBuffer;
     snapshot->sceneNodes = sceneNodes;
     snapshot->pipeline = m_pipeline;
@@ -111,11 +99,7 @@ SoftwareSceneRefitHandle SoftwareSceneRefitResources::prepare(
     snapshot->inputs.reserve(instanceCount);
     snapshot->meshNodes.reserve(instanceCount);
     for(usize index = 0u; index < instanceCount; ++index){
-        if(
-            !meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max
-            || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration()
-            || meshNodes[index]->getCreationDescription().byteSize < __hidden_refit_shader::s_SoftwareNodeByteSize
-        )
+        if(!meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index]->getCreationDescription().byteSize < __hidden_refit_shader::s_SoftwareNodeByteSize)
             return {};
         snapshot->inputs.push_back(inputs[index]);
         snapshot->meshNodes.push_back(meshNodes[index]);
@@ -141,12 +125,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
     if(!shaderSystem.loadShader<ComputeShader>(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), ::__hidden_refit_shader::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
         return false;
     Core::ComputePipelineDesc desc;
-    desc
-        .setComputeShader(m_shader)
-        .addBindingLayout(m_bindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_pipeline = device.createComputePipeline(desc);
     return static_cast<bool>(m_pipeline);
 }

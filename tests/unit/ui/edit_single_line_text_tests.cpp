@@ -44,8 +44,7 @@ TEST(UiSingleLineText, ChecksNormalizedBytesBeforeAllocationAndPreservesOutputOn
 TEST(UiSingleLineText, RejectsMalformedUtf8NulAndUnrenderableAsciiControlsAtomically){
     Tests::TestArena arena;
     AString<Core::Alloc::GlobalArena> output("before", arena.arena);
-    const AStringView invalid[]{ "\xC0\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xE2\x82", "x\x1By", "\x7F",
-        AStringView("a\0b", 3u) };
+    const AStringView invalid[]{ "\xC0\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xE2\x82", "x\x1By", "\x7F", AStringView("a\0b", 3u) };
     for(const auto value : invalid){
         EXPECT_EQ(NormalizeSingleLineText(arena.arena, value, 64u), MakeUnexpected(EditTextStatus::InvalidText));
         EXPECT_EQ(output, "before");

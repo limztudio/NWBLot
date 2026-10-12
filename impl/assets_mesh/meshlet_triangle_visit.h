@@ -23,12 +23,7 @@ template<
     typename PrimitiveContainer,
     typename Visitor
 >
-[[nodiscard]] bool ForEachMeshletTriangleCorner(
-    const MeshletContainer& meshlets,
-    const LocalVertexRefContainer& localVertexRefs,
-    const PrimitiveContainer& primitiveIndices,
-    Visitor&& visitor
-){
+[[nodiscard]] bool ForEachMeshletTriangleCorner(const MeshletContainer& meshlets, const LocalVertexRefContainer& localVertexRefs, const PrimitiveContainer& primitiveIndices, Visitor&& visitor){
     const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();
 

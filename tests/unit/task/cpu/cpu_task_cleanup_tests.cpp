@@ -320,10 +320,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
     usize outstandingDuringRetirement = 0u;
     u32 callbacks = 0u;
     CpuTaskScheduler scheduler(0u);
-    parent = scheduler.submit([
-        &scheduler, &callbacks,
-        probe = ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement)
-    ](){
+    parent = scheduler.submit([&scheduler, &callbacks, probe = ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement)](){
         EXPECT_TRUE(probe.m_active);
         EXPECT_TRUE(scheduler.submit([&]()noexcept{ ++callbacks; }).valid());
     });

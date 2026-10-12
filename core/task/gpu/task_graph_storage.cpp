@@ -28,11 +28,7 @@ namespace __hidden_gpu_task_graph_storage{
 
 class UnappendedPayloadDestroyScope final : NoCopy{
 public:
-    UnappendedPayloadDestroyScope(
-        GraphicsArena& arena,
-        void* const payload,
-        const GpuTaskPayloadDestroyThunk destroyPayload
-    )noexcept
+    UnappendedPayloadDestroyScope(GraphicsArena& arena, void* const payload, const GpuTaskPayloadDestroyThunk destroyPayload)noexcept
         : m_arena(arena)
         , m_payload(payload)
         , m_destroyPayload(destroyPayload)
@@ -125,11 +121,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     if(!mutationAccess.validFor(*this))
         return {};
 
-    const bool appendPreludeDependency = m_normalExecutionPrelude.valid()
-        && desc.dependencyCount == 0u
-        && !desc.scheduling.joinsAcceptedQueueFrontier
-        && !desc.scheduling.isRecoverySubmission
-    ;
+    const bool appendPreludeDependency = m_normalExecutionPrelude.valid() && desc.dependencyCount == 0u && !desc.scheduling.joinsAcceptedQueueFrontier && !desc.scheduling.isRecoverySubmission;
     const usize preludeDependencyCount = appendPreludeDependency ? 1u : 0u;
     if(
         !desc.identity
@@ -155,17 +147,12 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
         return {};
 
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        if(
-            !desc.externalStateSources[sourceIndex].states
-            || !desc.externalStateSources[sourceIndex].states->valid()
-            || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount
-        )
+        if(!desc.externalStateSources[sourceIndex].states || !desc.externalStateSources[sourceIndex].states->valid() || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount)
             return {};
     }
 
-    // Resource sets are immutable graph data. Expand them now rather than introducing an opaque aggregate into
-    // hazard analysis or barrier lowering; every later stage sees the same concrete member uses as an explicit
-    // declaration would have supplied.
+    // Resource sets are immutable graph data.
+    // Expand them now rather than introducing an opaque aggregate into hazard analysis or barrier lowering; every later stage sees the same concrete member uses as an explicit declaration would have supplied.
     usize expandedResourceUseCount = desc.resourceUseCount;
     const usize remainingResourceUseCapacity = static_cast<usize>(Limit<u32>::s_Max) - m_resourceUses.size();
     if(expandedResourceUseCount > remainingResourceUseCapacity)
@@ -180,17 +167,15 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
         expandedResourceUseCount += resourceSet.memberCount;
     }
 
-    // Task declarations capture every valid native handoff when the graph accepts the declaration. Invalid sources
-    // cannot become valid after this immutable copy, so reject them at the declaration boundary.
+    // Task declarations capture every valid native handoff when the graph accepts the declaration.
+    // Invalid sources cannot become valid after this immutable copy, so reject them at the declaration boundary.
     Optional<GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>>> externalStateSnapshots;
     if(desc.externalStateSourceCount != 0u){
         auto& snapshots = externalStateSnapshots.emplace(m_arena);
         snapshots.reserve(desc.externalStateSourceCount);
         for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
             const CommandListResourceStateHandoff* const source = desc.externalStateSources[sourceIndex].states;
-            GlobalUniquePtr<CommandListResourceStateHandoff> snapshot =
-                MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena)
-            ;
+            GlobalUniquePtr<CommandListResourceStateHandoff> snapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
             if(!snapshot)
                 return {};
             if(!snapshot->copyFrom(*source))
@@ -201,18 +186,9 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_dependencies, m_dependencies.size() + desc.dependencyCount + preludeDependencyCount);
-    ContainerDetail::ReserveGrowingCapacity(
-        m_externalDependencies,
-        m_externalDependencies.size() + desc.externalDependencyCount
-    );
-    ContainerDetail::ReserveGrowingCapacity(
-        m_externalStateSources,
-        m_externalStateSources.size() + desc.externalStateSourceCount
-    );
-    ContainerDetail::ReserveGrowingCapacity(
-        m_externalStateSnapshots,
-        m_externalStateSnapshots.size() + desc.externalStateSourceCount
-    );
+    ContainerDetail::ReserveGrowingCapacity(m_externalDependencies, m_externalDependencies.size() + desc.externalDependencyCount);
+    ContainerDetail::ReserveGrowingCapacity(m_externalStateSources, m_externalStateSources.size() + desc.externalStateSourceCount);
+    ContainerDetail::ReserveGrowingCapacity(m_externalStateSnapshots, m_externalStateSnapshots.size() + desc.externalStateSourceCount);
     ContainerDetail::ReserveGrowingCapacity(m_resourceUses, m_resourceUses.size() + expandedResourceUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_tasks, m_tasks.size() + 1u);
@@ -266,10 +242,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
         m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         const CommandListResourceStateHandoff* const snapshot = (*externalStateSnapshots)[sourceIndex].get();
-        m_externalStateSources.push_back(GpuTaskExternalStateSource{
-            .states = snapshot,
-            .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass,
-        });
+        m_externalStateSources.push_back(GpuTaskExternalStateSource{ .states = snapshot, .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass, });
         m_externalStateSnapshots.push_back((*externalStateSnapshots)[sourceIndex].get());
     }
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
@@ -308,11 +281,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     return GpuTaskId{ .generation = m_generation, .index = index };
 }
 
-void GpuTaskGraph::discardAndDestroyUnappendedPayload(
-    void* const payload,
-    const GpuTaskDiscardedThunk discardPayload,
-    const GpuTaskPayloadDestroyThunk destroyPayload
-){
+void GpuTaskGraph::discardAndDestroyUnappendedPayload(void* const payload, const GpuTaskDiscardedThunk discardPayload, const GpuTaskPayloadDestroyThunk destroyPayload){
     if(!payload)
         return;
 
@@ -321,20 +290,12 @@ void GpuTaskGraph::discardAndDestroyUnappendedPayload(
         discardPayload(payload);
 }
 
-GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
-    const GpuGraphResourceDesc& desc,
-    const ResourceQueueAdmissionSnapshot* const queueAdmission,
-    const ResourceBinding& binding,
-    const DeclarationMutationScope& mutationAccess
-){
+GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphResourceDesc& desc, const ResourceQueueAdmissionSnapshot* const queueAdmission, const ResourceBinding& binding, const DeclarationMutationScope& mutationAccess){
     if(!mutationAccess.validFor(*this))
         return {};
 
     const usize queueFamilyIndexCount = queueAdmission ? queueAdmission->queueFamilyIndexCount : 0u;
-    const bool hasInitialOwnerHandoff =
-        desc.initialOwnerHandoffSources != nullptr
-        || desc.initialOwnerHandoffSourceCount != 0u
-    ;
+    const bool hasInitialOwnerHandoff = desc.initialOwnerHandoffSources != nullptr || desc.initialOwnerHandoffSourceCount != 0u;
     const bool hasExternalFinalRelease = desc.externalFinalReleaseDestinationQueue.valid();
     if(
         !desc.identity
@@ -343,47 +304,21 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
         || desc.type >= GpuGraphResourceType::kCount
         || !ResourceQueueSharing::IsValid(desc.queueSharing)
-        || (
-            queueAdmission
-            && (
-                !queueAdmission->valid()
-                || queueAdmission->admittedQueueClasses != desc.queueSharing
-                || queueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max) - m_queueFamilyIndices.size()
-            )
-        )
-        || (
-            desc.initialAvailabilityCompletion.valid()
-            && (
-                desc.type == GpuGraphResourceType::HazardDomain
-                || !validExternalCompletion(desc.initialAvailabilityCompletion)
-            )
-        )
-        || (
-            desc.externalFinalState != ResourceStates::Unknown
-            && desc.type != GpuGraphResourceType::Texture
-            && desc.type != GpuGraphResourceType::Buffer
-            && desc.type != GpuGraphResourceType::AccelStruct
-        )
+        || (queueAdmission && (!queueAdmission->valid() || queueAdmission->admittedQueueClasses != desc.queueSharing || queueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max) - m_queueFamilyIndices.size()))
+        || (desc.initialAvailabilityCompletion.valid() && (desc.type == GpuGraphResourceType::HazardDomain || !validExternalCompletion(desc.initialAvailabilityCompletion)))
+        || (desc.externalFinalState != ResourceStates::Unknown && desc.type != GpuGraphResourceType::Texture && desc.type != GpuGraphResourceType::Buffer && desc.type != GpuGraphResourceType::AccelStruct)
         || (
             hasExternalFinalRelease
             && (
                 desc.externalFinalState == ResourceStates::Unknown
                 || desc.queueSharing != ResourceQueueSharing::Exclusive
-                || (
-                    desc.type != GpuGraphResourceType::Texture
-                    && desc.type != GpuGraphResourceType::Buffer
-                    && desc.type != GpuGraphResourceType::AccelStruct
-                )
+                || (desc.type != GpuGraphResourceType::Texture && desc.type != GpuGraphResourceType::Buffer && desc.type != GpuGraphResourceType::AccelStruct)
             )
         )
         || (
             hasInitialOwnerHandoff
             && (
-                (
-                    desc.type != GpuGraphResourceType::Texture
-                    && desc.type != GpuGraphResourceType::Buffer
-                    && desc.type != GpuGraphResourceType::AccelStruct
-                )
+                (desc.type != GpuGraphResourceType::Texture && desc.type != GpuGraphResourceType::Buffer && desc.type != GpuGraphResourceType::AccelStruct)
                 || !desc.initialOwnerHandoffSources
                 || desc.initialOwnerHandoffSourceCount == 0u
                 || desc.initialOwnerQueue.valid()
@@ -393,12 +328,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
                     > static_cast<usize>(Limit<u32>::s_Max) - m_initialOwnerHandoffSources.size()
             )
         )
-        || (
-            desc.initialOwnerQueue.valid()
-            && desc.type != GpuGraphResourceType::Texture
-            && desc.type != GpuGraphResourceType::Buffer
-            && desc.type != GpuGraphResourceType::AccelStruct
-        )
+        || (desc.initialOwnerQueue.valid() && desc.type != GpuGraphResourceType::Texture && desc.type != GpuGraphResourceType::Buffer && desc.type != GpuGraphResourceType::AccelStruct)
         || m_resources.size() >= Limit<u32>::s_Max
     )
         return {};
@@ -407,46 +337,26 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
             if(
-                (
-                    desc.type == GpuGraphResourceType::Texture
-                    && !source.range.textureSubresources.hasExtent()
-                )
+                (desc.type == GpuGraphResourceType::Texture && !source.range.textureSubresources.hasExtent())
                 || (desc.type == GpuGraphResourceType::Buffer && !source.range.bufferRange.hasExtent())
-                || (
-                    desc.type == GpuGraphResourceType::AccelStruct
-                    && (
-                        source.range.textureSubresources != s_AllSubresources
-                        || source.range.bufferRange != s_EntireBuffer
-                    )
-                )
+                || (desc.type == GpuGraphResourceType::AccelStruct && (source.range.textureSubresources != s_AllSubresources || source.range.bufferRange != s_EntireBuffer))
                 || !source.sourceQueue.valid()
                 || !source.destinationQueue.valid()
                 || !source.completion.valid()
                 || !validExternalCompletion(source.completion)
                 || !source.minimumCompletionToken.valid()
-                || !source.minimumCompletionToken.matchesPhysicalQueue(
-                    source.sourceQueue.index,
-                    source.sourceQueue.deviceGeneration
-                )
+                || !source.minimumCompletionToken.matchesPhysicalQueue(source.sourceQueue.index, source.sourceQueue.deviceGeneration)
                 || !source.stateSource
                 || !source.stateSource->valid()
             )
                 return {};
             for(usize previousSourceIndex = 0u; previousSourceIndex < sourceIndex; ++previousSourceIndex){
-                const GpuGraphInitialOwnerHandoffSourceDesc& previousSource =
-                    desc.initialOwnerHandoffSources[previousSourceIndex]
-                ;
-                // One completion binding supplies one physical-queue timeline token at submission. Reusing it for
-                // sources from different queues would make a later graph impossible to submit safely: one acquire
-                // would necessarily wait on the wrong producer frontier.
-                if(
-                    source.completion == previousSource.completion
-                    && source.sourceQueue != previousSource.sourceQueue
-                )
+                const GpuGraphInitialOwnerHandoffSourceDesc& previousSource = desc.initialOwnerHandoffSources[previousSourceIndex];
+                // One completion binding supplies one physical-queue timeline token at submission.
+                // Reusing it for sources from different queues would make a later graph impossible to submit safely: one acquire would necessarily wait on the wrong producer frontier.
+                if(source.completion == previousSource.completion && source.sourceQueue != previousSource.sourceQueue)
                     return {};
-                const bool overlaps = desc.type == GpuGraphResourceType::Texture
-                    ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources)
-                    : desc.type == GpuGraphResourceType::AccelStruct
+                const bool overlaps = desc.type == GpuGraphResourceType::Texture ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources) : desc.type == GpuGraphResourceType::AccelStruct
                         || source.range.bufferRange.overlaps(previousSource.range.bufferRange)
                 ;
                 if(overlaps)
@@ -463,9 +373,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         snapshots.reserve(desc.initialOwnerHandoffSourceCount);
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
-            GlobalUniquePtr<CommandListResourceStateHandoff> stateSnapshot =
-                MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena)
-            ;
+            GlobalUniquePtr<CommandListResourceStateHandoff> stateSnapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
             if(!stateSnapshot)
                 return {};
             if(!stateSnapshot->copyFrom(*source.stateSource))
@@ -483,24 +391,14 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         pointerKey.pointer = binding.accelStruct->get();
     prepareResourceIndexes(pointerKey);
 
-    ContainerDetail::ReserveGrowingCapacity(
-        m_initialOwnerHandoffSources,
-        m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount
-    );
-    ContainerDetail::ReserveGrowingCapacity(
-        m_initialOwnerHandoffStateSnapshots,
-        m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount
-    );
+    ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffSources, m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount);
+    ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffStateSnapshots, m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
     ContainerDetail::ReserveGrowingCapacity(m_queueFamilyIndices, m_queueFamilyIndices.size() + queueFamilyIndexCount);
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
 
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSourceRollback(
-        m_initialOwnerHandoffSources
-    );
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSnapshotRollback(
-        m_initialOwnerHandoffStateSnapshots
-    );
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSourceRollback(m_initialOwnerHandoffSources);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSnapshotRollback(m_initialOwnerHandoffStateSnapshots);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope queueFamilyRollback(m_queueFamilyIndices);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceRollback(m_resources);
@@ -699,13 +597,7 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     if(!mutation.valid())
         return {};
 
-    if(
-        !desc.identity
-        || desc.markerLabel.empty()
-        || desc.markerLabel.size() > Limit<u32>::s_Max
-        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
-        || m_externalCompletions.size() >= Limit<u32>::s_Max
-    )
+    if(!desc.identity || desc.markerLabel.empty() || desc.markerLabel.size() > Limit<u32>::s_Max || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size() || m_externalCompletions.size() >= Limit<u32>::s_Max)
         return {};
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
@@ -749,9 +641,7 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     return GpuExternalCompletionId{ .generation = m_generation, .index = index };
 }
 
-const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(
-    const GpuUploadBlobId& blob
-)const noexcept{
+const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(const GpuUploadBlobId& blob)const noexcept{
     if(!validUploadBlob(blob))
         return nullptr;
     return &m_uploadBlobs[blob.index];

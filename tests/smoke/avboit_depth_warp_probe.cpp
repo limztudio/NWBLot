@@ -114,13 +114,7 @@ static void PoisonUnusedCoverage(ProbeCase& probe)noexcept{
             precedingRank = nextBin++;
         oracle.warp[slice] = precedingRank;
     }
-    oracle.control = {
-        distinctCount == 0u ? 1u : distinctCount,
-        shift,
-        probe.virtualCount,
-        probe.physicalCount,
-        push.frame[2], push.frame[3], push.frame[0], push.frame[1],
-    };
+    oracle.control = { distinctCount == 0u ? 1u : distinctCount, shift, probe.virtualCount, probe.physicalCount, push.frame[2], push.frame[3], push.frame[0], push.frame[1], };
     return oracle;
 }
 
@@ -204,10 +198,7 @@ struct ProbeBatchTask{
         u32 slotsIndex = 0u;
     };
 
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{
-        .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
-        .requiresPrimaryGraphicsQueue = true,
-    };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true, };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
@@ -259,44 +250,16 @@ struct ProbeBatchTask{
     const auto& payload = *static_cast<const ProbeBatchTask::Payload*>(userData);
     const auto import = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
         Core::GpuGraphResourceDesc desc;
-        desc
-            .setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer)
-            .setInitialState(state).setExternalFinalState(state)
-        ;
+        desc.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state);
         return graph.importBuffer(buffer, desc);
     };
     // One task owns the transfer/compute transitions within its batch and restores the declared external states.
     const Array<Core::GpuTaskResourceUse, 5u> uses{
-        Core::GpuTaskResourceUse{
-            .resource = import(payload.coverage, "Depth warp probe coverage", Core::ResourceStates::CopyDest),
-            .range = {},
-            .requiredState = Core::ResourceStates::CopyDest,
-            .access = Core::GpuTaskResourceAccess::ReadWrite,
-        },
-        Core::GpuTaskResourceUse{
-            .resource = import(payload.warp, "Depth warp probe LUT", Core::ResourceStates::CopyDest),
-            .range = {},
-            .requiredState = Core::ResourceStates::CopyDest,
-            .access = Core::GpuTaskResourceAccess::ReadWrite,
-        },
-        Core::GpuTaskResourceUse{
-            .resource = import(payload.control, "Depth warp probe control", Core::ResourceStates::CopyDest),
-            .range = {},
-            .requiredState = Core::ResourceStates::CopyDest,
-            .access = Core::GpuTaskResourceAccess::ReadWrite,
-        },
-        Core::GpuTaskResourceUse{
-            .resource = import(payload.slots, "Depth warp probe heap slots", Core::ResourceStates::ConstantBuffer),
-            .range = {},
-            .requiredState = Core::ResourceStates::ConstantBuffer,
-            .access = Core::GpuTaskResourceAccess::Read,
-        },
-        Core::GpuTaskResourceUse{
-            .resource = import(payload.readback, "Depth warp probe readback", Core::ResourceStates::CopyDest),
-            .range = {},
-            .requiredState = Core::ResourceStates::CopyDest,
-            .access = Core::GpuTaskResourceAccess::Write,
-        },
+        Core::GpuTaskResourceUse{ .resource = import(payload.coverage, "Depth warp probe coverage", Core::ResourceStates::CopyDest), .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite, },
+        Core::GpuTaskResourceUse{ .resource = import(payload.warp, "Depth warp probe LUT", Core::ResourceStates::CopyDest), .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite, },
+        Core::GpuTaskResourceUse{ .resource = import(payload.control, "Depth warp probe control", Core::ResourceStates::CopyDest), .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite, },
+        Core::GpuTaskResourceUse{ .resource = import(payload.slots, "Depth warp probe heap slots", Core::ResourceStates::ConstantBuffer), .range = {}, .requiredState = Core::ResourceStates::ConstantBuffer, .access = Core::GpuTaskResourceAccess::Read, },
+        Core::GpuTaskResourceUse{ .resource = import(payload.readback, "Depth warp probe readback", Core::ResourceStates::CopyDest), .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, },
     };
     for(u32 index = 0u; index < uses.size(); ++index){
         if(!uses[index].resource.valid()){
@@ -320,11 +283,7 @@ class DepthWarpProbeProject final : public IProjectEntryCallbacks{
 private:
     [[nodiscard]] static Core::BufferHandle CreateBuffer(Core::GraphicsRuntime& graphics, const Name& name, const u32 words, const bool readback){
         Core::BufferDesc desc;
-        desc
-            .setDebugName(name).setByteSize(words * sizeof(u32)).setStructStride(sizeof(u32))
-            .setCanHaveUAVs(!readback).setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None)
-            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
-        ;
+        desc.setDebugName(name).setByteSize(words * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);
     }
 
@@ -369,10 +328,7 @@ public:
             return false;
         }
         Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc
-            .setComputeShader(m_shader).addBindingLayout(m_pushLayout)
-            .addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout())
-        ;
+        pipelineDesc.setComputeShader(m_shader).addBindingLayout(m_pushLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         m_pipeline = device.createComputePipeline(pipelineDesc);
         m_coverage = CreateBuffer(graphics, Name("DepthWarpProbeCoverage"), s_CoverageWords, false);
         m_warp = CreateBuffer(graphics, Name("DepthWarpProbeWarp"), s_WarpWords, false);
@@ -395,10 +351,7 @@ public:
         slots.avboitDepthWarp = m_descriptors[1].slot();
         slots.avboitControl = m_descriptors[2].slot();
         Core::GraphicsRuntime::BufferSetupDesc slotsDesc;
-        slotsDesc.bufferDesc
-            .setDebugName(Name("DepthWarpProbeSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true)
-            .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer)
-        ;
+        slotsDesc.bufferDesc.setDebugName(Name("DepthWarpProbeSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
         slotsDesc.data = &slots;
         slotsDesc.dataSize = sizeof(slots);
         slotsDesc.queue = Core::CommandQueue::Graphics;
@@ -408,9 +361,7 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: slot payload setup failed"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitDepthWarpProbe: manifest boundary={} exhaustive={} randomized={} total={} seed=0x6b47c2d1")
-            , s_BoundaryCaseCount, s_ExhaustiveCaseCount, s_RandomCaseCount, s_TotalCaseCount
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitDepthWarpProbe: manifest boundary={} exhaustive={} randomized={} total={} seed=0x6b47c2d1"), s_BoundaryCaseCount, s_ExhaustiveCaseCount, s_RandomCaseCount, s_TotalCaseCount);
         return true;
     }
 
@@ -418,8 +369,7 @@ public:
         static_cast<void>(delta);
         if(m_completed)
             return true;
-        ProbeBatchTask::Payload payload{ m_coverage, m_warp, m_control, m_slots, m_readback, m_pipeline,
-            m_context.graphics.getDevice().getDescriptorHeap(), nullptr, 0u, 0u, m_descriptors[3].slot() };
+        ProbeBatchTask::Payload payload{ m_coverage, m_warp, m_control, m_slots, m_readback, m_pipeline, m_context.graphics.getDevice().getDescriptorHeap(), nullptr, 0u, 0u, m_descriptors[3].slot() };
         for(u32 firstCase = 0u; firstCase < m_cases.size(); firstCase += s_BatchSize){
             payload.cases = m_cases.data() + firstCase;
             payload.firstCase = firstCase;
@@ -471,13 +421,9 @@ private:
             const auto oracle = BuildOracle(probe, BuildPush(probe, ordinal, payload.slotsIndex));
             const u32* result = mapped + index * s_ResultWords;
             for(u32 word = 0u; word < s_ResultWords; ++word){
-                const u32 expected = word < probe.virtualCount ? oracle.warp[word]
-                    : word >= s_WarpWords && word < s_WarpWords + NWB_AVBOIT_CONTROL_WORD_COUNT ? oracle.control[word - s_WarpWords]
-                    : s_Sentinel;
+                const u32 expected = word < probe.virtualCount ? oracle.warp[word] : word >= s_WarpWords && word < s_WarpWords + NWB_AVBOIT_CONTROL_WORD_COUNT ? oracle.control[word - s_WarpWords] : s_Sentinel;
                 if(result[word] != expected){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: mismatch case {} scenario {} virtual {} physical {} word {} expected {} observed {}")
-                        , ordinal, probe.scenario, probe.virtualCount, probe.physicalCount, word, expected, result[word]
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: mismatch case {} scenario {} virtual {} physical {} word {} expected {} observed {}"), ordinal, probe.scenario, probe.virtualCount, probe.physicalCount, word, expected, result[word]);
                     passed = false;
                     break;
                 }

@@ -82,35 +82,21 @@ static constexpr f32 s_MaxDefaultFontSize = 2048.0f;
 
 [[nodiscard]] static Expected<u32> ReadU32Value(const Path& path, const Value& value, const AStringView fieldName){
     if(!value.isInteger() || !FitsU32(value.asInteger())){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain integers in the u32 range")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(path)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain integers in the u32 range"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
     return static_cast<u32>(value.asInteger());
 }
 
 template<usize Count>
-[[nodiscard]] static Expected<Array<u32, Count>> ReadU32List(
-    const Path& path,
-    const Value& object,
-    const AStringView fieldName,
-    const bool required
-){
+[[nodiscard]] static Expected<Array<u32, Count>> ReadU32List(const Path& path, const Value& object, const AStringView fieldName, const bool required){
     Array<u32, Count> values{};
 
     const Value* field = FindField(object, fieldName);
     if(!field && !required)
         return values;
     if(!field || !field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component integer list")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(path)
-            , StringConvert(fieldName)
-            , Count
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component integer list"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(fieldName), Count);
         return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < Count; ++index){
@@ -130,12 +116,7 @@ template<usize Count>
     if(!field)
         return values;
     if(!field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component numeric list")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(path)
-            , StringConvert(fieldName)
-            , Count
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component numeric list"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(fieldName), Count);
         return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < Count; ++index){
@@ -159,15 +140,8 @@ template<usize Count>
         region.drawMode = *drawModeResult;
     }
 
-    if(!Core::Assets::ValidateMetadataAssetFields(
-        path,
-        object,
-        s_DiagnosticPrefix,
-        [hasSlice = region.drawMode == UiSkinDrawMode::NineSlice](const AStringView field)noexcept{
-            return
-                field == s_NameField || field == s_RectField || field == s_DrawModeField
-                || field == s_PaddingField || field == s_MinimumSizeField || (hasSlice && field == s_SliceField)
-            ;
+    if(!Core::Assets::ValidateMetadataAssetFields(path, object, s_DiagnosticPrefix, [hasSlice = region.drawMode == UiSkinDrawMode::NineSlice](const AStringView field)noexcept{
+            return field == s_NameField || field == s_RectField || field == s_DrawModeField || field == s_PaddingField || field == s_MinimumSizeField || (hasSlice && field == s_SliceField);
         }
     ))
         return MakeUnexpected(Failure{});
@@ -204,18 +178,13 @@ template<usize Count>
     if(!colors)
         return MakeUnexpected(Failure{});
     if(colors->asList().size() != UiSkinColorRole::Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(path)
-            , static_cast<u32>(UiSkinColorRole::Count)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::Count));
         return MakeUnexpected(Failure{});
     }
 
     Array<bool, UiSkinColorRole::Count> seen{};
     for(const Value& value : colors->asList()){
-        if(!Core::Assets::CheckMetadataAssetMap(path, value, s_DiagnosticPrefix)
-            || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { s_NameField, s_RgbaField }))
+        if(!Core::Assets::CheckMetadataAssetMap(path, value, s_DiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { s_NameField, s_RgbaField }))
             return MakeUnexpected(Failure{});
         AStringView name;
         auto nameResultValue = Core::Assets::ReadMetadataStringField(path, value, s_DiagnosticPrefix, s_NameField, true);
@@ -230,20 +199,12 @@ template<usize Count>
             }
         }
         if(role == UiSkinColorRole::Count || seen[role]){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'")
-                , StringConvert(s_DiagnosticPrefix)
-                , PathToString<tchar>(path)
-                , StringConvert(name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(name));
             return MakeUnexpected(Failure{});
         }
         const Value* rgba = FindField(value, s_RgbaField);
         if(!rgba || !rgba->isList() || rgba->asList().size() != s_RgbaComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components")
-                , StringConvert(s_DiagnosticPrefix)
-                , PathToString<tchar>(path)
-                , StringConvert(name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(name));
             return MakeUnexpected(Failure{});
         }
         f32 components[s_RgbaComponentCount] = {};
@@ -253,11 +214,7 @@ template<usize Count>
                 return MakeUnexpected(Failure{});
             components[index] = *indexResultValue;
             if(components[index] < s_PaletteChannelMin || components[index] > (index == s_AlphaComponentIndex ? s_PaletteAlphaMax : s_PaletteRgbMax)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]")
-                    , StringConvert(s_DiagnosticPrefix)
-                    , PathToString<tchar>(path)
-                    , StringConvert(name)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(name));
                 return MakeUnexpected(Failure{});
             }
         }
@@ -272,24 +229,17 @@ template<usize Count>
 
     const Value* typography = FindField(asset, s_TypographyField);
     if(!typography){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(path)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
-    if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_DiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_DiagnosticPrefix, { s_DefaultFontSizeField }))
+    if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_DiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_DiagnosticPrefix, { s_DefaultFontSizeField }))
         return MakeUnexpected(Failure{});
     auto defaultFontSizeResult = Core::Assets::ReadMetadataFiniteF32Field(path, *typography, s_DiagnosticPrefix, s_DefaultFontSizeField, true);
     if(!defaultFontSizeResult)
         return MakeUnexpected(Failure{});
     typographyResult.defaultFontSize = *defaultFontSizeResult;
     if(typographyResult.defaultFontSize < s_MinDefaultFontSize || typographyResult.defaultFontSize > s_MaxDefaultFontSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(path)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     return typographyResult;
@@ -305,26 +255,14 @@ template<usize Count>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_ui_skin_cook_metadata;
 
     UiSkinCookEntry parsed(arena);
     const Value& asset = doc.asset();
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(
-        nwbFilePath,
-        asset,
-        s_DiagnosticPrefix,
-        { s_TextureField, s_AtlasExtentField, s_ReferenceDensityField, s_ToolkitContractField, s_RegionsField, s_ColorsField, s_TypographyField }
-    ))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_TextureField, s_AtlasExtentField, s_ReferenceDensityField, s_ToolkitContractField, s_RegionsField, s_ColorsField, s_TypographyField }))
         return MakeUnexpected(Failure{});
 
     auto paletteResult = ParsePalette(nwbFilePath, asset);
@@ -362,10 +300,7 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(
     toolkitContract = toolkitContractResult->text;
     hasToolkitContract = toolkitContractResult->present;
     if(hasToolkitContract && toolkitContract != s_WidgetsContract){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     parsed.completeToolkitSkin = hasToolkitContract;
@@ -374,18 +309,11 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(
     if(!regions)
         return MakeUnexpected(Failure{});
     if(regions->asList().size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions exceed schema limit {}")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , s_UiSkinMaxRegionCount
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions exceed schema limit {}"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), s_UiSkinMaxRegionCount);
         return MakeUnexpected(Failure{});
     }
     if(regions->asList().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions must be nonempty and fit the supported count")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions must be nonempty and fit the supported count"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     parsed.regions.reserve(regions->asList().size());

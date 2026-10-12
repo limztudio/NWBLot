@@ -42,12 +42,7 @@ uint nwbAvboitCoarseBinCount(uint compressionShift){
     return (virtualSliceCount >> compressionShift) + uint((virtualSliceCount & ((1u << compressionShift) - 1u)) != 0u);
 }
 
-bool nwbAvboitCoarseBinOccupied(
-    uint coarseBin,
-    uint compressionShift,
-    inout uint cachedWordIndex,
-    inout uint cachedCoverageWord
-){
+bool nwbAvboitCoarseBinOccupied(uint coarseBin, uint compressionShift, inout uint cachedWordIndex, inout uint cachedCoverageWord){
     const uint beginSlice = coarseBin << compressionShift;
     if(compressionShift <= NWB_AVBOIT_COVERAGE_WORD_SHIFT){
         const uint wordIndex = beginSlice >> NWB_AVBOIT_COVERAGE_WORD_SHIFT;
@@ -135,8 +130,7 @@ void nwbAvboitDepthWarpMain(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(NWB_AVBOIT_DEPTH_WARP_GROUP_SIZE_X, 1, 1)]
-void main(){
+[numthreads(NWB_AVBOIT_DEPTH_WARP_GROUP_SIZE_X, 1, 1)] void main(){
     nwbAvboitDepthWarpMain();
 }
 

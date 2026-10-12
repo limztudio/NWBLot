@@ -91,11 +91,7 @@ GpuTextureImageVersion::~GpuTextureImageVersion()noexcept{
 
 bool GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot){
     const auto& images = snapshot.textureImages();
-    if(
-        images.size() > s_PaintMaxImages || snapshot.glyphPages().size() > s_PaintMaxImages
-        || snapshot.sdfPages().size() > s_PaintMaxImages
-        || images.size() + snapshot.glyphPages().size() + snapshot.sdfPages().size() > s_PaintMaxImages
-    )
+    if(images.size() > s_PaintMaxImages || snapshot.glyphPages().size() > s_PaintMaxImages || snapshot.sdfPages().size() > s_PaintMaxImages || images.size() + snapshot.glyphPages().size() + snapshot.sdfPages().size() > s_PaintMaxImages)
         return false;
     for(usize index = 0u; index < images.size(); ++index){
         if(!__hidden_ui_gpu_texture_images::ValidSource(images[index]))
@@ -107,10 +103,7 @@ bool GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot){
     }
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material == PaintMaterial::Image){
-            if(
-                command.textureImageIndex >= images.size() || command.glyphPageIndex != Limit<u32>::s_Max
-                || command.sdfPageIndex != Limit<u32>::s_Max || command.sdfChannel != 0u
-            )
+            if(command.textureImageIndex >= images.size() || command.glyphPageIndex != Limit<u32>::s_Max || command.sdfPageIndex != Limit<u32>::s_Max || command.sdfChannel != 0u)
                 return false;
         }
         else if(command.textureImageIndex != Limit<u32>::s_Max)
@@ -138,14 +131,10 @@ GpuVersion<GpuTextureImageVersion> GpuRendererState::prepareTextureImage(const S
     auto version = MakeGpuVersion<GpuTextureImageVersion>(m_arena, m_graphics, source);
     if(!version)
         return {};
-    if(!TextureAssetLoader::Create(
-        version->m_texture, source->texture(), source->identity().name(), m_graphics, NWB_TEXT("UI Texture Image")
-    ))
+    if(!TextureAssetLoader::Create(version->m_texture, source->texture(), source->identity().name(), m_graphics, NWB_TEXT("UI Texture Image")))
         return {};
     if(!__hidden_ui_gpu_texture_images::ValidVersion(*version)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness")
-            , source->generation()
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());
         return {};
     }
     if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() == s_PaintMaxImages)
@@ -167,11 +156,7 @@ bool GpuRendererState::prepareTextureImages(GpuFrameData& frame){
     return true;
 }
 
-Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(
-    Core::GpuTaskGraph& graph,
-    const GpuFrame& frame,
-    GpuRasterResourceUses& uses
-){
+Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
     Expected<GpuTextureGraphResources> resources{s_InPlace};
     if(frame->m_textureImages.size() != frame->m_snapshot.textureImages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
@@ -180,24 +165,16 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(
     for(usize index = 0u; index < frame->m_textureImages.size(); ++index){
         const auto& image = frame->m_textureImages[index];
         const auto& source = frame->m_snapshot.textureImages()[index];
-        if(
-            !image || !source || !image->m_source || image->m_source->generation() != source->generation()
-            || image->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_images::ValidVersion(*image)
-        )
+        if(!image || !source || !image->m_source || image->m_source->generation() != source->generation() || image->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_images::ValidVersion(*image))
             return MakeUnexpected(Failure{});
         char identityText[32u] = {};
         const AStringView suffix = FormatDecimal(index, identityText);
         const Name readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
         const Name textureIdentity = DeriveName(Name("ui.texture_image/"), suffix);
         const Core::QueueSubmissionToken& readiness = image->m_texture.readinessToken;
-        const Core::GpuExternalCompletionId ready = graph.importExternalCompletion(
-            Core::GpuExternalCompletionDesc().setIdentity(readyIdentity).setMarkerLabel("UI Texture Image Upload Completion")
-                .setToken(readiness)
-        );
+        const Core::GpuExternalCompletionId ready = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(readyIdentity).setMarkerLabel("UI Texture Image Upload Completion").setToken(readiness));
         if(!ready.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture {} completion import failed (queue={}, generation={}, value={})")
-                , index, readiness.physicalQueueIndex, readiness.deviceGeneration, readiness.value
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture {} completion import failed (queue={}, generation={}, value={})"), index, readiness.physicalQueueIndex, readiness.deviceGeneration, readiness.value);
             return MakeUnexpected(Failure{});
         }
         const Core::GpuGraphResourceId texture = graph.importTexture(
@@ -207,9 +184,7 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );
         if(!texture.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})")
-                , index, source->generation()
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})"), index, source->generation());
             return MakeUnexpected(Failure{});
         }
         resources->push_back(texture);

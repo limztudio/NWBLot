@@ -46,10 +46,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         mesh.runtimeLocalBoundsHeapHandle = handle;
     }
 
-    if(
-        mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer
-        && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()
-    ){
+    if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         const Core::BufferDesc& desc = mesh.runtimeMeshletLocalBoundsBuffer->getCreationDescription();
         const u64 requiredBytes = static_cast<u64>(mesh.meshletCount) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
@@ -63,9 +60,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
             }
         }
         if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows")
-                , StringConvert(mesh.meshName.resolvedText())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows"), StringConvert(mesh.meshName.resolvedText()));
         }
     }
 
@@ -77,11 +72,7 @@ bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const
     if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
         return false;
 
-    if(
-        mesh.runtimeLocalBoundsBuffer
-        && (!mesh.runtimeLocalBoundsHeapHandle.valid()
-            || mesh.runtimeLocalBoundsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
-    )
+    if(mesh.runtimeLocalBoundsBuffer && (!mesh.runtimeLocalBoundsHeapHandle.valid() || mesh.runtimeLocalBoundsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer))
         return false;
 
     return true;
@@ -91,21 +82,14 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
     if(!mesh.emulationVertexBuffer){
-        const auto layout = ECSRenderDetail::ResolveComputeEmulationLayout(
-            mesh.meshletLocalVertexRefBuffer->getDescription().byteSize,
-            mesh.meshletPrimitiveIndexCount
-        );
+        const auto layout = ECSRenderDetail::ResolveComputeEmulationLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
         if(!layout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: generated geometry layout exceeds the index byte-address range for mesh '{}'")
-                , StringConvert(mesh.meshName.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: generated geometry layout exceeds the index byte-address range for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
             return false;
         }
         const Name emulationVertexBufferName = DeriveName(mesh.meshName, AStringView(":emulation_vb"));
         if(!emulationVertexBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for mesh '{}'")
-                , StringConvert(mesh.meshName.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
             return false;
         }
 
@@ -122,9 +106,7 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
         ;
         mesh.emulationVertexBuffer = m_graphics.createBuffer(emulationVertexBufferDesc);
         if(!mesh.emulationVertexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for mesh '{}'")
-                , StringConvert(mesh.meshName.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
             return false;
         }
         mesh.emulationIndexByteOffset = layout->indexByteOffset;
@@ -137,15 +119,10 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
         return false;
     }
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(
-        !handle.valid()
-        || !heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()))
-    ){
+    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()))){
         if(handle.valid())
             heap.free(handle);
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'")
-            , StringConvert(mesh.meshName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
         return false;
     }
     mesh.emulationVertexHeapHandle = handle;
@@ -176,10 +153,7 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
         && materialTypedHandle.valid()
         && viewHandle.valid()
         && heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
-        && heap.write(
-            materialTypedHandle,
-            Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get())
-        )
+        && heap.write(materialTypedHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get()))
         && heap.write(viewHandle, Core::DescriptorWriteItem::ConstantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
     ;
     if(!registered){
@@ -195,10 +169,7 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
     ECSRenderDetail::MeshFrameBindingSnapshot replacement = {
         .instanceBuffer = materialBuffers.instanceBuffer,
         .materialTypedBuffer = materialBuffers.materialTypedBuffer,
-        .meshView = {
-            .buffer = m_meshState.m_meshViewBuffer,
-            .heapHandle = viewHandle,
-        },
+        .meshView = { .buffer = m_meshState.m_meshViewBuffer, .heapHandle = viewHandle, },
         .instanceHeapHandle = instanceHandle,
         .materialTypedHeapHandle = materialTypedHandle,
         .instanceBufferCapacity = materialBuffers.instanceBufferCapacity,
@@ -246,9 +217,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap")
-            , StringConvert(mesh.meshName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap"), StringConvert(mesh.meshName.resolvedText()));
         return false;
     }
 
@@ -262,10 +231,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
         if(!registered)
             return;
         if(!buffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no source buffer at binding {}")
-                , StringConvert(mesh.meshName.resolvedText())
-                , bindingSlot
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no source buffer at binding {}"), StringConvert(mesh.meshName.resolvedText()), bindingSlot);
             registered = false;
             return;
         }
@@ -302,10 +268,7 @@ bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)
     bool ready = true;
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
         const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
-        ready = ready
-            && handle.valid()
-            && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        ;
+        ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     });
     return ready;
 }
@@ -334,18 +297,14 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     NWB_ASSERT(!mesh.swBvhPositionHeapHandle.valid());
     NWB_ASSERT(!mesh.swBvhTriangleIndexHeapHandle.valid());
     if(!mesh.positionBuffer || !mesh.triangleIndexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no software-BVH position or triangle-index input")
-            , StringConvert(mesh.meshName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no software-BVH position or triangle-index input"), StringConvert(mesh.meshName.resolvedText()));
         return false;
     }
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap for software-BVH inputs")
-            , StringConvert(mesh.meshName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap for software-BVH inputs"), StringConvert(mesh.meshName.resolvedText()));
         return false;
     }
 
@@ -362,9 +321,7 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
             heap.free(positionHandle);
         if(triangleIndexHandle.valid())
             heap.free(triangleIndexHandle);
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-BVH inputs for mesh '{}'")
-            , StringConvert(mesh.meshName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-BVH inputs for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
         return false;
     }
 

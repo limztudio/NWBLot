@@ -10,7 +10,8 @@
 
 
 // Global descriptor heap -- typed view of the shared ray-tracing per-instance material table.
-// The storage-buffer descriptor table is deliberately reinterpreted here as NwbRtInstanceMaterial records. Every trace backend shares the same CPU-built table, while each pass selects its current descriptor through its local NwbRayTraceMaterialContextSlots cbuffer.
+// The storage-buffer descriptor table is deliberately reinterpreted here as NwbRtInstanceMaterial records.
+// Every trace backend shares the same CPU-built table, while each pass selects its current descriptor through its local NwbRayTraceMaterialContextSlots cbuffer.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,8 +26,7 @@
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table in bindless_heap.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbHeapRtInstanceMaterialBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbHeapRtInstanceMaterialBuffers[];
 #pragma warning(pop)
 
 

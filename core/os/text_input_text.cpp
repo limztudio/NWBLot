@@ -28,9 +28,7 @@ TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usi
 }
 
 bool IsTextInputUtf8Boundary(const AStringView text, const usize byteOffset)noexcept{
-    return byteOffset <= text.size()
-        && (byteOffset == text.size() || (static_cast<u8>(text[byteOffset]) & 0xc0u) != 0x80u)
-    ;
+    return byteOffset <= text.size() && (byteOffset == text.size() || (static_cast<u8>(text[byteOffset]) & 0xc0u) != 0x80u);
 }
 
 bool IsTextInputCaretRectValid(const TextInputRect rect)noexcept{

@@ -59,12 +59,7 @@ struct TelemetryIngestResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] TelemetryIngestResult ProcessTelemetryUpload(
-    LogArena& arena,
-    const void* bytes,
-    usize byteCount,
-    const TelemetryIngestConfig& config
-);
+[[nodiscard]] TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* bytes, usize byteCount, const TelemetryIngestConfig& config);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

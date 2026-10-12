@@ -61,14 +61,7 @@ bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
         return false;
     }
-    if(
-        (
-            desc.dimension == TextureDimension::Texture1D
-            || desc.dimension == TextureDimension::Texture2D
-            || desc.dimension == TextureDimension::Texture2DMS
-        )
-        && desc.arraySize != 1u
-    ){
+    if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture2D || desc.dimension == TextureDimension::Texture2DMS) && desc.arraySize != 1u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-array texture array size must be 1"), operationName);
         return false;
     }
@@ -87,14 +80,7 @@ bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
 
     const u32 maxMipLevels = VulkanTextureDetail::GetMaxMipLevels(desc);
     if(desc.mipLevels > maxMipLevels){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}")
-            , operationName
-            , desc.mipLevels
-            , maxMipLevels
-            , desc.width
-            , desc.height
-            , desc.depth
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}"), operationName, desc.mipLevels, maxMipLevels, desc.width, desc.height, desc.depth);
         return false;
     }
 
@@ -128,9 +114,7 @@ VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept{
 }
 
 Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo& formatInfo)noexcept{
-    const TextureFormatBlockLayout layout{
-        GetFormatBlockWidth(formatInfo), GetFormatBlockHeight(formatInfo), formatInfo.bytesPerBlock
-    };
+    const TextureFormatBlockLayout layout{ GetFormatBlockWidth(formatInfo), GetFormatBlockHeight(formatInfo), formatInfo.bytesPerBlock };
     if(layout.blockWidth == 0u || layout.blockHeight == 0u || layout.bytesPerBlock == 0u)
         return MakeUnexpected(Failure{});
     return layout;
@@ -214,9 +198,7 @@ Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
     if(bufferRowBlocks > UINT64_MAX / formatLayout.blockWidth || bufferImageBlocks > UINT64_MAX / formatLayout.blockHeight){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
-                , operationName
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -224,9 +206,7 @@ Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     const u64 bufferImageHeight = bufferImageBlocks * formatLayout.blockHeight;
     if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
-                , operationName
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -260,12 +240,7 @@ Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     return outLayout;
 }
 
-VkImageSubresourceLayers BuildImageSubresourceLayers(
-    const VkImageAspectFlags aspectMask,
-    const MipLevel mipLevel,
-    const ArraySlice arraySlice,
-    const ArraySlice layerCount
-)noexcept{
+VkImageSubresourceLayers BuildImageSubresourceLayers(const VkImageAspectFlags aspectMask, const MipLevel mipLevel, const ArraySlice arraySlice, const ArraySlice layerCount)noexcept{
     VkImageSubresourceLayers layers{};
     layers.aspectMask = aspectMask;
     layers.mipLevel = mipLevel;
@@ -284,14 +259,7 @@ VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& 
     return range;
 }
 
-Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(
-    Texture& texture,
-    const TextureSubresourceSet& resolvedSubresources,
-    const TextureDimension::Enum dimension,
-    const Format::Enum format,
-    TStringView operationName,
-    const bool assertFailure
-){
+Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const TextureDimension::Enum dimension, const Format::Enum format, TStringView operationName, const bool assertFailure){
     VkImageViewCreateInfo outViewInfo{};
     const bool usesTextureFormat = format == texture.m_creationDesc.format;
     const VkFormat vkFormat = usesTextureFormat ? texture.m_imageInfo.format : ConvertFormat(format);
@@ -341,10 +309,7 @@ namespace __hidden_texture{
 using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 
 
-[[nodiscard]] static ImageQueueFamilyVector CopyImageQueueFamilyIndices(
-    const VulkanContext& context,
-    const VkImageCreateInfo& imageInfo
-){
+[[nodiscard]] static ImageQueueFamilyVector CopyImageQueueFamilyIndices(const VulkanContext& context, const VkImageCreateInfo& imageInfo){
     ImageQueueFamilyVector result(context.objectArena);
     if(imageInfo.queueFamilyIndexCount == 0u)
         return result;
@@ -352,17 +317,11 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     NWB_ASSERT(imageInfo.pQueueFamilyIndices != nullptr);
     if(!imageInfo.pQueueFamilyIndices)
         return result;
-    result.assign(
-        imageInfo.pQueueFamilyIndices,
-        imageInfo.pQueueFamilyIndices + imageInfo.queueFamilyIndexCount
-    );
+    result.assign(imageInfo.pQueueFamilyIndices, imageInfo.pQueueFamilyIndices + imageInfo.queueFamilyIndexCount);
     return result;
 }
 
-[[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(
-    const VkImageCreateInfo& imageInfo,
-    const ImageQueueFamilyVector& queueFamilyIndices
-){
+[[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(const VkImageCreateInfo& imageInfo, const ImageQueueFamilyVector& queueFamilyIndices){
     NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkImageCreateInfo result = imageInfo;
     result.pNext = nullptr;
@@ -381,13 +340,7 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture::Texture(
-    const VulkanContext& context,
-    VulkanAllocator& allocator,
-    const TextureDesc& creationDesc,
-    const VkImageCreateInfo& imageInfo,
-    const bool initialStateKnown
-)
+Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc, const VkImageCreateInfo& imageInfo, const bool initialStateKnown)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
@@ -399,9 +352,7 @@ Texture::Texture(
     , m_context(context)
     , m_allocator(allocator)
 {
-    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
-        * static_cast<usize>(m_creationDesc.arraySize)
-    ;
+    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
     const bool retainedInitialStateKnown = m_creationDesc.keepInitialState && initialStateKnown;
     m_retainedSubresourceStates.assign(subresourceCount, retainedInitialStateKnown ? 1u : 0u);
 }
@@ -449,15 +400,10 @@ bool Texture::descriptionMatchesCreation()const noexcept{
 
 ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const{
     if(!m_creationDesc.keepInitialState){
-        return m_managed || m_creationInitialStateKnown
-            ? m_creationDesc.initialState
-            : ResourceStates::Unknown
-        ;
+        return m_managed || m_creationInitialStateKnown ? m_creationDesc.initialState : ResourceStates::Unknown;
     }
 
-    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
-        * static_cast<usize>(m_creationDesc.arraySize)
-    ;
+    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
     if(subresourceCount == 0u)
         return ResourceStates::Unknown;
 
@@ -472,10 +418,7 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const{
             hasUnknownState = true;
 
     }
-    return !hasUnknownState || (!hasKnownState && m_managed)
-        ? m_creationDesc.initialState
-        : ResourceStates::Unknown
-    ;
+    return !hasUnknownState || (!hasKnownState && m_managed) ? m_creationDesc.initialState : ResourceStates::Unknown;
 }
 
 Object Texture::getNativeHandle(ObjectType objectType){
@@ -486,13 +429,7 @@ Object Texture::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-Object Texture::getNativeView(
-    ObjectType objectType,
-    Format::Enum format,
-    TextureSubresourceSet subresources,
-    TextureDimension::Enum dimension,
-    bool
-){
+Object Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool){
     if(objectType == ObjectTypes::s_ImageView)
         return getView(subresources, dimension, format);
     if(objectType == ObjectTypes::s_Image)
@@ -514,11 +451,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         return VK_NULL_HANDLE;
     }
 
-    TextureViewKey key{
-        resolvedSubresources,
-        dimension,
-        format
-    };
+    TextureViewKey key{ resolvedSubresources, dimension, format };
 
     ScopedLock lock(m_viewsMutex);
     if(m_image == VK_NULL_HANDLE)
@@ -527,14 +460,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     if(it != m_views.end())
         return it.value();
 
-    const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(
-        *this,
-        resolvedSubresources,
-        dimension,
-        format,
-        NWB_TEXT("image view"),
-        true
-    );
+    const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(*this, resolvedSubresources, dimension, format, NWB_TEXT("image view"), true);
     if(!viewInfo)
         return VK_NULL_HANDLE;
 
@@ -581,12 +507,7 @@ bool Texture::prepareRevokeUnmanagedNativeImage(const VkImage expectedNativeImag
 
 void Texture::commitRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
     NothrowScopedLock bindingLock(m_memoryBindingMutex);
-    if(
-        expectedNativeImage == VK_NULL_HANDLE
-        || m_managed
-        || m_image != expectedNativeImage
-        || m_preparedRevokedNativeImage != expectedNativeImage
-    )
+    if(expectedNativeImage == VK_NULL_HANDLE || m_managed || m_image != expectedNativeImage || m_preparedRevokedNativeImage != expectedNativeImage)
         TerminateInvariant();
 
     NothrowScopedLock viewsLock(m_viewsMutex);
@@ -599,11 +520,7 @@ void Texture::commitRevokeUnmanagedNativeImage(const VkImage expectedNativeImage
 
 void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage expectedNativeImage)noexcept{
     NothrowScopedLock bindingLock(m_memoryBindingMutex);
-    const bool identityMatches = expectedNativeImage != VK_NULL_HANDLE
-        && !m_managed
-        && m_image == VK_NULL_HANDLE
-        && m_preparedRevokedNativeImage == expectedNativeImage
-    ;
+    const bool identityMatches = expectedNativeImage != VK_NULL_HANDLE && !m_managed && m_image == VK_NULL_HANDLE && m_preparedRevokedNativeImage == expectedNativeImage;
     NWB_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
     if(!identityMatches)
         TerminateInvariant();
@@ -613,32 +530,20 @@ void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage ex
 }
 
 bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel){
-    if(
-        !m_creationDesc.keepInitialState
-        || arraySlice >= m_creationDesc.arraySize
-        || mipLevel >= m_creationDesc.mipLevels
-    )
+    if(!m_creationDesc.keepInitialState || arraySlice >= m_creationDesc.arraySize || mipLevel >= m_creationDesc.mipLevels)
         return false;
 
-    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels)
-        + static_cast<usize>(mipLevel)
-    ;
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
     return index < m_retainedSubresourceStates.size() && m_retainedSubresourceStates[index] != 0u;
 }
 
 void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const bool known)noexcept{
-    if(
-        !m_creationDesc.keepInitialState
-        || arraySlice >= m_creationDesc.arraySize
-        || mipLevel >= m_creationDesc.mipLevels
-    )
+    if(!m_creationDesc.keepInitialState || arraySlice >= m_creationDesc.arraySize || mipLevel >= m_creationDesc.mipLevels)
         return;
 
-    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels)
-        + static_cast<usize>(mipLevel)
-    ;
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
     if(index >= m_retainedSubresourceStates.size())

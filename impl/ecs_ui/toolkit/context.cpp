@@ -219,9 +219,7 @@ bool Context::commitFrame(const u64 generation){
     m_commitPopups.clear();
     for(const auto& owned : m_popups)
         m_commitPopups.push_back(owned.scope);
-    if(!m_input.commitTargets(
-        m_commitTargets.data(), m_commitTargets.size(), generation, m_commitPopups.data(), m_commitPopups.size(), m_focusLossGeneration
-    ))
+    if(!m_input.commitTargets(m_commitTargets.data(), m_commitTargets.size(), generation, m_commitPopups.data(), m_commitPopups.size(), m_focusLossGeneration))
         return false;
     m_targets.clear();
     m_popups.clear();
@@ -289,10 +287,7 @@ bool Context::currentDeclaration(const WidgetState& state)const{
     if(!m_rootActive || !(state.root == m_root) || state.lastSeenFrame != m_frameGeneration)
         return false;
     const WidgetState* current = m_states.find(state.id);
-    return
-        current && current->root == state.root && current->declarationGeneration == state.declarationGeneration
-        && current->lastSeenFrame == state.lastSeenFrame && current->kind == state.kind
-    ;
+    return current && current->root == state.root && current->declarationGeneration == state.declarationGeneration && current->lastSeenFrame == state.lastSeenFrame && current->kind == state.kind;
 }
 
 

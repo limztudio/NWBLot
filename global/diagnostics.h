@@ -100,10 +100,7 @@ inline constexpr i32 s_PointerTextRadix = 16;
 
 
 inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const AStringView text)noexcept{
-    const usize copySize = text.size() >= s_MaxEventTextBytes
-        ? s_MaxEventTextBytes - 1u
-        : text.size()
-    ;
+    const usize copySize = text.size() >= s_MaxEventTextBytes ? s_MaxEventTextBytes - 1u : text.size();
     for(usize i = 0u; i < copySize; ++i)
         outText[i] = text[i];
     outText[copySize] = 0;
@@ -114,10 +111,7 @@ inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const WStringVie
     for(const wchar_t ch : text){
         if(writeCursor + 1u >= s_MaxEventTextBytes)
             break;
-        outText[writeCursor++] = ch >= 0 && ch <= s_AsciiCharacterMax
-            ? static_cast<char>(ch)
-            : '?'
-        ;
+        outText[writeCursor++] = ch >= 0 && ch <= s_AsciiCharacterMax ? static_cast<char>(ch) : '?';
     }
     outText[writeCursor] = 0;
 }
@@ -137,13 +131,7 @@ inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCurs
 
 inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const WStringView text)noexcept{
     for(const wchar_t ch : text){
-        AppendEventChar(
-            outText,
-            outCursor,
-            ch >= 0 && ch <= s_AsciiCharacterMax
-                ? static_cast<char>(ch)
-                : '?'
-        );
+        AppendEventChar(outText, outCursor, ch >= 0 && ch <= s_AsciiCharacterMax ? static_cast<char>(ch) : '?');
     }
 }
 
@@ -162,13 +150,7 @@ inline void AppendFormatLiteral(char (&outText)[s_MaxEventTextBytes], usize& out
             continue;
         }
 
-        AppendEventChar(
-            outText,
-            outCursor,
-            ch >= 0 && ch <= s_AsciiCharacterMax
-                ? static_cast<char>(ch)
-                : '?'
-        );
+        AppendEventChar(outText, outCursor, ch >= 0 && ch <= s_AsciiCharacterMax ? static_cast<char>(ch) : '?');
     }
 }
 
@@ -278,13 +260,7 @@ inline void FormatEventTextArgs(char (&outText)[s_MaxEventTextBytes], usize& out
 }
 
 template<typename CharT, typename Arg, typename... Args>
-inline void FormatEventTextArgs(
-    char (&outText)[s_MaxEventTextBytes],
-    usize& outCursor,
-    const BasicStringView<CharT> fmt,
-    Arg&& arg,
-    Args&&... args
-)noexcept{
+inline void FormatEventTextArgs(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> fmt, Arg&& arg, Args&&... args)noexcept{
     for(usize i = 0u; i < fmt.size(); ++i){
         const CharT ch = fmt[i];
         if(ch == static_cast<CharT>('{') && i + 1u < fmt.size() && fmt[i + 1u] == static_cast<CharT>('{')){
@@ -307,13 +283,7 @@ inline void FormatEventTextArgs(
             return;
         }
 
-        AppendEventChar(
-            outText,
-            outCursor,
-            ch >= 0 && ch <= s_AsciiCharacterMax
-                ? static_cast<char>(ch)
-                : '?'
-        );
+        AppendEventChar(outText, outCursor, ch >= 0 && ch <= s_AsciiCharacterMax ? static_cast<char>(ch) : '?');
     }
 }
 
@@ -477,12 +447,7 @@ NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& rec
 }
 
 inline void CaptureDiagnosticEvent(const StringView category, const StringView message, const StringView file = {}, const u32 line = 0u)noexcept{
-    CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .category = category,
-        .message = message,
-        .file = file,
-        .line = line,
-    });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .category = category, .message = message, .file = file, .line = line, });
 }
 
 

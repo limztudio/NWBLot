@@ -130,12 +130,7 @@ ClipboardCapabilities WaylandClipboardService::capabilities(const ClipboardChann
     return { available, available };
 }
 
-void WaylandClipboardService::startNativeRequest(
-    const ClipboardRequestToken token,
-    const ClipboardOperation::Enum operation,
-    const ClipboardChannel::Enum channel,
-    const AStringView text
-){
+void WaylandClipboardService::startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum channel, const AStringView text){
     if(operation == ClipboardOperation::WriteText){
         const ClipboardStatus::Enum status = writeSelection(channel, text);
         if(!completeNativeRequest(token, status))
@@ -191,10 +186,7 @@ void WaylandClipboardService::finishRead(const ClipboardStatus::Enum status){
 void WaylandClipboardService::pumpNativeRequests(){
     const Timer now = TimerNow();
     if(m_readToken.valid()){
-        const auto read = now >= m_readDeadline
-            ? Expected<bool, ClipboardPipeReadFailure>(MakeUnexpected(ClipboardPipeReadFailure{ .status = ClipboardStatus::Unavailable }))
-            : ReadClipboardPipe(m_readFd, m_received)
-        ;
+        const auto read = now >= m_readDeadline ? Expected<bool, ClipboardPipeReadFailure>(MakeUnexpected(ClipboardPipeReadFailure{ .status = ClipboardStatus::Unavailable })) : ReadClipboardPipe(m_readFd, m_received);
         if(!read || *read)
             finishRead(read ? ClipboardStatus::Success : read.error().status);
     }
@@ -250,10 +242,7 @@ void WaylandClipboardService::sendSource(Source& source, const int fd){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<IClipboardService> CreateWaylandClipboardService(
-    Alloc::GlobalArena& arena,
-    wl_display& display
-){
+GlobalUniquePtr<IClipboardService> CreateWaylandClipboardService(Alloc::GlobalArena& arena, wl_display& display){
     auto service = MakeGlobalUnique<WaylandClipboardService>(arena, arena, display);
     if(!service->initialize()){
         NWB_LOGGER_ERROR(NWB_TEXT("Wayland clipboard initialization failed"));

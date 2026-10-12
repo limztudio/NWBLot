@@ -42,12 +42,7 @@ EncodedFrameGraphQueueAssignment EncodeQueueAssignment(const u32 nodeIndex, cons
 }
 
 Expected<FrameGraphQueueAssignment> DecodeQueueAssignment(const EncodedFrameGraphQueueAssignment& encoded)noexcept{
-    if(
-        encoded.dedicated > 1u
-        || encoded.reserved[0u] != 0u
-        || encoded.reserved[1u] != 0u
-        || encoded.reserved[2u] != 0u
-    )
+    if(encoded.dedicated > 1u || encoded.reserved[0u] != 0u || encoded.reserved[1u] != 0u || encoded.reserved[2u] != 0u)
         return MakeUnexpected(Failure{});
 
     const FrameGraphQueueAssignment assignment{

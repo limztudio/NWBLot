@@ -34,22 +34,11 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuOwnershipTransferRoute::Enum route
 ){
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
-    if(
-        !plan.graph.validResource(resource.id)
-        || resource.id.generation != compiledPlan.graphGeneration
-        || resource.identity == s_NameNone
-        || resource.type >= GpuGraphResourceType::HazardDomain
-        || !ResourceQueueSharing::IsValid(resource.queueSharing)
-    )
+    if(!plan.graph.validResource(resource.id) || resource.id.generation != compiledPlan.graphGeneration || resource.identity == s_NameNone || resource.type >= GpuGraphResourceType::HazardDomain || !ResourceQueueSharing::IsValid(resource.queueSharing))
         return false;
 
     const GpuTaskGraphResourceView declaredResource = plan.graph.resourceAt(resource.id.index);
-    if(
-        declaredResource.id != resource.id
-        || declaredResource.identity != resource.identity
-        || declaredResource.type != resource.type
-        || declaredResource.queueSharing != resource.queueSharing
-    )
+    if(declaredResource.id != resource.id || declaredResource.identity != resource.identity || declaredResource.type != resource.type || declaredResource.queueSharing != resource.queueSharing)
         return false;
 
     const GpuCompiledTask* compiledSourceTask = nullptr;
@@ -74,50 +63,25 @@ namespace GpuTaskGraphCompilerDetail{
     default:
         return false;
     }
-    if(
-        (sourceTask.valid() && !compiledSourceTask)
-        || (destinationTask.valid() && !compiledDestinationTask)
-        || (
-            route == GpuOwnershipTransferRoute::Internal
-            && sourceTask == destinationTask
-        )
-    )
+    if((sourceTask.valid() && !compiledSourceTask) || (destinationTask.valid() && !compiledDestinationTask) || (route == GpuOwnershipTransferRoute::Internal && sourceTask == destinationTask))
         return false;
 
-    const GpuSubmissionPacketId sourcePacket = compiledSourceTask
-        ? compiledSourceTask->packet
-        : GpuSubmissionPacketId{}
-    ;
-    const GpuSubmissionPacketId destinationPacket = compiledDestinationTask
-        ? compiledDestinationTask->packet
-        : GpuSubmissionPacketId{}
-    ;
+    const GpuSubmissionPacketId sourcePacket = compiledSourceTask ? compiledSourceTask->packet : GpuSubmissionPacketId{};
+    const GpuSubmissionPacketId destinationPacket = compiledDestinationTask ? compiledDestinationTask->packet : GpuSubmissionPacketId{};
     const auto validCompiledPacket = [&compiledPlan](const GpuSubmissionPacketId packet){
-        return packet.valid()
-            && packet.generation == compiledPlan.planGeneration
-            && packet.index < compiledPlan.packets.size()
-        ;
+        return packet.valid() && packet.generation == compiledPlan.planGeneration && packet.index < compiledPlan.packets.size();
     };
     if(
         (compiledSourceTask && (compiledSourceTask->queue != sourceQueue || !validCompiledPacket(sourcePacket)))
-        || (
-            compiledDestinationTask
-            && (compiledDestinationTask->queue != destinationQueue || !validCompiledPacket(destinationPacket))
-        )
-        || (
-            route == GpuOwnershipTransferRoute::Internal
-            && sourcePacket == destinationPacket
-        )
+        || (compiledDestinationTask && (compiledDestinationTask->queue != destinationQueue || !validCompiledPacket(destinationPacket)))
+        || (route == GpuOwnershipTransferRoute::Internal && sourcePacket == destinationPacket)
     )
         return false;
 
     Expected<GpuTaskResourceRange> transferRange = GpuTaskResourceRange{};
     switch(resource.type){
     case GpuGraphResourceType::Texture:
-        if(
-            !(transferRange = ResolveTextureRangeForPlanning(plan.graph.textureForResource(resource.id), range))
-            || !transferRange->textureSubresources.hasExtent()
-        )
+        if(!(transferRange = ResolveTextureRangeForPlanning(plan.graph.textureForResource(resource.id), range)) || !transferRange->textureSubresources.hasExtent())
             return false;
         transferRange->bufferRange = s_EntireBuffer;
         break;
@@ -134,24 +98,14 @@ namespace GpuTaskGraphCompilerDetail{
 
     const GpuPhysicalQueueInfo* const sourceQueueInfo = FindCompiledQueueInfo(compiledPlan, sourceQueue);
     const GpuPhysicalQueueInfo* const destinationQueueInfo = FindCompiledQueueInfo(compiledPlan, destinationQueue);
-    if(
-        !sourceQueueInfo
-        || !destinationQueueInfo
-        || sourceQueueInfo->familyIndex == Limit<u32>::s_Max
-        || destinationQueueInfo->familyIndex == Limit<u32>::s_Max
-    )
+    if(!sourceQueueInfo || !destinationQueueInfo || sourceQueueInfo->familyIndex == Limit<u32>::s_Max || destinationQueueInfo->familyIndex == Limit<u32>::s_Max)
         return false;
     if(sourceQueueInfo->familyIndex == destinationQueueInfo->familyIndex)
         return true;
 
     const bool usesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource, plan.topology);
     if(usesConcurrentSharing){
-        if(!ResourceSharesQueuePairConcurrently(
-            resource,
-            plan.topology,
-            *sourceQueueInfo,
-            *destinationQueueInfo
-        ))
+        if(!ResourceSharesQueuePairConcurrently(resource, plan.topology, *sourceQueueInfo, *destinationQueueInfo))
             return false;
         return true;
     }

@@ -56,14 +56,12 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     const bool hover = interactive && input.hover() == thumbId;
     const bool pressed = interactive && input.primaryDown() && (input.capture() == trackId || input.capture() == thumbId);
     const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);
-    const UiSkinRegion* thumb = !interactive ? m_skin->findRegion(frame.m_style.disabled)
-        : pressed ? m_skin->findRegion(frame.m_style.pressed) : hover ? m_skin->findRegion(frame.m_style.hover) : nullptr;
+    const UiSkinRegion* thumb = !interactive ? m_skin->findRegion(frame.m_style.disabled) : pressed ? m_skin->findRegion(frame.m_style.pressed) : hover ? m_skin->findRegion(frame.m_style.hover) : nullptr;
     if(!thumb)
         thumb = region(frame.m_style.normal, frame.m_style.thumbFallback);
     if(!track || !thumb)
         return false;
-    const Color tint = !interactive ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint
-        : hover ? frame.m_style.hoverTint : Color{};
+    const Color tint = !interactive ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint : hover ? frame.m_style.hoverTint : Color{};
     m_paint.pushClip(placement->clip);
     bool painted = m_paint.drawRegion(track->name, placement->track, interactive ? Color{} : frame.m_style.disabledTint);
     if(painted)

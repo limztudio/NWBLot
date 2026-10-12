@@ -82,11 +82,7 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline bool ReadBytes(const Container& binary, usize& inOutOffset, void* outBytes, const usize byteCount)noexcept(
-    noexcept(CanReadBytes(binary, inOutOffset, byteCount))
-    && IsPointer_V<decltype(binary.data())>
-    && noexcept(binary.data())
-){
+[[nodiscard]] inline bool ReadBytes(const Container& binary, usize& inOutOffset, void* outBytes, const usize byteCount)noexcept(noexcept(CanReadBytes(binary, inOutOffset, byteCount)) && IsPointer_V<decltype(binary.data())> && noexcept(binary.data())){
     RequireByteContainer<Container>();
     if(!CanReadBytes(binary, inOutOffset, byteCount))
         return false;
@@ -140,11 +136,7 @@ inline void AppendPOD(Container& outBinary, const PodType& value){
 }
 
 template<typename PodType, typename Container>
-[[nodiscard]] inline Expected<PodType> ReadPOD(const Container& binary, usize& inOutOffset)noexcept(
-    noexcept(PodType{})
-    && IsNothrowMoveConstructible_V<PodType>
-    && noexcept(BinaryDetail::ReadBytes(binary, inOutOffset, DeclVal<void*>(), sizeof(PodType)))
-){
+[[nodiscard]] inline Expected<PodType> ReadPOD(const Container& binary, usize& inOutOffset)noexcept(noexcept(PodType{}) && IsNothrowMoveConstructible_V<PodType> && noexcept(BinaryDetail::ReadBytes(binary, inOutOffset, DeclVal<void*>(), sizeof(PodType)))){
     static_assert(IsTriviallyCopyable_V<PodType>, "binary POD reads require trivially-copyable values");
     PodType value = {};
     if(!BinaryDetail::ReadBytes(binary, inOutOffset, &value, sizeof(PodType)))
@@ -179,11 +171,7 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline Expected<AStringView> ReadLengthPrefixedString(const Container& binary, usize& inOutOffset)noexcept(
-    noexcept(ReadPOD<u32>(binary, inOutOffset))
-    && IsPointer_V<decltype(binary.data())>
-    && noexcept(binary.data())
-){
+[[nodiscard]] inline Expected<AStringView> ReadLengthPrefixedString(const Container& binary, usize& inOutOffset)noexcept(noexcept(ReadPOD<u32>(binary, inOutOffset)) && IsPointer_V<decltype(binary.data())> && noexcept(binary.data())){
     usize cursor = inOutOffset;
     const auto textLength = ReadPOD<u32>(binary, cursor);
     if(!textLength)
@@ -199,12 +187,7 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline Expected<AStringView> ReadStringTableTextView(
-    const Container& binary,
-    const usize stringTableOffset,
-    const usize stringTableByteCount,
-    const u32 textOffset
-){
+[[nodiscard]] inline Expected<AStringView> ReadStringTableTextView(const Container& binary, const usize stringTableOffset, const usize stringTableByteCount, const u32 textOffset){
     if(textOffset == Limit<u32>::s_Max || static_cast<usize>(textOffset) >= stringTableByteCount)
         return MakeUnexpected(Failure{});
     if(!CanReadBytes(binary, stringTableOffset, stringTableByteCount))
@@ -252,9 +235,7 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline Expected<AStringView> ReadString(const Container& binary, usize& inOutOffset)noexcept(
-    noexcept(BinaryDetail::ReadLengthPrefixedString(binary, inOutOffset))
-){
+[[nodiscard]] inline Expected<AStringView> ReadString(const Container& binary, usize& inOutOffset)noexcept(noexcept(BinaryDetail::ReadLengthPrefixedString(binary, inOutOffset))){
     return BinaryDetail::ReadLengthPrefixedString(binary, inOutOffset);
 }
 
@@ -277,12 +258,7 @@ template<typename ValueType>
 }
 
 template<typename Container, typename ValueContainer>
-[[nodiscard]] inline Expected<void, BinaryVectorPayloadFailure::Enum> ReadBinaryVectorPayload(
-    const Container& binary,
-    usize& inOutOffset,
-    const u64 count,
-    ValueContainer& outValues
-){
+[[nodiscard]] inline Expected<void, BinaryVectorPayloadFailure::Enum> ReadBinaryVectorPayload(const Container& binary, usize& inOutOffset, const u64 count, ValueContainer& outValues){
     using ValueType = typename ValueContainer::value_type;
     static_assert(IsTriviallyCopyable_V<ValueType>, "binary vector payloads require trivially-copyable elements");
     BinaryDetail::RequireByteContainer<Container>();
@@ -324,10 +300,7 @@ template<typename Container, typename ValueContainer>
 }
 
 template<typename Container, typename ValueContainer>
-[[nodiscard]] inline Expected<void, BinaryVectorPayloadFailure::Enum> AppendBinaryVectorPayload(
-    Container& outBinary,
-    const ValueContainer& values
-){
+[[nodiscard]] inline Expected<void, BinaryVectorPayloadFailure::Enum> AppendBinaryVectorPayload(Container& outBinary, const ValueContainer& values){
     BinaryDetail::RequireByteContainer<Container>();
 
     using ValueType = typename ValueContainer::value_type;
@@ -401,12 +374,7 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline Expected<ACompactString> ReadStringTableText(
-    const Container& binary,
-    const usize stringTableOffset,
-    const usize stringTableByteCount,
-    const u32 textOffset
-){
+[[nodiscard]] inline Expected<ACompactString> ReadStringTableText(const Container& binary, const usize stringTableOffset, const usize stringTableByteCount, const u32 textOffset){
     const auto parsedTextView = BinaryDetail::ReadStringTableTextView(binary, stringTableOffset, stringTableByteCount, textOffset);
     if(!parsedTextView)
         return MakeUnexpected(parsedTextView.error());

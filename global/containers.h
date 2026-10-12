@@ -60,11 +60,7 @@ inline constexpr InPlaceType s_InPlace{};
 template<typename Arg0, typename Arg1>
 using Pair = CompressedPair<Arg0, Arg1>;
 template<typename Arg0, typename Arg1>
-constexpr auto MakePair(Arg0&& arg0, Arg1&& arg1)noexcept(
-    noexcept(Pair<RemoveReferenceWrapper_T<Decay_T<Arg0>>, RemoveReferenceWrapper_T<Decay_T<Arg1>>>(
-        Forward<Arg0>(arg0), Forward<Arg1>(arg1)
-    ))
-){
+constexpr auto MakePair(Arg0&& arg0, Arg1&& arg1)noexcept(noexcept(Pair<RemoveReferenceWrapper_T<Decay_T<Arg0>>, RemoveReferenceWrapper_T<Decay_T<Arg1>>>(Forward<Arg0>(arg0), Forward<Arg1>(arg1)))){
     using Arg0Type = RemoveReferenceWrapper_T<Decay_T<Arg0>>;
     using Arg1Type = RemoveReferenceWrapper_T<Decay_T<Arg1>>;
     return Pair<Arg0Type, Arg1Type>(Forward<Arg0>(arg0), Forward<Arg1>(arg1));
@@ -87,17 +83,10 @@ constexpr auto Tie(Args&... args)noexcept{ return std::tie(args...); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
-using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
 template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
-using ParallelHashMap = tbb::concurrent_unordered_map<
-    T,
-    V,
-    Hash,
-    Equal,
-    ContainerDetail::ArenaAllocatorFor_T<typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type, ArenaT>
->;
+using ParallelHashMap = tbb::concurrent_unordered_map< T, V, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type, ArenaT> >;
 
 template<typename T, typename ArenaT>
 using ParallelVector = tbb::concurrent_vector<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
@@ -112,27 +101,16 @@ using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::Are
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
-using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
-using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<Pair<T, V>, ArenaT>>;
+template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<Pair<T, V>, ArenaT>>;
 
 template<
     typename K,
     typename V,
     typename ArenaT,
     ArenaT& (*DefaultArena)(),
-    typename Hash = Hasher<K>,
-    typename Equal = EqualTo<K>
->
-using DefaultHashMap = tsl::robin_map<
-    K,
-    V,
-    Hash,
-    Equal,
-    ContainerDetail::DefaultArenaAllocatorFor_T<Pair<K, V>, ArenaT, DefaultArena>
->;
+    typename Hash = Hasher<K>, typename Equal = EqualTo<K> > using DefaultHashMap = tsl::robin_map< K, V, Hash, Equal, ContainerDetail::DefaultArenaAllocatorFor_T<Pair<K, V>, ArenaT, DefaultArena> >;
 
 template<typename T, typename ArenaT>
 using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
@@ -172,11 +150,7 @@ namespace ContainerDetail{
 
 
 template<typename DestinationVector, typename SourceValue>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(
-    const DestinationVector& destination,
-    const SourceValue* sourceData,
-    const usize sourceSize
-){
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize){
     if(destination.empty() || sourceSize == 0u)
         return MakeUnexpected(Failure{});
 
@@ -313,12 +287,7 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
         ContainerDetail::ReserveGrowingCapacity(destination, requiredSize);
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){
             destination.resize(requiredSize);
-            NWB_MEMCPY(
-                destination.data() + destinationSize,
-                sourceSize * sizeof(DestinationValue),
-                destination.data() + sourceOffset,
-                sourceSize * sizeof(DestinationValue)
-            );
+            NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
         }
         else{
             for(usize i = 0u; i < sourceSize; ++i)
@@ -330,12 +299,7 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     ContainerDetail::ReserveGrowingCapacity(destination, destinationSize + sourceSize);
     if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
         destination.resize(destinationSize + sourceSize);
-        NWB_MEMCPY(
-            destination.data() + destinationSize,
-            sourceSize * sizeof(DestinationValue),
-            source.data(),
-            sourceSize * sizeof(SourceValue)
-        );
+        NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
     }
     else if constexpr(requires(DestinationVector& d, const SourceVector& s){ d.insert(d.end(), s.begin(), s.end()); }){
         destination.insert(destination.end(), source.begin(), source.end());

@@ -27,23 +27,8 @@ bool GpuTaskScheduler::recordPacketRange(
     GpuSubmissionPacketId* const outFailedPacket
 )const{
     return readyFrontierScheduler
-        ? recorder.recordPacketRangeInReadyFrontiers(
-            graph,
-            compiledGraph,
-            range,
-            recordedGraph,
-            *readyFrontierScheduler,
-            outFailedPacket,
-            commandIrCapture
-        )
-        : recorder.recordPacketRangeInCompileOrder(
-            graph,
-            compiledGraph,
-            range,
-            recordedGraph,
-            outFailedPacket,
-            commandIrCapture
-        )
+        ? recorder.recordPacketRangeInReadyFrontiers(graph, compiledGraph, range, recordedGraph, *readyFrontierScheduler, outFailedPacket, commandIrCapture)
+        : recorder.recordPacketRangeInCompileOrder(graph, compiledGraph, range, recordedGraph, outFailedPacket, commandIrCapture)
     ;
 }
 

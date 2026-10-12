@@ -34,9 +34,7 @@ struct DescriptorBufferStartupPrerequisites{
     bool cmdSetDescriptorBufferOffsetsAvailable = false;
 };
 
-[[nodiscard]] inline constexpr bool HasDescriptorBufferStartupPrerequisites(
-    const DescriptorBufferStartupPrerequisites& prerequisites
-)noexcept{
+[[nodiscard]] inline constexpr bool HasDescriptorBufferStartupPrerequisites(const DescriptorBufferStartupPrerequisites& prerequisites)noexcept{
     return
         prerequisites.descriptorBufferExtensionEnabled
         && prerequisites.bufferDeviceAddressFeatureEnabled
@@ -49,9 +47,7 @@ struct DescriptorBufferStartupPrerequisites{
     ;
 }
 
-[[nodiscard]] inline DescriptorBufferStartupPrerequisites QueryDescriptorBufferStartupPrerequisites(
-    const VulkanContext& context
-)noexcept{
+[[nodiscard]] inline DescriptorBufferStartupPrerequisites QueryDescriptorBufferStartupPrerequisites(const VulkanContext& context)noexcept{
     return {
         .descriptorBufferExtensionEnabled = context.extensions.extDescriptorBuffer,
         .bufferDeviceAddressFeatureEnabled = context.extensions.bufferDeviceAddress,
@@ -116,11 +112,7 @@ inline u64 s_NextDescriptorBufferStorageIdentity = 1u;
     }
 }
 
-[[nodiscard]] inline u32 GetDescriptorSize(
-    const VulkanContext& context,
-    const bool enabled,
-    const VkDescriptorType descriptorType
-)noexcept{
+[[nodiscard]] inline u32 GetDescriptorSize(const VulkanContext& context, const bool enabled, const VkDescriptorType descriptorType)noexcept{
     if(!enabled)
         return 0u;
 
@@ -143,10 +135,7 @@ inline u64 s_NextDescriptorBufferStorageIdentity = 1u;
     return size > UINT32_MAX ? 0u : static_cast<u32>(size);
 }
 
-[[nodiscard]] inline Expected<BufferRange> ResolveDescriptorBufferRange(
-    const DescriptorWriteItem& item,
-    const BufferDesc& bufferDesc
-)noexcept{
+[[nodiscard]] inline Expected<BufferRange> ResolveDescriptorBufferRange(const DescriptorWriteItem& item, const BufferDesc& bufferDesc)noexcept{
     const auto range = item.range.resolve(bufferDesc);
     if(range.byteSize == 0u)
         return MakeUnexpected(Failure{});

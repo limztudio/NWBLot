@@ -39,11 +39,7 @@ SdfAtlasPage::SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedSdfAtlasPage CreateSdfAtlasPage(
-    Core::Alloc::GlobalArena& arena,
-    const SdfAtlasPageBinding& binding,
-    SdfAtlasPage::Pixels&& pixels
-){
+SharedSdfAtlasPage CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels){
     if(
         !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
         || binding.index >= s_FontAtlasMaxGroupCount || binding.width == 0u || binding.height == 0u
@@ -56,22 +52,10 @@ SharedSdfAtlasPage CreateSdfAtlasPage(
         return {};
     SdfAtlasPageBinding immutable = binding;
     immutable.pixelsSha256 = ComputeSha256(BinaryByteView(pixels.data(), pixels.size()));
-    return
-        SharedSdfAtlasPage(
-            NewArenaObject<RefCounter<SdfAtlasPage>>(arena, arena, immutable, Move(pixels)),
-            ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>(&arena),
-            s_AdoptRef
-        )
-    ;
+    return SharedSdfAtlasPage(NewArenaObject<RefCounter<SdfAtlasPage>>(arena, arena, immutable, Move(pixels)), ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
-SharedSdfAtlasPage CreateSdfAtlasPage(
-    Core::Alloc::GlobalArena& arena,
-    const FontAtlas& atlas,
-    const u64 fontGeneration,
-    const u64 atlasIdentity,
-    const u32 groupIndex
-){
+SharedSdfAtlasPage CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration, const u64 atlasIdentity, const u32 groupIndex){
     // The asset codec/font installation validates the whole payload once before publishing matching glyph metadata.
     const FontAtlasPayload& payload = atlas.payload();
     if(groupIndex >= payload.groups.size())

@@ -334,8 +334,7 @@ TEST(UiRadioGroupBehaviorTests, AllFourArrowsWrapAndSkipDisabledChoices){
     auto choices = RadioGroupBehavior::Reconcile(state, source, result);
     ASSERT_TRUE(choices);
     const u64 input = state.inputGeneration();
-    const ControlActionKind::Enum kinds[]{ ControlActionKind::Up, ControlActionKind::Right, ControlActionKind::Left,
-        ControlActionKind::Down };
+    const ControlActionKind::Enum kinds[]{ ControlActionKind::Up, ControlActionKind::Right, ControlActionKind::Left, ControlActionKind::Down };
     const u64 expected[]{ 4u, 1u, 4u, 1u };
     for(u32 index = 0u; index < 4u; ++index){
         result = {};
@@ -472,8 +471,7 @@ TEST(UiRadioGroupBehaviorTests, MalformedKeysAndLookupsRejectAtomically){
 }
 
 TEST(UiRadioGroupBehaviorTests, EverySourceCallbackRejectsStateSelectionAbaBeforeUsingItsResult){
-    const CallbackPhase::Enum phases[]{ CallbackPhase::Generation, CallbackPhase::Revision, CallbackPhase::Count,
-        CallbackPhase::Key, CallbackPhase::Lookup, CallbackPhase::Enabled };
+    const CallbackPhase::Enum phases[]{ CallbackPhase::Generation, CallbackPhase::Revision, CallbackPhase::Count, CallbackPhase::Key, CallbackPhase::Lookup, CallbackPhase::Enabled };
     for(const CallbackPhase::Enum phase : phases){
         ChoiceSource source;
         RadioGroupState state;
@@ -540,8 +538,7 @@ TEST(UiRadioGroupBehaviorTests, ReentrantBehaviorRejectsTheOuterReconciliationAn
 }
 
 TEST(UiRadioGroupBehaviorTests, SourceMutationDuringChoiceCallbacksRejectsWithoutCommittingState){
-    const CallbackMutation::Enum mutations[]{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration,
-        CallbackMutation::SourceCount };
+    const CallbackMutation::Enum mutations[]{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration, CallbackMutation::SourceCount };
     for(const CallbackMutation::Enum mutation : mutations){
         ChoiceSource source;
         RadioGroupState state;

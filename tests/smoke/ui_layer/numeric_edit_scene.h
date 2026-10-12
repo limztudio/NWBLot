@@ -67,14 +67,11 @@ private:
     bool m_clamp = true;
 };
 
-using SharedUiNumericEditSmokeScene = RefCountPtr<
-    RefCounter<UiNumericEditSmokeScene>, ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiNumericEditSmokeScene = RefCountPtr< RefCounter<UiNumericEditSmokeScene>, ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerNumericEditSmokeEnabled();
 [[nodiscard]] bool IsUiLayerNumericEditSkinSmokeEnabled();
-[[nodiscard]] SharedUiNumericEditSmokeScene CreateUiNumericEditSmokeScene(
-    Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+[[nodiscard]] SharedUiNumericEditSmokeScene CreateUiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

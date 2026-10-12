@@ -33,12 +33,7 @@ void X11ClipboardService::requestConversion(){
 }
 
 void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
-    if(
-        m_phase != X11ClipboardPhase::Notify
-        || event.selection != m_operationSelection
-        || event.target != m_operationTarget
-        || event.time != m_operationTimestamp
-    )
+    if(m_phase != X11ClipboardPhase::Notify || event.selection != m_operationSelection || event.target != m_operationTarget || event.time != m_operationTimestamp)
         return;
     if(!event.property){
         if(m_operationTarget == m_utf8Atom){

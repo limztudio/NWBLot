@@ -72,12 +72,7 @@ static_assert(sizeof(ActiveCameraComponent) == sizeof(Core::ECS::EntityID), "Act
 struct alignas(Float4) CameraComponent{
     // x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
     // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
-    Float4 projection = Float4(
-        CameraDefaults::s_VerticalFovRadians,
-        CameraDefaults::s_NearPlane,
-        CameraDefaults::s_FarPlane,
-        CameraDefaults::s_AutoAspectRatio
-    );
+    Float4 projection = Float4(CameraDefaults::s_VerticalFovRadians, CameraDefaults::s_NearPlane, CameraDefaults::s_FarPlane, CameraDefaults::s_AutoAspectRatio);
 
     [[nodiscard]] f32 verticalFovRadians()const noexcept{ return projection.x; }
     [[nodiscard]] f32 nearPlane()const noexcept{ return projection.y; }
@@ -133,12 +128,7 @@ inline constexpr bool s_EnableCaustics = true;
 
 struct alignas(Float4) LightComponent{
     // x/y/z = color, w = intensity.
-    Float4 colorIntensity = Float4(
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_Intensity
-    );
+    Float4 colorIntensity = Float4(LightDefaults::s_WhiteColorComponent, LightDefaults::s_WhiteColorComponent, LightDefaults::s_WhiteColorComponent, LightDefaults::s_Intensity);
     f32 range = LightDefaults::s_Range;
     // Spot cone cosines; outer (wider) must stay <= inner (narrower).
     f32 innerConeCos = LightDefaults::s_InnerConeCos;

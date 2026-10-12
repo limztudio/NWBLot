@@ -21,11 +21,7 @@ TStringView NWB::QueryProjectWindowTitle(){
 }
 
 bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
-    return
-        context.graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
-        && context.graphics.setHDR10OutputEnabled(false)
-        && context.graphics.setSwapChainReadbackEnabled(true)
-    ;
+    return context.graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && context.graphics.setHDR10OutputEnabled(false) && context.graphics.setSwapChainReadbackEnabled(true);
 }
 
 

@@ -33,15 +33,9 @@ namespace __hidden_task_graph_submission_validation_tests{
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
-void ExpectWaitStatistics(
-    const Graphics::GpuPhysicalQueueId queue,
-    const Graphics::QueueSubmissionToken* const tokens,
-    const usize count
-){
+void ExpectWaitStatistics(const Graphics::GpuPhysicalQueueId queue, const Graphics::QueueSubmissionToken* const tokens, const usize count){
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-    const Graphics::GpuPacketRuntimeDetail::PacketWaitStatistics actual = Graphics::GpuPacketRuntimeDetail::CountPacketWaitStatistics(
-        queue, tokens, count, scratch
-    );
+    const Graphics::GpuPacketRuntimeDetail::PacketWaitStatistics actual = Graphics::GpuPacketRuntimeDetail::CountPacketWaitStatistics(queue, tokens, count, scratch);
     Graphics::Alloc::ScratchArena referenceScratch(s_TaskGraphScratchArena);
     Vector<u32, Graphics::Alloc::ScratchArena> identities(referenceScratch);
     identities.reserve(count);

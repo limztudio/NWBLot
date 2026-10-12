@@ -80,9 +80,7 @@ public:
         const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, 0.48f) : Float4(0.90f, 0.98f, 1.0f, coverage);
         const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, 0.48f) : Float4(1.0f, 0.94f, 0.88f, coverage);
         const Float4 tint = second ? secondTint : firstTint;
-        const auto entity = CreateTintedStaticMeshEntity(
-            m_world, m_context.objectArena, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale
-        );
+        const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale);
 
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
         auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
@@ -105,10 +103,7 @@ public:
         const i32 opticalPriority = 0,
         const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent
     ){
-        object(
-            s_Sphere, Float4(x, 1.4f, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage,
-            0.0f, 0.0f, 0.0f, opticalGroup, opticalPriority, opticalCoincidence
-        );
+        object(s_Sphere, Float4(x, 1.4f, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage, 0.0f, 0.0f, 0.0f, opticalGroup, opticalPriority, opticalCoincidence);
     }
 
     Expected<void> opticalParameters(const Core::ECS::EntityID entity, const f32 ior, const Float4& transmission){
@@ -116,22 +111,14 @@ public:
             return {};
         const Half packedIor = ConvertFloatToHalf(ior);
         const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
-        if(!Impl::SetMaterialMutableParameter(
-            m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::Half,
-            Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))
-        ))
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))))
             return MakeUnexpected(Failure{});
-        if(!Impl::SetMaterialMutableParameter(
-            m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::Half3,
-            Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)
-        ))
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)))
             return MakeUnexpected(Failure{});
         return {};
     }
 
-    Expected<Core::ECS::EntityID> csgSlab(
-        const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const AStringView surfaceInterface
-    ){
+    Expected<Core::ECS::EntityID> csgSlab(const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const AStringView surfaceInterface){
         const bool reference = caseName == "csg_reference";
         const bool middle = caseName == "csg_middle";
         const auto entity = CreateTintedStaticMeshEntity(
@@ -174,9 +161,7 @@ public:
             );
             if(!foreign.valid())
                 return false;
-            if(!opticalParameters(
-                foreign, caseName == "identity_different_ior" ? 3.8f : 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)
-            ))
+            if(!opticalParameters(foreign, caseName == "identity_different_ior" ? 3.8f : 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)))
                 return false;
         }
         // Reusing an actual ECS slot exercises generation bits beyond float32's exact integer range.
@@ -186,9 +171,7 @@ public:
                 return false;
             m_world.destroyEntity(recycled.id());
         }
-        const auto primary = csgSlab(
-            "csg_reference", Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f), s_OpticalVolume, s_OpticalInterface
-        );
+        const auto primary = csgSlab("csg_reference", Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f), s_OpticalVolume, s_OpticalInterface);
         if(!primary || primary->id <= (1u << 24u))
             return false;
         if(!opticalParameters(*primary, 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)))
@@ -261,19 +244,8 @@ public:
         return true;
     }
 
-    void panel(
-        const SmokeMaterialRef& material,
-        const Float4& tint,
-        const f32 x,
-        const f32 y,
-        const f32 z,
-        const f32 halfWidth,
-        const f32 halfHeight
-    ){
-        const auto entity = CreateTintedStaticMeshEntity(
-            m_world, m_context.objectArena, s_Plane, material, s_Interface, tint,
-            Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f)
-        );
+    void panel(const SmokeMaterialRef& material, const Float4& tint, const f32 x, const f32 y, const f32 z, const f32 halfWidth, const f32 halfHeight){
+        const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, material, s_Interface, tint, Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f));
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
         auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform->rotation);
@@ -287,17 +259,11 @@ public:
         }
         for(u32 stripe = 0u; stripe < 36u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.9f : 0.045f;
-            panel(
-                s_Opaque, Float4(value, value, value, 1.0f),
-                -5.25f + static_cast<f32>(stripe) * 0.3f, 1.4f, 4.5f, 0.15f, 5.0f
-            );
+            panel(s_Opaque, Float4(value, value, value, 1.0f), -5.25f + static_cast<f32>(stripe) * 0.3f, 1.4f, 4.5f, 0.15f, 5.0f);
         }
         // A second direction and colored depth markers make ray displacement legible.
         for(u32 row = 0u; row < 9u; ++row)
-            panel(
-                s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f),
-                0.0f, -1.4f + static_cast<f32>(row) * 0.7f, 4.48f, 5.4f, 0.015f
-            );
+            panel(s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f), 0.0f, -1.4f + static_cast<f32>(row) * 0.7f, 4.48f, 5.4f, 0.015f);
         panel(s_Transparent, Float4(0.04f, 0.27f, 1.0f, 0.70f), 0.0f, 1.93f, 3.0f, 3.1f, 0.10f);
         panel(s_Transparent, Float4(1.0f, 0.035f, 0.025f, 0.70f), 0.0f, 1.05f, -2.5f, 1.55f, 0.04f);
     }
@@ -319,16 +285,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CreateRefractionGalleryScene(
-    ProjectRuntimeContext& context,
-    Core::ECS::World& world,
-    const AStringView caseName,
-    const bool geometryPreview
-){
+bool CreateRefractionGalleryScene(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName, const bool geometryPreview){
     const auto camera = CreateSmokeCamera(world, 1.4f, __hidden_refraction_gallery_scene::s_GalleryCameraDistance, 0.0f);
-    const auto light = Impl::Scene::CreateDirectionalLightEntity(
-        world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f
-    );
+    const auto light = Impl::Scene::CreateDirectionalLightEntity(world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
     if(!camera.valid() || !light.valid())
         return false;
     // Tighter framing exposes overlap artifacts while preserving the same camera for every variant.
@@ -338,10 +297,7 @@ bool CreateRefractionGalleryScene(
         cameraComponent.setNearPlane(__hidden_refraction_gallery_scene::s_IdentityNearPlane);
     __hidden_refraction_gallery_scene::GalleryBuilder scene(context, world, geometryPreview);
     if(caseName == "csg_reference" || caseName == "csg_cap" || caseName == "csg_middle" || caseName == "csg_uncut"){
-        const auto slab = scene.csgSlab(
-            caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f),
-            __hidden_refraction_gallery_scene::s_Glass, __hidden_refraction_gallery_scene::s_Interface
-        );
+        const auto slab = scene.csgSlab(caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f), __hidden_refraction_gallery_scene::s_Glass, __hidden_refraction_gallery_scene::s_Interface);
         if(!slab)
             return false;
     }
@@ -375,36 +331,22 @@ bool CreateRefractionGalleryScene(
         scene.sphere(0.0f, 0.0f, 1.2f);
         scene.sphere(0.2f, 0.15f, 0.62f, true);
     }
-    else if(
-        caseName == "duplicate_single_cool" || caseName == "duplicate_single_warm"
-        || caseName == "duplicate_single_cool_tinted" || caseName == "duplicate_single_warm_tinted"
-    ){
+    else if(caseName == "duplicate_single_cool" || caseName == "duplicate_single_warm" || caseName == "duplicate_single_cool_tinted" || caseName == "duplicate_single_warm_tinted"){
         const bool warm = caseName == "duplicate_single_warm" || caseName == "duplicate_single_warm_tinted";
         const bool tinted = caseName == "duplicate_single_cool_tinted" || caseName == "duplicate_single_warm_tinted";
         const f32 coverage = tinted ? 0.3f : 0.0f;
         scene.sphere(0.0f, 0.0f, 1.1f, warm, coverage);
     }
-    else if(
-        caseName == "coincident" || caseName == "coincident_tinted"
-        || caseName == "coincident_reversed" || caseName == "coincident_tinted_reversed"
-        || caseName == "coincident_priority_swap" || caseName == "coincident_tinted_priority_swap"
-    ){
-        const bool tinted = caseName == "coincident_tinted" || caseName == "coincident_tinted_reversed"
-            || caseName == "coincident_tinted_priority_swap";
+    else if(caseName == "coincident" || caseName == "coincident_tinted" || caseName == "coincident_reversed" || caseName == "coincident_tinted_reversed" || caseName == "coincident_priority_swap" || caseName == "coincident_tinted_priority_swap"){
+        const bool tinted = caseName == "coincident_tinted" || caseName == "coincident_tinted_reversed" || caseName == "coincident_tinted_priority_swap";
         const bool reversed = caseName == "coincident_reversed" || caseName == "coincident_tinted_reversed";
         const bool warmWins = caseName == "coincident_priority_swap" || caseName == "coincident_tinted_priority_swap";
         const f32 coverage = tinted ? 0.3f : 0.0f;
         const i32 coolPriority = warmWins ? 0 : 10;
         const i32 warmPriority = warmWins ? 10 : 0;
         const Name opticalGroup = __hidden_refraction_gallery_scene::s_DuplicateOpticalGroup;
-        scene.sphere(
-            0.0f, 0.0f, 1.1f, reversed, coverage, opticalGroup,
-            reversed ? warmPriority : coolPriority, Impl::OpticalVolumeCoincidence::SharedGroup
-        );
-        scene.sphere(
-            0.0f, 0.0f, 1.1f, !reversed, coverage, opticalGroup,
-            reversed ? coolPriority : warmPriority, Impl::OpticalVolumeCoincidence::SharedGroup
-        );
+        scene.sphere(0.0f, 0.0f, 1.1f, reversed, coverage, opticalGroup, reversed ? warmPriority : coolPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
+        scene.sphere(0.0f, 0.0f, 1.1f, !reversed, coverage, opticalGroup, reversed ? coolPriority : warmPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
     }
     else if(caseName == "coincident_identical" || caseName == "coincident_tinted_identical"){
         const f32 coverage = caseName == "coincident_tinted_identical" ? 0.3f : 0.0f;
@@ -421,20 +363,11 @@ bool CreateRefractionGalleryScene(
         scene.sphere(0.0f, 0.0f, 1.1f, false, 0.3f);
     }
     else if(caseName == "torus")
-        scene.object(
-            __hidden_refraction_gallery_scene::s_Torus,
-            Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.2f, 1.2f, 1.2f, 0.0f), false, 0.0f, 1.2f, 0.23f
-        );
+        scene.object(__hidden_refraction_gallery_scene::s_Torus, Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.2f, 1.2f, 1.2f, 0.0f), false, 0.0f, 1.2f, 0.23f);
     else if(caseName == "same_mesh")
-        scene.object(
-            __hidden_refraction_gallery_scene::s_Shells,
-            Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), false, 0.0f, -0.20f
-        );
+        scene.object(__hidden_refraction_gallery_scene::s_Shells, Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), false, 0.0f, -0.20f);
     else if(caseName == "prism")
-        scene.object(
-            __hidden_refraction_gallery_scene::s_Prism,
-            Float4(0.08f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f), false, 0.0f, 0.95f, 0.1f, 0.2f
-        );
+        scene.object(__hidden_refraction_gallery_scene::s_Prism, Float4(0.08f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f), false, 0.0f, 0.95f, 0.1f, 0.2f);
     else{
         NWB_LOGGER_WARNING(NWB_TEXT("RefractionSmokeProject: unknown gallery case"));
         return false;

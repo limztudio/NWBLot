@@ -45,32 +45,13 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 
 template<typename MeshT>
-static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(
-    const MeshT& mesh,
-    const NWB::Impl::MeshletDesc& meshlet,
-    const u32 localPositionIndex
-){
-    return NWB::Impl::DecodeMeshletPositionRef(
-        mesh.meshletPositionRefDeltas().data(),
-        mesh.meshletPositionRefDeltas().size(),
-        meshlet,
-        localPositionIndex,
-        NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass())
-    );
+static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localPositionIndex){
+    return NWB::Impl::DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()));
 }
 
 template<typename MeshT>
-static Expected<NWB::Impl::MeshletAttributeStreamRef> TestDecodeMeshletAttributeRef(
-    const MeshT& mesh,
-    const NWB::Impl::MeshletDesc& meshlet,
-    const u32 localAttributeIndex
-){
-    return NWB::Impl::DecodeMeshletAttributeRef(
-        mesh.meshletAttributeRefDeltas().data(),
-        mesh.meshletAttributeRefDeltas().size(),
-        meshlet,
-        localAttributeIndex
-    );
+static Expected<NWB::Impl::MeshletAttributeStreamRef> TestDecodeMeshletAttributeRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localAttributeIndex){
+    return NWB::Impl::DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), meshlet, localAttributeIndex);
 }
 
 template<
@@ -92,23 +73,12 @@ static bool TestMeshletHasPositionNormalValue(
         const NWB::Impl::MeshletLocalVertexRef& localRef = localRefs[meshlet.localVertexOffset + localVertexIndex];
         const auto positionRef = TestDecodeMeshletPositionRef(mesh, meshlet, localRef.localDeformedPosition);
         const auto attributeRef = TestDecodeMeshletAttributeRef(mesh, meshlet, localRef.localAttribute);
-        if(
-            !positionRef
-            || !attributeRef
-        )
+        if(!positionRef || !attributeRef)
             return false;
 
         const Float3U& position = positions[positionRef->position];
         const Float4U normal = LoadHalf4U(normals[attributeRef->normal]);
-        if(
-            position.x == expectedPosition.x
-            && position.y == expectedPosition.y
-            && position.z == expectedPosition.z
-            && normal.x == expectedNormal.x
-            && normal.y == expectedNormal.y
-            && normal.z == expectedNormal.z
-            && normal.w == expectedNormal.w
-        )
+        if(position.x == expectedPosition.x && position.y == expectedPosition.y && position.z == expectedPosition.z && normal.x == expectedNormal.x && normal.y == expectedNormal.y && normal.z == expectedNormal.z && normal.w == expectedNormal.w)
             return true;
     }
 
@@ -131,12 +101,7 @@ template<typename MeshT>
     return count;
 }
 
-static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(
-    TestArena& testArena,
-    AStringView assetFilename,
-    const Name assetName,
-    const AssetsGraphicsFixture::CookCase& cookCase
-){
+static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(TestArena& testArena, AStringView assetFilename, const Name assetName, const AssetsGraphicsFixture::CookCase& cookCase){
     const bool cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(assetFilename, testArena, cookCase);
     EXPECT_TRUE(cooked);
     if(!cooked)
@@ -145,12 +110,7 @@ static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(
 }
 
 template<typename CallbackT>
-static void RunSmokeMeshAcceptance(
-    AStringView assetFilename,
-    const AStringView caseName,
-    const Name assetName,
-    CallbackT&& callback
-){
+static void RunSmokeMeshAcceptance(AStringView assetFilename, const AStringView caseName, const Name assetName, CallbackT&& callback){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -168,54 +128,22 @@ static void RunSmokeMeshAcceptance(
 }
 
 TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
-    RunSmokeMeshAcceptance(
-        "cube_hard_edges.nwb",
-        "hard_edge_cube",
-        Name("project/meshes/cube_hard_edges"),
-        [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("cube_hard_edges.nwb", "hard_edge_cube", Name("project/meshes/cube_hard_edges"), [](const NWB::Impl::Mesh& loadedMesh){
             ASSERT_EQ(loadedMesh.meshlets().size(), 1u);
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0];
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
             const auto& positions = loadedMesh.positionStream();
             const auto& normals = loadedMesh.normalStream();
-            EXPECT_TRUE(TestMeshletHasPositionNormalValue(
-                loadedMesh,
-                meshlet,
-                positions,
-                normals,
-                localRefs,
-                Float3U(-0.5f, -0.5f, -0.5f),
-                Float4U(0.0f, 0.0f, -1.0f, 0.0f)
-            ));
-            EXPECT_TRUE(TestMeshletHasPositionNormalValue(
-                loadedMesh,
-                meshlet,
-                positions,
-                normals,
-                localRefs,
-                Float3U(-0.5f, -0.5f, -0.5f),
-                Float4U(0.0f, -1.0f, 0.0f, 0.0f)
-            ));
-            EXPECT_TRUE(TestMeshletHasPositionNormalValue(
-                loadedMesh,
-                meshlet,
-                positions,
-                normals,
-                localRefs,
-                Float3U(-0.5f, -0.5f, -0.5f),
-                Float4U(-1.0f, 0.0f, 0.0f, 0.0f)
-            ));
+            EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(0.0f, 0.0f, -1.0f, 0.0f)));
+            EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(0.0f, -1.0f, 0.0f, 0.0f)));
+            EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(-1.0f, 0.0f, 0.0f, 0.0f)));
         }
     );
 }
 
 
 TEST(AssetsGraphics, OpposedSphereNormalsDisableMeshletCone){
-    RunSmokeMeshAcceptance(
-        "sphere_smooth.nwb",
-        "sphere_smooth",
-        Name("project/meshes/sphere_smooth"),
-        [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("sphere_smooth.nwb", "sphere_smooth", Name("project/meshes/sphere_smooth"), [](const NWB::Impl::Mesh& loadedMesh){
             ASSERT_EQ(loadedMesh.meshletBounds().size(), 1u);
             EXPECT_FALSE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
         }
@@ -223,11 +151,7 @@ TEST(AssetsGraphics, OpposedSphereNormalsDisableMeshletCone){
 }
 
 TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
-    RunSmokeMeshAcceptance(
-        "uv_seam_quad.nwb",
-        "uv_seam_quad",
-        Name("project/meshes/uv_seam_quad"),
-        [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("uv_seam_quad.nwb", "uv_seam_quad", Name("project/meshes/uv_seam_quad"), [](const NWB::Impl::Mesh& loadedMesh){
             ASSERT_EQ(loadedMesh.meshlets().size(), 1u);
             ASSERT_GE(loadedMesh.meshletLocalVertexRefs().size(), 5u);
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
@@ -258,11 +182,7 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
 }
 
 TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
-    RunSmokeMeshAcceptance(
-        "mirrored_uv_quad.nwb",
-        "mirrored_uv_quad",
-        Name("project/meshes/mirrored_uv_quad"),
-        [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("mirrored_uv_quad.nwb", "mirrored_uv_quad", Name("project/meshes/mirrored_uv_quad"), [](const NWB::Impl::Mesh& loadedMesh){
             EXPECT_EQ(loadedMesh.tangentStream().size(), s_ExpectedDualCount);
             EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[0u]).w, 1.0f);
             EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[1u]).w, -1.0f);
@@ -280,11 +200,7 @@ TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
 }
 
 TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
-    RunSmokeMeshAcceptance(
-        "two_sided_plane.nwb",
-        "two_sided_plane",
-        Name("project/meshes/two_sided_plane"),
-        [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("two_sided_plane.nwb", "two_sided_plane", Name("project/meshes/two_sided_plane"), [](const NWB::Impl::Mesh& loadedMesh){
             EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 3u);
             EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);
             EXPECT_FALSE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
@@ -293,11 +209,7 @@ TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
 }
 
 TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
-    RunSmokeMeshAcceptance(
-        "large_mesh_many_meshlets.nwb",
-        "large_mesh_many_meshlets",
-        Name("project/meshes/large_mesh_many_meshlets"),
-        [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("large_mesh_many_meshlets.nwb", "large_mesh_many_meshlets", Name("project/meshes/large_mesh_many_meshlets"), [](const NWB::Impl::Mesh& loadedMesh){
             const usize expectedPrimitiveCount = static_cast<usize>(NWB::Impl::s_MeshMaxMeshletTriangles) + 1u;
             const usize expectedMeshletCount = s_ExpectedDualCount;
             EXPECT_EQ(loadedMesh.meshlets().size(), s_ExpectedDualCount);

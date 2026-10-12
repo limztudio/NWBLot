@@ -48,23 +48,10 @@ struct AmdBreadcrumbReservation{
 
 [[nodiscard]] bool HasBufferDeviceWriteState(ResourceStates::Mask states)noexcept;
 [[nodiscard]] VkBufferMemoryBarrier2 BuildHostReadBufferBarrier(VkBuffer buffer)noexcept;
-void CollectUniquePhysicalQueueFamilyIndices(
-    const GpuPhysicalQueueTopology& topology,
-    Vector<u32, Alloc::ScratchArena>& familyIndices
-);
-[[nodiscard]] Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(
-    const GpuPhysicalQueueTopology& topology,
-    usize slotsPerQueue
-)noexcept;
-[[nodiscard]] Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(
-    const AmdBreadcrumbRingLayout& layout,
-    const GpuPhysicalQueueId& queue,
-    usize localSlot
-)noexcept;
-[[nodiscard]] Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(
-    u64 currentSerial,
-    usize slotsPerQueue
-)noexcept;
+void CollectUniquePhysicalQueueFamilyIndices(const GpuPhysicalQueueTopology& topology, Vector<u32, Alloc::ScratchArena>& familyIndices);
+[[nodiscard]] Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(const GpuPhysicalQueueTopology& topology, usize slotsPerQueue)noexcept;
+[[nodiscard]] Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(const AmdBreadcrumbRingLayout& layout, const GpuPhysicalQueueId& queue, usize localSlot)noexcept;
+[[nodiscard]] Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(u64 currentSerial, usize slotsPerQueue)noexcept;
 [[nodiscard]] bool MatchesAmdBreadcrumbObservation(u32 observedMarker, u32 reservedMarker)noexcept;
 
 class HostReadbackBarrierTracker final : NoCopy{

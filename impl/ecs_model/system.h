@@ -68,13 +68,7 @@ struct ModelSkinnedMeshObject;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ModelObjectRendererCallback = Function<void(
-    Core::ECS::World& world,
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::Entity& entity,
-    Core::ECS::EntityID owner,
-    const Core::Assets::AssetRef<Material>& material
-)>;
+using ModelObjectRendererCallback = Function<void(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::ECS::Entity& entity, Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material)>;
 
 struct ModelObjectRendererHooks{
     ModelObjectRendererCallback apply;
@@ -96,12 +90,7 @@ struct ModelAttachmentJointQuery{
 
 class ModelSystem final : public Core::ECS::ISystem{
 public:
-    ModelSystem(
-        Core::Alloc::GlobalArena& arena,
-        Core::ECS::World& world,
-        Core::Assets::AssetManager& assetManager,
-        ModelObjectRendererHooks rendererHooks = {}
-    );
+    ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::Assets::AssetManager& assetManager, ModelObjectRendererHooks rendererHooks = {});
     virtual ~ModelSystem()override = default;
 
 

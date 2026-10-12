@@ -24,12 +24,7 @@ using namespace NWB::UiMultilineTests;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SeedHistoryAndPreedit(
-    EditModel& model,
-    const AStringView text,
-    const usize anchor,
-    const usize caret
-){
+[[nodiscard]] static bool SeedHistoryAndPreedit(EditModel& model, const AStringView text, const usize anchor, const usize caret){
     if(text.empty())
         return false;
     return
@@ -229,10 +224,8 @@ TEST_F(UiEditSurroundingSelectionTests, CandidateSeamMergesRejectEitherEndpointW
         usize lostBoundary;
     };
     constexpr Case s_Cases[] = {
-        { "\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7z", 5u, 9u, 1u, 0u,
-            "\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7z", 4u },
-        { "z\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7q", 1u, 5u, 0u, 1u,
-            "z\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7q", 5u },
+        { "\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7z", 5u, 9u, 1u, 0u, "\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7z", 4u },
+        { "z\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7q", 1u, 5u, 0u, 1u, "z\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7q", 5u },
     };
     for(const Case& value : s_Cases){
         EditModel model(m_arena);

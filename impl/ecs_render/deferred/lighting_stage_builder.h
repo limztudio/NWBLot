@@ -62,17 +62,11 @@ struct DeferredLightingStageResult{
 
 class DeferredLightingStageBuilder final : NoCopy{
 public:
-    DeferredLightingStageBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererDeferredSystem& deferredSystem
-    );
+    DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem);
 
 
 public:
-    [[nodiscard]] Expected<DeferredLightingStageResult> declare(
-        const DeferredLightingStageInputs& inputs,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    );
+    [[nodiscard]] Expected<DeferredLightingStageResult> declare(const DeferredLightingStageInputs& inputs, Core::GpuTimingSubmissionTicket& timingTicket);
 
 
 private:

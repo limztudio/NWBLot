@@ -67,9 +67,7 @@ private:
     bool m_displayChanged = false;
 };
 
-using SharedUiSearchComboSmokeScene = RefCountPtr<
-    RefCounter<UiSearchComboSmokeScene>, ArenaRefDeleter<RefCounter<UiSearchComboSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiSearchComboSmokeScene = RefCountPtr< RefCounter<UiSearchComboSmokeScene>, ArenaRefDeleter<RefCounter<UiSearchComboSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerSearchComboSmokeEnabled();
 [[nodiscard]] bool IsUiLayerSearchComboSkinSmokeEnabled();

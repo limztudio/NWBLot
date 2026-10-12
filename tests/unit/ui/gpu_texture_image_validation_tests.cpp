@@ -35,11 +35,7 @@ namespace __hidden_ui_gpu_texture_image_validation_tests{
 
 
 [[nodiscard]] static bool ValidImageBindings(const DrawSnapshot& snapshot){
-    return
-        GpuRendererState::ValidateGlyphPages(snapshot)
-        && GpuRendererState::ValidateSdfPages(snapshot)
-        && GpuRendererState::ValidateTextureImages(snapshot)
-    ;
+    return GpuRendererState::ValidateGlyphPages(snapshot) && GpuRendererState::ValidateSdfPages(snapshot) && GpuRendererState::ValidateTextureImages(snapshot);
 }
 
 

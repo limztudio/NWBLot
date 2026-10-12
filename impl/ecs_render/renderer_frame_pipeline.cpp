@@ -25,10 +25,7 @@ namespace __hidden_renderer_frame_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = {
-    RendererGpuTimingScope::s_AvboitDepthWarp.identity,
-    RendererGpuTimingScope::s_AvboitIntegration.identity,
-};
+static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = { RendererGpuTimingScope::s_AvboitDepthWarp.identity, RendererGpuTimingScope::s_AvboitIntegration.identity, };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,13 +37,7 @@ static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererFramePipeline::RendererFramePipeline(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    ShaderPathResolveCallback shaderPathResolver
-)
+RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver)
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
@@ -69,54 +60,13 @@ RendererFramePipeline::RendererFramePipeline(
     , m_surfelIrradianceReturnState(arena)
     , m_shaderSystem(graphics, assetManager, m_shaderPathResolver)
     , m_meshSystem(arena, world, graphics, assetManager, m_meshState)
-    , m_csgSystem(
-        arena,
-        world,
-        graphics,
-        m_csgShapeRegistry,
-        m_csgState,
-        m_shaderSystem,
-        m_meshSystem
-    )
-    , m_materialSystem(
-        arena,
-        world,
-        graphics,
-        assetManager,
-        m_csgShapeRegistry,
-        m_materialState,
-        m_shaderSystem,
-        m_meshSystem,
-        m_csgSystem,
-        m_opticalVolumes
-    )
+    , m_csgSystem(arena, world, graphics, m_csgShapeRegistry, m_csgState, m_shaderSystem, m_meshSystem)
+    , m_materialSystem(arena, world, graphics, assetManager, m_csgShapeRegistry, m_materialState, m_shaderSystem, m_meshSystem, m_csgSystem, m_opticalVolumes)
     , m_deferredSystem(arena, world, graphics, m_deferredState, m_shaderSystem)
     , m_reflectionSystem(arena, graphics, m_shaderSystem)
-    , m_avboitSystem(
-        arena,
-        graphics,
-        m_avboitState,
-        m_shaderSystem,
-        m_materialSystem,
-        m_csgSystem
-    )
-    , m_raytracingSystem(
-        arena,
-        world,
-        graphics,
-        m_shaderSystem,
-        m_meshSystem,
-        m_materialSystem,
-        m_rayTracingState,
-        m_opticalVolumes,
-        m_csgShapeRegistry
-    )
-    , m_deferredTaskTimingFeedback(
-        arena,
-        graphics,
-        NotNull<const Name*>(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes),
-        LengthOf(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes)
-    )
+    , m_avboitSystem(arena, graphics, m_avboitState, m_shaderSystem, m_materialSystem, m_csgSystem)
+    , m_raytracingSystem(arena, world, graphics, m_shaderSystem, m_meshSystem, m_materialSystem, m_rayTracingState, m_opticalVolumes, m_csgShapeRegistry)
+    , m_deferredTaskTimingFeedback(arena, graphics, NotNull<const Name*>(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes), LengthOf(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes))
     , m_deferredLightingTaskGraph(arena)
     , m_deferredLightingTaskGraphAnalysis(arena)
     , m_deferredLightingTaskGraphQueueAssignments(arena)
@@ -160,12 +110,7 @@ bool RendererFramePipeline::setTaskGraphTimingFeedbackPolicy(const Core::GpuTask
 Core::GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRuntimeStatistics()const noexcept{
     const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
 
-    return Core::CollectGpuTaskGraphRuntimeStatistics(
-        m_deferredLightingCompiledGraph,
-        deferredCompiledPlan,
-        m_deferredLightingRecordedGraph,
-        m_deferredLightingSubmissionTransaction
-    );
+    return Core::CollectGpuTaskGraphRuntimeStatistics(m_deferredLightingCompiledGraph, deferredCompiledPlan, m_deferredLightingRecordedGraph, m_deferredLightingSubmissionTransaction);
 }
 
 
@@ -182,28 +127,16 @@ void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingR
     case LaggedLightingReport::Unreported:
         break;
     case LaggedLightingReport::NoDedicatedAsyncCompute:
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation {})"),
-            targetGeneration
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation {})"), targetGeneration);
         break;
     case LaggedLightingReport::BootstrapAccepted:
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting bootstrap accepted (target generation {})"),
-            targetGeneration
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: frame-lagged async lighting bootstrap accepted (target generation {})"), targetGeneration);
         break;
     case LaggedLightingReport::ActiveHistoryAccepted:
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting active history accepted (target generation {})"),
-            targetGeneration
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: frame-lagged async lighting active history accepted (target generation {})"), targetGeneration);
         break;
     case LaggedLightingReport::CurrentFrameAccepted:
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting current-frame path accepted (target generation {})"),
-            targetGeneration
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: frame-lagged async lighting current-frame path accepted (target generation {})"), targetGeneration);
         break;
     }
 }

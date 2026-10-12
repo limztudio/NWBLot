@@ -60,10 +60,7 @@ TEST(GpuCommandIrUploadCapture, OwnsLargeGraphBlobAfterCallerMutationAndGraphRes
         const auto stored = declarations.uploadBlobData(blob);
         ASSERT_TRUE(stored);
         ASSERT_EQ(stored->size(), s_ByteCount);
-        ASSERT_TRUE(capture.captureUploadBuffer(
-            task, packet, s_CommandIrQueue, blob, destination, 64u,
-            *stored, Graphics::ResourceStates::CopyDest
-        ));
+        ASSERT_TRUE(capture.captureUploadBuffer(task, packet, s_CommandIrQueue, blob, destination, 64u, *stored, Graphics::ResourceStates::CopyDest));
     }
 
     graph.reset();
@@ -96,17 +93,11 @@ TEST(GpuCommandIrUploadCapture, CheckpointRollbackKeepsExactCommandAndBlobPrefix
     const Graphics::GpuUploadBlobId firstBlob{ .generation = s_CommandIrTask.generation, .index = 0u };
     const Graphics::GpuUploadBlobId secondBlob{ .generation = s_CommandIrTask.generation, .index = 1u };
     ASSERT_TRUE(capture.beginRecordingAttempt(31u));
-    ASSERT_TRUE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, firstBlob, s_CommandIrDestination, 0u,
-        BinaryByteView{ s_FirstBytes, sizeof(s_FirstBytes) }, Graphics::ResourceStates::CopyDest
-    ));
+    ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, firstBlob, s_CommandIrDestination, 0u, BinaryByteView{ s_FirstBytes, sizeof(s_FirstBytes) }, Graphics::ResourceStates::CopyDest));
     const Graphics::GpuCommandIrCaptureCheckpoint checkpoint = capture.checkpoint();
     const auto prefix = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(prefix);
-    ASSERT_TRUE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, secondBlob, s_CommandIrDestination, 16u,
-        BinaryByteView{ s_SecondBytes, sizeof(s_SecondBytes) }, Graphics::ResourceStates::ShaderResource
-    ));
+    ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, secondBlob, s_CommandIrDestination, 16u, BinaryByteView{ s_SecondBytes, sizeof(s_SecondBytes) }, Graphics::ResourceStates::ShaderResource));
     const auto full = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(full);
     ASSERT_EQ(capture.recordCount(), 2u);
@@ -118,10 +109,7 @@ TEST(GpuCommandIrUploadCapture, CheckpointRollbackKeepsExactCommandAndBlobPrefix
     EXPECT_EQ(NWB_MEMCMP(rolledBack->bytes().data(), prefix->bytes().data(), prefix->bytes().size()), 0);
     ASSERT_TRUE(Graphics::ValidateGpuCommandIrStream(rolledBack->bytes()).valid());
 
-    ASSERT_TRUE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, secondBlob, s_CommandIrDestination, 16u,
-        BinaryByteView{ s_SecondBytes, sizeof(s_SecondBytes) }, Graphics::ResourceStates::ShaderResource
-    ));
+    ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, secondBlob, s_CommandIrDestination, 16u, BinaryByteView{ s_SecondBytes, sizeof(s_SecondBytes) }, Graphics::ResourceStates::ShaderResource));
     const auto refilled = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(refilled);
     ASSERT_EQ(refilled->bytes().size(), full->bytes().size());
@@ -137,22 +125,13 @@ TEST(GpuCommandIrUploadCapture, RejectedInputsAndForeignOrStaleCheckpointsPreser
     const Graphics::GpuUploadBlobId blob{ .generation = s_CommandIrTask.generation, .index = 0u };
     const Graphics::GpuUploadBlobId staleBlob{ .generation = s_CommandIrTask.generation + 1u, .index = 0u };
     ASSERT_TRUE(capture.beginRecordingAttempt(31u));
-    ASSERT_TRUE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, blob, s_CommandIrDestination, 0u,
-        BinaryByteView{ s_Bytes, sizeof(s_Bytes) }, Graphics::ResourceStates::CopyDest
-    ));
+    ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, blob, s_CommandIrDestination, 0u, BinaryByteView{ s_Bytes, sizeof(s_Bytes) }, Graphics::ResourceStates::CopyDest));
     const Graphics::GpuCommandIrCaptureCheckpoint checkpoint = capture.checkpoint();
     const auto before = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(before);
     EXPECT_FALSE(capture.beginRecordingAttempt(32u));
-    EXPECT_FALSE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, staleBlob, s_CommandIrDestination, 16u,
-        BinaryByteView{ s_Bytes, sizeof(s_Bytes) }, Graphics::ResourceStates::CopyDest
-    ));
-    EXPECT_FALSE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, blob, s_CommandIrDestination, 16u,
-        BinaryByteView{ nullptr, sizeof(s_Bytes) }, Graphics::ResourceStates::CopyDest
-    ));
+    EXPECT_FALSE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, staleBlob, s_CommandIrDestination, 16u, BinaryByteView{ s_Bytes, sizeof(s_Bytes) }, Graphics::ResourceStates::CopyDest));
+    EXPECT_FALSE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, blob, s_CommandIrDestination, 16u, BinaryByteView{ nullptr, sizeof(s_Bytes) }, Graphics::ResourceStates::CopyDest));
     EXPECT_FALSE(foreign.rollback(checkpoint));
     const auto after = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(after);

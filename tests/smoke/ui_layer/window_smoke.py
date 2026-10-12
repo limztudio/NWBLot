@@ -12,12 +12,8 @@ import time
 
 from interaction_smoke import NativeInput
 from window_probe import ACTION, center, observe_window, snapshot_from_logs
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -30,8 +26,7 @@ def parse_args(argv):
     parser.add_argument("--skin", choices=("default", "alternate"), default="default")
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--application-arg", action="append", default=[])
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
-        help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if not math.isfinite(args.timeout) or args.timeout <= 0.0:
         parser.error("--timeout must be finite and positive")
@@ -112,10 +107,8 @@ class WindowRun:
         raise SmokeFailure(f"window displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "input_path": "Win32 posted button/motion/leave/capture-change/activation messages"
-                if self.native.windows else "X11 XSendEvent and XSetInputFocus",
-            "runtime_limit": "No physical pointer grab or native Wayland input qualification",
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted button/motion/leave/capture-change/activation messages"
+                if self.native.windows else "X11 XSendEvent and XSetInputFocus", "runtime_limit": "No physical pointer grab or native Wayland input qualification",
             "omitted_platform_stages": [] if self.native.windows else ["capture_change_cancel", "capture_change_recovery", "pointer_leave_drag"]}
         (self.args.output_directory / "window.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 

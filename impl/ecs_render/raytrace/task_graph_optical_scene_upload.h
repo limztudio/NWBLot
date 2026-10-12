@@ -29,11 +29,7 @@ struct RayTracingOpticalSceneGraphBuffer{
 
 // Declare once in the serial renderer frame graph; terminal presentation/recovery joins async readers before replacement.
 // Returned reads retain Common at packet close and carry the latest accepted writer's availability completion.
-[[nodiscard]] RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
-    Core::GpuTaskGraph& graph,
-    const RayTracingOpticalSceneSnapshot& resources,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

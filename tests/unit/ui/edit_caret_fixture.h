@@ -114,9 +114,7 @@ public:
 
 
 protected:
-    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text,
-        const TextDirection::Enum direction = TextDirection::LeftToRight
-    ){
+    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
         return m_builder.layout({ text, 16.0f, direction });
     }
 
@@ -132,9 +130,7 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool adopt(const StringView text, const usize committedBytes,
-        const EditTextMode::Enum mode = EditTextMode::Multiline
-    ){
+    [[nodiscard]] bool adopt(const StringView text, const usize committedBytes, const EditTextMode::Enum mode = EditTextMode::Multiline){
         auto candidate = layout(text);
         return candidate && m_geometry.adoptLayout(Move(*candidate), text, m_mapping, committedBytes, mode);
     }

@@ -69,21 +69,8 @@ struct RayTracingOpticalSceneGather{
     bool unspecifiedBoundariesOnly = true;
 
     explicit RayTracingOpticalSceneGather(Core::Alloc::ScratchArena& arena, usize capacity);
-    void append(
-        Core::ECS::EntityID entity,
-        const RendererComponent& renderer,
-        bool transparent,
-        const Float3U& boundsMin,
-        const Float3U& boundsMax,
-        bool boundsValid
-    );
-    void appendRuntime(
-        Core::ECS::EntityID entity,
-        const RendererComponent& renderer,
-        const Core::BufferHandle& boundsBuffer,
-        Core::GpuDescriptorHandle boundsDescriptor,
-        const Float34U& objectToWorld
-    );
+    void append(Core::ECS::EntityID entity, const RendererComponent& renderer, bool transparent, const Float3U& boundsMin, const Float3U& boundsMax, bool boundsValid);
+    void appendRuntime(Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, Core::GpuDescriptorHandle boundsDescriptor, const Float34U& objectToWorld);
     void markIncomplete()noexcept{
         header.flags &= ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;
         boundsCompleteExceptRuntime = false;
@@ -98,11 +85,7 @@ struct OpticalWorldBounds{
 
 
 // Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.
-[[nodiscard]] Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(
-    const Float34U& objectToWorld,
-    const Float3U& localMin,
-    const Float3U& localMax
-)noexcept;
+[[nodiscard]] Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToWorld, const Float3U& localMin, const Float3U& localMax)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

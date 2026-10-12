@@ -9,8 +9,7 @@ from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiEditSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiEditSmoke: state sequence=(\d+) primary=(\d+),(\d+),(\d+),(\d+),([01])"
-    r" secondary=(\d+),(\d+),(\d+),(\d+),([01]) readonly=([01]) visible=([01])")
+STATE = re.compile(r"UiEditSmoke: state sequence=(\d+) primary=(\d+),(\d+),(\d+),(\d+),([01])" r" secondary=(\d+),(\d+),(\d+),(\d+),([01]) readonly=([01]) visible=([01])")
 FIELD = re.compile(r"field=(primary|secondary)")
 RECTANGLE = re.compile(rf"(bounds|content|caret|selection)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 SCROLL = re.compile(rf"scroll=({NUMBER})")
@@ -27,8 +26,7 @@ def text_hash(value):
 
 def model(value, anchor=None, caret=None, focused=False):
     length = len(value.encode("utf-8"))
-    return (length, text_hash(value), length if anchor is None else anchor,
-        length if caret is None else caret, int(focused))
+    return (length, text_hash(value), length if anchor is None else anchor, length if caret is None else caret, int(focused))
 
 
 def snapshot_from_logs(text):
@@ -53,12 +51,10 @@ def snapshot_from_logs(text):
     if any(len(geometry) != 5 for geometry in fields.values()):
         return None
     display = tuple(map(float, displays[-1].groups()))
-    geometry_values = [value for geometry in fields.values() for name, rectangle in geometry.items()
-        for value in ((rectangle,) if name == "scroll" else rectangle)]
+    geometry_values = [value for geometry in fields.values() for name, rectangle in geometry.items() for value in ((rectangle,) if name == "scroll" else rectangle)]
     if not all(math.isfinite(value) for value in (*display, *geometry_values)) or not all(value > 0.0 for value in display):
         raise SmokeFailure("edit fixture reported invalid geometry or display metrics")
-    return {"sequence": sequence, "primary": tuple(map(int, state.groups()[1:6])),
-        "secondary": tuple(map(int, state.groups()[6:11])), "readonly": bool(int(state[12])),
+    return {"sequence": sequence, "primary": tuple(map(int, state.groups()[1:6])), "secondary": tuple(map(int, state.groups()[6:11])), "readonly": bool(int(state[12])),
         "visible": bool(int(state[13])), "logical_extent": display[:2], "scale": display[2:], "fields": fields}
 
 
@@ -92,19 +88,16 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
         pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
         observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
         error = max(abs(actual - reference) for actual, reference in zip(observed, expected))
-        probes.append({"name": name, "position": [x, y], "expected": list(expected),
-            "observed": list(observed), "error": error, "passed": error <= tolerance})
+        probes.append({"name": name, "position": [x, y], "expected": list(expected), "observed": list(observed), "error": error, "passed": error <= tolerance})
 
     def caret_probe(field, caret, content):
         column, row, first_row, end_row = caret_probe_position(caret, content, scale_x, scale_y, width, height)
         expected = CARET_RGB
         pixels = [rows[py][column] for py in range(first_row, end_row)]
         error = min(max(abs(actual - reference) for actual, reference in zip(pixel, expected)) for pixel in pixels)
-        probes.append({"name": f"{field}_caret", "position": [column, row], "expected": list(expected),
-            "observed": [list(pixel) for pixel in pixels], "error": error, "passed": error <= TOLERANCE})
+        probes.append({"name": f"{field}_caret", "position": [column, row], "expected": list(expected), "observed": [list(pixel) for pixel in pixels], "error": error, "passed": error <= TOLERANCE})
 
-    values = (*snapshot["primary"], *snapshot["secondary"], int(snapshot["readonly"]),
-        int(snapshot["visible"]), snapshot["sequence"])
+    values = (*snapshot["primary"], *snapshot["secondary"], int(snapshot["readonly"]), int(snapshot["visible"]), snapshot["sequence"])
     for index, value in enumerate(values):
         probe(f"model_{index}", (19.0 + index * 20.0, height / scale_y - 14.0), encoded_marker(value))
 
@@ -134,13 +127,10 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
             if sw > 1.0 and sh > 1.0:
                 # Selection is painted behind glyphs; the lower line edge avoids the glyph's ink.
                 linear_background = linear_channels(background)
-                color = tuple(foreground * 0.75 + backdrop * 0.25
-                    for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
+                color = tuple(foreground * 0.75 + backdrop * 0.25 for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
                 probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0), linear_rgb_bytes(color))
 
     model_matches = snapshot["primary"] == primary and snapshot["secondary"] == secondary
     model_matches = model_matches and snapshot["readonly"] == readonly and snapshot["visible"] == visible
-    return {"extent": [width, height], "snapshot": snapshot, "primary": list(primary), "secondary": list(secondary),
-        "readonly": readonly, "visible": visible, "probes": probes,
-        "passed": model_matches and geometry_matches and (extent is None or (width, height) == extent)
-            and all(item["passed"] for item in probes)}
+    return {"extent": [width, height], "snapshot": snapshot, "primary": list(primary), "secondary": list(secondary), "readonly": readonly, "visible": visible, "probes": probes,
+        "passed": model_matches and geometry_matches and (extent is None or (width, height) == extent) and all(item["passed"] for item in probes)}

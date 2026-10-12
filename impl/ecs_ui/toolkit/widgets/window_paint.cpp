@@ -49,25 +49,17 @@ bool Builder::paintWindowTitle(){
         const Rect collapse = WindowLayout::Collapse(state, metrics);
         if(painted && (input.hover() == m_scope->m_window.collapseState.id || input.capture() == m_scope->m_window.collapseState.id)){
             const bool pressed = input.capture() == m_scope->m_window.collapseState.id && input.primaryDown();
-            const UiSkinRegion* hover = region(
-                pressed ? style.buttonPressed : style.buttonHover,
-                style.windowTitle
-            );
+            const UiSkinRegion* hover = region(pressed ? style.buttonPressed : style.buttonHover, style.windowTitle);
             painted = hover && m_paint.drawRegion(hover->name, collapse);
         }
         if(painted)
-            painted = m_paint.drawRegion(
-                style.windowCollapse, collapse,
-                state.collapsed ? style.disabledText : style.text
-            );
+            painted = m_paint.drawRegion(style.windowCollapse, collapse, state.collapsed ? style.disabledText : style.text);
         if(painted && focused && m_skin->findRegion(style.focus))
             painted = m_paint.drawRegion(style.focus, collapse);
     }
     const Point titleSize = m_scope->m_window.title.measure();
-    const SIMDVectorSingle titleOrigin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y),
-        VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top));
-    Point origin{ VectorGetX(titleOrigin), VectorGetY(titleOrigin)
-        + Max(0.0f, (metrics.titleHeight - metrics.titlePadding.top - metrics.titlePadding.bottom - titleSize.y) * 0.5f) };
+    const SIMDVectorSingle titleOrigin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y), VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top));
+    Point origin{ VectorGetX(titleOrigin), VectorGetY(titleOrigin) + Max(0.0f, (metrics.titleHeight - metrics.titlePadding.top - metrics.titlePadding.bottom - titleSize.y) * 0.5f) };
     if(m_scope->m_window.options.collapsible)
         origin.x += metrics.collapseExtent + style.gap;
     if(painted)
@@ -106,15 +98,12 @@ bool Builder::paintWindowResize(){
     else{
         // Skins may supply a resize sprite. The default atlas uses its white sprite for a logical corner grip.
         const f32 thickness = Min(2.0f, corner.width * 0.125f);
-        const SIMDVectorSingle scaledSize = VectorMultiply(VectorSet(corner.width, corner.height, corner.width, corner.height),
-            VectorSet(0.25f, 0.25f, 0.75f, 0.75f));
-        const SIMDVectorSingle ends = VectorMultiplyAddExpression(VectorSet(corner.width, corner.height, corner.width, corner.height),
-            VectorSet(0.25f, 1.0f, 1.0f, 0.25f), VectorSet(corner.x, corner.y, corner.x, corner.y));
+        const SIMDVectorSingle scaledSize = VectorMultiply(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(0.25f, 0.25f, 0.75f, 0.75f));
+        const SIMDVectorSingle ends = VectorMultiplyAddExpression(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(0.25f, 1.0f, 1.0f, 0.25f), VectorSet(corner.x, corner.y, corner.x, corner.y));
         const SIMDVectorSingle origins = VectorSubtract(ends, VectorSet(0.0f, thickness, thickness, 0.0f));
         const Rect horizontal{ VectorGetX(origins), VectorGetY(origins), VectorGetZ(scaledSize), thickness };
         const Rect vertical{ VectorGetZ(origins), VectorGetW(origins), thickness, VectorGetW(scaledSize) };
-        painted = m_paint.drawRegion(style.white, horizontal, style.text)
-            && m_paint.drawRegion(style.white, vertical, style.text);
+        painted = m_paint.drawRegion(style.white, horizontal, style.text) && m_paint.drawRegion(style.white, vertical, style.text);
     }
     const bool popped = m_paint.popClip();
     HitTarget target;

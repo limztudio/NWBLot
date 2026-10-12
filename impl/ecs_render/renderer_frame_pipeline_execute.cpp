@@ -59,13 +59,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         Core::Alloc::ScratchArena queueAssignmentTelemetryScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
         const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
-        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(
-            declarations,
-            m_deferredLightingTaskGraphQueueAssignments,
-            compiledPlan,
-            m_deferredLightingSubmissionTransaction,
-            queueAssignmentTelemetryScratchArena
-        ))
+        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(declarations, m_deferredLightingTaskGraphQueueAssignments, compiledPlan, m_deferredLightingSubmissionTransaction, queueAssignmentTelemetryScratchArena))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred queue-assignment history refresh failed before graph reset"));
     }
 
@@ -76,12 +70,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
 
     const Core::AcquiredPresentationFrame presentationFrame = m_graphics.acquiredPresentationFrame();
     const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
-    if(
-        !presentationFrame.valid()
-        || presentationFrame.framebuffer.get() != framebuffer
-        || presentationFramebufferDesc.colorAttachments.size() != 1u
-        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
-    ){
+    if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: render target did not match the acquired presentation frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return;
@@ -111,22 +100,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame render recovery failed; rendering is suspended until resources are recreated"));
         return;
     }
-    Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease =
-        device.getDescriptorHeap().acquirePendingRecordingLease()
-    ;
+    Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease = device.getDescriptorHeap().acquirePendingRecordingLease();
     if(!descriptorHeapPendingRecordingLease.valid()){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: descriptor heap pending-recording lease was unavailable; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return;
     }
     // Use the device's primary physical Graphics queue for scheduling.
-    const Core::GpuPhysicalQueueId primaryGraphicsQueue =
-        device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
+    const Core::GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max
-        && computeFamilyIndex != graphicsFamilyIndex
-    ;
+    const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max && computeFamilyIndex != graphicsFamilyIndex;
     const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && dedicatedAsyncCompute;
     const bool laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
     if(laggedAsyncLightingRequested && !laggedLightingHistoryResourcesReady){
@@ -136,46 +120,23 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     }
 
     const u64 laggedLightingHistoryTargetGeneration = deferredTargets.laggedLightingHistory.generation;
-    const Core::QueueSubmissionToken laggedLightingHistorySubmissionToken =
-        m_laggedLightingHistorySubmissionToken
-    ;
-    const auto laggedLightingHistoryTokenPending = [&device, laggedLightingHistoryTargetGeneration](
-        const Core::QueueSubmissionToken& token,
-        const u64 tokenTargetGeneration
-    ){
+    const Core::QueueSubmissionToken laggedLightingHistorySubmissionToken = m_laggedLightingHistorySubmissionToken;
+    const auto laggedLightingHistoryTokenPending = [&device, laggedLightingHistoryTargetGeneration](const Core::QueueSubmissionToken& token, const u64 tokenTargetGeneration){
         return token.valid()
         && tokenTargetGeneration == laggedLightingHistoryTargetGeneration
         && token.hasPhysicalQueueIdentity()
-        && device.matchesPhysicalQueueIdentity(
-            token.queue,
-            token.physicalQueueIndex,
-            token.deviceGeneration
-        )
-        && device.queueGetCompletedInstance(
-            Core::GpuPhysicalQueueId{
-                .index = token.physicalQueueIndex,
-                .deviceGeneration = token.deviceGeneration,
-            }
-        ) < token.value
+        && device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)
+        && device.queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration, }) < token.value
     ;
     };
-    const bool laggedLightingHistorySubmissionPending = laggedLightingHistoryTokenPending(
-        laggedLightingHistorySubmissionToken,
-        m_laggedLightingHistoryGeneration
-    );
+    const bool laggedLightingHistorySubmissionPending = laggedLightingHistoryTokenPending(laggedLightingHistorySubmissionToken, m_laggedLightingHistoryGeneration);
 
     // Keep only an incomplete accepted tail as the writer drain.
     if(laggedLightingHistorySubmissionPending){
         m_laggedLightingHistoryWriterDrainToken = laggedLightingHistorySubmissionToken;
         m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration;
     }
-    else if(
-        m_laggedLightingHistoryWriterDrainToken.valid()
-        && !laggedLightingHistoryTokenPending(
-            m_laggedLightingHistoryWriterDrainToken,
-            m_laggedLightingHistoryWriterDrainGeneration
-        )
-    )
+    else if(m_laggedLightingHistoryWriterDrainToken.valid() && !laggedLightingHistoryTokenPending(m_laggedLightingHistoryWriterDrainToken, m_laggedLightingHistoryWriterDrainGeneration))
         invalidateLaggedLightingHistoryWriterDrain();
 
     if(laggedAsyncLightingRequested){
@@ -189,22 +150,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         resetLaggedLightingHistoryReadTracking();
     }
     // Snapshot the prior tail before declaration resets the token.
-    const Core::QueueSubmissionToken priorLaggedLightingHistoryReadReadyToken =
-        m_laggedLightingHistorySubmissionToken
-    ;
-    const Core::QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken =
-        m_laggedLightingHistoryWriterDrainToken
-    ;
+    const Core::QueueSubmissionToken priorLaggedLightingHistoryReadReadyToken = m_laggedLightingHistorySubmissionToken;
+    const Core::QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken = m_laggedLightingHistoryWriterDrainToken;
     const bool laggedLightingHistoryWriterWaitPending = priorLaggedLightingHistoryWriterDrainToken.valid();
-    const bool hardwareShadowSupported =
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
-    ;
-    const bool laggedAsyncLightingSchedule =
-        laggedAsyncLightingRequested
-        && laggedLightingHistoryResourcesReady
-        && priorLaggedLightingHistoryReadReadyToken.valid()
-    ;
+    const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
+    const bool laggedAsyncLightingSchedule = laggedAsyncLightingRequested && laggedLightingHistoryResourcesReady && priorLaggedLightingHistoryReadReadyToken.valid();
     // The history tail is optional; its failure must not break the frame.
     const bool requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
     m_shadowPreparationOutcome.ready = false;
@@ -223,18 +173,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const RayTracingFrameCpuStateSnapshot rayTracingCpuState = m_rayTracingState.captureFrameCpuState();
     const bool avboitTargetsNeedClear = m_avboitSystem.captureTargetClearState();
     const bool deferredBindlessSlotsUploaded = deferredTargets.bindless.slotsUploaded;
-    const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources =
-        m_raytracingSystem.snapshotShadowPreparationResources()
-    ;
+    const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources = m_raytracingSystem.snapshotShadowPreparationResources();
     const RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources = m_raytracingSystem.snapshotDeferredGraphResources();
-    const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources =
-        m_raytracingSystem.snapshotSurfelPersistentResources()
-    ;
-    const FrameExecuteCpuRestore::Snapshot executeCpuRestoreSnapshot{
-        .rayTracing = rayTracingCpuState,
-        .avboitTargetsNeedClear = avboitTargetsNeedClear,
-        .deferredBindlessSlotsUploaded = deferredBindlessSlotsUploaded,
-    };
+    const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources = m_raytracingSystem.snapshotSurfelPersistentResources();
+    const FrameExecuteCpuRestore::Snapshot executeCpuRestoreSnapshot{ .rayTracing = rayTracingCpuState, .avboitTargetsNeedClear = avboitTargetsNeedClear, .deferredBindlessSlotsUploaded = deferredBindlessSlotsUploaded, };
     const auto restorePrefixCpuState = [&](){
         FrameExecuteCpuRestore::RestorePrefixCpuState(m_meshSystem, m_deferredSystem);
     };
@@ -268,9 +210,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalCombineTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalSampleTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket(m_graphics.gpuTiming());
-    constexpr usize graphicsPrefixTimingTicketCount = static_cast<usize>(
-        ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::kCount
-    );
+    constexpr usize graphicsPrefixTimingTicketCount = static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::kCount);
     Core::GpuTimingSubmissionTicket* graphicsPrefixTimingTickets[graphicsPrefixTimingTicketCount] = {
         &graphicsPrefixMeshViewSetupTimingTicket,
         &graphicsPrefixSceneShadingSetupTimingTicket,
@@ -298,18 +238,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     GraphClearTimingRecordState deferredClearTimingState{
         .graphics = &m_graphics,
         .timing = &deferredClearTiming,
-        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(
-            ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::DeferredClear
-        )],
+        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::DeferredClear)],
         .scope = RendererGpuTimingScope::s_DeferredClear,
     };
     Optional<Core::GpuTimingMeasure> opaqueCsgIntervalClearTiming;
     GraphClearTimingRecordState opaqueCsgIntervalClearTimingState{
         .graphics = &m_graphics,
         .timing = &opaqueCsgIntervalClearTiming,
-        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(
-            ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer
-        )],
+        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer)],
         .scope = RendererGpuTimingScope::s_CsgIntervalClear,
     };
     // Keep this measurement alive like CSG intervals.
@@ -341,19 +277,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitAccumulationTimingTicket(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> avboitClearTiming;
-    GraphClearTimingRecordState avboitClearTimingState{
-        .graphics = &m_graphics,
-        .timing = &avboitClearTiming,
-        .timingTicket = &avboitPreTimingTicket,
-        .scope = RendererGpuTimingScope::s_AvboitClear,
-    };
+    GraphClearTimingRecordState avboitClearTimingState{ .graphics = &m_graphics, .timing = &avboitClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = RendererGpuTimingScope::s_AvboitClear, };
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalClearTiming;
-    GraphClearTimingRecordState transparentCsgIntervalClearTimingState{
-        .graphics = &m_graphics,
-        .timing = &transparentCsgIntervalClearTiming,
-        .timingTicket = &avboitPreTimingTicket,
-        .scope = RendererGpuTimingScope::s_CsgIntervalClear,
-    };
+    GraphClearTimingRecordState transparentCsgIntervalClearTimingState{ .graphics = &m_graphics, .timing = &transparentCsgIntervalClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = RendererGpuTimingScope::s_CsgIntervalClear, };
     // Pre opens it; Combine closes it.
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
     // Producer opens it; raster consumer closes it.
@@ -368,9 +294,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // Publish the endpoint only after Present accepts.
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
-    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(
-        deferredTargets.framebuffer->getFramebufferInfo()
-    );
+    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     buildDeferredLightingTaskGraph(
         frameGraphFeatures,
         deferredTargets,
@@ -481,9 +405,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         );
     }
     Core::Alloc::ScratchArena deferredGraphSchedulingScratchArena(RendererArenaScope::s_TaskGraphArena);
-    const bool deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(
-        deferredGraphSchedulingScratchArena
-    );
+    const bool deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(deferredGraphSchedulingScratchArena);
     const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
     const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
@@ -506,15 +428,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuTaskId graphicsPrefixTimingTasks[GraphicsPrefixTimingResolver::s_TimingTaskCount];
     GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(MakeNotNull(this));
     GraphicsPrefixTimingResolutionResult graphicsPrefixTimingResolution;
-    graphicsPrefixTimingResolver.resolve(
-        deferredCompiledPlan,
-        graphicsPrefixTimingTickets,
-        graphicsPrefixOwnedTimingTickets,
-        graphicsPrefixTimingTicketCount,
-        graphicsPrefixTimingTasks,
-        asyncPrefixTimingSpansOnePacket,
-        graphicsPrefixTimingResolution
-    );
+    graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, graphicsPrefixTimingTickets, graphicsPrefixOwnedTimingTickets, graphicsPrefixTimingTicketCount, graphicsPrefixTimingTasks, asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
     const bool graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
     const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
     ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(MakeNotNull(this));
@@ -523,92 +437,41 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityPreparedTasksMerged = shadowVisibilityMerge.preparedTasksMerged;
     const bool shadowVisibilityAllLitClearMerged = shadowVisibilityMerge.allLitClearMerged;
     const bool shadowVisibilityAdaptivePrimitivesMerged = shadowVisibilityMerge.adaptivePrimitivesMerged;
-    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredShadowVisibilityTask);
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue =
-        deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixTask);
+    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = deferredCompiledPlan.queueInfoForTask(m_deferredShadowVisibilityTask);
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixTask);
     OpaqueEmulationMergeValidator opaqueEmulationMergeValidator(MakeNotNull(this));
     OpaqueEmulationMergeValidationResult opaqueEmulationMerge;
-    opaqueEmulationMergeValidator.validate(
-        deferredCompiledPlan,
-        graphicsPrefixTimingTasks,
-        graphicsPrefixTimingTicketCount,
-        graphicsPrefixTimingBindingsValid,
-        hasOpaqueCsgFrameWork,
-        opaqueEmulationMerge
-    );
+    opaqueEmulationMergeValidator.validate(deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixTimingTicketCount, graphicsPrefixTimingBindingsValid, hasOpaqueCsgFrameWork, opaqueEmulationMerge);
     const bool graphicsPrefixPacketsAreGraphics = opaqueEmulationMerge.packetsAreGraphics;
     const bool graphicsPrefixOpaqueComputeEmulationMerged = opaqueEmulationMerge.opaqueComputeEmulationMerged;
     const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = opaqueEmulationMerge.opaqueSharedComputeEmulationMerged;
     const bool graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgReceiverComputeEmulationMerged;
     const bool graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgIntervalSampleComputeEmulationMerged;
     const bool graphicsPrefixCsgIntervalClearBundleMerged = opaqueEmulationMerge.csgIntervalClearBundleMerged;
-    const Core::GpuPhysicalQueueInfo* const frameTimingBeginQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredFrameTimingBeginTask);
-    const Core::GpuSubmissionPacketId frameTimingBeginPacket =
-        deferredCompiledPlan.packetForTask(m_deferredFrameTimingBeginTask);
-    const Core::GpuSubmissionPacketRange frameTimingEnvelope =
-        deferredCompiledPlan.packetTimingEnvelopeRange();
-    const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredShadowPrepareTask);
-    const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredSoftwareCausticsTask);
-    const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue
-        && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
-    ;
-    const bool softwareCausticsRunsOnCompute = !hardwareShadowSupported
-        && softwareCausticsQueue
-        && softwareCausticsQueue->queueClass == Core::CommandQueue::Compute
-    ;
-    const RendererAvboitTaskGraphValidation avboitValidation = m_avboitSystem.validateTaskGraphStage(
-        deferredCompiledPlan,
-        clearAvboitTargets,
-        hasTransparentRenderers
-    );
-    const Core::GpuTaskId causticsTask = hardwareShadowSupported
-        ? m_deferredHardwareCausticsTask
-        : m_deferredSoftwareCausticsTask
-    ;
+    const Core::GpuPhysicalQueueInfo* const frameTimingBeginQueue = deferredCompiledPlan.queueInfoForTask(m_deferredFrameTimingBeginTask);
+    const Core::GpuSubmissionPacketId frameTimingBeginPacket = deferredCompiledPlan.packetForTask(m_deferredFrameTimingBeginTask);
+    const Core::GpuSubmissionPacketRange frameTimingEnvelope = deferredCompiledPlan.packetTimingEnvelopeRange();
+    const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue = deferredCompiledPlan.queueInfoForTask(m_deferredShadowPrepareTask);
+    const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue = deferredCompiledPlan.queueInfoForTask(m_deferredSoftwareCausticsTask);
+    const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
+    const bool softwareCausticsRunsOnCompute = !hardwareShadowSupported && softwareCausticsQueue && softwareCausticsQueue->queueClass == Core::CommandQueue::Compute;
+    const RendererAvboitTaskGraphValidation avboitValidation = m_avboitSystem.validateTaskGraphStage(deferredCompiledPlan, clearAvboitTargets, hasTransparentRenderers);
+    const Core::GpuTaskId causticsTask = hardwareShadowSupported ? m_deferredHardwareCausticsTask : m_deferredSoftwareCausticsTask;
     // History-selector uploads must share Lighting's acceptance boundary.
-    const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket =
-        !m_deferredLaggedLightingHistorySlotsUploadTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredLightingTask,
-            m_deferredLaggedLightingHistorySlotsUploadTask
-        )
-    ;
+    const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket = !m_deferredLaggedLightingHistorySlotsUploadTask.valid() || deferredCompiledPlan.tasksSharePacket(m_deferredLightingTask, m_deferredLaggedLightingHistorySlotsUploadTask);
     // Resolve the terminal endpoint through the compiler, not renderer policy.
-    const Core::GpuCompiledPresentEndpoint* const presentationEndpoint =
-        deferredCompiledPlan.presentEndpoint();
-    const Core::GpuTaskId terminalPresentationTask = presentationEndpoint
-        ? presentationEndpoint->producer
-        : Core::GpuTaskId{}
-    ;
-    const Core::GpuPhysicalQueueInfo* const deferredLightingQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredLightingTask);
-    const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredCompositeTask);
-    const Core::GpuPhysicalQueueInfo* const deferredPresentQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredPresentTask);
-    const Core::GpuPhysicalQueueInfo* const deferredPresentationOverlayQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredPresentationOverlayTask);
-    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue = presentationEndpoint
-        ? deferredCompiledPlan.queueInfo(presentationEndpoint->queue)
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredLaggedLightingHistoryTask);
-    const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredFrameRecoveryTask);
+    const Core::GpuCompiledPresentEndpoint* const presentationEndpoint = deferredCompiledPlan.presentEndpoint();
+    const Core::GpuTaskId terminalPresentationTask = presentationEndpoint ? presentationEndpoint->producer : Core::GpuTaskId{};
+    const Core::GpuPhysicalQueueInfo* const deferredLightingQueue = deferredCompiledPlan.queueInfoForTask(m_deferredLightingTask);
+    const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue = deferredCompiledPlan.queueInfoForTask(m_deferredCompositeTask);
+    const Core::GpuPhysicalQueueInfo* const deferredPresentQueue = deferredCompiledPlan.queueInfoForTask(m_deferredPresentTask);
+    const Core::GpuPhysicalQueueInfo* const deferredPresentationOverlayQueue = deferredCompiledPlan.queueInfoForTask(m_deferredPresentationOverlayTask);
+    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue = presentationEndpoint ? deferredCompiledPlan.queueInfo(presentationEndpoint->queue) : nullptr;
+    const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue = deferredCompiledPlan.queueInfoForTask(m_deferredLaggedLightingHistoryTask);
+    const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue = deferredCompiledPlan.queueInfoForTask(m_deferredFrameRecoveryTask);
     SurfelCausticsMergeValidator surfelCausticsMergeValidator(MakeNotNull(this));
     SurfelCausticsMergeValidationResult surfelCausticsMerge;
-    surfelCausticsMergeValidator.validate(
-        deferredCompiledPlan,
-        causticsTask,
-        terminalPresentationTask,
-        captureLaggedLightingHistory,
-        surfelCausticsMerge
-    );
+    surfelCausticsMergeValidator.validate(deferredCompiledPlan, causticsTask, terminalPresentationTask, captureLaggedLightingHistory, surfelCausticsMerge);
     const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue = surfelCausticsMerge.hardwareCausticsQueue;
     const Core::GpuPhysicalQueueInfo* const surfelGiQueue = surfelCausticsMerge.surfelGiQueue;
     const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue = surfelCausticsMerge.surfelGiPreparationQueue;
@@ -667,11 +530,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !m_graphicsPrefixSceneShadingSetupTask.valid()
         || !m_graphicsPrefixDeferredClearTask.valid()
         || !m_graphicsPrefixGbufferTask.valid()
-        || (hasOpaqueCsgFrameWork && (
-            !m_graphicsPrefixCsgReceiverSpanTask.valid()
-            || !m_graphicsPrefixCsgIntervalCombineTask.valid()
-            || !m_graphicsPrefixCsgIntervalSampleTask.valid()
-        ))
+        || (hasOpaqueCsgFrameWork && (!m_graphicsPrefixCsgReceiverSpanTask.valid() || !m_graphicsPrefixCsgIntervalCombineTask.valid() || !m_graphicsPrefixCsgIntervalSampleTask.valid()))
         || !m_graphicsPrefixTask.valid()
         || !taskIsCompiled(m_graphicsPrefixMeshViewSetupTask)
         || !taskIsCompiled(m_graphicsPrefixSceneShadingSetupTask)
@@ -698,11 +557,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !shadowVisibilityAllLitClearMerged
         || !shadowVisibilityAdaptivePrimitivesMerged
         || !shadowVisibilityQueue
-        || (!hardwareShadowSupported && (
-            !m_deferredSoftwareCausticsTask.valid()
-            || !taskIsCompiled(m_deferredSoftwareCausticsTask)
-            || !softwareCausticsQueue
-        ))
+        || (!hardwareShadowSupported && (!m_deferredSoftwareCausticsTask.valid() || !taskIsCompiled(m_deferredSoftwareCausticsTask) || !softwareCausticsQueue))
         || !m_deferredCausticIrradianceClearTask.valid()
         || !m_deferredCausticPhotonTask.valid()
         || !causticPhotonMergedIntoCausticsPacket
@@ -739,22 +594,19 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             || !surfelGiPreparationQueue
             || !taskIsCompiled(m_deferredSurfelGiSnapshotCopyTask)
             || !surfelGiSnapshotCopyQueue
-            || (static_cast<u8>(surfelGiSnapshotCopyQueue->capabilities)
-                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
+            || (static_cast<u8>(surfelGiSnapshotCopyQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || (m_deferredSurfelGiCounterReadbackTask.valid() && (
             !taskIsCompiled(m_deferredSurfelGiCounterReadbackTask)
             || !surfelGiCounterReadbackQueue
-            || (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
-                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
+            || (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || !surfelCounterReadbackFollowsPresentation
         || (hardwareShadowSupported && (
             !m_deferredHardwareCausticsTask.valid()
             || !taskIsCompiled(m_deferredHardwareCausticsTask)
             || !hardwareCausticsQueue
-            || (static_cast<u8>(hardwareCausticsQueue->capabilities)
-                & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
+            || (static_cast<u8>(hardwareCausticsQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
         ))
         || !avboitValidation.valid()
         || !m_deferredLightingTask.valid()
@@ -763,14 +615,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !m_deferredFrameTimingEndTask.valid()
         || (m_deferredPresentationOverlayRequired != m_deferredPresentationOverlayTask.valid())
         || !m_deferredFrameRecoveryTask.valid()
-        || (m_deferredSurfelGiCounterReadbackCompletion.valid()
-            && !surfelCounterReadbackCompletionToken.valid())
+        || (m_deferredSurfelGiCounterReadbackCompletion.valid() && !surfelCounterReadbackCompletionToken.valid())
         || (captureLaggedLightingHistory && (
             !m_deferredLaggedLightingHistoryTask.valid()
             || !taskIsCompiled(m_deferredLaggedLightingHistoryTask)
             || !deferredLaggedLightingHistoryQueue
-            || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
-                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
+            || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || !laggedLightingHistoryFollowsPresentation
         || (laggedAsyncLightingSchedule && !m_deferredLightingHistoryReadReadyCompletion.valid())
@@ -796,17 +646,13 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !primaryGraphicsQueue.valid()
         || presentationEndpoint->queue != primaryGraphicsQueue
         || deferredPresentQueue->id != primaryGraphicsQueue
-        || (m_deferredPresentationOverlayRequired
-            && deferredPresentationOverlayQueue->id != primaryGraphicsQueue)
+        || (m_deferredPresentationOverlayRequired && deferredPresentationOverlayQueue->id != primaryGraphicsQueue)
         || terminalPresentationQueue->id != primaryGraphicsQueue
         || (laggedAsyncLightingSchedule && !surfelGiSnapshotCopyAndTimingPacketsAreDistinct)
-        || (static_cast<u8>(deferredLightingQueue->capabilities)
-            & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
-        || (static_cast<u8>(deferredCompositeQueue->capabilities)
-            & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
+        || (static_cast<u8>(deferredLightingQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
+        || (static_cast<u8>(deferredCompositeQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
-        || (m_deferredPresentationOverlayRequired
-            && deferredPresentationOverlayQueue->queueClass != Core::CommandQueue::Graphics)
+        || (m_deferredPresentationOverlayRequired && deferredPresentationOverlayQueue->queueClass != Core::CommandQueue::Graphics)
         || terminalPresentationQueue->queueClass != Core::CommandQueue::Graphics
         || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
     ){
@@ -834,9 +680,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             , static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_deferredShadowVisibilityDiagnosticsTask))
             , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityDiagnosticsTask).index
         );
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compiled deferred graph topology was unavailable (declared={} scheduled={})")
-            , m_deferredLightingTaskGraphDeclared, deferredGraphScheduled
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compiled deferred graph topology was unavailable (declared={} scheduled={})"), m_deferredLightingTaskGraphDeclared, deferredGraphScheduled);
         deferredPresentTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
         deferredLightingTimingTicket.discard();
@@ -887,11 +731,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         deferredPresentTimingTicket.discard();
     };
     const auto discardUnacceptedGraphPackets = [&]() -> bool {
-        return m_deferredLightingSubmissionTransaction.discardUnaccepted(
-            m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph,
-            m_deferredLightingRecordedGraph.recordingAttemptGeneration()
-        );
+        return m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredLightingRecordedGraph.recordingAttemptGeneration());
     };
     const auto discardRenderPackets = [&](){
         Core::DiscardGpuTimingMeasure(&asyncPrefixTiming);
@@ -911,12 +751,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred graph cancellation overlapped active native work; requesting device recreation"));
             m_graphics.requestDeviceRecreation();
         }
-        const bool shadowPrepareAccepted = taskIsCompiled(m_deferredShadowPrepareTask)
-            && m_deferredLightingSubmissionTransaction.taskToken(
-                deferredCompiledPlan,
-                m_deferredShadowPrepareTask
-            ).valid()
-        ;
+        const bool shadowPrepareAccepted = taskIsCompiled(m_deferredShadowPrepareTask) && m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredShadowPrepareTask).valid();
         restorePostGbufferPacketCpuState(!shadowPrepareAccepted);
         m_raytracingSystem.discardSoftShadowTemporalHistory();
     };
@@ -928,20 +763,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const auto& acceptedTraceGeometry = m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
     const auto& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
-    shadowPrepareLiveStateBuffers.reserve(AddSize(
-        AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()),
-        AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? 5u : 4u)
-    ));
+    shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? 5u : 4u)));
     const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer){
         if(buffer)
             shadowPrepareLiveStateBuffers.push_back(buffer);
     };
     if(rayTracingShadowResources.sceneTlasBackingBuffer)
         appendShadowPrepareStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
-    bool shadowPrepareStateCandidateRequired = static_cast<bool>(rayTracingShadowResources.sceneTlas)
-        || m_raytracingSystem.preparedMeshSwBvhBuildsReady()
-        || m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted()
-    ;
+    bool shadowPrepareStateCandidateRequired = static_cast<bool>(rayTracingShadowResources.sceneTlas) || m_raytracingSystem.preparedMeshSwBvhBuildsReady() || m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted();
     // Keep accepted trace-geometry state with the handoff, including invisible streams.
     for(const Core::BufferHandle& acceptedBuffer : acceptedTraceGeometry){
         appendShadowPrepareStateBuffer(acceptedBuffer);
@@ -977,11 +806,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             frameTimingTransaction.discard();
             return false;
         }
-        if(
-            !m_deferredLightingTaskGraphScheduled
-            || !m_deferredFrameRecoveryTask.valid()
-            || !deferredCompiledPlan.findTask(m_deferredFrameRecoveryTask).valid()
-        ){
+        if(!m_deferredLightingTaskGraphScheduled || !m_deferredFrameRecoveryTask.valid() || !deferredCompiledPlan.findTask(m_deferredFrameRecoveryTask).valid()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
             m_deferredFrameRecoveryArmed = false;
             m_deferredFrameRecoveryRetiresTiming = false;
@@ -1014,10 +839,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         return true;
     };
     const auto recoverPendingFrameSubmission = [&]() -> bool {
-        return (m_deferredLightingSubmissionTransaction.hasAcceptedPackets() || frameTimingTransaction.needsRetirement())
-            ? executeFrameRecoveryTask()
-            : true
-        ;
+        return (m_deferredLightingSubmissionTransaction.hasAcceptedPackets() || frameTimingTransaction.needsRetirement()) ? executeFrameRecoveryTask() : true;
     };
     const auto recoverPendingFrameThenDiscardUnaccepted = [&]() -> bool {
         const bool recovered = recoverPendingFrameSubmission();
@@ -1042,9 +864,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .stateCandidateRequired = shadowPrepareStateCandidateRequired,
     };
     Core::Alloc::ScratchArena normalExecutionScratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::TextureHandle shadowVisibilityReturnTextures[] = {
-        deferredTargets.shadowVisibility,
-    };
+    const Core::TextureHandle shadowVisibilityReturnTextures[] = { deferredTargets.shadowVisibility, };
     // Freeze the resource generation selected during graph declaration from preflight-owned light-space storage.
     const LightSpaceShadowSnapshot lightSpaceShadowResources = m_raytracingSystem.lightSpaceShadowSnapshot();
     const Core::TextureHandle shadowComputeScratchTextures[] = {
@@ -1097,15 +917,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .runsOnCompute = shadowVisibilityRunsOnCompute,
     };
 
-    const Core::TextureHandle causticsComputeScratchTextures[] = {
-        deferredTargets.causticAccumulator,
-        deferredTargets.causticHistory,
-        deferredTargets.causticResolveHalf,
-        deferredTargets.causticResolveGeometry,
-    };
-    const Core::TextureHandle causticIrradianceTextures[] = {
-        deferredTargets.causticIrradiance,
-    };
+    const Core::TextureHandle causticsComputeScratchTextures[] = { deferredTargets.causticAccumulator, deferredTargets.causticHistory, deferredTargets.causticResolveHalf, deferredTargets.causticResolveGeometry, };
+    const Core::TextureHandle causticIrradianceTextures[] = { deferredTargets.causticIrradiance, };
     Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_causticIrradianceReturnState);
     Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_causticsComputePersistentState);
     FrameExecuteLifecycle::SoftwareCausticsStateLifecycleContext softwareCausticsStateLifecycle{
@@ -1120,15 +933,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .runsOnCompute = softwareCausticsRunsOnCompute,
     };
 
-    const Core::TextureHandle surfelIrradianceReturnTextures[] = {
-        deferredTargets.surfelIrradiance,
-    };
-    const Core::BufferHandle surfelGiCounterBuffers[] = {
-        rayTracingSurfelResources.counterBuffer,
-    };
-    const Core::TextureHandle surfelGiComputeScratchTextures[] = {
-        deferredTargets.surfelIrradianceHalf,
-    };
+    const Core::TextureHandle surfelIrradianceReturnTextures[] = { deferredTargets.surfelIrradiance, };
+    const Core::BufferHandle surfelGiCounterBuffers[] = { rayTracingSurfelResources.counterBuffer, };
+    const Core::TextureHandle surfelGiComputeScratchTextures[] = { deferredTargets.surfelIrradianceHalf, };
     const Core::BufferHandle surfelGiComputeScratchBuffers[] = {
         rayTracingSurfelResources.poolBuffer,
         rayTracingSurfelResources.cellHeadBuffer,
@@ -1156,9 +963,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .computeBufferCount = LengthOf(surfelGiComputeScratchBuffers),
     };
 
-    const Core::TextureHandle hardwareCausticAccumulatorTextures[] = {
-        deferredTargets.causticAccumulator,
-    };
+    const Core::TextureHandle hardwareCausticAccumulatorTextures[] = { deferredTargets.causticAccumulator, };
     Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate(m_hardwareCausticAccumulatorPersistentState);
     FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext hardwareCausticsStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
@@ -1168,15 +973,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .accumulatorTextureCount = LengthOf(hardwareCausticAccumulatorTextures),
     };
 
-    const Core::TextureHandle deferredLightingShadowReturnTextures[] = {
-        deferredTargets.shadowVisibility,
-    };
-    const Core::TextureHandle deferredLightingCausticReturnTextures[] = {
-        deferredTargets.causticIrradiance,
-    };
-    const Core::TextureHandle deferredLightingSurfelReturnTextures[] = {
-        deferredTargets.surfelIrradiance,
-    };
+    const Core::TextureHandle deferredLightingShadowReturnTextures[] = { deferredTargets.shadowVisibility, };
+    const Core::TextureHandle deferredLightingCausticReturnTextures[] = { deferredTargets.causticIrradiance, };
+    const Core::TextureHandle deferredLightingSurfelReturnTextures[] = { deferredTargets.surfelIrradiance, };
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate(m_shadowVisibilityReturnState);
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate(m_causticIrradianceReturnState);
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate(m_surfelIrradianceReturnState);
@@ -1196,110 +995,44 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .usesLaggedHistory = laggedAsyncLightingSchedule,
     };
 
-    Core::GpuTaskGraphTaskRecordedCallback normalRecordedCallbacks[
-        RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity
-    ] = {};
+    Core::GpuTaskGraphTaskRecordedCallback normalRecordedCallbacks[RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity] = {};
     usize normalRecordedCallbackCount = 0u;
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
-        .task = m_deferredShadowPrepareTask,
-        .context = &shadowPrepareStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareShadowPrepareTask,
-    };
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
-        .task = m_deferredShadowVisibilityTask,
-        .context = &shadowVisibilityStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask,
-    };
+    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowPrepareTask, };
+    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask, };
     if(!hardwareShadowSupported){
-        normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
-            .task = m_deferredSoftwareCausticsTask,
-            .context = &softwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask,
-        };
+        normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredSoftwareCausticsTask, .context = &softwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask, };
     }
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
-        .task = m_deferredSurfelGiTask,
-        .context = &surfelGiStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareSurfelGiTask,
-    };
+    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredSurfelGiTask, .context = &surfelGiStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareSurfelGiTask, };
     if(hardwareShadowSupported){
-        normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
-            .task = m_deferredHardwareCausticsTask,
-            .context = &hardwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask,
-        };
+        normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask, };
     }
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
-        .task = m_deferredLightingTask,
-        .context = &deferredLightingStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask,
-    };
+    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask, };
     NWB_ASSERT(normalRecordedCallbackCount <= LengthOf(normalRecordedCallbacks));
 
-    Core::GpuTaskGraphTaskAcceptedCallback normalAcceptedCallbacks[
-        RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity
-    ] = {};
+    Core::GpuTaskGraphTaskAcceptedCallback normalAcceptedCallbacks[RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity] = {};
     usize normalAcceptedCallbackCount = 0u;
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
-        .task = m_deferredShadowPrepareTask,
-        .context = &shadowPrepareStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask,
-    };
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
-        .task = m_deferredShadowVisibilityTask,
-        .context = &shadowVisibilityStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask,
-    };
+    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask, };
+    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask, };
     if(!hardwareShadowSupported){
-        normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
-            .task = m_deferredSoftwareCausticsTask,
-            .context = &softwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask,
-        };
+        normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredSoftwareCausticsTask, .context = &softwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask, };
     }
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
-        .task = m_deferredSurfelGiTask,
-        .context = &surfelGiStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptSurfelGiTask,
-    };
+    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredSurfelGiTask, .context = &surfelGiStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptSurfelGiTask, };
     if(hardwareShadowSupported){
-        normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
-            .task = m_deferredHardwareCausticsTask,
-            .context = &hardwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask,
-        };
+        normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask, };
     }
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
-        .task = m_deferredLightingTask,
-        .context = &deferredLightingStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask,
-    };
+    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask, };
     NWB_ASSERT(normalAcceptedCallbackCount <= LengthOf(normalAcceptedCallbacks));
 
-    Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[
-        RendererFramePipelineExecuteDetail::s_DeferredTimingTicketCapacity
-    ] = {};
+    Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[RendererFramePipelineExecuteDetail::s_DeferredTimingTicketCapacity] = {};
     usize normalTimingTicketCount = 0u;
-    const auto appendNormalTimingTicket = [&](
-        const Core::GpuTaskId task,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    ) -> bool {
+    const auto appendNormalTimingTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket) -> bool {
         if(!task.valid() || normalTimingTicketCount >= LengthOf(normalTimingTickets))
             return false;
-        normalTimingTickets[normalTimingTicketCount++] = Core::GpuTaskGraphTaskTimingTicket{
-            .task = task,
-            .timingTicket = &timingTicket,
-        };
+        normalTimingTickets[normalTimingTicketCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
         return true;
     };
-    bool normalTimingTicketsReady = appendNormalTimingTicket(
-        m_deferredShadowPrepareTask,
-        shadowPrepareTimingTicket
-    );
-    for(usize prefixTaskIndex = 0u;
-        normalTimingTicketsReady && prefixTaskIndex < graphicsPrefixTimingTicketCount;
-        ++prefixTaskIndex
-    ){
+    bool normalTimingTicketsReady = appendNormalTimingTicket(m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
+    for(usize prefixTaskIndex = 0u; normalTimingTicketsReady && prefixTaskIndex < graphicsPrefixTimingTicketCount; ++prefixTaskIndex){
         const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
         bool packetAlreadyTimed = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
@@ -1319,10 +1052,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalTimingTicketsReady = normalTimingTicketsReady
         && normalTimingTicketCount == 1u + graphicsPrefixUniquePacketCount
         && appendNormalTimingTicket(m_deferredShadowVisibilityTask, shadowVisibilityTimingTicket)
-        && appendNormalTimingTicket(
-            hardwareShadowSupported ? m_deferredHardwareCausticsTask : m_deferredSoftwareCausticsTask,
-            hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket
-        )
+        && appendNormalTimingTicket(hardwareShadowSupported ? m_deferredHardwareCausticsTask : m_deferredSoftwareCausticsTask, hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket)
         && appendNormalTimingTicket(m_deferredSurfelGiTask, surfelGiTimingTicket)
     ;
     RendererAvboitTaskGraphTimingTickets avboitTimingTickets{
@@ -1333,13 +1063,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .m_accumulation = avboitAccumulationTimingTicket,
     };
     normalTimingTicketsReady = normalTimingTicketsReady
-        && m_avboitSystem.appendTaskGraphTimingTickets(
-            avboitValidation,
-            avboitTimingTickets,
-            normalTimingTickets,
-            LengthOf(normalTimingTickets),
-            normalTimingTicketCount
-        )
+        && m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, normalTimingTickets, LengthOf(normalTimingTickets), normalTimingTicketCount)
         && appendNormalTimingTicket(m_deferredLightingTask, deferredLightingTimingTicket)
         && appendNormalTimingTicket(m_deferredCompositeTask, deferredCompositeTimingTicket)
         && appendNormalTimingTicket(m_deferredPresentTask, deferredPresentTimingTicket)
@@ -1352,12 +1076,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
 
     // Empty hooks use direct presentation for standalone passes.
     const Core::QueueSubmissionPreSubmitHook framePresentationSignal = m_graphics.claimFramePresentationSignal();
-    const Core::GpuTaskGraphTaskSubmissionHook terminalPresentationSubmissionHooks[] = {
-        Core::GpuTaskGraphTaskSubmissionHook{
-            .task = terminalPresentationTask,
-            .hook = framePresentationSignal,
-        },
-    };
+    const Core::GpuTaskGraphTaskSubmissionHook terminalPresentationSubmissionHooks[] = { Core::GpuTaskGraphTaskSubmissionHook{ .task = terminalPresentationTask, .hook = framePresentationSignal, }, };
     Core::GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = terminalPresentationTask;
     normalExecution.taskRecordedCallbacks = normalRecordedCallbacks;
@@ -1367,14 +1086,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalExecution.taskTimingTicketCount = normalTimingTicketCount;
     normalExecution.taskAcceptedCallbacks = normalAcceptedCallbacks;
     normalExecution.taskAcceptedCallbackCount = normalAcceptedCallbackCount;
-    normalExecution.taskSubmissionHooks = framePresentationSignal.valid()
-        ? terminalPresentationSubmissionHooks
-        : nullptr
-    ;
-    normalExecution.taskSubmissionHookCount = framePresentationSignal.valid()
-        ? LengthOf(terminalPresentationSubmissionHooks)
-        : 0u
-    ;
+    normalExecution.taskSubmissionHooks = framePresentationSignal.valid() ? terminalPresentationSubmissionHooks : nullptr;
+    normalExecution.taskSubmissionHookCount = framePresentationSignal.valid() ? LengthOf(terminalPresentationSubmissionHooks) : 0u;
 
     const Core::GpuTaskScheduler& normalScheduler = m_graphics.gpuTasks();
     const bool normalGraphAccepted = normalScheduler.executeGraph(
@@ -1387,90 +1100,24 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         normalExecutionScratchArena
     );
 
-    const Core::QueueSubmissionToken frameTimingBeginSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_deferredFrameTimingBeginTask
-        )
-    ;
-    const Core::QueueSubmissionToken shadowPrepareSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_deferredShadowPrepareTask
-        )
-    ;
-    const Core::QueueSubmissionToken graphicsPrefixSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_graphicsPrefixTask
-        )
-    ;
-    const Core::QueueSubmissionToken shadowVisibilitySubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_deferredShadowVisibilityTask
-        )
-    ;
-    const Core::GpuTaskId selectedCausticsTask = hardwareShadowSupported
-        ? m_deferredHardwareCausticsTask
-        : m_deferredSoftwareCausticsTask
-    ;
-    const Core::QueueSubmissionToken selectedCausticsSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            selectedCausticsTask
-        )
-    ;
-    const Core::QueueSubmissionToken surfelGiSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_deferredSurfelGiTask
-        )
-    ;
-    const Core::QueueSubmissionToken avboitPreSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            avboitValidation.stage().firstTask
-        )
-    ;
-    const Core::QueueSubmissionToken avboitCompletionSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            avboitValidation.stage().completionTask
-        )
-    ;
-    const Core::QueueSubmissionToken deferredLightingSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_deferredLightingTask
-        )
-    ;
-    const Core::QueueSubmissionToken deferredCompositeSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_deferredCompositeTask
-        )
-    ;
-    const Core::QueueSubmissionToken deferredPresentSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            m_deferredPresentTask
-        )
-    ;
-    const Core::QueueSubmissionToken finalPresentationSubmissionToken =
-        m_deferredLightingSubmissionTransaction.taskToken(
-            deferredCompiledPlan,
-            terminalPresentationTask
-        )
-    ;
+    const Core::QueueSubmissionToken frameTimingBeginSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredFrameTimingBeginTask);
+    const Core::QueueSubmissionToken shadowPrepareSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredShadowPrepareTask);
+    const Core::QueueSubmissionToken graphicsPrefixSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_graphicsPrefixTask);
+    const Core::QueueSubmissionToken shadowVisibilitySubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredShadowVisibilityTask);
+    const Core::GpuTaskId selectedCausticsTask = hardwareShadowSupported ? m_deferredHardwareCausticsTask : m_deferredSoftwareCausticsTask;
+    const Core::QueueSubmissionToken selectedCausticsSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, selectedCausticsTask);
+    const Core::QueueSubmissionToken surfelGiSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredSurfelGiTask);
+    const Core::QueueSubmissionToken avboitPreSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, avboitValidation.stage().firstTask);
+    const Core::QueueSubmissionToken avboitCompletionSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, avboitValidation.stage().completionTask);
+    const Core::QueueSubmissionToken deferredLightingSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredLightingTask);
+    const Core::QueueSubmissionToken deferredCompositeSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredCompositeTask);
+    const Core::QueueSubmissionToken deferredPresentSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredPresentTask);
+    const Core::QueueSubmissionToken finalPresentationSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, terminalPresentationTask);
 
     bool presentationSignalReady = true;
     if(framePresentationSignal.valid()){
         if(finalPresentationSubmissionToken.valid()){
-            presentationSignalReady = m_graphics.confirmFramePresentationSignal(
-                framePresentationSignal,
-                finalPresentationSubmissionToken
-            );
+            presentationSignalReady = m_graphics.confirmFramePresentationSignal(framePresentationSignal, finalPresentationSubmissionToken);
             if(!presentationSignalReady && !m_graphics.cancelFramePresentationSignal(framePresentationSignal))
                 m_graphics.requestDeviceRecreation();
         }
@@ -1481,16 +1128,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    const bool selectedCausticsStateReady = hardwareShadowSupported
-        ? hardwareCausticsStateLifecycle.stateReady
-        : softwareCausticsStateLifecycle.stateReady
-    ;
+    const bool selectedCausticsStateReady = hardwareShadowSupported ? hardwareCausticsStateLifecycle.stateReady : softwareCausticsStateLifecycle.stateReady;
     const bool normalSemanticTokensReady =
         frameTimingBeginSubmissionToken.valid()
-        && frameTimingBeginSubmissionToken.matchesPhysicalQueue(
-            primaryGraphicsQueue.index,
-            primaryGraphicsQueue.deviceGeneration
-        )
+        && frameTimingBeginSubmissionToken.matchesPhysicalQueue(primaryGraphicsQueue.index, primaryGraphicsQueue.deviceGeneration)
         && shadowPrepareSubmissionToken.valid()
         && graphicsPrefixSubmissionToken.valid()
         && shadowVisibilitySubmissionToken.valid()
@@ -1503,13 +1144,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         && deferredPresentSubmissionToken.valid()
         && finalPresentationSubmissionToken.valid()
     ;
-    const bool normalStateReady =
-        shadowPrepareStateLifecycle.stateReady
-        && shadowVisibilityStateLifecycle.stateReady
-        && selectedCausticsStateReady
-        && surfelGiStateLifecycle.stateReady
-        && deferredLightingStateLifecycle.stateReady
-    ;
+    const bool normalStateReady = shadowPrepareStateLifecycle.stateReady && shadowVisibilityStateLifecycle.stateReady && selectedCausticsStateReady && surfelGiStateLifecycle.stateReady && deferredLightingStateLifecycle.stateReady;
     const bool acceptedStateLost =
         (shadowPrepareSubmissionToken.valid() && !shadowPrepareStateLifecycle.stateReady)
         || (shadowVisibilitySubmissionToken.valid() && !shadowVisibilityStateLifecycle.stateReady)
@@ -1526,12 +1161,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             frameTimingTransaction.discard();
         }
     }
-    if(
-        !normalGraphAccepted
-        || !normalSemanticTokensReady
-        || !normalStateReady
-        || !presentationSignalReady
-    ){
+    if(!normalGraphAccepted || !normalSemanticTokensReady || !normalStateReady || !presentationSignalReady){
         const bool hadAcceptedPackets = m_deferredLightingSubmissionTransaction.hasAcceptedPackets();
         bool recovered = true;
         if(!hadAcceptedPackets){
@@ -1576,16 +1206,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     }
 
     if(!dedicatedAsyncCompute && m_frameLaggedAsyncLightingEnabled){
-        reportLaggedLightingTransition(
-            LaggedLightingReport::NoDedicatedAsyncCompute,
-            deferredTargets.laggedLightingHistory.generation
-        );
+        reportLaggedLightingTransition(LaggedLightingReport::NoDedicatedAsyncCompute, deferredTargets.laggedLightingHistory.generation);
     }
     else if(m_laggedLightingCurrentFrameAcceptancePending){
-        reportLaggedLightingTransition(
-            LaggedLightingReport::CurrentFrameAccepted,
-            deferredTargets.laggedLightingHistory.generation
-        );
+        reportLaggedLightingTransition(LaggedLightingReport::CurrentFrameAccepted, deferredTargets.laggedLightingHistory.generation);
         m_laggedLightingCurrentFrameAcceptancePending = false;
     }
 
@@ -1596,44 +1220,22 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             && m_deferredLightingTaskGraphScheduled
             && deferredCompiledPlan.findTask(m_deferredSurfelGiCounterReadbackTask).valid()
             && surfelGiCounterReadbackQueue
-            && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
-                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
+            && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
         ;
         if(!readbackTailAvailable){
-            m_deferredLightingSubmissionTransaction.rejectTask(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                m_deferredSurfelGiCounterReadbackTask,
-                m_deferredLightingRecordedGraph.recordingAttemptGeneration()
-            );
+            m_deferredLightingSubmissionTransaction.rejectTask(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredSurfelGiCounterReadbackTask, m_deferredLightingRecordedGraph.recordingAttemptGeneration());
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
         }
         else{
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
             Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_surfelGiCounterPersistentState);
-            const Core::BufferHandle readbackCounterBuffers[] = {
-                rayTracingSurfelResources.counterBuffer,
-            };
+            const Core::BufferHandle readbackCounterBuffers[] = { rayTracingSurfelResources.counterBuffer, };
             // Keep the candidate private until Transfer accepts.
-            FrameExecuteSurfelReadback::Context readbackContext{
-                .scratchArena = scratchArena,
-                .renderer = this,
-                .candidate = &readbackCounterStateCandidate,
-                .buffers = readbackCounterBuffers,
-                .bufferCount = LengthOf(readbackCounterBuffers),
-            };
+            FrameExecuteSurfelReadback::Context readbackContext{ .scratchArena = scratchArena, .renderer = this, .candidate = &readbackCounterStateCandidate, .buffers = readbackCounterBuffers, .bufferCount = LengthOf(readbackCounterBuffers), };
             const auto prepareReadbackFinalState = &FrameExecuteSurfelReadback::PrepareReadbackFinalState;
-            const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{
-                .task = m_deferredSurfelGiCounterReadbackTask,
-                .context = &readbackContext,
-                .invoke = prepareReadbackFinalState,
-            };
+            const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = prepareReadbackFinalState, };
             const auto acceptReadbackFinalState = &FrameExecuteSurfelReadback::AcceptReadbackFinalState;
-            const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{
-                .task = m_deferredSurfelGiCounterReadbackTask,
-                .context = &readbackContext,
-                .invoke = acceptReadbackFinalState,
-            };
+            const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = acceptReadbackFinalState, };
             const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
             const bool readbackAccepted = scheduler.executeTask(
                 m_deferredLightingTaskGraph,
@@ -1647,12 +1249,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 nullptr,
                 &readbackAcceptedCallback
             );
-            const Core::QueueSubmissionToken readbackSubmissionToken =
-                m_deferredLightingSubmissionTransaction.taskToken(
-                    deferredCompiledPlan,
-                    m_deferredSurfelGiCounterReadbackTask
-                )
-            ;
+            const Core::QueueSubmissionToken readbackSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredSurfelGiCounterReadbackTask);
             if(!readbackSubmissionToken.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
             }
@@ -1681,15 +1278,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             || !m_deferredLaggedLightingHistoryTask.valid()
             || !taskIsCompiled(m_deferredLaggedLightingHistoryTask)
             || !deferredLaggedLightingHistoryQueue
-            || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
-                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
+            || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ){
             if(m_deferredLightingTaskGraphScheduled){
-                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph.recordingAttemptGeneration()
-                ))
+                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
                     m_graphics.requestDeviceRecreation();
             }
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
@@ -1709,17 +1301,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .surfelStateCandidate = &surfelHistoryReturnStateCandidate,
             };
             const auto prepareHistoryCopyFinalState = &FrameExecuteHistoryCopy::PrepareHistoryCopyFinalState;
-            const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{
-                .task = m_deferredLaggedLightingHistoryTask,
-                .context = &historyCopyAcceptance,
-                .invoke = prepareHistoryCopyFinalState,
-            };
+            const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{ .task = m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = prepareHistoryCopyFinalState, };
             const auto acceptHistoryCopyFinalState = &FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState;
-            const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{
-                .task = m_deferredLaggedLightingHistoryTask,
-                .context = &historyCopyAcceptance,
-                .invoke = acceptHistoryCopyFinalState,
-            };
+            const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{ .task = m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = acceptHistoryCopyFinalState, };
             const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
             const bool historyCopyAccepted = scheduler.executeTask(
                 m_deferredLightingTaskGraph,
@@ -1733,12 +1317,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 nullptr,
                 &historyCopyAcceptedCallback
             );
-            const Core::QueueSubmissionToken historyCopySubmissionToken =
-                m_deferredLightingSubmissionTransaction.taskToken(
-                    deferredCompiledPlan,
-                    m_deferredLaggedLightingHistoryTask
-                )
-            ;
+            const Core::QueueSubmissionToken historyCopySubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredLaggedLightingHistoryTask);
             if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){
                 if(!executeFrameRecoveryTask())
                     failFrameRenderRecovery();
@@ -1747,26 +1326,16 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 return;
             }
             if(!historyCopyAccepted || !historyCopySubmissionToken.valid()){
-                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph.recordingAttemptGeneration()
-                ))
+                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
                     m_graphics.requestDeviceRecreation();
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting"));
                 invalidateLaggedLightingHistorySubmission();
             }
             else{
                 // The accepted hook publishes this token; keep the assertion here.
-                NWB_ASSERT(
-                    m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue
-                    && m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value
-                );
+                NWB_ASSERT(m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
                 if(!laggedAsyncLightingSchedule){
-                    reportLaggedLightingTransition(
-                        LaggedLightingReport::BootstrapAccepted,
-                        deferredTargets.laggedLightingHistory.generation
-                    );
+                    reportLaggedLightingTransition(LaggedLightingReport::BootstrapAccepted, deferredTargets.laggedLightingHistory.generation);
                 }
             }
         }

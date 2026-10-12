@@ -202,9 +202,7 @@ void CheckInvalidBindings(TestArena& testArena, Graphics::Alloc::ScratchArena& s
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(fixture.m_graph);
     const Graphics::GpuCompiledGraph::ReadView plan(fixture.m_compilation.compiledGraph);
     ASSERT_GT(plan.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacketRange range = plan.packetRange(
-        plan.packetIdAt(0u), plan.packetIdAt(plan.packetCount() - s_ExcludedPacketCount - 1u)
-    );
+    const Graphics::GpuSubmissionPacketRange range = plan.packetRange(plan.packetIdAt(0u), plan.packetIdAt(plan.packetCount() - s_ExcludedPacketCount - 1u));
     InvocationState state;
     Vector<CallbackContext, Graphics::Alloc::ScratchArena> contexts(scratch);
     Vector<Callback, Graphics::Alloc::ScratchArena> callbacks(scratch);

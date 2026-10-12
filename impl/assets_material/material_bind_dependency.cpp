@@ -26,22 +26,14 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool TryResolveMaterialBindDependencyInterface(
-    const Path& normalizedMaterialBindIncludeRoot,
-    const Path& dependency,
-    CookString& outInterfacePath,
-    ScratchArena& scratchArena
-){
+static bool TryResolveMaterialBindDependencyInterface(const Path& normalizedMaterialBindIncludeRoot, const Path& dependency, CookString& outInterfacePath, ScratchArena& scratchArena){
     outInterfacePath.clear();
     if(normalizedMaterialBindIncludeRoot.empty())
         return true;
 
     auto normalizedDependencyResult = AbsolutePath(dependency);
     if(!normalizedDependencyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}")
-            , PathToString<tchar>(dependency)
-            , StringConvert(normalizedDependencyResult.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}"), PathToString<tchar>(dependency), StringConvert(normalizedDependencyResult.error().message()));
         return false;
     }
     Path normalizedDependency = normalizedDependencyResult->lexicallyNormal();
@@ -57,9 +49,7 @@ static bool TryResolveMaterialBindDependencyInterface(
     Path relativePath = normalizedDependency.lexicallyRelative(normalizedMaterialBindIncludeRoot);
     relativePath.replaceExtension();
     if(!Core::Assets::AssetPathsDetail::BuildRelativeAssetPathText(relativePath, outInterfacePath)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to derive interface from generated include '{}'")
-            , PathToString<tchar>(normalizedDependency)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to derive interface from generated include '{}'"), PathToString<tchar>(normalizedDependency));
         return false;
     }
 
@@ -70,23 +60,14 @@ static bool TryResolveMaterialBindDependencyInterface(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
-    CookArena& arena,
-    const AStringView shaderName,
-    const Path& materialBindIncludeRoot,
-    const CookVector<Path>& dependencies,
-    ScratchArena& scratchArena
-){
+Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(CookArena& arena, const AStringView shaderName, const Path& materialBindIncludeRoot, const CookVector<Path>& dependencies, ScratchArena& scratchArena){
     MaterialBindDependency result(arena);
 
     Path normalizedMaterialBindIncludeRoot(materialBindIncludeRoot.arena());
     if(!materialBindIncludeRoot.empty()){
         const auto normalizedRoot = AbsolutePath(materialBindIncludeRoot);
         if(!normalizedRoot){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}")
-                , PathToString<tchar>(materialBindIncludeRoot)
-                , StringConvert(normalizedRoot.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}"), PathToString<tchar>(materialBindIncludeRoot), StringConvert(normalizedRoot.error().message()));
             return MakeUnexpected(Failure{});
         }
         normalizedMaterialBindIncludeRoot = normalizedRoot->lexicallyNormal();
@@ -95,23 +76,14 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
     CookString dependencyInterfacePath{arena};
     bool dependsOnMultipleInterfaces = false;
     for(const Path& dependency : dependencies){
-        if(!TryResolveMaterialBindDependencyInterface(
-            normalizedMaterialBindIncludeRoot,
-            dependency,
-            dependencyInterfacePath,
-            scratchArena
-        ))
+        if(!TryResolveMaterialBindDependencyInterface(normalizedMaterialBindIncludeRoot, dependency, dependencyInterfacePath, scratchArena))
             return MakeUnexpected(Failure{});
         if(dependencyInterfacePath.empty())
             continue;
 
         const Name dependencyInterfaceName{ AStringView(dependencyInterfacePath) };
         if(!dependencyInterfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes invalid generated "
-                "material bind interface '{}'")
-                , StringConvert(shaderName)
-                , StringConvert(dependencyInterfacePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes invalid generated " "material bind interface '{}'"), StringConvert(shaderName), StringConvert(dependencyInterfacePath));
             return MakeUnexpected(Failure{});
         }
 

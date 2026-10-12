@@ -65,14 +65,7 @@ VkImageMemoryBarrier2 BuildTextureOwnershipAcquireBarrier(
     return barrier;
 }
 
-VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(
-    const VkBuffer buffer,
-    const ResourceStates::Mask state,
-    const u32 sourceQueueFamily,
-    const u32 destinationQueueFamily,
-    const bool rayTracingStageAvailable,
-    const BufferRange range
-)noexcept{
+VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(const VkBuffer buffer, const ResourceStates::Mask state, const u32 sourceQueueFamily, const u32 destinationQueueFamily, const bool rayTracingStageAvailable, const BufferRange range)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(resolvedState, rayTracingStageAvailable);
@@ -87,14 +80,7 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(
     return barrier;
 }
 
-VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
-    const VkBuffer buffer,
-    const ResourceStates::Mask state,
-    const u32 sourceQueueFamily,
-    const u32 destinationQueueFamily,
-    const bool rayTracingStageAvailable,
-    const BufferRange range
-)noexcept{
+VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(const VkBuffer buffer, const ResourceStates::Mask state, const u32 sourceQueueFamily, const u32 destinationQueueFamily, const bool rayTracingStageAvailable, const BufferRange range)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
@@ -119,19 +105,11 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::releaseTextureOwnership(
-    Texture* textureResource,
-    TextureSubresourceSet subresources,
-    const CommandQueue::Enum destinationQueue
-){
+void CommandList::releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, const CommandQueue::Enum destinationQueue){
     releaseTextureOwnership(textureResource, subresources, m_device.getPrimaryPhysicalQueue(destinationQueue));
 }
 
-void CommandList::releaseTextureOwnership(
-    Texture* textureResource,
-    TextureSubresourceSet subresources,
-    const GpuPhysicalQueueId destinationQueue
-){
+void CommandList::releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, const GpuPhysicalQueueId destinationQueue){
     if(!textureResource)
         return;
     if(!validateCommandRecordingScope(s_ReleaseTextureOwnershipOperation))
@@ -143,29 +121,17 @@ void CommandList::releaseTextureOwnership(
         return;
     }
     if(m_stateTracker.isPermanentTexture(texture)){
-        rejectCommandRecording(
-            s_ReleaseTextureOwnershipOperation,
-            NWB_TEXT("permanently tracked textures cannot transfer ownership")
-        );
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("permanently tracked textures cannot transfer ownership"));
         return;
     }
     if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-        rejectCommandRecording(
-            s_ReleaseTextureOwnershipOperation,
-            NWB_TEXT("concurrently shared textures do not have exclusive ownership")
-        );
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("concurrently shared textures do not have exclusive ownership"));
         return;
     }
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture.m_creationDesc,
-        TextureSubresourceMipResolve::Range
-    );
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(
-            s_ReleaseTextureOwnershipOperation,
-            NWB_TEXT("subresource range is empty or outside the texture")
-        );
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("subresource range is empty or outside the texture"));
         return;
     }
 
@@ -177,8 +143,8 @@ void CommandList::releaseTextureOwnership(
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
 
-    // Releases require explicit image layouts; never invent one for untouched images. Validate every affected
-    // subresource before publishing any tracked state or destination.
+    // Releases require explicit image layouts; never invent one for untouched images.
+    // Validate every affected subresource before publishing any tracked state or destination.
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
@@ -189,10 +155,7 @@ void CommandList::releaseTextureOwnership(
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             const auto existing = m_textureOwnershipReleaseDestinations.find(key);
             if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
-                rejectCommandRecording(
-                    s_ReleaseTextureOwnershipOperation,
-                    NWB_TEXT("subresource already targets a conflicting destination queue")
-                );
+                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("subresource already targets a conflicting destination queue"));
                 return;
             }
         }
@@ -201,11 +164,7 @@ void CommandList::releaseTextureOwnership(
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
-            m_stateTracker.beginTrackingTexture(
-                &texture,
-                TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
-                state
-            );
+            m_stateTracker.beginTrackingTexture(&texture, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), state);
             m_textureOwnershipReleaseDestinations.insert_or_assign(TextureSubresourceStateKey{ &texture, mipLevel, arraySlice }, destinationQueue);
         }
     }
@@ -226,27 +185,18 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
         return;
     }
     if(texture->m_creationDesc.keepInitialState && texture->m_creationDesc.initialState != stateBits){
-        rejectCommandRecording(
-            VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
-            NWB_TEXT("permanent state conflicts with the retained initial state")
-        );
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("permanent state conflicts with the retained initial state"));
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(
-            VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
-            NWB_TEXT("a different permanent state is already tracked")
-        );
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("a different permanent state is already tracked"));
         return;
     }
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         if(it->first.texture == texture){
-            rejectCommandRecording(
-                VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
-                NWB_TEXT("texture already has a pending ownership release")
-            );
+            rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("texture already has a pending ownership release"));
             return;
         }
     }
@@ -271,26 +221,17 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
     if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
         return;
     if(buffer->m_creationDesc.keepInitialState && buffer->m_creationDesc.initialState != stateBits){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("permanent state conflicts with the retained initial state")
-        );
+        rejectCommandRecording(s_OperationName, NWB_TEXT("permanent state conflicts with the retained initial state"));
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("a different permanent state is already tracked")
-        );
+        rejectCommandRecording(s_OperationName, NWB_TEXT("a different permanent state is already tracked"));
         return;
     }
     if(m_bufferOwnershipReleaseDestinations.find(buffer) != m_bufferOwnershipReleaseDestinations.end()){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("buffer already has a pending ownership release")
-        );
+        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer already has a pending ownership release"));
         return;
     }
 

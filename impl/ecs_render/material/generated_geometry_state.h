@@ -23,8 +23,7 @@ namespace ECSRenderDetail{
 
 
 // Generated geometry stores compact vertices and indices in one allocation; non-indexed draws use only its vertex region.
-inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState =
-    Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
+inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState = Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
 
 
 // Buffer identity alone does not describe which regions a retained draw generates and consumes.

@@ -47,15 +47,7 @@ protected:
         pixels[0] = 64u;
         if(generation > 1u)
             pixels[32] = 192u;
-        const GlyphPageBinding binding{
-            .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
-            .fontGeneration = 9u,
-            .atlasIdentity = atlasIdentity,
-            .generation = generation,
-            .index = index,
-            .width = 8u,
-            .height = 8u,
-        };
+        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = index, .width = 8u, .height = 8u, };
         return CreateGlyphPage(m_arena, binding, Move(pixels));
     }
 

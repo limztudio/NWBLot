@@ -64,10 +64,7 @@ TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresent
     targets.lowHeight = 270u;
     targets.virtualSliceCount = 128u;
     targets.physicalSliceCount = 64u;
-    targets.deferredSlotsBufferDescriptor = NWB::Core::GpuDescriptorHandle::Make(
-        NWB::Core::GpuDescriptorClass::UniformBuffer,
-        23u
-    );
+    targets.deferredSlotsBufferDescriptor = NWB::Core::GpuDescriptorHandle::Make(NWB::Core::GpuDescriptorClass::UniformBuffer, 23u);
 
     const auto sdr = NWB::Impl::BuildRendererAvboitPushConstants(targets, false);
     const auto hdr10 = NWB::Impl::BuildRendererAvboitPushConstants(targets, true);
@@ -77,109 +74,56 @@ TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresent
 
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending){
-    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
-        NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    );
+    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
     bool bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
-    commit.handledDirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
-        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    );
+    commit.handledDirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
     commit.bindlessResourceSlotsUploadRecorded = true;
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
-        false,
-        17u,
-        dirtyFlags,
-        bindlessResourceSlotsUploaded,
-        commit
-    );
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 17u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
 
-    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
-        NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    ));
+    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
-        true,
-        17u,
-        dirtyFlags,
-        bindlessResourceSlotsUploaded,
-        commit
-    );
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 17u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
 
     EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty);
     EXPECT_TRUE(bindlessResourceSlotsUploaded);
 }
 
 TEST(EcsGraphics, MeshSkinningGraphOwnedDispatchCommitsSelectorWithAcceptedCompute){
-    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
-        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    );
-    // The immutable selector upload and compute dispatch share one graph packet. A rejected packet keeps both the
-    // selector and deformation retryable; acceptance publishes both CPU facts together.
+    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
+    // The immutable selector upload and compute dispatch share one graph packet.
+    // A rejected packet keeps both the selector and deformation retryable; acceptance publishes both CPU facts together.
     bool bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 23u;
     commit.handledDirtyFlags = dirtyFlags;
     commit.bindlessResourceSlotsUploadRecorded = true;
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
-        false,
-        23u,
-        dirtyFlags,
-        bindlessResourceSlotsUploaded,
-        commit
-    );
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 23u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
 
-    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
-        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    ));
+    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
-        true,
-        23u,
-        dirtyFlags,
-        bindlessResourceSlotsUploaded,
-        commit
-    );
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 23u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
 
     EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::None);
     EXPECT_TRUE(bindlessResourceSlotsUploaded);
 }
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision){
-    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
-        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    );
+    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
     bool bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
     commit.handledDirtyFlags = dirtyFlags;
     commit.bindlessResourceSlotsUploadRecorded = true;
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
-        true,
-        18u,
-        dirtyFlags,
-        bindlessResourceSlotsUploaded,
-        commit
-    );
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 18u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
 
-    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
-        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
-        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    ));
+    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
 }
 
@@ -210,9 +154,7 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     receiver.minBounds = VectorSet(-20.f, -20.f, -20.f, 0.f);
     receiver.maxBounds = VectorSet(-10.f, -10.f, -10.f, 0.f);
     NWB::Impl::CsgClipWorkBounds work;
-    ASSERT_TRUE(work.resolveCutter(
-        registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver
-    ));
+    ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver));
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 0.25f);
     EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 0.125f);
@@ -221,15 +163,11 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 0.375f);
     EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 2.5f);
     receiver.valid = true;
-    EXPECT_FALSE(work.resolveCutter(
-        registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver
-    ));
+    EXPECT_FALSE(work.resolveCutter(registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver));
     EXPECT_FALSE(work.valid);
     receiver.minBounds = VectorSet(0.5f, 0.25f, 1.75f, 0.f);
     receiver.maxBounds = VectorSet(1.f, 1.f, 3.f, 0.f);
-    ASSERT_TRUE(work.resolveCutter(
-        registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver
-    ));
+    ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver));
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 0.5f);
     EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 0.25f);
@@ -254,16 +192,12 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
 
     NWB::Impl::CsgBoxShapeParameters invalidParameters;
     invalidParameters.halfExtents.x = 0.f;
-    EXPECT_TRUE(work.resolveCutter(
-        registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver
-    ));
+    EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver));
     EXPECT_FALSE(work.valid);
     receiver.minBounds = VectorReplicate(-2.f);
     receiver.maxBounds = VectorReplicate(2.f);
     receiver.valid = true;
-    EXPECT_FALSE(work.resolveCutter(
-        registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver
-    ));
+    EXPECT_FALSE(work.resolveCutter(registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver));
     EXPECT_FALSE(work.valid);
 
     const auto foundShape3 = registry.findShapeType(NWB::Impl::s_CsgPlaneShapeName);
@@ -301,9 +235,7 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
 
 TEST(EcsGraphics, CsgReceiverWorkRegionKeepsAbsoluteBoundsForSubrectDispatch){
     NWB::Impl::CsgFrameWorkRegion region;
-    region.expandWorldBounds(
-        MatrixIdentity(), VectorSet(-0.5f, -0.25f, 1.f, 0.f), VectorSet(0.5f, 0.25f, 2.f, 0.f), 1001u, 701u
-    );
+    region.expandWorldBounds(MatrixIdentity(), VectorSet(-0.5f, -0.25f, 1.f, 0.f), VectorSet(0.5f, 0.25f, 2.f, 0.f), 1001u, 701u);
     ASSERT_TRUE(region.bounded());
     const NWB::Core::Rect rect = region.resolveRect(1001u, 701u);
     EXPECT_EQ(rect.minX, 248);
@@ -322,10 +254,7 @@ TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProj
     EXPECT_EQ(unknownRect.maxY, 701);
 
     NWB::Impl::CsgFrameWorkRegion crossing;
-    crossing.expandWorldBounds(
-        MatrixPerspectiveFovLH(s_PIDIV2, 1.f, 0.1f, 100.f),
-        VectorSet(-1.f, -1.f, -1.f, 0.f), VectorSet(1.f, 1.f, 1.f, 0.f), 1001u, 701u
-    );
+    crossing.expandWorldBounds(MatrixPerspectiveFovLH(s_PIDIV2, 1.f, 0.1f, 100.f), VectorSet(-1.f, -1.f, -1.f, 0.f), VectorSet(1.f, 1.f, 1.f, 0.f), 1001u, 701u);
     EXPECT_TRUE(crossing.fullFrame);
     EXPECT_EQ(crossing.resolveRect(1001u, 701u).maxX, 1001);
 
@@ -333,16 +262,11 @@ TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProj
     invalid.expandWorldBounds(MatrixIdentity(), VectorSet(1.f, 1.f, 1.f, 0.f), VectorZero(), 1001u, 701u);
     EXPECT_TRUE(invalid.fullFrame);
     NWB::Impl::CsgFrameWorkRegion nonfinite;
-    nonfinite.expandWorldBounds(
-        MatrixIdentity(), VectorSet(-Limit<f32>::s_Infinity, -1.f, 1.f, 0.f),
-        VectorSet(1.f, 1.f, 2.f, 0.f), 1001u, 701u
-    );
+    nonfinite.expandWorldBounds(MatrixIdentity(), VectorSet(-Limit<f32>::s_Infinity, -1.f, 1.f, 0.f), VectorSet(1.f, 1.f, 2.f, 0.f), 1001u, 701u);
     EXPECT_TRUE(nonfinite.fullFrame);
 
     NWB::Impl::CsgFrameWorkRegion large;
-    large.expandWorldBounds(
-        MatrixIdentity(), VectorSet(-1e20f, -0.25f, 1.f, 0.f), VectorSet(0.f, 0.25f, 2.f, 0.f), 1000u, 600u
-    );
+    large.expandWorldBounds(MatrixIdentity(), VectorSet(-1e20f, -0.25f, 1.f, 0.f), VectorSet(0.f, 0.25f, 2.f, 0.f), 1000u, 600u);
     ASSERT_TRUE(large.bounded());
     EXPECT_EQ(large.minX, 0u);
     EXPECT_EQ(large.maxX, 502u);
@@ -553,26 +477,12 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
     AppendRuntimeVertex(instance, Float3U(1.0f, -1.0f, 0.0f), 0.5f);
     AppendRuntimeVertex(instance, Float3U(0.0f, 1.0f, 0.0f), 1.0f);
 
-    instance.meshlets.push_back(NWB::Impl::MeshletDesc{
-        0u,
-        0u,
-        0u,
-        0u,
-        NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u),
-    });
+    instance.meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u), });
     instance.meshlets.back().skinBase = 0u;
-    instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{
-        Float4U(0.0f, 0.0f, 0.0f, 2.0f),
-        NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f),
-    });
+    instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 2.0f), NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f), });
     Vector<NWB::Impl::MeshletPositionStreamRef> meshletPositionStreamRefs;
     Vector<NWB::Impl::MeshletAttributeStreamRef> meshletAttributeStreamRefs;
-    NWB::Tests::AppendSequentialMeshletRefs(
-        instance.restPositions.size(),
-        meshletPositionStreamRefs,
-        meshletAttributeStreamRefs,
-        instance.meshletLocalVertexRefs
-    );
+    NWB::Tests::AppendSequentialMeshletRefs(instance.restPositions.size(), meshletPositionStreamRefs, meshletAttributeStreamRefs, instance.meshletLocalVertexRefs);
     for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex){
         instance.attributeSkins.push_back(static_cast<u32>(vertexIndex));
     }
@@ -602,17 +512,10 @@ static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix(){
 
 
 TEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation){
-    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(
-        LoadFloat(MakeNonUniformScaleJointMatrix()),
-        NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
-        NWB::Impl::SkeletonRuntime::s_RigidJointEpsilon
-    ));
+    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(LoadFloat(MakeNonUniformScaleJointMatrix()), NWB::Impl::SkeletonRuntime::s_AffineEpsilon, NWB::Impl::SkeletonRuntime::s_RigidJointEpsilon));
 }
 
-static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(
-    const NWB::Impl::SkeletonJointMatrix& rootJoint,
-    const NWB::Impl::SkeletonJointMatrix& childJoint
-){
+static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(const NWB::Impl::SkeletonJointMatrix& rootJoint, const NWB::Impl::SkeletonJointMatrix& childJoint){
     NWB::Impl::SkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
     pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
     pose.parentJoints.push_back(0u);
@@ -622,10 +525,7 @@ static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(
 }
 
 TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
-    NWB::Impl::SkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
-        MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f),
-        MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f)
-    );
+    NWB::Impl::SkeletonPoseComponent pose = MakeTwoJointSkeletonPose(MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f), MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f));
 
     Vector<NWB::Impl::SkeletonJointMatrix> resolvedJoints;
     ASSERT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints));
@@ -666,12 +566,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     scaledDualQuaternionJoint.inverseBindMatrices.clear();
     joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeNonUniformScaleJointMatrix();
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(
-        scaledDualQuaternionJoint,
-        joints.joints,
-        joints.skinningMode,
-        jointMatrices
-    ));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(scaledDualQuaternionJoint, joints.joints, joints.skinningMode, jointMatrices));
 
     EXPECT_EQ(runtimeValidationLogger.errorCount(), 3u);
     EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette count")));

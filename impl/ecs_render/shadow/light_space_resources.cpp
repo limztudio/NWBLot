@@ -55,18 +55,14 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         snapshot.viewPipeline && snapshot.cullPipeline && snapshot.opaqueResolve && snapshot.transparentResolve
         && snapshot.opaqueFallback && snapshot.transparentFallback && snapshot.shadePipeline
         && snapshot.opaqueCapture && snapshot.transparentCapture
-        && (!csg || (snapshot.csgShadePipeline && snapshot.csgOpaqueResolve && snapshot.csgTransparentResolve
-            && (hardwareCsg || (snapshot.csgOpaqueFallback && snapshot.csgTransparentFallback))))
+        && (!csg || (snapshot.csgShadePipeline && snapshot.csgOpaqueResolve && snapshot.csgTransparentResolve && (hardwareCsg || (snapshot.csgOpaqueFallback && snapshot.csgTransparentFallback))))
     )
         return true;
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     // Fragment stores/atomics are mandatory baseline device features, independently of ray-query support.
     constexpr auto depthSupport = Core::FormatSupport::Texture | Core::FormatSupport::DepthStencil | Core::FormatSupport::ShaderLoad;
-    if(
-        !heap.isInitialized() || (hardwareCsg && !heap.hasAccelStructLayout())
-        || (device.queryFormatSupport(Core::Format::D32) & depthSupport) != depthSupport
-    )
+    if(!heap.isInitialized() || (hardwareCsg && !heap.hasAccelStructLayout()) || (device.queryFormatSupport(Core::Format::D32) & depthSupport) != depthSupport)
         return false;
     if(!snapshot.layout){
         Core::BindingLayoutDesc desc(m_arena);
@@ -103,10 +99,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
             continue;
         if(hardwareCsg && index >= 11u && index <= 12u)
             continue;
-        if(
-            !state.m_shaders[index] && !m_shaderSystem.loadShaderForStage(state.m_shaders[index], names[index], variants[index], stages[index],
-            Name("ECSRender_LightSpaceShadow"))
-        ){
+        if(!state.m_shaders[index] && !m_shaderSystem.loadShaderForStage(state.m_shaders[index], names[index], variants[index], stages[index], Name("ECSRender_LightSpaceShadow"))){
             state.m_pipelineFailed = true;
             return false;
         }
@@ -123,10 +116,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         if(*outputs[index])
             continue;
         Core::ComputePipelineDesc desc;
-        desc
-            .setComputeShader(state.m_shaders[shaderIndices[index]]).addBindingLayout(snapshot.layout)
-            .addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout())
-        ;
+        desc.setComputeShader(state.m_shaders[shaderIndices[index]]).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         if(hardwareCsg && index >= 7u && index <= 8u)
             desc.addBindingLayout(heap.getAccelStructLayout());
         *outputs[index] = device.createComputePipeline(desc);
@@ -144,10 +134,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         Core::RenderState render;
         render.setRasterState(raster).setDepthStencilState(depth);
         Core::GraphicsPipelineDesc desc;
-        desc
-            .setVertexShader(state.m_shaders[1]).setRenderState(render).addBindingLayout(snapshot.layout)
-            .addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout())
-        ;
+        desc.setVertexShader(state.m_shaders[1]).setRenderState(render).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         if(transparent != 0u)
             desc.setPixelShader(state.m_shaders[2]);
         output = device.createGraphicsPipeline(desc, Core::FramebufferInfo{}.setDepthFormat(Core::Format::D32));
@@ -184,8 +171,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
         const u64 contextSize = m_lightSpaceShadow.m_csg.bytes.size();
         if(contextSize == 0u || contextSize > maximumRange || contextSize > Limit<u32>::s_Max)
             return false;
-        if(!snapshot.csgContext || snapshot.csgContext->getCreationDescription().byteSize < contextSize
-            || !snapshot.csgOpaqueDepth || snapshot.csgOpaqueDepth->getCreationDescription().byteSize < plan.countByteSize){
+        if(!snapshot.csgContext || snapshot.csgContext->getCreationDescription().byteSize < contextSize || !snapshot.csgOpaqueDepth || snapshot.csgOpaqueDepth->getCreationDescription().byteSize < plan.countByteSize){
             Core::BufferHandle csgBuffers[2];
             Core::GpuDescriptorHandle csgDescriptors[2];
             ScopeExit retireCsg([&]()noexcept{
@@ -204,9 +190,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
                 csgBuffers[index] = m_graphics.createBuffer(desc);
                 if(!csgBuffers[index])
                     return false;
-                const auto descriptor = RayTracingDetail::RegisterHeapBuffer(
-                    heap, *csgBuffers[index], Core::GpuDescriptorClass::StorageBuffer, true
-                );
+                const auto descriptor = RayTracingDetail::RegisterHeapBuffer(heap, *csgBuffers[index], Core::GpuDescriptorClass::StorageBuffer, true);
                 if(!descriptor)
                     return false;
                 csgDescriptors[index] = *descriptor;
@@ -267,10 +251,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     if(!depth)
         return false;
     descriptors[4] = heap.allocate(Core::GpuDescriptorClass::SampledImage2DArray);
-    if(
-        !descriptors[4].valid() || !heap.write(descriptors[4], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32,
-        Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray))
-    )
+    if(!descriptors[4].valid() || !heap.write(descriptors[4], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
         return false;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> opaque;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> transparent;

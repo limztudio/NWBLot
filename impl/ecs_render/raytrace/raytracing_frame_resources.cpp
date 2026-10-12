@@ -48,24 +48,17 @@ void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
 }
 
 RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLightingClassificationInput()const noexcept{
-    return {
-        .refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount,
-    };
+    return { .refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount, };
 }
 
-void RendererRayTracingSystem::publishPreparedLightingClassification(
-    const RayTracingLightingClassification& classification,
-    const ECSRenderDetail::SceneLightGpuData* const lights,
-    const u32 lightCount
-){
+void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount){
     m_rayTracingState.m_causticLightCount = classification.causticLightCount;
     m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights, lightCount);
     prepareLightSpaceShadows(lights, lightCount);
 
-    // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds
-    // and diagnostic latch. A successful prefix publication leaves the latch set across optional graph-build retries;
-    // final declaration failure restores the earlier snapshot.
+    // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds and diagnostic latch.
+    // A successful prefix publication leaves the latch set across optional graph-build retries; final declaration failure restores the earlier snapshot.
     if(m_rayTracingState.m_causticEmissionGateLogged)
         return;
     m_rayTracingState.m_causticEmissionGateLogged = true;
@@ -86,14 +79,9 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(
     for(u32 i = 0u; i < lightCount; ++i){
         if(lights[i].params.w < 0.f)
             continue;
-        // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only
-        // directional/spot reach here.
+        // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only directional/spot reach here.
         const bool directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})")
-            , static_cast<u32>(lights[i].params.w)
-            , i
-            , directional ? NWB_TEXT("directional") : NWB_TEXT("spot")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})"), static_cast<u32>(lights[i].params.w), i, directional ? NWB_TEXT("directional") : NWB_TEXT("spot"));
     }
 }
 
@@ -146,9 +134,7 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
             state.m_surfelAgeFreePipeline
             && state.m_surfelHashBuildPipeline
             && state.m_surfelSpawnPipeline
-            && (state.m_surfelUseHwTrace
-                ? (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgHwPipeline : state.m_surfelTraceHwPipeline)
-                : (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgPipeline : state.m_surfelTracePipeline))
+            && (state.m_surfelUseHwTrace ? (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgHwPipeline : state.m_surfelTraceHwPipeline) : (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgPipeline : state.m_surfelTracePipeline))
             && state.m_surfelResolvePipeline
             && state.m_surfelUpsamplePipeline
             && state.m_surfelTraceBuildArgsPipeline,
@@ -171,15 +157,10 @@ RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSur
     };
 }
 
-RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(
-    const bool hardwareShadowSupported
-)const noexcept{
+RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(const bool hardwareShadowSupported)const noexcept{
     const auto& state = m_rayTracingState;
     const bool hardwareTransparentTrace = hardwareShadowSupported && state.m_softTransparentReady && hardwareTransparentShadowReady();
-    const bool transparentSceneReady = hardwareTransparentTrace
-        ? state.m_tlas && state.m_tlasHeapHandle.valid()
-        : state.m_sceneBvhNodeBuffer && state.m_sceneInstanceBuffer
-    ;
+    const bool transparentSceneReady = hardwareTransparentTrace ? state.m_tlas && state.m_tlasHeapHandle.valid() : state.m_sceneBvhNodeBuffer && state.m_sceneInstanceBuffer;
     const bool softTransparentFoldReady =
         state.m_softShadowReady
         && state.m_softShadowSlotMask != 0u
@@ -190,12 +171,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
         && state.m_shadowInstanceBuffer
     ;
     GraphOwnedAdaptiveShadowPlan adaptivePlan;
-    if(
-        !softTransparentShadowReady()
-        && !hardwareShadowSupported
-        && shadowVisibilitySoftwareResourcesPreflighted()
-        && state.m_swShadowEdgeCounterBuffer
-    ){
+    if(!softTransparentShadowReady() && !hardwareShadowSupported && shadowVisibilitySoftwareResourcesPreflighted() && state.m_swShadowEdgeCounterBuffer){
         adaptivePlan.enabled = true;
         adaptivePlan.compact = true;
     }
@@ -221,22 +197,12 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
     };
 }
 
-bool RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(
-    const Core::QueueSubmissionToken& submissionToken
-)const noexcept{
+bool RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept{
     const Core::QueueSubmissionToken& accepted = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
-    return
-        accepted.valid()
-        && submissionToken.valid()
-        && accepted.queue == submissionToken.queue
-        && accepted.value == submissionToken.value
-        && accepted.matchesPhysicalQueue(submissionToken.physicalQueueIndex, submissionToken.deviceGeneration)
-    ;
+    return accepted.valid() && submissionToken.valid() && accepted.queue == submissionToken.queue && accepted.value == submissionToken.value && accepted.matchesPhysicalQueue(submissionToken.physicalQueueIndex, submissionToken.deviceGeneration);
 }
 
-void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(
-    const Core::QueueSubmissionToken& submissionToken
-)noexcept{
+void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(const Core::QueueSubmissionToken& submissionToken)noexcept{
     NWB_ASSERT(submissionToken.valid());
     m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;
 }
@@ -270,9 +236,7 @@ bool RendererRayTracingSystem::shadowVisibilityHardwareSupported()const noexcept
 }
 
 bool RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
-    return m_shadowVisibilityTraceResourcesPreflighted
-        && !m_shadowVisibilityHardwareSupported
-    ;
+    return m_shadowVisibilityTraceResourcesPreflighted && !m_shadowVisibilityHardwareSupported;
 }
 
 

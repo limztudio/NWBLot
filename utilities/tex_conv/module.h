@@ -95,12 +95,7 @@ bool IsSupportedInputPath(const Path& path);
 bool IsHdrInputPath(const Path& path);
 Expected<OutputPaths> ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument);
 bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force);
-Expected<TexturePayload> EncodeTexture(
-    const Vector<Path>& inputPaths,
-    TextureDimension::Enum dimension,
-    bool srgb,
-    const AlphaSource& alphaSource
-);
+Expected<TexturePayload> EncodeTexture(const Vector<Path>& inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource);
 bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload, bool force);
 
 int Run(int argc, char** argv);

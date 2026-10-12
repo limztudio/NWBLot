@@ -42,28 +42,10 @@ struct SetupUploadSameClassRouting{
 using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
 
 
-[[nodiscard]] SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
-    GraphicsBackend::Device& device,
-    CommandQueue::Enum consumerQueue,
-    usize uploadBytes
-)noexcept;
-[[nodiscard]] ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(
-    ResourceQueueSharing::Mask requestedSharing,
-    CommandQueue::Enum consumerQueue,
-    bool crossFamilySameClassRouting = false
-)noexcept;
-[[nodiscard]] CommandQueue::Enum ResolveSetupUploadConsumerQueue(
-    GraphicsBackend::Device& device,
-    CommandQueue::Enum requestedConsumerQueue,
-    usize uploadBytes,
-    bool hasKnownFinalState,
-    bool requiresGraphicsConsumerQueue = false
-)noexcept;
-[[nodiscard]] GpuTaskSchedulingHint SetupUploadGraphScheduling(
-    usize byteCount,
-    bool sameClassRouting = false,
-    bool crossFamilySameClassRouting = false
-)noexcept;
+[[nodiscard]] SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(GraphicsBackend::Device& device, CommandQueue::Enum consumerQueue, usize uploadBytes)noexcept;
+[[nodiscard]] ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(ResourceQueueSharing::Mask requestedSharing, CommandQueue::Enum consumerQueue, bool crossFamilySameClassRouting = false)noexcept;
+[[nodiscard]] CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& device, CommandQueue::Enum requestedConsumerQueue, usize uploadBytes, bool hasKnownFinalState, bool requiresGraphicsConsumerQueue = false)noexcept;
+[[nodiscard]] GpuTaskSchedulingHint SetupUploadGraphScheduling(usize byteCount, bool sameClassRouting = false, bool crossFamilySameClassRouting = false)noexcept;
 [[nodiscard]] ResourceStates::Mask SetupUploadGraphFinalState(ResourceStates::Mask declaredInitialState)noexcept;
 
 [[nodiscard]] Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
@@ -86,11 +68,7 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     QueueSubmissionToken& inOutUploadToken,
     GpuPhysicalQueueId requiredTerminalQueue = {}
 );
-[[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(
-    const GraphicsRuntime& graphics,
-    GraphicsArena& graphArena,
-    GpuTimingRecorder& timing
-);
+[[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, GraphicsArena& graphArena, GpuTimingRecorder& timing);
 
 bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc);
 bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc);

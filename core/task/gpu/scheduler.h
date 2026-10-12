@@ -49,21 +49,11 @@ private:
 
 
     public:
-        [[nodiscard]] static SubmissionAttemptExceptionFinalizer* ActiveFor(
-            const GpuTaskGraph& graph,
-            const GpuCompiledGraph& compiledGraph,
-            const GpuRecordedGraph& recordedGraph,
-            const GpuGraphSubmissionTransaction& transaction
-        )noexcept;
+        [[nodiscard]] static SubmissionAttemptExceptionFinalizer* ActiveFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuRecordedGraph& recordedGraph, const GpuGraphSubmissionTransaction& transaction)noexcept;
 
 
     public:
-        SubmissionAttemptExceptionFinalizer(
-            GpuTaskGraph& graph,
-            const GpuCompiledGraph& compiledGraph,
-            const GpuRecordedGraph& recordedGraph,
-            GpuGraphSubmissionTransaction& transaction
-        )noexcept;
+        SubmissionAttemptExceptionFinalizer(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuRecordedGraph& recordedGraph, GpuGraphSubmissionTransaction& transaction)noexcept;
         ~SubmissionAttemptExceptionFinalizer()noexcept;
 
 
@@ -87,13 +77,7 @@ private:
 
     class SubmissionAttemptExceptionScope final : NoCopy{
     public:
-        SubmissionAttemptExceptionScope(
-            GpuTaskGraph& graph,
-            const GpuCompiledGraph& compiledGraph,
-            const GpuRecordedGraph& recordedGraph,
-            GpuGraphSubmissionTransaction& transaction,
-            GpuSubmissionPacketId* outFailedPacket = nullptr
-        )noexcept;
+        SubmissionAttemptExceptionScope(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuRecordedGraph& recordedGraph, GpuGraphSubmissionTransaction& transaction, GpuSubmissionPacketId* outFailedPacket = nullptr)noexcept;
         ~SubmissionAttemptExceptionScope()noexcept;
 
 

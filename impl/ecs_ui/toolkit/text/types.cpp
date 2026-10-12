@@ -27,10 +27,7 @@ TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, bool all
             return TextLayoutStatus::InvalidParameters;
     }
     for(const char character : request.language){
-        if(
-            !(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z')
-            && !(character >= '0' && character <= '9') && character != '-'
-        )
+        if(!(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z') && !(character >= '0' && character <= '9') && character != '-')
             return TextLayoutStatus::InvalidParameters;
     }
     usize offset = 0u;

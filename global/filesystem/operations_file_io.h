@@ -31,11 +31,7 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsolutePath(
-    ArenaT& arena,
-    const Path<ArenaT>& baseDirectory,
-    const AStringView relativeOrAbsolute
-){
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsolutePath(ArenaT& arena, const Path<ArenaT>& baseDirectory, const AStringView relativeOrAbsolute){
     if(relativeOrAbsolute.empty())
         return MakeUnexpected(std::make_error_code(std::errc::invalid_argument));
     Path<ArenaT> candidate(arena, relativeOrAbsolute);
@@ -102,8 +98,7 @@ template<typename ArenaT, typename Container>
 
 
 template<typename ArenaT, typename StringT>
-[[nodiscard]] inline Expected<void, ErrorCode> ReadTextFile(const Path<ArenaT>& path, StringT& inOutText)
-    requires requires(StringT& text, usize size){ text.resize(size); text.data(); text.clear(); }
+[[nodiscard]] inline Expected<void, ErrorCode> ReadTextFile(const Path<ArenaT>& path, StringT& inOutText) requires requires(StringT& text, usize size){ text.resize(size); text.data(); text.clear(); }
 {
     return GlobalFilesystemDetail::ReadWholeBinaryFile(path, inOutText);
 }
@@ -113,10 +108,7 @@ template<typename ArenaT>
     if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(content.size())))
         return false;
 
-    GlobalFilesystemDetail::OutputFileStream stream(
-        path,
-        GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
-    );
+    GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc);
     if(!stream.is_open())
         return false;
 
@@ -140,18 +132,12 @@ template<typename ArenaT, typename Container>
     if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
         return false;
 
-    GlobalFilesystemDetail::OutputFileStream stream(
-        path,
-        GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
-    );
+    GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc);
     if(!stream.is_open())
         return false;
 
     if(!bytes.empty()){
-        stream.write(
-            reinterpret_cast<const char*>(bytes.data()),
-            static_cast<GlobalFilesystemDetail::StreamSize>(bytes.size())
-        );
+        stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<GlobalFilesystemDetail::StreamSize>(bytes.size()));
     }
     stream.close();
     return stream.good();

@@ -157,11 +157,7 @@ TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
     ASSERT_TRUE(Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded));
     const Telemetry::TelemetryBytes current = encoded;
 
-    const u16 unsupportedVersions[] = {
-        0u,
-        static_cast<u16>(Telemetry::s_TelemetryFormatVersion + 1u),
-        Limit<u16>::s_Max,
-    };
+    const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_TelemetryFormatVersion + 1u), Limit<u16>::s_Max, };
     Expected<Telemetry::DecodedEvent, Telemetry::DecodeResult> decoded = MakeUnexpected(Telemetry::DecodeResult{});
     Telemetry::Recorder recorder(testArena.arena);
     for(const u16 version : unsupportedVersions){
@@ -201,11 +197,7 @@ TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecov
     ASSERT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
     const Telemetry::TelemetryBytes current = encoded;
 
-    const u16 unsupportedVersions[] = {
-        0u,
-        static_cast<u16>(Telemetry::s_TelemetryFormatVersion + 1u),
-        Limit<u16>::s_Max,
-    };
+    const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_TelemetryFormatVersion + 1u), Limit<u16>::s_Max, };
     Telemetry::Recorder decoded(testArena.arena);
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
@@ -225,9 +217,7 @@ TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecov
         ASSERT_TRUE(readEventHeader);
         Telemetry::EncodedEventHeader eventHeader = *readEventHeader;
         eventHeader.version = version;
-        NWB_MEMCPY(
-            encoded.data() + sizeof(streamHeader), encoded.size() - sizeof(streamHeader), &eventHeader, sizeof(eventHeader)
-        );
+        NWB_MEMCPY(encoded.data() + sizeof(streamHeader), encoded.size() - sizeof(streamHeader), &eventHeader, sizeof(eventHeader));
         const auto invalidEvent = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
         ASSERT_FALSE(invalidEvent);
         EXPECT_EQ(invalidEvent.error().status, Telemetry::DecodeStatus::InvalidHeader);
@@ -249,11 +239,7 @@ TEST(Telemetry, DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers){
     Telemetry::TelemetryBytes encoded(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(testArena.arena, record, encoded));
     const Telemetry::TelemetryBytes current = encoded;
-    const u16 unsupportedVersions[] = {
-        0u,
-        static_cast<u16>(Telemetry::s_DiagnosticPayloadVersion + 1u),
-        Limit<u16>::s_Max,
-    };
+    const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_DiagnosticPayloadVersion + 1u), Limit<u16>::s_Max, };
     Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
@@ -281,13 +267,7 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         threads[threadIndex] = Thread([&recorder, threadIndex](){
             for(u32 eventIndex = 0u; eventIndex < s_EventsPerThread; ++eventIndex){
-                if(!Telemetry::RecordTextLog(
-                    recorder,
-                    NWB::Core::Common::LogType::Info,
-                    NWB_TEXT("concurrent telemetry record"),
-                    eventIndex,
-                    threadIndex
-                ))
+                if(!Telemetry::RecordTextLog(recorder, NWB::Core::Common::LogType::Info, NWB_TEXT("concurrent telemetry record"), eventIndex, threadIndex))
                     return;
             }
         });

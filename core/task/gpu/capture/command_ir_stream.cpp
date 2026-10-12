@@ -20,10 +20,7 @@ namespace __hidden_gpu_command_ir_stream{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<GpuGraphResourceId> DecodeResource(
-    const u32 resourceIndex,
-    const u64 graphGeneration
-)noexcept{
+[[nodiscard]] static Expected<GpuGraphResourceId> DecodeResource(const u32 resourceIndex, const u64 graphGeneration)noexcept{
     const GpuGraphResourceId resource{ .generation = graphGeneration, .index = resourceIndex };
     if(!resource.valid())
         return MakeUnexpected(Failure{});
@@ -31,27 +28,11 @@ namespace __hidden_gpu_command_ir_stream{
 }
 
 [[nodiscard]] static TextureSlice DecodeTextureSlice(const GpuCommandIrTextureSlice& slice)noexcept{
-    return TextureSlice{
-        .x = slice.x,
-        .y = slice.y,
-        .z = slice.z,
-        .width = slice.width,
-        .height = slice.height,
-        .depth = slice.depth,
-        .mipLevel = slice.mipLevel,
-        .arraySlice = slice.arraySlice,
-    };
+    return TextureSlice{ .x = slice.x, .y = slice.y, .z = slice.z, .width = slice.width, .height = slice.height, .depth = slice.depth, .mipLevel = slice.mipLevel, .arraySlice = slice.arraySlice, };
 }
 
-[[nodiscard]] static TextureSubresourceSet DecodeSubresources(
-    const GpuCommandIrTextureSubresourceSet& subresources
-)noexcept{
-    return TextureSubresourceSet(
-        subresources.baseMipLevel,
-        subresources.numMipLevels,
-        subresources.baseArraySlice,
-        subresources.numArraySlices
-    );
+[[nodiscard]] static TextureSubresourceSet DecodeSubresources(const GpuCommandIrTextureSubresourceSet& subresources)noexcept{
+    return TextureSubresourceSet(subresources.baseMipLevel, subresources.numMipLevels, subresources.baseArraySlice, subresources.numArraySlices);
 }
 
 [[nodiscard]] static Rect DecodeRect(const GpuCommandIrRect& rect)noexcept{
@@ -70,12 +51,8 @@ namespace __hidden_gpu_command_ir_stream{
     return IntColor(color.r, color.g, color.b, color.a);
 }
 
-[[nodiscard]] static bool ValidateClearTextureRecord(
-    const GpuCommandIrClearTextureRecord& record
-)noexcept{
-    constexpr u8 allowedFlags = static_cast<u8>(
-        GpuCommandIrClearTextureFlag::ClearDepth | GpuCommandIrClearTextureFlag::ClearStencil
-    );
+[[nodiscard]] static bool ValidateClearTextureRecord(const GpuCommandIrClearTextureRecord& record)noexcept{
+    constexpr u8 allowedFlags = static_cast<u8>(GpuCommandIrClearTextureFlag::ClearDepth | GpuCommandIrClearTextureFlag::ClearStencil);
     const u8 clearFlags = static_cast<u8>(record.clearFlags);
     if(
         record.destinationSubresources.numMipLevels == 0u
@@ -86,20 +63,11 @@ namespace __hidden_gpu_command_ir_stream{
     )
         return false;
 
-    return record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil
-        ? clearFlags != GpuCommandIrClearTextureFlag::None
-        : clearFlags == GpuCommandIrClearTextureFlag::None
-    ;
+    return record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil ? clearFlags != GpuCommandIrClearTextureFlag::None : clearFlags == GpuCommandIrClearTextureFlag::None;
 }
 
-[[nodiscard]] static bool ValidateClearTextureRectUIntRecord(
-    const GpuCommandIrClearTextureRectUIntRecord& record
-)noexcept{
-    return record.destinationSubresources.numMipLevels != 0u
-        && record.destinationSubresources.numArraySlices != 0u
-        && record.clearRect.maxX > record.clearRect.minX
-        && record.clearRect.maxY > record.clearRect.minY
-    ;
+[[nodiscard]] static bool ValidateClearTextureRectUIntRecord(const GpuCommandIrClearTextureRectUIntRecord& record)noexcept{
+    return record.destinationSubresources.numMipLevels != 0u && record.destinationSubresources.numArraySlices != 0u && record.clearRect.maxX > record.clearRect.minX && record.clearRect.maxY > record.clearRect.minY;
 }
 
 
@@ -155,10 +123,7 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         return;
     }
     const GpuCommandIrStreamHeader& header = *wireHeader;
-    if(
-        header.commandBytes > static_cast<u64>(Limit<usize>::s_Max)
-        || header.blobBytes > static_cast<u64>(Limit<usize>::s_Max)
-    ){
+    if(header.commandBytes > static_cast<u64>(Limit<usize>::s_Max) || header.blobBytes > static_cast<u64>(Limit<usize>::s_Max)){
         fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
         return;
     }
@@ -170,17 +135,11 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(
-        (header.recordCount == 0u && header.graphGeneration != 0u)
-        || (header.recordCount != 0u && header.graphGeneration == 0u)
-    ){
+    if((header.recordCount == 0u && header.graphGeneration != 0u) || (header.recordCount != 0u && header.graphGeneration == 0u)){
         fail(GpuCommandIrStreamValidationError::InvalidGraphGeneration, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(
-        (header.recordCount == 0u && header.planGeneration != 0u)
-        || (header.recordCount != 0u && header.planGeneration == 0u)
-    ){
+    if((header.recordCount == 0u && header.planGeneration != 0u) || (header.recordCount != 0u && header.planGeneration == 0u)){
         fail(GpuCommandIrStreamValidationError::InvalidPlanGeneration, 0u, Limit<u64>::s_Max);
         return;
     }
@@ -209,11 +168,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
 
     if(m_nextRecordIndex == m_recordCount){
         if(m_cursor != m_payloadEnd){
-            fail(
-                GpuCommandIrStreamValidationError::TrailingPayload,
-                m_cursor,
-                m_nextRecordIndex
-            );
+            fail(GpuCommandIrStreamValidationError::TrailingPayload, m_cursor, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
         if(m_nextBlobOffset != m_bytes.size() - m_blobBegin){
@@ -301,11 +256,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             decoded.packet = context->packet;
             decoded.queue = context->queue;
         }
-        decodedRecord = context.has_value()
-            && sourceResource.has_value()
-            && destinationResource.has_value()
-            && record.dataSizeBytes != 0u
-        ;
+        decodedRecord = context.has_value() && sourceResource.has_value() && destinationResource.has_value() && record.dataSizeBytes != 0u;
         if(sourceResource)
             decoded.source = *sourceResource;
         if(destinationResource)
@@ -332,10 +283,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             decoded.packet = context->packet;
             decoded.queue = context->queue;
         }
-        decodedRecord = context.has_value()
-            && sourceResource.has_value()
-            && destinationResource.has_value()
-        ;
+        decodedRecord = context.has_value() && sourceResource.has_value() && destinationResource.has_value();
         if(sourceResource)
             decoded.source = *sourceResource;
         if(destinationResource)
@@ -360,9 +308,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             decoded.packet = context->packet;
             decoded.queue = context->queue;
         }
-        decodedRecord = context.has_value()
-            && destinationResource.has_value()
-        ;
+        decodedRecord = context.has_value() && destinationResource.has_value();
         if(destinationResource)
             decoded.destination = *destinationResource;
         decoded.uintClearValue = UIntColor(record.clearValue);
@@ -384,16 +330,11 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             decoded.packet = context->packet;
             decoded.queue = context->queue;
         }
-        decodedRecord = context.has_value()
-            && destinationResource.has_value()
-            && ValidateClearTextureRecord(record)
-        ;
+        decodedRecord = context.has_value() && destinationResource.has_value() && ValidateClearTextureRecord(record);
         if(destinationResource)
             decoded.destination = *destinationResource;
         decoded.destinationSubresources = DecodeSubresources(record.destinationSubresources);
-        decoded.clearTextureValueType = static_cast<GpuClearTextureTaskValueType::Enum>(
-            record.clearTextureValueType
-        );
+        decoded.clearTextureValueType = static_cast<GpuClearTextureTaskValueType::Enum>(record.clearTextureValueType);
         decoded.floatClearValue = DecodeColor(record.floatClearValue);
         decoded.uintClearValue = DecodeColor(record.uintClearValue);
         decoded.intClearValue = DecodeColor(record.intClearValue);
@@ -419,10 +360,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             decoded.packet = context->packet;
             decoded.queue = context->queue;
         }
-        decodedRecord = context.has_value()
-            && destinationResource.has_value()
-            && ValidateClearTextureRectUIntRecord(record)
-        ;
+        decodedRecord = context.has_value() && destinationResource.has_value() && ValidateClearTextureRectUIntRecord(record);
         if(destinationResource)
             decoded.destination = *destinationResource;
         decoded.destinationSubresources = DecodeSubresources(record.destinationSubresources);
@@ -446,29 +384,15 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             decoded.packet = context->packet;
             decoded.queue = context->queue;
         }
-        decodedRecord = context.has_value()
-            && destinationResource.has_value()
-            && record.sourceUploadBlobIndex != Limit<u32>::s_Max
-            && record.reserved == 0u
-        ;
+        decodedRecord = context.has_value() && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.reserved == 0u;
         if(destinationResource)
             decoded.destination = *destinationResource;
-        decoded.sourceUploadBlob = GpuUploadBlobId{
-            .generation = m_graphGeneration,
-            .index = record.sourceUploadBlobIndex,
-        };
+        decoded.sourceUploadBlob = GpuUploadBlobId{ .generation = m_graphGeneration, .index = record.sourceUploadBlobIndex, };
         decoded.blobOffsetBytes = record.blobOffsetBytes;
         decoded.blobSizeBytes = record.blobSizeBytes;
         decoded.destinationOffsetBytes = record.destinationOffsetBytes;
         decoded.finalState = static_cast<ResourceStates::Mask>(record.finalState);
-        if(
-            decodedRecord
-            && (
-                record.blobSizeBytes == 0u
-                || record.blobOffsetBytes != m_nextBlobOffset
-                || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset
-            )
-        ){
+        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
@@ -492,19 +416,10 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             decoded.packet = context->packet;
             decoded.queue = context->queue;
         }
-        decodedRecord = context.has_value()
-            && destinationResource.has_value()
-            && record.sourceUploadBlobIndex != Limit<u32>::s_Max
-            && record.aspect < TextureUploadAspect::kCount
-            && record.reserved0 == 0u
-            && record.reserved1 == 0u
-        ;
+        decodedRecord = context.has_value() && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.aspect < TextureUploadAspect::kCount && record.reserved0 == 0u && record.reserved1 == 0u;
         if(destinationResource)
             decoded.destination = *destinationResource;
-        decoded.sourceUploadBlob = GpuUploadBlobId{
-            .generation = m_graphGeneration,
-            .index = record.sourceUploadBlobIndex,
-        };
+        decoded.sourceUploadBlob = GpuUploadBlobId{ .generation = m_graphGeneration, .index = record.sourceUploadBlobIndex, };
         decoded.blobOffsetBytes = record.blobOffsetBytes;
         decoded.blobSizeBytes = record.blobSizeBytes;
         decoded.destinationSlice = DecodeTextureSlice(record.destinationSlice);
@@ -512,14 +427,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
         decoded.depthPitch = record.depthPitch;
         decoded.finalState = static_cast<ResourceStates::Mask>(record.finalState);
         decoded.uploadAspect = static_cast<TextureUploadAspect::Enum>(record.aspect);
-        if(
-            decodedRecord
-            && (
-                record.blobSizeBytes == 0u
-                || record.blobOffsetBytes != m_nextBlobOffset
-                || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset
-            )
-        ){
+        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
@@ -544,11 +452,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     return decoded;
 }
 
-void GpuCommandIrStreamReader::fail(
-    const GpuCommandIrStreamValidationError::Enum error,
-    const usize byteOffset,
-    const u64 recordIndex
-)noexcept{
+void GpuCommandIrStreamReader::fail(const GpuCommandIrStreamValidationError::Enum error, const usize byteOffset, const u64 recordIndex)noexcept{
     if(m_validation.failed())
         return;
 

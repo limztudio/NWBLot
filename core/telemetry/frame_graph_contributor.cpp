@@ -42,12 +42,7 @@ inline constexpr u64 s_QueueIndexShift = 16u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphBuilder::FrameGraphBuilder(
-    FrameGraphNodeDescs& nodes,
-    FrameGraphEdgeDescs& edges,
-    FrameGraphPendingNameEdges& pendingNameEdges,
-    const u64 frameIndex
-)
+FrameGraphBuilder::FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex)
     : m_nodes(nodes)
     , m_edges(edges)
     , m_pendingNameEdges(pendingNameEdges)
@@ -56,13 +51,7 @@ FrameGraphBuilder::FrameGraphBuilder(
     , m_frameIndex(frameIndex)
 {}
 
-FrameGraphBuilder::FrameGraphBuilder(
-    FrameGraphNodeDescs& nodes,
-    FrameGraphEdgeDescs& edges,
-    FrameGraphPendingNameEdges& pendingNameEdges,
-    FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const u64 frameIndex
-)
+FrameGraphBuilder::FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, const u64 frameIndex)
     : FrameGraphBuilder(nodes, edges, pendingNameEdges, frameIndex)
 {
     m_physicalQueueRuntimeStatistics = &physicalQueueRuntimeStatistics;
@@ -95,19 +84,13 @@ FrameGraphBuilder::FrameGraphBuilder(
 }
 
 
-bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
-    const FrameGraphNodeHandle owner,
-    const FrameGraphPhysicalQueueRuntimeStatistics& statistics
-){
+bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(const FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics){
     if(
         !m_physicalQueueRuntimeStatistics
         || !owner.valid()
         || owner.index >= m_nodes.size()
         || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass
-        || !IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
-            statistics,
-            m_nodes[owner.index].runtimeStatistics
-        )
+        || !IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(statistics, m_nodes[owner.index].runtimeStatistics)
     )
         return false;
 
@@ -117,10 +100,7 @@ bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
     if(m_physicalQueueRuntimeStatistics->size() == m_physicalQueueRuntimeStatistics->max_size())
         return false;
 
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecord record{
-        .ownerNodeIndex = owner.index,
-        .statistics = statistics,
-    };
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecord record{ .ownerNodeIndex = owner.index, .statistics = statistics, };
     ContainerDetail::ReserveGrowingCapacity(*m_physicalQueueRuntimeStatistics, m_physicalQueueRuntimeStatistics->size() + 1u);
     if(!m_physicalQueueIdentities.insert(identity).second)
         return false;
@@ -128,18 +108,8 @@ bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
     return true;
 }
 
-bool FrameGraphBuilder::addPacketSubmissionStatistics(
-    const FrameGraphNodeHandle owner,
-    const FrameGraphPacketSubmissionStatisticsRecord& statistics
-){
-    if(
-        !m_packetSubmissionStatistics
-        || !owner.valid()
-        || owner.index >= m_nodes.size()
-        || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass
-        || statistics.ownerNodeIndex != owner.index
-        || !IsValidFrameGraphPacketSubmissionStatistics(statistics)
-    )
+bool FrameGraphBuilder::addPacketSubmissionStatistics(const FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics){
+    if(!m_packetSubmissionStatistics || !owner.valid() || owner.index >= m_nodes.size() || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass || statistics.ownerNodeIndex != owner.index || !IsValidFrameGraphPacketSubmissionStatistics(statistics))
         return false;
 
     const FrameGraphRuntimeStatistics& ownerStatistics = m_nodes[owner.index].runtimeStatistics;
@@ -156,10 +126,7 @@ bool FrameGraphBuilder::addPacketSubmissionStatistics(
         || statistics.mergedTimelineWaitCount > ownerStatistics.submission.mergedTimelineWaitCount
         || statistics.inheritedTimelineWaitElisionCount > ownerStatistics.submission.inheritedTimelineWaitElisionCount
         || statistics.submissionSeconds > ownerStatistics.submission.submissionSeconds
-        || (
-            statistics.joinsAcceptedQueueFrontier
-            && ownerStatistics.submission.acceptedFrontierSubmissionCount == 0u
-        )
+        || (statistics.joinsAcceptedQueueFrontier && ownerStatistics.submission.acceptedFrontierSubmissionCount == 0u)
         || (statistics.recoverySubmission && ownerStatistics.submission.recoverySubmissionCount == 0u)
     )
         return false;
@@ -182,43 +149,19 @@ void FrameGraphBuilder::addEdge(const FrameGraphNodeHandle from, const FrameGrap
     if(!from.valid() || !to.valid())
         return;
 
-    m_edges.push_back(FrameGraphEdgeDesc{
-        .fromNodeIndex = from.index,
-        .toNodeIndex = to.index,
-        .kind = kind,
-        .flags = flags,
-    });
+    m_edges.push_back(FrameGraphEdgeDesc{ .fromNodeIndex = from.index, .toNodeIndex = to.index, .kind = kind, .flags = flags, });
 }
 
 void FrameGraphBuilder::dependsOnByName(const FrameGraphNodeHandle from, const Name& dependencyName, const u8 flags){
     if(!from.valid())
         return;
 
-    m_pendingNameEdges.push_back(FrameGraphPendingNameEdge{
-        .toName = dependencyName,
-        .fromNodeIndex = from.index,
-        .kind = FrameGraphEdgeKind::DependsOn,
-        .flags = flags,
-    });
+    m_pendingNameEdges.push_back(FrameGraphPendingNameEdge{ .toName = dependencyName, .fromNodeIndex = from.index, .kind = FrameGraphEdgeKind::DependsOn, .flags = flags, });
 }
 
-FrameGraphNodeHandle FrameGraphBuilder::addNode(
-    const Name& name,
-    const AStringView label,
-    const FrameGraphNodeKind::Enum kind,
-    const FrameGraphPassMetadata& metadata,
-    const u8 flags
-){
+FrameGraphNodeHandle FrameGraphBuilder::addNode(const Name& name, const AStringView label, const FrameGraphNodeKind::Enum kind, const FrameGraphPassMetadata& metadata, const u8 flags){
     const u32 index = static_cast<u32>(m_nodes.size());
-    m_nodes.push_back(FrameGraphNodeDesc{
-        .name = name,
-        .label = label,
-        .kind = kind,
-        .flags = flags,
-        .queueAssignment = metadata.queueAssignment,
-        .compiledTask = metadata.compiledTask,
-        .runtimeStatistics = metadata.runtimeStatistics,
-    });
+    m_nodes.push_back(FrameGraphNodeDesc{ .name = name, .label = label, .kind = kind, .flags = flags, .queueAssignment = metadata.queueAssignment, .compiledTask = metadata.compiledTask, .runtimeStatistics = metadata.runtimeStatistics, });
     return FrameGraphNodeHandle{ .index = index };
 }
 

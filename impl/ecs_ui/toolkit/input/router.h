@@ -93,10 +93,7 @@ public:
     [[nodiscard]] InputRoutingResult process();
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
     // Context passes the focus-loss generation captured at preparation to fence delayed popup acceptance.
-    [[nodiscard]] bool commitTargets(
-        const HitTarget* targets, usize count, u64 layoutGeneration,
-        const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max
-    );
+    [[nodiscard]] bool commitTargets(const HitTarget* targets, usize count, u64 layoutGeneration, const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max);
     [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token);
     [[nodiscard]] bool dismissPopup(PopupDismissReason::Enum reason);
     void closePopup(const PopupToken& token);
@@ -116,9 +113,7 @@ public:
     void reset();
     [[nodiscard]] bool consumeActivation(WidgetId id);
     [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration);
-    [[nodiscard]] Expected<ControlAction> consumeControlAction(
-        WidgetId host, u64 declarationGeneration, const ControlToken& token
-    );
+    [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token);
     // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
     void fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token);
     // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
@@ -168,18 +163,10 @@ private:
     [[nodiscard]] bool currentContextMenuOwner(const ContextMenuOwner& owner)const;
     void reconcileContextMenus();
     void appendContextMenu(const HitTarget& target, const Point& position, bool keyboard, InputRoutingResult& result);
-    [[nodiscard]] bool routeContextMenuKey(
-        const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed, InputRoutingResult& result
-    );
+    [[nodiscard]] bool routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed, InputRoutingResult& result);
     void routeSecondary(const InputEvent& event, InputRoutingResult& result);
-    void appendControlAction(
-        const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta,
-        InputRoutingResult& result, f64 deltaX = 0.0
-    );
-    [[nodiscard]] bool routeControlKey(
-        const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner,
-        bool alreadyPressed, InputRoutingResult& result
-    );
+    void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result, f64 deltaX = 0.0);
+    [[nodiscard]] bool routeControlKey(const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, bool alreadyPressed, InputRoutingResult& result);
     void routeWheel(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
     [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const;

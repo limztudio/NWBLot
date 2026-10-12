@@ -120,10 +120,7 @@ public:
         for(const auto& symbol : m_symbols)
             records.push_back(SymbolRecordView{ symbol.first, &symbol.second });
 
-        Sort(
-            records.begin(),
-            records.end(),
-            [](const SymbolRecordView& lhs, const SymbolRecordView& rhs){
+        Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs){
                 return LessNameHash(lhs.hash, rhs.hash);
             }
         );
@@ -282,11 +279,7 @@ private:
     return registry;
 }
 
-void RecordSymbol(
-    const NameHash& hash,
-    const AStringView text,
-    void* const userData
-){
+void RecordSymbol(const NameHash& hash, const AStringView text, void* const userData){
     auto* const registry = static_cast<RuntimeRegistry*>(userData);
     if(!registry)
         return;
@@ -295,12 +288,7 @@ void RecordSymbol(
         return;
 }
 
-[[nodiscard]] bool ResolveSymbol(
-    const NameHash& hash,
-    char* const outText,
-    const usize outTextSize,
-    void* const userData
-){
+[[nodiscard]] bool ResolveSymbol(const NameHash& hash, char* const outText, const usize outTextSize, void* const userData){
     auto* const registry = static_cast<RuntimeRegistry*>(userData);
     return registry && registry->resolve(hash, outText, outTextSize);
 }

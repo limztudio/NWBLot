@@ -31,14 +31,7 @@ usize MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const
 
 
 bool MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const{
-    return
-        lhs.material == rhs.material
-        && lhs.pass == rhs.pass
-        && lhs.twoSided == rhs.twoSided
-        && lhs.csgMode == rhs.csgMode
-        && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant
-        && lhs.framebufferInfo == rhs.framebufferInfo
-    ;
+    return lhs.material == rhs.material && lhs.pass == rhs.pass && lhs.twoSided == rhs.twoSided && lhs.csgMode == rhs.csgMode && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant && lhs.framebufferInfo == rhs.framebufferInfo;
 }
 
 

@@ -21,19 +21,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::push_constant]]
-ConstantBuffer<NwbBvhBuildPushConstants> g_NwbBvhBuildPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbBvhBuildPushConstants> g_NwbBvhBuildPushConstants;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbBvhLoadTrianglePositions(
-    const uint triangle,
-    out float3 outP0,
-    out float3 outP1,
-    out float3 outP2
-){
+void nwbBvhLoadTrianglePositions(const uint triangle, out float3 outP0, out float3 outP1, out float3 outP2){
     const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const uint indexHeapSlot = g_NwbBvhBuildPushConstants.triangleIndexHeapSlot;
     const uint positionHeapSlot = g_NwbBvhBuildPushConstants.positionHeapSlot;

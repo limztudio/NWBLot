@@ -18,9 +18,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStringView anchorKey,
-    const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options
-){
+ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options){
     ContextMenuResult result;
     Item* anchor = annotationAnchor(anchorKey);
     if(
@@ -58,10 +56,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     frame.options = options;
     frame.options.enabled = options.enabled && anchor->enabled;
     const bool previouslyOpen = state.isOpen();
-    if(
-        state.m_owner != widget->id || state.m_ownerDeclaration != widget->declarationGeneration
-        || state.m_anchorWidget != anchor->state.id || state.m_anchorDeclaration != anchor->state.declarationGeneration
-    ){
+    if(state.m_owner != widget->id || state.m_ownerDeclaration != widget->declarationGeneration || state.m_anchorWidget != anchor->state.id || state.m_anchorDeclaration != anchor->state.declarationGeneration){
         if(state.m_owner.valid())
             state.close();
         state.m_owner = widget->id;
@@ -123,8 +118,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     list.options.wheelRows = options.wheelRows;
     list.options.selectOnNavigate = false;
     list.options.enabled = frame.options.enabled;
-    list.focusOnCommit = frame.open && frame.options.enabled && previouslyListFocused
-        && m_context.input().focus() != frame.rows.id;
+    list.focusOnCommit = frame.open && frame.options.enabled && previouslyListFocused && m_context.input().focus() != frame.rows.id;
     list.padding = list.style.padding;
     const UiSkinRegion* background = region(list.style.background, list.style.backgroundFallback);
     if(!background || !contextMenuMatches(frame)){
@@ -133,8 +127,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     }
     const SIMDVectorSingle listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
     const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
-        VectorGreater(listpaddingCurrent, listpaddingCandidate));
+    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent, VectorGreater(listpaddingCurrent, listpaddingCandidate));
     list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
     frame.list = static_cast<u32>(m_scope->m_lists.size());
     state.m_popup.bindParent(frame.parentToken);

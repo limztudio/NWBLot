@@ -35,23 +35,11 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
 
 static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
-    if(!ApplyDirectoryRetention(
-        arena,
-        CrashExtractedDirectory(arena, config.storageDirectory),
-        config.retention.maxExtractedPackages
-    ))
+    if(!ApplyDirectoryRetention(arena, CrashExtractedDirectory(arena, config.storageDirectory), config.retention.maxExtractedPackages))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to extracted crash packages"));
-    if(!ApplyDirectoryRetention(
-        arena,
-        CrashRawDirectory(arena, config.storageDirectory),
-        config.retention.maxRawArchives
-    ))
+    if(!ApplyDirectoryRetention(arena, CrashRawDirectory(arena, config.storageDirectory), config.retention.maxRawArchives))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to raw crash archives"));
-    if(!ApplyDirectoryRetention(
-        arena,
-        CrashInvalidDirectory(arena, config.storageDirectory),
-        config.retention.maxInvalidArchives
-    ))
+    if(!ApplyDirectoryRetention(arena, CrashInvalidDirectory(arena, config.storageDirectory), config.retention.maxInvalidArchives))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives"));
 }
 
@@ -362,13 +350,7 @@ struct ArchiveFileHeader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static CrashIngestResult RejectCrashUpload(
-    LogArena& arena,
-    const Path& archivePath,
-    const Path& packageDirectory,
-    const CrashIngestConfig& config,
-    const AStringView reason
-){
+[[nodiscard]] static CrashIngestResult RejectCrashUpload(LogArena& arena, const Path& archivePath, const Path& packageDirectory, const CrashIngestConfig& config, const AStringView reason){
     if(!RemoveAllIfExists(packageDirectory))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove rejected crash package directory"));
 
@@ -379,12 +361,7 @@ struct ArchiveFileHeader{
 
     CrashIngestResult result(arena);
     result.type = Core::Common::LogType::Error;
-    result.message = StringFormat(
-        arena,
-        NWB_TEXT("Crash upload rejected: {}; raw='{}'"),
-        StringConvert(reason),
-        PathToString<tchar>(invalidPath ? *invalidPath : archivePath)
-    );
+    result.message = StringFormat(arena, NWB_TEXT("Crash upload rejected: {}; raw='{}'"), StringConvert(reason), PathToString<tchar>(invalidPath ? *invalidPath : archivePath));
     return result;
 }
 
@@ -427,10 +404,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     Ingest::ApplyRetention(arena, config);
 
     result.accepted = true;
-    result.type = rawArchived
-        ? Ingest::AcceptedCrashLogType(summary)
-        : Core::Common::LogType::Warning
-    ;
+    result.type = rawArchived ? Ingest::AcceptedCrashLogType(summary) : Core::Common::LogType::Warning;
     Ingest::AppendAcceptedIngestDetails(arena, symbolicationReport, rawArchived ? *rawPath : archivePath, rawArchived);
     result.message = StringConvert(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
     return result;

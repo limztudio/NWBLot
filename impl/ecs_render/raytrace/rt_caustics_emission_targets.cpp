@@ -20,8 +20,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
-    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here,
-    // preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
+    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
     m_preparedCausticEmissionTargetBytes.clear();
     m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
 
@@ -49,24 +48,12 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         if(!materialInfo || !materialInfo->refractive)
             continue;
 
-        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(
-            *meshSystemPtr,
-            m_meshSystem,
-            entity
-        );
+        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
         if(!meshResult || !meshResult->meshResources.csgLocalBounds.valid())
             continue;
 
         const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        const SIMDMatrix objectToWorld = transformPtr
-            ? MatrixAffineTransformation(
-                LoadFloat(transformPtr->scale),
-                VectorZero(),
-                LoadFloat(transformPtr->rotation),
-                LoadFloat(transformPtr->position)
-            )
-            : MatrixIdentity()
-        ;
+        const SIMDMatrix objectToWorld = transformPtr ? MatrixAffineTransformation(LoadFloat(transformPtr->scale), VectorZero(), LoadFloat(transformPtr->rotation), LoadFloat(transformPtr->position)) : MatrixIdentity();
 
         SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
         SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
@@ -106,12 +93,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
 
     const usize targetByteCount = targets.size() * sizeof(NwbCausticEmissionTargetGpu);
     m_preparedCausticEmissionTargetBytes.resize(targetByteCount);
-    NWB_MEMCPY(
-        m_preparedCausticEmissionTargetBytes.data(),
-        m_preparedCausticEmissionTargetBytes.size(),
-        targets.data(),
-        targetByteCount
-    );
+    NWB_MEMCPY(m_preparedCausticEmissionTargetBytes.data(), m_preparedCausticEmissionTargetBytes.size(), targets.data(), targetByteCount);
 
     StoreFloat(combinedMin, m_rayTracingState.m_causticTargetBoundsMin);
     StoreFloat(combinedMax, m_rayTracingState.m_causticTargetBoundsMax);
@@ -120,9 +102,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
     return true;
 }
 
-Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(
-    Core::GpuTaskGraph& graph
-)const{
+Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const{
     Core::GpuUploadBlobId blob;
     const u32 targetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
     if(targetCount == 0u){
@@ -143,11 +123,7 @@ Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCausticE
         return MakeUnexpected(Failure{});
     }
 
-    blob = graph.copyUploadData(
-        m_preparedCausticEmissionTargetBytes.data(),
-        targetByteCount,
-        alignof(NwbCausticEmissionTargetGpu)
-    );
+    blob = graph.copyUploadData(m_preparedCausticEmissionTargetBytes.data(), targetByteCount, alignof(NwbCausticEmissionTargetGpu));
     if(!(blob.valid()))
         return MakeUnexpected(Failure{});
     return blob;
@@ -184,9 +160,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setFormat(targets.causticIrradianceFormat)
         .setInUAV(true)
         // Graphics/async production and the graph-owned lagged-history transfer copy share this target concurrently.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        .setName("engine/caustic/irradiance")
-    ;
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/caustic/irradiance");
     targets.causticIrradiance = m_graphics.createTexture(irradianceDesc);
     if(!targets.causticIrradiance){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic irradiance target"));
@@ -211,14 +185,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     }
 
     Core::TextureDesc historyDesc;
-    historyDesc
-        .setWidth(halfWidth)
-        .setHeight(halfHeight)
-        .setFormat(targets.causticHistoryFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/caustic/atrous_half_a")
-    ;
+    historyDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_a");
     targets.causticHistory = m_graphics.createTexture(historyDesc);
     if(!targets.causticHistory){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-A target"));
@@ -226,14 +193,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     }
 
     Core::TextureDesc halfBDesc;
-    halfBDesc
-        .setWidth(halfWidth)
-        .setHeight(halfHeight)
-        .setFormat(targets.causticHistoryFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/caustic/atrous_half_b")
-    ;
+    halfBDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_b");
     targets.causticResolveHalf = m_graphics.createTexture(halfBDesc);
     if(!targets.causticResolveHalf){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-B target"));
@@ -242,14 +202,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
 
     // Half-resolution geometry cache for edge-aware resolve.
     Core::TextureDesc geometryDesc;
-    geometryDesc
-        .setWidth(halfWidth)
-        .setHeight(halfHeight)
-        .setFormat(targets.causticHistoryFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/caustic/resolve_geometry")
-    ;
+    geometryDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/resolve_geometry");
     targets.causticResolveGeometry = m_graphics.createTexture(geometryDesc);
     if(!targets.causticResolveGeometry){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));

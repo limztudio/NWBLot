@@ -37,23 +37,12 @@ struct TextureDescription{
 
 class UiImageSourceTests : public testing::Test{
 protected:
-    static void Install(
-        Texture& texture, const TextureDescription& description,
-        Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes
-    ){
-        texture.setPayload(
-            description.colorSpace, description.hasAlpha, description.width, description.height,
-            Move(mips), Move(bytes), description.dimension, description.depth, description.format,
-            description.alphaMode, description.alphaConstant
-        );
+    static void Install(Texture& texture, const TextureDescription& description, Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes){
+        texture.setPayload(description.colorSpace, description.hasAlpha, description.width, description.height, Move(mips), Move(bytes), description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
     }
 
-    [[nodiscard]] static bool Prepare(
-        Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}
-    ){
-        const auto count = TextureFormat::ComputeCompleteMipCount(
-            description.dimension, description.width, description.height, description.depth
-        );
+    [[nodiscard]] static bool Prepare(Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}){
+        const auto count = TextureFormat::ComputeCompleteMipCount(description.dimension, description.width, description.height, description.depth);
         if(!count)
             return false;
         Texture::MipLevelVector mips(arena);

@@ -53,9 +53,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& context, NWB::Core::ECS::World& world,
-    const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness
-)
+ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& context, NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness)
     : m_context(context)
     , m_world(world)
     , m_bindJoints(context.objectArena)
@@ -81,23 +79,13 @@ bool ReflectionRoughnessScene::create(const AStringView caseName, const bool fin
         m_case = ReflectionRoughnessCase::StaticDeform;
     else if(caseName != "rough")
         return false;
-    const auto backdrop = createPanel(
-        s_Opaque, Float4(0.12f, 0.12f, 0.12f, 1.f),
-        Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f)
-    );
-    const auto mirror = createPanel(
-        s_Opaque, Float4(0.f, 0.f, 0.f, 1.f),
-        Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f),
-        m_case == ReflectionRoughnessCase::Furnace ? 1.f : 0.95f, m_roughness
-    );
+    const auto backdrop = createPanel(s_Opaque, Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f));
+    const auto mirror = createPanel(s_Opaque, Float4(0.f, 0.f, 0.f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), m_case == ReflectionRoughnessCase::Furnace ? 1.f : 0.95f, m_roughness);
     if(!backdrop.valid() || !mirror.valid())
         return false;
     if(m_case == ReflectionRoughnessCase::Furnace)
         return true;
-    const auto green = createPanel(
-        s_Opaque, Float4(0.f, 1.f, 0.f, 1.f),
-        Float4(1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f)
-    );
+    const auto green = createPanel(s_Opaque, Float4(0.f, 1.f, 0.f, 1.f), Float4(1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f));
     if(!green.valid())
         return false;
     if(deforming()){
@@ -105,10 +93,7 @@ bool ReflectionRoughnessScene::create(const AStringView caseName, const bool fin
             return false;
     }
     else{
-        m_red = createPanel(
-            m_case == ReflectionRoughnessCase::Light ? s_Lit : s_Opaque,
-            Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f)
-        );
+        m_red = createPanel(m_case == ReflectionRoughnessCase::Light ? s_Lit : s_Opaque, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f));
         if(!m_red.valid())
             return false;
     }
@@ -151,9 +136,7 @@ bool ReflectionRoughnessScene::applyMutation(){
     return true;
 }
 
-NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef& material, const Float4& color,
-    const Float4& position, const Float4& scale, const f32 f0, const f32 roughness
-){
+NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const f32 roughness){
     using namespace __hidden_reflection_roughness_scene;
     const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, material, s_Interface, color, position, scale);
     if(!entity.valid())
@@ -162,15 +145,9 @@ NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMateri
     StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(roughness);
-    if(!NWB::Impl::SetMaterialMutableParameter(
-        m_world, entity, Name(s_Interface), "runtime.specular_f0",
-        NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)
-    ))
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
         return NWB::Core::ECS::s_InvalidEntityId;
-    if(!NWB::Impl::SetMaterialMutableParameter(
-        m_world, entity, Name(s_Interface), "runtime.perceptual_roughness",
-        NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))
-    ))
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
         return NWB::Core::ECS::s_InvalidEntityId;
     return entity;
 }
@@ -201,10 +178,7 @@ bool ReflectionRoughnessScene::createDeformingSource(){
     for(const NWB::Impl::SkeletonJoint& joint : skeleton.joints())
         m_bindJoints.push_back(joint.localBindPose);
     bool tintApplied = false;
-    m_red = CreateTintedModelEntity(
-        m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface,
-        Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f), tintApplied
-    );
+    m_red = CreateTintedModelEntity(m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f), tintApplied);
     if(!m_red.valid() || !tintApplied)
         return false;
     SyncSmokeModelRuntimes(m_world);

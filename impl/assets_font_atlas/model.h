@@ -114,20 +114,10 @@ struct FontAtlasPayload{
 
 [[nodiscard]] bool ValidateFontAtlasPayload(const FontAtlasPayload& payload);
 [[nodiscard]] bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font);
-[[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(
-    const Font& font,
-    u32 sourceGlyphCount,
-    Core::Assets::AssetArena& arena
-);
+[[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Font& font, u32 sourceGlyphCount, Core::Assets::AssetArena& arena);
 [[nodiscard]] bool ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, u32 glyphCount);
-[[nodiscard]] Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(
-    const FontAtlasPayload& payload,
-    Core::Assets::AssetArena& arena
-);
-[[nodiscard]] Expected<FontAtlasPayload> DeserializeFontAtlasPayload(
-    const Core::Assets::AssetBytes& binary,
-    Core::Assets::AssetArena& arena
-);
+[[nodiscard]] Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Core::Assets::AssetBytes& binary, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

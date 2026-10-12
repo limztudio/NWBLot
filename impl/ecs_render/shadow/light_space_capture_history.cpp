@@ -23,11 +23,8 @@ void LightSpaceCaptureHistory::beginFrame()noexcept{
     m_frameAccepted = false;
 }
 
-LightSpaceCaptureTicket LightSpaceCaptureHistory::prepare(
-    const LightSpaceCaptureIdentity& identity, const SoftwareShadowCaptureCadence::Enum cadence
-)noexcept{
-    m_pendingReuseLimit = cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames ? 2u
-        : cadence == SoftwareShadowCaptureCadence::ReuseOneFrame ? 1u : 0u;
+LightSpaceCaptureTicket LightSpaceCaptureHistory::prepare(const LightSpaceCaptureIdentity& identity, const SoftwareShadowCaptureCadence::Enum cadence)noexcept{
+    m_pendingReuseLimit = cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames ? 2u : cadence == SoftwareShadowCaptureCadence::ReuseOneFrame ? 1u : 0u;
     const bool reuse = m_acceptedReuseCount < m_pendingReuseLimit
         && m_accepted && identity.trusted && m_acceptedIdentity.trusted
         && identity.scene == m_acceptedIdentity.scene && identity.lighting == m_acceptedIdentity.lighting

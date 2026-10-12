@@ -96,14 +96,7 @@ TEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandList
 TEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable){
     TestArena testArena;
     Core::GpuCrashTracker crashTracker(testArena.arena);
-    constexpr AStringView s_MarkerNames[] = {
-        "Destroyed command list 0",
-        "Destroyed command list 1",
-        "Destroyed command list 2",
-        "Destroyed command list 3",
-        "Destroyed command list 4",
-        "Destroyed command list 5",
-    };
+    constexpr AStringView s_MarkerNames[] = { "Destroyed command list 0", "Destroyed command list 1", "Destroyed command list 2", "Destroyed command list 3", "Destroyed command list 4", "Destroyed command list 5", };
     usize markerHashes[6] = {};
 
     usize markerIndex = 0u;
@@ -183,11 +176,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
 
     const auto retainedViewIsValid = [&](){
         const Core::ResolvedMarker resolved = crashTracker.resolveMarker(retainedHash);
-        return
-            retained.second() == AStringView("Retained marker view")
-            && resolved.first()
-            && resolved.second() == AStringView("Retained marker view")
-        ;
+        return retained.second() == AStringView("Retained marker view") && resolved.first() && resolved.second() == AStringView("Retained marker view");
     };
     growthStart.arrive_and_wait();
     if(!retainedViewIsValid())

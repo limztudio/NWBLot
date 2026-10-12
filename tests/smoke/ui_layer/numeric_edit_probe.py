@@ -14,12 +14,9 @@ DISPLAY = re.compile(rf"UiNumericEditSmoke: display logical=({NUMBER})x({NUMBER}
 STATE = re.compile(r"UiNumericEditSmoke: state sequence=(\d+) values=((?:\d+,){29}\d+)")
 GEOMETRY = re.compile(rf"UiNumericEditSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 SKIN = re.compile(r"UiNumericEditSmoke: skin=(default|alternate)")
-FIELDS = ("integer_bits", "float_bits", "i_bytes", "i_hash", "i_anchor", "i_caret", "i_status", "i_dirty", "i_focus",
-    "f_bytes", "f_hash", "f_anchor", "f_caret", "f_status", "f_dirty", "f_focus", "clipboard_bytes", "clipboard_hash",
-    "clipboard_anchor", "clipboard_caret", "clipboard_focus", "enabled", "readonly", "clamp", "commits", "cancels",
-    "rejects", "clamps", "restored", "coherent")
-RECTANGLES = tuple(f"{field}_{part}" for field in ("integer", "float", "clipboard")
-    for part in ("bounds", "content", "caret", "selection"))
+FIELDS = ("integer_bits", "float_bits", "i_bytes", "i_hash", "i_anchor", "i_caret", "i_status", "i_dirty", "i_focus", "f_bytes", "f_hash", "f_anchor", "f_caret", "f_status", "f_dirty", "f_focus", "clipboard_bytes", "clipboard_hash",
+    "clipboard_anchor", "clipboard_caret", "clipboard_focus", "enabled", "readonly", "clamp", "commits", "cancels", "rejects", "clamps", "restored", "coherent")
+RECTANGLES = tuple(f"{field}_{part}" for field in ("integer", "float", "clipboard") for part in ("bounds", "content", "caret", "selection"))
 MARKER_PARTS = tuple(6 if index < 2 else 3 if index in (3, 10, 17) else 2 for index in range(len(FIELDS))) + (2,)
 MARKER_TOLERANCE = 5
 
@@ -59,8 +56,7 @@ def snapshot_from_logs(text):
         return None
     state, display = states[-1], tuple(map(float, displays[-1].groups()))
     sequence, values = int(state[1]), tuple(map(int, state[2].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text)
-        if int(match[1]) == sequence}
+    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
     if any(name not in rectangles for name in RECTANGLES):
         return None
     geometry_values = (value for rectangle in rectangles.values() for value in rectangle)
@@ -68,8 +64,7 @@ def snapshot_from_logs(text):
         raise SmokeFailure("numeric fixture reported invalid geometry or display metrics")
     if any(value > 0xFFFFFFFFFFFFFFFF for value in values):
         raise SmokeFailure("numeric fixture state exceeds the unsigned 64-bit log schema")
-    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)),
-        "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
+    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
 
 
 def center(rectangle):
@@ -78,8 +73,8 @@ def center(rectangle):
 
 
 def ink_coverage(observed, background, foreground):
-    # Small glyphs can be antialiased throughout. Require ink along the expected color ray,
-    # with appreciable coverage, instead of requiring a fully opaque core pixel.
+    # Small glyphs can be antialiased throughout.
+    # Require ink along the expected color ray, with appreciable coverage, instead of requiring a fully opaque core pixel.
     actual, backdrop = linear_channels(observed), linear_channels(background)
     direction = tuple(target - base for target, base in zip(foreground, backdrop))
     denominator = sum(component * component for component in direction)
@@ -102,14 +97,12 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
         pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
         observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
         error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": [x, y], "expected": list(color), "observed": list(observed),
-            "error": error, "passed": error <= tolerance})
+        probes.append({"name": name, "position": [x, y], "expected": list(color), "observed": list(observed), "error": error, "passed": error <= tolerance})
 
     marker = 0
     for index, (value, parts) in enumerate(zip((*snapshot["values"], snapshot["sequence"]), MARKER_PARTS)):
         for part in range(parts):
-            probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot["logical_extent"][1] - 13.0),
-                encoded_marker(value >> (part * 12)))
+            probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot["logical_extent"][1] - 13.0), encoded_marker(value >> (part * 12)))
             marker += 1
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     probe("panel_gutter", (28.0, 330.0), panel, 8)
@@ -147,16 +140,13 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
                 probes.append({"name": f"{field}_text_ink", "coverage": 0.0, "passed": False})
             else:
                 error, negative_coverage, x, y, color, observed = closest
-                probes.append({"name": f"{field}_text_ink", "position": [x, y], "expected": list(color),
-                    "observed": list(observed), "coverage": -negative_coverage, "error": error, "passed": error <= 5})
+                probes.append({"name": f"{field}_text_ink", "position": [x, y], "expected": list(color), "observed": list(observed), "coverage": -negative_coverage, "error": error, "passed": error <= 5})
         if focused and anchor != caret:
             geometry_matches = geometry_matches and sw > 1.0 and sh > 1.0
             if sw > 1.0 and sh > 1.0:
                 linear_background = linear_channels(background)
-                color = tuple(foreground * 0.75 + backdrop * 0.25
-                    for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
-                probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0),
-                    linear_rgb_bytes(color))
+                color = tuple(foreground * 0.75 + backdrop * 0.25 for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
+                probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0), linear_rgb_bytes(color))
         elif focused and enabled and (field == "clipboard" or not snapshot["readonly"]):
             geometry_matches = geometry_matches and abs(kw * scale_x - 1.0) <= 0.01
             column = round(kx * scale_x)
@@ -166,11 +156,8 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
             color = linear_rgb_bytes((0.95, 0.97, 1.0))
             pixels = [rows[py][column] for py in range(max(0, row - 1), min(height, row + 2))]
             error = min(max(abs(actual - reference) for actual, reference in zip(pixel, color)) for pixel in pixels)
-            probes.append({"name": f"{field}_caret", "position": [column, row], "expected": list(color),
-                "observed": [list(pixel) for pixel in pixels], "error": error, "passed": error <= MARKER_TOLERANCE})
+            probes.append({"name": f"{field}_caret", "position": [column, row], "expected": list(color), "observed": [list(pixel) for pixel in pixels], "error": error, "passed": error <= MARKER_TOLERANCE})
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
     extra_matches = extra is None or extra(snapshot)
-    return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes,
-        "geometry_matches": geometry_matches, "model_matches": model_matches, "extra_matches": extra_matches,
-        "marker_count": marker, "passed": model_matches and geometry_matches and extra_matches
-            and (extent is None or (width, height) == extent) and all(item["passed"] for item in probes)}
+    return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes, "geometry_matches": geometry_matches, "model_matches": model_matches, "extra_matches": extra_matches,
+        "marker_count": marker, "passed": model_matches and geometry_matches and extra_matches and (extent is None or (width, height) == extent) and all(item["passed"] for item in probes)}

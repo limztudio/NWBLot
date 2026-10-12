@@ -97,10 +97,7 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
         CpuTaskOptions options;
         options.cost = static_cast<CpuTaskCost::Enum>(task % 3u);
         options.priority = static_cast<CpuTaskPriority::Enum>((task / 3u) % 3u);
-        const CpuTaskHandle handle = task % 2u == 0u
-            ? scope.submit(Move(callback), options)
-            : scheduler.submit(Move(callback), options)
-        ;
+        const CpuTaskHandle handle = task % 2u == 0u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
         state.handles[producer][task] = handle;
         if(!handle.valid())
             state.rejected.store(true, MemoryOrder::release);
@@ -247,10 +244,7 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
                 };
                 const CpuTaskOptions options{ .cost = CpuTaskCost::Light, .target = CpuTaskTarget::MainThread };
                 const u32 joinKind = task % s_JoinKinds;
-                const CpuTaskHandle handle = task % 2u == 0u || joinKind == 1u
-                    ? scope.submit(Move(callback), options)
-                    : scheduler.submit(Move(callback), options)
-                ;
+                const CpuTaskHandle handle = task % 2u == 0u || joinKind == 1u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
                 if(!handle.valid()){
                     rejected.store(true, MemoryOrder::release);
                     return;

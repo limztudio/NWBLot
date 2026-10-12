@@ -88,24 +88,9 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     m_preparedShadowInstanceMaterialBytes.resize(instanceMaterialByteCount);
     m_preparedShadowInstanceBytes.resize(instanceByteCount);
     m_preparedShadowMaterialTypedBytes.resize(materialTypedByteCount);
-    NWB_MEMCPY(
-        m_preparedShadowInstanceMaterialBytes.data(),
-        m_preparedShadowInstanceMaterialBytes.size(),
-        instanceMaterialData,
-        instanceMaterialByteCount
-    );
-    NWB_MEMCPY(
-        m_preparedShadowInstanceBytes.data(),
-        m_preparedShadowInstanceBytes.size(),
-        instanceData,
-        instanceByteCount
-    );
-    NWB_MEMCPY(
-        m_preparedShadowMaterialTypedBytes.data(),
-        m_preparedShadowMaterialTypedBytes.size(),
-        materialTypedData,
-        materialTypedByteCount
-    );
+    NWB_MEMCPY(m_preparedShadowInstanceMaterialBytes.data(), m_preparedShadowInstanceMaterialBytes.size(), instanceMaterialData, instanceMaterialByteCount);
+    NWB_MEMCPY(m_preparedShadowInstanceBytes.data(), m_preparedShadowInstanceBytes.size(), instanceData, instanceByteCount);
+    NWB_MEMCPY(m_preparedShadowMaterialTypedBytes.data(), m_preparedShadowMaterialTypedBytes.size(), materialTypedData, materialTypedByteCount);
     m_preparedShadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
     m_preparedShadowInstanceBuffer = state.m_shadowInstanceBuffer;
     m_preparedShadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer;
@@ -126,12 +111,7 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     return true;
 }
 
-bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(
-    const u64 hash,
-    const usize instanceMaterialCount,
-    const usize instanceCount,
-    const usize materialTypedByteCount
-){
+bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount){
     clearPreparedShadowMaterialContext();
     if(instanceMaterialCount == 0u || instanceCount == 0u || materialTypedByteCount == 0u)
         return false;
@@ -151,11 +131,7 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(
         && state.m_shadowMaterialTypedHeapHandle.valid()
         && state.m_shadowMaterialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
     ;
-    if(
-        !state.m_swShadowMaterialContextHashValid
-        || state.m_swShadowMaterialContextHash != hash
-        || !validStorage
-    )
+    if(!state.m_swShadowMaterialContextHashValid || state.m_swShadowMaterialContextHash != hash || !validStorage)
         return false;
 
     m_preparedShadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
@@ -178,9 +154,7 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(
     return true;
 }
 
-Expected<PreparedShadowMaterialContextUploads> RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
-    Core::GpuTaskGraph& graph
-)const{
+Expected<PreparedShadowMaterialContextUploads> RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(Core::GpuTaskGraph& graph)const{
     PreparedShadowMaterialContextUploads result;
     if(!m_preparedShadowMaterialContextReady)
         return result;
@@ -243,21 +217,9 @@ Expected<PreparedShadowMaterialContextUploads> RendererRayTracingSystem::retainP
         return MakeUnexpected(Failure{});
     }
 
-    result.instanceMaterial = graph.copyUploadData(
-        m_preparedShadowInstanceMaterialBytes.data(),
-        m_preparedShadowInstanceMaterialBytes.size(),
-        alignof(NwbRtInstanceMaterialGpu)
-    );
-    result.instance = graph.copyUploadData(
-        m_preparedShadowInstanceBytes.data(),
-        m_preparedShadowInstanceBytes.size(),
-        alignof(InstanceGpuData)
-    );
-    result.materialTyped = graph.copyUploadData(
-        m_preparedShadowMaterialTypedBytes.data(),
-        m_preparedShadowMaterialTypedBytes.size(),
-        alignof(u32)
-    );
+    result.instanceMaterial = graph.copyUploadData(m_preparedShadowInstanceMaterialBytes.data(), m_preparedShadowInstanceMaterialBytes.size(), alignof(NwbRtInstanceMaterialGpu));
+    result.instance = graph.copyUploadData(m_preparedShadowInstanceBytes.data(), m_preparedShadowInstanceBytes.size(), alignof(InstanceGpuData));
+    result.materialTyped = graph.copyUploadData(m_preparedShadowMaterialTypedBytes.data(), m_preparedShadowMaterialTypedBytes.size(), alignof(u32));
     if(!(result.instanceMaterial.valid() && result.instance.valid() && result.materialTyped.valid()))
         return MakeUnexpected(Failure{});
     return result;

@@ -77,12 +77,7 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
     const u64 capacityBytes = *capacity;
     if(sourceEndOffset > capacityBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}")
-            , StringConvert(m_volumeName)
-            , sourceOffset
-            , sourceEndOffset
-            , capacityBytes
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}"), StringConvert(m_volumeName), sourceOffset, sourceEndOffset, capacityBytes);
         return false;
     }
 
@@ -105,11 +100,7 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
 
     Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_MoveBytesScratch);
-    Vector<u8, Core::Alloc::ScratchArena> moveBuffer(
-        static_cast<usize>(moveChunkBytes),
-        0,
-        scratchArena
-    );
+    Vector<u8, Core::Alloc::ScratchArena> moveBuffer(static_cast<usize>(moveChunkBytes), 0, scratchArena);
 
     if(destinationOffset < sourceOffset){
         u64 movedBytes = 0;

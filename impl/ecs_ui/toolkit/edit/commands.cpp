@@ -29,10 +29,7 @@ static bool IsMutation(const EditCommand::Enum command)noexcept{
 }
 
 static bool SuppressRepeat(const EditCommand::Enum command)noexcept{
-    return
-        command == EditCommand::SelectAll || command == EditCommand::Copy || command == EditCommand::Cut
-        || command == EditCommand::Paste || command == EditCommand::Submit || command == EditCommand::Cancel
-    ;
+    return command == EditCommand::SelectAll || command == EditCommand::Copy || command == EditCommand::Cut || command == EditCommand::Paste || command == EditCommand::Submit || command == EditCommand::Cancel;
 }
 
 static bool EraseWord(EditModel& model, const bool forward){

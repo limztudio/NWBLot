@@ -19,10 +19,8 @@ from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, read_b
 CASES = ("reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65")
 ORDINARY_CASES = ("reference", "clipped_reference")
 OPEN_CAPACITY_MESSAGE = "RendererSystem: CSG direct-shadow traversal exceeded open-surface capacity (flags=16); conservative occlusion retained"
-COUNTS = {"reference": (5, 6), "retained": (5, 6), "clipped_reference": (4, 5), "clipped": (4, 5),
-    "boundary64": (64, 6), "terminal65": (65, 6)}
-LENGTHS = {"reference": (2., 1.2), "retained": (2., 1.2), "clipped_reference": (1., 1.6), "clipped": (1., 1.6),
-    "boundary64": (64. / 63., 1.2), "terminal65": (None, 1.2)}
+COUNTS = {"reference": (5, 6), "retained": (5, 6), "clipped_reference": (4, 5), "clipped": (4, 5), "boundary64": (64, 6), "terminal65": (65, 6)}
+LENGTHS = {"reference": (2., 1.2), "retained": (2., 1.2), "clipped_reference": (1., 1.6), "clipped": (1., 1.6), "boundary64": (64. / 63., 1.2), "terminal65": (None, 1.2)}
 IOR = 1.5
 REGIONS = (("first_receiver", -1.2, 0.), ("six_sheet_control", 1.2, 0.), ("clear_receiver", 0., 1.2))
 
@@ -32,8 +30,7 @@ def expected_open_rgb(length, events):
         return (0., 0., 0.)
     interface_transmission = (1. - ((IOR - 1.) / (IOR + 1.)) ** 2) ** events
     linear = [channel ** length * interface_transmission for channel in TRANSMISSION]
-    return tuple(255. * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1. / 2.4) - 0.055)
-        for value in linear)
+    return tuple(255. * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1. / 2.4) - 0.055) for value in linear)
 
 
 def validate_runtime(log_text, case, route, frames):
@@ -48,8 +45,7 @@ def validate_runtime(log_text, case, route, frames):
         start = warning_indices[0]
         if not re.fullmatch(r"\d{2}:\d{2}:\d{2}\.\d{3} \[WARNING\]:", lines[start]):
             raise SmokeFailure("terminal65 warning has an invalid severity-record header")
-        end = next((index for index in range(start + 1, len(lines))
-            if re.fullmatch(r"\d{2}:\d{2}:\d{2}\.\d{3} \[[A-Z ]+\]:", lines[index])), len(lines))
+        end = next((index for index in range(start + 1, len(lines)) if re.fullmatch(r"\d{2}:\d{2}:\d{2}\.\d{3} \[[A-Z ]+\]:", lines[index])), len(lines))
         message = "\n".join(lines[start + 1:end]).strip("\n")
         if message != OPEN_CAPACITY_MESSAGE:
             raise SmokeFailure("terminal65 requires the complete exact open-capacity flags=16 warning message")
@@ -61,8 +57,7 @@ def validate_runtime(log_text, case, route, frames):
         if marker in remaining:
             raise SmokeFailure(f"{case}: rejected runtime diagnostic {marker}")
     first, second = COUNTS[case]
-    required = ["FramebufferCapture: capture ready", "CsgShadowSmokeProject: shutdown",
-        f"CsgShadowSmokeProject: open_case={case} retained_events={first},{second} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1",
+    required = ["FramebufferCapture: capture ready", "CsgShadowSmokeProject: shutdown", f"CsgShadowSmokeProject: open_case={case} retained_events={first},{second} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1",
         f"CsgShadowSmokeProject: atlas arm=1 light=directional hardware={int(route == 'hardware')}",
         "SoftwareShadowSmoke: requested backend=0 directional_resolution=512 point_resolution=256 budget_bytes=268435456 coverage=0 blocker_search=0 capture_cadence=0"]
     if route == "software":
@@ -70,8 +65,7 @@ def validate_runtime(log_text, case, route, frames):
         if "RendererSystem: dispatched hardware transparent shadow traversal" in log_text:
             raise SmokeFailure("software arm used hardware transparent shadows")
     if case in ORDINARY_CASES:
-        required.append("RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware"
-            else "RendererSystem: dispatched light-space shadow maps")
+        required.append("RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware" else "RendererSystem: dispatched light-space shadow maps")
         if "RendererSystem: dispatched CSG light-space shadows" in log_text:
             raise SmokeFailure("ordinary open reference admitted CSG shadow work")
     else:
@@ -82,8 +76,7 @@ def validate_runtime(log_text, case, route, frames):
     sources = [int(value) for value in re.findall(r"FramebufferCapture: graphics source frame (\d+)", log_text)]
     if len(sources) != 1 or sources[0] < frames - 1:
         raise SmokeFailure(f"{case}: capture lacks one completed source after the required frame warmup")
-    return {"graphics_source_frame": sources[0], "route": route, "retained_events": [first, second],
-        "diagnostic_flags": 16 if case == "terminal65" else 0, "expected_capacity_terminal": case == "terminal65"}
+    return {"graphics_source_frame": sources[0], "route": route, "retained_events": [first, second], "diagnostic_flags": 16 if case == "terminal65" else 0, "expected_capacity_terminal": case == "terminal65"}
 
 
 def measure_frame(frame, case):
@@ -101,8 +94,7 @@ def measure_frame(frame, case):
         error = max(abs(value - target) for value, target in zip(rgb, expected))
         if error > tolerance:
             raise SmokeFailure(f"{case}/{region[0]}: open shadow disagrees with independent pairing/Beer/Fresnel oracle; rgb={rgb}, expected={expected}")
-        measurements[region[0]] = {"rgb": rgb, "expected_rgb": expected, "optical_length": length, "interface_count": events,
-            "maximum_mean_byte_error": error, "samples": len(pixels)}
+        measurements[region[0]] = {"rgb": rgb, "expected_rgb": expected, "optical_length": length, "interface_count": events, "maximum_mean_byte_error": error, "samples": len(pixels)}
     return measurements
 
 
@@ -119,18 +111,15 @@ def compare_frames(frames):
         change = max(abs(a - b) for a, b in zip(measured["retained"][name]["rgb"], measured["clipped"][name]["rgb"]))
         if change < 15.:
             raise SmokeFailure(f"{name}: clipping did not change the open pairing control")
-    return {"oracle": "independent odd span/even pairs, clipped ordinary geometry, Beer absorption and IOR1.5 interface Fresnel through the 64/65 boundary",
-        "ior": IOR, "unit_transmission": TRANSMISSION,
+    return {"oracle": "independent odd span/even pairs, clipped ordinary geometry, Beer absorption and IOR1.5 interface Fresnel through the 64/65 boundary", "ior": IOR, "unit_transmission": TRANSMISSION,
         "mean_rgb_tolerance_bytes": BYTE_TOLERANCE, "regions": measured}
 
 
 def capture_case(args, case):
     output = args.output_directory / (case + ".bmp")
     runtime_log = output.with_suffix(".log")
-    command = ["--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
-        "--timeout", str(args.timeout), "--log-output", str(runtime_log),
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
+    command = ["--executable", str(args.executable), "--working-directory", str(args.working_directory), "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
+        "--timeout", str(args.timeout), "--log-output", str(runtime_log), "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
     if args.logserver_executable:
         command.extend(("--logserver-executable", str(args.logserver_executable)))
     else:
@@ -198,8 +187,7 @@ def main(argv):
         for case in CASES:
             frames[case], receipts[case] = capture_case(args, case)
         result = compare_frames(frames)
-        result.update({"status": "passed", "route": args.route, "capture_count": len(receipts), "captures": receipts,
-            "limits": "source receipts prove completed static captures and selected route; no per-ray diagnostic attribution or performance claim"})
+        result.update({"status": "passed", "route": args.route, "capture_count": len(receipts), "captures": receipts, "limits": "source receipts prove completed static captures and selected route; no per-ray diagnostic attribution or performance claim"})
         (args.output_directory / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         print("PASS: retained/clipped five/six-sheet optics, exact 64 capacity, and conservative 65 terminal")
         return 0

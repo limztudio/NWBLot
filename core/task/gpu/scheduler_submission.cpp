@@ -32,10 +32,7 @@ private:
 
 
 public:
-    PreparedTimingTicketsUnwindScope(
-        GpuTimingSubmissionTicket* const* const tickets,
-        usize& preparedTicketCount
-    )noexcept
+    PreparedTimingTicketsUnwindScope(GpuTimingSubmissionTicket* const* const tickets, usize& preparedTicketCount)noexcept
         : m_tickets(tickets)
         , m_preparedTicketCount(preparedTicketCount)
     {}
@@ -68,12 +65,7 @@ private:
 
 class GpuTaskScheduler::SubmittingPacketUnwindScope final : NoCopy{
 public:
-    SubmittingPacketUnwindScope(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess,
-        GpuGraphSubmissionTransaction& transaction
-    )noexcept
+    SubmittingPacketUnwindScope(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuGraphSubmissionTransaction& transaction)noexcept
         : m_graph(graph)
         , m_compiledGraph(compiledGraph)
         , m_planAccess(planAccess)
@@ -84,13 +76,7 @@ public:
             return;
 
         NothrowScopedLock resolutionLock(m_transaction.m_resolutionMutex);
-        m_transaction.abandonSubmittingPacketAfterExceptionWithinSubmissionOperation(
-            m_graph,
-            m_compiledGraph,
-            m_planAccess,
-            m_packet,
-            *m_submissionLease
-        );
+        m_transaction.abandonSubmittingPacketAfterExceptionWithinSubmissionOperation(m_graph, m_compiledGraph, m_planAccess, m_packet, *m_submissionLease);
     }
 
 
@@ -133,11 +119,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     const QueueSubmissionPreSubmitHook* const preSubmitHook,
     const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
 )const{
-    if(
-        !planAccess.validFor(compiledGraph)
-        || !artifactAccess.validFor(recordedGraph)
-        || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveFor(transaction)
-    )
+    if(!planAccess.validFor(compiledGraph) || !artifactAccess.validFor(recordedGraph) || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveFor(transaction))
         return false;
     GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(!declarationAccess.valid())
@@ -147,13 +129,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         !planAccess.validFor(declarationAccess)
         || device().getDeviceGeneration() != planAccess.deviceGeneration()
         || !planAccess.validPacket(packetID)
-        || !recordedGraph.validForWithinArtifactOperation(
-            graph,
-            declarationAccess,
-            compiledGraph,
-            planAccess,
-            artifactAccess
-        )
+        || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
         || !transaction.validFor(planAccess)
         || (timingTicketCount != 0u && !timingTickets)
         || (preSubmitHook && !preSubmitHook->valid())
@@ -176,27 +152,13 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         if(timingTickets[timingTicketIndex] != ownedTimingTicket)
             submissionTimingTickets.push_back(timingTickets[timingTicketIndex]);
     }
-    if(!graph.packetReadyForSubmission(
-        compiledGraph,
-        planAccess,
-        packetID,
-        recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess)
-    ))
+    if(!graph.packetReadyForSubmission(compiledGraph, planAccess, packetID, recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess)))
         return false;
 
-    const GpuRecordedPacket* const recordedPacket = recordedGraph.findWithinArtifactOperation(
-        packetID,
-        artifactAccess
-    );
+    const GpuRecordedPacket* const recordedPacket = recordedGraph.findWithinArtifactOperation(packetID, artifactAccess);
     const GpuPhysicalQueueInfo* const queue = planAccess.queueInfo(packet.queue);
     // All validation before the transaction reservation is retryable.  A caller that abandons this artifact uses discardUnaccepted() explicitly
-    if(
-        !recordedPacket
-        || recordedPacket->commandListCount == 0u
-        || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists
-        || !queue
-        || !device().matchesPhysicalQueueIdentity(packet.queue)
-    ){
+    if(!recordedPacket || recordedPacket->commandListCount == 0u || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists || !queue || !device().matchesPhysicalQueueIdentity(packet.queue)){
         return false;
     }
     for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex){
@@ -206,11 +168,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     }
 
     Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
-    waitTokens.reserve(
-        packet.dependencyCount
-        + packet.externalDependencyCount
-        + (packet.joinsAcceptedQueueFrontier ? planAccess.packetCount() : 0u)
-    );
+    waitTokens.reserve(packet.dependencyCount + packet.externalDependencyCount + (packet.joinsAcceptedQueueFrontier ? planAccess.packetCount() : 0u));
     const GpuPacketDependency* const dependencies = packetView.dependencies;
     for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
         const QueueSubmissionToken token = transaction.packetToken(dependencies[dependencyIndex].producer);
@@ -225,40 +183,24 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         const QueueSubmissionToken* const token = declarationAccess.externalCompletionToken(completion);
         if(!token)
             return false;
-        const GpuPhysicalQueueInfo* const externalQueue = device().getPhysicalQueueInfo(GpuPhysicalQueueId{
-            .index = token->physicalQueueIndex,
-            .deviceGeneration = token->deviceGeneration,
-        });
+        const GpuPhysicalQueueInfo* const externalQueue = device().getPhysicalQueueInfo(GpuPhysicalQueueId{ .index = token->physicalQueueIndex, .deviceGeneration = token->deviceGeneration, });
         if(!externalQueue || externalQueue->queueClass != token->queue)
             return false;
         waitTokens.push_back(*token);
     }
 
-    if(
-        packet.externalDependencyCount != 0u
-        && !GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(declarationAccess, planAccess, packetID)
-    )
+    if(packet.externalDependencyCount != 0u && !GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(declarationAccess, planAccess, packetID))
         return false;
 
-    if(
-        packet.joinsAcceptedQueueFrontier
-        && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens)
-    )
+    if(packet.joinsAcceptedQueueFrontier && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens))
         return false;
 
     // Freeze every timing ticket before validating the complete wait frontier: a query reservation may contribute the accepted frame-reset token that ordered this pool on another physical queue. Preparation remains retryable until the graph packet lease is acquired.
     SubmittingPacketUnwindScope submittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
     usize preparedTimingTicketCount = 0u;
-    PreparedTimingTicketsUnwindScope preparedTimingTicketsUnwind(
-        submissionTimingTickets.data(),
-        preparedTimingTicketCount
-    );
+    PreparedTimingTicketsUnwindScope preparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     for(; preparedTimingTicketCount < submissionTimingTickets.size(); ++preparedTimingTicketCount){
-        if(submissionTimingTickets[preparedTimingTicketCount]->prepareSubmissionAfterCommandListValidation(
-            recordedPacket->commandLists,
-            recordedPacket->commandListCount,
-            waitTokens
-        ))
+        if(submissionTimingTickets[preparedTimingTicketCount]->prepareSubmissionAfterCommandListValidation(recordedPacket->commandLists, recordedPacket->commandListCount, waitTokens))
             continue;
         return false;
     }
@@ -281,22 +223,14 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     GpuGraphSubmissionTransaction::NativeSubmissionInfo nativeSubmissionInfo;
     nativeSubmissionInfo.commandListCount = recordedPacket->commandListCount;
-    const GpuPacketRuntimeDetail::PacketWaitStatistics waitStatistics = GpuPacketRuntimeDetail::CountPacketWaitStatistics(
-        packet.queue, waitTokens.data(), waitTokens.size(), scratchArena
-    );
+    const GpuPacketRuntimeDetail::PacketWaitStatistics waitStatistics = GpuPacketRuntimeDetail::CountPacketWaitStatistics(packet.queue, waitTokens.data(), waitTokens.size(), scratchArena);
     nativeSubmissionInfo.plannedWaitTokenCount = waitStatistics.plannedWaitTokenCount;
     nativeSubmissionInfo.sameQueueWaitElisionCount = waitStatistics.sameQueueWaitElisionCount;
     nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
 
     // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens
     GpuTaskGraph::PacketSubmissionLease submissionLease;
-    if(!transaction.beginPacketSubmission(
-        graph,
-        compiledGraph,
-        packetID,
-        recordedGraph.recordingAttemptGeneration(),
-        submissionLease
-    ))
+    if(!transaction.beginPacketSubmission(graph, compiledGraph, packetID, recordedGraph.recordingAttemptGeneration(), submissionLease))
         return false;
     preparedTimingTicketsUnwind.abandonOnUnwind();
     submittingPacketUnwind.arm(packetID, submissionLease);
@@ -307,12 +241,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(preSubmitHook)
         submitDesc.setPreSubmitHook(*preSubmitHook);
     const Timer submissionBegin = TimerNow();
-    const auto submission = device().executeGraphCommandLists(
-        recordedPacket->commandLists,
-        recordedPacket->commandListCount,
-        packet.queue,
-        submitDesc
-    );
+    const auto submission = device().executeGraphCommandLists(recordedPacket->commandLists, recordedPacket->commandListCount, packet.queue, submitDesc);
     const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
     const usize emittedTimelineWaitCount = submission ? submission->timelineWaitCount : 0u;
     if(token.valid()){
@@ -325,13 +254,10 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex)
             graphSubmissionOwnerships[commandListIndex].reset();
     }
-    // Device has released its native Queue locks. Serialize only the irreversible CPU publication tail
-    // another ordinary packet may already enter Vulkan without exposing timing, payload, or transaction state out of order.
+    // Device has released its native Queue locks.
+    // Serialize only the irreversible CPU publication tail another ordinary packet may already enter Vulkan without exposing timing, payload, or transaction state out of order.
     SubmittingPacketUnwindScope resolutionSubmittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
-    PreparedTimingTicketsUnwindScope resolutionPreparedTimingTicketsUnwind(
-        submissionTimingTickets.data(),
-        preparedTimingTicketCount
-    );
+    PreparedTimingTicketsUnwindScope resolutionPreparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     ScopedLock resolutionLock(transaction.m_resolutionMutex);
     resolutionPreparedTimingTicketsUnwind.abandonOnUnwind();
     resolutionSubmittingPacketUnwind.arm(packetID, submissionLease);
@@ -364,17 +290,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     nativeSubmissionInfo.submissionSeconds = DurationInSeconds<f64>(TimerNow(), submissionBegin);
     resolutionPreparedTimingTicketsUnwind.release();
     resolutionSubmittingPacketUnwind.release();
-    return transaction.acceptSubmittingPacket(
-        graph,
-        compiledGraph,
-        packetID,
-        token,
-        submissionLease,
-        nativeSubmissionInfo,
-        submissionTimingTickets.data(),
-        submissionTimingTickets.size(),
-        taskAcceptedCallbacks
-    );
+    return transaction.acceptSubmittingPacket(graph, compiledGraph, packetID, token, submissionLease, nativeSubmissionInfo, submissionTimingTickets.data(), submissionTimingTickets.size(), taskAcceptedCallbacks);
 }
 
 

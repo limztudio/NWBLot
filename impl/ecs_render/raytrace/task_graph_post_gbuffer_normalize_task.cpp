@@ -26,25 +26,14 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PostGbufferNormalizeGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
-    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(
-        context,
-        payload.shadowVisibilityTask
-    );
+bool PostGbufferNormalizeGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
     if(!shadowVisibilityQueue)
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     // Explicit uses below lower G-buffer, scene, and trace-geometry states first.
-    if(
-        shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
-        && payload.asyncPrefixTiming
-        && *payload.asyncPrefixTiming
-    ){
+    if(shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute && payload.asyncPrefixTiming && *payload.asyncPrefixTiming){
         (*payload.asyncPrefixTiming)->finishTiming(commandList);
         payload.asyncPrefixTiming->reset();
     }

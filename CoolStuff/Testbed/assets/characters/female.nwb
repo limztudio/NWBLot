@@ -353050,9 +353050,4 @@ model.skinned_meshes = {
 };
 
 
-asset_bunch bunch = [
-    mesh,
-    skeleton,
-    skin,
-    model,
-];
+asset_bunch bunch = [mesh, skeleton, skin, model,];

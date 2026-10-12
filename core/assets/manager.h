@@ -90,12 +90,7 @@ public:
 
 public:
     template<typename TAsset, typename TResource>
-    [[nodiscard]] static bool CheckLoaderEnter(
-        const AssetRef<TAsset>& assetRef,
-        const TResource& resource,
-        const TStringView owner,
-        const AStringView assetKindText
-    ){
+    [[nodiscard]] static bool CheckLoaderEnter(const AssetRef<TAsset>& assetRef, const TResource& resource, const TStringView owner, const AStringView assetKindText){
         if(!assetRef.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, StringConvert(assetKindText));
             return false;
@@ -104,27 +99,15 @@ public:
     }
 
     template<typename AssetT>
-    [[nodiscard]] Expected<UniquePtr<AssetT>> loadTypedSync(
-        const Name& virtualPath,
-        const TStringView ownerName,
-        const AStringView assetKindText
-    )const{
+    [[nodiscard]] Expected<UniquePtr<AssetT>> loadTypedSync(const Name& virtualPath, const TStringView ownerName, const AStringView assetKindText)const{
         auto loadedAsset = loadSync(AssetT::AssetTypeName(), virtualPath);
         if(!loadedAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
-                , ownerName
-                , StringConvert(assetKindText)
-                , StringConvert(virtualPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'"), ownerName, StringConvert(assetKindText), StringConvert(virtualPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         const AssetT* typedAsset = CastAsset<AssetT>(loadedAsset->get());
         if(!typedAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}")
-                , ownerName
-                , StringConvert(virtualPath.resolvedText())
-                , StringConvert(assetKindText)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}"), ownerName, StringConvert(virtualPath.resolvedText()), StringConvert(assetKindText));
             return MakeUnexpected(Failure{});
         }
         return UniquePtr<AssetT>(checked_cast<AssetT*>(loadedAsset->release()));

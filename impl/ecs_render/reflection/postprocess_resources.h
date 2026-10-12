@@ -71,17 +71,11 @@ public:
 public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, const ReflectionSettings& settings);
-    [[nodiscard]] ReflectionPostprocessSnapshot snapshot(
-        const ReflectionRadianceBinding& base,
-        const ReflectionSceneContentStamp& stamp,
-        const ReflectionSettings& settings,
-        u64 graphicsFrameIndex
-    )const;
+    [[nodiscard]] ReflectionPostprocessSnapshot snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)const;
 
 private:
     void releaseTargets();
-    [[nodiscard]] bool preparePipeline(
-        Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, Name name, AStringView variant);
+    [[nodiscard]] bool preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, Name name, AStringView variant);
     [[nodiscard]] bool prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
 
 private:

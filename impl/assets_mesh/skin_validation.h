@@ -52,10 +52,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     return {};
 }
 
-[[nodiscard]] inline bool ValidInverseBindMatrixCount(
-    const usize inverseBindMatrixCount,
-    const u32 skeletonJointCount
-)noexcept{
+[[nodiscard]] inline bool ValidInverseBindMatrixCount(const usize inverseBindMatrixCount, const u32 skeletonJointCount)noexcept{
     if(inverseBindMatrixCount == 0u)
         return true;
 

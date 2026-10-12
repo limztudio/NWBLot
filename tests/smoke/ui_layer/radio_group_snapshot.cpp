@@ -130,9 +130,7 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
         static_cast<u64>(input.popupCount()), focusScope, m_source.labelReads(), m_disabled.selectedKey(),
         m_source.rowCount() };
     const DisplayMetrics& previous = m_snapshot.display;
-    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth
-        || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX
-        || current.display.pixelScaleY != previous.pixelScaleY;
+    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
     bool changed = current.values != m_snapshot.values;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
@@ -141,14 +139,10 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: display logical={}x{} scale={}x{}")
-            , current.display.logicalWidth, current.display.logicalHeight
-            , current.display.pixelScaleX, current.display.pixelScaleY
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},"
-        "{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{}," "{},{},{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7]
         , value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15], value[16]
         , value[17], value[18], value[19], value[20], value[21]

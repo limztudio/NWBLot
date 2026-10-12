@@ -16,111 +16,34 @@ endif()
 add_subdirectory(logger_server)
 
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
-    add_test(NAME nwb_ui_smoke_tooling_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/ui_smoke_tooling_tests.py"
-    )
-    add_test(NAME nwb_gpu_timing_parse_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_parse_tests.py"
-    )
-    add_test(NAME nwb_csg_shadow_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke_tests.py"
-    )
-    add_test(NAME nwb_csg_shadow_open_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke_tests.py"
-    )
-    add_test(NAME nwb_reflection_cpu_timing_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_cpu_timing_smoke_tests.py"
-    )
-    add_test(NAME nwb_csg_gi_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_smoke_tests.py"
-    )
-    add_test(NAME nwb_csg_caustic_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_smoke_tests.py"
-    )
-    add_test(NAME nwb_skinned_caustic_csg_transition_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_testbed_window_capture_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/window_capture_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_caustic_quality_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_stress_presentation_timing_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_timing_smoke_tests.py"
-    )
-    add_test(NAME nwb_stress_csg_profile_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_csg_profile_tests.py"
-    )
-    add_test(
-        NAME nwb_smoke_cpu_gpu_timing_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_tests.py"
-    )
-    add_test(
-        NAME nwb_reflection_capture_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_reflection_spatial_owner_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_spatial_owner_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_reflection_roughness_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_reflection_feedback_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_reflection_benchmark_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_benchmark_tests.py"
-    )
-    add_test(
-        NAME nwb_renderer_gather_benchmark_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_tests.py"
-    )
-    add_test(
-        NAME nwb_renderer_compiler_statistics_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/compiler_statistics_diagnostic_tests.py"
-    )
-    add_test(
-        NAME nwb_renderer_ab_benchmark_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/renderer_ab_benchmark_tests.py"
-    )
-    add_test(
-        NAME nwb_reflection_temporal_omission_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_temporal_omission_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_reflection_optical_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_csg_optics_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_optics_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_refraction_capture_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_capture_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_refraction_identity_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_identity_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_refraction_gallery_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_smoke_tests.py"
-    )
-    add_test(
-        NAME nwb_refraction_duplicate_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_duplicate_smoke_tests.py"
-    )
+    add_test(NAME nwb_ui_smoke_tooling_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/ui_smoke_tooling_tests.py")
+    add_test(NAME nwb_gpu_timing_parse_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_parse_tests.py")
+    add_test(NAME nwb_csg_shadow_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke_tests.py")
+    add_test(NAME nwb_csg_shadow_open_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke_tests.py")
+    add_test(NAME nwb_reflection_cpu_timing_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_cpu_timing_smoke_tests.py")
+    add_test(NAME nwb_csg_gi_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_smoke_tests.py")
+    add_test(NAME nwb_csg_caustic_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_smoke_tests.py")
+    add_test(NAME nwb_skinned_caustic_csg_transition_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke_tests.py")
+    add_test(NAME nwb_testbed_window_capture_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/window_capture_smoke_tests.py")
+    add_test(NAME nwb_caustic_quality_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_smoke_tests.py")
+    add_test(NAME nwb_stress_presentation_timing_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_timing_smoke_tests.py")
+    add_test(NAME nwb_stress_csg_profile_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_csg_profile_tests.py")
+    add_test(NAME nwb_smoke_cpu_gpu_timing_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_tests.py")
+    add_test(NAME nwb_reflection_capture_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke_tests.py")
+    add_test(NAME nwb_reflection_spatial_owner_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_spatial_owner_smoke_tests.py")
+    add_test(NAME nwb_reflection_roughness_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_smoke_tests.py")
+    add_test(NAME nwb_reflection_feedback_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_smoke_tests.py")
+    add_test(NAME nwb_reflection_benchmark_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_benchmark_tests.py")
+    add_test(NAME nwb_renderer_gather_benchmark_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_tests.py")
+    add_test(NAME nwb_renderer_compiler_statistics_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/compiler_statistics_diagnostic_tests.py")
+    add_test(NAME nwb_renderer_ab_benchmark_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/renderer_ab_benchmark_tests.py")
+    add_test(NAME nwb_reflection_temporal_omission_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_temporal_omission_smoke_tests.py")
+    add_test(NAME nwb_reflection_optical_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke_tests.py")
+    add_test(NAME nwb_csg_optics_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_optics_smoke_tests.py")
+    add_test(NAME nwb_refraction_capture_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_capture_smoke_tests.py")
+    add_test(NAME nwb_refraction_identity_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_identity_smoke_tests.py")
+    add_test(NAME nwb_refraction_gallery_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_smoke_tests.py")
+    add_test(NAME nwb_refraction_duplicate_analysis_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_duplicate_smoke_tests.py")
 endif()
 
 if(TARGET nwb_tex_conv)
@@ -128,17 +51,8 @@ if(TARGET nwb_tex_conv)
 endif()
 
 if(TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
-    add_test(
-        NAME nwb_pipeline_cli_integration
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/pipeline_cli_tests.py"
-            --dependency-computer "$<TARGET_FILE:nwb_dependency_computer>"
-            --asset-builder "$<TARGET_FILE:nwb_asset_builder>"
-            --asset-gatherer "$<TARGET_FILE:nwb_asset_gatherer>"
-            --pipeline-launcher "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
-            --repo-root "${PROJECT_SOURCE_DIR}"
-    )
+    add_test(NAME nwb_pipeline_cli_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/pipeline_cli_tests.py" --dependency-computer "$<TARGET_FILE:nwb_dependency_computer>" --asset-builder "$<TARGET_FILE:nwb_asset_builder>"
+            --asset-gatherer "$<TARGET_FILE:nwb_asset_gatherer>" --pipeline-launcher "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --repo-root "${PROJECT_SOURCE_DIR}")
     set_tests_properties(nwb_pipeline_cli_integration PROPERTIES TIMEOUT 120)
 endif()
 
@@ -161,8 +75,7 @@ if(Python3_Interpreter_FOUND)
         list(APPEND nwb_terminal_cli_arguments --application "$<TARGET_FILE:testbed>")
     endif()
     if(nwb_terminal_cli_arguments)
-        add_test(NAME nwb_terminal_cli_integration
-            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/terminal_cli_tests.py" ${nwb_terminal_cli_arguments})
+        add_test(NAME nwb_terminal_cli_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/terminal_cli_tests.py" ${nwb_terminal_cli_arguments})
         set_tests_properties(nwb_terminal_cli_integration PROPERTIES TIMEOUT 120)
     endif()
 endif()

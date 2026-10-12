@@ -47,13 +47,7 @@ namespace BufferSetupFailure{
 inline constexpr usize s_RawByteLoadAlignmentBytes = sizeof(u32);
 
 template<typename PayloadT>
-[[nodiscard]] inline Core::BufferHandle SetupBuffer(
-    Core::GraphicsRuntime& graphics,
-    const Name& debugName,
-    const PayloadT* payload,
-    const usize count,
-    const BufferFlags flags = {}
-){
+[[nodiscard]] inline Core::BufferHandle SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const BufferFlags flags = {}){
     const auto payloadBytes = TryMultiply<usize>(count, sizeof(PayloadT));
     if(!payloadBytes)
         return {};
@@ -75,22 +69,12 @@ template<typename PayloadT>
 }
 
 template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] inline Core::BufferHandle SetupBuffer(
-    Core::GraphicsRuntime& graphics,
-    const Name& debugName,
-    const PayloadVector& payload,
-    const BufferFlags flags = {}
-){
+[[nodiscard]] inline Core::BufferHandle SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadVector& payload, const BufferFlags flags = {}){
     return SetupBuffer<PayloadT>(graphics, debugName, payload.data(), payload.size(), flags);
 }
 
 template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredBuffer(
-    Core::GraphicsRuntime& graphics,
-    const Name& debugName,
-    const PayloadVector& payload,
-    const BufferFlags flags
-){
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadVector& payload, const BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
     if(MultiplyOverflows<usize>(payload.size(), sizeof(PayloadT)))
@@ -103,21 +87,12 @@ template<typename PayloadT, typename PayloadVector>
 }
 
 template<typename PayloadVector>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::GlobalArena& arena,
-    const Name& debugName,
-    const PayloadVector& payload,
-    const BufferFlags flags
-){
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena, const Name& debugName, const PayloadVector& payload, const BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
 
     const usize logicalByteCount = payload.size();
-    const usize trailingByteCount =
-        (s_RawByteLoadAlignmentBytes - (logicalByteCount % s_RawByteLoadAlignmentBytes))
-        % s_RawByteLoadAlignmentBytes
-    ;
+    const usize trailingByteCount = (s_RawByteLoadAlignmentBytes - (logicalByteCount % s_RawByteLoadAlignmentBytes)) % s_RawByteLoadAlignmentBytes;
     if(AddOverflows<usize>(logicalByteCount, trailingByteCount))
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 

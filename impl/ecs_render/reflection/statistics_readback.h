@@ -75,19 +75,9 @@ public:
     void reset(u16 deviceGeneration)noexcept;
     [[nodiscard]] ReflectionStatisticsReservationKey reserve(const ReflectionStatistics& metadata)noexcept;
     void discard(const ReflectionStatisticsReservationKey& key)noexcept;
-    void accept(
-        const ReflectionStatisticsReservationKey& key,
-        const Core::QueueSubmissionToken& token,
-        bool hardwareReady,
-        const ReflectionHistoryOutcome* history = nullptr,
-        const ReflectionFeedbackOutcome* feedback = nullptr
-    )noexcept;
+    void accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
     [[nodiscard]] Expected<ReflectionStatisticsPendingReadback> pending(u32 slot)const noexcept;
-    void complete(
-        const ReflectionStatisticsReservationKey& key,
-        const Core::QueueSubmissionToken& token,
-        const u32* counters
-    )noexcept;
+    void complete(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept;
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
 
 private:
@@ -103,14 +93,9 @@ private:
 };
 
 using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;
-using ReflectionStatisticsControlHandle = RefCountPtr<
-    ReflectionStatisticsControl, ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena>
->;
+using ReflectionStatisticsControlHandle = RefCountPtr< ReflectionStatisticsControl, ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(
-    Core::Alloc::GlobalArena& arena,
-    u16 deviceGeneration
-);
+[[nodiscard]] ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration);
 
 // Destruction releases only an unaccepted reservation.
 class ReflectionStatisticsReservation final : NoCopy{
@@ -124,12 +109,7 @@ public:
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
-    void accept(
-        const Core::QueueSubmissionToken& token,
-        bool hardwareReady,
-        const ReflectionHistoryOutcome* history = nullptr,
-        const ReflectionFeedbackOutcome* feedback = nullptr
-    )noexcept;
+    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
     void discard()noexcept;
 
 private:

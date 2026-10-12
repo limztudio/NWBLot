@@ -15,7 +15,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software occlusion rays finish each instance before visiting the next scene leaf. Only the summed optical depth, interface product, and opaque gate remain live across instances; temporary crossing lists never mix objects.
+// Software occlusion rays finish each instance before visiting the next scene leaf.
+// Only the summed optical depth, interface product, and opaque gate remain live across instances; temporary crossing lists never mix objects.
 // Include after shadow_surface.slangi for the shared Fresnel and Beer-Lambert helpers.
 
 
@@ -31,7 +32,8 @@ struct NwbShadowVisibilityAccumulator{
 struct NwbShadowInstanceOptics{
     float3 absorptionCoeff;
     // The interface product folds (0, 1) Fresnel transmission fractions only, so half math is sufficient here.
-    // Ray extents (tMin/tMax/crossingT) and absorption stay on float. Widen only at the half lerp in the finalize.
+    // Ray extents (tMin/tMax/crossingT) and absorption stay on float.
+    // Widen only at the half lerp in the finalize.
     half interfaceTransmittance;
     float tMin;
     float tMax;
@@ -135,7 +137,8 @@ half nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3 
     return half(smoothstep(1e-5, 2e-3, spread));
 }
 
-// Finish one instance once. Keep the existing endpoint reconstruction and half rounding, including sub-ULP chords.
+// Finish one instance once.
+// Keep the existing endpoint reconstruction and half rounding, including sub-ULP chords.
 // Scene leaves have unique instance identities, so this fold needs neither an identity table nor a retained hit list.
 void nwbShadowAccumulateInstance(inout NwbShadowVisibilityAccumulator acc, const NwbShadowInstanceOptics optics){
     const float pairedChord = nwbShadowInstanceChordLength(optics);

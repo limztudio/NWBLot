@@ -69,12 +69,7 @@ struct AvboitAccumulationRecordResult{
 
 class AvboitAccumulationRecordBuilder final : NoCopy{
 public:
-    AvboitAccumulationRecordBuilder(
-        Core::GpuTaskGraph& graph,
-        Core::GraphicsRuntime& graphics,
-        RendererMaterialSystem& materialSystem,
-        RendererAvboitSystem& avboitSystem
-    );
+    AvboitAccumulationRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem);
 
 
 public:

@@ -13,15 +13,7 @@
 
 // Reconstruct the captured texel-center ray, then intersect the receiver's local plane along that ray.
 // Both projection types use the actual stored view basis; framebuffer Y increases opposite projected Y.
-bool nwbLightSpaceReceiverDepth(
-    const NwbLightSpaceView view,
-    const uint2 pixel,
-    const float3 origin,
-    const float3 receiverNormal,
-    const float3 receiverPositionError,
-    out float projectedDepth,
-    out float linearDepth
-){
+bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel, const float3 origin, const float3 receiverNormal, const float3 receiverPositionError, out float projectedDepth, out float linearDepth){
     projectedDepth = 0.0;
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
@@ -87,7 +79,8 @@ bool nwbLightSpaceReceiverDepth(
     if(depth > 1.0){
         if((view.light.w & NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE) == 0u)
             return false;
-        // All captured casters lie before the fitted far plane. Threshold 1 includes them while clear D32 stays lit.
+        // All captured casters lie before the fitted far plane.
+        // Threshold 1 includes them while clear D32 stays lit.
         // Retain the actual corrected plane distance for PCSS rather than inverting a clamped depth.
         projectedDepth = 1.0;
         linearDepth = point ? distance - depthError : nwbLightSpaceLinearDepth(view, corrected);
@@ -118,8 +111,7 @@ bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
         return false;
-    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0,
-        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0, 1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
     const bool point = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
     float3 direction;
     float3 relativeAnchor;

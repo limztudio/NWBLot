@@ -30,12 +30,7 @@ struct NwbSkinnedMeshSkinInfluence{
 };
 
 uint4 nwbSkinnedMeshSkinJoints(const NwbSkinnedMeshSkinInfluence skin){
-    return uint4(
-        skin.packedJoint.x & NWB_SKINNED_MESH_SKIN_JOINT_MASK,
-        skin.packedJoint.x >> NWB_SKINNED_MESH_SKIN_JOINT_BITS,
-        skin.packedJoint.y & NWB_SKINNED_MESH_SKIN_JOINT_MASK,
-        skin.packedJoint.y >> NWB_SKINNED_MESH_SKIN_JOINT_BITS
-    );
+    return uint4(skin.packedJoint.x & NWB_SKINNED_MESH_SKIN_JOINT_MASK, skin.packedJoint.x >> NWB_SKINNED_MESH_SKIN_JOINT_BITS, skin.packedJoint.y & NWB_SKINNED_MESH_SKIN_JOINT_MASK, skin.packedJoint.y >> NWB_SKINNED_MESH_SKIN_JOINT_BITS);
 }
 
 float4 nwbSkinnedMeshSkinWeights(const NwbSkinnedMeshSkinInfluence skin){
@@ -59,8 +54,7 @@ struct NwbSkinnedMeshBindlessResources{
 // Each runtime mesh owns one small stream-slot payload. It is registered as a global UniformBuffer descriptor and selected by a dispatch-uniform push-constant slot, so skinning, bounds, and repack do not create local selector descriptor sets.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the UniformBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbHeapSkinnedMeshBindlessResources[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbHeapSkinnedMeshBindlessResources[];
 #pragma warning(pop)
 
 
@@ -70,24 +64,15 @@ ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbHeapSkinn
 // These aliases intentionally view the one global StorageBuffer descriptor table with the strides the skinned compute passes require. Read-only and writable views share a Vulkan STORAGE_BUFFER descriptor; the resource access qualifier remains shader-local, so each pass can fetch exactly the persistent stream it needs.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the global StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapSkinnedMeshPositionBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapSkinnedMeshWritablePositionBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapSkinnedMeshHalf4Buffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapSkinnedMeshWritableHalf4Buffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbHeapSkinnedMeshletDescBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbHeapSkinnedMeshletLocalVertexRefBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<uint, Std430DataLayout> g_NwbHeapSkinnedMeshUintBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbHeapSkinnedMeshSkinInfluenceBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbHeapSkinnedMeshJointMatrixBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapSkinnedMeshPositionBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapSkinnedMeshWritablePositionBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapSkinnedMeshHalf4Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapSkinnedMeshWritableHalf4Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbHeapSkinnedMeshletDescBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbHeapSkinnedMeshletLocalVertexRefBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbHeapSkinnedMeshUintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbHeapSkinnedMeshSkinInfluenceBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbHeapSkinnedMeshJointMatrixBuffers[];
 #pragma warning(pop)
 
 

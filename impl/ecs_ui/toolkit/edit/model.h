@@ -118,8 +118,7 @@ private:
     [[nodiscard]] bool replaceRange(usize begin, usize end, AStringView replacement);
     [[nodiscard]] bool validateText(AStringView text)const;
     [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView text)const;
-    void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret,
-        AStringView after, usize afterAnchor, usize afterCaret);
+    void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret, AStringView after, usize afterAnchor, usize afterCaret);
     void clearHistory();
     void advanceRevision()noexcept;
     void advanceSelectionGeneration()noexcept;

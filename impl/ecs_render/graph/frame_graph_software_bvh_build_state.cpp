@@ -26,19 +26,13 @@ FrameGraphSoftwareBvhBuildStateResult::FrameGraphSoftwareBvhBuildStateResult(Cor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphSoftwareBvhBuildStateImporter::FrameGraphSoftwareBvhBuildStateImporter(
-    Core::GpuTaskGraph& graph,
-    RendererMeshSystem& meshSystem
-)
+FrameGraphSoftwareBvhBuildStateImporter::FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem)
     : m_graph(graph)
     , m_meshSystem(meshSystem){
 }
 
 
-Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(
-    const FrameGraphSoftwareBvhBuildStateInputs& inputs,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     FrameGraphSoftwareBvhBuildStateResult result(scratchArena);
     using namespace RendererTaskGraphDetail;
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = *inputs.rayTracingShadowResources;
@@ -53,11 +47,7 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
             return MakeUnexpected(Failure{});
         softwareBvhBuildStateResources.reserve(meshSoftwareBvhParentBuildStates->size() + 3u);
         softwareBvhBuildStateBuffers.reserve(meshSoftwareBvhParentBuildStates->size() + 3u);
-        const auto appendSoftwareBvhBuildState = [&](
-            const Core::BufferHandle& buffer,
-            const Name identity,
-            const AStringView label
-        ){
+        const auto appendSoftwareBvhBuildState = [&](const Core::BufferHandle& buffer, const Name identity, const AStringView label){
             if(!buffer || !identity)
                 return false;
             for(Core::Buffer* const existing : softwareBvhBuildStateBuffers){
@@ -81,21 +71,9 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
             !rayTracingShadowResources.bvhSortKeysBuffer
             || !rayTracingShadowResources.bvhSortPayloadBuffer
             || !rayTracingShadowResources.bvhVisitCounterBuffer
-            || !appendSoftwareBvhBuildState(
-                rayTracingShadowResources.bvhSortKeysBuffer,
-                Name("render.shadow_trace.sw_bvh_sort_keys"),
-                "Software BVH Sort Keys"
-            )
-            || !appendSoftwareBvhBuildState(
-                rayTracingShadowResources.bvhSortPayloadBuffer,
-                Name("render.shadow_trace.sw_bvh_sort_payload"),
-                "Software BVH Sort Payload"
-            )
-            || !appendSoftwareBvhBuildState(
-                rayTracingShadowResources.bvhVisitCounterBuffer,
-                Name("render.shadow_trace.sw_bvh_visit_counter"),
-                "Software BVH Visit Counter"
-            )
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortKeysBuffer, Name("render.shadow_trace.sw_bvh_sort_keys"), "Software BVH Sort Keys")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortPayloadBuffer, Name("render.shadow_trace.sw_bvh_sort_payload"), "Software BVH Sort Payload")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhVisitCounterBuffer, Name("render.shadow_trace.sw_bvh_visit_counter"), "Software BVH Visit Counter")
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
             return MakeUnexpected(Failure{});

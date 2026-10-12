@@ -39,10 +39,7 @@ struct StandaloneDeclarationContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId GpuRendererState::declareStandalone(
-    Core::GpuTaskGraph& graph,
-    Core::GpuTimingFrameTransaction& frameTimingTransaction
-){
+Core::GpuTaskId GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction){
     if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
         return {};
     Core::GpuTaskSchedulingHint beginScheduling;
@@ -53,11 +50,7 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
         Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_begin")).setMarkerLabel("UI Frame Timing Begin")
             .setScheduling(beginScheduling)
             .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
-        Core::FrameTimingBeginGraphTask::Payload{
-            .frameTimingTransaction = frameTimingTransaction,
-            .device = m_graphics.getDevice(),
-            .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{},
-        }
+        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{}, }
     );
     if(!begin.valid() || !graph.setNormalExecutionPrelude(begin))
         return {};
@@ -65,10 +58,7 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
     if(!layer || !layer->color.valid())
         return {};
     const GpuFrame frame = m_pending;
-    const Core::GpuExternalCompletionId acquired = graph.importExternalCompletion(
-        Core::GpuExternalCompletionDesc().setIdentity(Name("ui.acquired_ready")).setMarkerLabel("UI Acquired Image")
-            .setToken(frame->m_acquired.backBuffer.availabilityCompletion)
-    );
+    const Core::GpuExternalCompletionId acquired = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.acquired_ready")).setMarkerLabel("UI Acquired Image").setToken(frame->m_acquired.backBuffer.availabilityCompletion));
     if(!acquired.valid())
         return {};
     const Core::GpuGraphResourceId backBuffer = graph.importTexture(
@@ -78,10 +68,7 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
             .setExternalFinalState(Core::ResourceStates::Present)
             .setInitialAvailabilityCompletion(acquired)
     );
-    const Core::GpuGraphPipelineId pipeline = graph.importGraphicsPipeline(
-        frame->m_outputPipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.output_pipeline")).setMarkerLabel("UI Output Pipeline")
-            .setType(Core::GpuGraphPipelineType::Graphics)
-    );
+    const Core::GpuGraphPipelineId pipeline = graph.importGraphicsPipeline(frame->m_outputPipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.output_pipeline")).setMarkerLabel("UI Output Pipeline").setType(Core::GpuGraphPipelineType::Graphics));
     if(!backBuffer.valid() || !pipeline.valid())
         return {};
     const Core::GpuTaskResourceUse uses[]{
@@ -102,9 +89,7 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
         return {};
     Core::GpuTaskId timingEndDependency = output;
     if(m_presentationContributor && m_presentationContributor->hasTaskGraphPresentationWork()){
-        timingEndDependency = m_presentationContributor->declareTaskGraphPresentation(
-            graph, frame->m_acquired, backBuffer, output
-        );
+        timingEndDependency = m_presentationContributor->declareTaskGraphPresentation(graph, frame->m_acquired, backBuffer, output);
         if(!timingEndDependency.valid())
             return {};
     }
@@ -159,9 +144,7 @@ bool GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame)
     const GpuFrame pending = m_state->m_pending;
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_state->m_graphics.gpuTiming());
     __hidden_ui_gpu_standalone::StandaloneDeclarationContext declarationContext{ *m_state, frameTimingTransaction };
-    const auto submitted = m_state->m_graphics.submitStandaloneTaskGraph(
-        &declarationContext,
-        [](void* context, Core::GpuTaskGraph& graph){
+    const auto submitted = m_state->m_graphics.submitStandaloneTaskGraph(&declarationContext, [](void* context, Core::GpuTaskGraph& graph){
             auto& declaration = *static_cast<__hidden_ui_gpu_standalone::StandaloneDeclarationContext*>(context);
             return declaration.state.declareStandalone(graph, declaration.frameTimingTransaction);
         },

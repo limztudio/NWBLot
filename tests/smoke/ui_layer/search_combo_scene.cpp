@@ -132,16 +132,11 @@ bool UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
 }
 
 void UiSearchComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiSearchComboSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiSearchComboSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u64, 22u> UiSearchComboSmokeScene::values()const{
@@ -213,8 +208,7 @@ void UiSearchComboSmokeScene::observeState(Impl::Ui::TextService& text){
     LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query"), editor.bounds);
     LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_content"), editor.content);
     LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_caret"), editor.caret);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_selection"),
-        CaptureEditSelection(m_arena, text, m_state.query(), editor, 12.0f));
+    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_selection"), CaptureEditSelection(m_arena, text, m_state.query(), editor, 12.0f));
 }
 
 void UiSearchComboSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -244,11 +238,7 @@ bool IsUiLayerSearchComboSkinSmokeEnabled(){
 }
 
 SharedUiSearchComboSmokeScene CreateUiSearchComboSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiSearchComboSmokeScene(
-        NewArenaObject<RefCounter<UiSearchComboSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiSearchComboSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiSearchComboSmokeScene(NewArenaObject<RefCounter<UiSearchComboSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiSearchComboSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

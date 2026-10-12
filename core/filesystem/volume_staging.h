@@ -38,12 +38,7 @@ private:
     bool m_active = true;
 };
 
-bool PublishStagedVolume(
-    const StagedDirectoryPaths& stagedPaths,
-    const Path& outputDirectory,
-    AStringView volumeName,
-    usize segmentCount
-);
+bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount);
 bool RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName);
 
 

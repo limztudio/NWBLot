@@ -22,11 +22,7 @@ namespace __hidden_camera{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SceneCameraTransformValid(
-    const SIMDVectorSingle position,
-    const SIMDVectorSingle rotation,
-    const SIMDVectorSingle scale
-)noexcept{
+[[nodiscard]] bool SceneCameraTransformValid(const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale)noexcept{
     constexpr f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
 
@@ -53,13 +49,7 @@ namespace __hidden_camera{
     if(!SceneCameraTransformValid(position, rotation, scale))
         return MakeUnexpected(Failure{});
 
-    const auto projection = TryBuildCameraProjection(
-        VectorReplicate(camera.verticalFovRadians()),
-        VectorReplicate(camera.nearPlane()),
-        VectorReplicate(camera.farPlane()),
-        VectorReplicate(camera.aspectRatio()),
-        VectorReplicate(fallbackAspectRatio)
-    );
+    const auto projection = TryBuildCameraProjection(VectorReplicate(camera.verticalFovRadians()), VectorReplicate(camera.nearPlane()), VectorReplicate(camera.farPlane()), VectorReplicate(camera.aspectRatio()), VectorReplicate(fallbackAspectRatio));
     if(!projection)
         return MakeUnexpected(Failure{});
 
@@ -105,15 +95,7 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
         auto* transform = world.tryGetComponent<TransformComponent>(activeCamera);
         auto* camera = world.tryGetComponent<CameraComponent>(activeCamera);
         if(transform && camera){
-            const auto requestedCamera = __hidden_camera::TryBuildSceneCameraView(
-                activeCamera,
-                *transform,
-                *camera,
-                fallbackAspectRatio,
-                LoadFloat(transform->position),
-                LoadFloat(transform->rotation),
-                LoadFloat(transform->scale)
-            );
+            const auto requestedCamera = __hidden_camera::TryBuildSceneCameraView(activeCamera, *transform, *camera, fallbackAspectRatio, LoadFloat(transform->position), LoadFloat(transform->rotation), LoadFloat(transform->scale));
             if(requestedCamera)
                 return *requestedCamera;
         }
@@ -122,15 +104,7 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
     const auto cameraView = world.view<TransformComponent, CameraComponent>();
     for(auto it = cameraView.begin(); it != cameraView.end(); ++it){
         auto&& [entity, transform, camera] = *it;
-        const auto resolvedCamera = __hidden_camera::TryBuildSceneCameraView(
-            entity,
-            transform,
-            camera,
-            fallbackAspectRatio,
-            LoadFloat(transform.position),
-            LoadFloat(transform.rotation),
-            LoadFloat(transform.scale)
-        );
+        const auto resolvedCamera = __hidden_camera::TryBuildSceneCameraView(entity, transform, camera, fallbackAspectRatio, LoadFloat(transform.position), LoadFloat(transform.rotation), LoadFloat(transform.scale));
         if(resolvedCamera)
             return *resolvedCamera;
     }

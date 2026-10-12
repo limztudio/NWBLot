@@ -24,17 +24,11 @@ namespace __hidden_ui_edit_box_paint{
 
 
 [[nodiscard]] static bool ValidColor(const Color& color)noexcept{
-    return
-        IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a)
-        && color.a >= 0.0f && color.a <= 1.0f
-    ;
+    return IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
 }
 
-[[nodiscard]] static const UiSkinRegion* Background(const UiSkin& skin, const EditBoxStyle& style,
-    const EditBoxPaintFlags& flags
-)noexcept{
-    const Name& preferred = !flags.enabled ? style.disabled : flags.focused ? style.focused
-        : flags.hovered ? style.hover : style.normal;
+[[nodiscard]] static const UiSkinRegion* Background(const UiSkin& skin, const EditBoxStyle& style, const EditBoxPaintFlags& flags)noexcept{
+    const Name& preferred = !flags.enabled ? style.disabled : flags.focused ? style.focused : flags.hovered ? style.hover : style.normal;
     const UiSkinRegion* region = skin.findRegion(preferred);
     if(!region)
         region = skin.findRegion(style.normal);
@@ -53,9 +47,7 @@ namespace __hidden_ui_edit_box_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin,
-    const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags
-)const{
+bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags)const{
     if(
         !m_ready || !__hidden_ui_edit_box_paint::ValidColor(style.background)
         || !__hidden_ui_edit_box_paint::ValidColor(style.text) || !__hidden_ui_edit_box_paint::ValidColor(style.disabledText)
@@ -99,8 +91,7 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
             if(segment->width > 0.0f){
                 const f32 thickness = Min(placement.caret.width, segment->height);
                 const f32 verticalOffset = placement.textOrigin.y + Max(0.0f, segment->height - thickness);
-                const SIMDVectorSingle underlineOrigin = VectorAdd(VectorSet(segment->x, segment->y, segment->x, segment->y),
-                    VectorSet(placement.textOrigin.x, verticalOffset, placement.textOrigin.x, verticalOffset));
+                const SIMDVectorSingle underlineOrigin = VectorAdd(VectorSet(segment->x, segment->y, segment->x, segment->y), VectorSet(placement.textOrigin.x, verticalOffset, placement.textOrigin.x, verticalOffset));
                 segment->x = VectorGetX(underlineOrigin);
                 segment->y = VectorGetY(underlineOrigin);
                 segment->height = thickness;
@@ -108,10 +99,7 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
             }
         }
     }
-    if(
-        painted && flags.focused && flags.enabled && !flags.readOnly
-        && (m_composing ? flags.preeditCaretVisible : flags.caretVisible)
-    )
+    if(painted && flags.focused && flags.enabled && !flags.readOnly && (m_composing ? flags.preeditCaretVisible : flags.caretVisible))
         paint.fillRect(placement.caret, style.caret);
     const bool contentPopped = paint.popClip();
     const bool framePopped = paint.popClip();

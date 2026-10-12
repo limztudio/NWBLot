@@ -20,16 +20,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ComboResult Builder::comboBox(
-    const AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options
-){
+ComboResult Builder::comboBox(const AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options){
     return declareCombo(stableKey, source, state, options);
 }
 
-ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source,
-    ComboState& state, const ComboOptions& options, SearchComboState* search,
-    ISearchableListDataSource* searchSource, const SearchComboOptions* searchOptions
-){
+ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options, SearchComboState* search, ISearchableListDataSource* searchSource, const SearchComboOptions* searchOptions){
     ComboResult result;
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
@@ -54,10 +49,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     const u64 previousSelection = state.selectedKey();
     const bool previouslyOpen = state.isOpen();
     const bool previouslyFocused = m_context.input().focus() == field.id;
-    if(
-        !m_context.claimState(field, state.m_popup.instanceGeneration())
-        || !ComboBehavior::Bind(state, field.id, field.declarationGeneration)
-    )
+    if(!m_context.claimState(field, state.m_popup.instanceGeneration()) || !ComboBehavior::Bind(state, field.id, field.declarationGeneration))
         return result;
     state.m_popup.bindParent(m_context.popupToken());
     if(previouslyOpen && !state.isOpen())
@@ -129,8 +121,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     if(!rows)
         return result;
     frame.rows = *rows;
-    frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration,
-        state.m_popup.instanceGeneration(), state.m_popup.openGeneration() };
+    frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration, state.m_popup.instanceGeneration(), state.m_popup.openGeneration() };
     frame.listToken = { state.m_list.inputGeneration(), results.instanceGeneration(), results.revision() };
     frame.open = state.isOpen();
     const bool previouslyListFocused = m_context.input().focus() == frame.rows.id;
@@ -153,8 +144,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     item.combo = static_cast<u32>(m_scope->m_combos.size());
     item.padding = frame.style.padding;
     Point minimum;
-    const Name names[]{ frame.style.normal, frame.style.hover, frame.style.open,
-        frame.style.focused, frame.style.disabled };
+    const Name names[]{ frame.style.normal, frame.style.hover, frame.style.open, frame.style.focused, frame.style.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, frame.style.fallback);
         if(!skinRegion){
@@ -162,15 +152,12 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
             return {};
         }
         const SIMDVectorSingle minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-        const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
-            skinRegion->minimumWidth, skinRegion->minimumHeight);
-        const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
-            VectorGreater(minimumCurrent, minimumCandidate));
+        const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
+        const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent, VectorGreater(minimumCurrent, minimumCandidate));
         minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
         const SIMDVectorSingle itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
         const SIMDVectorSingle itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent,
-            VectorGreater(itempaddingCurrent, itempaddingCandidate));
+        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent, VectorGreater(itempaddingCurrent, itempaddingCandidate));
         item.padding = { VectorGetX(itempaddingMaximum), VectorGetY(itempaddingMaximum), VectorGetZ(itempaddingMaximum), VectorGetW(itempaddingMaximum) };
     }
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
@@ -181,10 +168,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     frame.arrowExtent = NumericSimd::Max(frame.style.arrowExtent, NumericSimd::Max(arrow->minimumWidth, arrow->minimumHeight));
     const bool selected = state.selectedKey() != 0u;
     const auto index = selected ? source.indexOf(state.selectedKey()) : Expected<u64>{ 0u };
-    if(
-        selected && (!index || *index >= frame.rowCount
-            || source.key(*index) != state.selectedKey() || !source.enabled(*index))
-    ){
+    if(selected && (!index || *index >= frame.rowCount || source.key(*index) != state.selectedKey() || !source.enabled(*index))){
         m_context.fail();
         return {};
     }
@@ -223,17 +207,14 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     }
     const SIMDVectorSingle listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
     const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
-        VectorGreater(listpaddingCurrent, listpaddingCandidate));
+    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent, VectorGreater(listpaddingCurrent, listpaddingCandidate));
     list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
     const Point measured = item.text.measure();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle contentSize = VectorSet(NumericSimd::Add(NumericSimd::Add(measured.x, frame.arrowExtent), frame.style.arrowGap),
-        NumericSimd::Max(measured.y, frame.arrowExtent), 0.0f, 0.0f);
-    const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f)),
-        VectorSet(item.padding.right, item.padding.bottom, 0.0f, 0.0f));
+    const SIMDVectorSingle contentSize = VectorSet(NumericSimd::Add(NumericSimd::Add(measured.x, frame.arrowExtent), frame.style.arrowGap), NumericSimd::Max(measured.y, frame.arrowExtent), 0.0f, 0.0f);
+    const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f)), VectorSet(item.padding.right, item.padding.bottom, 0.0f, 0.0f));
     const SIMDVectorSingle minimumSize = VectorSet(minimum.x, minimum.y, 0.0f, 0.0f);
     const SIMDVectorSingle intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
     description.intrinsicSize = { VectorGetX(intrinsicSize), VectorGetY(intrinsicSize) };
@@ -255,8 +236,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     result.selectionChanged = previousSelection != state.selectedKey();
     result.opened = !previouslyOpen && state.isOpen();
     result.closed = previouslyOpen && !state.isOpen();
-    result.focused = options.enabled && (m_context.input().focus() == field.id || m_context.input().focus() == frame.rows.id
-        || (frame.editor != s_LayoutNoParent && m_context.input().focus() == m_scope->m_comboEditors[frame.editor].state.id));
+    result.focused = options.enabled && (m_context.input().focus() == field.id || m_context.input().focus() == frame.rows.id || (frame.editor != s_LayoutNoParent && m_context.input().focus() == m_scope->m_comboEditors[frame.editor].state.id));
     return result;
 }
 

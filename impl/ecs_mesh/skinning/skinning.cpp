@@ -27,12 +27,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::prepareRuntimeMeshResources(
-    MeshSkinningRuntimeInstance& instance,
-    const SkeletonJointPaletteComponent* jointPalette,
-    const SkeletonPoseComponent* skeletonPose,
-    Core::Alloc::ScratchArena& scratchArena
-){
+bool MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, Core::Alloc::ScratchArena& scratchArena){
     instance.deformationState.invalidateCurrent();
     RuntimeSkinPayloadScratch payload{ scratchArena };
     if(!MeshSkinningPayload::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
@@ -63,30 +58,15 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
 
     // Releasing a pose rebuilds descriptors; force one rest->skinned copy.
     if(!hasActiveSkin && hadSkinningResources && resourcesRebuilt){
-        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-            instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty
-        );
+        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty);
     }
-    const MeshSkinningDeformationInputs inputs{
-        .resourceSlotsBuffer = resources->bindlessResourceSlotsBuffer,
-        .editRevision = instance.editRevision,
-        .skinningMode = payload.resolvedSkinningMode,
-    };
+    const MeshSkinningDeformationInputs inputs{ .resourceSlotsBuffer = resources->bindlessResourceSlotsBuffer, .editRevision = instance.editRevision, .skinningMode = payload.resolvedSkinningMode, };
     // Changed inputs stay revision zero until the graph accepts their complete output.
-    instance.deformationState.refreshCurrent(
-        inputs,
-        payload.jointMatrices.data(),
-        payload.jointMatrices.size(),
-        skinnedMeshInputDirty || meshletBoundsDirty || resourcesRebuilt
-    );
+    instance.deformationState.refreshCurrent(inputs, payload.jointMatrices.data(), payload.jointMatrices.size(), skinnedMeshInputDirty || meshletBoundsDirty || resourcesRebuilt);
     return true;
 }
 
-bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
-    const MeshSkinningGraphDispatchPlan& plan,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(!plan.hasActiveSkin)
         return false;
 
@@ -154,11 +134,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
 }
 
 
-bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
-    const MeshSkinningGraphDispatchPlan& plan,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(!plan.updatesMeshletBounds)
         return false;
 
@@ -175,17 +151,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
     Core::Buffer* const meshletBounds = resolveBuffer(plan.meshletBoundsResource);
     Core::Buffer* const meshletLocalBounds = resolveBuffer(plan.meshletLocalBoundsResource);
     Core::ComputePipeline* const boundsPipeline = context.declarations.computePipelineFor(plan.boundsPipeline);
-    if(
-        !bindlessResourceSlots
-        || !skinnedPosition
-        || !meshletDesc
-        || !meshletPositionRefDeltas
-        || !meshletLocalVertexRefs
-        || !meshletPrimitiveIndices
-        || !meshletBounds
-        || !meshletLocalBounds
-        || !boundsPipeline
-    )
+    if(!bindlessResourceSlots || !skinnedPosition || !meshletDesc || !meshletPositionRefDeltas || !meshletLocalVertexRefs || !meshletPrimitiveIndices || !meshletBounds || !meshletLocalBounds || !boundsPipeline)
         return false;
 
     auto& device = m_graphics.getDevice();
@@ -257,13 +223,7 @@ void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGra
     if(!instance->deformationState.accept(plan.deformationCandidate))
         return;
 
-    ApplyMeshSkinningSubmissionCommit(
-        true,
-        instance->editRevision,
-        instance->dirtyFlags,
-        resources.bindlessResourceSlotsUploaded,
-        plan.submissionCommit
-    );
+    ApplyMeshSkinningSubmissionCommit(true, instance->editRevision, instance->dirtyFlags, resources.bindlessResourceSlotsUploaded, plan.submissionCommit);
 }
 
 

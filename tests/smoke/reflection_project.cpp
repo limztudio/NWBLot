@@ -70,8 +70,8 @@ static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World
     return AddSmokeRenderSystems(world, context);
 }
 
-// Timed fixtures need continued submissions when Windows denies foreground ownership. This pass opts into the
-// existing per-project policy without adding GPU work or changing production focus throttling.
+// Timed fixtures need continued submissions when Windows denies foreground ownership.
+// This pass opts into the existing per-project policy without adding GPU work or changing production focus throttling.
 class ReflectionTimingRenderPass final : public NWB::Core::IRenderPass{
 private:
     static constexpr u32 s_InFlightRanges = 32u;
@@ -114,19 +114,16 @@ public:
         auto& graphics = getGraphics();
         auto& timing = graphics.gpuTiming();
         auto& device = graphics.getDevice();
-        // One TimerQuery owns both timestamps for a complete range. Reserve complete in-flight ranges, including
-        // every native depth mip, to cover expected completion latency. The benchmark still checks sample coverage.
+        // One TimerQuery owns both timestamps for a complete range.
+        // Reserve complete in-flight ranges, including every native depth mip, to cover expected completion latency.
+        // The benchmark still checks sample coverage.
         for(const Name& scope : singleRangeScopes){
             if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
                 NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), StringConvert(scope.resolvedText()));
                 return false;
             }
         }
-        if(!timing.prepareScopeQueries(
-            NWB::Impl::ReflectionGpuTimingScope::s_DepthPyramid.identity,
-            device,
-            s_InFlightRanges * mipCount
-        )){
+        if(!timing.prepareScopeQueries(NWB::Impl::ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_InFlightRanges * mipCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare depth timing capacity"));
             return false;
         }
@@ -192,13 +189,7 @@ public:
                 return false;
             }
             m_spatialOwnerProbe = MakeUnique<ReflectionSpatialOwnerProbe>(m_context, m_renderer);
-            if(
-                !m_spatialOwnerProbe
-                || !m_spatialOwnerProbe->configure(
-                    AStringView(spatialOwnerSelection->data(), spatialOwnerSelection->size()), m_reflectionSettings
-                )
-                || !m_renderer.setReflectionSettings(m_reflectionSettings)
-            )
+            if(!m_spatialOwnerProbe || !m_spatialOwnerProbe->configure(AStringView(spatialOwnerSelection->data(), spatialOwnerSelection->size()), m_reflectionSettings) || !m_renderer.setReflectionSettings(m_reflectionSettings))
                 return false;
         }
         const bool screenCase = caseName == "onscreen" || caseName == "onscreen_moved" || caseName == "boundary" || caseName == "floor";
@@ -212,9 +203,7 @@ public:
         const auto extent = NWB::QueryProjectFrameClientSize();
         camera.setAspectRatio(static_cast<f32>(extent.width) / static_cast<f32>(extent.height));
         m_csgSliceRayCapacity = Min(m_reflectionSettings.maxHardwareRaysPerFrame, 2u * extent.width * extent.height);
-        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(
-            *m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f
-        );
+        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
         NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
 
         if(m_feedbackCase){
@@ -235,12 +224,7 @@ public:
             m_roughnessScene = MakeUnique<ReflectionRoughnessScene>(m_context, *m_world, cameraId, light, m_authoredRoughness);
             if(!m_roughnessScene->create(caseName, m_freshFinalState))
                 return false;
-            if(
-                m_roughnessScene->mutationCase()
-                && !m_roughnessScene->deforming()
-                && m_reflectionSettings.temporalEnabled
-                && (m_targetSamples < 32u || m_postResetSamples > m_targetSamples)
-            ){
+            if(m_roughnessScene->mutationCase() && !m_roughnessScene->deforming() && m_reflectionSettings.temporalEnabled && (m_targetSamples < 32u || m_postResetSamples > m_targetSamples)){
                 NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: mutation history cap must cover warm-up and post-reset samples"));
                 return false;
             }
@@ -287,10 +271,7 @@ public:
             return false;
         if(m_framebufferCapture)
             m_framebufferCapture->update();
-        if(
-            m_spatialOwnerProbe
-            && !m_spatialOwnerProbe->update(m_latestStatistics, m_context.gpuTimingView(), m_reflectionSettings)
-        )
+        if(m_spatialOwnerProbe && !m_spatialOwnerProbe->update(m_latestStatistics, m_context.gpuTimingView(), m_reflectionSettings))
             return false;
         reportCsgSlicePackets();
         updateRoughnessScene();
@@ -338,8 +319,7 @@ private:
     void updateRoughnessScene(){
         if(!m_roughnessScene || !m_roughnessScene->mutationCase() || m_mutationApplied || m_latestStatistics.sequence == 0u)
             return;
-        const bool warmed = m_roughnessScene->deforming() || !m_reflectionSettings.temporalEnabled
-            ? m_latestStatistics.frameIndex >= 32u : m_latestStatistics.historySampleCount >= 32u;
+        const bool warmed = m_roughnessScene->deforming() || !m_reflectionSettings.temporalEnabled ? m_latestStatistics.frameIndex >= 32u : m_latestStatistics.historySampleCount >= 32u;
         if(!warmed)
             return;
         m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
@@ -350,9 +330,7 @@ private:
         else
             NWB_FATAL_ASSERT_MSG(m_roughnessScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: scene mutation failed"));
         m_mutationApplied = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}")
-            , m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u, m_requestedSeed
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}"), m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u, m_requestedSeed);
     }
 
     void updateFeedbackScene(){
@@ -368,9 +346,7 @@ private:
         else
             NWB_FATAL_ASSERT_MSG(m_feedbackScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: feedback mutation failed"));
         m_mutationApplied = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}")
-            , m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}"), m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u);
     }
 
     bool shouldCapture(const u64 graphicsFrame)const{
@@ -385,15 +361,9 @@ private:
                 return false;
             if(m_postResetSamples == 1u)
                 return graphicsFrame == m_mutationGraphicsFrame;
-            return
-                m_latestStatistics.historyStartGraphicsFrame == m_mutationGraphicsFrame
-                && m_latestStatistics.historySampleCount >= m_postResetSamples
-            ;
+            return m_latestStatistics.historyStartGraphicsFrame == m_mutationGraphicsFrame && m_latestStatistics.historySampleCount >= m_postResetSamples;
         }
-        return m_reflectionSettings.temporalEnabled && !(m_roughnessScene && m_roughnessScene->deforming())
-            ? m_latestStatistics.historySampleCount >= m_targetSamples
-            : m_latestStatistics.frameIndex >= Max(m_targetSamples, 3u)
-        ;
+        return m_reflectionSettings.temporalEnabled && !(m_roughnessScene && m_roughnessScene->deforming()) ? m_latestStatistics.historySampleCount >= m_targetSamples : m_latestStatistics.frameIndex >= Max(m_targetSamples, 3u);
     }
 
     bool configureRenderer(){
@@ -481,11 +451,8 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: screen steps {}"), settings.screenMaxSteps);
         m_renderer.setRefractionEnabled(true);
         m_renderer.setRefractionHardwareTracingEnabled(true);
-        const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
-            && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware {}")
-            , hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable")
-        );
+        const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware {}"), hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: reflection mode {}"), StringConvert(route));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
         if(m_opticalCase)
@@ -607,12 +574,8 @@ private:
         m_spatialOwnerProbe.reset();
     }
 
-    NWB::Core::ECS::EntityID createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material,
-        const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0 = 0.0f
-    ){
-        const auto entity = CreateTintedStaticMeshEntity(
-            *m_world, m_context.objectArena, mesh, material, s_MaterialInterface, color, position, scale
-        );
+    NWB::Core::ECS::EntityID createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0 = 0.0f){
+        const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, mesh, material, s_MaterialInterface, color, position, scale);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("ReflectionSmokeProject: mesh creation failed"));
         const Name materialInterface(s_MaterialInterface);
         const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
@@ -628,29 +591,23 @@ private:
         return entity;
     }
 
-    void createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position,
-        const Float4& scale, const f32 specularF0 = 0.0f
-    ){
+    void createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0 = 0.0f){
         const auto entity = createMesh(s_PlaneMesh, material, color, position, scale, specularF0);
         auto& transform = m_world->entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
     }
 
     void createMirrorBackdrop(){
-        createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f),
-            Float4(0.0f, 1.4f, 2.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
-        createPanel(s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f),
-            Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(2.8f, 1.0f, 1.8f, 0.0f), 0.95f);
+        createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 2.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(2.8f, 1.0f, 1.8f, 0.0f), 0.95f);
     }
 
     void createMirrorScene(const bool moved){
         createMirrorBackdrop();
         const f32 shift = moved ? 0.9f : 0.0f;
         // Both marker spheres are behind the camera. Reflecting them through z=0 gives virtual images at z=+8.
-        const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
-            Float4(-1.6f + shift, 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
-        const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
-            Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+        const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.6f + shift, 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+        const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
         NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProject: offscreen markers failed"));
     }
 
@@ -658,46 +615,34 @@ private:
         createMirrorBackdrop();
         const f32 redX = moved ? -1.45f : -1.7f;
         const f32 greenX = boundary ? 3.0f : (moved ? 1.45f : 1.7f);
-        // Rays approach these two-sided markers from the back. Screen hits are provisional; hybrid must resolve the ambiguity.
+        // Rays approach these two-sided markers from the back.
+        // Screen hits are provisional; hybrid must resolve the ambiguity.
         // Direct images are three times larger than their virtual images at z=+3, and occupy separate screen regions.
-        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
-            Float4(redX, 1.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
-        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
-            Float4(greenX, 2.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(redX, 1.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(greenX, 2.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
     }
 
     void createFloorMirrorScene(){
-        createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f),
-            Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
-        const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f),
-            Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
+        createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
+        const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
         NWB_FATAL_ASSERT_MSG(floor.valid(), NWB_TEXT("ReflectionSmokeProject: floor mirror creation failed"));
         // Camera and reflected rays both approach the marker fronts. Reflection through y=0 moves their virtual centers to y=-2.
-        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
-            Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
-        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
-            Float4(1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
     }
 
     void createOpaqueGlassScene(){
         for(u32 stripe = 0u; stripe < 24u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.55f : 0.015f;
-            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f),
-                Float4(-3.45f + static_cast<f32>(stripe) * 0.3f, 1.4f, 2.8f, 0.0f),
-                Float4(0.15f, 1.0f, 3.0f, 0.0f));
+            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(-3.45f + static_cast<f32>(stripe) * 0.3f, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 3.0f, 0.0f));
         }
-        const auto opaque = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f),
-            Float4(-1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), 0.95f);
-        const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);
+        const auto opaque = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(-1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), 0.95f);
+        const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f), Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);
         NWB_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), NWB_TEXT("ReflectionSmokeProject: opaque/glass spheres failed"));
         m_world->entity(glass).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
-        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
-            Float4(-4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
-        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
-            Float4(4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
-        createPanel(s_TransparentMaterial, Float4(0.015f, 0.025f, 1.0f, 0.90f),
-            Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(2.0f, 1.0f, 0.08f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
+        createPanel(s_TransparentMaterial, Float4(0.015f, 0.025f, 1.0f, 0.90f), Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(2.0f, 1.0f, 0.08f, 0.0f));
     }
 
 

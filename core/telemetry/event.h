@@ -122,11 +122,7 @@ struct EventHeader{
     u8 reserved = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
-        return magic == s_EventMagic
-            && version == s_TelemetryFormatVersion
-            && kind != EventKind::Unknown
-            && IsValidEventKind(kind)
-        ;
+        return magic == s_EventMagic && version == s_TelemetryFormatVersion && kind != EventKind::Unknown && IsValidEventKind(kind);
     }
 };
 

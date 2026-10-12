@@ -37,8 +37,8 @@ private:
 
 
 private:
-    // Records one compiler-derived non-empty contiguous range. Earlier producer packets needed by the range must already be recorded,
-    // keeps deliberate late tails separate from the ordinary graph prefix.
+    // Records one compiler-derived non-empty contiguous range.
+    // Earlier producer packets needed by the range must already be recorded, keeps deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -141,37 +141,15 @@ struct PacketWaitStatistics{
     usize mergedTimelineWaitCount = 0u;
 };
 
-[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(
-    GpuPhysicalQueueId queue,
-    const QueueSubmissionToken* waitTokens,
-    usize waitTokenCount,
-    Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(GpuPhysicalQueueId queue, const QueueSubmissionToken* waitTokens, usize waitTokenCount, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] u64 AllocateAcceptanceRevision()noexcept;
 
-[[nodiscard]] bool ValidateInitialOwnershipCompletionToken(
-    const GpuTaskGraphInitialOwnerHandoffSourceView& source,
-    const GpuCompiledBarrier& barrier,
-    const GpuPhysicalQueueInfo& sourceQueue,
-    const QueueSubmissionToken& token,
-    u16 deviceGeneration
-)noexcept;
-[[nodiscard]] bool ValidateInitialOwnershipCompletions(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId& packetID
-);
+[[nodiscard]] bool ValidateInitialOwnershipCompletionToken(const GpuTaskGraphInitialOwnerHandoffSourceView& source, const GpuCompiledBarrier& barrier, const GpuPhysicalQueueInfo& sourceQueue, const QueueSubmissionToken& token, u16 deviceGeneration)noexcept;
+[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID);
 
 // Reject missing declaration tokens across the entire range before any native packet can be accepted.
-[[nodiscard]] bool ValidateExternalDependencyTokens(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketRange& range
-)noexcept;
-[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
-    const GpuTaskGraphResourceView& resource,
-    const GpuCompiledBarrier& barrier
-)noexcept;
+[[nodiscard]] bool ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept;
+[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(const GpuTaskGraphResourceView& resource, const GpuCompiledBarrier& barrier)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

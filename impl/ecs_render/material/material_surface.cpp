@@ -56,13 +56,7 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
 }
 
 template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, typename ReleaseFn>
-[[nodiscard]] static ResourceT* FindOrCreateCachedAsset(
-    CacheT& cache,
-    const Core::Assets::AssetRef<AssetT>& assetRef,
-    const AStringView emptyKindText,
-    LoadFn&& loadResource,
-    ReleaseFn&& releaseResource
-){
+[[nodiscard]] static ResourceT* FindOrCreateCachedAsset(CacheT& cache, const Core::Assets::AssetRef<AssetT>& assetRef, const AStringView emptyKindText, LoadFn&& loadResource, ReleaseFn&& releaseResource){
     if(!assetRef.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText));
         return nullptr;
@@ -85,30 +79,16 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     return assetIt.value().get();
 }
 
-[[nodiscard]] static Expected<u32> ResolveTextureAssetSlot(
-    RendererMaterialResourceState& resources,
-    const Core::Assets::AssetRef<Texture>& textureAsset,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager
-){
+[[nodiscard]] static Expected<u32> ResolveTextureAssetSlot(RendererMaterialResourceState& resources, const Core::Assets::AssetRef<Texture>& textureAsset, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager){
     TextureGpuResource* const textureResource = FindOrCreateCachedAsset<Texture, TextureGpuResource>(
         resources.textureAssetCache,
         textureAsset,
         "Texture2D",
         [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
-            if(!TextureAssetLoader::Load(
-                outResource,
-                assetRef,
-                assetPath,
-                graphics,
-                assetManager,
-                NWB_TEXT("RendererSystem")
-            ))
+            if(!TextureAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, NWB_TEXT("RendererSystem")))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension")
-                    , StringConvert(assetPath.resolvedText())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension"), StringConvert(assetPath.resolvedText()));
                 TextureAssetLoader::Release(outResource, graphics);
                 return false;
             }
@@ -121,34 +101,20 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
 
     const Name& texturePath = textureAsset.name();
     if(!textureResource->valid() || textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached Texture2D asset '{}' is invalid")
-            , StringConvert(texturePath.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached Texture2D asset '{}' is invalid"), StringConvert(texturePath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 
     return textureResource->sampledImageHeapHandle.slot();
 }
 
-[[nodiscard]] static Expected<u32> ResolveSamplerAssetSlot(
-    RendererMaterialResourceState& resources,
-    const Core::Assets::AssetRef<Sampler>& samplerAsset,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager
-){
+[[nodiscard]] static Expected<u32> ResolveSamplerAssetSlot(RendererMaterialResourceState& resources, const Core::Assets::AssetRef<Sampler>& samplerAsset, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager){
     SamplerGpuResource* const samplerResource = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
         resources.samplerAssetCache,
         samplerAsset,
         Sampler::s_AssetTypeText,
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
-            return SamplerAssetLoader::Load(
-                outResource,
-                assetRef,
-                assetPath,
-                graphics,
-                assetManager,
-                NWB_TEXT("RendererSystem")
-            );
+            return SamplerAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, NWB_TEXT("RendererSystem"));
         },
         [&](SamplerGpuResource& liveResource){ SamplerAssetLoader::Release(liveResource, graphics); }
     );
@@ -156,10 +122,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
         return MakeUnexpected(Failure{});
 
     const Name& samplerPath = samplerAsset.name();
-    if(
-        !samplerResource->valid()
-        || samplerResource->samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler
-    ){
+    if(!samplerResource->valid() || samplerResource->samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached sampler asset '{}' is invalid"), StringConvert(samplerPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
@@ -199,32 +162,16 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
         Expected<u32> heapSlot = MakeUnexpected(Failure{});
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:
-            heapSlot = __hidden_material_surface::ResolveTextureAssetSlot(
-                resources,
-                resourceReference.textureAsset,
-                graphicsModule,
-                m_assetManager
-            );
+            heapSlot = __hidden_material_surface::ResolveTextureAssetSlot(resources, resourceReference.textureAsset, graphicsModule, m_assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
-                    , StringConvert(materialInfo.materialName.resolvedText())
-                    , StringConvert(resourceReference.textureAsset.name().resolvedText())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'"), StringConvert(materialInfo.materialName.resolvedText()), StringConvert(resourceReference.textureAsset.name().resolvedText()));
                 return false;
             }
             break;
         case MaterialResourceKind::Sampler:
-            heapSlot = __hidden_material_surface::ResolveSamplerAssetSlot(
-                resources,
-                resourceReference.samplerAsset,
-                graphicsModule,
-                m_assetManager
-            );
+            heapSlot = __hidden_material_surface::ResolveSamplerAssetSlot(resources, resourceReference.samplerAsset, graphicsModule, m_assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'")
-                    , StringConvert(materialInfo.materialName.resolvedText())
-                    , StringConvert(resourceReference.samplerAsset.name().resolvedText())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'"), StringConvert(materialInfo.materialName.resolvedText()), StringConvert(resourceReference.samplerAsset.name().resolvedText()));
                 return false;
             }
             break;
@@ -234,19 +181,11 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
         }
 
         const u32 resolvedHeapSlot = *heapSlot;
-        if(
-            resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size()
-            || sizeof(resolvedHeapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset
-        ){
+        if(resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size() || sizeof(resolvedHeapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
-        NWB_MEMCPY(
-            materialInfo.constantTypedBytes.data() + resourceReference.constantByteOffset,
-            materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset,
-            &resolvedHeapSlot,
-            sizeof(resolvedHeapSlot)
-        );
+        NWB_MEMCPY(materialInfo.constantTypedBytes.data() + resourceReference.constantByteOffset, materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset, &resolvedHeapSlot, sizeof(resolvedHeapSlot));
     }
 
     materialInfo.resourceReferencesResolved = true;
@@ -257,11 +196,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererMaterialSystem::SplitMaterialTypedBytesByClass(
-    const Material& material,
-    MaterialTypedByteVector& outConstantTypedBytes,
-    MaterialTypedByteVector& outMutableDefaultTypedBytes
-){
+void RendererMaterialSystem::SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes){
     NWB_ASSERT(material.typedLayoutHash() != 0u);
     outConstantTypedBytes.clear();
     outMutableDefaultTypedBytes.clear();
@@ -274,15 +209,8 @@ void RendererMaterialSystem::SplitMaterialTypedBytesByClass(
         NWB_ASSERT((block.byteSize & (sizeof(u32) - 1u)) == 0u);
         NWB_ASSERT(sourceByteOffset <= packedTypedBytes.size() && block.byteSize <= packedTypedBytes.size() - sourceByteOffset);
 
-        MaterialTypedByteVector& targetTypedBytes = block.blockClass == MaterialBlockClass::MaterialConstant
-            ? outConstantTypedBytes
-            : outMutableDefaultTypedBytes
-        ;
-        targetTypedBytes.insert(
-            targetTypedBytes.end(),
-            packedTypedBytes.begin() + sourceByteOffset,
-            packedTypedBytes.begin() + sourceByteOffset + block.byteSize
-        );
+        MaterialTypedByteVector& targetTypedBytes = block.blockClass == MaterialBlockClass::MaterialConstant ? outConstantTypedBytes : outMutableDefaultTypedBytes;
+        targetTypedBytes.insert(targetTypedBytes.end(), packedTypedBytes.begin() + sourceByteOffset, packedTypedBytes.begin() + sourceByteOffset + block.byteSize);
         sourceByteOffset += block.byteSize;
     }
     // Material::loadBinary already validated the packed byte count against the cooked layout.
@@ -304,11 +232,7 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::createMaterialSurfaceInfo
         return &info;
     }
 
-    auto loadedAsset = m_assetManager.loadTypedSync<Material>(
-        materialPath,
-        NWB_TEXT("RendererSystem"),
-        "material"
-    );
+    auto loadedAsset = m_assetManager.loadTypedSync<Material>(materialPath, NWB_TEXT("RendererSystem"), "material");
     const Material* loadedMaterial = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedMaterial)
         return MakeUnexpected(Failure{});
@@ -390,18 +314,11 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::findMaterialSurfaceInfo(c
     return &materialInfo;
 }
 
-bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(
-    const MaterialSurfaceInfo& materialInfo,
-    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
-){
+bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
     return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
 }
 
-Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
-    const MaterialPassDrawItems* const* const drawItemSets,
-    const usize drawItemSetCount,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(const MaterialPassDrawItems* const* const drawItemSets, const usize drawItemSetCount, Core::Alloc::ScratchArena& scratchArena){
     return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, drawItemSetCount, scratchArena);
 }
 
@@ -448,10 +365,7 @@ void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
 
 bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLookupMode::Enum lookupMode){
     auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
-        const auto materialInfoResult = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? createMaterialSurfaceInfo(material)
-            : findMaterialSurfaceInfo(material)
-        ;
+        const auto materialInfoResult = lookupMode == RendererResourceLookupMode::CreateMissing ? createMaterialSurfaceInfo(material) : findMaterialSurfaceInfo(material);
         if(!materialInfoResult)
             return false;
         MaterialSurfaceInfo* const materialInfo = *materialInfoResult;

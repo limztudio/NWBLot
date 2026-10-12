@@ -107,20 +107,14 @@ bool CommandListResourceSelection::grow(){
     if(MultiplyOverflows<usize>(capacity, s_BytesPerEntry))
         return false;
     const usize bytes = capacity * s_BytesPerEntry;
-    void* const storage = m_storage
-        ? m_scratchArena.reallocate(m_storage, alignof(Entry), bytes)
-        : m_scratchArena.allocate(alignof(Entry), bytes)
-    ;
+    void* const storage = m_storage ? m_scratchArena.reallocate(m_storage, alignof(Entry), bytes) : m_scratchArena.allocate(alignof(Entry), bytes);
     if(!storage)
         return false;
 
     // Entries occupy the prefix and survive trivial relocation. Growing moves only the bucket region, which is rebuilt before publication. Reallocate releases its former top block even when it creates a new arena chunk.
     for(usize index = 0u; index < m_size; ++index){
         Entry entry;
-        const void* const source = m_storage
-            ? static_cast<const void*>(static_cast<const u8*>(storage) + index * sizeof(Entry))
-            : &m_inlineEntries[index]
-        ;
+        const void* const source = m_storage ? static_cast<const void*>(static_cast<const u8*>(storage) + index * sizeof(Entry)) : &m_inlineEntries[index];
         NWB_MEMCPY(&entry, sizeof(entry), source, sizeof(entry));
         new(static_cast<Entry*>(storage) + index) Entry(entry);
     }

@@ -17,11 +17,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ApplyCausticQualitySmokeSettings(
-    Impl::RendererSystem& renderer,
-    Core::Alloc::GlobalArena& arena,
-    const Impl::CausticQualitySettings& baseSettings = {}
-);
+[[nodiscard]] bool ApplyCausticQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::CausticQualitySettings& baseSettings = {});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

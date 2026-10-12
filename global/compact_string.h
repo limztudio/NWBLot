@@ -71,10 +71,7 @@ public:
 
 public:
     [[nodiscard]] bool assign(const value_type* text)noexcept(IsArithmetic_V<value_type>){
-        return text == nullptr
-            ? clearAndReturn(true)
-            : assign(view_type(text))
-        ;
+        return text == nullptr ? clearAndReturn(true) : assign(view_type(text));
     }
 
     [[nodiscard]] bool assign(const view_type text)noexcept(IsArithmetic_V<value_type>){
@@ -104,10 +101,7 @@ public:
     }
 
     [[nodiscard]] bool append(const value_type* text)noexcept(IsArithmetic_V<value_type>){
-        return text == nullptr
-            ? true
-            : append(view_type(text))
-        ;
+        return text == nullptr ? true : append(view_type(text));
     }
 
     [[nodiscard]] bool append(const view_type text)noexcept(IsArithmetic_V<value_type>){
@@ -206,10 +200,7 @@ public:
             return result;
 
         const usize remaining = m_size - pos;
-        const usize copiedCount = count == s_NPos || count > remaining
-            ? remaining
-            : count
-        ;
+        const usize copiedCount = count == s_NPos || count > remaining ? remaining : count;
 
         NWB_MEMCPY(result.m_storage, copiedCount * sizeof(value_type), m_storage + pos, copiedCount * sizeof(value_type));
         result.m_size = static_cast<u8>(copiedCount);

@@ -41,19 +41,8 @@ TRANSMISSION = (0.25, 0.5, 0.75)
 BYTE_TOLERANCE = 12.0
 # All regions are inside constant-thickness areas, away from raster and denoiser boundaries.
 # Values are (name, receiver x, receiver y, cut optical length, uncut optical length); None means opaque.
-REGIONS = (
-    (LIT_CLEAR, 0.0, 0.0, 0.0, 0.0),
-    (LIT_OPAQUE_HOLE, -1.7, 1.0, 0.0, None),
-    ("opaque_old_hole", -2.3, 1.0, None, None),
-    ("opaque_rim", -2.5, 1.0, None, None),
-    ("opaque_cap", 0.0, 1.0, None, None),
-    (LIT_GLASS_DEPTH, 2.0, 1.0, 1.0, 2.0),
-    (LIT_GLASS_HOLE, -1.7, -1.0, 0.0, 2.0),
-    ("glass_old_hole", -2.3, -1.0, 2.0, 2.0),
-    ("glass_rim", -2.5, -1.0, 2.0, 2.0),
-    (LIT_OVERLAP, 0.0, -1.0, 2.0, 4.0),
-    ("glass_control", 2.0, -1.0, 2.0, 2.0),
-)
+REGIONS = ((LIT_CLEAR, 0.0, 0.0, 0.0, 0.0), (LIT_OPAQUE_HOLE, -1.7, 1.0, 0.0, None), ("opaque_old_hole", -2.3, 1.0, None, None), ("opaque_rim", -2.5, 1.0, None, None), ("opaque_cap", 0.0, 1.0, None, None), (LIT_GLASS_DEPTH, 2.0, 1.0, 1.0, 2.0),
+    (LIT_GLASS_HOLE, -1.7, -1.0, 0.0, 2.0), ("glass_old_hole", -2.3, -1.0, 2.0, 2.0), ("glass_rim", -2.5, -1.0, 2.0, 2.0), (LIT_OVERLAP, 0.0, -1.0, 2.0, 4.0), ("glass_control", 2.0, -1.0, 2.0, 2.0),)
 
 
 def expected_rgb(length, world_x, world_y, light):
@@ -62,8 +51,7 @@ def expected_rgb(length, world_x, world_y, light):
     if light == LIT_POINT:
         length *= math.sqrt(12.0 ** 2 + world_x ** 2 + world_y ** 2) / 12.0
     linear = [channel ** length for channel in TRANSMISSION]
-    return tuple(255.0 * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1.0 / 2.4) - 0.055)
-        for value in linear)
+    return tuple(255.0 * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1.0 / 2.4) - 0.055) for value in linear)
 
 
 def ray_box(origin, direction, lower, upper):
@@ -126,8 +114,7 @@ def project_receiver(x, y, width, height, camera_x=0.0):
 
 def region_pixels(region, width, height, camera_x=0.0, spacing=0.015):
     _, center_x, center_y = region[:3]
-    result = {project_receiver(center_x + ix * spacing, center_y + iy * spacing, width, height, camera_x)
-        for iy in range(-3, 4) for ix in range(-3, 4)}
+    result = {project_receiver(center_x + ix * spacing, center_y + iy * spacing, width, height, camera_x) for iy in range(-3, 4) for ix in range(-3, 4)}
     if any(x < 0 or x >= width or y < 0 or y >= height for x, y in result):
         raise SmokeFailure("CSG shadow reference region is outside the capture")
     return sorted(result)
@@ -147,8 +134,7 @@ def measure_frame(frame, arm, light):
         error = max(abs(a - b) for a, b in zip(rgb, expected))
         if error > BYTE_TOLERANCE:
             raise SmokeFailure(f"{arm}/{name}: shadow disagrees with carved-box/Beer oracle; RGB={rgb}, expected={expected}, error={error:.3f}")
-        measurements[name] = {LIT_RGB: rgb, LIT_EXPECTED_RGB: expected, LIT_MAXIMUM_MEAN_BYTE_ERROR: error,
-            LIT_SAMPLE_COUNT: len(pixels)}
+        measurements[name] = {LIT_RGB: rgb, LIT_EXPECTED_RGB: expected, LIT_MAXIMUM_MEAN_BYTE_ERROR: error, LIT_SAMPLE_COUNT: len(pixels)}
     return measurements
 
 
@@ -168,32 +154,17 @@ def compare_frames(frames, light=LIT_DIRECTIONAL):
         gain = max(a - b for a, b in zip(measurements[LIT_CUT][name][LIT_RGB], measurements[LIT_UNCUT][name][LIT_RGB]))
         if gain < minimum_gain:
             raise SmokeFailure(f"{name}: cut/uncut control has insufficient shadow change ({gain:.3f} bytes)")
-    return {LIT_LIGHT: light, LIT_EXTENT: list(frames[LIT_REFERENCE][:2]), LIT_MEAN_RGB_TOLERANCE_BYTES: BYTE_TOLERANCE,
-        LIT_ORACLE: "ordinary carved box pieces plus independent Beer law, IOR1, linear presentation and sRGB attachment",
+    return {LIT_LIGHT: light, LIT_EXTENT: list(frames[LIT_REFERENCE][:2]), LIT_MEAN_RGB_TOLERANCE_BYTES: BYTE_TOLERANCE, LIT_ORACLE: "ordinary carved box pieces plus independent Beer law, IOR1, linear presentation and sRGB attachment",
         LIT_REGIONS: measurements}
 
 
 ANALYTIC_REGION_SPACING = 0.006
-ANALYTIC_REGIONS = (
-    (LIT_CLEAR, 0.0, 0.0),
-    (LIT_PLANE_LEFT, -2.3, 1.0),
-    ("plane_right", -1.7, 1.0),
-    (LIT_ELLIPSOID_CENTER, 0.0, 1.0),
-    ("ellipsoid_offset", 0.25, 1.0),
-    ("ellipsoid_rim", 0.61, 1.0),
-    (LIT_CAPSULE_BODY, 2.0, 1.0),
-    ("capsule_endcap", 2.0, 1.52),
-    (LIT_AXIAL_CAPSULE_CENTER, -2.0, -1.0),
-    ("axial_capsule_offset", -1.82, -1.0),
-    (LIT_SPHERE_UNION_CENTER, 0.0, -1.0),
-    ("sphere_union_offset", 0.3, -1.0),
-    ("uncut_control", 2.0, -1.0),
-)
+ANALYTIC_REGIONS = ((LIT_CLEAR, 0.0, 0.0), (LIT_PLANE_LEFT, -2.3, 1.0), ("plane_right", -1.7, 1.0), (LIT_ELLIPSOID_CENTER, 0.0, 1.0), ("ellipsoid_offset", 0.25, 1.0), ("ellipsoid_rim", 0.61, 1.0), (LIT_CAPSULE_BODY, 2.0, 1.0), ("capsule_endcap", 2.0, 1.52),
+    (LIT_AXIAL_CAPSULE_CENTER, -2.0, -1.0), ("axial_capsule_offset", -1.82, -1.0), (LIT_SPHERE_UNION_CENTER, 0.0, -1.0), ("sphere_union_offset", 0.3, -1.0), ("uncut_control", 2.0, -1.0),)
 
 
 def clipped_union_length(intervals, lower=-7.0, upper=-5.0):
-    intervals = sorted((max(lower, start), min(upper, end)) for start, end in intervals
-        if min(upper, end) > max(lower, start))
+    intervals = sorted((max(lower, start), min(upper, end)) for start, end in intervals if min(upper, end) > max(lower, start))
     total, previous_end = 0.0, lower
     for start, end in intervals:
         total += max(0.0, end - max(start, previous_end))
@@ -253,10 +224,8 @@ def measure_analytic_frame(frame, arm):
         expected = tuple(sum(value[channel] for value in expected_pixels) / len(pixels) for channel in range(3))
         error = max(abs(a - b) for a, b in zip(rgb, expected))
         if error > BYTE_TOLERANCE:
-            raise SmokeFailure(f"{arm}/{region[0]}: shadow disagrees with analytic optical-length/Beer oracle; "
-                f"RGB={rgb}, expected={expected}, error={error:.3f}")
-        measurements[region[0]] = {LIT_RGB: rgb, LIT_EXPECTED_RGB: expected, LIT_MAXIMUM_MEAN_BYTE_ERROR: error,
-            LIT_SAMPLE_COUNT: len(pixels)}
+            raise SmokeFailure(f"{arm}/{region[0]}: shadow disagrees with analytic optical-length/Beer oracle; " f"RGB={rgb}, expected={expected}, error={error:.3f}")
+        measurements[region[0]] = {LIT_RGB: rgb, LIT_EXPECTED_RGB: expected, LIT_MAXIMUM_MEAN_BYTE_ERROR: error, LIT_SAMPLE_COUNT: len(pixels)}
     return measurements
 
 
@@ -270,6 +239,4 @@ def compare_analytic_frames(frames):
         gain = max(a - b for a, b in zip(measurements[LIT_CUT][name][LIT_RGB], measurements[LIT_UNCUT][name][LIT_RGB]))
         if gain < 15.0:
             raise SmokeFailure(f"{name}: analytic cut/uncut control has insufficient shadow change ({gain:.3f} bytes)")
-    return {LIT_LIGHT: LIT_DIRECTIONAL, LIT_EXTENT: list(frames[LIT_CUT][:2]), LIT_MEAN_RGB_TOLERANCE_BYTES: BYTE_TOLERANCE,
-        LIT_ORACLE: "independent analytic cross sections and cutter union plus Beer law, IOR1 and sRGB attachment",
-        LIT_REGIONS: measurements}
+    return {LIT_LIGHT: LIT_DIRECTIONAL, LIT_EXTENT: list(frames[LIT_CUT][:2]), LIT_MEAN_RGB_TOLERANCE_BYTES: BYTE_TOLERANCE, LIT_ORACLE: "independent analytic cross sections and cutter union plus Beer law, IOR1 and sRGB attachment", LIT_REGIONS: measurements}

@@ -125,16 +125,9 @@ struct RayTracingCapabilityInputs{
     ;
 }
 
-[[nodiscard]] inline constexpr bool IsRayTracingShaderTypeAllowed(
-    const ShaderType::Mask shaderType,
-    const ShaderType::Mask allowedShaderTypes
-)noexcept{
+[[nodiscard]] inline constexpr bool IsRayTracingShaderTypeAllowed(const ShaderType::Mask shaderType, const ShaderType::Mask allowedShaderTypes)noexcept{
     const u16 shaderTypeBits = static_cast<u16>(shaderType);
-    return
-        shaderTypeBits != 0u
-        && (shaderTypeBits & (shaderTypeBits - 1u)) == 0u
-        && (shaderTypeBits & static_cast<u16>(allowedShaderTypes)) == shaderTypeBits
-    ;
+    return shaderTypeBits != 0u && (shaderTypeBits & (shaderTypeBits - 1u)) == 0u && (shaderTypeBits & static_cast<u16>(allowedShaderTypes)) == shaderTypeBits;
 }
 
 
@@ -149,10 +142,7 @@ struct RayDispatchLimits{
 
 [[nodiscard]] VkPipelineCreateFlags2 ComputeRayTracingPipelineCreateFlags(const RayTracingPipelineDesc& desc)noexcept;
 
-[[nodiscard]] bool ValidateRayDispatchDimensions(
-    const RayTracingDispatchRaysArguments& arguments,
-    const RayDispatchLimits& limits
-)noexcept;
+[[nodiscard]] bool ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& arguments, const RayDispatchLimits& limits)noexcept;
 
 struct RayTracingHandleLayout{
     u32 handleSize = 0u;
@@ -160,28 +150,13 @@ struct RayTracingHandleLayout{
     u32 baseAlignment = 0u;
 };
 
-Expected<RayTracingHandleLayout> ComputeRayTracingHandleLayout(
-    const VulkanContext& context,
-    TStringView operation
-);
+Expected<RayTracingHandleLayout> ComputeRayTracingHandleLayout(const VulkanContext& context, TStringView operation);
 
-Expected<u64> ComputeShaderTableByteSize(
-    u32 recordCount,
-    u32 handleSizeAligned,
-    TStringView operation
-);
+Expected<u64> ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned, TStringView operation);
 
-[[nodiscard]] Expected<u64> ComputeShaderTableAllocationByteSize(
-    u64 recordByteSize,
-    u32 baseAlignment
-)noexcept;
+[[nodiscard]] Expected<u64> ComputeShaderTableAllocationByteSize(u64 recordByteSize, u32 baseAlignment)noexcept;
 
-[[nodiscard]] Expected<u64> ComputeShaderTableAlignedOffset(
-    u64 deviceAddress,
-    u64 allocationByteSize,
-    u64 recordByteSize,
-    u32 baseAlignment
-)noexcept;
+[[nodiscard]] Expected<u64> ComputeShaderTableAlignedOffset(u64 deviceAddress, u64 allocationByteSize, u64 recordByteSize, u32 baseAlignment)noexcept;
 
 struct BlasGeometry{
     VkAccelerationStructureGeometryKHR geometry = {};
@@ -190,12 +165,7 @@ struct BlasGeometry{
     u32 primitiveCount = 0u;
 };
 
-Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
-    const VulkanContext& context,
-    const RayTracingGeometryDesc& geomDesc,
-    TStringView operation,
-    bool requireBuffers
-);
+Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, bool requireBuffers);
 
 [[nodiscard]] VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept;
 

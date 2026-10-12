@@ -29,8 +29,7 @@ namespace Tests::Smoke{
 
 
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u64 value)noexcept{
-    const SIMDVectorSingle channels = VectorSet(static_cast<f32>(value & 15u), static_cast<f32>((value >> 4u) & 15u),
-        static_cast<f32>((value >> 8u) & 15u), 15.0f);
+    const SIMDVectorSingle channels = VectorSet(static_cast<f32>(value & 15u), static_cast<f32>((value >> 4u) & 15u), static_cast<f32>((value >> 8u) & 15u), 15.0f);
     const SIMDVectorSingle color = VectorDivide(channels, VectorReplicate(15.0f));
     return { VectorGetX(color), VectorGetY(color), VectorGetZ(color), 1.0f };
 }
@@ -40,9 +39,7 @@ namespace Tests::Smoke{
 }
 
 inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} {}={},{},{},{}")
-        , tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} {}={},{},{},{}"), tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
 }
 
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{
@@ -60,8 +57,7 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
     return hash;
 }
 
-// Progress, slider, and image snapshots paint one 12-bit marker swatch per
-// value part plus sequence swatches along the bottom edge.
+// Progress, slider, and image snapshots paint one 12-bit marker swatch per value part plus sequence swatches along the bottom edge.
 template<typename ValuesT, typename BitsT>
 inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const BitsT& bits, const u64 sequence){
     const f32 y = context.display.logicalHeight - 18.0f;
@@ -89,22 +85,14 @@ inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT&
 }
 
 [[nodiscard]] inline bool SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right){
-    return
-        SameSmokeRect(left.bounds, right.bounds) && SameSmokeRect(left.content, right.content)
-        && SameSmokeRect(left.caret, right.caret) && left.scroll == right.scroll
-    ;
+    return SameSmokeRect(left.bounds, right.bounds) && SameSmokeRect(left.content, right.content) && SameSmokeRect(left.caret, right.caret) && left.scroll == right.scroll;
 }
 
-inline void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, const TStringView field,
-    const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection
-){
+inline void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, const TStringView field, const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection){
     const auto& bounds = placement.bounds;
     const auto& content = placement.content;
     const auto& caret = placement.caret;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}")
-        , tag, sequence, field, bounds.x, bounds.y, bounds.width, bounds.height
-        , content.x, content.y, content.width, content.height
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}"), tag, sequence, field, bounds.x, bounds.y, bounds.width, bounds.height, content.x, content.y, content.width, content.height);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}")
         , tag, sequence, field, caret.x, caret.y, caret.width, caret.height
         , selection.x, selection.y, selection.width, selection.height, placement.scroll

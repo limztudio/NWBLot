@@ -31,8 +31,7 @@ struct NwbCsgReceiverSurfacePixelOutput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[earlydepthstencil]
-NwbCsgReceiverSurfacePixelOutput main(const NwbCsgReceiverSurfacePixelInput input){
+[earlydepthstencil] NwbCsgReceiverSurfacePixelOutput main(const NwbCsgReceiverSurfacePixelInput input){
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
     nwbCsgMarkReceiverSurfaceEvent(input.position, input.worldPosition.xyz, receiverIndex, input.frontFace);
 

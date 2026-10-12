@@ -141,9 +141,7 @@ protected:
         return prepareSource(generation, m_source, m_state, options);
     }
 
-    [[nodiscard]] bool prepareSource(const u64 generation, const IListDataSource& source, ListState& state,
-        const ListOptions& options = Options()
-    ){
+    [[nodiscard]] bool prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options()){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
         m_result = m_builder.virtualList("list", source, state, options);
@@ -154,9 +152,7 @@ protected:
         return prepare(generation, options) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState,
-        PopupState* upperPopup = nullptr, ListState* upperState = nullptr
-    ){
+    [[nodiscard]] bool preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup = nullptr, ListState* upperState = nullptr){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
         if(!m_builder.virtualList("list", m_source, m_state, Options()).valid || !m_builder.endPanel())
@@ -489,8 +485,7 @@ TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInp
     ASSERT_TRUE(accept(1u));
     const HitTarget accepted = *target(MakeWidgetId(host(), "scrollbar"));
     const Point origin = Center(accepted.rectangle);
-    const Point destination{ origin.x, accepted.gestureReference.y + accepted.gestureReference.height
-        - accepted.rectangle.height * 0.5f };
+    const Point destination{ origin.x, accepted.gestureReference.y + accepted.gestureReference.height - accepted.rectangle.height * 0.5f };
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     InputEvent event;
     event.type = InputEventType::PointerWheel;

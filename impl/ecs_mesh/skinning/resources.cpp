@@ -30,31 +30,16 @@ namespace __hidden_resources{
 
 
 template<typename PayloadT>
-static Core::BufferHandle SetupStructuredBuffer(
-    Core::GraphicsRuntime& graphics,
-    const Name& debugName,
-    const PayloadT* payload,
-    const usize count,
-    const TStringView label
-){
+static Core::BufferHandle SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const TStringView label){
     if(MultiplyOverflows<usize>(count, sizeof(PayloadT))){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
         return {};
     }
 
-    return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(
-        graphics,
-        debugName,
-        payload,
-        count,
-        { false, false, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute }
-    );
+    return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(graphics, debugName, payload, count, { false, false, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
 }
 
-static Expected<Core::GpuDescriptorHandle> RegisterStorageBuffer(
-    Core::GpuDescriptorHeap& heap,
-    const Core::DescriptorWriteItem& item
-){
+static Expected<Core::GpuDescriptorHandle> RegisterStorageBuffer(Core::GpuDescriptorHeap& heap, const Core::DescriptorWriteItem& item){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
@@ -65,10 +50,7 @@ static Expected<Core::GpuDescriptorHandle> RegisterStorageBuffer(
     return handle;
 }
 
-static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer
-){
+static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
@@ -222,11 +204,7 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     return true;
 }
 
-Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ensureRuntimeResources(
-    MeshSkinningRuntimeInstance& instance,
-    const RuntimeSkinPayloadScratch& payload,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload, Core::Alloc::ScratchArena& scratchArena){
     NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
 
     const bool hasActiveSkin = payload.hasActiveSkin();
@@ -285,37 +263,20 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
             return failRebuild();
         }
 
-        rebuilt.skinBuffer = __hidden_resources::SetupStructuredBuffer(
-            m_graphics,
-            skinBufferName,
-            skinInfluences->data(),
-            skinInfluences->size(),
-            NWB_TEXT("skin influence")
-        );
+        rebuilt.skinBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, skinBufferName, skinInfluences->data(), skinInfluences->size(), NWB_TEXT("skin influence"));
         if(!rebuilt.skinBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
             return failRebuild();
         }
 
-        rebuilt.jointPaletteBuffer = __hidden_resources::SetupStructuredBuffer(
-            m_graphics,
-            jointPaletteBufferName,
-            payload.jointMatrices.data(),
-            payload.jointMatrices.size(),
-            NWB_TEXT("joint palette")
-        );
+        rebuilt.jointPaletteBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, jointPaletteBufferName, payload.jointMatrices.data(), payload.jointMatrices.size(), NWB_TEXT("joint palette"));
         if(!rebuilt.jointPaletteBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
             return failRebuild();
         }
     }
 
-    const Name bindlessSlotsBufferName = DeriveRuntimeResourceName(
-        instance.sourceName,
-        instance.handle.value,
-        instance.editRevision,
-        "mesh_skinning_bindless_slots"
-    );
+    const Name bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_bindless_slots");
     if(!bindlessSlotsBufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
         return failRebuild();

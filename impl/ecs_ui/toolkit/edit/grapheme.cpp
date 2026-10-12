@@ -52,15 +52,9 @@ struct BoundaryState{
             return false;
         if(IsControl(previous) || IsControl(current))
             return true;
-        if(
-            previous == GraphemeBreak::L && (current == GraphemeBreak::L || current == GraphemeBreak::V
-                || current == GraphemeBreak::LV || current == GraphemeBreak::LVT)
-        )
+        if(previous == GraphemeBreak::L && (current == GraphemeBreak::L || current == GraphemeBreak::V || current == GraphemeBreak::LV || current == GraphemeBreak::LVT))
             return false;
-        if(
-            (previous == GraphemeBreak::LV || previous == GraphemeBreak::V)
-            && (current == GraphemeBreak::V || current == GraphemeBreak::T)
-        )
+        if((previous == GraphemeBreak::LV || previous == GraphemeBreak::V) && (current == GraphemeBreak::V || current == GraphemeBreak::T))
             return false;
         if((previous == GraphemeBreak::LVT || previous == GraphemeBreak::T) && current == GraphemeBreak::T)
             return false;
@@ -72,10 +66,7 @@ struct BoundaryState{
             return false;
         if(pictograph && previous == GraphemeBreak::ZWJ && previousZwjAfterPictograph)
             return false;
-        if(
-            previous == GraphemeBreak::Regional_Indicator && current == GraphemeBreak::Regional_Indicator
-            && regionalRun % 2u != 0u
-        )
+        if(previous == GraphemeBreak::Regional_Indicator && current == GraphemeBreak::Regional_Indicator && regionalRun % 2u != 0u)
             return false;
         return true;
     }
@@ -114,9 +105,7 @@ struct BoundaryState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<EditBoundaryVector> GraphemeSegmentation::Build(
-    Core::Alloc::GlobalArena& arena, const AStringView text, const bool singleLine
-){
+Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalArena& arena, const AStringView text, const bool singleLine){
     if(!Validate(text, singleLine))
         return MakeUnexpected(Failure{});
     EditBoundaryVector candidate(arena);

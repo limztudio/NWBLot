@@ -44,24 +44,10 @@ TEST(Telemetry, FrameGraphPayloadRejectsNonCurrentVersions){
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
     Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(
-        testArena.arena,
-        nodes,
-        edges,
-        physicalQueueRuntimeStatistics,
-        packetSubmissionStatistics
-    );
+    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
-        testArena.arena,
-        907u,
-        nodes,
-        edges,
-        physicalQueueRuntimeStatistics,
-        packetSubmissionStatistics,
-        payload
-    ));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 907u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     Telemetry::EncodedFrameGraphPayloadHeader header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     ASSERT_EQ(header.version, Telemetry::s_FrameGraphPayloadVersion);
@@ -70,11 +56,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsNonCurrentVersions){
     ASSERT_GT(header.physicalQueueRuntimeStatisticsCount, 0u);
     ASSERT_GT(header.packetSubmissionStatisticsCount, 0u);
 
-    const u16 unsupportedVersions[] = {
-        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
-        static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u),
-        Limit<u16>::s_Max,
-    };
+    const u16 unsupportedVersions[] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u), Limit<u16>::s_Max, };
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
@@ -110,11 +92,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsHistoricalEmptyPayloads){
         header.version = static_cast<u16>(versionIndex + 1u);
         SCOPED_TRACE(header.version);
         NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(
-            testArena.arena,
-            payload.data(),
-            historicalHeaderBytes[versionIndex]
-        )));
+        EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), historicalHeaderBytes[versionIndex])));
     }
 }
 
@@ -126,47 +104,24 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRejectsMalformedRecords){
 
     Telemetry::TelemetryBytes payload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
-    const usize assignmentOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
-        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
-        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
-    ;
+    const usize assignmentOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader) + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size() + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size();
     Telemetry::EncodedFrameGraphQueueAssignment first;
     Telemetry::EncodedFrameGraphQueueAssignment second;
     NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-    NWB_MEMCPY(
-        &second,
-        sizeof(second),
-        payload.data() + assignmentOffset + sizeof(first),
-        sizeof(second)
-    );
+    NWB_MEMCPY(&second, sizeof(second), payload.data() + assignmentOffset + sizeof(first), sizeof(second));
 
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
     second.nodeIndex = first.nodeIndex;
-    NWB_MEMCPY(
-        payload.data() + assignmentOffset + sizeof(first),
-        payload.size() - assignmentOffset - sizeof(first),
-        &second,
-        sizeof(second)
-    );
+    NWB_MEMCPY(payload.data() + assignmentOffset + sizeof(first), payload.size() - assignmentOffset - sizeof(first), &second, sizeof(second));
     EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
     NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-    NWB_MEMCPY(
-        &second,
-        sizeof(second),
-        payload.data() + assignmentOffset + sizeof(first),
-        sizeof(second)
-    );
+    NWB_MEMCPY(&second, sizeof(second), payload.data() + assignmentOffset + sizeof(first), sizeof(second));
     first.nodeIndex = s_ExpectedDualCount;
     second.nodeIndex = 0u;
     NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
-    NWB_MEMCPY(
-        payload.data() + assignmentOffset + sizeof(first),
-        payload.size() - assignmentOffset - sizeof(first),
-        &second,
-        sizeof(second)
-    );
+    NWB_MEMCPY(payload.data() + assignmentOffset + sizeof(first), payload.size() - assignmentOffset - sizeof(first), &second, sizeof(second));
     EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
@@ -216,21 +171,11 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRejectsMalformedRecords){
     Telemetry::EncodedFrameGraphCompiledTask first;
     Telemetry::EncodedFrameGraphCompiledTask second;
     NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-    NWB_MEMCPY(
-        &second,
-        sizeof(second),
-        payload.data() + compiledTaskOffset + sizeof(first),
-        sizeof(second)
-    );
+    NWB_MEMCPY(&second, sizeof(second), payload.data() + compiledTaskOffset + sizeof(first), sizeof(second));
 
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
     second.nodeIndex = first.nodeIndex;
-    NWB_MEMCPY(
-        payload.data() + compiledTaskOffset + sizeof(first),
-        payload.size() - compiledTaskOffset - sizeof(first),
-        &second,
-        sizeof(second)
-    );
+    NWB_MEMCPY(payload.data() + compiledTaskOffset + sizeof(first), payload.size() - compiledTaskOffset - sizeof(first), &second, sizeof(second));
     EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));

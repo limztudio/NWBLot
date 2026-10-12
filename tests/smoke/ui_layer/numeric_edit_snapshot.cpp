@@ -43,11 +43,7 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("integer_bounds"), NWB_TEXT
 
 
 [[nodiscard]] static bool Coherent(const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxState& state){
-    return
-        state.modelGeneration == model.instanceGeneration() && state.revision == model.revision()
-        && state.selectionGeneration == model.selectionGeneration()
-        && state.anchor == model.anchor() && state.caret == model.caret()
-    ;
+    return state.modelGeneration == model.instanceGeneration() && state.revision == model.revision() && state.selectionGeneration == model.selectionGeneration() && state.anchor == model.anchor() && state.caret == model.caret();
 }
 
 
@@ -72,8 +68,7 @@ Array<u64, 30u> UiNumericEditSmokeScene::values()const{
         static_cast<u64>(m_states[1u].focused), static_cast<u64>(m_clipboard.text().size()), HashSmokeText(m_clipboard.text()),
         static_cast<u64>(m_clipboard.anchor()), static_cast<u64>(m_clipboard.caret()), static_cast<u64>(m_states[2u].focused),
         static_cast<u64>(m_enabled), static_cast<u64>(m_readOnly), static_cast<u64>(m_clamp), m_commits, m_cancels,
-        m_rejects, m_clamps, m_restored, static_cast<u64>(Coherent(integer, m_states[0u]) && Coherent(floating, m_states[1u])
-            && Coherent(m_clipboard, m_states[2u])) };
+        m_rejects, m_clamps, m_restored, static_cast<u64>(Coherent(integer, m_states[0u]) && Coherent(floating, m_states[1u]) && Coherent(m_clipboard, m_states[2u])) };
 }
 
 void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text){
@@ -94,16 +89,13 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
     const auto& previous = m_snapshot.display;
-    const bool displayChanged = display.logicalWidth != previous.logicalWidth || display.logicalHeight != previous.logicalHeight
-        || display.pixelScaleX != previous.pixelScaleX || display.pixelScaleY != previous.pixelScaleY;
+    const bool displayChanged = display.logicalWidth != previous.logicalWidth || display.logicalHeight != previous.logicalHeight || display.pixelScaleX != previous.pixelScaleX || display.pixelScaleY != previous.pixelScaleY;
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)
         return;
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNumericEditSmoke: display logical={}x{} scale={}x{}")
-            , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNumericEditSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
     }
     const auto& value = m_snapshot.values;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNumericEditSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")

@@ -12,9 +12,7 @@ import struct
 import sys
 import zlib
 
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, SmokeFailure, analyze_rgb_rows, read_bmp_24_rows,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, SmokeFailure, analyze_rgb_rows, read_bmp_24_rows,)
 
 LIT_SINGLE = "single"
 LIT_GEOMETRY = "geometry"
@@ -47,8 +45,7 @@ LIT_STORE_TRUE = "store_true"
 LIT_APPEND = "append"
 
 
-CASES = {
-    "identity_reference": ("Exact entity reference", "A tinted retained CSG slab at z=0 through z=1 uses a recycled entity generation beyond float32 integer precision.",
+CASES = { "identity_reference": ("Exact entity reference", "A tinted retained CSG slab at z=0 through z=1 uses a recycled entity generation beyond float32 integer precision.",
         "The camera near plane lies just before its raw front face; the screen control establishes the captured primary without a competing receiver."),
     "identity_same_ior": ("Same-IOR neighbor", "A thin neighboring glass volume shares IOR 1.5 with the primary, but its entry is clipped from raster capture by the camera near plane.",
         "The retained slab front is nearer than the neighbor backface and owns capture; the clipped foreign entry remains inside the hardware association band and must fail exact entity association."),
@@ -59,25 +56,16 @@ CASES = {
     "near_air_ordinary": ("Near-air closed volume", "A three-unit tinted box at z=-0.25 through z=2.75 uses the first half-precision IOR above one (1.0009765625).",
         "Negligible bending still requires the measured Beer path; the transmitting screen control deliberately uses one-unit thickness."),
     "near_air_csg": ("Near-air CSG volume", "The same three-unit near-air box at z=-0.25 through z=2.75 has a plane cutter outside its retained silhouette.",
-        "Current CSG context must preserve the ordinary volume's entry, exit and attenuation, including this valid IOR just above air."),
-    "csg_reference": ("Retained slab reference", "An ordinary glass slab occupies z=0 through z=1.",
-        "Its entry, exit and material match the retained solid in the CSG cap case."),
-    "csg_cap": ("Generated glass entry", "A plane removes the front half of a glass box, leaving z=0 through z=1.",
-        "The generated wall must retain the reference slab's refraction direction and physical absorption path."),
-    "csg_middle": ("Generated entry and exit", "Two planes retain only the middle z=0 through z=1 of a larger glass box.",
-        "Both visible-ray receiver triangles are removed; generated walls must still admit the retained glass primary."),
-    "csg_uncut": ("Uncut thickness control", "The original glass box retains its full z=-1 through z=1 thickness.",
-        "This control must differ from the carved slab so an original-triangle trace cannot pass the comparison."),
-    LIT_SINGLE: ("Single solid", "A single closed glass volume in front of the stripe wall.",
-        "The baseline supported case: one primary entry and exit. Compare the bent background with the straight red foreground panel."),
-    "separate": ("Separate objects", "Distinct glass objects with separate visible silhouettes.",
-        "Each pixel can retain its own nearest refractor. Spatially separate objects can therefore use different primary interfaces."),
-    "stacked": ("Depth stack", "Multiple glass objects placed one behind another along the view.",
+        "Current CSG context must preserve the ordinary volume's entry, exit and attenuation, including this valid IOR just above air."), "csg_reference": ("Retained slab reference", "An ordinary glass slab occupies z=0 through z=1.",
+        "Its entry, exit and material match the retained solid in the CSG cap case."), "csg_cap": ("Generated glass entry", "A plane removes the front half of a glass box, leaving z=0 through z=1.",
+        "The generated wall must retain the reference slab's refraction direction and physical absorption path."), "csg_middle": ("Generated entry and exit", "Two planes retain only the middle z=0 through z=1 of a larger glass box.",
+        "Both visible-ray receiver triangles are removed; generated walls must still admit the retained glass primary."), "csg_uncut": ("Uncut thickness control", "The original glass box retains its full z=-1 through z=1 thickness.",
+        "This control must differ from the carved slab so an original-triangle trace cannot pass the comparison."), LIT_SINGLE: ("Single solid", "A single closed glass volume in front of the stripe wall.",
+        "The baseline supported case: one primary entry and exit. Compare the bent background with the straight red foreground panel."), "separate": ("Separate objects", "Distinct glass objects with separate visible silhouettes.",
+        "Each pixel can retain its own nearest refractor. Spatially separate objects can therefore use different primary interfaces."), "stacked": ("Depth stack", "Multiple glass objects placed one behind another along the view.",
         "After a valid first exit, further glass uses an approximation from that exit while preserving the completed primary direction, measured thickness, absorption and Fresnel. No extra rays trace the remaining volume chain."),
-    "intersecting": ("Intersecting volumes", "Glass objects whose solid volumes overlap.",
-        "Overlapping volumes do not have a tracked medium stack. When another instance interrupts the selected volume's exit path, the hardware resolver falls back per pixel."),
-    "nested": ("Nested volumes", "One glass object contained inside another.",
-        "Nested media are outside the first implementation's complete optical model. Encountering the inner instance can trigger the screen-space fallback."),
+    "intersecting": ("Intersecting volumes", "Glass objects whose solid volumes overlap.", "Overlapping volumes do not have a tracked medium stack. When another instance interrupts the selected volume's exit path, the hardware resolver falls back per pixel."),
+    "nested": ("Nested volumes", "One glass object contained inside another.", "Nested media are outside the first implementation's complete optical model. Encountering the inner instance can trigger the screen-space fallback."),
     "coincident": ("Coincident surfaces", "Exact coincident glass with different tints and an explicit shared optical-volume group.",
         "The cool instance has priority 10 and the warm instance priority 0. The renderer should select one cool optical volume; the geometry preview still shows both authored surfaces."),
     "coincident_tinted": ("Coincident tinted glass", "Coincident glass instances with different authored optical tints.",
@@ -88,22 +76,14 @@ CASES = {
         "Primary identity is an instance, not a connected-volume label, so exclusion can affect its other components. After a valid first exit, later components use the exit-based background approximation; a full optical chain through disconnected components is not traced."),
     "prism": ("Faceted prism", "A glass prism with planar faces and sharp changes in surface normal.",
         "The selected entry and exit faces bend the ray using their normals. Internal reflection is capped, so sharp-angle regions can lose unresolved reflected energy. This angle-stress scene does not verify that the total-internal-reflection branch executed."),
-    "duplicate_single_cool": ("Cool reference", "One cool glass sphere of radius 1.1, matching the duplicate fixtures exactly.",
-        "Zero coverage; its actual render is the reference for cool-priority and identical-material clear duplicate cases."),
-    "duplicate_single_warm": ("Warm reference", "One warm glass sphere of radius 1.1, matching the duplicate fixtures exactly.",
-        "Zero coverage; its actual render is the reference when explicit optical priority selects the warm instance."),
-    "duplicate_single_cool_tinted": ("Cool tinted reference", "One cool glass sphere of radius 1.1 with coverage 0.3.",
-        "Reference for the cool-priority and identical-material duplicate cases with nonzero coverage."),
-    "duplicate_single_warm_tinted": ("Warm tinted reference", "One warm glass sphere of radius 1.1 with coverage 0.3.",
-        "Reference when explicit optical priority selects the warm instance with nonzero coverage."),
-    "coincident_reversed": ("Reversed creation order", "The warm instance is created before the cool instance at exactly the same transform.",
-        "The cool instance still has priority 10. Reversing creation order should preserve its single-volume result."),
-    "coincident_tinted_reversed": ("Reversed tinted order", "The coverage-0.3 pair is created warm first, cool second.",
-        "Explicit cool priority should preserve the cool single reference despite the reversed insertion order."),
-    "coincident_priority_swap": ("Swapped priority", "The same clear duplicate pair now gives the warm instance priority 10.",
-        "The result should match the warm single reference; optical priority changes the selected material."),
-    "coincident_tinted_priority_swap": ("Swapped tinted priority", "The coverage-0.3 duplicate pair now gives the warm instance priority 10.",
-        "The result should match the warm tinted single reference without adding the lower-priority surface."),
+    "duplicate_single_cool": ("Cool reference", "One cool glass sphere of radius 1.1, matching the duplicate fixtures exactly.", "Zero coverage; its actual render is the reference for cool-priority and identical-material clear duplicate cases."),
+    "duplicate_single_warm": ("Warm reference", "One warm glass sphere of radius 1.1, matching the duplicate fixtures exactly.", "Zero coverage; its actual render is the reference when explicit optical priority selects the warm instance."),
+    "duplicate_single_cool_tinted": ("Cool tinted reference", "One cool glass sphere of radius 1.1 with coverage 0.3.", "Reference for the cool-priority and identical-material duplicate cases with nonzero coverage."),
+    "duplicate_single_warm_tinted": ("Warm tinted reference", "One warm glass sphere of radius 1.1 with coverage 0.3.", "Reference when explicit optical priority selects the warm instance with nonzero coverage."),
+    "coincident_reversed": ("Reversed creation order", "The warm instance is created before the cool instance at exactly the same transform.", "The cool instance still has priority 10. Reversing creation order should preserve its single-volume result."),
+    "coincident_tinted_reversed": ("Reversed tinted order", "The coverage-0.3 pair is created warm first, cool second.", "Explicit cool priority should preserve the cool single reference despite the reversed insertion order."),
+    "coincident_priority_swap": ("Swapped priority", "The same clear duplicate pair now gives the warm instance priority 10.", "The result should match the warm single reference; optical priority changes the selected material."),
+    "coincident_tinted_priority_swap": ("Swapped tinted priority", "The coverage-0.3 duplicate pair now gives the warm instance priority 10.", "The result should match the warm tinted single reference without adding the lower-priority surface."),
     "coincident_identical": ("Identical-material duplicate", "Two identical clear spheres explicitly opt into IdenticalMaterial coincidence handling.",
         "The author guarantees instance-independent geometry. Exact static geometry, transform, material and effective inputs should collapse to the cool single reference."),
     "coincident_tinted_identical": ("Identical tinted duplicate", "Two identical coverage-0.3 spheres explicitly opt into IdenticalMaterial coincidence handling.",
@@ -111,23 +91,13 @@ CASES = {
     "near_coincident": ("Near overlap retained", "The warm member of an authored group is translated 0.04 units from the cool sphere.",
         "The transforms are different, so the renderer must retain both volumes. The existing bounded overlap fallback still applies."),
     "coincident_preserved": ("Independent duplicate layers", "Two identical tinted spheres retain the default Independent coincidence policy.",
-        "Independent surfaces remain separate. Their layered result remains subject to the renderer's bounded interface model."),
-}
+        "Independent surfaces remain separate. Their layered result remains subject to the renderer's bounded interface model."), }
 
 VARIANTS = (LIT_GEOMETRY, LIT_AUTOMATIC, LIT_SCREEN, LIT_DISABLED)
-VARIANT_LABELS = {
-    LIT_GEOMETRY: "Geometry preview — translucent, refraction off", LIT_AUTOMATIC: "Automatic tracing",
-    LIT_SCREEN: "Screen-space fallback", LIT_DISABLED: "Refraction disabled",
-}
-COMMON_LIMIT = (
-    "Current implementation: one primary refractor per pixel, bounded hardware continuation, "
-    "and opted-in exact static duplicate grouping. Additional glass after a valid first exit uses "
-    "an exit-based background approximation that preserves the primary direction, thickness, absorption "
-    "and Fresnel without extra rays. Invalid first exits, intersections and nested media retain the "
-    "conservative entry fallback. A hardware dispatch can still fall back on individual pixels. "
-    "These are real renderer outputs; the gallery measures "
-    "visible changes and exposes limitations without certifying complex optical accuracy."
-)
+VARIANT_LABELS = { LIT_GEOMETRY: "Geometry preview — translucent, refraction off", LIT_AUTOMATIC: "Automatic tracing", LIT_SCREEN: "Screen-space fallback", LIT_DISABLED: "Refraction disabled", }
+COMMON_LIMIT = ("Current implementation: one primary refractor per pixel, bounded hardware continuation, " "and opted-in exact static duplicate grouping. Additional glass after a valid first exit uses "
+    "an exit-based background approximation that preserves the primary direction, thickness, absorption " "and Fresnel without extra rays. Invalid first exits, intersections and nested media retain the "
+    "conservative entry fallback. A hardware dispatch can still fall back on individual pixels. " "These are real renderer outputs; the gallery measures " "visible changes and exposes limitations without certifying complex optical accuracy.")
 
 
 def parse_selection(text, allowed, option):
@@ -144,12 +114,8 @@ def parse_selection(text, allowed, option):
 
 def capture_environment(case, variant, inherited=None):
     env = dict(os.environ if inherited is None else inherited)
-    for name in (
-        LIT_NWB_REFRACTION_SMOKE_CASE, LIT_NWB_REFRACTION_SMOKE_GEOMETRY,
-        LIT_NWB_REFRACTION_SMOKE_ENABLED, LIT_NWB_REFRACTION_SMOKE_HARDWARE,
-        "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO,
-        "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
-    ):
+    for name in (LIT_NWB_REFRACTION_SMOKE_CASE, LIT_NWB_REFRACTION_SMOKE_GEOMETRY, LIT_NWB_REFRACTION_SMOKE_ENABLED, LIT_NWB_REFRACTION_SMOKE_HARDWARE, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO,
+        "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",):
         env.pop(name, None)
     env[LIT_NWB_REFRACTION_SMOKE_CASE] = case
     env[LIT_NWB_REFRACTION_SMOKE_GEOMETRY] = "1" if variant == LIT_GEOMETRY else "0"
@@ -174,11 +140,7 @@ def frame_difference(reference, output):
             channel_sum += sum(deltas)
             maximum = max(maximum, largest)
     pixels = width * height
-    return {
-        "compared_with": LIT_DISABLED, LIT_CHANGED_PIXELS: changed, "total_pixels": pixels,
-        "changed_fraction": changed / pixels, "mean_absolute_rgb_difference": channel_sum / (pixels * 3),
-        "maximum_channel_difference": maximum,
-    }
+    return { "compared_with": LIT_DISABLED, LIT_CHANGED_PIXELS: changed, "total_pixels": pixels, "changed_fraction": changed / pixels, "mean_absolute_rgb_difference": channel_sum / (pixels * 3), "maximum_channel_difference": maximum, }
 
 
 def validate_frame(frame, case, variant):
@@ -210,24 +172,16 @@ def png_rgb_bytes(frame):
 
 def capture(args, case, variant):
     output = args.output_directory / f"{case}_{variant}.bmp"
-    command = [
-        sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(output), "--log-output", str(output.with_suffix(".log")), "--application-capture",
-        "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
-        LIT_EXPECT_LOG_MESSAGE, f"RefractionSmokeProject: gallery case {case} created",
-        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown",
-        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + (
-            LIT_DISABLED if variant in (LIT_GEOMETRY, LIT_DISABLED) else "enabled"
-        ),
-    ]
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
+        "--output", str(output), "--log-output", str(output.with_suffix(".log")), "--application-capture", "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
+        LIT_EXPECT_LOG_MESSAGE, f"RefractionSmokeProject: gallery case {case} created", LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown", LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + (
+            LIT_DISABLED if variant in (LIT_GEOMETRY, LIT_DISABLED) else "enabled"),]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:
         command.append("--no-logserver")
     if variant == LIT_AUTOMATIC:
-        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: hardware" if args.require_hardware
-            else LIT_AVBOIT_REFRACTION_RESOLVE]
+        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: hardware" if args.require_hardware else LIT_AVBOIT_REFRACTION_RESOLVE]
     elif variant == LIT_SCREEN:
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: screen-space"]
     else:
@@ -290,8 +244,8 @@ byId('zoom').addEventListener('input',updateZoom);byId('layout').addEventListene
 
 
 def write_gallery(output_directory, manifest):
-    # Preserve raw BMPs alongside the report. Embedded PNGs contain the same RGB
-    # pixels; no resizing, repainting, or generated image is involved.
+    # Preserve raw BMPs alongside the report.
+    # Embedded PNGs contain the same RGB pixels; no resizing, repainting, or generated image is involved.
     (output_directory / "gallery_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding=LIT_UTF_8)
     embedded = json.loads(json.dumps(manifest))
     for case in embedded[LIT_CASES]:
@@ -313,10 +267,8 @@ def parse_args(argv):
     parser.add_argument(LIT_WORKING_DIRECTORY, type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
-    parser.add_argument("--cases", type=lambda value: parse_selection(value, CASES, LIT_CASES), default=tuple(CASES),
-        help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(CASES))
-    parser.add_argument("--variants", type=lambda value: parse_selection(value, VARIANTS, LIT_VARIANTS), default=VARIANTS,
-        help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(VARIANTS))
+    parser.add_argument("--cases", type=lambda value: parse_selection(value, CASES, LIT_CASES), default=tuple(CASES), help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(CASES))
+    parser.add_argument("--variants", type=lambda value: parse_selection(value, VARIANTS, LIT_VARIANTS), default=VARIANTS, help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(VARIANTS))
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument(LIT_TIMEOUT, type=float, default=60.0, help="Capture timeout in seconds for each child run.")
     parser.add_argument("--require-hardware", action=LIT_STORE_TRUE)
@@ -334,14 +286,9 @@ def main(argv):
     labels = dict(VARIANT_LABELS)
     if args.require_hardware:
         labels[LIT_AUTOMATIC] = "Hardware RT (per-pixel fallback allowed)"
-    manifest = {
-        "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "frames": args.frames, "hardware_required": args.require_hardware,
-        "application_args": list(args.application_arg),
-        LIT_VARIANTS: list(args.variants), "variant_labels": labels, LIT_LIMITS: COMMON_LIMIT,
-        "image_count": len(args.cases) * len(args.variants), LIT_CASES: [],
-        "validation": "Strict runtime logs, successful route dispatch, normal shutdown, nontrivial frames, and visible changes when a disabled baseline is present.",
-    }
+    manifest = { "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "frames": args.frames, "hardware_required": args.require_hardware, "application_args": list(args.application_arg),
+        LIT_VARIANTS: list(args.variants), "variant_labels": labels, LIT_LIMITS: COMMON_LIMIT, "image_count": len(args.cases) * len(args.variants), LIT_CASES: [],
+        "validation": "Strict runtime logs, successful route dispatch, normal shutdown, nontrivial frames, and visible changes when a disabled baseline is present.", }
     try:
         for case_id in args.cases:
             title, description, note = CASES[case_id]

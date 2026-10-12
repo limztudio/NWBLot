@@ -130,14 +130,7 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
     AString<NWB::Core::Alloc::GlobalArena> record(arena);
     StringAppendFormat(record, "{}\truntime\tAdmission/Incoming\n", incomingToken);
     const usize retainedCount = NameSymbols::EntryCount();
-    constexpr Array<AStringView, 6u> s_RejectedHeaders = {
-        "",
-        "nwb_namesym_v0\tproducer=runtime\n",
-        "nwb_namesym_v2\tproducer=runtime\n",
-        "nwb_namesym_v10\tproducer=runtime\n",
-        "nwb_namesym_v1_suffix\tproducer=runtime\n",
-        "\n",
-    };
+    constexpr Array<AStringView, 6u> s_RejectedHeaders = { "", "nwb_namesym_v0\tproducer=runtime\n", "nwb_namesym_v2\tproducer=runtime\n", "nwb_namesym_v10\tproducer=runtime\n", "nwb_namesym_v1_suffix\tproducer=runtime\n", "\n", };
     char resolvedText[NameSymbols::s_MaxResolvedTextLength] = {};
     for(const AStringView header : s_RejectedHeaders){
         AString<NWB::Core::Alloc::GlobalArena> document(arena);

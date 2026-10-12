@@ -170,10 +170,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> MovePathToDirectory(
-    const Path<ArenaT>& sourcePath,
-    const Path<ArenaT>& destinationDirectory
-){
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> MovePathToDirectory(const Path<ArenaT>& sourcePath, const Path<ArenaT>& destinationDirectory){
     const auto ensured = EnsureDirectories(destinationDirectory);
     if(!ensured)
         return MakeUnexpected(ensured.error());

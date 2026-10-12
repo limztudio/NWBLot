@@ -33,10 +33,7 @@ HitTarget BaseHitTarget(){
 PopupScope Scope(const u64 widget, const u32 layer, const PopupToken& parent = {}){
     PopupScope scope;
     scope.token = { { widget }, 10u, 20u, 1u };
-    scope.bounds = widget == 100u ? Rect{ 30.0f, 30.0f, 110.0f, 70.0f }
-        : widget == 200u ? Rect{ 170.0f, 120.0f, 100.0f, 80.0f }
-        : widget == 300u ? Rect{ 280.0f, 200.0f, 100.0f, 70.0f }
-        : Rect{ 250.0f, 30.0f, 120.0f, 70.0f };
+    scope.bounds = widget == 100u ? Rect{ 30.0f, 30.0f, 110.0f, 70.0f } : widget == 200u ? Rect{ 170.0f, 120.0f, 100.0f, 80.0f } : widget == 300u ? Rect{ 280.0f, 200.0f, 100.0f, 70.0f } : Rect{ 250.0f, 30.0f, 120.0f, 70.0f };
     scope.viewport = { 0.0f, 0.0f, 400.0f, 300.0f };
     scope.layer = layer;
     scope.parent = parent;
@@ -59,8 +56,7 @@ HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, cons
     HitTarget target;
     target.id = { scope.token.widget.value + offset };
     target.declarationGeneration = 10u;
-    target.rectangle = { scope.bounds.x + 4.0f + static_cast<f32>(offset - 1u) * 35.0f,
-        scope.bounds.y + 4.0f, 24.0f, 18.0f };
+    target.rectangle = { scope.bounds.x + 4.0f + static_cast<f32>(offset - 1u) * 35.0f, scope.bounds.y + 4.0f, 24.0f, 18.0f };
     target.clip = scope.bounds;
     target.paintOrder = order;
     target.popup = scope.token;

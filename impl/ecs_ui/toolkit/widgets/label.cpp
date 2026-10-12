@@ -21,10 +21,7 @@ Label::Label(Core::Alloc::GlobalArena& arena)
 {}
 
 TextLayoutStatus::Enum Label::setText(const ShapeRequest& request){
-    if(
-        request.text == StringView(m_text.data(), m_text.size()) && request.language == StringView(m_language.data(), m_language.size())
-        && request.fontSize == m_fontSize && request.scriptTag == m_scriptTag && request.direction == m_direction
-    )
+    if(request.text == StringView(m_text.data(), m_text.size()) && request.language == StringView(m_language.data(), m_language.size()) && request.fontSize == m_fontSize && request.scriptTag == m_scriptTag && request.direction == m_direction)
         return TextLayoutStatus::Success;
     const TextLayoutStatus::Enum status = ValidateTextRequest(request, true);
     if(status != TextLayoutStatus::Success)
@@ -40,9 +37,7 @@ TextLayoutStatus::Enum Label::setText(const ShapeRequest& request){
 
 bool Label::paint(TextService& text, PaintBuilder& paint, const Point topLeft, const Color& color){
     if(m_dirty || m_serviceIdentity != text.identity() || m_fontGeneration != text.generation()){
-        const ShapeRequest request{
-            StringView(m_text.data(), m_text.size()), m_fontSize, m_direction, m_scriptTag, StringView(m_language.data(), m_language.size())
-        };
+        const ShapeRequest request{ StringView(m_text.data(), m_text.size()), m_fontSize, m_direction, m_scriptTag, StringView(m_language.data(), m_language.size()) };
         auto layout = text.layout(request);
         if(!layout)
             return false;

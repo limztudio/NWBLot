@@ -39,9 +39,7 @@ using namespace NWB::Impl::Ui;
     return event;
 }
 
-[[nodiscard]] static InputEvent Key(const Core::Key::Enum key, const bool shift = false,
-    const bool control = false, const bool alt = false, const bool repeat = false
-){
+[[nodiscard]] static InputEvent Key(const Core::Key::Enum key, const bool shift = false, const bool control = false, const bool alt = false, const bool repeat = false){
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = key;
@@ -287,10 +285,7 @@ TEST_F(UiContextMenuInputTests, OtherF10ModifierCombinationsStayWithTheNormalFoc
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     focus();
-    const Array<InputEvent, 5u> events = {
-        Key(Core::Key::F10), Key(Core::Key::F10, false, true), Key(Core::Key::F10, false, false, true),
-        Key(Core::Key::F10, true, true), Key(Core::Key::F10, true, false, true)
-    };
+    const Array<InputEvent, 5u> events = { Key(Core::Key::F10), Key(Core::Key::F10, false, true), Key(Core::Key::F10, false, false, true), Key(Core::Key::F10, true, true), Key(Core::Key::F10, true, false, true) };
     for(const auto& event : events){
         EXPECT_TRUE(send(event).keyboardConsumed);
         EXPECT_FALSE(take());

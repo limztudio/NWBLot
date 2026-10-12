@@ -25,10 +25,7 @@ inline constexpr Name s_SmokeEnvironmentArena("tests/smoke/environment");
 
 using SmokeEnvironmentString = AString<Core::Alloc::GlobalArena>;
 
-[[nodiscard]] inline Expected<SmokeEnvironmentString> ReadSmokeEnvironmentText(
-    Core::Alloc::GlobalArena& arena,
-    const AStringView variableName
-){
+[[nodiscard]] inline Expected<SmokeEnvironmentString> ReadSmokeEnvironmentText(Core::Alloc::GlobalArena& arena, const AStringView variableName){
     auto value = ReadEnvironmentVariable(arena, variableName);
     if(!value || value->empty())
         return MakeUnexpected(Failure{});

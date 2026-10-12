@@ -49,26 +49,12 @@ constexpr Graphics::GpuGraphResourceId s_B{ .generation = 1u, .index = 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Graphics::GpuTaskResourceUse BufferUse(
-    const Graphics::GpuGraphResourceId resource,
-    const u64 offset,
-    const u64 size,
-    const Graphics::ResourceStates::Mask state = Graphics::ResourceStates::CopyDest
-){
-    return Graphics::GpuTaskResourceUse{
-        .resource = resource,
-        .range = { .bufferRange = Graphics::BufferRange(offset, size) },
-        .requiredState = state,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
+[[nodiscard]] Graphics::GpuTaskResourceUse BufferUse(const Graphics::GpuGraphResourceId resource, const u64 offset, const u64 size, const Graphics::ResourceStates::Mask state = Graphics::ResourceStates::CopyDest){
+    return Graphics::GpuTaskResourceUse{ .resource = resource, .range = { .bufferRange = Graphics::BufferRange(offset, size) }, .requiredState = state, .access = Graphics::GpuTaskResourceAccess::Write, };
 }
 
 template<usize Count>
-[[nodiscard]] Graphics::GpuTaskGraphTaskView TaskView(
-    const Graphics::GpuTaskResourceUse (&uses)[Count],
-    const u64 generation = 1u,
-    const u32 taskIndex = 0u
-){
+[[nodiscard]] Graphics::GpuTaskGraphTaskView TaskView(const Graphics::GpuTaskResourceUse (&uses)[Count], const u64 generation = 1u, const u32 taskIndex = 0u){
     Graphics::GpuTaskGraphTaskView view{};
     view.id = { .generation = generation, .index = taskIndex };
     view.resourceUses = uses;
@@ -208,9 +194,7 @@ TEST(GpuTaskUseIndex, CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInv
     Graphics::GpuTaskGraph graph(testArena.arena);
     const auto buffer = AddBufferMetadata(graph, Name("tests/task_use/covered"), "Covered Buffer");
     ASSERT_TRUE(buffer.valid());
-    Graphics::GpuTaskResourceUse uses[] = {
-        BufferUse(buffer, 0u, 64u), BufferUse(buffer, 0u, 0u), BufferUse(buffer, 16u, 16u),
-    };
+    Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 0u, 64u), BufferUse(buffer, 0u, 0u), BufferUse(buffer, 16u, 16u), };
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     const auto task = TaskView(uses, declarations.generation());
     const auto resource = declarations.resourceAt(buffer.index);
@@ -263,9 +247,7 @@ TEST(GpuTaskUseIndex, TextureRectangleKeepsMipThenSliceRemainderOrder){
     Ranges ranges(scratchArena);
     ranges.reserve(4u);
     ASSERT_TRUE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 1u, resource, uses[1u].range, scratchArena, ranges));
-    const Graphics::TextureSubresourceSet expected[] = {
-        { 0u, 1u, 0u, 3u }, { s_ExpectedDualCount, s_ExpectedDualCount, 0u, 3u }, { 1u, 1u, 0u, 1u }, { 1u, 1u, s_ExpectedDualCount, 1u },
-    };
+    const Graphics::TextureSubresourceSet expected[] = { { 0u, 1u, 0u, 3u }, { s_ExpectedDualCount, s_ExpectedDualCount, 0u, 3u }, { 1u, 1u, 0u, 1u }, { 1u, 1u, s_ExpectedDualCount, 1u }, };
     ASSERT_EQ(ranges.size(), LengthOf(expected));
     for(usize index = 0u; index < LengthOf(expected); ++index)
         EXPECT_EQ(ranges[index].textureSubresources, expected[index]);
@@ -279,11 +261,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
     ASSERT_TRUE(a.valid());
     ASSERT_TRUE(b.valid());
     const Graphics::GpuGraphResourceId members[] = { a, b };
-    const auto set = graph.importResourceSet(Graphics::GpuGraphResourceSetDesc{}
-        .setIdentity(Name("tests/task_use/expanded_set"))
-        .setMarkerLabel("Expanded Set")
-        .setMembers(members, LengthOf(members))
-    );
+    const auto set = graph.importResourceSet(Graphics::GpuGraphResourceSetDesc{}.setIdentity(Name("tests/task_use/expanded_set")).setMarkerLabel("Expanded Set").setMembers(members, LengthOf(members)));
     ASSERT_TRUE(set.valid());
     const Graphics::GpuTaskResourceUse direct[] = { BufferUse(a, 16u, 16u), BufferUse(b, 0u, 8u) };
     const Graphics::GpuTaskResourceSetUse expanded{
@@ -293,12 +271,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
         .access = Graphics::GpuTaskResourceAccess::Read,
     };
     Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests/task_use/expanded_task"))
-        .setMarkerLabel("Expanded Task")
-        .setResourceUses(direct, LengthOf(direct))
-        .setResourceSetUses(&expanded, 1u)
-    ;
+    desc.setIdentity(Name("tests/task_use/expanded_task")).setMarkerLabel("Expanded Task").setResourceUses(direct, LengthOf(direct)).setResourceSetUses(&expanded, 1u);
     const auto task = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
@@ -313,9 +286,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
     ASSERT_EQ(view.plan->prologueBarrierCount, 5u);
     ASSERT_NE(view.prologueBarriers, nullptr);
     const Graphics::GpuGraphResourceId expectedResources[] = { a, b, a, a, b };
-    const Graphics::BufferRange expectedRanges[] = {
-        { 16u, 16u }, { 0u, 8u }, { 0u, 16u }, { 32u, Graphics::BufferRange::s_AllBytes }, { 8u, Graphics::BufferRange::s_AllBytes },
-    };
+    const Graphics::BufferRange expectedRanges[] = { { 16u, 16u }, { 0u, 8u }, { 0u, 16u }, { 32u, Graphics::BufferRange::s_AllBytes }, { 8u, Graphics::BufferRange::s_AllBytes }, };
     for(usize index = 0u; index < LengthOf(expectedRanges); ++index){
         SCOPED_TRACE(index);
         const auto& barrier = view.prologueBarriers[index];

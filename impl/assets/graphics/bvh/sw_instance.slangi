@@ -21,20 +21,12 @@ struct NwbSwBvhInstance{
 };
 
 float3 nwbSwBvhTransformPoint(const NwbSwBvhInstance instance, const float3 point){
-    return float3(
-        dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w,
-        dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w,
-        dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w
-    );
+    return float3(dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w, dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w, dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w);
 }
 
 // Leave ray directions un-normalized so object-space and world-space ray parameters stay identical.
 float3 nwbSwBvhTransformVector(const NwbSwBvhInstance instance, const float3 vector){
-    return float3(
-        dot(instance.worldToObjectRow0.xyz, vector),
-        dot(instance.worldToObjectRow1.xyz, vector),
-        dot(instance.worldToObjectRow2.xyz, vector)
-    );
+    return float3(dot(instance.worldToObjectRow0.xyz, vector), dot(instance.worldToObjectRow1.xyz, vector), dot(instance.worldToObjectRow2.xyz, vector));
 }
 
 // This is the inverse-transpose of object->world, expressed as the transpose of the stored world->object 3x3. Callers choose their own normalization/fallback policy because their surface contracts differ.

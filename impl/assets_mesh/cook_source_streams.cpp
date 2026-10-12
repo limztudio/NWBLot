@@ -42,21 +42,10 @@ inline constexpr TStringView s_TangentStreamLabel = NWB_TEXT("tangent");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexRefs(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    const bool includeSkin,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const bool includeSkin, Core::Alloc::ScratchArena& scratchArena){
     ScratchVector<MeshVertexRef> vertexRefs(scratchArena);
 
-    const Core::Metascript::Value* field = MeshCookMetadata::FindRequiredMetadataListField(
-        nwbFilePath,
-        asset,
-        metaKind,
-        MeshCookMetadata::s_VertexRefsFieldNameView
-    );
+    const Core::Metascript::Value* field = MeshCookMetadata::FindRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_VertexRefsFieldNameView);
     if(!field)
         return MakeUnexpected(Failure{});
 
@@ -66,12 +55,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
     for(usize vertexRefIndex = 0u; vertexRefIndex < list.size(); ++vertexRefIndex){
         const Core::Metascript::Value& value = list[vertexRefIndex];
         if(!value.isList() || value.asList().size() != expectedComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
-                , metaKind
-                , PathToString<tchar>(nwbFilePath)
-                , vertexRefIndex
-                , expectedComponentCount
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices"), metaKind, PathToString<tchar>(nwbFilePath), vertexRefIndex, expectedComponentCount);
             return MakeUnexpected(Failure{});
         }
 
@@ -86,26 +70,14 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
             __hidden_mesh_source_streams::s_VertexRefColorName,
             __hidden_mesh_source_streams::s_VertexRefSkinName,
         };
-        u32* const componentValues[] = {
-            &ref.position,
-            &ref.normal,
-            &ref.tangent,
-            &ref.uv0,
-            &ref.color,
-            &ref.skin,
-        };
+        u32* const componentValues[] = { &ref.position, &ref.normal, &ref.tangent, &ref.uv0, &ref.color, &ref.skin, };
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
             ScratchString componentLabel{scratchArena};
             componentLabel.reserve(label.size() + componentNames[componentIndex].size() + 2u);
             componentLabel.append(label.data(), label.size());
             componentLabel += '.';
             componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());
-            const auto component = MeshCookMetadata::ParseMetadataU32Value(
-                nwbFilePath,
-                components[componentIndex],
-                metaKind,
-                componentLabel
-            );
+            const auto component = MeshCookMetadata::ParseMetadataU32Value(nwbFilePath, components[componentIndex], metaKind, componentLabel);
             if(!component)
                 return MakeUnexpected(Failure{});
             *componentValues[componentIndex] = *component;
@@ -114,70 +86,39 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
     }
 
     if(vertexRefs.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     return vertexRefs;
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceStreamIndex(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const AStringView streamName,
-    const u32 index,
-    const usize streamCount
-){
+bool MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, const TStringView metaKind, const AStringView streamName, const u32 index, const usize streamCount){
     if(index < streamCount)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range")
-        , metaKind
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(streamName)
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(streamName));
     return false;
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceIndexStream(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    const usize vertexRefCount
-){
+bool MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const usize vertexRefCount){
     if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
     }
     for(const u32 index : indices){
         if(index < vertexRefCount)
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
     }
     return true;
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceVertexRefs(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const bool includeSkin,
-    const SourceMeshStreams& streams,
-    const usize skinCount
-){
+bool MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const bool includeSkin, const SourceMeshStreams& streams, const usize skinCount){
     for(const MeshVertexRef& ref : streams.vertexRefs){
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
             return false;
@@ -194,10 +135,7 @@ bool MeshCookSourceStreams::ValidateSourceVertexRefs(
                 return false;
         }
         else if(ref.skin != s_MeshMissingStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index")
-                , metaKind
-                , PathToString<tchar>(nwbFilePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index"), metaKind, PathToString<tchar>(nwbFilePath));
             return false;
         }
     }
@@ -216,37 +154,27 @@ Expected<SourceMeshStreams> MeshCookSourceStreams::ParseCommonSourceMeshStreams(
 ){
     SourceMeshStreams streams(assetArena, scratchArena);
 
-    auto positionsResult = MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(
-        discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_PositionsFieldNameView, scratchArena
-    );
+    auto positionsResult = MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_PositionsFieldNameView, scratchArena);
     if(!positionsResult)
         return MakeUnexpected(Failure{});
     streams.positions = Move(*positionsResult);
 
-    auto normalsResult = MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(
-        discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_NormalsFieldNameView, scratchArena
-    );
+    auto normalsResult = MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_NormalsFieldNameView, scratchArena);
     if(!normalsResult)
         return MakeUnexpected(Failure{});
     streams.normals = Move(*normalsResult);
 
-    auto tangentsResult = MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(
-        discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_TangentsFieldNameView, scratchArena
-    );
+    auto tangentsResult = MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_TangentsFieldNameView, scratchArena);
     if(!tangentsResult)
         return MakeUnexpected(Failure{});
     streams.tangents = Move(*tangentsResult);
 
-    auto uv0Result = MeshCookMetadata::ParseMetadataFloatListField<Float2U, 2u>(
-        discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_Uv0FieldNameView, scratchArena
-    );
+    auto uv0Result = MeshCookMetadata::ParseMetadataFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_Uv0FieldNameView, scratchArena);
     if(!uv0Result)
         return MakeUnexpected(Failure{});
     streams.uv0 = Move(*uv0Result);
 
-    auto colorsResult = MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(
-        discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_ColorsFieldNameView, scratchArena
-    );
+    auto colorsResult = MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, metaKind, MeshCookMetadata::s_ColorsFieldNameView, scratchArena);
     if(!colorsResult)
         return MakeUnexpected(Failure{});
     streams.colors = Move(*colorsResult);

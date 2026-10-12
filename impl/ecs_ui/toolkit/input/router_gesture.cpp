@@ -22,10 +22,7 @@ Expected<PointerGesture> InputRouter::consumePointerGesture(const WidgetId id, c
         return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_pointerGestures.size(); ++index){
         auto& record = m_pointerGestures[index];
-        if(
-            record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration
-            || !record.pendingUpdate || record.gesture.popup != target->popup || record.gesture.control != target->control
-        )
+        if(record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration || !record.pendingUpdate || record.gesture.popup != target->popup || record.gesture.control != target->control)
             continue;
         const PointerGesture gesture = record.gesture;
         if(record.gesture.state == PointerGestureState::Completed)
@@ -84,10 +81,7 @@ void InputRouter::reconcilePointerGestures(){
     for(usize index = 0u; index < m_pointerGestures.size();){
         const auto& gesture = m_pointerGestures[index].gesture;
         const HitTarget* target = findTarget(gesture.id.target, gesture.id.declarationGeneration);
-        if(
-            target == nullptr || !isInteractive(*target) || !target->pointerGesture
-            || gesture.popup != target->popup || gesture.control != target->control
-        ){
+        if(target == nullptr || !isInteractive(*target) || !target->pointerGesture || gesture.popup != target->popup || gesture.control != target->control){
             if(gesture.id.sequence == m_activeGestureSequence)
                 m_activeGestureSequence = 0u;
             m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));

@@ -158,9 +158,7 @@ TEST_F(EditCaretFixture, PreeditOnlyLinesFallBackToTheClosestCommittedReplacemen
 }
 
 TEST_F(EditCaretFixture, PreeditOnlyFallbackCannotSelectUnrelatedCommittedPrefixOrSuffixStops){
-    const EditCaretMapping entries[]{
-        { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u }, { 4u, 8u }, { 5u, 9u }, { 6u, 10u }
-    };
+    const EditCaretMapping entries[]{ { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u }, { 4u, 8u }, { 5u, 9u }, { 6u, 10u } };
     m_mapping.assign(entries, entries + 7u);
     ASSERT_TRUE(adopt("ABCX\nY\nZEF", 6u));
     ASSERT_EQ(m_geometry.lines()[1u].stopCount, 0u);
@@ -321,8 +319,7 @@ TEST_F(EditCaretFixture, RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeom
     }
     ASSERT_TRUE(identityMapping("abc"));
     EXPECT_FALSE(m_geometry.adoptLayout(Move(rtl), "abc", m_mapping, 3u, EditTextMode::SingleLine));
-    const ShaperFault::Enum faults[]{ ShaperFault::LeadingGap, ShaperFault::TrailingGap,
-        ShaperFault::Overlap, ShaperFault::InconsistentGlyphEnd };
+    const ShaperFault::Enum faults[]{ ShaperFault::LeadingGap, ShaperFault::TrailingGap, ShaperFault::Overlap, ShaperFault::InconsistentGlyphEnd };
     for(const auto fault : faults){
         SCOPED_TRACE(fault);
         m_shaper.fault = fault;

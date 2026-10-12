@@ -13,20 +13,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbMeshGeneratedVertex nwbMeshBuildVertex(
-    const uint triangleIndex,
-    const uint corner,
-    const NwbMeshSourceVertex source,
-    const NwbMeshInstanceData instance
-){
-    return nwbMeshBuildGeneratedVertex(
-        source.clipPosition,
-        nwbMeshTransformDirection(source.normal, instance),
-        float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w),
-        source.uv0,
-        source.color,
-        source.worldPosition
-    );
+NwbMeshGeneratedVertex nwbMeshBuildVertex(const uint triangleIndex, const uint corner, const NwbMeshSourceVertex source, const NwbMeshInstanceData instance){
+    return nwbMeshBuildGeneratedVertex(source.clipPosition, nwbMeshTransformDirection(source.normal, instance), float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w), source.uv0, source.color, source.worldPosition);
 }
 
 

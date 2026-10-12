@@ -49,9 +49,7 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(
-        const TextInputSessionToken, const TextInputSessionDesc&
-    )override{
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(const TextInputSessionToken, const TextInputSessionDesc&)override{
         ++starts;
         return TextInputAdmission::Accepted;
     }
@@ -82,9 +80,7 @@ public:
 
 
 protected:
-    virtual void startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum,
-        const ClipboardChannel::Enum, const AStringView
-    )override{
+    virtual void startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum, const ClipboardChannel::Enum, const AStringView)override{
         startedToken = token;
     }
 

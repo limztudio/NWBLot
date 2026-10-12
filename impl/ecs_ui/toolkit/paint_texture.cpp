@@ -21,12 +21,7 @@ bool PaintBuilder::prepareTextureImages(const SharedImageSource* const images, c
     return prepareImages(nullptr, 0u, nullptr, 0u, images, count);
 }
 
-bool PaintBuilder::drawImage(
-    const SharedImageSource& source,
-    const Rect& rectangle,
-    const Rect& uv,
-    const Color& tint
-){
+bool PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
     if(
         !source || !IsFinite(rectangle.x) || !IsFinite(rectangle.y)
@@ -41,17 +36,12 @@ bool PaintBuilder::drawImage(
     )
         return false;
     const Rect clip = m_clips.back();
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
-        VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height)
-    );
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
     const f32 visibleLeft = VectorGetX(visibleBounds);
     const f32 visibleTop = VectorGetY(visibleBounds);
     const f32 visibleRight = VectorGetZ(visibleBounds);
     const f32 visibleBottom = VectorGetW(visibleBounds);
-    if(
-        rectangle.width == 0.0f || rectangle.height == 0.0f || clip.width <= 0.0f || clip.height <= 0.0f
-        || tint.a == 0.0f || visibleRight <= visibleLeft || visibleBottom <= visibleTop
-    )
+    if(rectangle.width == 0.0f || rectangle.height == 0.0f || clip.width <= 0.0f || clip.height <= 0.0f || tint.a == 0.0f || visibleRight <= visibleLeft || visibleBottom <= visibleTop)
         return true;
     if(!prepareTextureImages(&source, 1u))
         return false;

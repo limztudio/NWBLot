@@ -62,9 +62,7 @@ private:
     bool m_displayChanged = false;
 };
 
-using SharedUiListSmokeScene = RefCountPtr<
-    RefCounter<UiListSmokeScene>, ArenaRefDeleter<RefCounter<UiListSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiListSmokeScene = RefCountPtr< RefCounter<UiListSmokeScene>, ArenaRefDeleter<RefCounter<UiListSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerListSmokeEnabled();
 [[nodiscard]] bool IsUiLayerListSkinSmokeEnabled();

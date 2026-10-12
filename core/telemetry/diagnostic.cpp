@@ -32,17 +32,10 @@ inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
 
 [[nodiscard]] static bool ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = DiagnosticPayloadFlag::TerminatesProcess;
-    return header.magic == s_DiagnosticPayloadMagic
-        && header.version == s_DiagnosticPayloadVersion
-        && (header.flags & ~s_KnownFlags) == 0u
-    ;
+    return header.magic == s_DiagnosticPayloadMagic && header.version == s_DiagnosticPayloadVersion && (header.flags & ~s_KnownFlags) == 0u;
 }
 
-[[nodiscard]] static Expected<AStringView> ReadText(
-    const BinaryByteView& payload,
-    usize& inOutCursor,
-    const u32 byteCount
-)noexcept{
+[[nodiscard]] static Expected<AStringView> ReadText(const BinaryByteView& payload, usize& inOutCursor, const u32 byteCount)noexcept{
     if(!BinaryDetail::CanReadBytes(payload, inOutCursor, byteCount))
         return MakeUnexpected(Failure{});
 
@@ -70,11 +63,7 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildDiagnosticPayload(
-    TelemetryArena&,
-    const DiagnosticEventRecord& record,
-    TelemetryBytes& outPayload
-){
+bool BuildDiagnosticPayload(TelemetryArena&, const DiagnosticEventRecord& record, TelemetryBytes& outPayload){
     outPayload.clear();
 
     const AStringView event = record.event;
@@ -114,11 +103,7 @@ bool BuildDiagnosticPayload(
     return outPayload.size() == payloadBytes;
 }
 
-Expected<DiagnosticPayload> ParseDiagnosticPayload(
-    TelemetryArena& arena,
-    const void* const payload,
-    const usize payloadBytes
-){
+Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
     DiagnosticPayload parsedPayload(arena);
 
     if(payloadBytes < sizeof(EncodedDiagnosticPayloadHeader) || !payload)
@@ -161,17 +146,8 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(
     return parsedPayload;
 }
 
-bool RecordDiagnostic(
-    Recorder& recorder,
-    const DiagnosticEventRecord& record,
-    const u64 frameIndex,
-    const u32 streamId
-){
-    return recorder.recordBuiltPayload(
-        EventKind::Diagnostic,
-        frameIndex,
-        streamId,
-        [&record](TelemetryArena& arena, TelemetryBytes& payload){
+bool RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, const u64 frameIndex, const u32 streamId){
+    return recorder.recordBuiltPayload(EventKind::Diagnostic, frameIndex, streamId, [&record](TelemetryArena& arena, TelemetryBytes& payload){
             return BuildDiagnosticPayload(arena, record, payload);
         }
     );
@@ -185,26 +161,14 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
     : m_recorder(recorder)
 {
     DiagnosticCaptureGuard* expectedGuard = nullptr;
-    if(__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
-        expectedGuard,
-        this,
-        MemoryOrder::acq_rel
-    )){
+    if(__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expectedGuard, this, MemoryOrder::acq_rel)){
         DiagnosticEventCallback expectedCallback = nullptr;
-        if(::DiagnosticDetail::g_EventCallback.compare_exchange_strong(
-            expectedCallback,
-            __hidden_telemetry_diagnostic::CaptureCallback,
-            MemoryOrder::acq_rel
-        )){
+        if(::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, __hidden_telemetry_diagnostic::CaptureCallback, MemoryOrder::acq_rel)){
             m_installed = true;
         }
         else{
             expectedGuard = this;
-            if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
-                expectedGuard,
-                nullptr,
-                MemoryOrder::acq_rel
-            )){
+            if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expectedGuard, nullptr, MemoryOrder::acq_rel)){
                 NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic capture guard ownership changed while installing callback"));
                 NWB_ASSERT(false);
             }
@@ -221,21 +185,13 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
     }
 
     DiagnosticEventCallback expectedCallback = __hidden_telemetry_diagnostic::CaptureCallback;
-    if(!::DiagnosticDetail::g_EventCallback.compare_exchange_strong(
-        expectedCallback,
-        nullptr,
-        MemoryOrder::acq_rel
-    )){
+    if(!::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, nullptr, MemoryOrder::acq_rel)){
         NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic callback ownership changed before capture guard destruction"));
         NWB_ASSERT(false);
     }
 
     DiagnosticCaptureGuard* expected = this;
-    if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
-        expected,
-        nullptr,
-        MemoryOrder::acq_rel
-    )){
+    if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel)){
         NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic capture guard ownership changed before destruction"));
         NWB_ASSERT(false);
     }

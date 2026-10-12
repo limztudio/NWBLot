@@ -16,11 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(
-    const Core::ECS::EntityID entity,
-    const RuntimeMeshHandle runtimeMesh,
-    const MeshSkinningRuntimeInstance* const instance
-){
+Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance){
     SkinnedRuntimeMeshIdentity identity;
     if(!runtimeMesh.valid())
         return MakeUnexpected(Failure{});
@@ -39,13 +35,7 @@ Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(
     return identity;
 }
 
-Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(
-    const Core::ECS::EntityID entity,
-    const RuntimeMeshHandle runtimeMesh,
-    const MeshSkinningRuntimeInstance* const instance,
-    const bool boundsFresh,
-    const bool conesFresh
-){
+Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance, const bool boundsFresh, const bool conesFresh){
     const auto identity = ResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance);
     if(!identity)
         return MakeUnexpected(Failure{});

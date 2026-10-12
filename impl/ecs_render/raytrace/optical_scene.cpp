@@ -32,14 +32,7 @@ RayTracingOpticalSceneGather::RayTracingOpticalSceneGather(Core::Alloc::ScratchA
     instances.reserve(capacity);
 }
 
-void RayTracingOpticalSceneGather::append(
-    const Core::ECS::EntityID entity,
-    const RendererComponent& renderer,
-    const bool transparent,
-    const Float3U& boundsMin,
-    const Float3U& boundsMax,
-    const bool boundsValid
-){
+void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const bool transparent, const Float3U& boundsMin, const Float3U& boundsMax, const bool boundsValid){
     RayTracingOpticalInstanceGpu instance;
     instance.entityId = entity.id;
     instance.mediumPriority = renderer.opticalMediumPriority;
@@ -51,12 +44,7 @@ void RayTracingOpticalSceneGather::append(
         ++header.transparentCount;
         const SIMDVectorSingle boundsMinVector = LoadFloat(boundsMin);
         const SIMDVectorSingle boundsMaxVector = LoadFloat(boundsMax);
-        const bool finiteBounds =
-            boundsValid
-            && Vector3IsFinite(boundsMinVector)
-            && Vector3IsFinite(boundsMaxVector)
-            && Vector3LessOrEqual(boundsMinVector, boundsMaxVector)
-        ;
+        const bool finiteBounds = boundsValid && Vector3IsFinite(boundsMinVector) && Vector3IsFinite(boundsMaxVector) && Vector3LessOrEqual(boundsMinVector, boundsMaxVector);
         if(finiteBounds){
             instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
             if(!hasBounds){
@@ -75,13 +63,7 @@ void RayTracingOpticalSceneGather::append(
     instances.push_back(instance);
 }
 
-void RayTracingOpticalSceneGather::appendRuntime(
-    const Core::ECS::EntityID entity,
-    const RendererComponent& renderer,
-    const Core::BufferHandle& boundsBuffer,
-    const Core::GpuDescriptorHandle boundsDescriptor,
-    const Float34U& objectToWorld
-){
+void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, const Core::GpuDescriptorHandle boundsDescriptor, const Float34U& objectToWorld){
     const bool staticComplete = boundsCompleteExceptRuntime;
     const u32 instanceIndex = static_cast<u32>(instances.size());
     append(entity, renderer, true, {}, {}, false);
@@ -112,15 +94,11 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(
-    const Float34U& objectToWorld,
-    const Float3U& localMin,
-    const Float3U& localMax
-)noexcept{
-    // SIMD lanes own the affine corner math: all eight AABB corners are transformed as one
-    // lane batch, and the enclosure margin is reduced from lane magnitudes on vector lanes.
-    // A float affine coordinate uses three products and three additions. Gamma(8) additionally covers the final
-    // float bound conversion and margin arithmetic. The tiny absolute term covers flushed subnormal intermediates.
+Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(const Float34U& objectToWorld, const Float3U& localMin, const Float3U& localMax)noexcept{
+    // SIMD lanes own the affine corner math: all eight AABB corners are transformed as one lane batch, and the enclosure margin is reduced from lane magnitudes on vector lanes.
+    // A float affine coordinate uses three products and three additions.
+    // Gamma(8) additionally covers the final float bound conversion and margin arithmetic.
+    // The tiny absolute term covers flushed subnormal intermediates.
     constexpr f64 s_UnitRoundoff = 0x1p-24;
     constexpr f64 s_TransformError = (8.0 * s_UnitRoundoff) / (1.0 - 8.0 * s_UnitRoundoff);
     constexpr f64 s_UnderflowMargin = 8.0 * 0x1p-126;

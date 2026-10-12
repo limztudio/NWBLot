@@ -28,11 +28,7 @@ namespace ECSRenderDetail{
 
 
 template<typename Plan>
-static void MaterializeCsgComputePlan(
-    const Plan& plan,
-    MaterialPassDrawItems& outDrawItems,
-    CsgFrameGpuData& outCsgFrameData
-){
+static void MaterializeCsgComputePlan(const Plan& plan, MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData){
     outDrawItems.meshDrawItems.reserve(plan.meshDrawItems.size());
     outDrawItems.meshDrawItems.assign(plan.meshDrawItems.begin(), plan.meshDrawItems.end());
     outDrawItems.indexedDrawItems.reserve(plan.indexedDrawItems.size());
@@ -95,31 +91,17 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         captured = false;
     }
 
-    [[nodiscard]] bool capture(
-        const MaterialPassDrawItems& receiverSurfaceDrawItems,
-        const MaterialPassDrawItems& sourceRegularDrawItems,
-        const CsgFrameGpuData& csgFrameData,
-        Core::Alloc::ScratchArena& scratchArena
-    ){
+    [[nodiscard]] bool capture(const MaterialPassDrawItems& receiverSurfaceDrawItems, const MaterialPassDrawItems& sourceRegularDrawItems, const CsgFrameGpuData& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(receiverSurfaceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;
 
         meshDrawItems.reserve(receiverSurfaceDrawItems.meshDrawItems.size());
-        meshDrawItems.assign(
-            receiverSurfaceDrawItems.meshDrawItems.begin(),
-            receiverSurfaceDrawItems.meshDrawItems.end()
-        );
+        meshDrawItems.assign(receiverSurfaceDrawItems.meshDrawItems.begin(), receiverSurfaceDrawItems.meshDrawItems.end());
         indexedDrawItems.reserve(receiverSurfaceDrawItems.indexedDrawItems.size());
-        indexedDrawItems.assign(
-            receiverSurfaceDrawItems.indexedDrawItems.begin(),
-            receiverSurfaceDrawItems.indexedDrawItems.end()
-        );
+        indexedDrawItems.assign(receiverSurfaceDrawItems.indexedDrawItems.begin(), receiverSurfaceDrawItems.indexedDrawItems.end());
         regularDrawItems.reserve(sourceRegularDrawItems.computeDrawItems.size());
-        regularDrawItems.assign(
-            sourceRegularDrawItems.computeDrawItems.begin(),
-            sourceRegularDrawItems.computeDrawItems.end()
-        );
+        regularDrawItems.assign(sourceRegularDrawItems.computeDrawItems.begin(), sourceRegularDrawItems.computeDrawItems.end());
         drawItems.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         outputLayouts.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
@@ -128,10 +110,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
         for(const MaterialPassDrawItem& regularDrawItem : regularDrawItems){
             const MaterialPassMeshResourceSnapshot& regularMesh = regularDrawItem.meshResources;
-            if(
-                !regularMesh.emulationVertexBuffer
-                || !regularMesh.emulationVertexHeapHandle.valid()
-            ){
+            if(!regularMesh.emulationVertexBuffer || !regularMesh.emulationVertexHeapHandle.valid()){
                 reset();
                 return false;
             }
@@ -145,10 +124,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 return false;
             }
             const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-            ){
+            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()){
                 reset();
                 return false;
             }
@@ -171,13 +147,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     }
 
     [[nodiscard]] bool matches(Core::Alloc::ScratchArena& scratchArena)const{
-        if(
-            !captured
-            || outputBuffers.size() != drawItems.size()
-            || outputLayouts.size() != drawItems.size()
-            || regularOutputBuffers.size() != regularDrawItems.size()
-            || regularOutputLayouts.size() != regularDrawItems.size()
-        )
+        if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || regularOutputBuffers.size() != regularDrawItems.size() || regularOutputLayouts.size() != regularDrawItems.size())
             return false;
         MaterialPassEmulationOutputIndex<Core::Buffer*> receiverOutputs(scratchArena);
         for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
@@ -255,11 +225,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         captured = false;
     }
 
-    [[nodiscard]] bool capture(
-        const MaterialPassDrawItems& sourceDrawItems,
-        const CsgFrameGpuData& csgFrameData,
-        Core::Alloc::ScratchArena& scratchArena
-    ){
+    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems, const CsgFrameGpuData& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;
@@ -280,10 +246,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
                 return false;
             }
             const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-            ){
+            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()){
                 reset();
                 return false;
             }
@@ -301,9 +264,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         cutters.reserve(csgFrameData.cutters.size());
         cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
         workRegion = csgFrameData.workRegion;
-        captured = drawItems.size() == outputBuffers.size()
-            && outputBuffers.size() == outputHeapSlots.size()
-            && !drawItems.empty();
+        captured = drawItems.size() == outputBuffers.size() && outputBuffers.size() == outputHeapSlots.size() && !drawItems.empty();
         return captured;
     }
 

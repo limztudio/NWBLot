@@ -45,12 +45,7 @@ bool SmokeCpuGpuTimingProbe::initialize(const bool requested, const bool present
     return true;
 }
 
-bool SmokeCpuGpuTimingProbe::observe(
-    const Core::Perf::Session& session,
-    const PresentationFpsProbe& presentation,
-    const u64 successfulPresentations,
-    const bool complete
-){
+bool SmokeCpuGpuTimingProbe::observe(const Core::Perf::Session& session, const PresentationFpsProbe& presentation, const u64 successfulPresentations, const bool complete){
     if(!m_enabled || m_complete || !presentation.measurementStarted())
         return true;
     const Core::Perf::CaptureOptions options = session.captureOptions();
@@ -92,12 +87,7 @@ bool SmokeCpuGpuTimingProbe::hasCompletedGpuSamples(const Name& name, const u64 
     return false;
 }
 
-bool SmokeCpuGpuTimingProbe::capture(
-    const Core::Perf::TimingView& timing,
-    const bool gpu,
-    const u64 frame,
-    const u64 presentations
-){
+bool SmokeCpuGpuTimingProbe::capture(const Core::Perf::TimingView& timing, const bool gpu, const u64 frame, const u64 presentations){
     if(!timing.valid() || timing.scopeCount() > s_MaxScopesPerDomain){
         NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: timing view invalid or scope capacity exceeded"));
         return false;
@@ -148,9 +138,7 @@ bool SmokeCpuGpuTimingProbe::write(const PresentationFpsSample& presentation, co
     output.precision(17);
     output << "NWB_SMOKE_CPU_GPU_DIAGNOSTIC 1\n";
     output << "capture cpu=1 gpu=1 memory=0 diagnostic_only=1\n";
-    output << "window " << presentation.firstPresentationCount << ' ' << presentation.lastPresentationCount
-        << ' ' << m_firstSourceFrame << ' ' << endFrame << ' ' << presentation.wallSeconds << '\n'
-    ;
+    output << "window " << presentation.firstPresentationCount << ' ' << presentation.lastPresentationCount << ' ' << m_firstSourceFrame << ' ' << endFrame << ' ' << presentation.wallSeconds << '\n';
     usize scopeCount = 0u;
     for(usize domain = 0u; domain < 2u; ++domain){
         for(usize index = 0u; index < s_MaxScopesPerDomain; ++index){

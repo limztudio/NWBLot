@@ -33,10 +33,7 @@ struct UiTextEditOwner{
 };
 
 [[nodiscard]] inline bool operator==(const UiTextEditOwner& lhs, const UiTextEditOwner& rhs)noexcept{
-    return
-        lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration
-        && lhs.modelGeneration == rhs.modelGeneration
-    ;
+    return lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration && lhs.modelGeneration == rhs.modelGeneration;
 }
 
 namespace UiTextEditStatus{
@@ -52,12 +49,12 @@ struct UiTextEditResult{
 
 // The host validates token, sequence and owner before lending a model to a copied event.
 // Surrounding deletion additionally requires the exact native publication that the event addressed.
-[[nodiscard]] UiTextEditStatus::Enum ApplyUiTextEditEvent(
-    Ui::EditModel& model, const Core::TextInputEvent& event, u64 expectedSurroundingRevision, bool matchesPublishedModel
-);
+[[nodiscard]] UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::TextInputEvent& event, u64 expectedSurroundingRevision, bool matchesPublishedModel);
 
-// Owned OS events are applied only during a host call that lends the matching model. No model pointer is retained.
-// Drain before host edits. End before a local edit/selection change, then begin again to fence queued old-selection events.
+// Owned OS events are applied only during a host call that lends the matching model.
+// No model pointer is retained.
+// Drain before host edits.
+// End before a local edit/selection change, then begin again to fence queued old-selection events.
 // End with the old owner/model before removal or replacement so its transient preedit is cleared as well.
 class UiTextEditSession final : NoCopy{
 public:
@@ -66,21 +63,14 @@ public:
 
 
 public:
-    [[nodiscard]] Core::TextInputAdmission::Enum begin(
-        const UiTextEditOwner& owner, Ui::EditModel& model, Core::TextInputRect caret
-    );
+    [[nodiscard]] Core::TextInputAdmission::Enum begin(const UiTextEditOwner& owner, Ui::EditModel& model, Core::TextInputRect caret);
     // Only a model matching the last applied event can refresh the native snapshot; external edits require a new session.
-    [[nodiscard]] Core::TextInputAdmission::Enum refresh(
-        const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret
-    );
+    [[nodiscard]] Core::TextInputAdmission::Enum refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret);
     [[nodiscard]] UiTextEditResult drain(const UiTextEditOwner& owner, Ui::EditModel& model);
     // Collects an owned event without lending a model. The ordered host queue validates token and sequence.
     [[nodiscard]] Core::TextInputPollResult::Enum pollOwned(Core::TextInputEvent& event);
     // Explicitly trusts a synchronous local/ordered edit; refresh remains strict for ordinary callers.
-    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(
-        const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret,
-        Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other
-    );
+    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other);
     [[nodiscard]] bool end(const UiTextEditOwner& owner, Ui::EditModel& model);
     // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
     [[nodiscard]] bool cancel();
@@ -95,9 +85,7 @@ public:
 
 private:
     [[nodiscard]] bool matchesPublishedModel(const Ui::EditModel& model)const noexcept;
-    [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(
-        const Ui::EditModel& model, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod
-    );
+    [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(const Ui::EditModel& model, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod);
     [[nodiscard]] bool release();
     [[nodiscard]] UiTextEditStatus::Enum applyEvent(Ui::EditModel& model);
 

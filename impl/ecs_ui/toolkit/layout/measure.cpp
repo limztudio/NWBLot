@@ -47,8 +47,7 @@ bool LayoutTree::measure()noexcept{
         const SIMDVectorDouble measured = extent;
         const SIMDVectorDouble intrinsic = { description.intrinsicSize.x, description.intrinsicSize.y };
         const SIMDVectorDouble maximum = (measured > intrinsic) ? measured : intrinsic;
-        const SIMDVectorDouble padded = maximum + SIMDVectorDouble{ description.padding.left, description.padding.top }
-            + SIMDVectorDouble{ description.padding.right, description.padding.bottom };
+        const SIMDVectorDouble padded = maximum + SIMDVectorDouble{ description.padding.left, description.padding.top } + SIMDVectorDouble{ description.padding.right, description.padding.bottom };
         const f64 width = padded.x;
         const f64 height = padded.y;
         if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)

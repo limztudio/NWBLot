@@ -30,17 +30,8 @@ struct NwbMeshObjectVertexInput{
 
 
 NwbMeshRasterVertex main(NwbMeshObjectVertexInput input){
-    const NwbMeshGeneratedVertex vertex = nwbMeshTransformObjectVertex(
-        input.position, input.normal.xyz, input.tangent, input.uv0, half4(input.color), nwbMeshLoadInstance()
-    );
-    return nwbMeshBuildRasterVertex(
-        vertex.position,
-        nwbMeshGeneratedVertexColor(vertex),
-        nwbMeshGeneratedVertexNormal(vertex).xyz,
-        nwbMeshGeneratedVertexTangent(vertex),
-        vertex.uv0,
-        vertex.worldPosition
-    );
+    const NwbMeshGeneratedVertex vertex = nwbMeshTransformObjectVertex(input.position, input.normal.xyz, input.tangent, input.uv0, half4(input.color), nwbMeshLoadInstance());
+    return nwbMeshBuildRasterVertex(vertex.position, nwbMeshGeneratedVertexColor(vertex), nwbMeshGeneratedVertexNormal(vertex).xyz, nwbMeshGeneratedVertexTangent(vertex), vertex.uv0, vertex.worldPosition);
 }
 
 

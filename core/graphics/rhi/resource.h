@@ -101,19 +101,7 @@ struct ResourceQueueAdmissionSnapshot{
 
     [[nodiscard]] constexpr bool valid()const noexcept{
         return ResourceQueueSharing::IsValid(admittedQueueClasses)
-            && (
-                (
-                    !usesConcurrentSharing
-                    && queueFamilyIndexCount == 0u
-                    && !queueFamilyIndices
-                )
-                || (
-                    usesConcurrentSharing
-                    && admittedQueueClasses != ResourceQueueSharing::Exclusive
-                    && queueFamilyIndexCount >= 2u
-                    && queueFamilyIndices
-                )
-            )
+            && ((!usesConcurrentSharing && queueFamilyIndexCount == 0u && !queueFamilyIndices) || (usesConcurrentSharing && admittedQueueClasses != ResourceQueueSharing::Exclusive && queueFamilyIndexCount >= 2u && queueFamilyIndices))
         ;
     }
 };
@@ -255,12 +243,7 @@ struct TextureSubresourceSet{
     [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const noexcept;
 
     constexpr TextureSubresourceSet() = default;
-    constexpr TextureSubresourceSet(
-        MipLevel baseMipLevelValue,
-        MipLevel numMipLevelsValue,
-        ArraySlice baseArraySliceValue,
-        ArraySlice numArraySlicesValue
-    )noexcept
+    constexpr TextureSubresourceSet(MipLevel baseMipLevelValue, MipLevel numMipLevelsValue, ArraySlice baseArraySliceValue, ArraySlice numArraySlicesValue)noexcept
         : baseMipLevel(baseMipLevelValue)
         , numMipLevels(numMipLevelsValue)
         , baseArraySlice(baseArraySliceValue)
@@ -291,28 +274,15 @@ struct TextureSubresourceSet{
     }
 
     [[nodiscard]] constexpr bool contains(const TextureSubresourceSet& inner)const noexcept{
-        return baseMipLevel <= inner.baseMipLevel
-            && mipEnd() >= inner.mipEnd()
-            && baseArraySlice <= inner.baseArraySlice
-            && arrayEnd() >= inner.arrayEnd()
-        ;
+        return baseMipLevel <= inner.baseMipLevel && mipEnd() >= inner.mipEnd() && baseArraySlice <= inner.baseArraySlice && arrayEnd() >= inner.arrayEnd();
     }
 
     [[nodiscard]] constexpr bool overlaps(const TextureSubresourceSet& other)const noexcept{
-        return baseMipLevel < other.mipEnd()
-            && other.baseMipLevel < mipEnd()
-            && baseArraySlice < other.arrayEnd()
-            && other.baseArraySlice < arrayEnd()
-        ;
+        return baseMipLevel < other.mipEnd() && other.baseMipLevel < mipEnd() && baseArraySlice < other.arrayEnd() && other.baseArraySlice < arrayEnd();
     }
 };
 inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
-    return
-        lhs.baseMipLevel == rhs.baseMipLevel
-        && lhs.numMipLevels == rhs.numMipLevels
-        && lhs.baseArraySlice == rhs.baseArraySlice
-        && lhs.numArraySlices == rhs.numArraySlices
-    ;
+    return lhs.baseMipLevel == rhs.baseMipLevel && lhs.numMipLevels == rhs.numMipLevels && lhs.baseArraySlice == rhs.baseArraySlice && lhs.numArraySlices == rhs.numArraySlices;
 }
 inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
 

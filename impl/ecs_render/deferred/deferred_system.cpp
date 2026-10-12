@@ -16,13 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererDeferredSystem::RendererDeferredSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::GraphicsRuntime& graphics,
-    RendererDeferredState& deferredState,
-    RendererShaderSystem& shaderSystem
-)
+RendererDeferredSystem::RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem)
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
@@ -32,10 +26,7 @@ RendererDeferredSystem::RendererDeferredSystem(
 
 
 DeferredLightingGraphResources RendererDeferredSystem::lightingGraphResources()const noexcept{
-    return {
-        m_deferredState.m_sceneShadingBuffer,
-        m_deferredState.m_lightBuffer,
-    };
+    return { m_deferredState.m_sceneShadingBuffer, m_deferredState.m_lightBuffer, };
 }
 
 void RendererDeferredSystem::invalidateSceneLightingUploadMirrors()noexcept{

@@ -108,59 +108,17 @@ template<
 ){
     if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, NWB_TEXT("meshlets")))
         return false;
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        inOutCursor,
-        header.meshletBoundCount,
-        outMeshletBounds,
-        failureContext,
-        NWB_TEXT("meshlet bounds")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletBoundCount, outMeshletBounds, failureContext, NWB_TEXT("meshlet bounds")))
         return false;
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        inOutCursor,
-        header.meshletPositionRefDeltaByteCount,
-        outMeshletPositionRefDeltas,
-        failureContext,
-        NWB_TEXT("meshlet position ref deltas")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPositionRefDeltaByteCount, outMeshletPositionRefDeltas, failureContext, NWB_TEXT("meshlet position ref deltas")))
         return false;
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        inOutCursor,
-        header.meshletAttributeRefDeltaByteCount,
-        outMeshletAttributeRefDeltas,
-        failureContext,
-        NWB_TEXT("meshlet attribute ref deltas")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletAttributeRefDeltaByteCount, outMeshletAttributeRefDeltas, failureContext, NWB_TEXT("meshlet attribute ref deltas")))
         return false;
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        inOutCursor,
-        header.meshletLocalVertexRefCount,
-        outMeshletLocalVertexRefs,
-        failureContext,
-        NWB_TEXT("meshlet local vertex refs")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletLocalVertexRefCount, outMeshletLocalVertexRefs, failureContext, NWB_TEXT("meshlet local vertex refs")))
         return false;
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        inOutCursor,
-        header.meshletPrimitiveIndexCount,
-        outMeshletPrimitiveIndices,
-        failureContext,
-        NWB_TEXT("meshlet primitive indices")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPrimitiveIndexCount, outMeshletPrimitiveIndices, failureContext, NWB_TEXT("meshlet primitive indices")))
         return false;
-    return Core::Assets::ReadVectorPayload(
-        binary,
-        inOutCursor,
-        (header.meshletPrimitiveIndexCount / 3u + 31u) / 32u,
-        outSolidTriangleWords,
-        failureContext,
-        NWB_TEXT("solid triangle words")
-    );
+    return Core::Assets::ReadVectorPayload(binary, inOutCursor, (header.meshletPrimitiveIndexCount / 3u + 31u) / 32u, outSolidTriangleWords, failureContext, NWB_TEXT("solid triangle words"));
 }
 
 
@@ -207,11 +165,7 @@ void FillMeshBaseHeader(HeaderT& header, const MeshT& mesh){
 }
 
 template<typename MeshT>
-[[nodiscard]] bool AppendMeshAttributeStreams(
-    Core::Assets::AssetBytes& outBinary,
-    const MeshT& mesh,
-    const TStringView failureContext
-){
+[[nodiscard]] bool AppendMeshAttributeStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
     return Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, s_PositionsStreamLabel)
         && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, s_NormalsStreamLabel)
         && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, s_TangentsStreamLabel)
@@ -221,11 +175,7 @@ template<typename MeshT>
 }
 
 template<typename MeshT>
-[[nodiscard]] bool AppendMeshletStreams(
-    Core::Assets::AssetBytes& outBinary,
-    const MeshT& mesh,
-    const TStringView failureContext
-){
+[[nodiscard]] bool AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
     return Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, NWB_TEXT("meshlet bounds"))
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, NWB_TEXT("meshlet position ref deltas"))

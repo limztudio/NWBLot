@@ -22,10 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CausticsResolveChainBuilder::CausticsResolveChainBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererRayTracingSystem& raytracingSystem
-)
+CausticsResolveChainBuilder::CausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)
     : m_graph(graph)
     , m_raytracingSystem(raytracingSystem){
 }
@@ -45,12 +42,7 @@ struct ResolveStageDesc{
     bool applyStateSources;
     const CausticsResolveStageUses* stageUses;
     Core::GpuTaskId* outTask;
-    Core::GpuTaskId (RendererRayTracingSystem::*declareTask)(
-        Core::GpuTaskGraph&,
-        const Core::GpuTaskDesc&,
-        DeferredFrameTargets&,
-        const bool&
-    );
+    Core::GpuTaskId (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, DeferredFrameTargets&, const bool&);
 };
 
 
@@ -63,20 +55,10 @@ struct ResolveStageDesc{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(
-    const CausticsResolveChainInputs& inputs,
-    const CausticsResolveChainNaming& naming,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming, Core::Alloc::ScratchArena& scratchArena){
     using namespace RendererTaskGraphDetail;
     CausticsResolveChainResult result{};
-    if(
-        !inputs.targets
-        || !inputs.geometryTask.valid()
-        || !inputs.producerDispatched
-        || !inputs.timingTicket
-        || !inputs.resolveTiming
-    )
+    if(!inputs.targets || !inputs.geometryTask.valid() || !inputs.producerDispatched || !inputs.timingTicket || !inputs.resolveTiming)
         return MakeUnexpected(Failure{});
 
     const CausticResolveActivitySnapshot activity = m_raytracingSystem.causticResolveActivitySnapshot(*inputs.targets);
@@ -114,13 +96,7 @@ struct ResolveStageDesc{
     for(usize stageIndex = 0u; stageIndex < 7u; ++stageIndex){
         const __hidden_caustics_resolve_chain::ResolveStageDesc& stage = stages[stageIndex];
         Core::GpuTaskDesc stageDesc;
-        stageDesc
-            .setIdentity(stage.naming->identity)
-            .setMarkerLabel(stage.naming->label)
-            .setScheduling(stageScheduling)
-            .setDependencies(&previousTask, 1u)
-            .setResourceUses(stage.stageUses->uses, stage.stageUses->useCount)
-        ;
+        stageDesc.setIdentity(stage.naming->identity).setMarkerLabel(stage.naming->label).setScheduling(stageScheduling).setDependencies(&previousTask, 1u).setResourceUses(stage.stageUses->uses, stage.stageUses->useCount);
         if(activity.valid()){
             activityUses.clear();
             for(usize useIndex = 0u; useIndex < stage.stageUses->useCount; ++useIndex)
@@ -134,12 +110,7 @@ struct ResolveStageDesc{
         }
         if(!inputs.applyStateSourcesToPrepareOnly || stage.applyStateSources)
             stageDesc.setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
-        *stage.outTask = (m_raytracingSystem.*(stage.declareTask))(
-            m_graph,
-            stageDesc,
-            (*inputs.targets),
-            (*inputs.producerDispatched)
-        );
+        *stage.outTask = (m_raytracingSystem.*(stage.declareTask))(m_graph, stageDesc, (*inputs.targets), (*inputs.producerDispatched));
         if(!stage.outTask->valid()){
             NWB_LOGGER_WARNING(stage.naming->warnText);
             return MakeUnexpected(Failure{});
@@ -148,19 +119,8 @@ struct ResolveStageDesc{
     }
 
     Core::GpuTaskDesc timingCloseDesc;
-    timingCloseDesc
-        .setIdentity(naming.timingClose.identity)
-        .setMarkerLabel(naming.timingClose.label)
-        .setScheduling(stageScheduling)
-        .setDependencies(&result.causticResolveUpsampleTask, 1u)
-    ;
-    result.causticsTask = m_raytracingSystem.declareCausticResolveTask(
-        m_graph,
-        timingCloseDesc,
-        (*inputs.timingTicket),
-        (*inputs.producerDispatched),
-        (*inputs.resolveTiming)
-    );
+    timingCloseDesc.setIdentity(naming.timingClose.identity).setMarkerLabel(naming.timingClose.label).setScheduling(stageScheduling).setDependencies(&result.causticResolveUpsampleTask, 1u);
+    result.causticsTask = m_raytracingSystem.declareCausticResolveTask(m_graph, timingCloseDesc, (*inputs.timingTicket), (*inputs.producerDispatched), (*inputs.resolveTiming));
     if(!result.causticsTask.valid()){
         NWB_LOGGER_WARNING(naming.timingClose.warnText);
         return MakeUnexpected(Failure{});

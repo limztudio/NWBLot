@@ -200,8 +200,7 @@ TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataPreservesPreviously
     static constexpr AStringView s_FontFields[] = { "face_index", "units_per_em", "glyph_count" };
     for(const AStringView field : s_FontFields){
         Core::Metascript::Value wrong(face);
-        const u32 value = field == "face_index" ? fontEntry.faceIndex
-            : field == "units_per_em" ? atlasEntry.payload.unitsPerEm : atlasEntry.payload.sourceGlyphCount;
+        const u32 value = field == "face_index" ? fontEntry.faceIndex : field == "units_per_em" ? atlasEntry.payload.unitsPerEm : atlasEntry.payload.sourceGlyphCount;
         wrong.field(field).setInteger(value);
         EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, wrong, fontEntry.arena));
     }
@@ -219,9 +218,7 @@ TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataPreservesPreviously
     for(const AStringView field : s_RetiredAtlasFields){
         EXPECT_EQ(atlas.findField(field), nullptr);
         Core::Metascript::Value wrong(atlas);
-        const u32 value = field == "face_index" ? atlasEntry.payload.faceIndex
-            : field == "units_per_em" ? atlasEntry.payload.unitsPerEm
-            : field == "glyph_count" ? atlasEntry.payload.sourceGlyphCount : atlasEntry.payload.guardTexels;
+        const u32 value = field == "face_index" ? atlasEntry.payload.faceIndex : field == "units_per_em" ? atlasEntry.payload.unitsPerEm : field == "glyph_count" ? atlasEntry.payload.sourceGlyphCount : atlasEntry.payload.guardTexels;
         wrong.field(field).setInteger(value);
         EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrong, atlasEntry.arena, scratchArena));
     }

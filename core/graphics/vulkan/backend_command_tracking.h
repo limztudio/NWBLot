@@ -96,14 +96,7 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    TrackedCommandBuffer(
-        Queue& queue,
-        const VulkanContext& context,
-        u32 queueFamilyIndex,
-        VkCommandPool commandPool,
-        bool ownsCommandPool,
-        Futex* sharedCommandPoolMutex
-    );
+    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, u32 queueFamilyIndex, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex);
     ~TrackedCommandBuffer();
 
 
@@ -126,18 +119,9 @@ private:
     };
 
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
-    [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(
-        TimerQuery& query,
-        u64 generation
-    )noexcept;
+    [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
     [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
-    [[nodiscard]] bool validateTimerQueryRecordingClaims(
-        const Queue& submissionQueue,
-        const QueueSubmissionWait* localWaits,
-        usize localWaitCount,
-        TrackedCommandBuffer* const* precedingCommandBuffers,
-        usize precedingCommandBufferCount
-    )const noexcept;
+    [[nodiscard]] bool validateTimerQueryRecordingClaims(const Queue& submissionQueue, const QueueSubmissionWait* localWaits, usize localWaitCount, TrackedCommandBuffer* const* precedingCommandBuffers, usize precedingCommandBufferCount)const noexcept;
     void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
     void discardTimerQueryRecordingClaims()noexcept;
     void commitRetainedBufferStateCommits()noexcept;
@@ -180,8 +164,8 @@ private:
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
-    // Explicit graph-worker leases own one queue-local Vulkan pool each. Recycled buffers retain that identity
-    // until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
+    // Explicit graph-worker leases own one queue-local Vulkan pool each.
+    // Recycled buffers retain that identity until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
     u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
     TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;

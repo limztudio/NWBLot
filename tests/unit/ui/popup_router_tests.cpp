@@ -66,9 +66,7 @@ HitTarget Child(const PopupScope& scope, const u64 id, const Rect& rectangle, co
 
 Array<HitTarget, 5u> Targets(const PopupScope& scope){
     const auto base = BaseTargets();
-    return { base[0u], base[1u], Barrier(scope),
-        Child(scope, scope.token.widget.value + 1u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u),
-        Child(scope, scope.token.widget.value + 2u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u) };
+    return { base[0u], base[1u], Barrier(scope), Child(scope, scope.token.widget.value + 1u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u), Child(scope, scope.token.widget.value + 2u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u) };
 }
 
 
@@ -415,8 +413,7 @@ TEST_F(UiPopupRouterTests, HeldEscapeDoesNotDismissTheNewlyAcceptedLowerScopeOnR
     ASSERT_TRUE(install(lower, 1u));
     const PopupScope higher = Scope(200u, 5u);
     const auto lowerTargets = Targets(lower);
-    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u],
-        Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
     const PopupScope scopes[]{ lower, higher };
     ASSERT_TRUE(m_router.commitTargets(targets, 7u, 2u, scopes, 2u));
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
@@ -486,8 +483,7 @@ TEST_F(UiPopupRouterTests, HigherLayerScopeBlocksLowerChildrenAndRestoresTheirSa
     ASSERT_EQ(m_router.focus().value, 102u);
     const PopupScope higher = Scope(200u, 5u);
     const auto lowerTargets = Targets(lower);
-    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u],
-        Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
     const PopupScope scopes[]{ lower, higher };
     ASSERT_TRUE(m_router.commitTargets(targets, 7u, 3u, scopes, 2u));
     EXPECT_EQ(m_router.focus().value, 201u);
@@ -512,8 +508,7 @@ TEST_F(UiPopupRouterTests, RemovingLowerWhileRetainingHigherSplicesTheSavedBaseF
     ASSERT_EQ(m_router.focus().value, 102u);
     const PopupScope higher = Scope(200u, 5u);
     const auto lowerTargets = Targets(lower);
-    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u],
-        Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
     const PopupScope scopes[]{ lower, higher };
     ASSERT_TRUE(m_router.commitTargets(targets, 7u, 3u, scopes, 2u));
     ASSERT_EQ(m_router.focus().value, 201u);
@@ -556,8 +551,7 @@ TEST_F(UiPopupRouterTests, FocusLossDismissesAllScopesWithoutRestoringUnderlying
     ASSERT_TRUE(install(lower, 2u));
     const PopupScope higher = Scope(200u, 5u);
     const auto lowerTargets = Targets(lower);
-    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u],
-        Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
     const PopupScope scopes[]{ lower, higher };
     ASSERT_TRUE(m_router.commitTargets(targets, 7u, 3u, scopes, 2u));
     EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).keyboardConsumed);

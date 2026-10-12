@@ -21,12 +21,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TaskResourceUseIndex::TaskResourceUseIndex(
-    const usize resourceCount,
-    const u64 graphGeneration,
-    const usize useCapacity,
-    Alloc::ScratchArena& scratchArena
-)
+TaskResourceUseIndex::TaskResourceUseIndex(const usize resourceCount, const u64 graphGeneration, const usize useCapacity, Alloc::ScratchArena& scratchArena)
     : m_firstUses(resourceCount, Limit<usize>::s_Max, scratchArena)
     , m_nextUses(scratchArena)
     , m_touchedResources(scratchArena)
@@ -38,12 +33,7 @@ TaskResourceUseIndex::TaskResourceUseIndex(
 
 bool TaskResourceUseIndex::build(const GpuTaskGraphTaskView& task){
     m_valid = false;
-    if(
-        !task.id.valid()
-        || task.id.generation != m_graphGeneration
-        || task.resourceUseCount > m_useCapacity
-        || (task.resourceUseCount != 0u && !task.resourceUses)
-    )
+    if(!task.id.valid() || task.id.generation != m_graphGeneration || task.resourceUseCount > m_useCapacity || (task.resourceUseCount != 0u && !task.resourceUses))
         return false;
 
     // Reset only resources used by the preceding task; large graphs with small tasks do not clear a graph-wide table.

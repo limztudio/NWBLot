@@ -26,21 +26,8 @@ namespace __hidden_texture_device{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateNativeTextureSharing(
-    const Device& device,
-    const VolkInstanceTable& instanceDispatch,
-    const VkPhysicalDevice physicalDevice,
-    const TextureDesc& desc,
-    const NativeTextureProvenance& provenance
-){
-    return VulkanNativeSharingDetail::ValidateNativeResourceSharing(
-        device,
-        instanceDispatch,
-        physicalDevice,
-        desc.queueSharing,
-        provenance,
-        "texture handle for native texture"
-    );
+[[nodiscard]] static bool ValidateNativeTextureSharing(const Device& device, const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const TextureDesc& desc, const NativeTextureProvenance& provenance){
+    return VulkanNativeSharingDetail::ValidateNativeResourceSharing(device, instanceDispatch, physicalDevice, desc.queueSharing, provenance, "texture handle for native texture");
 }
 
 
@@ -64,14 +51,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     imageInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
     imageInfo.pQueueFamilyIndices = sharingInfo.data();
 
-    auto* texture = NewArenaObject<Texture>(
-        m_context.objectArena,
-        m_context,
-        m_allocator,
-        d,
-        imageInfo,
-        false
-    );
+    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, d, imageInfo, false);
     texture->m_formatLayout = metadata->formatLayout;
     texture->m_aspectMask = metadata->aspectMask;
 
@@ -102,9 +82,7 @@ MemoryRequirements Device::getTextureMemoryRequirements(Texture& texture){
         return {};
     }
     if(!texture.m_managed || !texture.m_creationDesc.isVirtual || texture.m_allocation != nullptr){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture is not a managed virtual texture")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture is not a managed virtual texture"));
         return {};
     }
     if(texture.m_image == VK_NULL_HANDLE || texture.m_imageInfo.tiling != VK_IMAGE_TILING_OPTIMAL){
@@ -223,19 +201,10 @@ bool Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsag
 
     Heap& heap = *texture.m_boundHeap.get();
     ScopedLock heapLock(heap.m_bindingMutex);
-    return &heap.m_context == &m_context
-        && &heap.m_allocator == &m_allocator
-        && heap.m_allocation != nullptr
-        && heap.m_memory != VK_NULL_HANDLE
-    ;
+    return &heap.m_context == &m_context && &heap.m_allocator == &m_allocator && heap.m_allocation != nullptr && heap.m_memory != VK_NULL_HANDLE;
 }
 
-TextureHandle Device::createHandleForNativeTexture(
-    const ObjectType objectType,
-    const Object nativeTextureHandle,
-    const TextureDesc& desc,
-    const NativeTextureProvenance& nativeProvenance
-){
+TextureHandle Device::createHandleForNativeTexture(const ObjectType objectType, const Object nativeTextureHandle, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance){
     if(objectType != ObjectTypes::s_Image){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));
         return nullptr;
@@ -253,13 +222,7 @@ TextureHandle Device::createHandleForNativeTexture(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native usage is zero"));
         return nullptr;
     }
-    if(!__hidden_texture_device::ValidateNativeTextureSharing(
-        *this,
-        m_context.instanceDispatch,
-        m_context.physicalDevice,
-        desc,
-        nativeProvenance
-    ))
+    if(!__hidden_texture_device::ValidateNativeTextureSharing(*this, m_context.instanceDispatch, m_context.physicalDevice, desc, nativeProvenance))
         return nullptr;
 
     VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(desc, *metadata);
@@ -269,29 +232,18 @@ TextureHandle Device::createHandleForNativeTexture(
     imageInfo.queueFamilyIndexCount = nativeProvenance.queueFamilyIndexCount;
     imageInfo.pQueueFamilyIndices = nativeProvenance.queueFamilyIndices;
     if(!VulkanTextureDetail::IsTextureImageInfoConsistent(desc, imageInfo)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native provenance contradicts the logical description or declared initial state")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native provenance contradicts the logical description or declared initial state"));
         return nullptr;
     }
 
-    auto* texture = NewArenaObject<Texture>(
-        m_context.objectArena,
-        m_context,
-        m_allocator,
-        desc,
-        imageInfo,
-        nativeProvenance.initialStateKnown
-    );
+    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, desc, imageInfo, nativeProvenance.initialStateKnown);
     texture->m_formatLayout = metadata->formatLayout;
     texture->m_aspectMask = metadata->aspectMask;
     texture->m_image = nativeImage;
     texture->m_managed = false;
 
     if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: a live wrapper already exists")
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: a live wrapper already exists"));
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }

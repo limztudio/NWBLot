@@ -71,14 +71,7 @@ private:
     return nullptr;
 }
 
-[[nodiscard]] static Expected<usize> PageTarget(
-    const EditCaretGeometry& geometry,
-    const usize activeCaret,
-    const Rect& caret,
-    const bool down,
-    const f32 preferredX,
-    const f32 viewportHeight
-){
+[[nodiscard]] static Expected<usize> PageTarget(const EditCaretGeometry& geometry, const usize activeCaret, const Rect& caret, const bool down, const f32 preferredX, const f32 viewportHeight){
     const auto& lines = geometry.lines();
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())
@@ -116,9 +109,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context,
-    const TextAreaState& state, const f32 fontSize, const u32 scriptTag, const StringView language
-)
+TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context, const TextAreaState& state, const f32 fontSize, const u32 scriptTag, const StringView language)
     : m_arena(arena)
     , m_text(text)
     , m_context(context)
@@ -130,9 +121,7 @@ TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena&
     , m_language(language.data(), language.size(), arena)
 {}
 
-EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction,
-    const EditNavigationSnapshot& preferred, const f32 viewportHeight
-){
+EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight){
     const bool page = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
     if(
         !current() || model.textMode() != EditTextMode::Multiline || model.composition().active
@@ -143,8 +132,7 @@ EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model,
         return {};
     const __hidden_ui_text_area_navigation::ModelStamp expected(model);
     EditBoxView view(m_arena);
-    const ShapeRequest request{ {}, m_fontSize, TextDirection::LeftToRight, m_scriptTag,
-        StringView(m_language.data(), m_language.size()) };
+    const ShapeRequest request{ {}, m_fontSize, TextDirection::LeftToRight, m_scriptTag, StringView(m_language.data(), m_language.size()) };
     if(!view.snapshot(model) || view.shape(m_text, request) != TextLayoutStatus::Success)
         return {};
     if(!current() || !expected.matches(model) || !m_state.navigation().matches(preferred))
@@ -157,10 +145,7 @@ EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model,
     if(!IsFinite(preferredX))
         return {};
     const bool down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
-    const auto resolved = page
-        ? __hidden_ui_text_area_navigation::PageTarget(geometry, model.caret(), *caret, down, preferredX, viewportHeight)
-        : geometry.verticalTarget(view.displayCaret(), down, preferredX)
-    ;
+    const auto resolved = page ? __hidden_ui_text_area_navigation::PageTarget(geometry, model.caret(), *caret, down, preferredX, viewportHeight) : geometry.verticalTarget(view.displayCaret(), down, preferredX);
     return resolved ? EditNavigationResult{ *resolved, preferredX, true } : EditNavigationResult{};
 }
 

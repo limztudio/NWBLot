@@ -39,8 +39,7 @@ struct GraphOwnedAdaptiveShadowPlan{
 };
 
 
-// Shadow Visibility freezes its domain-owned route policy before the coordinator declares target and dependency
-// topology. Resource handles remain in the dedicated resource snapshots below.
+// Shadow Visibility freezes its domain-owned route policy before the coordinator declares target and dependency topology. Resource handles remain in the dedicated resource snapshots below.
 struct RayTracingShadowVisibilityGraphPlanSnapshot{
     GraphOwnedAdaptiveShadowPlan adaptivePlan;
     LightSpaceShadowSnapshot lightSpace;
@@ -69,8 +68,7 @@ struct ShadowPreparationOutcome{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A shared packet may optimistically advance several independent temporal domains while recording. Preserve the
-// exact CPU mirrors so each rejected semantic stage can roll back only the state it owned.
+// A shared packet may optimistically advance several independent temporal domains while recording. Preserve the exact CPU mirrors so each rejected semantic stage can roll back only the state it owned.
 struct RayTracingFrameCpuStateSnapshot{
     Core::QueueSubmissionToken surfelCountReadbackSubmissionToken;
 
@@ -90,8 +88,7 @@ struct RayTracingFrameCpuStateSnapshot{
 };
 
 
-// Shadow Preparation retains native state for the scene TLAS, shared software-BVH scratch, and adaptive-shadow
-// scratch across packets. The coordinator receives owning handles without reaching into mutable domain state.
+// Shadow Preparation retains native state for the scene TLAS, shared software-BVH scratch, and adaptive-shadow scratch across packets. The coordinator receives owning handles without reaching into mutable domain state.
 struct RayTracingShadowPreparationResourceSnapshot{
     Core::RayTracingAccelStructHandle sceneTlas;
     Core::BufferHandle sceneTlasBackingBuffer;
@@ -132,8 +129,7 @@ struct RayTracingDeferredGraphResourceSnapshot{
 };
 
 
-// Persistent surfel resources outlive resizable targets. The accepted readback token belongs to the same resource
-// generation as the counter/readback pair and is captured with it for graph dependency and rollback planning.
+// Persistent surfel resources outlive resizable targets. The accepted readback token belongs to the same resource generation as the counter/readback pair and is captured with it for graph dependency and rollback planning.
 struct RayTracingSurfelPersistentResourceSnapshot{
     Core::BufferHandle constantsBuffer;
     Core::BufferHandle poolBuffer;
@@ -148,8 +144,7 @@ struct RayTracingSurfelPersistentResourceSnapshot{
     Core::QueueSubmissionToken countReadbackSubmissionToken;
 };
 
-// Prepared once before graph compilation. Recording only consumes these retained handles and slot values, so a
-// hardware failure cannot switch the graph to a different resource set after its dependencies have been declared.
+// Prepared once before graph compilation. Recording only consumes these retained handles and slot values, so a hardware failure cannot switch the graph to a different resource set after its dependencies have been declared.
 struct RayTracingRefractionGraphResources{
     Core::ComputePipelineHandle pipeline;
     Core::ComputePipelineHandle screenFallbackPipeline;
@@ -164,8 +159,7 @@ struct RayTracingRefractionGraphResources{
     bool usesHardwareTrace = false;
 
     [[nodiscard]] bool valid()const noexcept{
-        return pipeline && viewBuffer
-            && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
+        return pipeline && viewBuffer && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
     }
 };
 

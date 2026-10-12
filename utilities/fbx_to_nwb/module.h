@@ -238,17 +238,8 @@ Path DefaultOutputPath(const AStringView inputPath);
 Expected<SceneHandle> LoadScene(const ImportOptions& options);
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
 void PrintMeshInstances(const UtilityVector<MeshInstance>& instances);
-Expected<UtilityVector<usize>> SelectMeshInstances(
-    const UtilityVector<MeshInstance>& instances,
-    const AStringView selector);
-Expected<MeshBuildResult> BuildMesh(
-    const UtilityVector<MeshInstance>& instances,
-    const UtilityVector<usize>& selection,
-    const ImportOptions& options,
-    bool wantsSkinning,
-    const Vec4& defaultColor,
-    Core::CpuTaskScheduler& cpuScheduler
-);
+Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector);
+Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection, const ImportOptions& options, bool wantsSkinning, const Vec4& defaultColor, Core::CpuTaskScheduler& cpuScheduler);
 
 [[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh);
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler);

@@ -22,7 +22,9 @@ NWB_INLINE bool NWB_SIMD_CALL VectorDouble3EqualInt(SIMDVectorDouble v0, SIMDVec
 
 NWB_INLINE bool NWB_SIMD_CALL Vector3NearEqual(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle epsilon)noexcept{ return (VectorMoveMask(VectorNearEqual(v0, v1, epsilon)) & VectorComponentMask::s_XYZ) == VectorComponentMask::s_XYZ; }
 
-NWB_INLINE bool NWB_SIMD_CALL VectorDouble3NearEqual(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble epsilon)noexcept{ return (VectorDoubleMoveMask(VectorDoubleNearEqual(v0, v1, epsilon)) & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ; }
+NWB_INLINE bool NWB_SIMD_CALL VectorDouble3NearEqual(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble epsilon)noexcept{
+    return (VectorDoubleMoveMask(VectorDoubleNearEqual(v0, v1, epsilon)) & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
+}
 
 NWB_INLINE bool NWB_SIMD_CALL Vector3NotEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{ return !Vector3Equal(v0, v1); }
 
@@ -50,7 +52,9 @@ NWB_INLINE bool NWB_SIMD_CALL VectorDouble3LessOrEqual(SIMDVectorDouble v0, SIMD
 
 NWB_INLINE bool NWB_SIMD_CALL Vector3InBounds(SIMDVectorSingle value, SIMDVectorSingle bounds)noexcept{ return (VectorMoveMask(VectorInBounds(value, bounds)) & VectorComponentMask::s_XYZ) == VectorComponentMask::s_XYZ; }
 
-NWB_INLINE bool NWB_SIMD_CALL VectorDouble3InBounds(SIMDVectorDouble value, SIMDVectorDouble bounds)noexcept{ return (VectorDoubleMoveMask(VectorDoubleInBounds(value, bounds)) & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ; }
+NWB_INLINE bool NWB_SIMD_CALL VectorDouble3InBounds(SIMDVectorDouble value, SIMDVectorDouble bounds)noexcept{
+    return (VectorDoubleMoveMask(VectorDoubleInBounds(value, bounds)) & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
+}
 
 NWB_INLINE bool NWB_SIMD_CALL Vector3IsNaN(SIMDVectorSingle value)noexcept{ return (VectorMoveMask(VectorIsNaN(value)) & VectorComponentMask::s_XYZ) != 0; }
 

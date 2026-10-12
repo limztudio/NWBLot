@@ -31,11 +31,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitPreGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitPreGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     // A CSG upload without its frozen stream would detach clears and consumers.
     if(payload.transparentCsgStreamsUploaded != payload.transparentCsgSnapshot.captured)
@@ -63,41 +59,21 @@ namespace RendererTaskGraphDetail{
     return true;
 }
 
-[[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitComputeEmulationRecordTrait trait{
-        &RendererGpuTimingScope::s_AvboitOccupancy,
-        MaterialPipelinePass::AvboitOccupancy,
-        &AvboitFrameTargets::lowFramebuffer,
-    };
+    const AvboitComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &payload.occupancyTiming, trait);
 }
 
-[[nodiscard]] bool AvboitOccupancySharedComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitOccupancySharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitSharedComputeEmulationRecordTrait trait{
-        &RendererGpuTimingScope::s_AvboitOccupancy,
-        MaterialPipelinePass::AvboitOccupancy,
-        &AvboitFrameTargets::lowFramebuffer,
-    };
+    const AvboitSharedComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &payload.occupancyTiming, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
-[[nodiscard]] bool AvboitOccupancyGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitOccupancyGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     return RecordAvboitRasterPassFromPayload(
         payload,
@@ -108,13 +84,7 @@ namespace RendererTaskGraphDetail{
         &Payload::occupancyComputeEmulationOutputStatesGraphOwned,
         &Payload::occupancyCsgComputeEmulationOutputStatesGraphOwned,
         payload.occupancyComputeEmulationTiming,
-        [&](
-            Core::CommandList& dispatchCommandList,
-            const MaterialPassDrawItemPartitions& dispatchDrawItems,
-            const CsgFrameGpuData& dispatchCsgFrameData,
-            const usize dispatchInstanceCount,
-            const usize dispatchMaterialTypedByteCount
-        ){
+        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitOccupancyPass(
                 dispatchCommandList,
                                 payload.targets,
@@ -135,20 +105,11 @@ namespace RendererTaskGraphDetail{
     );
 }
 
-[[nodiscard]] bool AvboitDepthWarpGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitDepthWarpGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     bool timingRecorded = false;
     payload.timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
-    payload.avboitSystem.dispatchAvboitDepthWarp(
-        commandList,
-        payload.targets,
-        payload.timingAttribution,
-        &timingRecorded
-    );
+    payload.avboitSystem.dispatchAvboitDepthWarp(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
     if(!timingRecorded && payload.timingFeedback){
         payload.timingFeedback->discardRecording(payload.timingAttribution);
         payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

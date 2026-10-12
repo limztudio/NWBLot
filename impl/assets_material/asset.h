@@ -40,18 +40,10 @@ class Texture;
     const Core::Assets::AssetRef<PixelShader>& extinctionPixelShader
 )noexcept{
     if(transparent){
-        return
-            accumulatePixelShader.valid()
-            && occupancyPixelShader.valid()
-            && extinctionPixelShader.valid()
-        ;
+        return accumulatePixelShader.valid() && occupancyPixelShader.valid() && extinctionPixelShader.valid();
     }
 
-    return
-        !accumulatePixelShader.valid()
-        && !occupancyPixelShader.valid()
-        && !extinctionPixelShader.valid()
-    ;
+    return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
 }
 
 
@@ -105,18 +97,11 @@ namespace MaterialResourceKind{
 // Resource fields name an engine/project asset resolved to a heap slot at runtime.
 [[nodiscard]] inline bool IsMaterialAssetReference(const AStringView resourceName)noexcept{
     const usize rootEnd = resourceName.find('/');
-    if(
-        rootEnd == AStringView::npos
-        || rootEnd == 0u
-        || rootEnd + 1u >= resourceName.size()
-    )
+    if(rootEnd == AStringView::npos || rootEnd == 0u || rootEnd + 1u >= resourceName.size())
         return false;
 
     const AStringView virtualRoot = resourceName.substr(0u, rootEnd);
-    if(
-        virtualRoot != Core::Assets::s_EngineVirtualRoot
-        && virtualRoot != Core::Assets::s_ProjectVirtualRoot
-    )
+    if(virtualRoot != Core::Assets::s_EngineVirtualRoot && virtualRoot != Core::Assets::s_ProjectVirtualRoot)
         return false;
 
     usize componentBegin = rootEnd + 1u;
@@ -132,20 +117,12 @@ namespace MaterialResourceKind{
     return true;
 }
 
-[[nodiscard]] inline bool IsSupportedMaterialResourceReference(
-    const MaterialResourceKind::Enum resourceKind,
-    const AStringView resourceName
-)noexcept{
-    return IsValidMaterialResourceKind(resourceKind)
-        && IsMaterialAssetReference(resourceName)
-    ;
+[[nodiscard]] inline bool IsSupportedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const AStringView resourceName)noexcept{
+    return IsValidMaterialResourceKind(resourceKind) && IsMaterialAssetReference(resourceName);
 }
 
 // Serialized resource paths arrive as Name hashes; their original text is validated during cooking.
-[[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(
-    const MaterialResourceKind::Enum resourceKind,
-    const Name& resourceName
-)noexcept{
+[[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
     return resourceName && IsValidMaterialResourceKind(resourceKind);
 }
 
@@ -234,9 +211,7 @@ static_assert(
     return ((static_cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) % s_MaterialLayoutFieldComponentsPerValueType) + 1u;
 }
 
-[[nodiscard]] inline MaterialParameterValueType::Enum MaterialLayoutFieldValueType(
-    const MaterialLayoutFieldType::Enum fieldType
-)noexcept{
+[[nodiscard]] inline MaterialParameterValueType::Enum MaterialLayoutFieldValueType(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     if(!IsMaterialLayoutNumericFieldType(fieldType))
         return MaterialParameterValueType::None;
 
@@ -244,10 +219,7 @@ static_assert(
     return static_cast<MaterialParameterValueType::Enum>(s_MaterialParameterFirstValueTypeId + valueTypeOffset);
 }
 
-[[nodiscard]] inline MaterialLayoutFieldType::Enum MaterialLayoutFieldTypeFromParameterType(
-    const MaterialParameterValueType::Enum valueType,
-    const u32 componentCount
-)noexcept{
+[[nodiscard]] inline MaterialLayoutFieldType::Enum MaterialLayoutFieldTypeFromParameterType(const MaterialParameterValueType::Enum valueType, const u32 componentCount)noexcept{
     if(componentCount == 0u || componentCount > s_MaterialLayoutFieldComponentsPerValueType)
         return MaterialLayoutFieldType::None;
 
@@ -291,10 +263,7 @@ static_assert(
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return sizeof(u32);
 
-    return
-        MaterialLayoutFieldComponentCount(fieldType)
-        * MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType))
-    ;
+    return MaterialLayoutFieldComponentCount(fieldType) * MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
 }
 
 [[nodiscard]] inline u32 MaterialLayoutFieldAlignment(const MaterialLayoutFieldType::Enum fieldType)noexcept{
@@ -332,7 +301,8 @@ struct MaterialTypedLayoutField{
 };
 
 // A cooked material separates resource identity from its numeric/default payload.
-// `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle. Exactly one typed reference is valid.
+// `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle.
+// Exactly one typed reference is valid.
 struct MaterialResourceReference{
     Name blockName = s_NameNone;
     Name fieldName = s_NameNone;
@@ -342,11 +312,7 @@ struct MaterialResourceReference{
     u32 constantByteOffset = 0u;
 };
 
-[[nodiscard]] inline bool AssignMaterialResourceReferenceAsset(
-    MaterialResourceReference& reference,
-    const MaterialResourceKind::Enum resourceKind,
-    const Name& resourceName
-){
+[[nodiscard]] inline bool AssignMaterialResourceReferenceAsset(MaterialResourceReference& reference, const MaterialResourceKind::Enum resourceKind, const Name& resourceName){
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
         reference.textureAsset.virtualPath = resourceName;
@@ -411,12 +377,7 @@ public:
     void setTransparent(const bool transparent)noexcept{ m_transparent = transparent; }
     void setTwoSided(const bool twoSided)noexcept{ m_twoSided = twoSided; }
     void setRefractive(const bool refractive)noexcept{ m_refractive = refractive; }
-    void setTypedLayout(
-        u64 layoutHash,
-        const TypedLayoutBlockVector& blocks,
-        const TypedLayoutFieldVector& fields,
-        const TypedBlockByteVector& blockBytes
-    );
+    void setTypedLayout(u64 layoutHash, const TypedLayoutBlockVector& blocks, const TypedLayoutFieldVector& fields, const TypedBlockByteVector& blockBytes);
     void setResourceReferences(const ResourceReferenceVector& resourceReferences);
     bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept;
 
@@ -443,7 +404,8 @@ public:
     [[nodiscard]] const ResourceReferenceVector& resourceReferences()const noexcept{ return m_resourceReferences; }
     [[nodiscard]] const StageShaderArray& stageShaders()const noexcept{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const noexcept{ return m_stageShaderCount; }
-    // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw. Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
+    // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw.
+    // Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
     // Not a graphics stage: the material has one pixel stage, and this is the transparent-only shader the renderer selects by pass.
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitAccumulatePixelShader()const noexcept{ return m_avboitAccumulatePixelShader; }
     // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface renderCoverage. Same validity contract as above.

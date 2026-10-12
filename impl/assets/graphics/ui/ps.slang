@@ -45,7 +45,8 @@ NwbUiPixelOutput main(NwbUiPixelInput input){
         return output;
     }
     // Texture views decode their declared color space while alpha stays linear.
-    // Vertex RGB already includes tint alpha. Premultiply the straight texture sample once for the linear UI layer.
+    // Vertex RGB already includes tint alpha.
+    // Premultiply the straight texture sample once for the linear UI layer.
     output.color = float4(sampled.rgb * sampled.a * input.color.rgb, sampled.a * input.color.a);
     return output;
 }

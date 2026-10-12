@@ -20,9 +20,7 @@ NWB_IMPL_UI_BEGIN
 // Canonical multiline text contains LF and ordinary UTF8 scalars; all other ASCII/C1 controls and line separators fail.
 [[nodiscard]] bool ValidateMultilineText(AStringView text)noexcept;
 // CRLF/CR/NEL/LS/PS become LF, and each tab becomes one space.
-[[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(
-    Core::Alloc::GlobalArena& arena, AStringView source, usize maxBytes
-);
+[[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(Core::Alloc::GlobalArena& arena, AStringView source, usize maxBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

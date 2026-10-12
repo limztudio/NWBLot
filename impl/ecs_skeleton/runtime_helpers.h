@@ -35,12 +35,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkinningJointMatrix(
-    const SIMDMatrix& poseJoint,
-    const bool hasInverseBind,
-    const SIMDMatrix& inverseBind,
-    const f32 inverseBindDeterminantEpsilon
-)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, const bool hasInverseBind, const SIMDMatrix& inverseBind, const f32 inverseBindDeterminantEpsilon)noexcept{
     SIMDMatrix matrix = poseJoint;
     if(!MatrixIsInvertibleAffine(matrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return MakeUnexpected(Failure{});
@@ -55,10 +50,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return matrix;
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(
-    const SIMDMatrix& localJoint,
-    const SIMDMatrix* parentJoint
-)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint, const SIMDMatrix* parentJoint)noexcept{
     SIMDMatrix matrix = localJoint;
     if(!MatrixIsInvertibleAffine(matrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return MakeUnexpected(Failure{});
@@ -72,10 +64,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 }
 
 template<typename JointMatrixVector>
-[[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(
-    const SkeletonPoseComponent& pose,
-    JointMatrixVector& outJointPalette
-){
+[[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, JointMatrixVector& outJointPalette){
     outJointPalette.clear();
 
     if(!HasSkeletonPose(&pose))
@@ -84,11 +73,7 @@ template<typename JointMatrixVector>
         return MakeUnexpected(Failure{});
 
     const usize jointCount = pose.localJoints.size();
-    if(
-        jointCount == 0u
-        || pose.parentJoints.size() != jointCount
-        || jointCount > static_cast<usize>(Limit<u32>::s_Max)
-    )
+    if(jointCount == 0u || pose.parentJoints.size() != jointCount || jointCount > static_cast<usize>(Limit<u32>::s_Max))
         return MakeUnexpected(Failure{});
 
     outJointPalette.reserve(jointCount);

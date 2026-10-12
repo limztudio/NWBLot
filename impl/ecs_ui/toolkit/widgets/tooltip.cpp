@@ -32,18 +32,11 @@ static Atomic<u64> s_NextIdentity{ 1u };
 
 
 [[nodiscard]] static bool ValidOptions(const TooltipOptions& options)noexcept{
-    return
-        IsFinite(options.delaySeconds) && options.delaySeconds >= 0.0f
-        && IsFinite(options.maximumWidth) && options.maximumWidth > 0.0f
-        && IsFinite(options.gap) && options.gap >= 0.0f && options.side <= PopupPlacementSide::Center
-    ;
+    return IsFinite(options.delaySeconds) && options.delaySeconds >= 0.0f && IsFinite(options.maximumWidth) && options.maximumWidth > 0.0f && IsFinite(options.gap) && options.gap >= 0.0f && options.side <= PopupPlacementSide::Center;
 }
 
 [[nodiscard]] static bool SameOptions(const TooltipOptions& lhs, const TooltipOptions& rhs)noexcept{
-    return
-        lhs.enabled == rhs.enabled && lhs.delaySeconds == rhs.delaySeconds && lhs.maximumWidth == rhs.maximumWidth
-        && lhs.gap == rhs.gap && lhs.side == rhs.side
-    ;
+    return lhs.enabled == rhs.enabled && lhs.delaySeconds == rhs.delaySeconds && lhs.maximumWidth == rhs.maximumWidth && lhs.gap == rhs.gap && lhs.side == rhs.side;
 }
 
 
@@ -91,24 +84,16 @@ bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u
     const bool hovered, const f32 deltaSeconds, const TooltipOptions& options
 )noexcept{
     using namespace __hidden_ui_tooltip;
-    if(
-        !anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !(popup == PopupToken{}))
-        || !IsFinite(deltaSeconds) || deltaSeconds < 0.0f || !ValidOptions(options)
-    )
+    if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !(popup == PopupToken{})) || !IsFinite(deltaSeconds) || deltaSeconds < 0.0f || !ValidOptions(options))
         return false;
-    const bool sameBinding = state.m_anchor == anchor && state.m_declarationGeneration == declarationGeneration
-        && state.m_popup == popup && state.m_focusLossGeneration == focusLossGeneration
-        && state.m_hoverActivityGeneration == hoverActivityGeneration;
+    const bool sameBinding = state.m_anchor == anchor && state.m_declarationGeneration == declarationGeneration && state.m_popup == popup && state.m_focusLossGeneration == focusLossGeneration && state.m_hoverActivityGeneration == hoverActivityGeneration;
     const bool sameOptions = SameOptions(state.m_options, options);
     const bool activeHover = options.enabled && hovered;
     f64 elapsed = 0.0;
     if(activeHover && state.m_hovered && sameBinding && sameOptions)
         elapsed = NumericSimd::Min(NumericSimd::Add(state.m_elapsed, static_cast<f64>(deltaSeconds)), static_cast<f64>(options.delaySeconds));
     const bool visible = activeHover && elapsed >= static_cast<f64>(options.delaySeconds);
-    if(
-        !sameBinding || !sameOptions || state.m_hovered != activeHover || state.m_elapsed != elapsed
-        || state.m_visible != visible
-    ){
+    if(!sameBinding || !sameOptions || state.m_hovered != activeHover || state.m_elapsed != elapsed || state.m_visible != visible){
         state.advanceRevision();
         state.m_anchor = anchor;
         state.m_declarationGeneration = declarationGeneration;

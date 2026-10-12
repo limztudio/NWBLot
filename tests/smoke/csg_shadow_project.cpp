@@ -53,18 +53,12 @@ static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_shadow/mate
 static constexpr AStringView s_MaterialInterface = "project/shaders/csg_shadow";
 static constexpr SmokeMaterialRef s_OpenMaterial{"project/smoke/reflection/materials/optical_volume"};
 static constexpr AStringView s_OpenInterface = "project/shaders/reflection_optical";
-static constexpr Name s_Groups[] = {
-    Name("csg_shadow/opaque_hole"), Name("csg_shadow/opaque_cap"), Name("csg_shadow/glass_depth"),
-    Name("csg_shadow/glass_hole"), Name("csg_shadow/overlap_a"), Name("csg_shadow/overlap_b"),
-    Name("csg_shadow/glass_control"),
-};
+static constexpr Name s_Groups[] = { Name("csg_shadow/opaque_hole"), Name("csg_shadow/opaque_cap"), Name("csg_shadow/glass_depth"), Name("csg_shadow/glass_hole"), Name("csg_shadow/overlap_a"), Name("csg_shadow/overlap_b"), Name("csg_shadow/glass_control"), };
 static constexpr Name s_AnalyticGroups[] = {
     Name("csg_shadow/analytic_plane"), Name("csg_shadow/analytic_sphere"), Name("csg_shadow/analytic_capsule"),
     Name("csg_shadow/analytic_axial_capsule"), Name("csg_shadow/analytic_union"), Name("csg_shadow/analytic_control"),
 };
-static constexpr AStringView s_OpenCaseNames[] = {
-    "reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65",
-};
+static constexpr AStringView s_OpenCaseNames[] = { "reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65", };
 static constexpr Name s_OpenGroups[] = { Name("csg_shadow/open_five"), Name("csg_shadow/open_six") };
 static constexpr SmokeMeshRef s_OpenPairMesh{"project/meshes/csg_shadow_open_2"};
 static constexpr SmokeMeshRef s_OpenFiveMesh{"project/meshes/csg_shadow_open_5"};
@@ -192,10 +186,8 @@ private:
     }
 
     void createReferencePieces(const Box& box, const Box& cutter, const bool transparent){
-        const Float3U lower(Max(box.minimum.x, cutter.minimum.x), Max(box.minimum.y, cutter.minimum.y),
-            Max(box.minimum.z, cutter.minimum.z));
-        const Float3U upper(Min(box.maximum.x, cutter.maximum.x), Min(box.maximum.y, cutter.maximum.y),
-            Min(box.maximum.z, cutter.maximum.z));
+        const Float3U lower(Max(box.minimum.x, cutter.minimum.x), Max(box.minimum.y, cutter.minimum.y), Max(box.minimum.z, cutter.minimum.z));
+        const Float3U upper(Min(box.maximum.x, cutter.maximum.x), Min(box.maximum.y, cutter.maximum.y), Min(box.maximum.z, cutter.maximum.z));
         if(lower.x >= upper.x || lower.y >= upper.y || lower.z >= upper.z){
             createBox(box, transparent);
             return;
@@ -267,8 +259,7 @@ private:
             const bool hole = slot == 0u || slot == 3u;
             const f32 holeHalfWidth = m_pointLight ? 0.36f : 0.24f;
             Box cutter = hole
-                ? Box{ Float3U(x + 0.3f * xyScale - holeHalfWidth, y - 0.4f * xyScale, -7.2f),
-                    Float3U(x + 0.3f * xyScale + holeHalfWidth, y + 0.4f * xyScale, -4.8f) }
+                ? Box{ Float3U(x + 0.3f * xyScale - holeHalfWidth, y - 0.4f * xyScale, -7.2f), Float3U(x + 0.3f * xyScale + holeHalfWidth, y + 0.4f * xyScale, -4.8f) }
                 : Box{ Float3U(x - 1.0f, y - 1.0f, -6.0f), Float3U(x + 1.0f, y + 1.0f, -4.8f) };
             if(slot == 5u){
                 cutter.minimum.x += 20.0f;
@@ -289,12 +280,7 @@ private:
     }
 
     template<typename ParameterT>
-    void addAnalyticCutter(
-        const u32 groupIndex,
-        const Name shapeType,
-        const ParameterT& parameters,
-        const SIMDMatrix& shapeToWorld
-    ){
+    void addAnalyticCutter(const u32 groupIndex, const Name shapeType, const ParameterT& parameters, const SIMDMatrix& shapeToWorld){
         auto cutterEntity = m_world->createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
         cutter.receiverGroup = s_AnalyticGroups[groupIndex];
@@ -321,9 +307,7 @@ private:
 
         NWB::Impl::CsgSphereShapeParameters sphere;
         sphere.radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-        const SIMDMatrix ellipsoid = MatrixAffineTransformation(
-            VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f)
-        );
+        const SIMDMatrix ellipsoid = MatrixAffineTransformation(VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f));
         addAnalyticCutter(1u, Name(s_ENGINE_CSG_SPHERE), sphere, ellipsoid);
 
         NWB::Impl::CsgCapsuleShapeParameters capsule;
@@ -331,12 +315,7 @@ private:
         addAnalyticCutter(2u, Name("engine/csg/capsule"), capsule, MatrixTranslation(2.0f, 1.0f, -6.0f));
         capsule.radiusHalfHeight = Float4(0.3f, 0.4f, 0.0f, 0.0f);
         // An exact axis permutation exercises the capsule's zero radial-speed branch.
-        const SIMDMatrix alongLight = MatrixSet(
-            1.0f, 0.0f, 0.0f, -2.0f,
-            0.0f, 0.0f, -1.0f, -1.0f,
-            0.0f, 1.0f, 0.0f, -6.0f,
-            0.0f, 0.0f, 0.0f, 1.0f
-        );
+        const SIMDMatrix alongLight = MatrixSet(1.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 1.0f);
         addAnalyticCutter(3u, Name("engine/csg/capsule"), capsule, alongLight);
 
         sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
@@ -370,8 +349,7 @@ private:
                 return false;
         }
         else{
-            const SmokeMeshRef firstMesh = m_openCase == OpenCase::Boundary64 ? s_OpenBoundaryMesh
-                : m_openCase == OpenCase::Terminal65 ? s_OpenOverflowMesh : s_OpenFiveMesh;
+            const SmokeMeshRef firstMesh = m_openCase == OpenCase::Boundary64 ? s_OpenBoundaryMesh : m_openCase == OpenCase::Terminal65 ? s_OpenOverflowMesh : s_OpenFiveMesh;
             const SmokeMeshRef meshes[] = { firstMesh, s_OpenSixMesh };
             for(u32 tile = 0u; tile < 2u; ++tile){
                 const f32 x = tile == 0u ? -1.2f : 1.2f;
@@ -420,10 +398,7 @@ public:
         NWB_FATAL_ASSERT_MSG(cameraTransform, NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
         const f32 cameraX = m_arm == Arm::CameraShift ? 0.3f : 0.0f;
         cameraTransform->position.x = cameraX;
-        const auto receiver = CreateTintedStaticMeshEntity(
-            *m_world, m_context.objectArena, s_PlaneMesh, s_OpaqueMaterial, s_MaterialInterface,
-            Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f)
-        );
+        const auto receiver = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, s_OpaqueMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f));
         auto* receiverTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver);
         NWB_FATAL_ASSERT_MSG(camera.valid() && receiverTransform, NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform->rotation);
@@ -452,8 +427,7 @@ public:
             createAnalyticAtlas();
         else
             createAtlas();
-        const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
-            && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
+        const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
             , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_POINT : s_DIRECTIONAL), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)

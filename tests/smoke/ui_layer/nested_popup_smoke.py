@@ -11,12 +11,8 @@ from nested_popup_native import NestedPopupNativeInput
 from nested_popup_probe import observe_nested_popup, snapshot_from_logs
 from popup_tools_probe import center
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -34,10 +30,8 @@ class NestedPopupRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = {"parent": 0, "child": 0, "focus_scope": 0, "focus_code": 0, "before_clicks": 0,
-            "after_clicks": 0, "child_clicks": 0, "outside": 0, "before_bytes": 6, "after_bytes": 5, "child_bytes": 5,
-            "before_selected": 0, "after_selected": 0, "combo": 0, "combo_selected": 1, "search": 0,
-            "search_selected": 1, "query_bytes": 0, "menu": 0, "menu_cursor": 0, "command": 0, "raw_child": 0, "raw_combo": 0,
+        self.expected = {"parent": 0, "child": 0, "focus_scope": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0, "child_clicks": 0, "outside": 0, "before_bytes": 6, "after_bytes": 5, "child_bytes": 5,
+            "before_selected": 0, "after_selected": 0, "combo": 0, "combo_selected": 1, "search": 0, "search_selected": 1, "query_bytes": 0, "menu": 0, "menu_cursor": 0, "command": 0, "raw_child": 0, "raw_combo": 0,
             "raw_search": 0, "raw_menu": 0, "popup_count": 0, "child_parent_scope": 0}
 
     def logs(self):
@@ -70,8 +64,7 @@ class NestedPopupRun:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
-            report = observe_nested_popup(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra)
+            report = observe_nested_popup(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
                 for field in dynamic:
@@ -81,29 +74,22 @@ class NestedPopupRun:
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(),
-            "observation": report}
+        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"nested popup displayed-state gate '{name}' failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "failure": self.failure_report,
-            "input_path": "Win32 physical hover positioning, prepared raw capture, posted buttons/keys/WM_CHAR"
-                if self.native.windows else "X11 XSendEvent ASCII keys/button1/button3 and XSetInputFocus",
-            "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 physical hover positioning, prepared raw capture, posted buttons/keys/WM_CHAR"
+                if self.native.windows else "X11 XSendEvent ASCII keys/button1/button3 and XSetInputFocus", "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
         (self.args.output_directory / "nested_popup.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def reopen_parent(self, name):
         self.click("open")
-        self.checkpoint(name, parent=1, child=0, combo=0, search=0, menu=0, raw_child=0, raw_combo=0,
-            raw_search=0, raw_menu=0, menu_cursor=0, popup_count=1, child_parent_scope=0, focus_scope=1, focus_code=5)
+        self.checkpoint(name, parent=1, child=0, combo=0, search=0, menu=0, raw_child=0, raw_combo=0, raw_search=0, raw_menu=0, menu_cursor=0, popup_count=1, child_parent_scope=0, focus_scope=1, focus_code=5)
 
     def close_ancestor(self, name):
         self.native.close_ancestor()
-        self.checkpoint(name, parent=0, child=0, combo=0, search=0, menu=0, popup_count=0,
-            child_parent_scope=0, focus_scope=0, focus_code=1, popup_targets=0, label_reads=0,
-            dynamic=("raw_child", "raw_combo", "raw_search", "raw_menu"))
+        self.checkpoint(name, parent=0, child=0, combo=0, search=0, menu=0, popup_count=0, child_parent_scope=0, focus_scope=0, focus_code=1, popup_targets=0, label_reads=0, dynamic=("raw_child", "raw_combo", "raw_search", "raw_menu"))
         self.expected.pop("label_reads", None)
         self.expected.pop("popup_targets", None)
 
@@ -130,8 +116,7 @@ class NestedPopupRun:
         self.click("after_row2")
         self.checkpoint("after_list_resumes_parent_scope", after_selected=2, focus_code=12)
         self.click("child_open")
-        self.checkpoint("child_escapes_parent_clip_and_autofocuses", child=1, raw_child=1,
-            popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
+        self.checkpoint("child_escapes_parent_clip_and_autofocuses", child=1, raw_child=1, popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
         self.native.tap("Tab")
         self.checkpoint("top_child_traps_tab_in_editor", focus_code=15)
         self.native.text("c")
@@ -143,85 +128,65 @@ class NestedPopupRun:
         self.native.tap("Return")
         self.checkpoint("child_keyboard_action", child_clicks=1)
         self.native.tap("Escape")
-        self.checkpoint("escape_closes_only_child_and_restores_parent", child=0, raw_child=0,
-            popup_count=1, child_parent_scope=0, focus_scope=1, focus_code=9)
+        self.checkpoint("escape_closes_only_child_and_restores_parent", child=0, raw_child=0, popup_count=1, child_parent_scope=0, focus_scope=1, focus_code=9)
         self.native.tap("Return")
-        self.checkpoint("restored_parent_trigger_reopens_child", child=1, raw_child=1,
-            popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
+        self.checkpoint("restored_parent_trigger_reopens_child", child=1, raw_child=1, popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
         self.click("after_button")
-        self.checkpoint("outside_child_consumes_parent_press", child=0, raw_child=0,
-            popup_count=1, child_parent_scope=0, focus_scope=1, focus_code=9)
+        self.checkpoint("outside_child_consumes_parent_press", child=0, raw_child=0, popup_count=1, child_parent_scope=0, focus_scope=1, focus_code=9)
         self.click("after_button")
         self.checkpoint("next_parent_press_works_after_child", after_clicks=2, focus_code=10)
         self.click("child_open")
-        self.checkpoint("ancestor_close_button_setup", child=1, raw_child=1,
-            popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
+        self.checkpoint("ancestor_close_button_setup", child=1, raw_child=1, popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
         self.click("close_branch")
-        self.checkpoint("ancestor_close_suppresses_child_paint_and_targets", parent=0, child=0,
-            popup_count=0, child_parent_scope=0, focus_scope=0, focus_code=1, popup_targets=0, label_reads=0,
-            dynamic=("raw_child",))
+        self.checkpoint("ancestor_close_suppresses_child_paint_and_targets", parent=0, child=0, popup_count=0, child_parent_scope=0, focus_scope=0, focus_code=1, popup_targets=0, label_reads=0, dynamic=("raw_child",))
         self.expected.pop("popup_targets", None)
         self.expected.pop("label_reads", None)
         self.reopen_parent("ancestor_reopen_keeps_old_child_closed")
         self.click("combo")
-        self.checkpoint("combo_opens_as_child_of_parent", combo=1, raw_combo=1,
-            popup_count=2, focus_scope=3, dynamic=("focus_code",))
+        self.checkpoint("combo_opens_as_child_of_parent", combo=1, raw_combo=1, popup_count=2, focus_scope=3, dynamic=("focus_code",))
         self.native.tap("Down")
         self.checkpoint("combo_preview_preserves_committed_value")
         self.native.tap("Return")
-        self.checkpoint("combo_commit_restores_parent_field", combo=0, raw_combo=0,
-            combo_selected=2, popup_count=1, focus_scope=1, focus_code=17)
+        self.checkpoint("combo_commit_restores_parent_field", combo=0, raw_combo=0, combo_selected=2, popup_count=1, focus_scope=1, focus_code=17)
         self.click("combo")
-        self.checkpoint("combo_ancestor_close_setup", combo=1, raw_combo=1,
-            popup_count=2, focus_scope=3, dynamic=("focus_code",))
+        self.checkpoint("combo_ancestor_close_setup", combo=1, raw_combo=1, popup_count=2, focus_scope=3, dynamic=("focus_code",))
         self.close_ancestor("ancestor_close_suppresses_deferred_combo")
         self.reopen_parent("ancestor_reopen_keeps_combo_closed")
         self.click("search")
-        self.checkpoint("search_query_autofocuses_inside_parent", search=1, raw_search=1,
-            popup_count=2, focus_scope=3, focus_code=22)
+        self.checkpoint("search_query_autofocuses_inside_parent", search=1, raw_search=1, popup_count=2, focus_scope=3, focus_code=22)
         self.native.text("be")
         self.checkpoint("nested_search_filters_without_changing_selection", query_bytes=2)
         self.native.tap("Down")
         self.checkpoint("nested_search_previews_filtered_beta")
         self.native.tap("Return")
-        self.checkpoint("nested_search_commit_restores_parent_field", search=0, raw_search=0,
-            search_selected=2, popup_count=1, focus_scope=1, focus_code=20)
+        self.checkpoint("nested_search_commit_restores_parent_field", search=0, raw_search=0, search_selected=2, popup_count=1, focus_scope=1, focus_code=20)
         self.click("search")
-        self.checkpoint("search_ancestor_close_setup_retains_query", search=1, raw_search=1,
-            popup_count=2, focus_scope=3, focus_code=22)
+        self.checkpoint("search_ancestor_close_setup_retains_query", search=1, raw_search=1, popup_count=2, focus_scope=3, focus_code=22)
         self.close_ancestor("ancestor_close_suppresses_deferred_search")
         self.reopen_parent("ancestor_reopen_keeps_search_closed_and_query_owned")
         self.native.right_click(*self.point(*center(self.snapshot["rectangles"]["menu_anchor"])))
-        self.checkpoint("context_menu_opens_inside_parent", menu=1, raw_menu=1,
-            popup_count=2, focus_scope=3, menu_cursor=1, dynamic=("focus_code",))
+        self.checkpoint("context_menu_opens_inside_parent", menu=1, raw_menu=1, popup_count=2, focus_scope=3, menu_cursor=1, dynamic=("focus_code",))
         self.native.tap("Down")
         self.checkpoint("nested_menu_navigates_beta", menu_cursor=2)
         self.native.tap("Return")
-        self.checkpoint("nested_menu_command_restores_previous_parent_focus", menu=0, raw_menu=0, command=2,
-            popup_count=1, focus_scope=1, focus_code=5, dynamic=("menu_cursor",))
+        self.checkpoint("nested_menu_command_restores_previous_parent_focus", menu=0, raw_menu=0, command=2, popup_count=1, focus_scope=1, focus_code=5, dynamic=("menu_cursor",))
         self.native.right_click(*self.point(*center(self.snapshot["rectangles"]["menu_anchor"])))
-        self.checkpoint("menu_ancestor_close_setup", menu=1, raw_menu=1,
-            popup_count=2, focus_scope=3, menu_cursor=1, dynamic=("focus_code",))
+        self.checkpoint("menu_ancestor_close_setup", menu=1, raw_menu=1, popup_count=2, focus_scope=3, menu_cursor=1, dynamic=("focus_code",))
         self.close_ancestor("ancestor_close_suppresses_deferred_context_menu")
         self.reopen_parent("ancestor_reopen_keeps_context_menu_closed")
         self.click("child_open")
-        self.checkpoint("nested_native_focus_loss_setup", child=1, raw_child=1,
-            popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
+        self.checkpoint("nested_native_focus_loss_setup", child=1, raw_child=1, popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14)
         self.native.focus_loss_and_gain()
-        self.checkpoint("native_focus_loss_dismisses_entire_branch", parent=0, child=0, popup_count=0,
-            child_parent_scope=0, focus_scope=0, popup_targets=0, label_reads=0,
-            dynamic=("focus_code", "raw_child"))
+        self.checkpoint("native_focus_loss_dismisses_entire_branch", parent=0, child=0, popup_count=0, child_parent_scope=0, focus_scope=0, popup_targets=0, label_reads=0, dynamic=("focus_code", "raw_child"))
         self.expected.pop("popup_targets", None)
         self.expected.pop("label_reads", None)
         self.reopen_parent("reopen_after_focus_loss_has_no_old_descendants")
         self.backend.resize_client(self.handle, 900, 620)
         self.checkpoint("resize_preserves_parent_and_controls", extent=(900, 620))
         self.click("child_open")
-        self.checkpoint("nested_child_opens_after_resize", child=1, raw_child=1, popup_count=2,
-            child_parent_scope=1, focus_scope=2, focus_code=14, extent=(900, 620))
+        self.checkpoint("nested_child_opens_after_resize", child=1, raw_child=1, popup_count=2, child_parent_scope=1, focus_scope=2, focus_code=14, extent=(900, 620))
         self.native.tap("Escape")
-        self.checkpoint("escape_after_resize_restores_parent_trigger", child=0, raw_child=0, popup_count=1,
-            child_parent_scope=0, focus_scope=1, focus_code=9, extent=(900, 620))
+        self.checkpoint("escape_after_resize_restores_parent_trigger", child=0, raw_child=0, popup_count=1, child_parent_scope=0, focus_scope=1, focus_code=9, extent=(900, 620))
 
 
 def run(args):

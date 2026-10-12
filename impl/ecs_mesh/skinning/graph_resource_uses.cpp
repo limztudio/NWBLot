@@ -114,12 +114,7 @@ struct ResourceUseCollector : NoCopy{
     void writeTo(Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses)const{
         outUses.resize(m_count);
         const auto writeUse = [&](const Core::GpuGraphResourceId resource, const ResourceUseInfo& info){
-            outUses[info.outputIndex] = Core::GpuTaskResourceUse{
-                .resource = resource,
-                .range = {},
-                .requiredState = info.requiredState,
-                .access = info.access,
-            };
+            outUses[info.outputIndex] = Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = info.requiredState, .access = info.access, };
         };
         if(m_index){
             for(const auto& entry : *m_index)
@@ -142,11 +137,7 @@ struct ResourceUseCollector : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
-    const MeshSkinningGraphDispatchPlan* const plans,
-    const usize planCount,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const MeshSkinningGraphDispatchPlan* const plans, const usize planCount, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_skinning_graph_resource_uses;
 
     MeshSkinningGraphResourceUses uses(scratchArena);
@@ -166,11 +157,7 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
         if(!plan.hasActiveSkin)
             continue;
         if(
-            !deformation.add(
-                plan.bindlessResourceSlotsResource,
-                Core::ResourceStates::ConstantBuffer,
-                Core::GpuTaskResourceAccess::Read
-            )
+            !deformation.add(plan.bindlessResourceSlotsResource, Core::ResourceStates::ConstantBuffer, Core::GpuTaskResourceAccess::Read)
             || !deformation.add(plan.restPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !deformation.add(plan.restNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !deformation.add(plan.restTangentResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
@@ -192,20 +179,14 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
     for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
         const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
         if(
-            !postDispatch.add(
-                plan.bindlessResourceSlotsResource,
-                Core::ResourceStates::ConstantBuffer,
-                Core::GpuTaskResourceAccess::Read
-            )
+            !postDispatch.add(plan.bindlessResourceSlotsResource, Core::ResourceStates::ConstantBuffer, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.meshletDescResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.meshletPositionRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.meshletLocalVertexRefResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.meshletPrimitiveIndexResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.meshletBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || (plan.updatesMeshletBounds && !postDispatch.add(
-                plan.meshletLocalBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write
-            ))
+            || (plan.updatesMeshletBounds && !postDispatch.add(plan.meshletLocalBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write))
             || (plan.repacksNormals && (
                 !postDispatch.add(plan.skinnedNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
                 || !postDispatch.add(plan.meshletAttributeRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)

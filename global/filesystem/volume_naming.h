@@ -50,20 +50,12 @@
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Path<ArenaT> MakeVolumeSegmentPath(
-    const Path<ArenaT>& directory,
-    const AStringView volumeName,
-    const usize segmentIndex
-){
+[[nodiscard]] inline Path<ArenaT> MakeVolumeSegmentPath(const Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex){
     return directory / MakeVolumeSegmentFileName(volumeName, segmentIndex).view();
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool VolumeSegmentExists(
-    const Path<ArenaT>& directory,
-    const AStringView volumeName,
-    const usize segmentIndex = 0u
-){
+[[nodiscard]] inline bool VolumeSegmentExists(const Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex = 0u){
     if(directory.empty())
         return false;
 

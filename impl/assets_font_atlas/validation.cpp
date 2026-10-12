@@ -76,10 +76,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;
     }
-    if(
-        payload.unitsPerEm < 16u || payload.unitsPerEm > 16384u || payload.sourceGlyphCount == 0u
-        || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || payload.glyphs.size() != payload.sourceGlyphCount
-    ){
+    if(payload.unitsPerEm < 16u || payload.unitsPerEm > 16384u || payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || payload.glyphs.size() != payload.sourceGlyphCount){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid face metrics or incomplete all-glyph policy"));
         return false;
     }
@@ -91,10 +88,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: unsupported bake size, spread, guard, or raster mode"));
         return false;
     }
-    if(
-        !IsFinite(payload.ascenderUnits) || !IsFinite(payload.descenderUnits) || !IsFinite(payload.lineGapUnits)
-        || payload.ascenderUnits <= payload.descenderUnits || payload.lineGapUnits < 0.f
-    ){
+    if(!IsFinite(payload.ascenderUnits) || !IsFinite(payload.descenderUnits) || !IsFinite(payload.lineGapUnits) || payload.ascenderUnits <= payload.descenderUnits || payload.lineGapUnits < 0.f){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: nonfinite or invalid vertical metrics"));
         return false;
     }
@@ -104,10 +98,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
     }
     u64 pixelBytes = 0u;
     for(const FontAtlasGroup& group : payload.groups){
-        if(
-            group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent
-            || group.channelCount == 0u || group.channelCount > 4u
-        ){
+        if(group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent || group.channelCount == 0u || group.channelCount > 4u){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid extent or channel count"));
             return false;
         }
@@ -124,36 +115,24 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
     }
     for(usize index = 0u; index < payload.glyphs.size(); ++index){
         const FontAtlasGlyph& glyph = payload.glyphs[index];
-        if(
-            glyph.glyphId != index || glyph.drawable > 1u || !IsFinite(glyph.advanceUnits)
-            || !IsFinite(glyph.planeLeft) || !IsFinite(glyph.planeTop) || !IsFinite(glyph.planeRight) || !IsFinite(glyph.planeBottom)
-        ){
+        if(glyph.glyphId != index || glyph.drawable > 1u || !IsFinite(glyph.advanceUnits) || !IsFinite(glyph.planeLeft) || !IsFinite(glyph.planeTop) || !IsFinite(glyph.planeRight) || !IsFinite(glyph.planeBottom)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph ID, flags, or metrics at {}"), index);
             return false;
         }
         if(glyph.drawable == 0u){
-            if(
-                glyph.group != 0u || glyph.channel != 0u || glyph.x != 0u || glyph.y != 0u || glyph.width != 0u || glyph.height != 0u
-                || glyph.planeLeft != 0.f || glyph.planeTop != 0.f || glyph.planeRight != 0.f || glyph.planeBottom != 0.f
-            ){
+            if(glyph.group != 0u || glyph.channel != 0u || glyph.x != 0u || glyph.y != 0u || glyph.width != 0u || glyph.height != 0u || glyph.planeLeft != 0.f || glyph.planeTop != 0.f || glyph.planeRight != 0.f || glyph.planeBottom != 0.f){
                 NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: nondrawable glyph {} carries a bitmap"), index);
                 return false;
             }
             continue;
         }
-        if(
-            glyph.group >= payload.groups.size() || glyph.width == 0u || glyph.height == 0u
-            || glyph.planeLeft >= glyph.planeRight || glyph.planeTop >= glyph.planeBottom
-        ){
+        if(glyph.group >= payload.groups.size() || glyph.width == 0u || glyph.height == 0u || glyph.planeLeft >= glyph.planeRight || glyph.planeTop >= glyph.planeBottom){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
             return false;
         }
         const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
-        const SIMDVectorSingle expectedSize = VectorScale(
-            VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), 0.0f, 0.0f), unitsPerPixel
-        );
-        const SIMDVectorSingle planeSize = VectorSubtract(VectorSet(glyph.planeRight, glyph.planeBottom, 0.0f, 0.0f),
-            VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f));
+        const SIMDVectorSingle expectedSize = VectorScale(VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), 0.0f, 0.0f), unitsPerPixel);
+        const SIMDVectorSingle planeSize = VectorSubtract(VectorSet(glyph.planeRight, glyph.planeBottom, 0.0f, 0.0f), VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f));
         const SIMDVectorSingle difference = VectorSubtract(planeSize, expectedSize);
         const SIMDVectorSingle magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
         const SIMDVectorSingle tolerance = VectorScale(expectedSize, 0.0001f);
@@ -162,11 +141,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             return false;
         }
         const FontAtlasGroup& group = payload.groups[glyph.group];
-        if(
-            glyph.channel >= group.channelCount || glyph.x < payload.guardTexels || glyph.y < payload.guardTexels
-            || glyph.x >= group.width || glyph.y >= group.height
-            || glyph.width >= group.width - glyph.x || glyph.height >= group.height - glyph.y
-        ){
+        if(glyph.channel >= group.channelCount || glyph.x < payload.guardTexels || glyph.y < payload.guardTexels || glyph.x >= group.width || glyph.y >= group.height || glyph.width >= group.width - glyph.x || glyph.height >= group.height - glyph.y){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} exceeds guarded page bounds"), index);
             return false;
         }
@@ -181,11 +156,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
     u32 previousTag = 0u;
     for(const FontAtlasPositioningTable& table : payload.positioningTables){
         positioningBytes += table.bytes.size();
-        if(
-            table.tag <= previousTag || positioningBytes > s_FontAtlasMaxPositioningBytes
-            || ComputeSha256({ table.bytes.data(), table.bytes.size() }) != table.sha256
-            || !ValidateFontAtlasPositioningTable(table, payload.sourceGlyphCount)
-        ){
+        if(table.tag <= previousTag || positioningBytes > s_FontAtlasMaxPositioningBytes || ComputeSha256({ table.bytes.data(), table.bytes.size() }) != table.sha256 || !ValidateFontAtlasPositioningTable(table, payload.sourceGlyphCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: positioning order, bounds, hash, or structure"));
             return false;
         }

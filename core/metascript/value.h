@@ -109,18 +109,12 @@ public:
                 return false;
         }
 
-        constexpr bool canAppendString =
-            requires(Container& c, usize n){ c.reserve(n); }
+        constexpr bool canAppendString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c, const MStringView text){ c.emplace_back(text); }
         ;
-        constexpr bool canAppendArenaString =
-            requires(Container& c, usize n){ c.reserve(n); }
+        constexpr bool canAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c){ c.get_allocator().arena(); }
-            && requires(
-                Container& c,
-                const MStringView text,
-                typename Container::value_type::allocator_type allocator
-            ){
+            && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
                 c.emplace_back(text, allocator);
             }
         ;

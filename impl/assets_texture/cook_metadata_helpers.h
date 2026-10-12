@@ -50,62 +50,29 @@ inline constexpr AStringView s_AlphaConstantUnorm8Field = "alpha_constant_unorm8
 inline constexpr AStringView s_DataField = "data";
 
 template<typename IntegerT>
-[[nodiscard]] inline Expected<IntegerT> ReadRequiredUnsignedField(
-    const Path& nwbFilePath,
-    const Value& asset,
-    const AStringView fieldName,
-    const IntegerT minimum,
-    const IntegerT maximum
-){
+[[nodiscard]] inline Expected<IntegerT> ReadRequiredUnsignedField(const Path& nwbFilePath, const Value& asset, const AStringView fieldName, const IntegerT minimum, const IntegerT maximum){
     const Value* const field = FindField(asset, fieldName);
     if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
     if(!field->isInteger() || field->asInteger() < 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-negative integer")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-negative integer"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
 
     const u64 value = static_cast<u64>(field->asInteger());
     if(value < static_cast<u64>(minimum) || value > static_cast<u64>(maximum)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported range")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported range"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
 
     return static_cast<IntegerT>(value);
 }
 
-[[nodiscard]] Expected<TextureDimension::Enum> ReadTextureDimension(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset
-);
-[[nodiscard]] bool ValidateTextureDataFileName(
-    const Path& nwbFilePath,
-    AStringView dataFileName,
-    Core::Alloc::ScratchArena& scratchArena
-);
-[[nodiscard]] Expected<u64> BuildMipLevels(
-    const Path& nwbFilePath,
-    TexturePayloadFormat::Enum payloadFormat,
-    TextureDimension::Enum dimension,
-    u32 width,
-    u32 height,
-    u32 depth,
-    Texture::MipLevelVector& outMipLevels
-);
+[[nodiscard]] Expected<TextureDimension::Enum> ReadTextureDimension(const Path& nwbFilePath, const Core::Metascript::Value& asset);
+[[nodiscard]] bool ValidateTextureDataFileName(const Path& nwbFilePath, AStringView dataFileName, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<u64> BuildMipLevels(const Path& nwbFilePath, TexturePayloadFormat::Enum payloadFormat, TextureDimension::Enum dimension, u32 width, u32 height, u32 depth, Texture::MipLevelVector& outMipLevels);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

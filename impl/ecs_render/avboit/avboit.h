@@ -26,18 +26,9 @@ struct RendererAvboitPushConstants{
 };
 static_assert(sizeof(RendererAvboitPushConstants) == NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE, "RendererAvboitPushConstants layout must stay stable");
 static_assert(offsetof(RendererAvboitPushConstants, frame) == sizeof(u32) * NWB_AVBOIT_PUSH_FRAME_WORD_OFFSET, "RendererAvboit frame push offset drifted");
-static_assert(
-    offsetof(RendererAvboitPushConstants, volume) == sizeof(u32) * NWB_AVBOIT_PUSH_VOLUME_WORD_OFFSET,
-    "RendererAvboit volume push offset drifted"
-);
-static_assert(
-    offsetof(RendererAvboitPushConstants, params) == sizeof(u32) * NWB_AVBOIT_PUSH_PARAMS_WORD_OFFSET,
-    "RendererAvboit params push offset drifted"
-);
-static_assert(
-    offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * NWB_AVBOIT_PUSH_HEAP_SLOTS_WORD_OFFSET,
-    "RendererAvboit heap-slot push offset drifted"
-);
+static_assert(offsetof(RendererAvboitPushConstants, volume) == sizeof(u32) * NWB_AVBOIT_PUSH_VOLUME_WORD_OFFSET, "RendererAvboit volume push offset drifted");
+static_assert(offsetof(RendererAvboitPushConstants, params) == sizeof(u32) * NWB_AVBOIT_PUSH_PARAMS_WORD_OFFSET, "RendererAvboit params push offset drifted");
+static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * NWB_AVBOIT_PUSH_HEAP_SLOTS_WORD_OFFSET, "RendererAvboit heap-slot push offset drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

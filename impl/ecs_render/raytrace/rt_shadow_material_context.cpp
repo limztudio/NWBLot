@@ -72,14 +72,9 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
 }
 
 Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
-    // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its
-    // preparation packet records. Do not recreate either one here: a recording-time replacement would invalidate
-    // the graph's frozen resource identity and the immutable selector snapshot it retains.
-    if(
-        !m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-        || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
-    )
+    // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its preparation packet records.
+    // Do not recreate either one here: a recording-time replacement would invalidate the graph's frozen resource identity and the immutable selector snapshot it retains.
+    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer)
         return MakeUnexpected(Failure{});
 
     RayTraceMaterialContextSlots slots;
@@ -123,8 +118,7 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
     slots.meshInstances = *meshInstances;
 
     // Optical metadata follows the selected backend's instance order and retains its preflighted descriptor.
-    const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported
-        ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
+    const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
     if(opticalScene.valid()){
         slots.opticalScene = opticalScene.descriptor.slot();
         slots.opticalInstanceCount = opticalScene.upload->instanceCount;

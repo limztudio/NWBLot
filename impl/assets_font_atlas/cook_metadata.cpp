@@ -39,23 +39,12 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<u32> ReadU32(
-    const Path& path,
-    const Value& asset,
-    const AStringView field,
-    const u32 minimum,
-    const u32 maximum
-){
+[[nodiscard]] static Expected<u32> ReadU32(const Path& path, const Value& asset, const AStringView field, const u32 minimum, const u32 maximum){
     const Value* value = asset.findField(field);
     if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum){
         return static_cast<u32>(value->asInteger());
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}")
-        , PathToString<tchar>(path)
-        , StringConvert(field)
-        , minimum
-        , maximum
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}"), PathToString<tchar>(path), StringConvert(field), minimum, maximum);
     return MakeUnexpected(Failure{});
 }
 
@@ -146,14 +135,7 @@ static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& paylo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Name virtualPath = s_NameNone;
     auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)
@@ -162,22 +144,12 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(
     return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, doc.asset(), arena, scratchArena);
 }
 
-Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_font_atlas_cook_metadata;
     static_cast<void>(scratchArena);
     if(
         !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(
-            nwbFilePath, asset, s_DiagnosticPrefix,
-            { "font", "bake_ppem", "spread_pixels", "raster_mode",
-                "ascender_units", "descender_units", "line_gap_units", "glyphs" }
-        )
+        || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { "font", "bake_ppem", "spread_pixels", "raster_mode", "ascender_units", "descender_units", "line_gap_units", "glyphs" })
     )
         return MakeUnexpected(Failure{});
     FontAtlasCookEntry candidate(arena);

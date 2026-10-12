@@ -70,9 +70,7 @@ UiClipboardPublicationStatus::Enum UiClipboardPublications::request(const AStrin
         return UiClipboardPublicationStatus::QueueFull;
     const auto result = m_service.requestWriteText(channel, text);
     if(result.admission != Core::ClipboardAdmission::Accepted)
-        return result.admission == Core::ClipboardAdmission::WrongThread
-            ? UiClipboardPublicationStatus::WrongThread : UiClipboardPublicationStatus::QueueFull
-        ;
+        return result.admission == Core::ClipboardAdmission::WrongThread ? UiClipboardPublicationStatus::WrongThread : UiClipboardPublicationStatus::QueueFull;
     if(!result.token.valid())
         return UiClipboardPublicationStatus::NativeFailure;
     m_requests.push_back({ result.token, channel });
@@ -97,10 +95,7 @@ UiClipboardPublicationResult UiClipboardPublications::drain(){
             return result;
         }
         UiClipboardPublicationStatus::Enum status = UiClipboardPublicationStatus::NativeFailure;
-        if(
-            poll == Core::ClipboardPollResult::Completed && m_completion.token == publication.token
-            && m_completion.operation == Core::ClipboardOperation::WriteText && m_completion.channel == publication.channel
-        )
+        if(poll == Core::ClipboardPollResult::Completed && m_completion.token == publication.token && m_completion.operation == Core::ClipboardOperation::WriteText && m_completion.channel == publication.channel)
             status = __hidden_ui_clipboard_publications::Status(m_completion.status);
         if(status == UiClipboardPublicationStatus::Published)
             ++result.published;

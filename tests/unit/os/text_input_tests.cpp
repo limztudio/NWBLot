@@ -43,10 +43,7 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(
-        const TextInputSessionToken token,
-        const TextInputSessionDesc& desc
-    )override{
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(const TextInputSessionToken token, const TextInputSessionDesc& desc)override{
         m_nativeToken = token;
         m_nativeSurrounding.assign(desc.surrounding.data(), desc.surrounding.size());
         if(m_onStart)
@@ -68,9 +65,7 @@ protected:
         return TextInputAdmission::Accepted;
     }
 
-    virtual void updateNativeSurrounding(
-        const AStringView text, usize, usize, u64, const TextInputChangeCause::Enum cause
-    )override{
+    virtual void updateNativeSurrounding(const AStringView text, usize, usize, u64, const TextInputChangeCause::Enum cause)override{
         m_nativeSurrounding.assign(text.data(), text.size());
         m_nativeCause = cause;
         if(m_onSurrounding)
@@ -410,10 +405,7 @@ TEST(TextInput, UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState
     const TextInputSessionToken token = service.begin({}).token;
     ASSERT_EQ(service.updateSurrounding(token, "local change", 0u, 12u), TextInputAdmission::Accepted);
     const u64 revision = service.surroundingRevision(token);
-    EXPECT_EQ(
-        service.updateSurrounding(token, "invalid", 0u, 0u, static_cast<TextInputChangeCause::Enum>(255u)),
-        TextInputAdmission::InvalidRange
-    );
+    EXPECT_EQ(service.updateSurrounding(token, "invalid", 0u, 0u, static_cast<TextInputChangeCause::Enum>(255u)), TextInputAdmission::InvalidRange);
     EXPECT_EQ(service.surroundingText(), "local change");
     EXPECT_EQ(service.surroundingRevision(token), revision);
     EXPECT_EQ(service.m_nativeCause, TextInputChangeCause::Other);

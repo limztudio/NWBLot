@@ -75,12 +75,7 @@ inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipL
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
     const i32 width = static_cast<i32>(mipExtent.width);
     const i32 height = static_cast<i32>(mipExtent.height);
-    return Rect(
-        Max<i32>(0, Min<i32>(rect.minX, width)),
-        Max<i32>(0, Min<i32>(rect.maxX, width)),
-        Max<i32>(0, Min<i32>(rect.minY, height)),
-        Max<i32>(0, Min<i32>(rect.maxY, height))
-    );
+    return Rect(Max<i32>(0, Min<i32>(rect.minX, width)), Max<i32>(0, Min<i32>(rect.maxX, width)), Max<i32>(0, Min<i32>(rect.minY, height)), Max<i32>(0, Min<i32>(rect.maxY, height)));
 }
 
 inline bool TextureClearBoxCoversSubresources(const TextureDesc& desc, const TextureSubresourceSet& subresources, const Box& box)noexcept{
@@ -103,11 +98,7 @@ inline bool TextureClearSubresourcesContainedBy(const TextureSubresourceSet& req
     ;
 }
 
-inline void BuildArrayLayerImageSubresourceRanges(
-    const TextureSubresourceSet& subresources,
-    const VkImageAspectFlags aspectMask,
-    Vector<VkImageSubresourceRange, Alloc::ScratchArena>& ranges
-)noexcept{
+inline void BuildArrayLayerImageSubresourceRanges(const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, Vector<VkImageSubresourceRange, Alloc::ScratchArena>& ranges)noexcept{
     const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
     u32 rangeIndex = 0u;
     for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice)
@@ -129,26 +120,16 @@ struct TextureAttachmentClearTarget{
     bool isReadOnly = false;
 };
 
-inline Expected<TextureSubresourceSet> ResolveTextureAttachmentClearSubresources(
-    Texture& texture,
-    const FramebufferAttachment& attachment,
-    const TextureSubresourceSet& requestedSubresources
-)noexcept{
+inline Expected<TextureSubresourceSet> ResolveTextureAttachmentClearSubresources(Texture& texture, const FramebufferAttachment& attachment, const TextureSubresourceSet& requestedSubresources)noexcept{
     if(attachment.texture != &texture)
         return MakeUnexpected(Failure{});
-    const TextureSubresourceSet resolved = attachment.subresources.resolve(
-        texture.getCreationDescription(), TextureSubresourceMipResolve::Single
-    );
+    const TextureSubresourceSet resolved = attachment.subresources.resolve(texture.getCreationDescription(), TextureSubresourceMipResolve::Single);
     if(!TextureClearSubresourcesContainedBy(requestedSubresources, resolved))
         return MakeUnexpected(Failure{});
     return resolved;
 }
 
-inline Expected<TextureAttachmentClearTarget> FindTextureColorAttachmentClearTarget(
-    Texture& texture,
-    const TextureSubresourceSet& requestedSubresources,
-    const FramebufferDesc& fbDesc
-)noexcept{
+inline Expected<TextureAttachmentClearTarget> FindTextureColorAttachmentClearTarget(Texture& texture, const TextureSubresourceSet& requestedSubresources, const FramebufferDesc& fbDesc)noexcept{
     u32 colorAttachmentIndex = 0u;
     for(const FramebufferAttachment& attachment : fbDesc.colorAttachments){
         if(!attachment.texture)
@@ -169,11 +150,7 @@ inline bool TextureAttachmentClearRectContainedByFramebuffer(const VkClearRect& 
     const u64 endX = static_cast<u64>(clearRect.rect.offset.x) + clearRect.rect.extent.width;
     const u64 endY = static_cast<u64>(clearRect.rect.offset.y) + clearRect.rect.extent.height;
     const u64 endLayer = static_cast<u64>(clearRect.baseArrayLayer) + clearRect.layerCount;
-    return
-        endX <= framebufferInfo.width
-        && endY <= framebufferInfo.height
-        && endLayer <= framebufferInfo.arraySize
-    ;
+    return endX <= framebufferInfo.width && endY <= framebufferInfo.height && endLayer <= framebufferInfo.arraySize;
 }
 
 inline bool TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mipExtent, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
@@ -182,12 +159,7 @@ inline bool TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mip
 
     const i32 blockWidth = static_cast<i32>(formatLayout.blockWidth);
     const i32 blockHeight = static_cast<i32>(formatLayout.blockHeight);
-    return
-        (box.minX % blockWidth) == 0
-        && (box.minY % blockHeight) == 0
-        && (box.maxX == static_cast<i32>(mipExtent.width) || (box.maxX % blockWidth) == 0)
-        && (box.maxY == static_cast<i32>(mipExtent.height) || (box.maxY % blockHeight) == 0)
-    ;
+    return (box.minX % blockWidth) == 0 && (box.minY % blockHeight) == 0 && (box.maxX == static_cast<i32>(mipExtent.width) || (box.maxX % blockWidth) == 0) && (box.maxY == static_cast<i32>(mipExtent.height) || (box.maxY % blockHeight) == 0);
 }
 
 inline constexpr u64 s_TextureClearMergedLayerUploadThreshold = 64ull * 1024ull;
@@ -201,9 +173,7 @@ struct TextureClearUploadLayout{
     bool mergeArrayLayerCopies = false;
 };
 
-inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(
-    const u64 elementCount, const u32 elementSize, const u64 arrayLayerCount
-)noexcept{
+inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u64 elementCount, const u32 elementSize, const u64 arrayLayerCount)noexcept{
     if(elementCount == 0ull || elementSize == 0u || arrayLayerCount == 0ull || elementCount > Limit<u64>::s_Max / elementSize)
         return MakeUnexpected(Failure{});
     const u64 uploadSize = elementCount * elementSize;
@@ -220,9 +190,7 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(
     const u64 clearByteCount = mergeArrayLayerCopies ? *layerPitch * (arrayLayerCount - 1ull) + uploadSize : uploadSize;
     if(clearByteCount > static_cast<u64>(Limit<usize>::s_Max))
         return MakeUnexpected(Failure{});
-    return TextureClearUploadLayout{
-        uploadSize, *layerPitch, static_cast<usize>(clearByteCount), *copyOffsetAlignment, *stagingAlignment, mergeArrayLayerCopies
-    };
+    return TextureClearUploadLayout{ uploadSize, *layerPitch, static_cast<usize>(clearByteCount), *copyOffsetAlignment, *stagingAlignment, mergeArrayLayerCopies };
 }
 
 inline void WriteClearPatternValue(u8* outBytes, const usize outByteCount, const void* value, const usize valueByteCount)noexcept{
@@ -267,16 +235,8 @@ inline bool TextureColorClearAspectIsValid(const VkImageAspectFlags aspectMask)n
     return aspectMask == VK_IMAGE_ASPECT_COLOR_BIT;
 }
 
-inline bool TextureDepthStencilClearAspectsAreValid(
-    const VkImageAspectFlags aspectMask,
-    const bool clearDepth,
-    const bool clearStencil
-)noexcept{
-    return
-        (aspectMask & VK_IMAGE_ASPECT_COLOR_BIT) == 0u
-        && (!clearDepth || (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0u)
-        && (!clearStencil || (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0u)
-    ;
+inline bool TextureDepthStencilClearAspectsAreValid(const VkImageAspectFlags aspectMask, const bool clearDepth, const bool clearStencil)noexcept{
+    return (aspectMask & VK_IMAGE_ASPECT_COLOR_BIT) == 0u && (!clearDepth || (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0u) && (!clearStencil || (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0u);
 }
 
 inline f32 ClampClearFloat(const f32 value, const f32 minValue, const f32 maxValue)noexcept{
@@ -358,19 +318,12 @@ struct TextureClearPattern{
 inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatClearPattern(const Format::Enum format, const VkClearColorValue& clearValue)noexcept{
     TextureClearPattern<s_TextureClearMaxPatternBytes> result{};
     u8* const pattern = result.bytes.data();
-    const f32 values[] = {
-        clearValue.float32[0],
-        clearValue.float32[1],
-        clearValue.float32[2],
-        clearValue.float32[3],
-    };
+    const f32 values[] = { clearValue.float32[0], clearValue.float32[1], clearValue.float32[2], clearValue.float32[3], };
 
     auto writeUNorm8Components = [&](const u32 componentCount, const bool srgb)noexcept{
         const SIMDVectorSingle sourceValues = VectorSet(values[0], values[1], values[2], values[3]);
         const SIMDVectorSingle encodedValues = LinearToSRGBClearVector(sourceValues);
-        const SIMDVectorSingle selectedValues = srgb
-            ? VectorSet(VectorGetX(encodedValues), VectorGetY(encodedValues), VectorGetZ(encodedValues), VectorGetW(sourceValues))
-            : sourceValues;
+        const SIMDVectorSingle selectedValues = srgb ? VectorSet(VectorGetX(encodedValues), VectorGetY(encodedValues), VectorGetZ(encodedValues), VectorGetW(sourceValues)) : sourceValues;
         const SIMDVectorSingle quantized = QuantizeUNormClearVector(selectedValues, static_cast<f32>(Limit<u8>::s_Max));
         for(u32 component = 0u; component < componentCount; ++component){
             const u8 packed = static_cast<u8>(VectorGetByIndex(quantized, static_cast<usize>(component)));
@@ -382,9 +335,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
     auto writeUNorm8BGRAComponents = [&](const bool srgb)noexcept{
         const SIMDVectorSingle orderedValues = VectorSet(values[2], values[1], values[0], values[3]);
         const SIMDVectorSingle encodedOrderedValues = LinearToSRGBClearVector(orderedValues);
-        const SIMDVectorSingle selectedValues = srgb
-            ? VectorSet(VectorGetX(encodedOrderedValues), VectorGetY(encodedOrderedValues), VectorGetZ(encodedOrderedValues), VectorGetW(orderedValues))
-            : orderedValues;
+        const SIMDVectorSingle selectedValues = srgb ? VectorSet(VectorGetX(encodedOrderedValues), VectorGetY(encodedOrderedValues), VectorGetZ(encodedOrderedValues), VectorGetW(orderedValues)) : orderedValues;
         const SIMDVectorSingle quantized = QuantizeUNormClearVector(selectedValues, static_cast<f32>(Limit<u8>::s_Max));
         for(u32 component = 0u; component < s_TextureClearRGBAComponentCount; ++component){
             const u8 packed = static_cast<u8>(VectorGetByIndex(quantized, static_cast<usize>(component)));
@@ -457,11 +408,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         const SIMDVectorSingle source565 = VectorSet(values[2], values[1], values[0], 0.0f);
         const SIMDVectorSingle max565 = VectorSet(static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), static_cast<f32>((1u << s_ClearChannelBits565G) - 1u), static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), 0.0f);
         const SIMDVectorSingle quantized565 = VectorMin(VectorFloor(VectorAdd(VectorMultiply(VectorSaturate(source565), max565), VectorReplicate(s_ClearFloatRoundingBias))), max565);
-        const u16 packed = static_cast<u16>(
-            (static_cast<u32>(VectorGetX(quantized565)) << s_ClearShift11)
-            | (static_cast<u32>(VectorGetY(quantized565)) << s_ClearShift5)
-            | static_cast<u32>(VectorGetZ(quantized565))
-        );
+        const u16 packed = static_cast<u16>((static_cast<u32>(VectorGetX(quantized565)) << s_ClearShift11) | (static_cast<u32>(VectorGetY(quantized565)) << s_ClearShift5) | static_cast<u32>(VectorGetZ(quantized565)));
         WriteClearPatternValue(pattern, sizeof(packed), &packed, sizeof(packed));
         result.byteCount = sizeof(packed);
         return result;
@@ -482,7 +429,12 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
     };
     auto writeUNorm1010102RGBComponents = [&]()noexcept{
         const SIMDVectorSingle source1010102 = VectorSet(values[0], values[1], values[2], values[3]);
-        const SIMDVectorSingle max1010102 = VectorSet(static_cast<f32>((1u << s_ClearChannelBits101010) - 1u), static_cast<f32>((1u << s_ClearChannelBits101010) - 1u), static_cast<f32>((1u << s_ClearChannelBits101010) - 1u), static_cast<f32>((1u << s_ClearChannelBits21030) - 1u));
+        const SIMDVectorSingle max1010102 = VectorSet(
+            static_cast<f32>((1u << s_ClearChannelBits101010) - 1u),
+            static_cast<f32>((1u << s_ClearChannelBits101010) - 1u),
+            static_cast<f32>((1u << s_ClearChannelBits101010) - 1u),
+            static_cast<f32>((1u << s_ClearChannelBits21030) - 1u)
+        );
         const SIMDVectorSingle quantized1010102 = VectorMin(VectorFloor(VectorAdd(VectorMultiply(VectorSaturate(source1010102), max1010102), VectorReplicate(s_ClearFloatRoundingBias))), max1010102);
         const u32 packed =
             static_cast<u32>(VectorGetX(quantized1010102))
@@ -594,12 +546,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
 inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureUIntClearPattern(const Format::Enum format, const VkClearColorValue& clearValue)noexcept{
     TextureClearPattern<s_TextureClearMaxPatternBytes> result{};
     u8* const pattern = result.bytes.data();
-    const u32 values[] = {
-        clearValue.uint32[0],
-        clearValue.uint32[1],
-        clearValue.uint32[2],
-        clearValue.uint32[3],
-    };
+    const u32 values[] = { clearValue.uint32[0], clearValue.uint32[1], clearValue.uint32[2], clearValue.uint32[3], };
 
     auto writeU8Components = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
@@ -644,12 +591,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
 inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureIntClearPattern(const Format::Enum format, const VkClearColorValue& clearValue)noexcept{
     TextureClearPattern<s_TextureClearMaxPatternBytes> result{};
     u8* const pattern = result.bytes.data();
-    const i32 values[] = {
-        clearValue.int32[0],
-        clearValue.int32[1],
-        clearValue.int32[2],
-        clearValue.int32[3],
-    };
+    const i32 values[] = { clearValue.int32[0], clearValue.int32[1], clearValue.int32[2], clearValue.int32[3], };
 
     auto clampValue = [](const i32 value, const i32 minValue, const i32 maxValue)noexcept{
         if(value < minValue)

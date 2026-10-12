@@ -7,14 +7,11 @@ from window_capture_smoke import SmokeFailure
 
 
 SETTING_MARKER = "CausticQualitySmoke: requested photon_grid_divisor="
-PRODUCER_PATTERN = re.compile(r"RendererSystem: dispatched (hardware|software) caustic producer "
-    r"\((\d+) photons/frame, (\d+) temporal phases, (\d+) full-grid budget, "
-    r"(\d+) caustic lights, (\d+) refractive instances\)")
+PRODUCER_PATTERN = re.compile(r"RendererSystem: dispatched (hardware|software) caustic producer " r"\((\d+) photons/frame, (\d+) temporal phases, (\d+) full-grid budget, " r"(\d+) caustic lights, (\d+) refractive instances\)")
 
 
 def add_arguments(parser):
-    parser.add_argument("--caustic-photon-grid-divisor", type=int, choices=(1, 2, 4), default=1,
-        help="Divide both photon-grid dimensions; 2 traces one quarter, 4 one sixteenth of the full grid.")
+    parser.add_argument("--caustic-photon-grid-divisor", type=int, choices=(1, 2, 4), default=1, help="Divide both photon-grid dimensions; 2 traces one quarter, 4 one sixteenth of the full grid.")
 
 
 def verify_settings(text, divisor, producer_enabled=True):
@@ -35,6 +32,5 @@ def verify_settings(text, divisor, producer_enabled=True):
             raise SmokeFailure("actual caustic dispatch budget does not match requested quality or temporal phase")
         if lights <= 0 or targets <= 0:
             raise SmokeFailure("caustic producer reported no emitting lights or refractive targets")
-        producers.append(dict(backend=backend, photons_per_frame=photons, temporal_phases=phases,
-            full_grid_budget=full_grid, caustic_lights=lights, refractive_instances=targets))
+        producers.append(dict(backend=backend, photons_per_frame=photons, temporal_phases=phases, full_grid_budget=full_grid, caustic_lights=lights, refractive_instances=targets))
     return dict(photon_grid_divisor=divisor, verified=True, producers=producers)

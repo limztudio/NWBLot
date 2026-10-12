@@ -45,21 +45,9 @@ bool TimerQuery::discardUnacceptedRecording(const TimerQueryRecordingToken& toke
         return false;
 
     NothrowScopedLock lock(m_mutex);
-    if(
-        m_beginAccepted
-        || m_nextRecordingGeneration != token.generation
-        || m_lastAcceptedRecordingGeneration == token.generation
-        || (
-            m_completedCycleGeneration == token.generation
-            && m_completedCycleSubmission.valid()
-        )
-    )
+    if(m_beginAccepted || m_nextRecordingGeneration != token.generation || m_lastAcceptedRecordingGeneration == token.generation || (m_completedCycleGeneration == token.generation && m_completedCycleSubmission.valid()))
         return false;
-    const bool ownsResetAuthorization =
-        token.resetAuthorizationGeneration != 0u
-        && m_resetAuthorizationAvailable
-        && m_resetAuthorizationGeneration == token.resetAuthorizationGeneration
-    ;
+    const bool ownsResetAuthorization = token.resetAuthorizationGeneration != 0u && m_resetAuthorizationAvailable && m_resetAuthorizationGeneration == token.resetAuthorizationGeneration;
     if(m_cycleGeneration == 0u){
         if(ownsResetAuthorization){
             m_resetAuthorizationAvailable = false;
@@ -106,10 +94,7 @@ bool TimerQuery::releaseUnacceptedEndForRecovery(const TimerQueryRecordingToken&
         || !m_recordingActive
         || m_cycleInvalidated
         || m_cycleQueue != token.physicalQueue
-        || (
-            m_completedCycleGeneration == token.generation
-            && m_completedCycleSubmission.valid()
-        )
+        || (m_completedCycleGeneration == token.generation && m_completedCycleSubmission.valid())
     )
         return false;
 

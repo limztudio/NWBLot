@@ -61,11 +61,7 @@ using FontTestArena = TestArena<FontTestArenaTag>;
     return candidate;
 }
 
-[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(
-    FontTestArena& testArena,
-    const FontBinaryPayload::HeaderBinary& header,
-    const Core::Assets::AssetBytes& source
-){
+[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(FontTestArena& testArena, const FontBinaryPayload::HeaderBinary& header, const Core::Assets::AssetBytes& source){
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(header) + source.size());
     AppendPOD(binary, header);
@@ -74,12 +70,7 @@ using FontTestArena = TestArena<FontTestArenaTag>;
 }
 
 [[nodiscard]] static u32 ReadBigU32(const u8* bytes){
-    return
-        (static_cast<u32>(bytes[0u]) << 24u)
-        | (static_cast<u32>(bytes[1u]) << 16u)
-        | (static_cast<u32>(bytes[2u]) << 8u)
-        | static_cast<u32>(bytes[3u])
-    ;
+    return (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u) | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u]);
 }
 
 static void WriteBigU32(u8* bytes, const u32 value)noexcept{

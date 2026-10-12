@@ -64,13 +64,7 @@ bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshS
         return false;
     }
     Core::BufferDesc desc;
-    desc
-        .setByteSize(static_cast<u64>(instance.meshlets.size()) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE)
-        .setCanHaveUAVs(true)
-        .setCanHaveRawViews(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(partialName)
-    ;
+    desc.setByteSize(static_cast<u64>(instance.meshlets.size()) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(partialName);
     Core::BufferHandle partials = graphics.createBuffer(desc);
     if(!partials){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
@@ -91,11 +85,7 @@ bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningLocalBoundsTask::Payload::Payload(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics,
-    Core::GpuTimingSubmissionTicket& timingTicket
-)
+MeshSkinningLocalBoundsTask::Payload::Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket)
     : graphics(graphics)
     , timingTicket(timingTicket)
     , dispatches(arena)
@@ -105,11 +95,7 @@ MeshSkinningLocalBoundsTask::Payload::Payload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningLocalBoundsTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool MeshSkinningLocalBoundsTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(payload.dispatches.empty())
         return false;
     auto& device = payload.graphics.getDevice();
@@ -119,12 +105,7 @@ bool MeshSkinningLocalBoundsTask::Record(
     Core::GpuTimingSubmissionTicket::RecordingScope recording(payload.timingTicket);
     for(const MeshSkinningLocalBoundsDispatch& plan : payload.dispatches){
         Core::ComputePipeline* const pipeline = context.declarations.computePipelineFor(plan.localBoundsPipeline);
-        if(
-            !pipeline
-            || !context.declarations.bufferForResource(plan.bindlessResourceSlotsResource)
-            || !context.declarations.bufferForResource(plan.meshletLocalBoundsResource)
-            || !context.declarations.bufferForResource(plan.localBoundsResource)
-        )
+        if(!pipeline || !context.declarations.bufferForResource(plan.bindlessResourceSlotsResource) || !context.declarations.bufferForResource(plan.meshletLocalBoundsResource) || !context.declarations.bufferForResource(plan.localBoundsResource))
             return false;
         Core::ComputeState state;
         state.setPipeline(pipeline);

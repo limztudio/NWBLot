@@ -47,8 +47,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__)
-            / "__build_obj" / "build_input_tests";
+        m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__) / "__build_obj" / "build_input_tests";
         ASSERT_TRUE(EnsureDirectories(m_root / s_ASSETS / "empty"));
         m_paths.repoRoot = m_root;
         m_paths.assetRoots.emplace_back(m_root / s_ASSETS, ACompactString(s_PROJECT));
@@ -169,9 +168,7 @@ TEST_F(BuildInputSelection, InferredRootsDeduplicateAssetsAncestorsWithoutDroppi
     for(const AStringView source : { "assets/part/../part/a.nwb", "impl/assets/b.nwb", "assets/empty", "loose/c.nwb" })
         sources.emplace_back(source, m_testArena.arena);
     Assets::ScratchArena scratchArena(Name("tests/assets/inferred_roots"));
-    const auto roots = Assets::ResolveAssetRoots(
-        m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena
-    );
+    const auto roots = Assets::ResolveAssetRoots(m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(roots);
     ASSERT_EQ(roots->size(), 3u);
     EXPECT_EQ((*roots)[0].path, (m_root / s_ASSETS).lexicallyNormal());
@@ -188,9 +185,7 @@ TEST_F(BuildInputSelection, ExplicitRootsPreserveFirstSpellingAndCallerDuplicate
         sources.emplace_back(source, m_testArena.arena);
     sources.push_back(PathToString(m_testArena.arena, m_root / "assets" / "Case"));
     Assets::ScratchArena scratchArena(Name("tests/assets/explicit_roots"));
-    const auto exact = Assets::ResolveAssetRoots(
-        m_root, sources, false, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena
-    );
+    const auto exact = Assets::ResolveAssetRoots(m_root, sources, false, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(exact);
     ASSERT_EQ(exact->size(), 3u);
     EXPECT_EQ((*exact)[0].path, (m_root / "assets" / "Case").lexicallyNormal());
@@ -198,9 +193,7 @@ TEST_F(BuildInputSelection, ExplicitRootsPreserveFirstSpellingAndCallerDuplicate
     // Explicit roots remain exact directories rather than climbing to their assets ancestor.
     EXPECT_EQ((*exact)[2].path, (m_root / "impl" / "assets" / "graphics").lexicallyNormal());
     EXPECT_EQ((*exact)[2].virtualRoot.view(), "project");
-    const auto host = Assets::ResolveAssetRoots(
-        m_root, sources, false, Assets::AssetRootDuplicatePolicy::HostFilesystem, scratchArena
-    );
+    const auto host = Assets::ResolveAssetRoots(m_root, sources, false, Assets::AssetRootDuplicatePolicy::HostFilesystem, scratchArena);
     ASSERT_TRUE(host);
 #if defined(NWB_PLATFORM_WINDOWS)
     ASSERT_EQ(host->size(), 2u);
@@ -217,18 +210,14 @@ TEST_F(BuildInputSelection, RootResolutionFailureRetainsSourceIndexWithoutPublis
     sources.emplace_back("assets", m_testArena.arena);
     sources.emplace_back("", m_testArena.arena);
     Assets::ScratchArena scratchArena(Name("tests/assets/rejected_roots"));
-    const auto rejected = Assets::ResolveAssetRoots(
-        m_root, sources, false, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena
-    );
+    const auto rejected = Assets::ResolveAssetRoots(m_root, sources, false, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_FALSE(rejected);
     EXPECT_EQ(rejected.error().sourceIndex, 1u);
     EXPECT_EQ(rejected.error().reason, Assets::AssetRootResolutionFailure::ResolvePath);
     EXPECT_TRUE(rejected.error().inputPath.empty());
     EXPECT_TRUE(static_cast<bool>(rejected.error().error));
     sources[1] = "assets/empty";
-    const auto recovered = Assets::ResolveAssetRoots(
-        m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena
-    );
+    const auto recovered = Assets::ResolveAssetRoots(m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(recovered);
     ASSERT_EQ(recovered->size(), 1u);
     EXPECT_EQ((*recovered)[0].path, (m_root / s_ASSETS).lexicallyNormal());

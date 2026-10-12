@@ -46,10 +46,8 @@ namespace RendererTaskGraphDetail{
 struct AvboitPreGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The avboit system, the frame targets, the timing ticket, and the intervals timing slot are
-    // required: the pre-pass always records against this frame's ticket. References (not nullable
-    // pointers) carry those bindings so a missing binding fails at declaration time instead of
-    // silently returning `false` inside Record.
+    // The avboit system, the frame targets, the timing ticket, and the intervals timing slot are required: the pre-pass always records against this frame's ticket.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererAvboitSystem& avboitSystem;
         DeferredFrameTargets& targets;
@@ -62,13 +60,7 @@ struct AvboitPreGraphTask{
         bool transparentCsgStreamsUploaded = false;
         bool transparentCsgMaterialGeometryStatesGraphOwned = false;
 
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererAvboitSystem& avboitSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket& timingTicketIn,
-            Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
-        )
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererAvboitSystem& avboitSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn)
             : avboitSystem(avboitSystemIn)
             , targets(targetsIn)
             , timingTicket(timingTicketIn)
@@ -77,11 +69,7 @@ struct AvboitPreGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
@@ -130,11 +118,7 @@ struct AvboitOccupancyComputeEmulationGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.occupancyTiming);
@@ -175,11 +159,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.occupancyTiming);
@@ -209,12 +189,7 @@ struct AvboitOccupancyGraphTask{
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr;
 
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererAvboitSystem& avboitSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket& timingTicketIn
-        )
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererAvboitSystem& avboitSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn)
             : avboitSystem(avboitSystemIn)
             , targets(targetsIn)
             , timingTicket(timingTicketIn)
@@ -222,11 +197,7 @@ struct AvboitOccupancyGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.occupancyComputeEmulationTiming);
@@ -237,11 +208,9 @@ struct AvboitOccupancyGraphTask{
 struct AvboitDepthWarpGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The avboit system, the frame targets, and the timing ticket are required: depth warp always
-    // dispatches against this frame's targets. The timing feedback and scope stay optional: tasks
-    // without feedback skip sample attribution. References (not nullable pointers) carry the required
-    // bindings so a missing binding fails at declaration time instead of silently returning `false`
-    // inside Record.
+    // The avboit system, the frame targets, and the timing ticket are required: depth warp always dispatches against this frame's targets.
+    // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
+    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererAvboitSystem& avboitSystem;
         AvboitFrameTargets& targets;
@@ -251,11 +220,7 @@ struct AvboitDepthWarpGraphTask{
         mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 

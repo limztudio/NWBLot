@@ -63,15 +63,7 @@ class RendererMeshSystem;
 
 class RendererCsgSystem final : NoCopy{
 public:
-    RendererCsgSystem(
-        Core::Alloc::GlobalArena& arena,
-        Core::ECS::World& world,
-        Core::GraphicsRuntime& graphics,
-        CsgShapeRegistry& csgShapeRegistry,
-        RendererCsgState& csgState,
-        RendererShaderSystem& shaderSystem,
-        RendererMeshSystem& meshSystem
-    );
+    RendererCsgSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, CsgShapeRegistry& csgShapeRegistry, RendererCsgState& csgState, RendererShaderSystem& shaderSystem, RendererMeshSystem& meshSystem);
 
 
 public:
@@ -89,32 +81,10 @@ public:
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     );
-    void dispatchCsgReceiverSpanBuild(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-    );
-    void dispatchCsgIntervalCombine(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-    );
-    void renderCsgIntervalCaps(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-    );
-    void renderRefractionIntervalCaps(
-        Core::CommandList& commandList,
-        const DeferredFrameTargets& targets,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const Core::Rect& workRect,
-        const u32* receiverIndices,
-        usize receiverCount
-    );
+    void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
+    void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
+    void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
+    void renderRefractionIntervalCaps(Core::CommandList& commandList, const DeferredFrameTargets& targets, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Core::Rect& workRect, const u32* receiverIndices, usize receiverCount);
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);

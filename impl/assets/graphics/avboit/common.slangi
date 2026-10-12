@@ -45,8 +45,7 @@ struct NwbAvboitDrawPushConstants{
     uint4 nwbAvboitHeapSlots;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
+[[vk::push_constant]] ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 
 #if NWB_CSG_ENABLED
 #define NWB_CSG_MESH_INSTANCE_INDEX (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX])
@@ -83,19 +82,10 @@ bool nwbAvboitCsgPixelDiscard(const float4 rasterPosition, const float4 worldPos
 
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
     const float worldDistanceTolerance = nwbCsgPixelWorldDistanceTolerance(worldPosition.xyz);
-    bool csgPixelDiscard = nwbCsgReceiverPixelDiscardWithWorldTolerance(
-        receiverIndex,
-        worldPosition.xyz,
-        worldDistanceTolerance
-    );
+    bool csgPixelDiscard = nwbCsgReceiverPixelDiscardWithWorldTolerance(receiverIndex, worldPosition.xyz, worldDistanceTolerance);
 #if NWB_CSG_INTERVAL_SAMPLE_ENABLED
     if(!csgPixelDiscard){
-        csgPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(
-            rasterPosition,
-            receiverIndex,
-            worldPosition.xyz,
-            worldDistanceTolerance
-        );
+        csgPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(rasterPosition, receiverIndex, worldPosition.xyz, worldDistanceTolerance);
     }
 #endif
     return csgPixelDiscard;
@@ -115,13 +105,7 @@ uint nwbAvboitVirtualSliceFromDepth(float depth){
     return min(uint(floor(clampedDepth * float(nwbAvboitVirtualSliceCount()))), nwbAvboitVirtualSliceCount() - 1u);
 }
 
-void nwbAvboitLinearVirtualSlicesFromDepth(
-    float depth,
-    out uint outSlice0,
-    out uint outSlice1,
-    out half outWeight0,
-    out half outWeight1
-){
+void nwbAvboitLinearVirtualSlicesFromDepth(float depth, out uint outSlice0, out uint outSlice1, out half outWeight0, out half outWeight1){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
     const float slicePosition = clamp(depth * float(virtualSliceCount), 0.0, virtualSliceMax);
@@ -199,13 +183,7 @@ uint nwbAvboitPackExtinctionByte(float extinction){
     return uint(clamp(ceil(extinction * nwbAvboitExtinctionFixedScale()), 0.0, float(NWB_AVBOIT_EXTINCTION_BYTE_MASK)));
 }
 
-bool nwbAvboitAcceptLowDepthFragment(
-    Texture2D<float4> opaqueDepth,
-    SamplerState pointSampler,
-    float4 fragCoord,
-    const half alpha,
-    out uint outVirtualSlice
-){
+bool nwbAvboitAcceptLowDepthFragment(Texture2D<float4> opaqueDepth, SamplerState pointSampler, float4 fragCoord, const half alpha, out uint outVirtualSlice){
     outVirtualSlice = 0u;
     if(alpha <= half(0.0))
         return false;

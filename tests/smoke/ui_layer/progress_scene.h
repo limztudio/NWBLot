@@ -59,14 +59,11 @@ private:
     bool m_phase = false;
 };
 
-using SharedUiProgressSmokeScene = RefCountPtr<
-    RefCounter<UiProgressSmokeScene>, ArenaRefDeleter<RefCounter<UiProgressSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiProgressSmokeScene = RefCountPtr< RefCounter<UiProgressSmokeScene>, ArenaRefDeleter<RefCounter<UiProgressSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerProgressSmokeEnabled();
 [[nodiscard]] bool IsUiLayerProgressSkinSmokeEnabled();
-[[nodiscard]] SharedUiProgressSmokeScene CreateUiProgressSmokeScene(
-    Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+[[nodiscard]] SharedUiProgressSmokeScene CreateUiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

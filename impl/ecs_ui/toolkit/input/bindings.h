@@ -35,8 +35,7 @@ struct InputKeyBinding{
 };
 
 inline constexpr usize s_InputMaxBindings = 256u;
-inline constexpr i32 s_InputBindingModifierMask = Core::InputModifier::Shift | Core::InputModifier::Control
-    | Core::InputModifier::Alt | Core::InputModifier::Super;
+inline constexpr i32 s_InputBindingModifierMask = Core::InputModifier::Shift | Core::InputModifier::Control | Core::InputModifier::Alt | Core::InputModifier::Super;
 
 class InputBindings final : NoCopy{
 public:

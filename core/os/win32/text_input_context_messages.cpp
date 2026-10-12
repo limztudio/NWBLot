@@ -18,9 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<isize> Win32TextInputService::resolveContextMessage(
-    const u32 message, const usize wParam, const isize lParam
-){
+Expected<isize> Win32TextInputService::resolveContextMessage(const u32 message, const usize wParam, const isize lParam){
     if(!isOwnerThread() || message != WM_IME_SETCONTEXT)
         return MakeUnexpected(Failure{});
     // Keep the native flags, not the filtered result: ending a custom edit restores the ordinary IME UI.
@@ -53,17 +51,10 @@ void Win32TextInputService::replayContextVisibility(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<isize> ResolveWin32TextInputContextMessage(
-    ITextInputService& service,
-    const u32 message,
-    const usize wParam,
-    const isize lParam
-){
+Expected<isize> ResolveWin32TextInputContextMessage(ITextInputService& service, const u32 message, const usize wParam, const isize lParam){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return MakeUnexpected(Failure{});
-    return checked_cast<Win32TextInputService*>(&service)->resolveContextMessage(
-        message, wParam, lParam
-    );
+    return checked_cast<Win32TextInputService*>(&service)->resolveContextMessage(message, wParam, lParam);
 }
 
 

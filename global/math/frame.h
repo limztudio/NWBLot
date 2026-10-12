@@ -39,49 +39,30 @@ static constexpr f64 s_DoubleFrameFallbackTangentZAxisAlignmentThreshold = 0.999
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FrameProjectOntoPlane(const SIMDVectorSingle value, const SIMDVectorSingle normal)noexcept{
-    return VectorMultiplyAdd(
-        normal,
-        VectorNegate(Vector3Dot(value, normal)),
-        value
-    );
+    return VectorMultiplyAdd(normal, VectorNegate(Vector3Dot(value, normal)), value);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble FrameDoubleProjectOntoPlane(const SIMDVectorDouble value, const SIMDVectorDouble normal)noexcept{
-    return VectorDoubleMultiplyAdd(
-        normal,
-        VectorDoubleNegate(VectorDouble3Dot(value, normal)),
-        value
-    );
+    return VectorDoubleMultiplyAdd(normal, VectorDoubleNegate(VectorDouble3Dot(value, normal)), value);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FrameFallbackTangent(const SIMDVectorSingle normal)noexcept{
     const SIMDVectorSingle zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     const SIMDVectorSingle yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    const SIMDVectorSingle axis = VectorSelect(
-        yAxis,
-        zAxis,
-        VectorLess(VectorAbs(VectorSplatZ(normal)), VectorReplicate(s_FrameFallbackTangentZAxisAlignmentThreshold))
-    );
+    const SIMDVectorSingle axis = VectorSelect(yAxis, zAxis, VectorLess(VectorAbs(VectorSplatZ(normal)), VectorReplicate(s_FrameFallbackTangentZAxisAlignmentThreshold)));
     return FrameNormalizeDirection(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble FrameDoubleFallbackTangent(const SIMDVectorDouble normal)noexcept{
     const SIMDVectorDouble zAxis = VectorDoubleSet(0.0, 0.0, 1.0, 0.0);
     const SIMDVectorDouble yAxis = VectorDoubleSet(0.0, 1.0, 0.0, 0.0);
-    const SIMDVectorDouble axis = VectorDoubleSelect(
-        yAxis,
-        zAxis,
-        VectorDoubleLess(VectorDoubleAbs(VectorDoubleSplatZ(normal)), VectorDoubleReplicate(s_DoubleFrameFallbackTangentZAxisAlignmentThreshold))
-    );
+    const SIMDVectorDouble axis = VectorDoubleSelect(yAxis, zAxis, VectorDoubleLess(VectorDoubleAbs(VectorDoubleSplatZ(normal)), VectorDoubleReplicate(s_DoubleFrameFallbackTangentZAxisAlignmentThreshold)));
     return FrameDoubleNormalizeDirection(VectorDouble3Cross(axis, normal), VectorDoubleSet(1.0, 0.0, 0.0, 0.0));
 }
 
 template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 [[nodiscard]] NWB_INLINE T FrameTangentHandedness(const T handedness, const T fallbackHandedness)noexcept{
-    constexpr T s_HandednessEpsilon = IsSame_V<T, f32>
-        ? static_cast<T>(s_FrameHandednessEpsilon)
-        : static_cast<T>(s_DoubleFrameHandednessEpsilon)
-    ;
+    constexpr T s_HandednessEpsilon = IsSame_V<T, f32> ? static_cast<T>(s_FrameHandednessEpsilon) : static_cast<T>(s_DoubleFrameHandednessEpsilon);
     if(Abs(handedness) > s_HandednessEpsilon)
         return handedness < T{ 0 } ? T{ -1 } : T{ 1 };
     return fallbackHandedness < T{ 0 } ? T{ -1 } : T{ 1 };
@@ -104,15 +85,9 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FrameResolveTangent(const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle fallbackTangent)noexcept{
     const SIMDVectorSingle safeFallbackTangent = FrameFallbackTangent(normal);
 
-    SIMDVectorSingle projectedTangent = Vector3IsFinite(tangent)
-        ? FrameProjectOntoPlane(tangent, normal)
-        : safeFallbackTangent
-    ;
+    SIMDVectorSingle projectedTangent = Vector3IsFinite(tangent) ? FrameProjectOntoPlane(tangent, normal) : safeFallbackTangent;
     if(!FrameValidDirection(projectedTangent)){
-        projectedTangent = Vector3IsFinite(fallbackTangent)
-            ? FrameProjectOntoPlane(fallbackTangent, normal)
-            : safeFallbackTangent
-        ;
+        projectedTangent = Vector3IsFinite(fallbackTangent) ? FrameProjectOntoPlane(fallbackTangent, normal) : safeFallbackTangent;
     }
     if(!FrameValidDirection(projectedTangent))
         return safeFallbackTangent;
@@ -123,15 +98,9 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 [[nodiscard]] NWB_INLINE SIMDVectorDouble FrameDoubleResolveTangent(const SIMDVectorDouble normal, const SIMDVectorDouble tangent, const SIMDVectorDouble fallbackTangent)noexcept{
     const SIMDVectorDouble safeFallbackTangent = FrameDoubleFallbackTangent(normal);
 
-    SIMDVectorDouble projectedTangent = VectorDouble3IsFinite(tangent)
-        ? FrameDoubleProjectOntoPlane(tangent, normal)
-        : safeFallbackTangent
-    ;
+    SIMDVectorDouble projectedTangent = VectorDouble3IsFinite(tangent) ? FrameDoubleProjectOntoPlane(tangent, normal) : safeFallbackTangent;
     if(!FrameDoubleValidDirection(projectedTangent)){
-        projectedTangent = VectorDouble3IsFinite(fallbackTangent)
-            ? FrameDoubleProjectOntoPlane(fallbackTangent, normal)
-            : safeFallbackTangent
-        ;
+        projectedTangent = VectorDouble3IsFinite(fallbackTangent) ? FrameDoubleProjectOntoPlane(fallbackTangent, normal) : safeFallbackTangent;
     }
     if(!FrameDoubleValidDirection(projectedTangent))
         return safeFallbackTangent;
@@ -140,12 +109,7 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FrameResolveBitangent(const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle fallbackBitangent)noexcept{
-    const SIMDVectorSingle safeFallbackBitangent = FrameNormalizeDirection(
-        Vector3IsFinite(fallbackBitangent)
-            ? FrameProjectOntoPlane(fallbackBitangent, normal)
-            : Vector3Cross(normal, FrameFallbackTangent(normal)),
-        VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-    );
+    const SIMDVectorSingle safeFallbackBitangent = FrameNormalizeDirection(Vector3IsFinite(fallbackBitangent) ? FrameProjectOntoPlane(fallbackBitangent, normal) : Vector3Cross(normal, FrameFallbackTangent(normal)), VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
 
     SIMDVectorSingle bitangent = Vector3Cross(normal, tangent);
     if(!FrameValidDirection(bitangent))
@@ -155,9 +119,7 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble FrameDoubleResolveBitangent(const SIMDVectorDouble normal, const SIMDVectorDouble tangent, const SIMDVectorDouble fallbackBitangent)noexcept{
     const SIMDVectorDouble safeFallbackBitangent = FrameDoubleNormalizeDirection(
-        VectorDouble3IsFinite(fallbackBitangent)
-            ? FrameDoubleProjectOntoPlane(fallbackBitangent, normal)
-            : VectorDouble3Cross(normal, FrameDoubleFallbackTangent(normal)),
+        VectorDouble3IsFinite(fallbackBitangent) ? FrameDoubleProjectOntoPlane(fallbackBitangent, normal) : VectorDouble3Cross(normal, FrameDoubleFallbackTangent(normal)),
         VectorDoubleSet(0.0, 1.0, 0.0, 0.0)
     );
 
@@ -169,20 +131,12 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 
 NWB_INLINE void FrameOrthonormalize(SIMDVectorSingle& normal, SIMDVectorSingle& tangent, const SIMDVectorSingle fallbackNormal, const SIMDVectorSingle fallbackTangent)noexcept{
     normal = FrameNormalizeDirection(normal, FrameNormalizeDirection(fallbackNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f)));
-    tangent = VectorSelect(
-        FrameResolveTangent(normal, tangent, fallbackTangent),
-        FrameTangentHandedness(tangent, fallbackTangent),
-        s_SIMDMaskW
-    );
+    tangent = VectorSelect(FrameResolveTangent(normal, tangent, fallbackTangent), FrameTangentHandedness(tangent, fallbackTangent), s_SIMDMaskW);
 }
 
 NWB_INLINE void FrameDoubleOrthonormalize(SIMDVectorDouble& normal, SIMDVectorDouble& tangent, const SIMDVectorDouble fallbackNormal, const SIMDVectorDouble fallbackTangent)noexcept{
     normal = FrameDoubleNormalizeDirection(normal, FrameDoubleNormalizeDirection(fallbackNormal, VectorDoubleSet(0.0, 0.0, 1.0, 0.0)));
-    tangent = VectorDoubleSelect(
-        FrameDoubleResolveTangent(normal, tangent, fallbackTangent),
-        FrameDoubleTangentHandedness(tangent, fallbackTangent),
-        s_DoubleSIMDMaskW
-    );
+    tangent = VectorDoubleSelect(FrameDoubleResolveTangent(normal, tangent, fallbackTangent), FrameDoubleTangentHandedness(tangent, fallbackTangent), s_DoubleSIMDMaskW);
 }
 
 

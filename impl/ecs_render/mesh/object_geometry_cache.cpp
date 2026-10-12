@@ -33,17 +33,10 @@ namespace ECSRenderDetail{
 
 
 bool ObjectGeometryCacheSnapshot::valid()const noexcept{
-    return
-        buffer && decoderPipeline && heapHandle.valid()
-        && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && indexByteOffset != 0u && indexCount != 0u
-    ;
+    return buffer && decoderPipeline && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer && indexByteOffset != 0u && indexCount != 0u;
 }
 
-Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(
-    const u64 localVertexRefByteSize,
-    const u32 primitiveIndexCount
-)noexcept{
+Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(const u64 localVertexRefByteSize, const u32 primitiveIndexCount)noexcept{
     if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
         return MakeUnexpected(Failure{});
     constexpr u64 s_Stride = NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
@@ -62,12 +55,7 @@ Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(
     return ObjectGeometryCacheLayout{ bufferByteSize, static_cast<u32>(indexByteOffset), primitiveIndexCount };
 }
 
-bool AcceptObjectGeometryCacheWrite(
-    MeshResources& mesh,
-    const RuntimeMeshBuffers& sourceBuffers,
-    const ObjectGeometryCacheSnapshot& expected,
-    const bool runtimeMesh
-)noexcept{
+bool AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, const bool runtimeMesh)noexcept{
     ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
     if(!expected.valid() || cache.buffer != expected.buffer)
         return false;
@@ -122,10 +110,7 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     if(!cache.buffer){
         if(!mesh.meshletLocalVertexRefBuffer)
             return false;
-        const auto layout = ECSRenderDetail::ResolveObjectGeometryCacheLayout(
-            mesh.meshletLocalVertexRefBuffer->getDescription().byteSize,
-            mesh.meshletPrimitiveIndexCount
-        );
+        const auto layout = ECSRenderDetail::ResolveObjectGeometryCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
         if(!layout)
             return false;
         const Name bufferName = DeriveName(mesh.meshName, AStringView(":object_geometry"));
@@ -175,17 +160,11 @@ ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryC
         .indexByteOffset = cache.indexByteOffset,
         .indexCount = cache.indexCount,
         .initialized = cache.initialized,
-        .requiresDecode = !cache.acceptedContent || (mesh.runtimeMesh
-            && (mesh.runtimeGeometryContentRevision == 0u || cache.acceptedContentRevision != mesh.runtimeGeometryContentRevision)),
+        .requiresDecode = !cache.acceptedContent || (mesh.runtimeMesh && (mesh.runtimeGeometryContentRevision == 0u || cache.acceptedContentRevision != mesh.runtimeGeometryContentRevision)),
     };
 }
 
-bool RendererMeshSystem::confirmObjectGeometryCache(
-    const Name& meshKey,
-    const RuntimeMeshBuffers& sourceBuffers,
-    const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected,
-    const bool runtimeMesh
-){
+bool RendererMeshSystem::confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, const bool runtimeMesh){
     const auto mesh = findMeshResources(meshKey);
     if(!mesh)
         return false;

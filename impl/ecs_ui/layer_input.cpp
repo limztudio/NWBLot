@@ -62,8 +62,7 @@ bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 
         event.repeat = action == Core::InputAction::Repeat || held;
         routeInput(event, nullptr, action == Core::InputAction::Release ? nullptr : &m_blockCommandChars);
     }
-    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key)
-        ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
+    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key) ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
     m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
     if(action != Core::InputAction::Release)
         m_blockNativeChars = owner == __hidden_layer_input::s_Custom;
@@ -109,8 +108,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
     const u32 bit = 1u << static_cast<u32>(button);
     const bool firstPress = action != Core::InputAction::Release && (m_pressedButtons & bit) == 0u;
     if(action != Core::InputAction::Release && m_pressedButtons == 0u){
-        m_pointerOwner = m_context.input().wouldConsumePointer(m_pointer)
-            ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
+        m_pointerOwner = m_context.input().wouldConsumePointer(m_pointer) ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
         if(m_pointerOwner != __hidden_layer_input::s_Custom)
             m_context.input().clearFocus();
     }
@@ -141,10 +139,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
         if(!pasted)
             m_editHost.synchronizeFocus();
     }
-    if(
-        firstPress && (owner == __hidden_layer_input::s_Scene
-            || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))
-    ){
+    if(firstPress && (owner == __hidden_layer_input::s_Scene || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))){
         Ui::InputEvent leave;
         leave.type = Ui::InputEventType::PointerLeave;
         routeInput(leave);
@@ -242,8 +237,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
         *consumed = result.keyboardConsumed;
     if(blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
-        *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None
-            && !normalized->allowText;
+        *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;
     }
     if(result.activationOverflow)
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));

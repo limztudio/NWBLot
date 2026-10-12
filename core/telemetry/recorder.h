@@ -49,8 +49,8 @@ public:
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_recorder != nullptr; }
-    // Views are intended for quiescent export/readback points. Individual reads are serialized,
-    // but callers should not clear the recorder while iterating a view.
+    // Views are intended for quiescent export/readback points.
+    // Individual reads are serialized, but callers should not clear the recorder while iterating a view.
     [[nodiscard]] usize eventCount()const;
     [[nodiscard]] const EventRecord* eventAt(usize index)const;
 
@@ -115,26 +115,10 @@ public:
     [[nodiscard]] usize eventCount()const;
     [[nodiscard]] EventView view()const noexcept{ return EventView(*this); }
 
-    [[nodiscard]] bool recordBinary(
-        EventKind::Enum kind,
-        u64 frameIndex,
-        const void* payload,
-        usize payloadBytes,
-        u32 streamId = 0u
-    );
-    [[nodiscard]] bool recordPayload(
-        EventKind::Enum kind,
-        u64 frameIndex,
-        TelemetryBytes&& payload,
-        u32 streamId = 0u
-    );
+    [[nodiscard]] bool recordBinary(EventKind::Enum kind, u64 frameIndex, const void* payload, usize payloadBytes, u32 streamId = 0u);
+    [[nodiscard]] bool recordPayload(EventKind::Enum kind, u64 frameIndex, TelemetryBytes&& payload, u32 streamId = 0u);
     template<typename BuildPayloadT>
-    [[nodiscard]] bool recordBuiltPayload(
-        const EventKind::Enum kind,
-        const u64 frameIndex,
-        const u32 streamId,
-        BuildPayloadT buildPayload
-    ){
+    [[nodiscard]] bool recordBuiltPayload(const EventKind::Enum kind, const u64 frameIndex, const u32 streamId, BuildPayloadT buildPayload){
         EventSlotLease lease(*this);
         if(!enabledUnlocked(kind))
             return false;

@@ -30,8 +30,7 @@ bool nwbOpticalClosestSurfaceHit(
 #if NWB_CSG_RAY_OPTICAL_REUSE
     out NwbRayTraceCsgBoundaryCertificate certificate,
 #endif
-    inout NwbOpticalTraceResult result
-){
+    inout NwbOpticalTraceResult result){
     hit = (NwbRayTraceSurfaceHit)0;
 #if NWB_CSG_RAY_OPTICAL_REUSE
     certificate = (NwbRayTraceCsgBoundaryCertificate)0;
@@ -82,8 +81,7 @@ bool nwbOpticalCheckBoundary(
 #if NWB_CSG_RAY_OPTICAL_REUSE
     __constref NwbRayTraceCsgBoundaryCertificate certificate,
 #endif
-    inout NwbOpticalTraceResult result
-){
+    inout NwbOpticalTraceResult result){
     if(!nwbOpticalConsumeQuery(config, result))
         return false;
     const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.position));
@@ -115,16 +113,12 @@ bool nwbOpticalCheckBoundary(
         if(reuse)
             geometry = certificate.window;
         else{
-            const NwbRayTraceGeometryHit collected = nwbRayTraceCsgGeometryHit(
-                contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, ray.TMin, ray.TMax, false
-            );
+            const NwbRayTraceGeometryHit collected = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, ray.TMin, ray.TMax, false);
             result.physicalQueries += collected.physicalQueries;
             geometry = nwbRayTraceCsgCheckedBoundary(collected);
         }
 #else
-        const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(
-            contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, ray.TMin, ray.TMax
-        );
+        const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, ray.TMin, ray.TMax);
         result.physicalQueries += geometry.physicalQueries;
 #endif
         if(geometry.failure != 0u || (geometry.hit && (instance != hit.instance || geometry.primitive != hit.primitive || geometry.cutter != hit.cutter))){
@@ -140,16 +134,12 @@ bool nwbOpticalCheckBoundary(
             if(reuse)
                 next = certificate.next;
             else{
-                const NwbRayTraceGeometryHit collected = nwbRayTraceCsgGeometryHit(
-                    contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, geometry.distance, ray.TMax, false
-                );
+                const NwbRayTraceGeometryHit collected = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, geometry.distance, ray.TMax, false);
                 result.physicalQueries += collected.physicalQueries;
                 next = nwbRayTraceCsgCheckedBoundary(collected);
             }
 #else
-            const NwbRayTraceGeometryHit next = nwbRayTraceCsgGeometryHit(
-                contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, geometry.distance, ray.TMax
-            );
+            const NwbRayTraceGeometryHit next = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, geometry.distance, ray.TMax);
             result.physicalQueries += next.physicalQueries;
 #endif
             if(next.failure != 0u || next.hit){
@@ -165,8 +155,7 @@ bool nwbOpticalCheckBoundary(
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
     bool found = false;
 #endif
-    [loop]
-    for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
+    [loop] for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
         if(!query.Proceed()){
             if(!found)
                 result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
@@ -190,9 +179,7 @@ bool nwbOpticalCheckBoundary(
             continue;
         }
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[hit.instance];
-        const float3 normal = nwbRayTraceTriangleGeometricNormal(
-            material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4()
-        );
+        const float3 normal = nwbRayTraceTriangleGeometricNormal(material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4());
         const float facing = dot(direction, normal);
         if(!isfinite(facing) || abs(facing) <= 1e-6 || facing * dot(direction, hit.geometricNormal) <= 0.0 || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, hit.instance, hit.primitive, query.CandidatePrimitiveIndex())){
             query.Abort();
@@ -211,14 +198,13 @@ bool nwbOpticalCheckBoundary(
 
 
 // One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch (not an env approximation); TIR keeps membership. No path tree escapes the query budget; in-medium miss adds no env.
-NwbOpticalTraceResult nwbOpticalTrace(
-    const NwbOpticalTraceConfig config,
-    const float3 initialOrigin,
-    const float3 initialDirection
-){
+NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const float3 initialOrigin, const float3 initialDirection){
     NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
-    if(!all(isfinite(initialOrigin)) || !all(isfinite(initialDirection)) || dot(initialDirection, initialDirection) <= 0.0 || !isfinite(config.minDistance) || !isfinite(config.maxDistance) || config.minDistance < 0.0 || config.maxDistance <= config.minDistance || config.opticalSceneHeapSlot == 0xffffffffu)
+    if(
+        !all(isfinite(initialOrigin)) || !all(isfinite(initialDirection)) || dot(initialDirection, initialDirection) <= 0.0 || !isfinite(config.minDistance) || !isfinite(config.maxDistance) || config.minDistance < 0.0
+        || config.maxDistance <= config.minDistance || config.opticalSceneHeapSlot == 0xffffffffu
+    )
         return result;
     float3 direction = normalize(initialDirection);
     float3 origin = initialOrigin;
@@ -229,8 +215,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
     half3 throughput = half3(1.0h, 1.0h, 1.0h);
     float minDistance = config.minDistance;
     float continuationUncertainty = 0.0;
-    [loop]
-    for(uint step = 0u; step < NWB_OPTICAL_MAX_QUERIES; ++step){
+    [loop] for(uint step = 0u; step < NWB_OPTICAL_MAX_QUERIES; ++step){
         const float remaining = config.maxDistance - result.distance;
         if(remaining <= minDistance){
             result.termination = NWB_OPTICAL_TERMINATION_RANGE;
@@ -263,9 +248,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
         if(hit.failure != 0u){
             result.surfaceHit = true;
             result.transparentPath = (hit.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
-            result.termination = (hit.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u
-                ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED
-            ;
+            result.termination = (hit.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED;
             return result;
         }
 #endif
@@ -339,10 +322,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
             if(!nwbOpticalApplyBoundary(transmittedMedia, boundaryMedium, entering, result))
                 return result;
             const NwbOpticalMedium transmittedMedium = nwbOpticalDominantMedium(transmittedMedia);
-            const NwbDielectricInterface boundary = nwbDielectricTransmit(
-                direction, entering ? hit.geometricNormal : -hit.geometricNormal,
-                incidentMedium.ior, transmittedMedium.ior
-            );
+            const NwbDielectricInterface boundary = nwbDielectricTransmit(direction, entering ? hit.geometricNormal : -hit.geometricNormal, incidentMedium.ior, transmittedMedium.ior);
             direction = boundary.direction;
             if(boundary.totalInternalReflection)
                 ++result.tirCount;
@@ -356,7 +336,8 @@ NwbOpticalTraceResult nwbOpticalTrace(
 #endif
         }
         // Reconstructed hits have FP32 world-position uncertainty, independent of the receiver's FP16 G-buffer bias.
-        // Offset to the next geometric half-space and require progress on the next query. Near-coincident crossings within the same uncertainty band were checked before changing direction; no instance is ignored.
+        // Offset to the next geometric half-space and require progress on the next query.
+        // Near-coincident crossings within the same uncertainty band were checked before changing direction; no instance is ignored.
         continuationUncertainty = nwbOpticsPositionUncertainty(hit.position);
         const float3 offsetNormal = dot(direction, hit.geometricNormal) >= 0.0 ? hit.geometricNormal : -hit.geometricNormal;
         origin = hit.position + offsetNormal * continuationUncertainty;

@@ -22,8 +22,7 @@ struct NwbBvhBitonicSortPushConstants{
     uint payloadHeapSlot;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbBvhBitonicSortPushConstants> g_NwbBvhBitonicSortPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbBvhBitonicSortPushConstants> g_NwbBvhBitonicSortPushConstants;
 
 // Payload breaks equal Morton-code ties for stable BVH topology.
 bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, const uint payloadB){
@@ -92,10 +91,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     GroupMemoryBarrierWithGroupSync();
 
     if(mode == NWB_BVH_SORT_MODE_LOCAL_TILE){
-        [unroll]
-        for(uint sequenceSize = 2u; sequenceSize <= NWB_BVH_SORT_GROUP_SIZE; sequenceSize <<= 1u){
-            [unroll]
-            for(uint compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
+        [unroll] for(uint sequenceSize = 2u; sequenceSize <= NWB_BVH_SORT_GROUP_SIZE; sequenceSize <<= 1u){
+            [unroll] for(uint compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
                 const uint partner = local ^ compareDistance;
                 if(partner > local){
                     // Use global index so tiles alternate sort direction.
@@ -109,8 +106,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     else{
         const uint sequenceSize = g_NwbBvhBitonicSortPushConstants.sequenceSize;
         const bool ascending = (global & sequenceSize) == 0u;
-        [unroll]
-        for(uint compareDistance = NWB_BVH_SORT_GROUP_SIZE >> 1u; compareDistance > 0u; compareDistance >>= 1u){
+        [unroll] for(uint compareDistance = NWB_BVH_SORT_GROUP_SIZE >> 1u; compareDistance > 0u; compareDistance >>= 1u){
             const uint partner = local ^ compareDistance;
             if(partner > local){
                 NWB_BVH_SORT_TILE_COMPARE_SWAP(ascending, partner)

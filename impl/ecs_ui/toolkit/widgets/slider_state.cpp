@@ -59,15 +59,7 @@ ControlToken SliderState::controlToken()const noexcept{
 }
 
 SliderSnapshot SliderState::snapshot()const noexcept{
-    return {
-        .instanceGeneration = m_instanceGeneration,
-        .inputGeneration = m_inputGeneration,
-        .revision = m_revision,
-        .admissionGeneration = m_admissionGeneration,
-        .valueBits = BitCast<u64>(m_value),
-        .press = m_press,
-        .pressMoved = m_pressMoved
-    };
+    return { .instanceGeneration = m_instanceGeneration, .inputGeneration = m_inputGeneration, .revision = m_revision, .admissionGeneration = m_admissionGeneration, .valueBits = BitCast<u64>(m_value), .press = m_press, .pressMoved = m_pressMoved };
 }
 
 bool SliderState::matches(const SliderSnapshot& value)const noexcept{

@@ -46,9 +46,7 @@ struct BindingLayoutItem{
 
     ResourceType::Enum type : 8;
     u8 reserved : 8;
-    // Push constant byte size when (type == PushConstants)
-    // Descriptor array size (1 or more) for all other resource types
-    // Must be 1 for VolatileConstantBuffer
+    // Push constant byte size when (type == PushConstants) Descriptor array size (1 or more) for all other resource types Must be 1 for VolatileConstantBuffer
     u16 size : 16;
 
     constexpr BindingLayoutItem& setSlot(u32 value)noexcept{ slot = value; return *this; }
@@ -104,16 +102,15 @@ struct BindingLayoutDesc{
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
 };
 
-// BindlessLayoutType describes descriptor classes in the global heap. Slang bindings and host layouts must agree
-// on explicit Vulkan descriptor-set and binding indices.
+// BindlessLayoutType describes descriptor classes in the global heap.
+// Slang bindings and host layouts must agree on explicit Vulkan descriptor-set and binding indices.
 namespace BindlessLayoutType{
     static constexpr u8 s_BindlessLayoutTypeImmutableBase = 0;
     enum Enum : u8{
         Immutable = s_BindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
 
         MutableSrvUavCbv,   // Global non-sampler resource table
-                            // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV,
-                            // StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer
+                            // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV, StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer
 
         MutableSampler,     // Global sampler table
                             // Valid descriptor types: Sampler
@@ -201,7 +198,13 @@ struct DescriptorWriteItem{
         result.subresources = subresources;
         return result;
     }
-    static DescriptorWriteItem TextureUav(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown)noexcept{
+    static DescriptorWriteItem TextureUav(
+        u32 slot,
+        Texture* texture,
+        Format::Enum format = Format::UNKNOWN,
+        TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices),
+        TextureDimension::Enum dimension = TextureDimension::Unknown
+    )noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
         result.subresources = subresources;
         return result;

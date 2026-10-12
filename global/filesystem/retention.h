@@ -37,12 +37,7 @@ struct KeepAllEntries{
 
 
 template<typename ArenaT, typename PredicateT>
-[[nodiscard]] inline bool ApplyDirectoryRetention(
-    ArenaT& arena,
-    const Path<ArenaT>& directory,
-    const usize maxEntries,
-    PredicateT&& shouldRetainPath
-){
+[[nodiscard]] inline bool ApplyDirectoryRetention(ArenaT& arena, const Path<ArenaT>& directory, const usize maxEntries, PredicateT&& shouldRetainPath){
     if(maxEntries == 0u)
         return true;
 

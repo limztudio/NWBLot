@@ -22,15 +22,7 @@ void nwbMeshStoreGeneratedIndices(const uint primitiveBase, const uint3 indices)
 }
 
 void nwbMeshInitializeCulledVertex(){
-    nwbMeshGeneratedVertices()[NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX] = nwbMeshBuildGeneratedVertexWithRasterFlags(
-        float4(2.0, 2.0, 0.0, 1.0),
-        float3(0.0, 0.0, 1.0),
-        float4(1.0, 0.0, 0.0, 1.0),
-        float2(0.0),
-        half4(0.0h, 0.0h, 0.0h, 0.0h),
-        float3(0.0),
-        0u
-    );
+    nwbMeshGeneratedVertices()[NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX] = nwbMeshBuildGeneratedVertexWithRasterFlags(float4(2.0, 2.0, 0.0, 1.0), float3(0.0, 0.0, 1.0), float4(1.0, 0.0, 0.0, 1.0), float2(0.0), half4(0.0h, 0.0h, 0.0h, 0.0h), float3(0.0), 0u);
 }
 #endif
 

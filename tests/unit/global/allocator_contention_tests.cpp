@@ -73,11 +73,7 @@ TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
                 arena.deallocate(allocation, 1u, s_AllocationBytes);
             }
 
-            results[threadIndex] = WorkerResult{
-                .stats = arena.memoryStats(),
-                .allocationFailed = allocationFailed,
-                .contentsPreserved = contentsPreserved,
-            };
+            results[threadIndex] = WorkerResult{ .stats = arena.memoryStats(), .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, };
         });
     }
 
@@ -166,11 +162,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentAllocationCrossThreadFreeAndAcco
                 arena.deallocate(allocation, alignment, 113u);
             }
 
-            results[threadIndex] = PersistentArenaWorkerResult{
-                .allocationFailed = allocationFailed,
-                .contentsPreserved = contentsPreserved,
-                .alignmentPreserved = alignmentPreserved,
-            };
+            results[threadIndex] = PersistentArenaWorkerResult{ .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, .alignmentPreserved = alignmentPreserved, };
         });
     }
 
@@ -255,11 +247,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentReallocationPreservesPayloadAndA
                 arena.deallocate(allocation, s_ReplacementAlignment, s_ReplacementBytes);
             }
 
-            results[threadIndex] = PersistentArenaWorkerResult{
-                .allocationFailed = allocationFailed,
-                .contentsPreserved = contentsPreserved,
-                .alignmentPreserved = alignmentPreserved,
-            };
+            results[threadIndex] = PersistentArenaWorkerResult{ .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, .alignmentPreserved = alignmentPreserved, };
         });
     }
 

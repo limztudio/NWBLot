@@ -40,11 +40,7 @@ struct OpticalUploadTask{
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
-        if(
-            !payload.destination || !payload.upload || !bytes || bytes->size() == 0u
-            || bytes->size() != payload.upload->bytes.size() || !payload.reservation.valid() || context.commandIrCapture
-            || context.queue != payload.queue
-        )
+        if(!payload.destination || !payload.upload || !bytes || bytes->size() == 0u || bytes->size() != payload.upload->bytes.size() || !payload.reservation.valid() || context.commandIrCapture || context.queue != payload.queue)
             return false;
 
         commandList.endRenderPass();
@@ -72,10 +68,7 @@ struct OpticalUploadTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
-    Core::GpuTaskGraph& graph,
-    const RayTracingOpticalSceneSnapshot& resources
-){
+RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources){
     if(!resources.valid())
         return {};
     const Core::BufferHandle& uploadBuffer = resources.uploadBuffer ? resources.uploadBuffer : resources.buffer;
@@ -98,12 +91,7 @@ RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
     Core::GpuGraphResourceDesc resourceDesc = RendererTaskGraphDetail::BufferResourceDesc(bufferDesc.debugName, "Ray Optical Scene Buffer");
     resourceDesc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
     if(plan.acceptedToken.valid()){
-        const Core::GpuExternalCompletionId ready = graph.importExternalCompletion(
-            Core::GpuExternalCompletionDesc{}
-                .setIdentity(Name("render.raytrace.optical_scene_ready"))
-                .setMarkerLabel("Ray Optical Scene Ready")
-                .setToken(plan.acceptedToken)
-        );
+        const Core::GpuExternalCompletionId ready = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("render.raytrace.optical_scene_ready")).setMarkerLabel("Ray Optical Scene Ready").setToken(plan.acceptedToken));
         if(!ready.valid())
             return {};
         resourceDesc.setInitialAvailabilityCompletion(ready);
@@ -120,18 +108,8 @@ RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
     if(!blob.valid())
         return {};
     const Core::GpuTaskResourceUse uses[] = {
-        Core::GpuTaskResourceUse{
-            .resource = result.resource,
-            .range = Core::GpuTaskResourceRange{ .bufferRange = Core::BufferRange(0u, byteSize) },
-            .requiredState = Core::ResourceStates::CopyDest,
-            .access = Core::GpuTaskResourceAccess::Write,
-        },
-        Core::GpuTaskResourceUse{
-            .resource = result.resource,
-            .range = Core::GpuTaskResourceRange{ .bufferRange = Core::BufferRange(0u, byteSize) },
-            .requiredState = Core::ResourceStates::Common,
-            .access = Core::GpuTaskResourceAccess::Write,
-        },
+        Core::GpuTaskResourceUse{ .resource = result.resource, .range = Core::GpuTaskResourceRange{ .bufferRange = Core::BufferRange(0u, byteSize) }, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, },
+        Core::GpuTaskResourceUse{ .resource = result.resource, .range = Core::GpuTaskResourceRange{ .bufferRange = Core::BufferRange(0u, byteSize) }, .requiredState = Core::ResourceStates::Common, .access = Core::GpuTaskResourceAccess::Write, },
     };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -140,18 +118,8 @@ RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.raytrace.optical_scene_upload"))
-        .setMarkerLabel("Ray Optical Scene Upload")
-        .setScheduling(scheduling)
-        .setResourceUses(uses, LengthOf(uses))
-    ;
-    result.uploadTask = graph.addTask<__hidden_task_graph_optical_scene_upload::OpticalUploadTask>(
-        desc,
-        __hidden_task_graph_optical_scene_upload::OpticalUploadTask::Payload{
-            uploadBuffer, blob, resources.upload, Move(reservation), plan.queue,
-        }
-    );
+    desc.setIdentity(Name("render.raytrace.optical_scene_upload")).setMarkerLabel("Ray Optical Scene Upload").setScheduling(scheduling).setResourceUses(uses, LengthOf(uses));
+    result.uploadTask = graph.addTask<__hidden_task_graph_optical_scene_upload::OpticalUploadTask>(desc, __hidden_task_graph_optical_scene_upload::OpticalUploadTask::Payload{ uploadBuffer, blob, resources.upload, Move(reservation), plan.queue, });
     return result.valid() ? result : RayTracingOpticalSceneGraphBuffer{};
 }
 
@@ -165,11 +133,7 @@ RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
-    Core::GpuTaskGraph& graph,
-    const RayTracingOpticalSceneSnapshot& resources,
-    Core::Alloc::ScratchArena& scratchArena
-){
+RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, Core::Alloc::ScratchArena& scratchArena){
     const RayTracingOpticalSceneGraphBuffer uploaded = __hidden_task_graph_optical_scene_upload::ImportOpticalSceneUpload(graph, resources);
     if(!uploaded.valid() || !resources.finalize)
         return uploaded;

@@ -14,11 +14,7 @@
 
 
 // Preserves the original inputs exactly and publishes dependency additions only after complete resolution.
-[[nodiscard]] Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeSkinDependencies(
-    const PipelineOptions& options,
-    NWB::Core::Assets::AssetArena& arena,
-    NWB::Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeSkinDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

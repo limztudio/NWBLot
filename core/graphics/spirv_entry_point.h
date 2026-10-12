@@ -28,25 +28,13 @@ namespace SpirvEntryPointLookupResult{
 };
 
 
-[[nodiscard]] bool IsValidSpirvModuleWords(
-    const u32* words,
-    usize wordCount
-)noexcept;
+[[nodiscard]] bool IsValidSpirvModuleWords(const u32* words, usize wordCount)noexcept;
 
 // The result borrows unchanged module words and excludes the validated terminating null.
-[[nodiscard]] Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(
-    const u32* words,
-    usize wordCount,
-    AStringView entryName,
-    ShaderType::Mask shaderType
-)noexcept;
+[[nodiscard]] Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(const u32* words, usize wordCount, AStringView entryName, ShaderType::Mask shaderType)noexcept;
 
 // Byte backing may be unaligned; the result borrows the original module bytes.
-[[nodiscard]] Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(
-    BinaryByteView bytecode,
-    AStringView entryName,
-    ShaderType::Mask shaderType
-)noexcept;
+[[nodiscard]] Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(BinaryByteView bytecode, AStringView entryName, ShaderType::Mask shaderType)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

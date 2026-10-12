@@ -33,29 +33,15 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::Submiss
     const GpuRecordedGraph& recordedGraph,
     const GpuGraphSubmissionTransaction& transaction
 )noexcept{
-    for(
-        SubmissionAttemptExceptionFinalizer* finalizer = s_ActiveFinalizer;
-        finalizer;
-        finalizer = finalizer->m_previousFinalizer
-    ){
-        if(
-            &finalizer->m_graph == &graph
-            && &finalizer->m_compiledGraph == &compiledGraph
-            && &finalizer->m_recordedGraph == &recordedGraph
-            && &finalizer->m_transaction == &transaction
-        )
+    for(SubmissionAttemptExceptionFinalizer* finalizer = s_ActiveFinalizer; finalizer; finalizer = finalizer->m_previousFinalizer){
+        if(&finalizer->m_graph == &graph && &finalizer->m_compiledGraph == &compiledGraph && &finalizer->m_recordedGraph == &recordedGraph && &finalizer->m_transaction == &transaction)
             return finalizer->m_owner;
     }
     return nullptr;
 }
 
 
-GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptionFinalizer(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuRecordedGraph& recordedGraph,
-    GpuGraphSubmissionTransaction& transaction
-)noexcept
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptionFinalizer(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuRecordedGraph& recordedGraph, GpuGraphSubmissionTransaction& transaction)noexcept
     : m_graph(graph)
     , m_compiledGraph(compiledGraph)
     , m_recordedGraph(recordedGraph)
@@ -83,98 +69,50 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExcepti
     if(m_owner != this || !m_armed || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
         return;
 
-    if(GpuGraphSubmissionTransaction::WaitForSubmissionExceptionClosing(
-        m_transaction,
-        m_graph,
-        m_compiledGraph,
-        m_recordingAttemptGeneration,
-        m_submissionBinding
-    ))
+    if(GpuGraphSubmissionTransaction::WaitForSubmissionExceptionClosing(m_transaction, m_graph, m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
         return;
 
-    GpuRecordedGraph::ArtifactOperation artifactOperation(
-        m_recordedGraph,
-        GpuRecordedGraph::ArtifactOperationMode::WaitRead
-    );
+    GpuRecordedGraph::ArtifactOperation artifactOperation(m_recordedGraph, GpuRecordedGraph::ArtifactOperationMode::WaitRead);
     if(!artifactOperation.valid())
         TerminateInvariant();
-    if(m_transaction.submissionExceptionClosingResolved(
-        m_compiledGraph,
-        m_recordingAttemptGeneration,
-        m_submissionBinding
-    ))
+    if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
         return;
-    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
-        m_transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::ExceptionFinalizer,
-        &artifactOperation
-    );
+    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(m_transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::ExceptionFinalizer, &artifactOperation);
     if(!submissionOperation.valid()){
-        if(m_transaction.submissionExceptionClosingResolved(
-            m_compiledGraph,
-            m_recordingAttemptGeneration,
-            m_submissionBinding
-        ))
+        if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
             return;
         TerminateInvariant();
     }
-    if(m_transaction.submissionExceptionClosingResolved(
-        m_compiledGraph,
-        m_recordingAttemptGeneration,
-        m_submissionBinding
-    ))
+    if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
         return;
     GpuCompiledGraph::ReadView planAccess(m_compiledGraph);
     if(!planAccess.valid()){
-        if(m_transaction.submissionExceptionClosingResolved(
-            m_compiledGraph,
-            m_recordingAttemptGeneration,
-            m_submissionBinding
-        ))
+        if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
             return;
         TerminateInvariant();
     }
     GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(m_graph);
     if(!planAccess.validFor(declarationAccess)){
-        if(m_transaction.submissionExceptionClosingResolved(
-            m_compiledGraph,
-            m_recordingAttemptGeneration,
-            m_submissionBinding
-        ))
+        if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
             return;
         TerminateInvariant();
     }
 
-    // This exact transaction writer prevents another admitted packet from resolving the binding. The graph remains ExceptionClosing,
-    // graph reset and declaration mutation both reject until callback-free finalization below.
+    // This exact transaction writer prevents another admitted packet from resolving the binding.
+    // The graph remains ExceptionClosing, graph reset and declaration mutation both reject until callback-free finalization below.
     // Accepted-frontier rejection can bind and close the graph before publishing a recorded artifact
-    const bool artifactMatchesAttempt = m_recordedGraph.validForWithinArtifactOperation(
-        m_graph,
-        declarationAccess,
-        m_compiledGraph,
-        planAccess,
-        artifactOperation
-    );
+    const bool artifactMatchesAttempt = m_recordedGraph.validForWithinArtifactOperation(m_graph, declarationAccess, m_compiledGraph, planAccess, artifactOperation);
     if(artifactMatchesAttempt){
         for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){
             const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
             if(m_transaction.packetToken(packet).valid())
                 continue;
-            GpuTimingSubmissionTicket* const timingTicket = m_recordedGraph.packetTimingTicket(
-                packet,
-                artifactOperation
-            );
+            GpuTimingSubmissionTicket* const timingTicket = m_recordedGraph.packetTimingTicket(packet, artifactOperation);
             if(timingTicket)
                 timingTicket->abandonWithoutCallbacks();
         }
     }
-    m_transaction.completeSubmissionExceptionClosingWithinSubmissionOperation(
-        m_graph,
-        m_compiledGraph,
-        planAccess,
-        m_recordingAttemptGeneration,
-        m_submissionBinding
-    );
+    m_transaction.completeSubmissionExceptionClosingWithinSubmissionOperation(m_graph, m_compiledGraph, planAccess, m_recordingAttemptGeneration, m_submissionBinding);
 }
 
 
@@ -183,9 +121,7 @@ void GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::beginClosingWithinSu
     if(!owner || owner->m_armed)
         return;
 
-    const auto closing = owner->m_transaction.beginSubmissionExceptionClosingWithinSubmissionOperation(
-        owner->m_graph, owner->m_compiledGraph
-    );
+    const auto closing = owner->m_transaction.beginSubmissionExceptionClosingWithinSubmissionOperation(owner->m_graph, owner->m_compiledGraph);
     if(!closing){
         if(owner->m_transaction.hasUnresolvedSubmissionBinding(owner->m_compiledGraph))
             TerminateInvariant();

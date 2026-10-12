@@ -61,23 +61,18 @@ LIT_MAIN = "__main__"
 
 
 def memory_snapshot(frame, count):
-    return {scope: {LIT_PRESENT: True, "frame": frame, "reserved": 2048, "used": 128,
-        LIT_HISTORICAL_ARENA_PEAK: 1024, LIT_ALLOCATIONS: count * 3, "reallocations": count,
-        "deallocations": count * 2} for scope in bench.ARENAS}
+    return {scope: {LIT_PRESENT: True, "frame": frame, "reserved": 2048, "used": 128, LIT_HISTORICAL_ARENA_PEAK: 1024, LIT_ALLOCATIONS: count * 3, "reallocations": count, "deallocations": count * 2} for scope in bench.ARENAS}
 
 
 def rows(workload=LIT_SHARED, mode=LIT_TIMING):
-    configuration = dict(bench.FROZEN_SETTINGS, type="configuration", schema=1, workload=workload, mode=mode,
-        successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0,
+    configuration = dict(bench.FROZEN_SETTINGS, type="configuration", schema=1, workload=workload, mode=mode, successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0,
         transparent_renderers=0 if workload == LIT_OPAQUE else 32 if workload == "hybrid" else 64)
     result = [configuration]
     if mode == LIT_MEMORY:
         result.append({LIT_TYPE: "memory_baseline", LIT_ARENAS: memory_snapshot(95, 100)})
     for frame in range(96, 352):
-        row = {LIT_TYPE: LIT_CPU, LIT_SOURCE_FRAME: frame, LIT_PUBLISH_FRAME: frame, LIT_SCOPES_MS: {
-            LIT_GRAPHICS_FRAME: 8., "graphics.frame_preamble": .05, LIT_GRAPHICS_PREPARE_RESOURCES: 2.,
-            "graphics.render_passes": 2., LIT_GRAPHICS_RENDER: 5., "frame.project_update": .1,
-            "graphics.present": .2, "graphics.begin_frame": .4}}
+        row = {LIT_TYPE: LIT_CPU, LIT_SOURCE_FRAME: frame, LIT_PUBLISH_FRAME: frame, LIT_SCOPES_MS: { LIT_GRAPHICS_FRAME: 8., "graphics.frame_preamble": .05, LIT_GRAPHICS_PREPARE_RESOURCES: 2.,
+            "graphics.render_passes": 2., LIT_GRAPHICS_RENDER: 5., "frame.project_update": .1, "graphics.present": .2, "graphics.begin_frame": .4}}
         if mode == LIT_MEMORY:
             row[LIT_ARENAS] = memory_snapshot(frame, frame - 96 + 101)
         result.append(row)
@@ -85,8 +80,7 @@ def rows(workload=LIT_SHARED, mode=LIT_TIMING):
     for scope in scopes:
         for first, last, mean in ((96, 159, 2.), (160, 351, 4.)):
             count = last - first + 1
-            result.append({LIT_TYPE: LIT_GPU, LIT_SCOPE: scope, LIT_FIRST_SOURCE_FRAME: first,
-                LIT_LAST_SOURCE_FRAME: last, LIT_PUBLISH_FRAME: last + 2, LIT_TOTAL_MS: count * mean, LIT_SAMPLES: count})
+            result.append({LIT_TYPE: LIT_GPU, LIT_SCOPE: scope, LIT_FIRST_SOURCE_FRAME: first, LIT_LAST_SOURCE_FRAME: last, LIT_PUBLISH_FRAME: last + 2, LIT_TOTAL_MS: count * mean, LIT_SAMPLES: count})
     result.append({LIT_TYPE: LIT_COMPLETE})
     return result
 
@@ -152,8 +146,7 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
 
     def test_allows_only_actual_initial_opaque_target_clear(self):
         values = rows(LIT_OPAQUE)
-        values.insert(-1, {LIT_TYPE: LIT_GPU, LIT_SCOPE: "render.avboit_clear", LIT_FIRST_SOURCE_FRAME: 0,
-            LIT_LAST_SOURCE_FRAME: 0, LIT_PUBLISH_FRAME: 2, LIT_SAMPLES: 1, LIT_TOTAL_MS: .01})
+        values.insert(-1, {LIT_TYPE: LIT_GPU, LIT_SCOPE: "render.avboit_clear", LIT_FIRST_SOURCE_FRAME: 0, LIT_LAST_SOURCE_FRAME: 0, LIT_PUBLISH_FRAME: 2, LIT_SAMPLES: 1, LIT_TOTAL_MS: .01})
         self.assertEqual(bench.summarize_rows(values, LIT_OPAQUE, LIT_TIMING)[LIT_GPU][LIT_RENDER_FRAME]["gpu_samples"], 256)
         values[-2][LIT_LAST_SOURCE_FRAME] = 96
         with self.assertRaisesRegex(bench.SmokeFailure, "inactive measured"):
@@ -161,8 +154,7 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
 
     def test_rejects_enabled_history_even_outside_measured_window(self):
         values = rows()
-        values.insert(-1, {LIT_TYPE: LIT_GPU, LIT_SCOPE: "render.reflection_temporal", LIT_FIRST_SOURCE_FRAME: 0,
-            LIT_LAST_SOURCE_FRAME: 0, LIT_PUBLISH_FRAME: 2, LIT_SAMPLES: 1, LIT_TOTAL_MS: .01})
+        values.insert(-1, {LIT_TYPE: LIT_GPU, LIT_SCOPE: "render.reflection_temporal", LIT_FIRST_SOURCE_FRAME: 0, LIT_LAST_SOURCE_FRAME: 0, LIT_PUBLISH_FRAME: 2, LIT_SAMPLES: 1, LIT_TOTAL_MS: .01})
         with self.assertRaisesRegex(bench.SmokeFailure, "inactive GPU"):
             bench.summarize_rows(values, LIT_SHARED, LIT_TIMING)
 
@@ -220,8 +212,7 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
     def test_memory_only_comparison_never_performs_timing_inference(self):
         result = bench.summarize_rows(rows(mode=LIT_MEMORY), LIT_SHARED, LIT_MEMORY)
         orders = [[LIT_BASELINE, LIT_CANDIDATE], [LIT_CANDIDATE, LIT_BASELINE]] * 4
-        trials = [dict(block=block, position=position, arm=arm, result=result)
-            for block, order in enumerate(orders) for position, arm in enumerate(order)]
+        trials = [dict(block=block, position=position, arm=arm, result=result) for block, order in enumerate(orders) for position, arm in enumerate(order)]
         with patch.object(bench, "paired_statistics", side_effect=AssertionError("timing inference forbidden")):
             self.assertEqual(bench.compare(trials, orders, LIT_MEMORY)[LIT_STATUS], "memory_observation_only")
 
@@ -254,21 +245,18 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
             surface = root / "template.surface"
             surface.write_bytes(b"// surface\r\n")
             output = root / LIT_GENERATED
-            arguments = ["--source-root", str(source), "--mesh-template", str(mesh),
-                "--surface-template", str(surface), "--output-root", str(output)]
+            arguments = ["--source-root", str(source), "--mesh-template", str(mesh), "--surface-template", str(surface), "--output-root", str(output)]
             self.assertEqual(generate_assets(arguments), 0)
             stale = output / "retired.nwb"
             stale.write_bytes(b"retired asset;\r\n")
             mesh.write_bytes(LIT_MESH_CHANGED_R_N)
-            before = {path.relative_to(output).as_posix(): path.read_bytes()
-                for path in output.rglob("*") if path.is_file()}
+            before = {path.relative_to(output).as_posix(): path.read_bytes() for path in output.rglob("*") if path.is_file()}
             with patch(LIT_SYS_STDERR, new_callable=io.StringIO) as errors:
                 with self.assertRaises(SystemExit) as failure:
                     generate_assets(arguments)
                 self.assertEqual(failure.exception.code, 2)
                 self.assertIn("unexpected existing generated files: retired.nwb", errors.getvalue())
-            self.assertEqual({path.relative_to(output).as_posix(): path.read_bytes()
-                for path in output.rglob("*") if path.is_file()}, before)
+            self.assertEqual({path.relative_to(output).as_posix(): path.read_bytes() for path in output.rglob("*") if path.is_file()}, before)
             nested_output = source / LIT_GENERATED
             with patch(LIT_SYS_STDERR, new_callable=io.StringIO) as errors:
                 with self.assertRaises(SystemExit) as failure:
@@ -287,9 +275,7 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
                     self.assertEqual(bench.environment({key: ""}, LIT_SHARED, mode, LIT_CAPTURE_JSONL)[key], "")
 
     def test_inherited_smoke_and_diagnostic_controls_are_sanitized(self):
-        env = bench.environment({LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_GPU_TIMING_FILE: "stale",
-            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1", "NWB_LINUX_BACKEND": "x11", "PATH": "keep"},
-            LIT_UNIQUE, LIT_TIMING, LIT_CAPTURE_JSONL)
+        env = bench.environment({LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_GPU_TIMING_FILE: "stale", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1", "NWB_LINUX_BACKEND": "x11", "PATH": "keep"}, LIT_UNIQUE, LIT_TIMING, LIT_CAPTURE_JSONL)
         self.assertNotIn(LIT_NWB_GPU_TIMING_FILE, env)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, env)
         self.assertEqual(env[LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F], "0")

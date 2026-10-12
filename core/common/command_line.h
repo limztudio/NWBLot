@@ -26,22 +26,10 @@ namespace ArgCommand{
         iNumArg,
     };
 };
-inline constexpr StringView g_ArgCmd[] = {
-    "-a,--logaddress",
-    "-p,--logport",
-};
+inline constexpr StringView g_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };
 inline constexpr u16 s_DefaultLogServerPort = 7117u;
-inline const Tuple<
-    AStringView
-    , u16
-> g_ArgDefault = {
-    "http://localhost",
-    s_DefaultLogServerPort,
-};
-inline constexpr StringView g_ArgDesc[] = {
-    "Log server address",
-    "Log server port",
-};
+inline const Tuple< AStringView, u16 > g_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
+inline constexpr StringView g_ArgDesc[] = { "Log server address", "Log server port", };
 
 template<ArgCommand::Enum i, typename CLI, typename T>
 inline auto ArgAddOption(CLI& cli, T& arg){

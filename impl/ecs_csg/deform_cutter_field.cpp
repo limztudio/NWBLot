@@ -64,12 +64,7 @@ SIMDVectorSingle CsgDeformCutterField::CapsuleSignedDistanceVec(SIMDVectorSingle
     return VectorSubtract(Vector3Length(delta), VectorSplatX(parameter0));
 }
 
-Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(
-    const CsgDeformShape& shape,
-    const CsgDeformVertexVector<ScratchArena>& vertices,
-    const f32 epsilon,
-    Vector<f32, ScratchArena>& outDistances
-){
+Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(const CsgDeformShape& shape, const CsgDeformVertexVector<ScratchArena>& vertices, const f32 epsilon, Vector<f32, ScratchArena>& outDistances){
     const CsgDeformShapeKind::Enum shapeKind = CsgDeformCutterField::ClassifyDeformShape(shape.shapeType);
     if(shapeKind == CsgDeformShapeKind::Invalid){
         return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);

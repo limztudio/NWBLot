@@ -23,9 +23,7 @@ NWB_CORE_BEGIN
 
 
 // Borrow the Frame display, surface and selected seat. Destroy this service before those objects.
-[[nodiscard]] GlobalUniquePtr<ITextInputService> CreateWaylandTextInputService(
-    Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface
-);
+[[nodiscard]] GlobalUniquePtr<ITextInputService> CreateWaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface);
 void AttachWaylandTextInputSeat(ITextInputService& service, wl_seat* seat, u32 seatGlobalName);
 [[nodiscard]] bool SetWaylandTextInputKeyboardFocus(ITextInputService& service, bool focused);
 void SetWaylandTextInputBufferScale(ITextInputService& service, i32 scale);

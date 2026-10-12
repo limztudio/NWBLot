@@ -119,11 +119,7 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
     return !block->isFree;
 }
 
-[[nodiscard]] inline Expected<AllocationLayout> BuildAllocationLayout(
-    const Block& block,
-    const usize alignment,
-    const usize requestedBytes
-)noexcept{
+[[nodiscard]] inline Expected<AllocationLayout> BuildAllocationLayout(const Block& block, const usize alignment, const usize requestedBytes)noexcept{
     const usize dataAddress = reinterpret_cast<usize>(BlockData(block));
     if(AddOverflows<usize>(dataAddress, sizeof(Block*)))
         return MakeUnexpected(Failure{});
@@ -146,15 +142,10 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
         return MakeUnexpected(Failure{});
     spanBytes = *spanBytesResult;
 
-    return AllocationLayout{
-        .userOffset = userOffset,
-        .spanBytes = spanBytes,
-    };
+    return AllocationLayout{ .userOffset = userOffset, .spanBytes = spanBytes, };
 }
 
-[[nodiscard]] inline Expected<AllocationLayout> BuildNormalAllocationLayout(
-    const usize requestedBytes
-)noexcept{
+[[nodiscard]] inline Expected<AllocationLayout> BuildNormalAllocationLayout(const usize requestedBytes)noexcept{
     constexpr usize s_UserOffset = AlignUp(sizeof(Block*), s_BlockAlignment);
     if(AddOverflows<usize>(s_UserOffset, requestedBytes))
         return MakeUnexpected(Failure{});
@@ -165,17 +156,10 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
         return MakeUnexpected(Failure{});
     spanBytes = *spanBytesResult;
 
-    return AllocationLayout{
-        .userOffset = s_UserOffset,
-        .spanBytes = spanBytes,
-    };
+    return AllocationLayout{ .userOffset = s_UserOffset, .spanBytes = spanBytes, };
 }
 
-[[nodiscard]] inline Expected<AllocationLayout> BuildExistingPointerLayout(
-    const Block& block,
-    void* const p,
-    const usize requestedBytes
-)noexcept{
+[[nodiscard]] inline Expected<AllocationLayout> BuildExistingPointerLayout(const Block& block, void* const p, const usize requestedBytes)noexcept{
     const usize dataAddress = reinterpret_cast<usize>(BlockData(block));
     const usize pointerAddress = reinterpret_cast<usize>(p);
     if(pointerAddress < dataAddress || pointerAddress - dataAddress < sizeof(Block*))
@@ -191,33 +175,15 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
         return MakeUnexpected(Failure{});
     spanBytes = *spanBytesResult;
 
-    return AllocationLayout{
-        .userOffset = userOffset,
-        .spanBytes = spanBytes,
-    };
+    return AllocationLayout{ .userOffset = userOffset, .spanBytes = spanBytes, };
 }
 
-[[nodiscard]] inline Block* CreateBlock(
-    void* const address,
-    const usize spanBytes,
-    Block* const previous,
-    Block* const next,
-    const bool isFree
-)noexcept{
-    return new(address) Block{
-        .spanBytes = spanBytes,
-        .requestedBytes = 0u,
-        .previous = previous,
-        .next = next,
-        .isFree = isFree,
-    };
+[[nodiscard]] inline Block* CreateBlock(void* const address, const usize spanBytes, Block* const previous, Block* const next, const bool isFree)noexcept{
+    return new(address) Block{ .spanBytes = spanBytes, .requestedBytes = 0u, .previous = previous, .next = next, .isFree = isFree, };
 }
 
 inline void InitializeLinks(Block& block, Block* const previous, Block* const next)noexcept{
-    new(BlockData(block)) FreeLinks{
-        .previous = previous,
-        .next = next,
-    };
+    new(BlockData(block)) FreeLinks{ .previous = previous, .next = next, };
 }
 
 inline void InsertFreeBlock(void*& freeHead, Block& block)noexcept{
@@ -261,13 +227,7 @@ inline void SplitUsedBlock(void*& freeHead, Block& block, const usize requestedS
         return;
 
     Block* const oldNext = block.next;
-    Block* const tail = CreateBlock(
-        BlockData(block) + requestedSpan,
-        remainder - sizeof(Block),
-        &block,
-        oldNext,
-        true
-    );
+    Block* const tail = CreateBlock(BlockData(block) + requestedSpan, remainder - sizeof(Block), &block, oldNext, true);
     block.spanBytes = requestedSpan;
     block.next = tail;
     if(oldNext)
@@ -304,11 +264,7 @@ struct FreeBlockSelection{
     AllocationLayout layout;
 };
 
-[[nodiscard]] inline Expected<FreeBlockSelection> FindFreeBlock(
-    void* const freeHead,
-    const usize alignment,
-    const usize requestedBytes
-)noexcept{
+[[nodiscard]] inline Expected<FreeBlockSelection> FindFreeBlock(void* const freeHead, const usize alignment, const usize requestedBytes)noexcept{
     const bool normalAlignment = alignment == s_BlockAlignment;
     const auto normalLayout = normalAlignment ? BuildNormalAllocationLayout(requestedBytes) : Expected<AllocationLayout>(MakeUnexpected(Failure{}));
     if(normalAlignment && !normalLayout)
@@ -383,13 +339,7 @@ PersistentArena::PersistentArena(const Name& allocationLog, const usize maxSize)
     if(managedBytes < sizeof(__hidden_persistent::Block) + __hidden_persistent::MinimumFreeSpan())
         return;
 
-    auto* const first = __hidden_persistent::CreateBlock(
-        m_bucket,
-        managedBytes - sizeof(__hidden_persistent::Block),
-        nullptr,
-        nullptr,
-        true
-    );
+    auto* const first = __hidden_persistent::CreateBlock(m_bucket, managedBytes - sizeof(__hidden_persistent::Block), nullptr, nullptr, true);
     __hidden_persistent::InsertFreeBlock(m_freeHead, *first);
 }
 
@@ -446,10 +396,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
 
     const usize alignment = __hidden_persistent::EffectiveAlignment(align);
     const usize pointerAddress = reinterpret_cast<usize>(p);
-    const auto layout = (pointerAddress % alignment == 0u)
-        ? __hidden_persistent::BuildExistingPointerLayout(*block, p, size)
-        : Expected<__hidden_persistent::AllocationLayout>(MakeUnexpected(Failure{}))
-    ;
+    const auto layout = (pointerAddress % alignment == 0u) ? __hidden_persistent::BuildExistingPointerLayout(*block, p, size) : Expected<__hidden_persistent::AllocationLayout>(MakeUnexpected(Failure{}));
     if(layout && layout->spanBytes <= block->spanBytes){
         __hidden_persistent::SplitUsedBlock(m_freeHead, *block, layout->spanBytes);
         block->requestedBytes = size;
@@ -501,10 +448,7 @@ void PersistentArena::deallocate(void* const p, const usize align, const usize s
 
     auto* const block = __hidden_persistent::BlockFromAllocation(p);
     const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, block);
-    NWB_ASSERT_MSG(
-        liveBlock,
-        NWB_TEXT("PersistentArena deallocation must reference a live block from this arena")
-    );
+    NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena deallocation must reference a live block from this arena"));
     if(!liveBlock)
         return;
 
@@ -517,10 +461,7 @@ Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usiz
     const usize alignment = __hidden_persistent::EffectiveAlignment(align);
     auto selection = __hidden_persistent::FindFreeBlock(m_freeHead, alignment, size);
     if(!selection && m_freeHead){
-        __hidden_persistent::CoalesceFreeBlocks(
-            m_freeHead,
-            static_cast<__hidden_persistent::Block*>(m_bucket)
-        );
+        __hidden_persistent::CoalesceFreeBlocks(m_freeHead, static_cast<__hidden_persistent::Block*>(m_bucket));
         selection = __hidden_persistent::FindFreeBlock(m_freeHead, alignment, size);
     }
     if(!selection)

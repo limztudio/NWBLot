@@ -47,10 +47,7 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     sample.publishFrame = frame.publishFrameIndex;
     for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
         const auto& timing = report.cpuTiming.stats(Name(s_CpuNames[scope]));
-        if(
-            !timing.valid() || timing.sampleCount != 1u || timing.publishFrameIndex != frame.publishFrameIndex
-            || timing.firstSampleFrameIndex != sample.sourceFrame || timing.lastSampleFrameIndex != sample.sourceFrame
-        )
+        if(!timing.valid() || timing.sampleCount != 1u || timing.publishFrameIndex != frame.publishFrameIndex || timing.firstSampleFrameIndex != sample.sourceFrame || timing.lastSampleFrameIndex != sample.sourceFrame)
             return false;
         sample.milliseconds[scope] = timing.seconds;
     }
@@ -90,9 +87,7 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     return true;
 }
 
-bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const bool memoryEnabled, const u32 renderers,
-    const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners
-)const{
+bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const bool memoryEnabled, const u32 renderers, const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners)const{
     const bool complete = finished() && m_cpu.size() == s_SampleFrames;
     const AString<Core::Alloc::GlobalArena> outputPath(path, m_cpu.get_allocator());
     OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);
@@ -116,8 +111,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
         output << "}\n";
     }
     for(const CpuSample& sample : m_cpu){
-        output << "{\"type\":\"cpu\",\"source_frame\":" << sample.sourceFrame
-            << ",\"publish_frame\":" << sample.publishFrame << ",\"scopes_ms\":{";
+        output << "{\"type\":\"cpu\",\"source_frame\":" << sample.sourceFrame << ",\"publish_frame\":" << sample.publishFrame << ",\"scopes_ms\":{";
         for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
             if(scope != 0u)
                 output << ',';
@@ -132,9 +126,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
     }
     for(usize index = 0u; index < m_gpu.size(); index += 2u){
         const usize count = Min(usize{ 2u }, m_gpu.size() - index);
-        const SIMDVectorDouble milliseconds = SIMDVectorDouble{
-            m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0
-        } * 1000.0;
+        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0 } * 1000.0;
         for(usize lane = 0u; lane < count; ++lane){
             const GpuSample& sample = m_gpu[index + lane];
             output << "{\"type\":\"gpu\",\"scope\":\"" << s_GpuNames[sample.scope]

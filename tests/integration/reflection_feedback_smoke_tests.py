@@ -161,16 +161,12 @@ class CompletedFeedbackTests(unittest.TestCase):
         stats, feedback = [], []
         for index in range(8):
             frame = 32 + 5 * index
-            stats.append({"sequence": index + 1, LIT_GENERATION: 2, "frame": frame, "opaque_pixels": 600,
-                "glass_pixels": 0, LIT_SCREEN_HITS: 50, "screen_attempts": 100, LIT_EFFECTIVE_BUDGET: smoke.DEFAULT_RAY_BUDGET})
-            feedback.append(dict(zip(smoke.FEEDBACK_FIELDS, (index + 1, 2, frame + 100, frame + 40, 1, 100,
-                frame if enabled else 0, int(enabled), int(enabled), int(enabled), 0, 0, 1, 600, 60,
-                100 if enabled else 0, 1 if enabled else 0, 800, 2))))
+            stats.append({"sequence": index + 1, LIT_GENERATION: 2, "frame": frame, "opaque_pixels": 600, "glass_pixels": 0, LIT_SCREEN_HITS: 50, "screen_attempts": 100, LIT_EFFECTIVE_BUDGET: smoke.DEFAULT_RAY_BUDGET})
+            feedback.append(dict(zip(smoke.FEEDBACK_FIELDS, (index + 1, 2, frame + 100, frame + 40, 1, 100, frame if enabled else 0, int(enabled), int(enabled), int(enabled), 0, 0, 1, 600, 60, 100 if enabled else 0, 1 if enabled else 0, 800, 2))))
         return stats, feedback
 
     def log(self, samples, source=160, mutation=None):
-        result = LIT_N.join("ReflectionSmokeFeedback: " + " ".join(f"{key}={sample[key]}" for key in smoke.FEEDBACK_FIELDS)
-            for sample in samples)
+        result = LIT_N.join("ReflectionSmokeFeedback: " + " ".join(f"{key}={sample[key]}" for key in smoke.FEEDBACK_FIELDS) for sample in samples)
         result += "\nFramebufferCapture: graphics source frame " + str(source)
         if mutation is not None:
             result += "\nReflectionSmokeFeedbackMutation: graphics_frame=" + str(source) + " fresh_final=" + str(int(mutation))
@@ -178,9 +174,7 @@ class CompletedFeedbackTests(unittest.TestCase):
 
     def validate(self, samples=None, spec=None, stats=None, source=160, mutation=None):
         baseline_stats, baseline_feedback = self.observations()
-        return smoke.validate_feedback(self.log(samples if samples is not None else baseline_feedback, source, mutation),
-            stats if stats is not None else baseline_stats,
-            spec or smoke.FeedbackCapture("floor_feedback", LIT_FLOOR, True))
+        return smoke.validate_feedback(self.log(samples if samples is not None else baseline_feedback, source, mutation), stats if stats is not None else baseline_stats, spec or smoke.FeedbackCapture("floor_feedback", LIT_FLOOR, True))
 
     def test_metadata_cannot_detach_from_statistics(self):
         _, samples = self.observations()
@@ -192,10 +186,8 @@ class CompletedFeedbackTests(unittest.TestCase):
         from reflection_smoke import STATISTICS_FIELDS
         sample = dict.fromkeys(STATISTICS_FIELDS, 0)
         capacity = 2 * 953 * 713
-        sample.update(sequence=1, generation=1, frame=3, mode=2, width=953, height=713,
-            requested_budget=smoke.DEFAULT_RAY_BUDGET, effective_budget=capacity, queue_capacity=capacity,
-            hardware_requested=1, hardware_available=1, hardware_ready=1, token_value=1, device_generation=1,
-            candidates=100, hardware_rays=100, hardware_hits=100, opaque_pixels=100)
+        sample.update(sequence=1, generation=1, frame=3, mode=2, width=953, height=713, requested_budget=smoke.DEFAULT_RAY_BUDGET, effective_budget=capacity, queue_capacity=capacity,
+            hardware_requested=1, hardware_available=1, hardware_ready=1, token_value=1, device_generation=1, candidates=100, hardware_rays=100, hardware_hits=100, opaque_pixels=100)
         smoke.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE, extent=(953, 713))
         with self.assertRaisesRegex(SmokeFailure, "dimensions"):
             smoke.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE)
@@ -234,8 +226,7 @@ class CompletedFeedbackTests(unittest.TestCase):
 
     def test_missing_fields_and_duplicate_keys_fail(self):
         _, samples = self.observations()
-        for log in ("", self.log(samples).replace("screen_returns=60", "other=60"),
-            self.log(samples).replace("sequence=1 ", "sequence=1 sequence=1 ", 1)):
+        for log in ("", self.log(samples).replace("screen_returns=60", "other=60"), self.log(samples).replace("sequence=1 ", "sequence=1 sequence=1 ", 1)):
             with self.assertRaises(SmokeFailure):
                 smoke.parse_feedback(log)
 

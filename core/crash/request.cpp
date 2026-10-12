@@ -153,21 +153,12 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     SnapshotCrashState(request, reasonKind, reasonCode);
     request.exceptionPointers = options.exceptionPointers;
     request.faultAddress = options.faultAddress;
-    request.instructionPointer = options.triggerInstructionPointer != 0u
-        ? options.triggerInstructionPointer
-        : options.instructionPointer
-    ;
+    request.instructionPointer = options.triggerInstructionPointer != 0u ? options.triggerInstructionPointer : options.instructionPointer;
     request.stackPointer = options.stackPointer;
     request.framePointer = options.framePointer;
     request.triggerLine = options.triggerLine;
-    const u32 availableCallstackFrameCount = options.callstackFrameCount > s_MaxCallstackFrames
-        ? static_cast<u32>(s_MaxCallstackFrames)
-        : options.callstackFrameCount
-    ;
-    const u32 callstackFramesToSkip = options.callstackFramesToSkip > availableCallstackFrameCount
-        ? availableCallstackFrameCount
-        : options.callstackFramesToSkip
-    ;
+    const u32 availableCallstackFrameCount = options.callstackFrameCount > s_MaxCallstackFrames ? static_cast<u32>(s_MaxCallstackFrames) : options.callstackFrameCount;
+    const u32 callstackFramesToSkip = options.callstackFramesToSkip > availableCallstackFrameCount ? availableCallstackFrameCount : options.callstackFramesToSkip;
     request.callstackFramesToSkip = callstackFramesToSkip;
     u32 outputCallstackFrameCount = 0u;
     if(options.triggerInstructionPointer != 0u)

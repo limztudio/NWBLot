@@ -14,20 +14,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedImageSource LoadImageSource(
-    Core::Alloc::GlobalArena& arena,
-    const Core::Assets::AssetManager& assets,
-    const Core::Assets::AssetRef<Texture>& identity
-){
+SharedImageSource LoadImageSource(Core::Alloc::GlobalArena& arena, const Core::Assets::AssetManager& assets, const Core::Assets::AssetRef<Texture>& identity){
     if(!identity.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("LoadImageSource: texture asset reference is empty"));
         return {};
     }
-    auto loadedAsset = assets.loadTypedSync<Texture>(
-        identity.name(),
-        NWB_TEXT("LoadImageSource"),
-        Texture::s_AssetTypeText
-    );
+    auto loadedAsset = assets.loadTypedSync<Texture>(identity.name(), NWB_TEXT("LoadImageSource"), Texture::s_AssetTypeText);
     const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!texture)
         return {};

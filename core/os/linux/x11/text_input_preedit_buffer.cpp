@@ -69,12 +69,7 @@ void X11PreeditBuffer::clear()noexcept{
     m_caretByte = 0u;
 }
 
-bool X11PreeditBuffer::replace(
-    const usize firstCharacter,
-    const usize characterCount,
-    const AStringView insertion,
-    const usize caretCharacter
-){
+bool X11PreeditBuffer::replace(const usize firstCharacter, const usize characterCount, const AStringView insertion, const usize caretCharacter){
     using namespace __hidden_x11_preedit;
     if(characterCount > s_MaxBytes || firstCharacter > s_MaxBytes - characterCount)
         return false;

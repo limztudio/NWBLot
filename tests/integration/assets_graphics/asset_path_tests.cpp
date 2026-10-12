@@ -55,12 +55,7 @@ struct RelativeCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void PrepareWorkload(
-    PathFixture& fixture,
-    const usize directoryCount,
-    const AStringView directoryToken,
-    const usize tokenRepeats
-){
+static void PrepareWorkload(PathFixture& fixture, const usize directoryCount, const AStringView directoryToken, const usize tokenRepeats){
     const usize directoryBytes = directoryToken.size() * tokenRepeats;
     fixture.relativeText.reserve(directoryCount * (directoryBytes + 1u) + 32u);
     for(usize directory = 0u; directory < directoryCount; ++directory){

@@ -184,12 +184,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTan(SIMDVectorSingle value)noexc
 #elif defined(NWB_HAS_NEON)
     vb = vreinterpretq_f32_u32(vcvtq_u32_f32(vb));
 #else
-    vb = VectorSetInt(
-        static_cast<u32>(VectorGetX(vb)),
-        static_cast<u32>(VectorGetY(vb)),
-        static_cast<u32>(VectorGetZ(vb)),
-        static_cast<u32>(VectorGetW(vb))
-    );
+    vb = VectorSetInt(static_cast<u32>(VectorGetX(vb)), static_cast<u32>(VectorGetY(vb)), static_cast<u32>(VectorGetZ(vb)), static_cast<u32>(VectorGetW(vb)));
 #endif
 
     SIMDVectorSingle vc2 = VectorMultiply(vc, vc);

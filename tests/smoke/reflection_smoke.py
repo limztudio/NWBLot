@@ -94,20 +94,15 @@ LIT_APPEND = "append"
 
 
 MODES = (LIT_DISABLED, LIT_SCREEN, LIT_HARDWARE, LIT_HYBRID)
-BASELINE_CAPTURES = ((LIT_OFFSCREEN, LIT_DISABLED), (LIT_OFFSCREEN, LIT_SCREEN), (LIT_OFFSCREEN, LIT_HARDWARE),
-    (LIT_MOVED, LIT_DISABLED), (LIT_MOVED, LIT_HARDWARE), (LIT_OPAQUE_GLASS, LIT_DISABLED), (LIT_OPAQUE_GLASS, LIT_HARDWARE),
+BASELINE_CAPTURES = ((LIT_OFFSCREEN, LIT_DISABLED), (LIT_OFFSCREEN, LIT_SCREEN), (LIT_OFFSCREEN, LIT_HARDWARE), (LIT_MOVED, LIT_DISABLED), (LIT_MOVED, LIT_HARDWARE), (LIT_OPAQUE_GLASS, LIT_DISABLED), (LIT_OPAQUE_GLASS, LIT_HARDWARE),
     (LIT_OFFSCREEN, LIT_HYBRID))
-SCREEN_CAPTURES = ((LIT_ONSCREEN, LIT_DISABLED), (LIT_ONSCREEN, LIT_SCREEN), (LIT_ONSCREEN, LIT_HARDWARE),
-    (LIT_ONSCREEN, LIT_HYBRID), (LIT_ONSCREEN_MOVED, LIT_SCREEN), (LIT_BOUNDARY, LIT_DISABLED),
-    (LIT_BOUNDARY, LIT_SCREEN), (LIT_BOUNDARY, LIT_HYBRID), (LIT_FLOOR, LIT_DISABLED), (LIT_FLOOR, LIT_SCREEN),
-    (LIT_FLOOR, LIT_HARDWARE), (LIT_FLOOR, LIT_HYBRID))
+SCREEN_CAPTURES = ((LIT_ONSCREEN, LIT_DISABLED), (LIT_ONSCREEN, LIT_SCREEN), (LIT_ONSCREEN, LIT_HARDWARE), (LIT_ONSCREEN, LIT_HYBRID), (LIT_ONSCREEN_MOVED, LIT_SCREEN), (LIT_BOUNDARY, LIT_DISABLED),
+    (LIT_BOUNDARY, LIT_SCREEN), (LIT_BOUNDARY, LIT_HYBRID), (LIT_FLOOR, LIT_DISABLED), (LIT_FLOOR, LIT_SCREEN), (LIT_FLOOR, LIT_HARDWARE), (LIT_FLOOR, LIT_HYBRID))
 CAPTURES = BASELINE_CAPTURES + SCREEN_CAPTURES
 DEFAULT_RAY_BUDGET = 2 * 960 * 720
 BUDGET_CAPTURES = ((LIT_FLOOR, LIT_HYBRID, 0), (LIT_FLOOR, LIT_HYBRID, 64))
-STATISTICS_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_FRAME, LIT_MODE, LIT_WIDTH, LIT_HEIGHT, LIT_REQUESTED_BUDGET,
-    LIT_EFFECTIVE_BUDGET, LIT_QUEUE_CAPACITY, LIT_HARDWARE_REQUESTED, LIT_HARDWARE_AVAILABLE, LIT_HARDWARE_READY,
-    LIT_TOKEN_QUEUE, LIT_TOKEN_VALUE, LIT_PHYSICAL_QUEUE, LIT_DEVICE_GENERATION, LIT_CANDIDATES, LIT_HARDWARE_RAYS,
-    LIT_HARDWARE_HITS, LIT_OPAQUE_PIXELS, LIT_GLASS_PIXELS, LIT_FALLBACK_PIXELS, LIT_SCREEN_ATTEMPTS, LIT_SCREEN_HITS)
+STATISTICS_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_FRAME, LIT_MODE, LIT_WIDTH, LIT_HEIGHT, LIT_REQUESTED_BUDGET, LIT_EFFECTIVE_BUDGET, LIT_QUEUE_CAPACITY, LIT_HARDWARE_REQUESTED, LIT_HARDWARE_AVAILABLE, LIT_HARDWARE_READY,
+    LIT_TOKEN_QUEUE, LIT_TOKEN_VALUE, LIT_PHYSICAL_QUEUE, LIT_DEVICE_GENERATION, LIT_CANDIDATES, LIT_HARDWARE_RAYS, LIT_HARDWARE_HITS, LIT_OPAQUE_PIXELS, LIT_GLASS_PIXELS, LIT_FALLBACK_PIXELS, LIT_SCREEN_ATTEMPTS, LIT_SCREEN_HITS)
 COUNTER_FIELDS = STATISTICS_FIELDS[-8:]
 OPAQUE_REGION = (0.28, 0.36, 0.43, 0.57)
 GLASS_REGION = (0.57, 0.36, 0.72, 0.57)
@@ -159,8 +154,7 @@ def analyze_markers(frame, moved=False, required=True):
         projected_radius = height / (2.0 * math.tan(math.pi / 6.0)) * 0.65 / 14.0
         minimum_pixels = max(80, math.pi * projected_radius ** 2 * 0.25)
         if len(points) < minimum_pixels:
-            raise SmokeFailure(f"hardware reflection is missing the offscreen {color} marker "
-                f"({len(points)} pixels, at least {math.ceil(minimum_pixels)} required by its projected area)")
+            raise SmokeFailure(f"hardware reflection is missing the offscreen {color} marker " f"({len(points)} pixels, at least {math.ceil(minimum_pixels)} required by its projected area)")
         expected_x, expected_y = marker_projection(width, height, color, moved)
         radius = projected_radius + height * 0.015
         outside = sum((x - expected_x) ** 2 + (y - expected_y) ** 2 > radius ** 2 for x, y in points)
@@ -170,9 +164,7 @@ def analyze_markers(frame, moved=False, required=True):
             raise SmokeFailure(f"{color} reflection is outside its geometrically predicted marker region ({outside}/{len(points)} pixels)")
         if math.hypot(centroid_x - expected_x, centroid_y - expected_y) > height * 0.025:
             raise SmokeFailure(f"{color} reflection centroid does not match the virtual marker position")
-        results[color] = {LIT_PIXELS: len(points), LIT_MINIMUM_PROJECTED_AREA_PIXELS: math.ceil(minimum_pixels),
-            LIT_CENTROID: [centroid_x, centroid_y], LIT_EXPECTED_CENTROID: [expected_x, expected_y],
-            "outside_predicted_region": outside}
+        results[color] = {LIT_PIXELS: len(points), LIT_MINIMUM_PROJECTED_AREA_PIXELS: math.ceil(minimum_pixels), LIT_CENTROID: [centroid_x, centroid_y], LIT_EXPECTED_CENTROID: [expected_x, expected_y], "outside_predicted_region": outside}
     return results
 
 
@@ -204,9 +196,7 @@ def panel_projection(width, height, color, case, reflected):
     if case == LIT_FLOOR:
         source_y = -2.0 if reflected else 2.0
         distance = 9.0
-    return (width * 0.5 + focal_length * source_x / distance,
-        height * 0.5 - focal_length * (source_y - 1.4) / distance,
-        focal_length * 0.3 / distance, focal_length * half_height / distance)
+    return (width * 0.5 + focal_length * source_x / distance, height * 0.5 - focal_length * (source_y - 1.4) / distance, focal_length * 0.3 / distance, focal_length * half_height / distance)
 
 
 def in_panel_rectangle(point, projection, margin):
@@ -223,8 +213,7 @@ def analyze_panels(frame, case, mode):
         allowed_regions = []
         color_results = {}
         for label, reflected in ((LIT_DIRECT, False), (LIT_REFLECTION, True)):
-            expected = not (case == LIT_BOUNDARY and color == LIT_GREEN) if not reflected else (
-                mode != LIT_DISABLED and not (case == LIT_BOUNDARY and color == LIT_GREEN and mode == LIT_SCREEN))
+            expected = not (case == LIT_BOUNDARY and color == LIT_GREEN) if not reflected else (mode != LIT_DISABLED and not (case == LIT_BOUNDARY and color == LIT_GREEN and mode == LIT_SCREEN))
             projection = panel_projection(width, height, color, case, reflected)
             region_points = [point for point in points if in_panel_rectangle(point, projection, height * 0.008)]
             if not expected:
@@ -234,18 +223,14 @@ def analyze_panels(frame, case, mode):
                 continue
             minimum = max(32, 4.0 * projection[2] * projection[3] * (0.25 if reflected else 0.5))
             if len(region_points) < minimum:
-                raise SmokeFailure(f"{case}/{mode}: missing {color} {label} panel "
-                    f"({len(region_points)} pixels; projected area requires {math.ceil(minimum)})")
+                raise SmokeFailure(f"{case}/{mode}: missing {color} {label} panel " f"({len(region_points)} pixels; projected area requires {math.ceil(minimum)})")
             cx = sum(x for x, _ in region_points) / len(region_points)
             cy = sum(y for _, y in region_points) / len(region_points)
             if math.hypot(cx - projection[0], cy - projection[1]) > max(2.0, height * 0.012):
                 raise SmokeFailure(f"{case}/{mode}: {color} {label} centroid does not match its geometric projection")
             allowed_regions.append(projection)
-            color_results[label] = {LIT_PIXELS: len(region_points), LIT_EXPECTED: True,
-                LIT_CENTROID: [cx, cy], LIT_EXPECTED_CENTROID: list(projection[:2]),
-                LIT_MINIMUM_PROJECTED_AREA_PIXELS: math.ceil(minimum)}
-        outside = sum(not any(in_panel_rectangle(point, region, height * 0.008) for region in allowed_regions)
-            for point in points)
+            color_results[label] = {LIT_PIXELS: len(region_points), LIT_EXPECTED: True, LIT_CENTROID: [cx, cy], LIT_EXPECTED_CENTROID: list(projection[:2]), LIT_MINIMUM_PROJECTED_AREA_PIXELS: math.ceil(minimum)}
+        outside = sum(not any(in_panel_rectangle(point, region, height * 0.008) for region in allowed_regions) for point in points)
         if outside > max(16, len(points) * 0.03):
             raise SmokeFailure(f"{case}/{mode}: {color} pixels appeared outside direct/reflected panel regions ({outside})")
         color_results["outside_predicted_regions"] = outside
@@ -294,8 +279,7 @@ def compare_opaque_glass(reference, reflected):
         metrics[name + "_new_reflected_pixels"] = added
     foreground = [(x, y) for x, y in region_pixels(width, height, FOREGROUND_REGION) if blue_foreground(before[y][x])]
     retained = sum(blue_foreground(after[y][x]) for x, y in foreground)
-    added_foreground = sum(blue_foreground(after[y][x]) and not blue_foreground(before[y][x])
-        for x, y in region_pixels(width, height, FOREGROUND_REGION))
+    added_foreground = sum(blue_foreground(after[y][x]) and not blue_foreground(before[y][x]) for x, y in region_pixels(width, height, FOREGROUND_REGION))
     if len(foreground) < width * height * 0.002 or retained < len(foreground) * 0.97 or added_foreground > len(foreground) * 0.03:
         raise SmokeFailure("reflection displaced, expanded, or removed the foreground AVBOIT strip")
     exterior_count = 0
@@ -306,8 +290,7 @@ def compare_opaque_glass(reference, reflected):
             exterior_changed += max(abs(a - b) for a, b in zip(before[y][x], after[y][x])) > 8
     if exterior_changed > max(16, exterior_count * 0.005):
         raise SmokeFailure("reflection changed pixels outside the opaque/glass silhouettes")
-    metrics.update(foreground_pixels=len(foreground), foreground_retained=retained,
-        foreground_added=added_foreground, exterior_changed=exterior_changed)
+    metrics.update(foreground_pixels=len(foreground), foreground_retained=retained, foreground_added=added_foreground, exterior_changed=exterior_changed)
     return metrics
 
 
@@ -420,11 +403,8 @@ def compare_hybrid_statistics(hardware, hybrid):
     if not hardware_rays or not hybrid_rays or min(sample[LIT_SCREEN_HITS] for sample in hybrid) <= 0 \
         or max(hybrid_rays) >= min(hardware_rays):
         raise SmokeFailure("floor hybrid did not reduce completed hardware rays while accepting screen hits")
-    return {"hardware_ray_range": [min(hardware_rays), max(hardware_rays)],
-        "hybrid_hardware_ray_range": [min(hybrid_rays), max(hybrid_rays)],
-        "eligible_pixel_range": [min(populations), max(populations)],
-        "hybrid_accepted_screen_hit_range": [min(sample[LIT_SCREEN_HITS] for sample in hybrid),
-            max(sample[LIT_SCREEN_HITS] for sample in hybrid)]}
+    return {"hardware_ray_range": [min(hardware_rays), max(hardware_rays)], "hybrid_hardware_ray_range": [min(hybrid_rays), max(hybrid_rays)], "eligible_pixel_range": [min(populations), max(populations)],
+        "hybrid_accepted_screen_hit_range": [min(sample[LIT_SCREEN_HITS] for sample in hybrid), max(sample[LIT_SCREEN_HITS] for sample in hybrid)]}
 
 
 def capture_stem(case, mode, budget=DEFAULT_RAY_BUDGET):
@@ -448,13 +428,9 @@ def capture_environment(case, mode, budget=DEFAULT_RAY_BUDGET):
 def capture(args, case, mode, budget=DEFAULT_RAY_BUDGET):
     output = args.output_directory / (capture_stem(case, mode, budget) + LIT_BMP)
     log_output = output.with_suffix(LIT_LOG)
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
-        LIT_TIMEOUT, str(args.timeout), LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {case} created",
-        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: reflection mode {mode}",
-        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown",
-        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: hardware ray budget {budget}",
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
+        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout), LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {case} created",
+        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: reflection mode {mode}", LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown", LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: hardware ray budget {budget}",
         LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKESTATISTICS, "--log-output", str(log_output)]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
@@ -463,18 +439,14 @@ def capture(args, case, mode, budget=DEFAULT_RAY_BUDGET):
     if mode in (LIT_HARDWARE, LIT_HYBRID):
         if budget == 0:
             route = "screen-space" if mode == LIT_HYBRID else "environment"
-            command += [LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: " + route,
-                LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
+            command += [LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: " + route, LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
         else:
             command += [LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
-        command += [LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
-            "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
+        command += [LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message", "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
     elif mode == LIT_DISABLED:
-        command += [LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: disabled",
-            LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
+        command += [LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: disabled", LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
     elif mode == LIT_SCREEN:
-        command += [LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: screen-space",
-            LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
+        command += [LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: screen-space", LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
     if case == LIT_OPAQUE_GLASS:
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
@@ -495,14 +467,9 @@ def capture(args, case, mode, budget=DEFAULT_RAY_BUDGET):
 
 
 def write_report(args, captures, metrics=None, statistics=None):
-    metadata = {"frames": args.frames, "frame_source": "actual application framebuffer readback", "size": [960, 720],
-        "hardware_required": args.require_hardware, "application_args": args.application_arg,
-        "settings": {"environment_top": [0, 0, 0], "environment_bottom": [0, 0, 0],
-            "max_hardware_rays_per_frame": 1382400, "roughness": 0, "glass_ior": 3.8},
-        "suite": args.suite,
-        LIT_CAPTURES: [{LIT_CASE: case, LIT_MODE: mode, LIT_HARDWARE_BUDGET: budget,
-            LIT_FILE: capture_stem(case, mode, budget) + LIT_BMP, "log": capture_stem(case, mode, budget) + LIT_LOG}
-            for case, mode, budget in captures], "statistics": statistics,
+    metadata = {"frames": args.frames, "frame_source": "actual application framebuffer readback", "size": [960, 720], "hardware_required": args.require_hardware, "application_args": args.application_arg,
+        "settings": {"environment_top": [0, 0, 0], "environment_bottom": [0, 0, 0], "max_hardware_rays_per_frame": 1382400, "roughness": 0, "glass_ior": 3.8}, "suite": args.suite, LIT_CAPTURES: [{LIT_CASE: case, LIT_MODE: mode, LIT_HARDWARE_BUDGET: budget,
+            LIT_FILE: capture_stem(case, mode, budget) + LIT_BMP, "log": capture_stem(case, mode, budget) + LIT_LOG} for case, mode, budget in captures], "statistics": statistics,
         "metrics": metrics, LIT_LIMITATIONS: "Smooth single-bounce reflection with on-screen and offscreen geometric marker checks. Wall-mirror screen hits approach marker backs and have provisional confidence; the floor case approaches their fronts. Completed per-frame counters separately check floor hybrid ray reduction and bounded budgets; they do not establish GPU speed. Hardware secondary-hit lighting is approximate; roughness reconstruction and temporal history are not validated here."}
     (args.output_directory / "reflection_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
     cards = []
@@ -511,8 +478,7 @@ def write_report(args, captures, metrics=None, statistics=None):
         png = png_rgb_bytes(read_bmp_24_rows(bmp))
         bmp.with_suffix(".png").write_bytes(png)
         label = html.escape(item[LIT_CASE] + " / " + item[LIT_MODE] + " / budget " + str(item[LIT_HARDWARE_BUDGET]))
-        cards.append(f'<article><h2>{label}</h2><a href="{html.escape(item[LIT_FILE])}">Raw BMP</a>'
-            f' / <a href="{html.escape(item["log"])}">Completed-frame log</a>'
+        cards.append(f'<article><h2>{label}</h2><a href="{html.escape(item[LIT_FILE])}">Raw BMP</a>' f' / <a href="{html.escape(item["log"])}">Completed-frame log</a>'
             f'<img alt="Actual {label} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
     document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection smoke captures</title>'
     document += '<style>body{background:#141922;color:#e7edf5;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{display:block;width:100%;margin-top:12px}a{color:#88c9ff}pre{white-space:pre-wrap}h2{font-size:19px}</style>'
@@ -576,29 +542,20 @@ def main(argv):
         if args.suite in (LIT_ALL, LIT_BASELINE):
             for case, mode in ((LIT_OFFSCREEN, LIT_DISABLED), (LIT_OFFSCREEN, LIT_SCREEN), (LIT_MOVED, LIT_DISABLED)):
                 metrics[LIT_CASE_MODE.format(case=case, mode=mode)] = analyze_markers(read_bmp_24_rows(args.output_directory / LIT_CASE_MODE_BMP.format(case=case, mode=mode)), required=False)
-            metrics["marker_motion"] = compare_marker_motion(
-                read_bmp_24_rows(args.output_directory / "offscreen_hardware.bmp"),
-                read_bmp_24_rows(args.output_directory / "moved_hardware.bmp"))
+            metrics["marker_motion"] = compare_marker_motion(read_bmp_24_rows(args.output_directory / "offscreen_hardware.bmp"), read_bmp_24_rows(args.output_directory / "moved_hardware.bmp"))
             metrics["offscreen_hybrid"] = analyze_markers(read_bmp_24_rows(args.output_directory / "offscreen_hybrid.bmp"))
-            metrics[LIT_OPAQUE_GLASS] = compare_opaque_glass(
-                read_bmp_24_rows(args.output_directory / "opaque_glass_disabled.bmp"),
-                read_bmp_24_rows(args.output_directory / "opaque_glass_hardware.bmp"))
+            metrics[LIT_OPAQUE_GLASS] = compare_opaque_glass(read_bmp_24_rows(args.output_directory / "opaque_glass_disabled.bmp"), read_bmp_24_rows(args.output_directory / "opaque_glass_hardware.bmp"))
         if args.suite in (LIT_ALL, LIT_SCREEN):
             for case, mode in SCREEN_CAPTURES:
                 metrics[LIT_CASE_MODE.format(case=case, mode=mode)] = analyze_panels(read_bmp_24_rows(args.output_directory / LIT_CASE_MODE_BMP.format(case=case, mode=mode)), case, mode)
-            metrics["panel_motion"] = compare_panel_motion(
-                read_bmp_24_rows(args.output_directory / "onscreen_screen.bmp"),
-                read_bmp_24_rows(args.output_directory / "onscreen_moved_screen.bmp"))
-            metrics["floor_completed_ray_comparison"] = compare_hybrid_statistics(
-                validate_statistics(statistics["floor_hardware"], LIT_FLOOR, LIT_HARDWARE),
-                validate_statistics(statistics["floor_hybrid"], LIT_FLOOR, LIT_HYBRID))
+            metrics["panel_motion"] = compare_panel_motion(read_bmp_24_rows(args.output_directory / "onscreen_screen.bmp"), read_bmp_24_rows(args.output_directory / "onscreen_moved_screen.bmp"))
+            metrics["floor_completed_ray_comparison"] = compare_hybrid_statistics(validate_statistics(statistics["floor_hardware"], LIT_FLOOR, LIT_HARDWARE), validate_statistics(statistics["floor_hybrid"], LIT_FLOOR, LIT_HYBRID))
         if args.suite in (LIT_ALL, LIT_BUDGET):
             for case, mode, budget in BUDGET_CAPTURES:
                 stem = capture_stem(case, mode, budget)
                 metrics[stem] = analyze_panels(read_bmp_24_rows(args.output_directory / (stem + LIT_BMP)), case, mode)
         write_report(args, completed, metrics, statistics)
-        print(f"PASS: reflection {args.suite} geometric marker, route, and composition checks\n"
-            + json.dumps(metrics, indent=2), flush=True)
+        print(f"PASS: reflection {args.suite} geometric marker, route, and composition checks\n" + json.dumps(metrics, indent=2), flush=True)
         return 0
     except (SmokeFailure, OSError, subprocess.TimeoutExpired) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)

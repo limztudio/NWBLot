@@ -11,12 +11,8 @@ from combo_native import ComboNativeInput
 from combo_probe_common import center
 from combo_probe import COMBO_PROBE
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -33,9 +29,7 @@ class ComboRun:
         self.deadline = time.monotonic() + args.timeout
         self.snapshot = None
         self.stages = []
-        self.expected = {"selected": 0, "cursor": 0, "count": 100000, "focused": 0, "reversed": 0,
-            "removed": 0, "visible": 1, "commits": 0, "underlying": 0, "open": 0, "enabled": 1,
-            "bottom": 0, "source_generation": 1}
+        self.expected = {"selected": 0, "cursor": 0, "count": 100000, "focused": 0, "reversed": 0, "removed": 0, "visible": 1, "commits": 0, "underlying": 0, "open": 0, "enabled": 1, "bottom": 0, "source_generation": 1}
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -70,8 +64,7 @@ class ComboRun:
             if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < 400.0:
                 raise SmokeSkip("the combo fixture needs a logical client of at least 600x400")
             self.backend.capture_client_window(self.handle, path)
-            report = COMBO_PROBE.observe(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra)
+            report = COMBO_PROBE.observe(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
                 for field in dynamic:
@@ -84,18 +77,15 @@ class ComboRun:
         raise SmokeFailure(f"combo displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
-                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus",
-            "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
+                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus", "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
         (self.args.output_directory / "combo.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):
         self.checkpoint("initial_closed_combo", extra=lambda s: s["rectangles"]["trigger"][2] > 0.0)
         self.expected.pop("focused")
         self.click("trigger")
-        self.checkpoint("pointer_opens_preview", open=1, dynamic=("cursor",),
-            extra=lambda s: s["past"] - s["first"] <= 10)
+        self.checkpoint("pointer_opens_preview", open=1, dynamic=("cursor",), extra=lambda s: s["past"] - s["first"] <= 10)
         self.native.tap("Home")
         self.checkpoint("home_previews_first_without_commit", cursor=1)
         self.native.tap("Down")
@@ -111,8 +101,7 @@ class ComboRun:
         self.native.tap("space")
         self.checkpoint("reopen_starts_from_committed_key", open=1)
         self.native.tap("End")
-        self.checkpoint("end_previews100000_without_bulk_labels", cursor=100000,
-            extra=lambda s: s["past"] == 100000 and s["first"] > 99980)
+        self.checkpoint("end_previews100000_without_bulk_labels", cursor=100000, extra=lambda s: s["past"] == 100000 and s["first"] > 99980)
         self.native.tap("Escape")
         self.checkpoint("end_preview_cancel_preserves_committed_key", open=0, dynamic=("cursor",))
         self.native.tap("Down")
@@ -128,8 +117,7 @@ class ComboRun:
         self.native.tap("F4")
         self.checkpoint("external_selection_updates_caption", selected=100000, dynamic=("cursor",))
         self.native.tap("space")
-        self.checkpoint("reopen_ensures100000_visible", open=1, cursor=100000,
-            extra=lambda s: s["past"] == 100000 and s["first"] > 99980)
+        self.checkpoint("reopen_ensures100000_visible", open=1, cursor=100000, extra=lambda s: s["past"] == 100000 and s["first"] > 99980)
         old_first = self.snapshot["first"]
         self.native.wheel(2, *self.point(*center(self.snapshot["rectangles"]["viewport"])))
         self.checkpoint("wheel_scrolls_without_committing", extra=lambda s: s["first"] < old_first)
@@ -150,8 +138,7 @@ class ComboRun:
         self.native.tap("F5")
         self.checkpoint("reorder_preserves_committed_key", reversed=1)
         self.native.tap("space")
-        self.checkpoint("reordered_reopen_ensures_stable_key", open=1,
-            extra=lambda s: s["first"] > 99980 and s["rectangles"]["cursor_row"][2] > 0.0)
+        self.checkpoint("reordered_reopen_ensures_stable_key", open=1, extra=lambda s: s["first"] > 99980 and s["rectangles"]["cursor_row"][2] > 0.0)
         self.native.tap("Escape")
         self.checkpoint("reordered_cancel_keeps_selection", open=0, dynamic=("cursor",))
         self.native.tap("F6")

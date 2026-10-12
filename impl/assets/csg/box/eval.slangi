@@ -27,14 +27,7 @@ float3 nwbCsgBoxNormal(const float3 shapePosition, const NwbCsgCutter cutter){
     const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
     const float3 outside = max(q, float3(0.0));
     if(dot(outside, outside) > NWB_CSG_NORMALIZATION_LENGTH_SQUARED_EPSILON)
-        return nwbCsgNormalizeOr(
-            outside * float3(
-                nwbCsgNonZeroSign(shapePosition.x),
-                nwbCsgNonZeroSign(shapePosition.y),
-                nwbCsgNonZeroSign(shapePosition.z)
-            ),
-            float3(1.0, 0.0, 0.0)
-        );
+        return nwbCsgNormalizeOr(outside * float3(nwbCsgNonZeroSign(shapePosition.x), nwbCsgNonZeroSign(shapePosition.y), nwbCsgNonZeroSign(shapePosition.z)), float3(1.0, 0.0, 0.0));
 
     if(q.x >= q.y && q.x >= q.z)
         return float3(nwbCsgNonZeroSign(shapePosition.x), 0.0, 0.0);

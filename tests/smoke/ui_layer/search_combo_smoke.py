@@ -12,12 +12,8 @@ from combo_probe_common import center
 from edit_probe import text_hash
 from search_combo_probe import SEARCH_COMBO_PROBE
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -34,15 +30,12 @@ class SearchComboRun:
         self.deadline = time.monotonic() + args.timeout
         self.snapshot = None
         self.stages = []
-        self.expected = {"selected": 0, "cursor": 0, "full_count": 100000, "count": 100000, "focused": 0,
-            "reversed": 0, "removed": 0, "commits": 0, "underlying": 0, "open": 0, "enabled": 1,
-            "source_revision": 1, "query_focused": 0, "composing": 0}
+        self.expected = {"selected": 0, "cursor": 0, "full_count": 100000, "count": 100000, "focused": 0, "reversed": 0, "removed": 0, "commits": 0, "underlying": 0, "open": 0, "enabled": 1, "source_revision": 1, "query_focused": 0, "composing": 0}
         self.query_expectation("")
 
     def query_expectation(self, value, anchor=None, caret=None):
         length = len(value.encode("utf-8"))
-        self.expected.update({"query_bytes": length, "query_hash": text_hash(value) & 0xFFFFFF,
-            "query_anchor": length if anchor is None else anchor, "query_caret": length if caret is None else caret})
+        self.expected.update({"query_bytes": length, "query_hash": text_hash(value) & 0xFFFFFF, "query_anchor": length if anchor is None else anchor, "query_caret": length if caret is None else caret})
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -77,8 +70,7 @@ class SearchComboRun:
             if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < 430.0:
                 raise SmokeSkip("the combo fixture needs a logical client of at least 600x430")
             self.backend.capture_client_window(self.handle, path)
-            report = SEARCH_COMBO_PROBE.observe(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra)
+            report = SEARCH_COMBO_PROBE.observe(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
                 for field in dynamic:
@@ -91,10 +83,8 @@ class SearchComboRun:
         raise SmokeFailure(f"searchable combo displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
-                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus",
-            "runtime_limit": "No live IME, native Wayland, physical grabs, or native Linux qualification."}
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
+                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus", "runtime_limit": "No live IME, native Wayland, physical grabs, or native Linux qualification."}
         (self.args.output_directory / "search_combo.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):
@@ -162,8 +152,7 @@ class SearchComboRun:
         self.native.tap("Down")
         self.checkpoint("query_navigation_after_paste", cursor=12)
         self.native.tap("Page_Down")
-        self.checkpoint("page_down_from_query_moves_results", dynamic=("cursor",),
-            extra=lambda s: s["cursor"] > 12 and str(s["cursor"]).startswith("12"))
+        self.checkpoint("page_down_from_query_moves_results", dynamic=("cursor",), extra=lambda s: s["cursor"] > 12 and str(s["cursor"]).startswith("12"))
         self.native.tap("Page_Up")
         self.checkpoint("page_up_from_query_restores_result", cursor=12)
         self.native.tap("F5")
@@ -176,8 +165,7 @@ class SearchComboRun:
         self.native.tap("Return")
         self.checkpoint("result_enter_commits_full_source_key", selected=12999, cursor=12999, open=0, commits=3)
         self.native.tap("F6")
-        self.checkpoint("source_removal_clears_committed_key", selected=0, full_count=99999, count=1110,
-            removed=12999, source_revision=3, dynamic=("cursor",))
+        self.checkpoint("source_removal_clears_committed_key", selected=0, full_count=99999, count=1110, removed=12999, source_revision=3, dynamic=("cursor",))
         self.native.tap("F7")
         self.query_expectation("")
         self.checkpoint("external_query_clear_refreshes_view", count=99999, dynamic=("cursor",))
@@ -200,8 +188,7 @@ class SearchComboRun:
         self.native.tap("Down")
         self.checkpoint("exact_result_navigation", cursor=100000, extent=(800, 600))
         self.native.tap("Return")
-        self.checkpoint("query_commit_after_resize", selected=100000, cursor=100000, open=0, query_focused=0,
-            commits=4, extent=(800, 600))
+        self.checkpoint("query_commit_after_resize", selected=100000, cursor=100000, open=0, query_focused=0, commits=4, extent=(800, 600))
 
 
 def run(args):

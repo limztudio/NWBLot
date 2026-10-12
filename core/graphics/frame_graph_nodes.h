@@ -20,9 +20,8 @@ NWB_CORE_BEGIN
 
 
 // Well-known frame-graph node identities published by the graphics layer.
-// Any frame-graph contributor (render pass or not) references these by name to express
-// reads/writes/dependencies on graphics-owned nodes. Node names are stable identities
-// joined to timing by NameHash, so Name is the correct type here.
+// Any frame-graph contributor (render pass or not) references these by name to express reads/writes/dependencies on graphics-owned nodes.
+// Node names are stable identities joined to timing by NameHash, so Name is the correct type here.
 namespace GraphicsFrameGraphNodes{
     inline constexpr Name s_Backbuffer("graphics/backbuffer");
 };

@@ -20,8 +20,7 @@ struct NwbOpticalBoundsFinalizePushConstants{
     uint staticBoundsComplete;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbOpticalBoundsFinalizePushConstants> g_NwbOpticalBoundsFinalize;
+[[vk::push_constant]] ConstantBuffer<NwbOpticalBoundsFinalizePushConstants> g_NwbOpticalBoundsFinalize;
 
 groupshared float3 g_NwbOpticalMinimum[NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE];
 groupshared float3 g_NwbOpticalMaximum[NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE];
@@ -31,11 +30,7 @@ groupshared uint g_NwbOpticalInvalid[NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE];
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbOpticalTransformRuntimeBounds(
-    const uint inputOffset,
-    out float3 boundsMin,
-    out float3 boundsMax
-){
+bool nwbOpticalTransformRuntimeBounds(const uint inputOffset, out float3 boundsMin, out float3 boundsMax){
     boundsMin = float3(0.0);
     boundsMax = float3(0.0);
     const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);
@@ -64,10 +59,7 @@ bool nwbOpticalTransformRuntimeBounds(
         const float margin = magnitude * (16.0 * 1.1920928955078125e-7);
         boundsMin[rowIndex] = ((row.w + low.x) + low.y) + low.z - margin;
         boundsMax[rowIndex] = ((row.w + high.x) + high.y) + high.z + margin;
-        if(
-            !all(isfinite(first)) || !all(isfinite(second)) || !isfinite(magnitude) || !isfinite(margin)
-            || !isfinite(boundsMin[rowIndex]) || !isfinite(boundsMax[rowIndex])
-        )
+        if(!all(isfinite(first)) || !all(isfinite(second)) || !isfinite(magnitude) || !isfinite(margin) || !isfinite(boundsMin[rowIndex]) || !isfinite(boundsMax[rowIndex]))
             return false;
     }
     return true;

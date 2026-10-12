@@ -36,30 +36,16 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
     m_signalSemaphoreValues.push_back(value);
 }
 
-bool Queue::coversTimerQueryPrerequisite(
-    const QueueSubmissionToken& prerequisite,
-    const bool prerequisiteObservedComplete,
-    const SubmissionWait* const localWaits,
-    const usize localWaitCount
-)const noexcept{
+bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const bool prerequisiteObservedComplete, const SubmissionWait* const localWaits, const usize localWaitCount)const noexcept{
     if(!prerequisite.valid() || prerequisiteObservedComplete)
         return true;
     if(prerequisite.matchesPhysicalQueue(m_physicalQueue.index, m_physicalQueue.deviceGeneration))
         return true;
-    if(
-        !prerequisite.hasPhysicalQueueIdentity()
-        || prerequisite.deviceGeneration != m_device.m_deviceGeneration
-        || prerequisite.physicalQueueIndex >= m_device.m_physicalQueues.size()
-    )
+    if(!prerequisite.hasPhysicalQueueIdentity() || prerequisite.deviceGeneration != m_device.m_deviceGeneration || prerequisite.physicalQueueIndex >= m_device.m_physicalQueues.size())
         return false;
 
     const Queue* const producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
-    if(
-        !producerQueue
-        || producerQueue->m_physicalQueue.deviceGeneration != prerequisite.deviceGeneration
-        || producerQueue->m_queueID != prerequisite.queue
-        || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE
-    )
+    if(!producerQueue || producerQueue->m_physicalQueue.deviceGeneration != prerequisite.deviceGeneration || producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
         return false;
 
     const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value) -> bool {
@@ -118,8 +104,8 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
-    // Queue-global synchronization belongs to the next accepted native submission. Validation and injected
-    // pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
+    // Queue-global synchronization belongs to the next accepted native submission.
+    // Validation and injected pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
@@ -129,11 +115,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
-    const bool hasPendingSemaphores = localWaitCount > 0u
-        || localSignalCount > 0u
-        || !m_waitSemaphores.empty()
-        || !m_signalSemaphores.empty()
-    ;
+    const bool hasPendingSemaphores = localWaitCount > 0u || localSignalCount > 0u || !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
     const bool requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
 
     if(hasCommands && numCmd > UINT32_MAX){
@@ -210,13 +192,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         validatedTimerQueryCommandBuffers.reserve(numCmd);
         for(usize i = 0u; i < numCmd; ++i){
             TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
-            if(!tracked->validateTimerQueryRecordingClaims(
-                *this,
-                localWaits,
-                localWaitCount,
-                validatedTimerQueryCommandBuffers.empty() ? nullptr : validatedTimerQueryCommandBuffers.data(),
-                validatedTimerQueryCommandBuffers.size()
-            )){
+            if(!tracked->validateTimerQueryRecordingClaims(*this, localWaits, localWaitCount, validatedTimerQueryCommandBuffers.empty() ? nullptr : validatedTimerQueryCommandBuffers.data(), validatedTimerQueryCommandBuffers.size())){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
                 return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
@@ -267,9 +243,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
                     )
                 )
             ){
-                NWB_LOGGER_CRITICAL_WARNING(
-                    NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale")
-                );
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale"));
                 return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
         }
@@ -290,12 +264,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     }
 
     const u64 submissionID = m_lastSubmittedID + 1u;
-    const QueueSubmissionToken submissionToken{
-        .value = submissionID,
-        .physicalQueueIndex = m_physicalQueue.index,
-        .deviceGeneration = m_physicalQueue.deviceGeneration,
-        .queue = m_queueID,
-    };
+    const QueueSubmissionToken submissionToken{ .value = submissionID, .physicalQueueIndex = m_physicalQueue.index, .deviceGeneration = m_physicalQueue.deviceGeneration, .queue = m_queueID, };
 
     auto timelineSignal = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
     timelineSignal.semaphore = m_trackingSemaphore;
@@ -387,9 +356,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         if(!tracked || !validateCommandBufferSubmissionState(*tracked))
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         if(!tracked->validatePendingAccelStructBuildCommits()){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains")
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
         for(GpuDescriptorHeap* const heap : tracked->m_referencedDescriptorHeaps){
@@ -405,11 +372,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
                     return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
                 }
             }
-            descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{
-                .heap = heap,
-                .commandBuffer = tracked,
-                .heapUseIndex = *heapUseIndex,
-            });
+            descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{ .heap = heap, .commandBuffer = tracked, .heapUseIndex = *heapUseIndex, });
         }
     }
 
@@ -582,10 +545,7 @@ void Queue::clearPendingSemaphores()noexcept{
     m_signalSemaphoreValues.clear();
 }
 
-Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
-    CommandBufferList& source,
-    const CommandBufferList::iterator commandBuffer
-){
+Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList& source, const CommandBufferList::iterator commandBuffer){
     auto next = commandBuffer;
     ++next;
 
@@ -607,17 +567,9 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
         return next;
     }
 
-    WorkerCommandArena* const workerArena = findWorkerCommandArena(
-        cmdBuf->m_recordingWorkerDomain,
-        cmdBuf->m_recordingWorkerIndex
-    );
+    WorkerCommandArena* const workerArena = findWorkerCommandArena(cmdBuf->m_recordingWorkerDomain, cmdBuf->m_recordingWorkerIndex);
     if(!workerArena){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"),
-            m_physicalQueue.index,
-            cmdBuf->m_recordingWorkerDomain,
-            cmdBuf->m_recordingWorkerIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"), m_physicalQueue.index, cmdBuf->m_recordingWorkerDomain, cmdBuf->m_recordingWorkerIndex);
         NWB_ASSERT_MSG(false, NWB_TEXT("Worker command buffer lost its owning command arena"));
         NWB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
         m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);

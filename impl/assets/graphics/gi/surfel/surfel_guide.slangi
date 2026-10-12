@@ -57,8 +57,7 @@ float nwbSurfelGuideTotal(const NwbSurfelGuide guide){
 
 uint nwbSurfelGuideSelectBin(const NwbSurfelGuide guide, const float target){
     float cumulative = 0.0;
-    [loop]
-    for(uint bin = 0u; bin < NWB_SURFEL_GUIDE_BIN_COUNT; ++bin){
+    [loop] for(uint bin = 0u; bin < NWB_SURFEL_GUIDE_BIN_COUNT; ++bin){
         cumulative += nwbSurfelGuideWeight(guide, bin);
         if(target < cumulative)
             return bin;

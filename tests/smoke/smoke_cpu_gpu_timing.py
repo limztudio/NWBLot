@@ -33,22 +33,15 @@ ENABLED = "SmokeCpuGpuTimingProbe: enabled "
 COMPLETE = "SmokeCpuGpuTimingProbe: complete "
 REQUIRED_CPU = {LIT_GRAPHICS_FRAME, LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES, LIT_GRAPHICS_BEGIN_FRAME, LIT_GRAPHICS_PRESENT}
 # Exact stable producer scope strings; the helper computes global/name.h's canonical eight-lane hash.
-# This is not an externally supplied dictionary. Unrecognized labels retain their original token.
-KNOWN_CPU = ("frame.project_update", LIT_GRAPHICS_FRAME, "graphics.animate", LIT_GRAPHICS_BEGIN_FRAME,
-    "graphics.frame_preamble", "graphics.render", LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES,
-    "graphics.prepare_resources_failed", LIT_GRAPHICS_PRESENT, "graphics.garbage_collect",
-    "cpu.task.queue_delay", "cpu.task.execution", "cpu.task.handle_join", "cpu.task.scope_join",
+# This is not an externally supplied dictionary.
+# Unrecognized labels retain their original token.
+KNOWN_CPU = ("frame.project_update", LIT_GRAPHICS_FRAME, "graphics.animate", LIT_GRAPHICS_BEGIN_FRAME, "graphics.frame_preamble", "graphics.render", LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES,
+    "graphics.prepare_resources_failed", LIT_GRAPHICS_PRESENT, "graphics.garbage_collect", "cpu.task.queue_delay", "cpu.task.execution", "cpu.task.handle_join", "cpu.task.scope_join",
     "cpu.task.scheduler_join", "cpu.worker.idle", "cpu.task.ecs.world", "cpu.task.graphics.setup", "cpu.task.graphics.frame")
-KNOWN_GPU = ("render.frame", "render.async_prefix", "render.async_shadow", "render.async_surfel_gi", "render.async_final",
-    "render.mesh_dispatch", "render.opaque_regular", "render.shadow_visibility", "render.caustic_photons",
-    "render.caustic_resolve", "render.deferred_lighting", "render.deferred_composite", "render.deferred_present",
-    "render.reflection_classify", "render.reflection_hardware", "render.reflection_spatial",
-    "render.shadow.light_space_views", "render.shadow.light_space_opaque_capture",
-    "render.shadow.light_space_transparent_capture", "render.shadow.light_space_shade",
-    "render.shadow.light_space_map_opaque", "render.shadow.light_space_map_transparent",
-    "render.shadow.light_space_fallback_opaque", "render.shadow.light_space_fallback_transparent",
-    "render.surfel_spawn", "render.surfel_age_free", "render.surfel_hash_build", "render.surfel_trace",
-    "render.surfel_resolve", "render.surfel_upsample")
+KNOWN_GPU = ("render.frame", "render.async_prefix", "render.async_shadow", "render.async_surfel_gi", "render.async_final", "render.mesh_dispatch", "render.opaque_regular", "render.shadow_visibility", "render.caustic_photons",
+    "render.caustic_resolve", "render.deferred_lighting", "render.deferred_composite", "render.deferred_present", "render.reflection_classify", "render.reflection_hardware", "render.reflection_spatial",
+    "render.shadow.light_space_views", "render.shadow.light_space_opaque_capture", "render.shadow.light_space_transparent_capture", "render.shadow.light_space_shade", "render.shadow.light_space_map_opaque", "render.shadow.light_space_map_transparent",
+    "render.shadow.light_space_fallback_opaque", "render.shadow.light_space_fallback_transparent", "render.surfel_spawn", "render.surfel_age_free", "render.surfel_hash_build", "render.surfel_trace", "render.surfel_resolve", "render.surfel_upsample")
 CHECKED_SYMBOLS = known_name_symbols(KNOWN_CPU + KNOWN_GPU)
 
 
@@ -104,8 +97,7 @@ def parse_publications(text, measurement):
             if key in scopes or any(row[LIT_NAME] == name and prior[0] == domain for prior, row in scopes.items()):
                 raise SmokeFailure("CPU diagnostic duplicate scope identity")
             scopes[key] = dict(name=name, generation=generation, raw_name=raw_name, decoded_from_hash=name != raw_name, domain=LIT_GPU if domain else LIT_CPU, records=0, samples=0, seconds=0.0,
-                minimum_sample_seconds=None, maximum_sample_seconds=0.0, first_source_frame=None,
-                last_source_frame=None, single_source_frames=set(), excluded_records=0, excluded_samples=0)
+                minimum_sample_seconds=None, maximum_sample_seconds=0.0, first_source_frame=None, last_source_frame=None, single_source_frames=set(), excluded_records=0, excluded_samples=0)
             continue
         parts = line.split()
         if len(parts) != 14 or parts[0] != "sample":
@@ -131,8 +123,7 @@ def parse_publications(text, measurement):
         last_observation = (observation, presentations)
         row = scopes[key]
         included = begin >= source_first and end < source_end
-        records.append(dict(domain=row[LIT_DOMAIN], scope=row[LIT_NAME], generation=generation, observation_frame=observation,
-            presentations=presentations, publication_frame=publication, first_source_frame=begin,
+        records.append(dict(domain=row[LIT_DOMAIN], scope=row[LIT_NAME], generation=generation, observation_frame=observation, presentations=presentations, publication_frame=publication, first_source_frame=begin,
             last_source_frame=end, samples=count, seconds=total, included=included))
         if not included:
             row["excluded_records"] += 1
@@ -160,14 +151,9 @@ def parse_publications(text, measurement):
         row["sample_mean_ms"] = 1000 * row[LIT_SECONDS] / row[LIT_SAMPLES] if row[LIT_SAMPLES] else None
         row["total_ms_per_accepted_presentation"] = 1000 * row[LIT_SECONDS] / (last - first)
         result_scopes.append(row)
-    return dict(schema=1, requested=True, diagnostic_only=True, performance_qualification=False,
-        capture=dict(cpu=True, gpu=True, memory=False),
-        scope_decoding=dict(method="deterministic_canonical_engine_hash", decoder="tests/ab/name_symbols.py",
-            known_cpu=list(KNOWN_CPU), known_gpu=list(KNOWN_GPU), unknown_labels="retained_raw",
-            provenance="Decoder and this scope roster are bound by launch identity_before.helpers and identity_after.helpers."),
-        window=dict(first_presentation=first, last_presentation=last,
-            seconds=seconds, first_source_frame=source_first, end_source_frame_exclusive=source_end),
-        scopes=result_scopes, publications=records,
+    return dict(schema=1, requested=True, diagnostic_only=True, performance_qualification=False, capture=dict(cpu=True, gpu=True, memory=False), scope_decoding=dict(method="deterministic_canonical_engine_hash", decoder="tests/ab/name_symbols.py",
+            known_cpu=list(KNOWN_CPU), known_gpu=list(KNOWN_GPU), unknown_labels="retained_raw", provenance="Decoder and this scope roster are bound by launch identity_before.helpers and identity_after.helpers."),
+        window=dict(first_presentation=first, last_presentation=last, seconds=seconds, first_source_frame=source_first, end_source_frame_exclusive=source_end), scopes=result_scopes, publications=records,
         interpretation="Scopes overlap and task durations may overlap across workers; do not sum them or subtract GPU means from wall time.",
         gpu_coverage="Only completed publications observed by the final timestamp are included; no GPU drain or missing-sample imputation.")
 
@@ -186,8 +172,7 @@ def verify_capture(log_text, path, measurement, requested, owner):
     result = parse_publications(path.read_text(encoding=LIT_UTF_8), measurement)
     match = re.fullmatch(re.escape(COMPLETE + f"owner={owner} ") + r"records=([0-9]+) first=([0-9]+) last=([0-9]+) first_source=([0-9]+) end_source=([0-9]+)", completed[0])
     window = result[LIT_WINDOW]
-    expected = (len(result["publications"]), window["first_presentation"], window["last_presentation"],
-        window[LIT_FIRST_SOURCE_FRAME], window["end_source_frame_exclusive"])
+    expected = (len(result["publications"]), window["first_presentation"], window["last_presentation"], window[LIT_FIRST_SOURCE_FRAME], window["end_source_frame_exclusive"])
     if match is None or tuple(map(int, match.groups())) != expected:
         raise SmokeFailure("CPU diagnostic completion marker disagrees with output")
     return result

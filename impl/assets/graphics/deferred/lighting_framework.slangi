@@ -30,8 +30,7 @@ struct NwbDeferredLightingPushConstants{
     uint presentationMode;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConstants;
 
 #define g_NwbDeferredBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbDeferredLightingPushConstants.resourceSlots]
 

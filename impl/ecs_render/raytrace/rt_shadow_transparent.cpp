@@ -26,27 +26,16 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const bool graphOwnsOpaqueToTransparentBoundary,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-    )
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
-    const bool composeCsg = lightSpace && lightSpace->ready
-        && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
-    const bool replaceTransparent = composeCsg
-        && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) != 0u;
+    const bool composeCsg = lightSpace && lightSpace->ready && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
+    const bool replaceTransparent = composeCsg && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) != 0u;
     if(lightSpace && lightSpace->ready && (!composeCsg || replaceTransparent)){
         NWB_ASSERT(graphOwnsOpaqueToTransparentBoundary);
-        Core::GpuTimingMeasure timing(
-            m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList
-        );
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList);
 
         const u32 sampleCount = transparentShadowSampleCount();
-        if(!RecordLightSpaceResolve(
-            commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(), *lightSpace, *targets.transparentSoftHalf,
-            frameIndex, sampleCount, targets.bindless.transparentSoftHalfStorage.slot(), true
-        ))
+        if(!RecordLightSpaceResolve(commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(), *lightSpace, *targets.transparentSoftHalf, frameIndex, sampleCount, targets.bindless.transparentSoftHalfStorage.slot(), true))
             return false;
         reportTransparentShadowSampling(sampleCount);
         return true;
@@ -55,28 +44,9 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
     const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList,
-        targets,
-        deferredLightingResources,
-        frameIndex,
-        softGroupsX,
-        softGroupsY,
-        false,
-        false,
-        true,
-        false,
-        false,
-        graphOwnsOpaqueToTransparentBoundary,
-        false,
-        false,
-        false,
-        false,
-        false
-    );
+    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, false, false, true, false, false, graphOwnsOpaqueToTransparentBoundary, false, false, false, false, false);
     if(composeCsg){
-        commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::ResourceStates::UnorderedAccess, true);
+        commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
         commandList.commitBarriers();
         if(!RecordLightSpaceResolve(commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(),
             *lightSpace, *targets.transparentSoftHalf, frameIndex, transparentShadowSampleCount(),
@@ -93,11 +63,7 @@ void RendererRayTracingSystem::reportSoftwareShadowTraversal(const DeferredFrame
         return;
 
     m_rayTracingState.m_swShadowDispatchLogged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
-        , static_cast<u64>(targets.width)
-        , static_cast<u64>(targets.height)
-        , static_cast<u64>(m_rayTracingState.m_sceneBvhInstanceCount)
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)"), static_cast<u64>(targets.width), static_cast<u64>(targets.height), static_cast<u64>(m_rayTracingState.m_sceneBvhInstanceCount));
 }
 
 bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
@@ -107,12 +73,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
     const u32 frameIndex,
     const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || !m_rayTracingState.m_softTransparentTemporalReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-    )
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || !m_rayTracingState.m_softTransparentTemporalReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
     const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
@@ -150,11 +111,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     const u32 frameIndex,
     const bool graphOwnsTransparentWaveletInputBoundary
 ){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-    )
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
     const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
@@ -185,42 +142,14 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     return true;
 }
 
-bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex
-){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-    )
+bool RendererRayTracingSystem::renderSoftTransparentShadowFold(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const u32 frameIndex){
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
     const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
     const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList,
-        targets,
-        deferredLightingResources,
-        frameIndex,
-        softGroupsX,
-        softGroupsY,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-    );
+    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, false, false, false, false, false, false, false, false, false, false, false, true);
     return true;
 }
 

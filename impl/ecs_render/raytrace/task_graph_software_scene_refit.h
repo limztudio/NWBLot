@@ -26,10 +26,7 @@ struct SoftwareSceneRefitGraphTasks{
 };
 
 // Both tasks must share the accepting packet with all mesh builds and the scene upload.
-[[nodiscard]] SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(
-    Core::GpuTaskGraph& graph, const SoftwareSceneRefitHandle& snapshot,
-    Core::GpuGraphResourceId sceneNodes, Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(Core::GpuTaskGraph& graph, const SoftwareSceneRefitHandle& snapshot, Core::GpuGraphResourceId sceneNodes, Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

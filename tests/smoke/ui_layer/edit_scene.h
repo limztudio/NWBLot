@@ -67,9 +67,7 @@ private:
     bool m_displayChanged = false;
 };
 
-using SharedUiEditSmokeScene = RefCountPtr<
-    RefCounter<UiEditSmokeScene>, ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiEditSmokeScene = RefCountPtr< RefCounter<UiEditSmokeScene>, ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerEditSmokeEnabled();
 [[nodiscard]] SharedUiEditSmokeScene CreateUiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);

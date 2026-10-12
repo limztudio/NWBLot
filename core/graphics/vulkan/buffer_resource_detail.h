@@ -81,10 +81,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     return desc.structStride != 0u || desc.canHaveUAVs || desc.canHaveRawViews;
 }
 
-[[nodiscard]] inline bool IsBufferDescriptionCompatibleWithResourceStates(
-    const BufferDesc& desc,
-    const ResourceStates::Mask states
-)noexcept{
+[[nodiscard]] inline bool IsBufferDescriptionCompatibleWithResourceStates(const BufferDesc& desc, const ResourceStates::Mask states)noexcept{
     if(states == ResourceStates::Unknown)
         return true;
     if(!IsBufferResourceStateMaskValid(states))
@@ -95,16 +92,9 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
         return false;
     if((states & ResourceStates::IndexBuffer) && !desc.isIndexBuffer)
         return false;
-    if(
-        (states & ResourceStates::IndirectArgument)
-        && !desc.isDrawIndirectArgs
-        && (!(states & ResourceStates::AccelStructBuildInput) || !desc.isAccelStructBuildInput)
-    )
+    if((states & ResourceStates::IndirectArgument) && !desc.isDrawIndirectArgs && (!(states & ResourceStates::AccelStructBuildInput) || !desc.isAccelStructBuildInput))
         return false;
-    if(
-        (states & (ResourceStates::AccelStructRead | ResourceStates::AccelStructBuildBlas))
-        && !desc.isAccelStructStorage
-    )
+    if((states & (ResourceStates::AccelStructRead | ResourceStates::AccelStructBuildBlas)) && !desc.isAccelStructStorage)
         return false;
     if((states & ResourceStates::AccelStructBuildInput) && !desc.isAccelStructBuildInput)
         return false;
@@ -115,10 +105,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     return true;
 }
 
-[[nodiscard]] inline VkBufferUsageFlags RequiredBufferUsageForResourceStates(
-    const BufferDesc& desc,
-    const ResourceStates::Mask states
-)noexcept{
+[[nodiscard]] inline VkBufferUsageFlags RequiredBufferUsageForResourceStates(const BufferDesc& desc, const ResourceStates::Mask states)noexcept{
     VkBufferUsageFlags usage = 0u;
     if(states & ResourceStates::ConstantBuffer)
         usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
@@ -126,10 +113,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
         usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     if(states & ResourceStates::IndexBuffer)
         usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    if(
-        (states & ResourceStates::IndirectArgument)
-        && (desc.isDrawIndirectArgs || !(states & ResourceStates::AccelStructBuildInput))
-    )
+    if((states & ResourceStates::IndirectArgument) && (desc.isDrawIndirectArgs || !(states & ResourceStates::AccelStructBuildInput)))
         usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     if(states & ResourceStates::CopySource)
         usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -178,45 +162,19 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     return usage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageSupportedByDevice(
-    const VulkanContext& context,
-    const VkBufferUsageFlags usage
-)noexcept{
+[[nodiscard]] inline bool IsBufferUsageSupportedByDevice(const VulkanContext& context, const VkBufferUsageFlags usage)noexcept{
     if(usage == 0u)
         return false;
-    if(
-        (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-        && (!context.extensions.bufferDeviceAddress || !context.deviceDispatch.vkGetBufferDeviceAddress)
-    )
+    if((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) && (!context.extensions.bufferDeviceAddress || !context.deviceDispatch.vkGetBufferDeviceAddress))
         return false;
 
-    const VkBufferUsageFlags accelStructUsage =
-        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
-        | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
-    ;
-    if(
-        (usage & accelStructUsage)
-        && (
-            !context.extensions.khrAccelerationStructure
-            || !context.accelerationStructureFeatureEnabled
-            || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-        )
-    )
+    const VkBufferUsageFlags accelStructUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+    if((usage & accelStructUsage) && (!context.extensions.khrAccelerationStructure || !context.accelerationStructureFeatureEnabled || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)))
         return false;
-    if(
-        (usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR)
-        && (
-            !context.extensions.khrRayTracingPipeline
-            || !context.rayTracingPipelineFeatureEnabled
-            || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-        )
-    )
+    if((usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR) && (!context.extensions.khrRayTracingPipeline || !context.rayTracingPipelineFeatureEnabled || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)))
         return false;
 
-    const VkBufferUsageFlags micromapUsage =
-        VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT
-        | VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT
-    ;
+    const VkBufferUsageFlags micromapUsage = VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT | VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
     if(
         (usage & micromapUsage)
         && (
@@ -230,36 +188,17 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     )
         return false;
 
-    const VkBufferUsageFlags descriptorBufferUsage =
-        VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT
-        | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
-        | VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT
-    ;
-    if(
-        (usage & descriptorBufferUsage)
-        && (
-            !context.extensions.extDescriptorBuffer
-            || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-        )
-    )
+    const VkBufferUsageFlags descriptorBufferUsage = VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT;
+    if((usage & descriptorBufferUsage) && (!context.extensions.extDescriptorBuffer || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)))
         return false;
     return true;
 }
 
-[[nodiscard]] inline VkBufferUsageFlags PickManagedBufferUsage(
-    const VulkanContext& context,
-    const BufferDesc& desc
-)noexcept{
+[[nodiscard]] inline VkBufferUsageFlags PickManagedBufferUsage(const VulkanContext& context, const BufferDesc& desc)noexcept{
     VkBufferUsageFlags usage = RequiredBufferUsageForDescription(desc);
     usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
-    if(
-        context.extensions.extOpacityMicromap
-        && context.opacityMicromapFeatureEnabled
-        && context.extensions.khrSynchronization2
-        && context.extensions.khrAccelerationStructure
-        && context.accelerationStructureFeatureEnabled
-    ){
+    if(context.extensions.extOpacityMicromap && context.opacityMicromapFeatureEnabled && context.extensions.khrSynchronization2 && context.extensions.khrAccelerationStructure && context.accelerationStructureFeatureEnabled){
         if(desc.isAccelStructBuildInput)
             usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
         if(desc.isAccelStructStorage)
@@ -270,32 +209,19 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     return usage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageCompatibleWithDescription(
-    const BufferDesc& desc,
-    const VkBufferUsageFlags usage
-)noexcept{
+[[nodiscard]] inline bool IsBufferUsageCompatibleWithDescription(const BufferDesc& desc, const VkBufferUsageFlags usage)noexcept{
     const VkBufferUsageFlags requiredUsage = RequiredBufferUsageForDescription(desc);
     return (usage & requiredUsage) == requiredUsage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageCompatibleWithResourceStates(
-    const BufferDesc& desc,
-    const VkBufferUsageFlags usage,
-    const ResourceStates::Mask states
-)noexcept{
+[[nodiscard]] inline bool IsBufferUsageCompatibleWithResourceStates(const BufferDesc& desc, const VkBufferUsageFlags usage, const ResourceStates::Mask states)noexcept{
     if(!IsBufferDescriptionCompatibleWithResourceStates(desc, states))
         return false;
     const VkBufferUsageFlags requiredUsage = RequiredBufferUsageForResourceStates(desc, states);
     return (usage & requiredUsage) == requiredUsage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageConsistent(
-    const VulkanContext& context,
-    const BufferDesc& desc,
-    const bool managed,
-    const VkBufferUsageFlags usage,
-    const VkBufferUsageFlags requiredUsage = 0u
-)noexcept{
+[[nodiscard]] inline bool IsBufferUsageConsistent(const VulkanContext& context, const BufferDesc& desc, const bool managed, const VkBufferUsageFlags usage, const VkBufferUsageFlags requiredUsage = 0u)noexcept{
     if(!IsBufferUsageSupportedByDevice(context, usage))
         return false;
     if(!IsBufferUsageCompatibleWithDescription(desc, usage))

@@ -39,13 +39,7 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendCsgShapeCookEntry(
-    NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& outEntries,
-    NWB::Impl::AssetsCsgCook::CookArena& arena,
-    const Name shapeName,
-    const Name shaderModule,
-    const AStringView moduleInclude
-){
+static void AppendCsgShapeCookEntry(NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& outEntries, NWB::Impl::AssetsCsgCook::CookArena& arena, const Name shapeName, const Name shaderModule, const AStringView moduleInclude){
     NWB::Impl::AssetsCsgCook::CsgShapeCookEntry entry(arena);
     entry.shapeName = shapeName;
     entry.shaderModule = shaderModule;
@@ -54,10 +48,7 @@ static void AppendCsgShapeCookEntry(
     outEntries.push_back(Move(entry));
 }
 
-[[nodiscard]] static NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(
-    const NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& entries,
-    const Name shapeName
-){
+[[nodiscard]] static NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& entries, const Name shapeName){
     for(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntry& entry : entries){
         if(entry.shapeName == shapeName)
             return entry.shapeTypeId;
@@ -65,22 +56,14 @@ static void AppendCsgShapeCookEntry(
     return NWB::Impl::s_InvalidCsgShapeTypeId;
 }
 
-Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(
-    const SIMDMatrix& shapeToWorld,
-    const u8* parameterBytes,
-    const usize parameterByteSize
-)noexcept{
+Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
     static_cast<void>(shapeToWorld);
     static_cast<void>(parameterBytes);
     static_cast<void>(parameterByteSize);
     return NWB::Impl::CsgShapeBounds{ VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), true };
 }
 
-[[nodiscard]] static NWB::Impl::CsgShapeTypeDesc CsgCookTestShapeDesc(
-    const Name shapeName,
-    const Name shaderModule,
-    const AStringView moduleInclude
-){
+[[nodiscard]] static NWB::Impl::CsgShapeTypeDesc CsgCookTestShapeDesc(const Name shapeName, const Name shaderModule, const AStringView moduleInclude){
     NWB::Impl::CsgShapeTypeDesc desc;
     desc.name = shapeName;
     desc.shaderModule = shaderModule;
@@ -145,19 +128,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
             addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"first.slangi\"", "\"second.slangi\"" });
         entries.push_back(Move(entry));
         const Path emptyPath(testArena.arena);
-        return Plan::PrepareShaderEntriesForCook(
-            testArena.arena,
-            shaderCook,
-            paths,
-            bindRoot,
-            csgRoot,
-            emptyPath,
-            emptyPath,
-            includeMetadata,
-            entries,
-            materials,
-            scratchArena
-        );
+        return Plan::PrepareShaderEntriesForCook(testArena.arena, shaderCook, paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, entries, materials, scratchArena);
     };
 
     for(u32 mode = 0u; mode < 3u; ++mode){
@@ -237,20 +208,8 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
     using namespace NWB::Impl::AssetsCsgCook;
 
     CsgShapeCookEntryVector entries(testArena.arena);
-    AppendCsgShapeCookEntry(
-        entries,
-        testArena.arena,
-        Name("project/csg/first_shape"),
-        Name("project/csg/first_module"),
-        "project/csg/generated/shared.slangi"
-    );
-    AppendCsgShapeCookEntry(
-        entries,
-        testArena.arena,
-        Name("project/csg/second_shape"),
-        Name("project/csg/second_module"),
-        "project/csg/generated/SHARED.slangi"
-    );
+    AppendCsgShapeCookEntry(entries, testArena.arena, Name("project/csg/first_shape"), Name("project/csg/first_module"), "project/csg/generated/shared.slangi");
+    AppendCsgShapeCookEntry(entries, testArena.arena, Name("project/csg/second_shape"), Name("project/csg/second_module"), "project/csg/generated/SHARED.slangi");
 
     auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision");
     ASSERT_TRUE(rootResult);
@@ -258,12 +217,7 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
 
 
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    EXPECT_FALSE(EmitCsgShapeModuleIncludes(
-        root / "cache",
-        "tests",
-        entries,
-        scratchArena
-    ));
+    EXPECT_FALSE(EmitCsgShapeModuleIncludes(root / "cache", "tests", entries, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("generated include")));
 
     EXPECT_TRUE(RemoveAllIfExists(root));

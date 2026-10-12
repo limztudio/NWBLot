@@ -39,54 +39,30 @@ static constexpr AStringView s_ColorField = "color";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<f32> ParseFiniteF32(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const AStringView label
-){
+[[nodiscard]] Expected<f32> ParseFiniteF32(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
         return MakeUnexpected(Failure{});
     }
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue) || numericValue < static_cast<f64>(s_MinF32) || numericValue > static_cast<f64>(s_MaxF32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-finite or out-of-range f32 value")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-finite or out-of-range f32 value"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
         return MakeUnexpected(Failure{});
     }
 
     return static_cast<f32>(numericValue);
 }
 
-[[nodiscard]] Expected<u32> ParseU32(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const AStringView label
-){
+[[nodiscard]] Expected<u32> ParseU32(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
         return MakeUnexpected(Failure{});
     }
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue) || numericValue > static_cast<f64>(s_MaxU32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer, negative, or out-of-range u32 value")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer, negative, or out-of-range u32 value"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
         return MakeUnexpected(Failure{});
     }
 
@@ -99,37 +75,21 @@ static constexpr AStringView s_ColorField = "color";
     return out.str();
 }
 
-[[nodiscard]] const Core::Metascript::Value* FindRequiredListField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const AStringView fieldName
-){
+[[nodiscard]] const Core::Metascript::Value* FindRequiredListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
     const Core::Metascript::Value* field = Core::Metascript::FindField(asset, fieldName);
     if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': missing required '{}' field")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': missing required '{}' field"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return nullptr;
     }
     if(!field->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return nullptr;
     }
     return field;
 }
 
 template<typename ElementT, usize ComponentCount>
-[[nodiscard]] Expected<UtilityVector<ElementT>> ParseFloatListField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const AStringView fieldName
-){
+[[nodiscard]] Expected<UtilityVector<ElementT>> ParseFloatListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
     UtilityVector<ElementT> outValues;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, fieldName);
@@ -141,12 +101,7 @@ template<typename ElementT, usize ComponentCount>
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& value = list[i];
         if(!value.isList() || value.asList().size() != ComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
-                , StringConvert(s_MeshMetaKind)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(MakeIndexedLabel(fieldName, i))
-                , ComponentCount
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(MakeIndexedLabel(fieldName, i)), ComponentCount);
             return MakeUnexpected(Failure{});
         }
 
@@ -172,20 +127,13 @@ template<typename ElementT, usize ComponentCount>
     }
 
     if(outValues.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
     return outValues;
 }
 
-[[nodiscard]] Expected<UtilityVector<SourceVertexRef>> ParseVertexRefs(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset
-){
+[[nodiscard]] Expected<UtilityVector<SourceVertexRef>> ParseVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset){
     UtilityVector<SourceVertexRef> outVertexRefs;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_VertexRefsField);
@@ -197,24 +145,13 @@ template<typename ElementT, usize ComponentCount>
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& value = list[i];
         if(!value.isList() || value.asList().size() != s_AuthoredVertexRefComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
-                , StringConvert(s_MeshMetaKind)
-                , PathToString<tchar>(nwbFilePath)
-                , i
-                , s_AuthoredVertexRefComponentCount
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), i, s_AuthoredVertexRefComponentCount);
             return MakeUnexpected(Failure{});
         }
 
         SourceVertexRef ref;
         const auto& components = value.asList();
-        u32* const componentValues[] = {
-            &ref.position,
-            &ref.normal,
-            &ref.tangent,
-            &ref.uv0,
-            &ref.color,
-        };
+        u32* const componentValues[] = { &ref.position, &ref.normal, &ref.tangent, &ref.uv0, &ref.color, };
         for(usize componentIndex = 0u; componentIndex < s_AuthoredVertexRefComponentCount; ++componentIndex){
             AStringStream label;
             label << "vertex_refs[" << i << "][" << componentIndex << "]";
@@ -228,20 +165,13 @@ template<typename ElementT, usize ComponentCount>
     }
 
     if(outVertexRefs.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     return outVertexRefs;
 }
 
-[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& skinAsset,
-    const AStringView skinVariableName
-){
+[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const Path& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName){
     UtilityVector<MeshSkinInfluence> outInfluences;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, skinAsset, "influences");
@@ -253,35 +183,18 @@ template<typename ElementT, usize ComponentCount>
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& influenceValue = list[i];
         if(!influenceValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}]' must be a map")
-                , StringConvert(s_MeshMetaKind)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(skinVariableName)
-                , i
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}]' must be a map"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(skinVariableName), i);
             return MakeUnexpected(Failure{});
         }
 
         const Core::Metascript::Value* jointsValue = Core::Metascript::FindField(influenceValue, "joints");
         const Core::Metascript::Value* weightsValue = Core::Metascript::FindField(influenceValue, "weights");
         if(!jointsValue || !jointsValue->isList() || jointsValue->asList().size() != s_MeshSkinInfluenceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].joints' must contain {} integers")
-                , StringConvert(s_MeshMetaKind)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(skinVariableName)
-                , i
-                , s_MeshSkinInfluenceCount
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].joints' must contain {} integers"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(skinVariableName), i, s_MeshSkinInfluenceCount);
             return MakeUnexpected(Failure{});
         }
         if(!weightsValue || !weightsValue->isList() || weightsValue->asList().size() != s_MeshSkinInfluenceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain {} numeric values")
-                , StringConvert(s_MeshMetaKind)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(skinVariableName)
-                , i
-                , s_MeshSkinInfluenceCount
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain {} numeric values"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(skinVariableName), i, s_MeshSkinInfluenceCount);
             return MakeUnexpected(Failure{});
         }
 
@@ -293,11 +206,7 @@ template<typename ElementT, usize ComponentCount>
             if(!jointIndex)
                 return MakeUnexpected(Failure{});
             if(*jointIndex > static_cast<u32>(Limit<u16>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains an out-of-range joint index")
-                    , StringConvert(s_MeshMetaKind)
-                    , PathToString<tchar>(nwbFilePath)
-                    , StringConvert(jointLabel.str())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains an out-of-range joint index"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(jointLabel.str()));
                 return MakeUnexpected(Failure{});
             }
 
@@ -314,22 +223,13 @@ template<typename ElementT, usize ComponentCount>
     }
 
     if(outInfluences.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences' must not be empty")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(skinVariableName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences' must not be empty"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(skinVariableName));
         return MakeUnexpected(Failure{});
     }
     return outInfluences;
 }
 
-[[nodiscard]] bool FillIndicesRecursive(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const AStringView label,
-    UtilityVector<u32>& outIndices
-){
+[[nodiscard]] bool FillIndicesRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, UtilityVector<u32>& outIndices){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0u; i < list.size(); ++i){
@@ -348,10 +248,7 @@ template<typename ElementT, usize ComponentCount>
     return true;
 }
 
-[[nodiscard]] Expected<UtilityVector<u32>> ParseIndices(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset
-){
+[[nodiscard]] Expected<UtilityVector<u32>> ParseIndices(const Path& nwbFilePath, const Core::Metascript::Value& asset){
     UtilityVector<u32> outIndices;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_IndicesField);
@@ -360,29 +257,17 @@ template<typename ElementT, usize ComponentCount>
     if(!FillIndicesRecursive(nwbFilePath, *field, s_IndicesField, outIndices))
         return MakeUnexpected(Failure{});
     if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     return outIndices;
 }
 
-[[nodiscard]] bool ValidateStreamIndex(
-    const Path& nwbFilePath,
-    const AStringView streamName,
-    const u32 index,
-    const usize count
-){
+[[nodiscard]] bool ValidateStreamIndex(const Path& nwbFilePath, const AStringView streamName, const u32 index, const usize count){
     if(index < count)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range")
-        , StringConvert(s_MeshMetaKind)
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(streamName)
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(streamName));
     return false;
 }
 
@@ -399,10 +284,7 @@ template<typename ElementT, usize ComponentCount>
         if(!ValidateStreamIndex(nwbFilePath, s_ColorField, ref.color, mesh.colors.size()))
             return false;
         if(ref.skin != s_MissingSourceStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index")
-                , StringConvert(s_MeshMetaKind)
-                , PathToString<tchar>(nwbFilePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
             return false;
         }
     }
@@ -411,10 +293,7 @@ template<typename ElementT, usize ComponentCount>
         if(index < mesh.vertexRefs.size())
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
         return false;
     }
     return true;
@@ -431,17 +310,9 @@ template<typename ElementT, usize ComponentCount>
     ;
 }
 
-[[nodiscard]] bool ValidateMeshAssetFields(
-    const Path& nwbFilePath,
-    const AStringView meshVariableName,
-    const Core::Metascript::Value& asset
-){
+[[nodiscard]] bool ValidateMeshAssetFields(const Path& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map")
-            , StringConvert(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(meshVariableName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(meshVariableName));
         return false;
     }
 

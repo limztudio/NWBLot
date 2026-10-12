@@ -71,12 +71,7 @@ static void AppendCallstackFrame(Detail::CrashDumpRequestOptions& options, const
     options.callstackFrames[options.callstackFrameCount++] = address;
 }
 
-static void CaptureFramePointerCallstack(
-    Detail::CrashDumpRequestOptions& options,
-    const u64 instructionPointer,
-    const u64 stackPointer,
-    const u64 framePointer
-)noexcept{
+static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& options, const u64 instructionPointer, const u64 stackPointer, const u64 framePointer)noexcept{
     AppendCallstackFrame(options, instructionPointer);
 
     if(stackPointer == 0u || framePointer == 0u || !IsAlignedPointer(framePointer))
@@ -138,32 +133,19 @@ static void WarmUpUnwinder()noexcept{
 }
 #endif
 
-static void CaptureCurrentCallstack(
-    Detail::CrashDumpRequestOptions& outOptions,
-    const void* const stackPointer,
-    const void* const framePointer,
-    const void* const instructionPointer
-)noexcept{
+static void CaptureCurrentCallstack(Detail::CrashDumpRequestOptions& outOptions, const void* const stackPointer, const void* const framePointer, const void* const instructionPointer)noexcept{
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(framePointer));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(instructionPointer));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    const u64 alignmentInstructionPointer = outOptions.triggerInstructionPointer != 0u
-        ? outOptions.triggerInstructionPointer
-        : outOptions.instructionPointer
-    ;
+    const u64 alignmentInstructionPointer = outOptions.triggerInstructionPointer != 0u ? outOptions.triggerInstructionPointer : outOptions.instructionPointer;
     if(CaptureEhFrameCallstack(outOptions, alignmentInstructionPointer)){
         // backtrace already trimmed crash-handler-internal frames, so the downstream skip must not drop user frames.
         outOptions.callstackFramesToSkip = 0u;
         return;
     }
 #endif
-    CaptureFramePointerCallstack(
-        outOptions,
-        outOptions.instructionPointer,
-        outOptions.stackPointer,
-        outOptions.framePointer
-    );
+    CaptureFramePointerCallstack(outOptions, outOptions.instructionPointer, outOptions.stackPointer, outOptions.framePointer);
 }
 
 static void CaptureSignalContext(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
@@ -185,8 +167,7 @@ static void CaptureSignalContext(Detail::CrashDumpRequestOptions& options, const
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    // backtrace() crosses the kernel signal trampoline into the interrupted frame, so the fault instruction
-    // pointer aligns the trace and a frame-pointer-omitting final build still gets the full faulting callstack.
+    // backtrace() crosses the kernel signal trampoline into the interrupted frame, so the fault instruction pointer aligns the trace and a frame-pointer-omitting final build still gets the full faulting callstack.
     if(CaptureEhFrameCallstack(options, options.instructionPointer))
         return;
 #endif
@@ -210,8 +191,7 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 [[noreturn]] static void TerminateHandler(){
     Detail::CrashDumpRequestOptions options;
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the
-    // follow-up SIGABRT to carry it.
+    // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the follow-up SIGABRT to carry it.
     if(!CaptureEhFrameCallstack(options, 0u))
         options.callstackFrameCount = 0u;
 #endif
@@ -280,10 +260,7 @@ static void OpenAndroidEmergencyFile(){
 }
 
 [[nodiscard]] static bool SendAllSocketNoSigpipe(const int fd, const void* const data, const usize byteCount)noexcept{
-    return TransferAllPosix(
-        static_cast<const u8*>(data),
-        byteCount,
-        [fd](const u8* const cursor, const usize remaining)noexcept{
+    return TransferAllPosix(static_cast<const u8*>(data), byteCount, [fd](const u8* const cursor, const usize remaining)noexcept{
             return send(fd, cursor, remaining, MSG_NOSIGNAL);
         }
     );
@@ -339,19 +316,12 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
     }
 }
 
-[[nodiscard]] static Detail::CrashDumpTransportStatus::Enum WaitForAck(
-    const int ackReadFd,
-    const Detail::CrashRequest& request,
-    const u32 waitMilliseconds
-)noexcept{
+[[nodiscard]] static Detail::CrashDumpTransportStatus::Enum WaitForAck(const int ackReadFd, const Detail::CrashRequest& request, const u32 waitMilliseconds)noexcept{
     if(ackReadFd < 0 || waitMilliseconds == 0u)
         return Detail::CrashDumpTransportStatus::Sent;
 
     const u64 now = ProcessExecutionDetail::MonotonicMilliseconds();
-    const u64 deadline = now == 0u
-        ? 0u
-        : now + waitMilliseconds
-    ;
+    const u64 deadline = now == 0u ? 0u : now + waitMilliseconds;
 
     for(;;){
         pollfd pollFd = {};
@@ -377,10 +347,7 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
         if(!ReadAllFileDescriptor(ackReadFd, &ack, sizeof(ack)))
             return Detail::CrashDumpTransportStatus::Failed;
         if(Detail::CrashAckMatchesRequest(ack, request))
-            return ack.packageWritten
-                ? Detail::CrashDumpTransportStatus::PackageWritten
-                : Detail::CrashDumpTransportStatus::PackageWriteFailed
-            ;
+            return ack.packageWritten ? Detail::CrashDumpTransportStatus::PackageWritten : Detail::CrashDumpTransportStatus::PackageWriteFailed;
         if(ProcessExecutionDetail::TimeoutExpired(deadline))
             return Detail::CrashDumpTransportStatus::TimedOut;
     }
@@ -391,10 +358,7 @@ static void WaitForChildProcess(const pid_t pid)noexcept{
         return;
 
     const u64 now = ProcessExecutionDetail::MonotonicMilliseconds();
-    const u64 deadline = now == 0u
-        ? 0u
-        : now + s_HandlerExitWaitMilliseconds
-    ;
+    const u64 deadline = now == 0u ? 0u : now + s_HandlerExitWaitMilliseconds;
     if(!ProcessExecutionDetail::WaitForProcessSuccess(pid, deadline))
         return;
 }
@@ -426,21 +390,15 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 #else
     __asm__ volatile("mov %0, sp" : "=r"(stackPointer));
 #endif
-    __hidden_crash_posix::CaptureCurrentCallstack(
-        outOptions,
-        stackPointer,
-        __builtin_frame_address(0),
-        __builtin_return_address(0)
-    );
+    __hidden_crash_posix::CaptureCurrentCallstack(outOptions, stackPointer, __builtin_frame_address(0), __builtin_return_address(0));
 #endif
 }
 
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     static_cast<void>(waitMilliseconds);
 
-    // Re-entrancy guard + concurrent-writer serialization, matching the Win32 transport: a fault while inside
-    // the transport bails, and only one faulting thread owns the channel (the Android emergency fd is a shared
-    // append target, so it needs the same guard against interleaved writes). Async-safe (atomic CAS, no Futex).
+    // Re-entrancy guard + concurrent-writer serialization, matching the Win32 transport: a fault while inside the transport bails, and only one faulting thread owns the channel (the Android emergency fd is a shared append target, so it needs the same guard against interleaved writes).
+    // Async-safe (atomic CAS, no Futex).
     static thread_local bool s_inTransport = false;
     if(s_inTransport)
         return CrashDumpTransportStatus::Failed;
@@ -455,10 +413,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
 #if defined(NWB_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0)
-        status = WriteAllFileDescriptor(g_State.emergencyWriteFd, &request, sizeof(request))
-            ? CrashDumpTransportStatus::Sent
-            : CrashDumpTransportStatus::Failed
-        ;
+        status = WriteAllFileDescriptor(g_State.emergencyWriteFd, &request, sizeof(request)) ? CrashDumpTransportStatus::Sent : CrashDumpTransportStatus::Failed;
 #elif defined(NWB_PLATFORM_LINUX)
     if(g_State.requestWriteFd >= 0){
         __hidden_crash_posix::DrainPendingAcks(g_State.ackReadFd);
@@ -496,10 +451,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
         return false;
     }
-    if(
-        !__hidden_crash_posix::SetCloseOnExec(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex])
-        || !__hidden_crash_posix::SetCloseOnExec(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex])
-    ){
+    if(!__hidden_crash_posix::SetCloseOnExec(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]) || !__hidden_crash_posix::SetCloseOnExec(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex])){
         close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
         close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
         close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
@@ -520,10 +472,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
         close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
 
-        __hidden_crash_posix::SilenceChildProcess(
-            requestChannelFds[__hidden_crash_posix::s_ChildEndIndex],
-            ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]
-        );
+        __hidden_crash_posix::SilenceChildProcess(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex], ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
 
         char fdText[s_HandlerArgumentTextCapacity] = {};
         char ackFdText[s_HandlerArgumentTextCapacity] = {};

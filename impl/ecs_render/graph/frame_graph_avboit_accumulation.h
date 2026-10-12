@@ -79,11 +79,7 @@ struct FrameGraphAvboitAccumulationUploadResult{
 
 class FrameGraphAvboitAccumulationUploadChain final : NoCopy{
 public:
-    FrameGraphAvboitAccumulationUploadChain(
-        Core::GpuTaskGraph& graph,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem
-    );
+    FrameGraphAvboitAccumulationUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
 
 
 public:

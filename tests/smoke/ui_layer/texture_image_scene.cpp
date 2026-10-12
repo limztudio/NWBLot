@@ -54,11 +54,7 @@ static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextureImageSmokeScene::UiTextureImageSmokeScene(
-    Core::Alloc::GlobalArena& arena,
-    Core::InputDispatcher& input,
-    const Core::Assets::AssetManager& assets
-)
+UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets)
     : m_arena(arena)
     , m_input(input)
 {
@@ -94,11 +90,7 @@ bool UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
     const f32 width = Max(300.0f, context.display.logicalWidth * 0.5f - 40.0f);
     const f32 right = 24.0f + width + 32.0f;
     const f32 otherWidth = Max(220.0f, context.display.logicalWidth - right - 24.0f);
-    if(
-        !paintControls(ui, { 24.0f, 24.0f, width, 112.0f })
-        || !paintImages(context, width, right, otherWidth)
-        || !paintBuilderImages(ui, { right, 24.0f, otherWidth, 112.0f }) || !paintPopups(context, right) || ui.failed()
-    )
+    if(!paintControls(ui, { 24.0f, 24.0f, width, 112.0f }) || !paintImages(context, width, right, otherWidth) || !paintBuilderImages(ui, { right, 24.0f, otherWidth, 112.0f }) || !paintPopups(context, right) || ui.failed())
         return false;
     observeState(context);
     paintMarkers(context);
@@ -140,16 +132,9 @@ bool UiTextureImageSmokeScene::replaceVersion(){
     mipLevels.assign(payload.mipLevels().begin(), payload.mipLevels().end());
     Core::Assets::AssetBytes bytes(m_arena);
     bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
-    replacement.setPayload(
-        payload.colorSpace(), payload.hasAlpha(), payload.width(), payload.height(), Move(mipLevels), Move(bytes),
-        payload.dimension(), payload.depth(), payload.payloadFormat(), payload.alphaMode(), payload.alphaConstantUnorm8()
-    );
+    replacement.setPayload(payload.colorSpace(), payload.hasAlpha(), payload.width(), payload.height(), Move(mipLevels), Move(bytes), payload.dimension(), payload.depth(), payload.payloadFormat(), payload.alphaMode(), payload.alphaConstantUnorm8());
     Impl::Ui::SharedImageSource next = Impl::Ui::MakeImageSource(m_arena, replacement);
-    if(
-        !next || next->generation() == m_replacement->generation()
-        || next->generation() == m_default->generation() || next->generation() == m_alternate->generation()
-        || next->identity().name() != m_default->identity().name()
-    )
+    if(!next || next->generation() == m_replacement->generation() || next->generation() == m_default->generation() || next->generation() == m_alternate->generation() || next->identity().name() != m_default->identity().name())
         return false;
     m_replacement = Move(next);
     ++m_replacementCount;
@@ -172,12 +157,7 @@ bool UiTextureImageSmokeScene::paintControls(Impl::Ui::Builder& ui, const Impl::
     return ui.endPanel();
 }
 
-bool UiTextureImageSmokeScene::paintImages(
-    Impl::UiPaintContext& context,
-    const f32 width,
-    const f32 right,
-    const f32 otherWidth
-){
+bool UiTextureImageSmokeScene::paintImages(Impl::UiPaintContext& context, const f32 width, const f32 right, const f32 otherWidth){
     using namespace Impl::Ui;
     using namespace __hidden_ui_texture_image_scene;
     auto& paint = context.paint;
@@ -219,8 +199,7 @@ bool UiTextureImageSmokeScene::paintImages(
     const bool popped = paint.popClip();
     if(!clipped || !popped)
         return false;
-    return paint.drawImage(m_default, rectangles[9u]) && paint.drawImage(m_alternate, rectangles[10u])
-        && paint.drawRegion(Name("progress.fill"), rectangles[11u]);
+    return paint.drawImage(m_default, rectangles[9u]) && paint.drawImage(m_alternate, rectangles[10u]) && paint.drawRegion(Name("progress.fill"), rectangles[11u]);
 }
 
 bool UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
@@ -309,18 +288,9 @@ bool IsUiLayerTextureImageSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE_SKIN");
 }
 
-SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(
-    Core::Alloc::GlobalArena& arena,
-    Core::InputDispatcher& input,
-    const Core::Assets::AssetManager& assets,
-    Core::GraphicsRuntime& graphics
-){
+SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets, Core::GraphicsRuntime& graphics){
     static_cast<void>(graphics);
-    return SharedUiTextureImageSmokeScene(
-        NewArenaObject<RefCounter<UiTextureImageSmokeScene>>(arena, arena, input, assets),
-        ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiTextureImageSmokeScene(NewArenaObject<RefCounter<UiTextureImageSmokeScene>>(arena, arena, input, assets), ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

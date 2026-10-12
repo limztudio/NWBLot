@@ -64,17 +64,11 @@ struct OpaqueUploadChainResult{
 
 class OpaqueUploadChainBuilder final : NoCopy{
 public:
-    OpaqueUploadChainBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem
-    );
+    OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
 
 
 public:
-    [[nodiscard]] Expected<OpaqueUploadChainResult> declare(
-        const OpaqueUploadChainInputs& inputs
-    );
+    [[nodiscard]] Expected<OpaqueUploadChainResult> declare(const OpaqueUploadChainInputs& inputs);
 
 
 private:

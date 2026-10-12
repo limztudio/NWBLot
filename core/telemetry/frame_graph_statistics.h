@@ -18,7 +18,8 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Generation-scoped CPU telemetry; fixed-width counts (no host-width leak). Wire records: packed fixed-size, codec-native byte order (no cross-endian format).
+// Generation-scoped CPU telemetry; fixed-width counts (no host-width leak).
+// Wire records: packed fixed-size, codec-native byte order (no cross-endian format).
 // Durations are seconds.
 struct FrameGraphCompileRuntimeStatistics{
     u64 taskCount = 0u;
@@ -77,16 +78,9 @@ namespace FrameGraphStatisticsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<u64> FrameGraphCompileBarrierCount(
-    const FrameGraphCompileRuntimeStatistics& statistics
-)noexcept{
+[[nodiscard]] inline Expected<u64> FrameGraphCompileBarrierCount(const FrameGraphCompileRuntimeStatistics& statistics)noexcept{
     u64 barrierCountTotal = statistics.transitionBarrierCount;
-    const u64 remainingBarrierCounts[] = {
-        statistics.uavBarrierCount,
-        statistics.ownershipReleaseBarrierCount,
-        statistics.ownershipAcquireBarrierCount,
-        statistics.stateExportBarrierCount,
-    };
+    const u64 remainingBarrierCounts[] = { statistics.uavBarrierCount, statistics.ownershipReleaseBarrierCount, statistics.ownershipAcquireBarrierCount, statistics.stateExportBarrierCount, };
     for(const u64 barrierCount : remainingBarrierCounts){
         if(barrierCount > Limit<u64>::s_Max - barrierCountTotal)
             return MakeUnexpected(Failure{});
@@ -217,8 +211,10 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
     FrameGraphPhysicalQueueRuntimeStatistics statistics;
 };
 
-// Exact native-submission telemetry for one compiler-generated packet. Payloads whose packet table is marked present contain every native submission for every runtime-statistics owner, including an exact empty table when no owner submitted native work.
-// Packet generation is the immutable plan generation. Wait counts exclude backend-internal waits outside the graph.
+// Exact native-submission telemetry for one compiler-generated packet.
+// Payloads whose packet table is marked present contain every native submission for every runtime-statistics owner, including an exact empty table when no owner submitted native work.
+// Packet generation is the immutable plan generation.
+// Wait counts exclude backend-internal waits outside the graph.
 struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 packetGeneration = 0u;
     u64 taskCount = 0u;

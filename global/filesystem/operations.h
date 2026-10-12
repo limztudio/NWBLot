@@ -419,13 +419,7 @@ template<typename ArenaT>
 
 [[nodiscard]] inline bool IsMissingPathError(const ErrorCode& error)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
-    return error.category() == std::system_category()
-        && (
-            error.value() == ERROR_FILE_NOT_FOUND
-            || error.value() == ERROR_PATH_NOT_FOUND
-            || error.value() == ERROR_DIRECTORY
-        )
-    ;
+    return error.category() == std::system_category() && (error.value() == ERROR_FILE_NOT_FOUND || error.value() == ERROR_PATH_NOT_FOUND || error.value() == ERROR_DIRECTORY);
 #else
     return error == std::errc::no_such_file_or_directory || error == std::errc::not_a_directory;
 #endif

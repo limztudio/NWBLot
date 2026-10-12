@@ -17,11 +17,8 @@ from smoke_volume_identity import file_identity
 import caustic_quality_smoke
 import surfel_gi_quality_smoke
 import smoke_cpu_gpu_timing
-from window_capture_smoke import (
-    STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,
-)
+from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit,
+    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
 LIT_REFERENCE_THREE = "reference_three"
 LIT_TEMPORAL_ONE = "temporal_one"
@@ -113,8 +110,7 @@ DONE = "StressTestSmokeProject: presentation measurement complete "
 INTERVAL = "StressTestSmokeProject: presentation fps "
 SHUTDOWN = "StressTestSmokeProject: shutdown"
 GPU_DEBUG = ("Loader: GPU debug validation enabled",)
-REQUIRED = (START, SHUTDOWN, "AvboitTimingProbe: in-flight ranges 32",
-    "AvboitTimingProbe: render unfocused 1", "AvboitTimingProbe: caustic in-flight ranges 32")
+REQUIRED = (START, SHUTDOWN, "AvboitTimingProbe: in-flight ranges 32", "AvboitTimingProbe: render unfocused 1", "AvboitTimingProbe: caustic in-flight ranges 32")
 
 
 SHADOW_QUALITY_SETTINGS = "ShadowQualitySmoke: requested transparent_sampling="
@@ -138,8 +134,7 @@ CSG_DEVICE = LIT_STRESSTESTSMOKEPROJECT_DEVICE_CAPABILI
 
 WORKLOAD = "StressTestSmokeProject: workload "
 SPAWN = "StressTestSmokeProject: spawned "
-WORKLOAD_FIELDS = (LIT_CHARACTERS_PER_CLASS, LIT_TOTAL, LIT_TRANSPARENT, LIT_OPAQUE, LIT_LAYOUT, LIT_ROWS, LIT_COLUMNS,
-    "row_spacing_x", "row_stagger_x", LIT_FRONT_Z, LIT_BACK_Z, "body_scale", "camera_x", "camera_y", "camera_z",
+WORKLOAD_FIELDS = (LIT_CHARACTERS_PER_CLASS, LIT_TOTAL, LIT_TRANSPARENT, LIT_OPAQUE, LIT_LAYOUT, LIT_ROWS, LIT_COLUMNS, "row_spacing_x", "row_stagger_x", LIT_FRONT_Z, LIT_BACK_Z, "body_scale", "camera_x", "camera_y", "camera_z",
     "camera_pitch", "vertical_fov", "near_plane", "far_plane", "aspect")
 WORKLOAD_INTEGERS = (LIT_CHARACTERS_PER_CLASS, LIT_TOTAL, LIT_TRANSPARENT, LIT_OPAQUE, LIT_ROWS, LIT_COLUMNS)
 
@@ -169,20 +164,14 @@ def parse_workload(lines, characters_per_class):
     except ValueError as error:
         raise SmokeFailure("invalid stress workload count or camera/layout number") from error
     comparison = characters_per_class == 5
-    expected = dict(characters_per_class=characters_per_class, total=characters_per_class * 2,
-        transparent=characters_per_class, opaque=characters_per_class,
-        layout="zigzag_v1" if comparison else "two_rows_v1", rows=2, columns=characters_per_class,
-        row_spacing_x=1.44 if comparison else .72, row_stagger_x=.36 if comparison else .18,
-        front_z=-.55, back_z=.55, body_scale=1., camera_x=0., camera_y=1.8 if comparison else 2.7,
-        camera_z=-4.8 if comparison else -7.2, camera_pitch=.2 if comparison else .25,
-        vertical_fov=math.pi / 3., near_plane=.001, far_plane=10000., aspect=0.)
+    expected = dict(characters_per_class=characters_per_class, total=characters_per_class * 2, transparent=characters_per_class, opaque=characters_per_class, layout="zigzag_v1" if comparison else "two_rows_v1", rows=2, columns=characters_per_class,
+        row_spacing_x=1.44 if comparison else .72, row_stagger_x=.36 if comparison else .18, front_z=-.55, back_z=.55, body_scale=1., camera_x=0., camera_y=1.8 if comparison else 2.7,
+        camera_z=-4.8 if comparison else -7.2, camera_pitch=.2 if comparison else .25, vertical_fov=math.pi / 3., near_plane=.001, far_plane=10000., aspect=0.)
     for field, value in expected.items():
-        matches = row[field] == value if field in WORKLOAD_INTEGERS or field == LIT_LAYOUT else math.isclose(
-            row[field], value, rel_tol=1e-6, abs_tol=1e-6)
+        matches = row[field] == value if field in WORKLOAD_INTEGERS or field == LIT_LAYOUT else math.isclose(row[field], value, rel_tol=1e-6, abs_tol=1e-6)
         if not matches:
             raise SmokeFailure(f"requested stress workload profile disagrees with observed {field}")
-    expected_spawn = (SPAWN + f"{row['total']} spinning characters ({row['transparent']} transparent + "
-        f"{row['opaque']} opaque) over ground, directional + point light")
+    expected_spawn = (SPAWN + f"{row['total']} spinning characters ({row['transparent']} transparent + " f"{row['opaque']} opaque) over ground, directional + point light")
     if spawns[0] != expected_spawn:
         raise SmokeFailure("spawned characters disagree with the requested stress workload")
     first_interval = next((index for index, line in enumerate(lines) if line.startswith(INTERVAL)), len(lines))
@@ -193,8 +182,7 @@ def parse_workload(lines, characters_per_class):
 
 REFLECTION_ENABLED = "StressTestSmokeProject: reflection diagnostics enabled"
 REFLECTION_SAMPLE = "StressReflectionStatistics: "
-REFLECTION_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_FRAME, LIT_GRAPHICS_FRAME, LIT_HARDWARE_READY, LIT_TRANSPORT_ENABLED,
-    LIT_CANDIDATES, LIT_HARDWARE_RAYS, LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_QUERY_BUDGET_UNITS, LIT_PHYSICAL_QUERIES, LIT_BOOTSTRAP_EVENTS,
+REFLECTION_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_FRAME, LIT_GRAPHICS_FRAME, LIT_HARDWARE_READY, LIT_TRANSPORT_ENABLED, LIT_CANDIDATES, LIT_HARDWARE_RAYS, LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_QUERY_BUDGET_UNITS, LIT_PHYSICAL_QUERIES, LIT_BOOTSTRAP_EVENTS,
     LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS)
 REFLECTION_COUNTERS = REFLECTION_FIELDS[6:]
 REFLECTION_SCREEN_FIELDS = (LIT_SCREEN_ATTEMPTS, LIT_SCREEN_HITS, LIT_SCREEN_RETURNS, LIT_SCREEN_ITERATIONS, LIT_SCREEN_LIMIT_MISSES)
@@ -232,13 +220,11 @@ def parse_reflection_diagnostics(lines, requested):
             if value >= 2 ** (64 if field == LIT_SCREEN_ITERATIONS else 32):
                 raise SmokeFailure("screen reflection counter exceeds its unsigned field bounds")
         attempts = screen[LIT_SCREEN_ATTEMPTS]
-        if (screen[LIT_SCREEN_HITS] > screen[LIT_SCREEN_RETURNS] or screen[LIT_SCREEN_RETURNS] > attempts
-                or screen[LIT_SCREEN_LIMIT_MISSES] > attempts or screen[LIT_SCREEN_ITERATIONS] > attempts * 256):
+        if (screen[LIT_SCREEN_HITS] > screen[LIT_SCREEN_RETURNS] or screen[LIT_SCREEN_RETURNS] > attempts or screen[LIT_SCREEN_LIMIT_MISSES] > attempts or screen[LIT_SCREEN_ITERATIONS] > attempts * 256):
             raise SmokeFailure("screen reflection counters exceed their attempted ray population or maximum budget")
         for field in REFLECTION_SCREEN_FIELDS:
             screen_sums[field] += screen[field]
-        maximum_frame_average_iterations = max(maximum_frame_average_iterations,
-            screen[LIT_SCREEN_ITERATIONS] / attempts if attempts else 0.0)
+        maximum_frame_average_iterations = max(maximum_frame_average_iterations, screen[LIT_SCREEN_ITERATIONS] / attempts if attempts else 0.0)
         for field, value in row.items():
             bits = 64 if field in (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME) else 32
             if value >= 2 ** bits or (field in (LIT_SEQUENCE, LIT_GENERATION) and value == 0):
@@ -248,18 +234,15 @@ def parse_reflection_diagnostics(lines, requested):
         if row[LIT_TRANSPORT_ENABLED] and not row[LIT_HARDWARE_READY]:
             raise SmokeFailure("optical transport cannot be enabled without accepted hardware readiness")
         rays = row[LIT_HARDWARE_RAYS]
-        if rays > row[LIT_CANDIDATES] or any(row[field] > rays for field in
-                (LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS)):
+        if rays > row[LIT_CANDIDATES] or any(row[field] > rays for field in (LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS)):
             raise SmokeFailure("reflection path counters cannot exceed their admitted ray population")
         if not row[LIT_HARDWARE_READY] and any(row[field] for field in REFLECTION_COUNTERS if field != LIT_CANDIDATES):
             raise SmokeFailure("reflection work counters require accepted hardware readiness")
-        if not row[LIT_TRANSPORT_ENABLED] and any(row[field] for field in
-                (LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_BOOTSTRAP_EVENTS, LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS)):
+        if not row[LIT_TRANSPORT_ENABLED] and any(row[field] for field in (LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_BOOTSTRAP_EVENTS, LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS)):
             raise SmokeFailure("optical-only counters require optical transport")
         if row[LIT_PHYSICAL_QUERIES] > row[LIT_QUERY_BUDGET_UNITS]:
             raise SmokeFailure("physical reflection queries exceed reserved traversal units")
-        if (rays == 0 and row[LIT_QUERY_BUDGET_UNITS] != 0) or (row[LIT_QUERY_BUDGET_UNITS] == 0
-                and (row[LIT_BOOTSTRAP_EVENTS] != 0 or row[LIT_TRANSPARENT_PATHS] != 0)):
+        if (rays == 0 and row[LIT_QUERY_BUDGET_UNITS] != 0) or (row[LIT_QUERY_BUDGET_UNITS] == 0 and (row[LIT_BOOTSTRAP_EVENTS] != 0 or row[LIT_TRANSPARENT_PATHS] != 0)):
             raise SmokeFailure("reflection query-dependent counters require admitted rays and reserved traversal units")
         key = row[LIT_GENERATION], row[LIT_SEQUENCE]
         if key in seen:
@@ -270,8 +253,7 @@ def parse_reflection_diagnostics(lines, requested):
                 raise SmokeFailure("accepted reflection sequence and graphics frame must advance within a generation")
         elif row[LIT_GENERATION] in ranges:
             raise SmokeFailure("accepted reflection diagnostics cannot return to an earlier generation")
-        generation = ranges.setdefault(row[LIT_GENERATION], {LIT_GENERATION: row[LIT_GENERATION], LIT_SAMPLE_COUNT: 0,
-            "sequence_range": [row[LIT_SEQUENCE], row[LIT_SEQUENCE]], "frame_range": [row[LIT_FRAME], row[LIT_FRAME]],
+        generation = ranges.setdefault(row[LIT_GENERATION], {LIT_GENERATION: row[LIT_GENERATION], LIT_SAMPLE_COUNT: 0, "sequence_range": [row[LIT_SEQUENCE], row[LIT_SEQUENCE]], "frame_range": [row[LIT_FRAME], row[LIT_FRAME]],
             "graphics_frame_range": [row[LIT_GRAPHICS_FRAME], row[LIT_GRAPHICS_FRAME]]})
         generation[LIT_SAMPLE_COUNT] += 1
         for field in (LIT_SEQUENCE, LIT_FRAME, LIT_GRAPHICS_FRAME):
@@ -291,24 +273,16 @@ def parse_reflection_diagnostics(lines, requested):
         status = "queries_observed"
     else:
         status = "no_queries"
-    return {LIT_REQUESTED: True, LIT_STATUS: status, LIT_SAMPLE_COUNT: len(records),
-        "sample_scope": "accepted_readbacks_including_warmup_not_presentation_counts",
-        "ranges_by_generation": list(ranges.values()), "hardware_ready_samples": hardware_ready_samples,
-        "transport_enabled_samples": transport_enabled_samples, LIT_SUMS: sums,
-        "unsupported_ratio": sums[LIT_UNSUPPORTED_PATHS] / rays if rays else None,
-        "exterior_eligible_ratio": sums[LIT_EXTERIOR_ELIGIBLE_RAYS] / rays if rays else None,
-        "query_budget_units_per_hardware_ray": sums[LIT_QUERY_BUDGET_UNITS] / rays if rays else None,
-        "physical_queries_per_hardware_ray": sums[LIT_PHYSICAL_QUERIES] / rays if rays else None,
-        LIT_SCREEN: {LIT_SAMPLE_COUNT: len(records), LIT_SUMS: screen_sums,
-            LIT_MAXIMUM_FRAME_AVERAGE_ITERATIONS: maximum_frame_average_iterations,
-            "iterations_per_attempt": screen_sums[LIT_SCREEN_ITERATIONS] / screen_sums[LIT_SCREEN_ATTEMPTS] if screen_sums[LIT_SCREEN_ATTEMPTS] else None,
+    return {LIT_REQUESTED: True, LIT_STATUS: status, LIT_SAMPLE_COUNT: len(records), "sample_scope": "accepted_readbacks_including_warmup_not_presentation_counts", "ranges_by_generation": list(ranges.values()), "hardware_ready_samples": hardware_ready_samples,
+        "transport_enabled_samples": transport_enabled_samples, LIT_SUMS: sums, "unsupported_ratio": sums[LIT_UNSUPPORTED_PATHS] / rays if rays else None, "exterior_eligible_ratio": sums[LIT_EXTERIOR_ELIGIBLE_RAYS] / rays if rays else None,
+        "query_budget_units_per_hardware_ray": sums[LIT_QUERY_BUDGET_UNITS] / rays if rays else None, "physical_queries_per_hardware_ray": sums[LIT_PHYSICAL_QUERIES] / rays if rays else None, LIT_SCREEN: {LIT_SAMPLE_COUNT: len(records), LIT_SUMS: screen_sums,
+            LIT_MAXIMUM_FRAME_AVERAGE_ITERATIONS: maximum_frame_average_iterations, "iterations_per_attempt": screen_sums[LIT_SCREEN_ITERATIONS] / screen_sums[LIT_SCREEN_ATTEMPTS] if screen_sums[LIT_SCREEN_ATTEMPTS] else None,
             "limit_miss_ratio": screen_sums[LIT_SCREEN_LIMIT_MISSES] / screen_sums[LIT_SCREEN_ATTEMPTS] if screen_sums[LIT_SCREEN_ATTEMPTS] else None,
             "return_ratio": screen_sums[LIT_SCREEN_RETURNS] / screen_sums[LIT_SCREEN_ATTEMPTS] if screen_sums[LIT_SCREEN_ATTEMPTS] else None}}
 
 
 def parse_sample(line, prefix, rate_key, positive_count):
-    match = re.fullmatch(re.escape(prefix) + re.escape(rate_key)
-        + r"=(\S+) presentations=(\d+) seconds=(\S+) first=(\d+) last=(\d+)", line)
+    match = re.fullmatch(re.escape(prefix) + re.escape(rate_key) + r"=(\S+) presentations=(\d+) seconds=(\S+) first=(\d+) last=(\d+)", line)
     if not match:
         raise SmokeFailure("malformed presentation measurement record")
     try:
@@ -326,8 +300,7 @@ def parse_sample(line, prefix, rate_key, positive_count):
 
 def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnostics=False, characters_per_class=10):
     require_normal_process_exit(exit_code, "", LIT_STRESS_PRESENTATION_TIMING)
-    validate_expected_log_text(text, list(REQUIRED), list(STRICT_LOG_FAILURE_MESSAGES) + [
-        "presentation measurement incomplete", "render submission suspended", "render pass skipped", "device recreation"])
+    validate_expected_log_text(text, list(REQUIRED), list(STRICT_LOG_FAILURE_MESSAGES) + ["presentation measurement incomplete", "render submission suspended", "render pass skipped", "device recreation"])
     lines = [line.strip() for line in text.splitlines()]
     if any(lines.count(marker) != 1 for marker in REQUIRED):
         raise SmokeFailure("one exact startup, reservation, fixture and shutdown sequence is required")
@@ -381,10 +354,8 @@ def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnosti
     extents = re.findall(r"deferred rendering targets ready \((\d+)x(\d+),", text)
     if not extents or any(pair != ("1280", "900") for pair in extents):
         raise SmokeFailure("actual stress extent must be 1280x900")
-    return {LIT_MEASUREMENT: total | {"frame_ms": 1000.0 * total[LIT_SECONDS] / total[LIT_PRESENTATIONS]},
-        LIT_INTERVALS: intervals, LIT_WIDTH: 1280, LIT_HEIGHT: 900, "warmup_seconds": 5,
-        "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present",
-        LIT_WORKLOAD: workload, "pacing": pacing_summary, LIT_OPTICAL_REFLECTION: parse_reflection_diagnostics(lines, reflection_diagnostics)}
+    return {LIT_MEASUREMENT: total | {"frame_ms": 1000.0 * total[LIT_SECONDS] / total[LIT_PRESENTATIONS]}, LIT_INTERVALS: intervals, LIT_WIDTH: 1280, LIT_HEIGHT: 900, "warmup_seconds": 5,
+        "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present", LIT_WORKLOAD: workload, "pacing": pacing_summary, LIT_OPTICAL_REFLECTION: parse_reflection_diagnostics(lines, reflection_diagnostics)}
 
 
 def parse_measurement(log_text, characters_per_class=10):
@@ -404,12 +375,9 @@ def verify_software_shadow_settings(text, args):
     if not match:
         raise SmokeFailure("malformed SoftwareShadowSmoke requested-settings record")
     observed = dict(zip(fields, map(int, match.groups())))
-    requested = dict(backend=SOFTWARE_SHADOW_BACKENDS[args.software_shadow_backend],
-        directional_resolution=args.software_shadow_directional_resolution,
-        point_resolution=args.software_shadow_point_resolution, budget_bytes=args.software_shadow_budget_mib * 1024 * 1024,
-        coverage=SOFTWARE_SHADOW_COVERAGE[args.software_shadow_coverage],
-        blocker_search=SOFTWARE_SHADOW_BLOCKER_SEARCH[args.software_shadow_blocker_search],
-        capture_cadence=SOFTWARE_SHADOW_CAPTURE_CADENCE[args.software_shadow_capture_cadence])
+    requested = dict(backend=SOFTWARE_SHADOW_BACKENDS[args.software_shadow_backend], directional_resolution=args.software_shadow_directional_resolution,
+        point_resolution=args.software_shadow_point_resolution, budget_bytes=args.software_shadow_budget_mib * 1024 * 1024, coverage=SOFTWARE_SHADOW_COVERAGE[args.software_shadow_coverage],
+        blocker_search=SOFTWARE_SHADOW_BLOCKER_SEARCH[args.software_shadow_blocker_search], capture_cadence=SOFTWARE_SHADOW_CAPTURE_CADENCE[args.software_shadow_capture_cadence])
     if observed != requested:
         raise SmokeFailure(f"software shadow settings mismatch: requested {requested}, application reported {observed}")
     reuse_records = [line.strip() for line in text.splitlines() if line.strip().startswith(SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX)]
@@ -418,8 +386,7 @@ def verify_software_shadow_settings(text, args):
         raise SmokeFailure("capture cadence requires exactly one matching accepted light-space capture reuse marker")
     if args.software_shadow_capture_cadence == LIT_EVERY_FRAME and reuse_records:
         raise SmokeFailure("every-frame acquisition unexpectedly reused a light-space capture")
-    return {"capture_cadence_name": args.software_shadow_capture_cadence, "accepted_reuse_verified": bool(reuse_records),
-        "backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
+    return {"capture_cadence_name": args.software_shadow_capture_cadence, "accepted_reuse_verified": bool(reuse_records), "backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
         "blocker_search_name": args.software_shadow_blocker_search, LIT_REQUESTED: requested, LIT_OBSERVED: observed, LIT_VERIFIED: True}
 
 
@@ -434,14 +401,12 @@ def verify_csg_profile(text, args):
         return {LIT_REQUESTED: LIT_NONE, LIT_ENABLED: False, LIT_VERIFIED: True}
     if requested != LIT_WAIST_BANDS or len(records) != 1 or len(dispatches) != 1:
         raise SmokeFailure("waist_bands requires exactly one profile and actual CSG shadow dispatch record")
-    fields = ("profile", LIT_RECEIVERS, LIT_TRANSPARENT, LIT_OPAQUE, "cutters", "half_x", "half_y", "half_z",
-        "center_y", "amplitude_y", LIT_FRONT_Z, LIT_BACK_Z, LIT_MOTION)
+    fields = ("profile", LIT_RECEIVERS, LIT_TRANSPARENT, LIT_OPAQUE, "cutters", "half_x", "half_y", "half_z", "center_y", "amplitude_y", LIT_FRONT_Z, LIT_BACK_Z, LIT_MOTION)
     match = re.fullmatch(re.escape(CSG_PROFILE) + " ".join(re.escape(field) + r"=(\S+)" for field in fields), records[0])
     if not match:
         raise SmokeFailure("malformed CSG stress profile signature")
     observed = dict(zip(fields, match.groups()))
-    expected = dict(profile=LIT_WAIST_BANDS, receivers=20, transparent=10, opaque=10, cutters=2,
-        half_x=4.5, half_y=.08, half_z=.65, center_y=.9, amplitude_y=.1, front_z=-.55, back_z=.55, motion="crowd_yaw")
+    expected = dict(profile=LIT_WAIST_BANDS, receivers=20, transparent=10, opaque=10, cutters=2, half_x=4.5, half_y=.08, half_z=.65, center_y=.9, amplitude_y=.1, front_z=-.55, back_z=.55, motion="crowd_yaw")
     for field, value in expected.items():
         if isinstance(value, str):
             matches = observed[field] == value
@@ -454,8 +419,7 @@ def verify_csg_profile(text, args):
         if not matches:
             raise SmokeFailure(f"CSG stress profile disagrees with requested {field}")
     devices = [line for line in lines if line.startswith(CSG_DEVICE)]
-    capability = re.match(re.escape(CSG_DEVICE) + r"meshlets=[01] rayquery=([01]) raypipeline=[01] accelstruct=([01]) ",
-        devices[0]) if len(devices) == 1 else None
+    capability = re.match(re.escape(CSG_DEVICE) + r"meshlets=[01] rayquery=([01]) raypipeline=[01] accelstruct=([01]) ", devices[0]) if len(devices) == 1 else None
     dispatch = re.fullmatch(re.escape(CSG_DISPATCH) + r"\(hardware_compose=([01]), ([0-9]+) instances\)", dispatches[0])
     if not capability or not dispatch:
         raise SmokeFailure("CSG stress requires enabled-device capability and actual map route evidence")
@@ -470,8 +434,7 @@ def verify_csg_profile(text, args):
     completion = next((index for index, line in enumerate(lines) if line.startswith(DONE)), -1)
     if not lines.index(records[0]) < lines.index(dispatches[0]) < first_interval < completion:
         raise SmokeFailure("CSG setup and dispatch must precede the first measurement interval")
-    return {LIT_REQUESTED: requested, LIT_ENABLED: True, LIT_OBSERVED: observed, "hardware_compose": hardware,
-        "map_instances": int(dispatch[2]), LIT_SIGNATURE: records[0], LIT_VERIFIED: True}
+    return {LIT_REQUESTED: requested, LIT_ENABLED: True, LIT_OBSERVED: observed, "hardware_compose": hardware, "map_instances": int(dispatch[2]), LIT_SIGNATURE: records[0], LIT_VERIFIED: True}
 
 
 def verify_shadow_quality_settings(text, args, expected_extent=None):
@@ -498,8 +461,7 @@ def verify_shadow_quality_settings(text, args, expected_extent=None):
             raise SmokeFailure("shadow receiver source disagrees with measured frame extent")
         if (reduced_width, reduced_height) != ((width + factor - 1) // factor, (height + factor - 1) // factor):
             raise SmokeFailure("shadow receiver grid does not cover the source at the requested factor")
-        allocations.append(dict(factor=factor, width=width, height=height,
-            reduced_width=reduced_width, reduced_height=reduced_height))
+        allocations.append(dict(factor=factor, width=width, height=height, reduced_width=reduced_width, reduced_height=reduced_height))
     dispatched = [line.strip() for line in text.splitlines() if line.strip().startswith(SHADOW_TEMPORAL_ONE_RECORDED)]
     hardware = None
     if args.shadow_transparent_sampling == LIT_TEMPORAL_ONE:
@@ -511,10 +473,8 @@ def verify_shadow_quality_settings(text, args, expected_extent=None):
         hardware = bool(int(match[1]))
     elif dispatched:
         raise SmokeFailure("unrequested temporal-one dispatch was recorded")
-    return {"transparent_sampling": args.shadow_transparent_sampling,
-        "receiver_resolution": args.shadow_receiver_resolution, "receiver_factor": factor, "allocations": allocations,
-        "bootstrap_samples": 3, "accepted_history_samples": 1 if args.shadow_transparent_sampling == LIT_TEMPORAL_ONE else 3,
-        "effective_dispatch_verified": bool(dispatched), "hardware": hardware, LIT_VERIFIED: True}
+    return {"transparent_sampling": args.shadow_transparent_sampling, "receiver_resolution": args.shadow_receiver_resolution, "receiver_factor": factor, "allocations": allocations,
+        "bootstrap_samples": 3, "accepted_history_samples": 1 if args.shadow_transparent_sampling == LIT_TEMPORAL_ONE else 3, "effective_dispatch_verified": bool(dispatched), "hardware": hardware, LIT_VERIFIED: True}
 
 
 def verify_reflection_quality_settings(text, args, optical):
@@ -527,8 +487,7 @@ def verify_reflection_quality_settings(text, args, optical):
             raise SmokeFailure("new reflection diagnostic acquisition requires accepted screen-work counters for every sample")
         if screen[LIT_MAXIMUM_FRAME_AVERAGE_ITERATIONS] > args.reflection_screen_steps:
             raise SmokeFailure("accepted screen iteration count exceeds the requested step budget")
-    return {"screen_max_steps": args.reflection_screen_steps, LIT_VERIFIED: True,
-        "screen_work_measured": args.reflection_diagnostics}
+    return {"screen_max_steps": args.reflection_screen_steps, LIT_VERIFIED: True, "screen_work_measured": args.reflection_diagnostics}
 
 
 def launch_environment(base, args, output):
@@ -538,27 +497,15 @@ def launch_environment(base, args, output):
     result = {key: value for key, value in base.items() if not key.startswith(LIT_NWB)}
     if platform.system() == "Linux":
         result["NWB_LINUX_BACKEND"] = "x11"
-    result.update(NWB_STRESS_SMOKE_TIMING="1",
-        NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
-        NWB_STRESS_CSG_PROFILE=args.csg_profile,
-        NWB_REFLECTION_SCREEN_STEPS=str(args.reflection_screen_steps),
-        NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
-        NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage,
-        NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH=args.software_shadow_blocker_search,
-        NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE=args.software_shadow_capture_cadence,
-        NWB_SHADOW_TRANSPARENT_SAMPLING=args.shadow_transparent_sampling,
-        NWB_SHADOW_RECEIVER_RESOLUTION=args.shadow_receiver_resolution,
-        NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib),
-        NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution),
-        NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
-        NWB_CAUSTIC_PHOTON_GRID_DIVISOR=str(args.caustic_photon_grid_divisor),
-        NWB_SURFEL_GI_RESOLVE_RESOLUTION=args.surfel_gi_resolve_resolution,
-        NWB_GPU_TIMING_FILE=str(output / LIT_GPU_TIMING_TXT))
+    result.update(NWB_STRESS_SMOKE_TIMING="1", NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class), NWB_STRESS_CSG_PROFILE=args.csg_profile, NWB_REFLECTION_SCREEN_STEPS=str(args.reflection_screen_steps),
+        NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend, NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage, NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH=args.software_shadow_blocker_search,
+        NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE=args.software_shadow_capture_cadence, NWB_SHADOW_TRANSPARENT_SAMPLING=args.shadow_transparent_sampling, NWB_SHADOW_RECEIVER_RESOLUTION=args.shadow_receiver_resolution,
+        NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib), NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution), NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
+        NWB_CAUSTIC_PHOTON_GRID_DIVISOR=str(args.caustic_photon_grid_divisor), NWB_SURFEL_GI_RESOLVE_RESOLUTION=args.surfel_gi_resolve_resolution, NWB_GPU_TIMING_FILE=str(output / LIT_GPU_TIMING_TXT))
     if args.cpu_diagnostics:
         result.update(NWB_STRESS_CPU_DIAGNOSTICS="1", NWB_STRESS_CPU_TIMING_FILE=str(output / LIT_CPU_GPU_TIMING_TXT))
     if not args.animate:
-        result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
-            NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds))
+        result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle), NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds))
     if args.reflection_diagnostics:
         result["NWB_STRESS_REFLECTION_DIAGNOSTICS"] = "1"
     return result
@@ -583,9 +530,7 @@ def write_json(path, value):
 
 
 def identities(args, helpers):
-    return {"renderer": ab.binary_identity(args.executable), "runtime": ab.runtime_identity(args.working_directory),
-        "logger": None if args.no_logserver else ab.binary_identity(args.logserver_executable),
-        "python": file_identity(Path(sys.executable)),
+    return {"renderer": ab.binary_identity(args.executable), "runtime": ab.runtime_identity(args.working_directory), "logger": None if args.no_logserver else ab.binary_identity(args.logserver_executable), "python": file_identity(Path(sys.executable)),
         "helpers": {str(path): file_identity(path) for path in helpers}}
 
 
@@ -602,22 +547,18 @@ def validate_performance_target_request(args):
 def performance_target(measurement, minimum):
     # Derive qualification from the validated accepted count and wall clock, not rounded log FPS or GPU samples.
     observed = measurement[LIT_PRESENTATIONS] / measurement[LIT_SECONDS]
-    return dict(requested=minimum is not None, minimum_fps=minimum, comparison=">", observed_fps=observed,
-        source="accepted_native_presentations / steady_clock_seconds", passed=None if minimum is None else observed > minimum)
+    return dict(requested=minimum is not None, minimum_fps=minimum, comparison=">", observed_fps=observed, source="accepted_native_presentations / steady_clock_seconds", passed=None if minimum is None else observed > minimum)
 
 
 def acquire(args, output):
     validate_performance_target_request(args)
-    helpers = sorted({Path(module.__file__).resolve() for module in list(sys.modules.values())
-        if getattr(module, "__file__", None) and Path(module.__file__).suffix == ".py"
+    helpers = sorted({Path(module.__file__).resolve() for module in list(sys.modules.values()) if getattr(module, "__file__", None) and Path(module.__file__).suffix == ".py"
         and ("tests" in Path(module.__file__).parts or Path(module.__file__).resolve() == Path(__file__).resolve())})
     before = identities(args, helpers)
     env = launch_environment(build_launch_environment(args), args, output)
     launch = SimpleNamespace(**vars(args), log_port=0)
-    write_json(output / "launch.json", {LIT_EXECUTABLE: str(args.executable), LIT_WORKING_DIRECTORY: str(args.working_directory),
-        "application_args": args.application_arg, "timeout_seconds": args.timeout,
-        "environment": {key: value for key, value in env.items() if key.startswith((LIT_NWB, "VK_"))},
-        "identity_before": before, LIT_MINIMUM_FPS: args.minimum_fps})
+    write_json(output / "launch.json", {LIT_EXECUTABLE: str(args.executable), LIT_WORKING_DIRECTORY: str(args.working_directory), "application_args": args.application_arg, "timeout_seconds": args.timeout,
+        "environment": {key: value for key, value in env.items() if key.startswith((LIT_NWB, "VK_"))}, "identity_before": before, LIT_MINIMUM_FPS: args.minimum_fps})
     process = logserver = log_directory = None
     baseline, pattern = {}, ""
     collected = False
@@ -638,8 +579,7 @@ def acquire(args, output):
         collected = True
         (output / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
         result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
-        result[LIT_CPU_DIAGNOSTICS] = smoke_cpu_gpu_timing.verify_capture(
-            text, output / LIT_CPU_GPU_TIMING_TXT, result[LIT_MEASUREMENT], args.cpu_diagnostics, "stress")
+        result[LIT_CPU_DIAGNOSTICS] = smoke_cpu_gpu_timing.verify_capture(text, output / LIT_CPU_GPU_TIMING_TXT, result[LIT_MEASUREMENT], args.cpu_diagnostics, "stress")
         result[LIT_DIAGNOSTIC_ONLY] = args.cpu_diagnostics or args.reflection_diagnostics
         result["performance_qualification"] = not result[LIT_DIAGNOSTIC_ONLY]
         if args.cpu_diagnostics:
@@ -647,23 +587,18 @@ def acquire(args, output):
         result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
         result[LIT_CSG_PROFILE] = verify_csg_profile(text, args)
         result["caustic_quality_settings"] = caustic_quality_smoke.verify_settings(text, args.caustic_photon_grid_divisor)
-        result["surfel_gi_quality_settings"] = surfel_gi_quality_smoke.verify_settings(
-            text, args.surfel_gi_resolve_resolution, (result[LIT_WIDTH], result[LIT_HEIGHT]))
+        result["surfel_gi_quality_settings"] = surfel_gi_quality_smoke.verify_settings(text, args.surfel_gi_resolve_resolution, (result[LIT_WIDTH], result[LIT_HEIGHT]))
         result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args, (result[LIT_WIDTH], result[LIT_HEIGHT]))
         result["reflection_quality_settings"] = verify_reflection_quality_settings(text, args, result[LIT_OPTICAL_REFLECTION])
         result["runtime_signature"] = ab.device_material_signature(text)
-        result[LIT_MOTION] = {"mode": "rotating" if args.animate else "fixed",
-            "simulation_clock": "wall" if args.animate else "fixed_step",
-            "spin_angle": None if args.animate else args.spin_angle,
+        result[LIT_MOTION] = {"mode": "rotating" if args.animate else "fixed", "simulation_clock": "wall" if args.animate else "fixed_step", "spin_angle": None if args.animate else args.spin_angle,
             "fixed_delta_seconds": None if args.animate else args.fixed_delta_seconds}
         after = identities(args, helpers)
         if before != after:
             raise SmokeFailure("renderer, resources, logger, interpreter or helper identity changed during acquisition")
         result[LIT_PERFORMANCE_TARGET] = performance_target(result[LIT_MEASUREMENT], args.minimum_fps)
-        result.update(schema=1, passed=result[LIT_PERFORMANCE_TARGET][LIT_PASSED] is not False, capture_validated=True,
-            exit_code=code, identity_before=before, identity_after=after,
-            raw_files={name: file_identity(output / name) for name in (LIT_RUNTIME_LOG, LIT_PROCESS_TAIL_TXT, LIT_GPU_TIMING_TXT, LIT_CPU_GPU_TIMING_TXT, LIT_CPU_GPU_SUMMARY_JSON)
-                if (output / name).is_file()})
+        result.update(schema=1, passed=result[LIT_PERFORMANCE_TARGET][LIT_PASSED] is not False, capture_validated=True, exit_code=code, identity_before=before, identity_after=after,
+            raw_files={name: file_identity(output / name) for name in (LIT_RUNTIME_LOG, LIT_PROCESS_TAIL_TXT, LIT_GPU_TIMING_TXT, LIT_CPU_GPU_TIMING_TXT, LIT_CPU_GPU_SUMMARY_JSON) if (output / name).is_file()})
         return result
     finally:
         primary_failure = sys.exc_info()[0] is not None
@@ -699,42 +634,29 @@ def parse_args(argv=None):
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE)
     parser.add_argument("--output-directory", type=Path)
     parser.add_argument("--timeout", type=float, default=90.0)
-    parser.add_argument("--minimum-fps", type=float,
-        help="Require strictly greater accepted presentation FPS; equality fails. Diagnostic runs cannot qualify.")
-    parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
-        help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
-    parser.add_argument("--csg-profile", choices=(LIT_NONE, LIT_WAIST_BANDS), default=LIT_NONE,
-        help="Waist bands add two moving box cutters to all twenty mesh children.")
-    parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default=LIT_REFERENCE_THREE,
-        help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
-    parser.add_argument("--shadow-receiver-resolution", choices=tuple(SHADOW_RECEIVER_RESOLUTION), default=LIT_QUARTER,
-        help="Quarter reduces shadow tracing and filtering density; native geometry, final output and light-space map sizes stay unchanged.")
+    parser.add_argument("--minimum-fps", type=float, help="Require strictly greater accepted presentation FPS; equality fails. Diagnostic runs cannot qualify.")
+    parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10, help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
+    parser.add_argument("--csg-profile", choices=(LIT_NONE, LIT_WAIST_BANDS), default=LIT_NONE, help="Waist bands add two moving box cutters to all twenty mesh children.")
+    parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default=LIT_REFERENCE_THREE, help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
+    parser.add_argument("--shadow-receiver-resolution", choices=tuple(SHADOW_RECEIVER_RESOLUTION), default=LIT_QUARTER, help="Quarter reduces shadow tracing and filtering density; native geometry, final output and light-space map sizes stay unchanged.")
     parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default=LIT_AUTOMATIC)
-    parser.add_argument("--software-shadow-coverage", choices=tuple(SOFTWARE_SHADOW_COVERAGE), default=LIT_REFERENCE,
-        help="Fitted-volume coverage uses empty directional margins and retains receivers beyond a complete map's far plane.")
-    parser.add_argument("--software-shadow-blocker-search", choices=tuple(SOFTWARE_SHADOW_BLOCKER_SEARCH), default=LIT_REFERENCE_GRID9,
-        help="Compact cross uses five blocker taps; center1 uses only the fully checked center and may narrow penumbras.")
-    parser.add_argument("--software-shadow-capture-cadence", choices=tuple(SOFTWARE_SHADOW_CAPTURE_CADENCE), default=LIT_EVERY_FRAME,
-        help="Reuse accepted light-space captures for up to one or two frames, including CSG; receiver shading remains current.")
-    parser.add_argument("--software-shadow-budget-mib", type=int, default=256,
-        help="Requested shadow-map storage budget in MiB (1 through 4095).")
+    parser.add_argument("--software-shadow-coverage", choices=tuple(SOFTWARE_SHADOW_COVERAGE), default=LIT_REFERENCE, help="Fitted-volume coverage uses empty directional margins and retains receivers beyond a complete map's far plane.")
+    parser.add_argument("--software-shadow-blocker-search", choices=tuple(SOFTWARE_SHADOW_BLOCKER_SEARCH), default=LIT_REFERENCE_GRID9, help="Compact cross uses five blocker taps; center1 uses only the fully checked center and may narrow penumbras.")
+    parser.add_argument("--software-shadow-capture-cadence", choices=tuple(SOFTWARE_SHADOW_CAPTURE_CADENCE), default=LIT_EVERY_FRAME, help="Reuse accepted light-space captures for up to one or two frames, including CSG; receiver shading remains current.")
+    parser.add_argument("--software-shadow-budget-mib", type=int, default=256, help="Requested shadow-map storage budget in MiB (1 through 4095).")
     parser.add_argument("--software-shadow-directional-resolution", type=int, default=512)
     parser.add_argument("--software-shadow-point-resolution", type=int, default=256)
     motion = parser.add_mutually_exclusive_group()
     motion.add_argument("--spin-angle", type=float, default=0.6)
-    motion.add_argument("--animate", action=LIT_STORE_TRUE,
-        help="Continuously rotate the bodies using wall-time simulation; excludes fixed yaw and fixed simulation delta.")
+    motion.add_argument("--animate", action=LIT_STORE_TRUE, help="Continuously rotate the bodies using wall-time simulation; excludes fixed yaw and fixed simulation delta.")
     parser.add_argument("--fixed-delta-seconds", type=float)
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     caustic_quality_smoke.add_arguments(parser)
     surfel_gi_quality_smoke.add_arguments(parser)
     parser.set_defaults(surfel_gi_resolve_resolution=LIT_QUARTER)
-    parser.add_argument("--reflection-screen-steps", type=int, default=96,
-        help="Maximum SSR hierarchy iterations per attempted surface ray (8 through 256); lower budgets fall back normally.")
-    parser.add_argument("--cpu-diagnostics", action=LIT_STORE_TRUE,
-        help="Capture existing CPU+GPU timing with memory off; buffered publication evidence is diagnostic only, not a performance result.")
-    parser.add_argument("--reflection-diagnostics", action=LIT_STORE_TRUE,
-        help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
+    parser.add_argument("--reflection-screen-steps", type=int, default=96, help="Maximum SSR hierarchy iterations per attempted surface ray (8 through 256); lower budgets fall back normally.")
+    parser.add_argument("--cpu-diagnostics", action=LIT_STORE_TRUE, help="Capture existing CPU+GPU timing with memory off; buffered publication evidence is diagnostic only, not a performance result.")
+    parser.add_argument("--reflection-diagnostics", action=LIT_STORE_TRUE, help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
     args = parser.parse_args(argv)
     if args.csg_profile != LIT_NONE:
         if args.characters_per_class != 10 or args.software_shadow_backend == LIT_TRACE:
@@ -792,8 +714,7 @@ def main(argv=None):
         optical = result[LIT_OPTICAL_REFLECTION]
         write_status(f"Optical reflection: {optical['status']} (query activity alone does not certify optical correctness)")
         if optical[LIT_REQUESTED]:
-            write_status(f"Reflection samples={optical['sample_count']} unsupported_ratio={optical['unsupported_ratio']} "
-                f"exterior_eligible_ratio={optical['exterior_eligible_ratio']} queries_per_hardware_ray={optical['queries_per_hardware_ray']}")
+            write_status(f"Reflection samples={optical['sample_count']} unsupported_ratio={optical['unsupported_ratio']} " f"exterior_eligible_ratio={optical['exterior_eligible_ratio']} queries_per_hardware_ray={optical['queries_per_hardware_ray']}")
         return 0
     except SmokeSkip as error:
         if output is not None:

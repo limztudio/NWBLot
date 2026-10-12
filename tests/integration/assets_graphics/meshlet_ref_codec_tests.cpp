@@ -46,13 +46,7 @@ TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
 TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
     TestArena testArena;
     auto meshlets = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
-    meshlets.push_back(NWB::Impl::MeshletDesc{
-        0u,
-        0u,
-        0u,
-        0u,
-        NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u),
-    });
+    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u), });
 
     auto positionRefs = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
     positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 0u, 1000u });
@@ -66,14 +60,7 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
 
     auto positionRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
     auto attributeRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
-    const bool encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(
-        meshlets,
-        positionRefs,
-        attributeRefs,
-        positionRefDeltas,
-        attributeRefDeltas,
-        true
-    );
+    const bool encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(meshlets, positionRefs, attributeRefs, positionRefDeltas, attributeRefDeltas, true);
     EXPECT_TRUE(encoded);
     if(!encoded)
         return;

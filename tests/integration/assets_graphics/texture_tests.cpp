@@ -88,11 +88,7 @@ static constexpr AStringView s_TextureHdrTestMetadata =
 ;
 
 
-static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(
-    TestArena& testArena,
-    const usize byteCount = 96u,
-    const u8 initialValue = 0u
-){
+static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(TestArena& testArena, const usize byteCount = 96u, const u8 initialValue = 0u){
     NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     bytes.resize(byteCount);
     for(usize index = 0u; index < bytes.size(); ++index)
@@ -131,9 +127,7 @@ TEST(AssetsGraphics, TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips){
 
 TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-        logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-    );
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     TestArena testArena;
     NWB::Impl::Texture texture(testArena.arena, Name("project/textures/version_admission"));
@@ -170,9 +164,7 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
 
 TEST(AssetsGraphics, TexturePayloadRejectsMismatchedExplicitAlphaMode){
     CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-        logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-    );
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     TestArena testArena;
     NWB::Impl::Texture texture(testArena.arena, Name("project/textures/invalid_alpha_mode"));
@@ -201,12 +193,9 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
     };
     constexpr Array<ObsoleteField, 15u> s_ObsoleteFields = {{
         { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
-        { "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
-            NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
-        { "asset.uastc_hdr_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
-            NWB_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
-        { "asset.alpha_uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
-            NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
+        { "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n", NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
+        { "asset.uastc_hdr_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n", NWB_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
+        { "asset.alpha_uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n", NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
         { "asset.schema_version = 1;\n", NWB_TEXT("unsupported asset field 'schema_version'") },
         { "asset.revision = 1;\n", NWB_TEXT("unsupported asset field 'revision'") },
         { "asset.block_width = 4;\n", NWB_TEXT("unsupported asset field 'block_width'") },
@@ -222,9 +211,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
     for(const AStringView source : { s_TextureTestMetadata, s_TextureHdrTestMetadata }){
         for(const ObsoleteField& field : s_ObsoleteFields){
             CapturingLogger logger;
-            NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-                logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-            );
+            NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
             TestArena testArena;
             NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
@@ -258,9 +245,7 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingMalformedAndUnsupportedFormats){
     constexpr AStringView s_FormatAssignment = "asset.format = \"uastc_ldr_4x4\";";
     for(const InvalidFormat& invalidFormat : s_InvalidFormats){
         CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-        );
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
         TestArena testArena;
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
@@ -296,9 +281,7 @@ TEST(AssetsGraphics, TextureCookerRejectsFieldsDerivedFromFormatAndDimension){
     }};
     for(const DerivedField& field : s_DerivedFields){
         CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-        );
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
         TestArena testArena;
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
@@ -343,9 +326,7 @@ TEST(AssetsGraphics, TextureCookerRequiresExactDerivedSidecarSize){
 
         for(const usize byteCount : { sidecarCase.byteCount - 1u, sidecarCase.byteCount, sidecarCase.byteCount + 1u }){
             CapturingLogger logger;
-            NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-                logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-            );
+            NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
             ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / sidecarCase.filename, MakeTextureTestUastcPayload(testArena, byteCount)));
             NWB::Impl::TextureCookEntry entry(testArena.arena);
@@ -393,9 +374,7 @@ TEST(AssetsGraphics, TextureCookerInfersHdrAlphaAndChecksConstantBounds){
     ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / "bright.tex", MakeTextureTestUastcPayload(testArena, 48u)));
     for(const AlphaCase& alphaCase : s_AlphaCases){
         CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-        );
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
         ::AString<NWB::Core::Alloc::ScratchArena> metadata(s_TextureHdrTestMetadata, scratchArena);
@@ -430,32 +409,14 @@ TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
         TStringView diagnostic;
     };
     constexpr Array<OverflowCase, 4u> s_OverflowCases = {{
-        {
-            "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
-            "asset.dimension = \"2d\"; asset.width = 4294967295; asset.height = 4294967295;\n",
-            NWB_TEXT("block grid exceeds runtime limits")
-        },
-        {
-            "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
-            "asset.dimension = \"volume\"; asset.width = 2147483648; asset.height = 2147483648; asset.depth = 4;\n",
-            NWB_TEXT("byte size overflows")
-        },
-        {
-            "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
-            "asset.dimension = \"volume\"; asset.width = 1073741824; asset.height = 1073741824; asset.depth = 15;\n",
-            NWB_TEXT("mip payload offsets overflow")
-        },
-        {
-            "asset.format = \"uastc_hdr_4x4\"; asset.alpha_mode = \"uastc_ldr_4x4\";\n"
-            "asset.dimension = \"cube\"; asset.width = 1073741824; asset.height = 1073741824;\n",
-            NWB_TEXT("separate HDR alpha payload size overflows")
-        },
+        { "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n" "asset.dimension = \"2d\"; asset.width = 4294967295; asset.height = 4294967295;\n", NWB_TEXT("block grid exceeds runtime limits") },
+        { "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n" "asset.dimension = \"volume\"; asset.width = 2147483648; asset.height = 2147483648; asset.depth = 4;\n", NWB_TEXT("byte size overflows") },
+        { "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n" "asset.dimension = \"volume\"; asset.width = 1073741824; asset.height = 1073741824; asset.depth = 15;\n", NWB_TEXT("mip payload offsets overflow") },
+        { "asset.format = \"uastc_hdr_4x4\"; asset.alpha_mode = \"uastc_ldr_4x4\";\n" "asset.dimension = \"cube\"; asset.width = 1073741824; asset.height = 1073741824;\n", NWB_TEXT("separate HDR alpha payload size overflows") },
     }};
     for(const OverflowCase& overflowCase : s_OverflowCases){
         CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-        );
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
         TestArena testArena;
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);

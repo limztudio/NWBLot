@@ -75,11 +75,7 @@ const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const{
 
 
 SharedBakedFontAtlas CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration){
-    SharedBakedFontAtlas result(
-        NewArenaObject<RefCounter<BakedFontAtlas>>(arena, arena, atlas, fontGeneration),
-        ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    SharedBakedFontAtlas result(NewArenaObject<RefCounter<BakedFontAtlas>>(arena, arena, atlas, fontGeneration), ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
     return result->valid() ? result : SharedBakedFontAtlas{};
 }
 

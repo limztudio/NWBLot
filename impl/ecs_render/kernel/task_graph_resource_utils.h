@@ -29,32 +29,18 @@ namespace RendererTaskGraphDetail{
 
 [[nodiscard]] inline Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, const AStringView label){
     Core::GpuGraphResourceDesc desc;
-    desc
-        .setIdentity(identity)
-        .setMarkerLabel(label)
-        .setType(Core::GpuGraphResourceType::Texture)
-    ;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Texture);
     return desc;
 }
 
 [[nodiscard]] inline Core::GpuGraphResourceDesc BufferResourceDesc(const Name& identity, const AStringView label){
     Core::GpuGraphResourceDesc desc;
-    desc
-        .setIdentity(identity)
-        .setMarkerLabel(label)
-        .setType(Core::GpuGraphResourceType::Buffer)
-    ;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer);
     return desc;
 }
 
 template<typename Plan>
-[[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(
-    Core::GpuTaskGraph& graph,
-    const Plan& plan,
-    Core::Alloc::ScratchArena& scratchArena,
-    const Name& identity,
-    const AStringView label
-){
+[[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(Core::GpuTaskGraph& graph, const Plan& plan, Core::Alloc::ScratchArena& scratchArena, const Name& identity, const AStringView label){
     if(!plan.captured || plan.outputBuffers.empty())
         return MakeUnexpected(Failure{});
 
@@ -80,12 +66,7 @@ template<typename Plan>
             return MakeUnexpected(Failure{});
         members.push_back(resource);
     }
-    const Core::GpuGraphResourceSetId result = graph.importResourceSet(
-        Core::GpuGraphResourceSetDesc{}
-            .setIdentity(identity)
-            .setMarkerLabel(label)
-            .setMembers(members.data(), members.size())
-    );
+    const Core::GpuGraphResourceSetId result = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
     if(!result.valid())
         return MakeUnexpected(Failure{});
     return result;
@@ -93,26 +74,12 @@ template<typename Plan>
 
 [[nodiscard]] inline Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, const AStringView label){
     Core::GpuGraphResourceDesc desc;
-    desc
-        .setIdentity(identity)
-        .setMarkerLabel(label)
-        .setType(Core::GpuGraphResourceType::HazardDomain)
-    ;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::HazardDomain);
     return desc;
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse ReadUse(
-    const Core::GpuGraphResourceId resource,
-    const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
-    const bool hasIndependentStateSource = false
-)noexcept{
-    return Core::GpuTaskResourceUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = state,
-        .access = Core::GpuTaskResourceAccess::Read,
-        .hasIndependentStateSource = hasIndependentStateSource,
-    };
+[[nodiscard]] inline Core::GpuTaskResourceUse ReadUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource, const bool hasIndependentStateSource = false)noexcept{
+    return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::Read, .hasIndependentStateSource = hasIndependentStateSource, };
 }
 
 
@@ -138,23 +105,11 @@ template<typename Plan>
     return result;
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse WriteUse(
-    const Core::GpuGraphResourceId resource,
-    const Core::ResourceStates::Mask state
-)noexcept{
-    return Core::GpuTaskResourceUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = state,
-        .access = Core::GpuTaskResourceAccess::Write,
-    };
+[[nodiscard]] inline Core::GpuTaskResourceUse WriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
+    return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::Write, };
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse WriteTextureUse(
-    const Core::GpuGraphResourceId resource,
-    const Core::TextureSubresourceSet& subresources,
-    const Core::ResourceStates::Mask state
-)noexcept{
+[[nodiscard]] inline Core::GpuTaskResourceUse WriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
     Core::GpuTaskResourceUse result = WriteUse(resource, state);
     result.range.textureSubresources = subresources;
     return result;
@@ -162,31 +117,15 @@ template<typename Plan>
 
 [[nodiscard]] inline Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label){
     Core::GpuGraphResourceDesc desc;
-    desc
-        .setIdentity(identity)
-        .setMarkerLabel(label)
-        .setType(Core::GpuGraphResourceType::AccelStruct)
-    ;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::AccelStruct);
     return desc;
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse ReadWriteUse(
-    const Core::GpuGraphResourceId resource,
-    const Core::ResourceStates::Mask state
-)noexcept{
-    return Core::GpuTaskResourceUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = state,
-        .access = Core::GpuTaskResourceAccess::ReadWrite,
-    };
+[[nodiscard]] inline Core::GpuTaskResourceUse ReadWriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
+    return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::ReadWrite, };
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse ReadWriteTextureUse(
-    const Core::GpuGraphResourceId resource,
-    const Core::TextureSubresourceSet& subresources,
-    const Core::ResourceStates::Mask state
-)noexcept{
+[[nodiscard]] inline Core::GpuTaskResourceUse ReadWriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
     Core::GpuTaskResourceUse result = ReadWriteUse(resource, state);
     result.range.textureSubresources = subresources;
     return result;
@@ -203,26 +142,10 @@ inline void AppendCsgRemovedIntervalUses(
     const Core::TextureSubresourceSet& subresources,
     const Core::TextureSubresourceSet& countSubresources
 ){
-    resourceUses.push_back(ReadTextureUse(
-        removedIntervalDepth,
-        subresources,
-        Core::ResourceStates::UnorderedAccess
-    ));
-    resourceUses.push_back(ReadTextureUse(
-        removedIntervalCapNormal,
-        subresources,
-        Core::ResourceStates::UnorderedAccess
-    ));
-    resourceUses.push_back(ReadTextureUse(
-        removedIntervalData,
-        subresources,
-        Core::ResourceStates::UnorderedAccess
-    ));
-    resourceUses.push_back(ReadTextureUse(
-        removedIntervalCount,
-        countSubresources,
-        Core::ResourceStates::UnorderedAccess
-    ));
+    resourceUses.push_back(ReadTextureUse(removedIntervalDepth, subresources, Core::ResourceStates::UnorderedAccess));
+    resourceUses.push_back(ReadTextureUse(removedIntervalCapNormal, subresources, Core::ResourceStates::UnorderedAccess));
+    resourceUses.push_back(ReadTextureUse(removedIntervalData, subresources, Core::ResourceStates::UnorderedAccess));
+    resourceUses.push_back(ReadTextureUse(removedIntervalCount, countSubresources, Core::ResourceStates::UnorderedAccess));
 }
 
 

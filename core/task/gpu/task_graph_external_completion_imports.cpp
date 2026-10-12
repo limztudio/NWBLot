@@ -24,22 +24,11 @@ namespace __hidden_gpu_task_graph_external_completion_imports{
 
 
 [[nodiscard]] static bool HasExternalCompletionTokenValue(const QueueSubmissionToken& token)noexcept{
-    return token.queue != CommandQueue::kCount
-        || token.value != 0u
-        || token.physicalQueueIndex != Limit<u16>::s_Max
-        || token.deviceGeneration != 0u
-    ;
+    return token.queue != CommandQueue::kCount || token.value != 0u || token.physicalQueueIndex != Limit<u16>::s_Max || token.deviceGeneration != 0u;
 }
 
-[[nodiscard]] static bool SameSubmissionToken(
-    const QueueSubmissionToken& lhs,
-    const QueueSubmissionToken& rhs
-)noexcept{
-    return lhs.queue == rhs.queue
-        && lhs.value == rhs.value
-        && lhs.physicalQueueIndex == rhs.physicalQueueIndex
-        && lhs.deviceGeneration == rhs.deviceGeneration
-    ;
+[[nodiscard]] static bool SameSubmissionToken(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
+    return lhs.queue == rhs.queue && lhs.value == rhs.value && lhs.physicalQueueIndex == rhs.physicalQueueIndex && lhs.deviceGeneration == rhs.deviceGeneration;
 }
 
 
@@ -59,15 +48,7 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
 
     using namespace __hidden_gpu_task_graph_external_completion_imports;
     const bool hasToken = HasExternalCompletionTokenValue(desc.token);
-    if(
-        !desc.identity
-        || desc.markerLabel.empty()
-        || (hasToken && (
-            !desc.token.valid()
-            || !desc.token.hasPhysicalQueueIdentity()
-            || !validForDeviceGeneration(desc.token.deviceGeneration)
-        ))
-    )
+    if(!desc.identity || desc.markerLabel.empty() || (hasToken && (!desc.token.valid() || !desc.token.hasPhysicalQueueIdentity() || !validForDeviceGeneration(desc.token.deviceGeneration))))
         return {};
 
     const u32 completionIndex = findExternalCompletionIdentity(desc.identity);

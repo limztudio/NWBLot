@@ -59,11 +59,7 @@ bool GpuTaskGraph::tryReset(){
         )
             return false;
         for(const GpuTaskNode& task : m_tasks){
-            if(
-                task.lifecycleState == TaskLifecycleState::Recording
-                || task.lifecycleState == TaskLifecycleState::Submitting
-                || task.lifecycleState == TaskLifecycleState::Accepting
-            )
+            if(task.lifecycleState == TaskLifecycleState::Recording || task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting)
                 return false;
         }
         m_teardownInProgress = true;
@@ -95,20 +91,9 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
     destroyResourceStateSnapshots();
     {
         NothrowScopedLock lock(m_lifecycleMutex);
-        if(
-            m_activeCompiledGraph
-            && m_activeRecordingPlanGeneration != 0u
-            && m_submissionBindingState == SubmissionBindingState::None
-        ){
-            const bool recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(
-                *this,
-                m_activeRecordingPlanGeneration,
-                m_activeRecordingAttemptGeneration
-            );
-            NWB_FATAL_ASSERT_MSG(
-                recordingAttemptResolved,
-                "GPU task graph reset cleanup must release its exact recording-plan lease"
-            );
+        if(m_activeCompiledGraph && m_activeRecordingPlanGeneration != 0u && m_submissionBindingState == SubmissionBindingState::None){
+            const bool recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, m_activeRecordingAttemptGeneration);
+            NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "GPU task graph reset cleanup must release its exact recording-plan lease");
             if(!recordingAttemptResolved)
                 TerminateInvariant();
         }
@@ -148,10 +133,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_activeRecordingAttemptGeneration = AllocateGeneration();
         m_activeRecordingPlanGeneration = 0u;
         m_activeRecordingPreparationSerial = 0u;
-        NWB_FATAL_ASSERT_MSG(
-            m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) == 0u,
-            "GPU task graph reset publication requires every packet recording claim to drain"
-        );
+        NWB_FATAL_ASSERT_MSG(m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) == 0u, "GPU task graph reset publication requires every packet recording claim to drain");
         if(m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) != 0u)
             TerminateInvariant();
         m_activeCompiledGraph = nullptr;

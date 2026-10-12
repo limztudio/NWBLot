@@ -77,12 +77,7 @@ inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_
     return SpoolDirectory(arena, testGroup) / bucketName;
 }
 
-[[nodiscard]] static CrashTestPath PackageDirectory(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView testGroup,
-    const AStringView bucketName,
-    const AStringView packageName
-){
+[[nodiscard]] static CrashTestPath PackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){
     return BucketDirectory(arena, testGroup, bucketName) / packageName;
 }
 
@@ -90,12 +85,7 @@ static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStr
     EXPECT_TRUE(RemoveAllIfExists(TestCaseDirectory(arena, testGroup)));
 }
 
-[[nodiscard]] static bool CreatePackageDirectory(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView testGroup,
-    const AStringView bucketName,
-    const AStringView packageName
-){
+[[nodiscard]] static bool CreatePackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){
     const CrashTestPath packageDirectory = PackageDirectory(arena, testGroup, bucketName, packageName);
     if(!EnsureDirectories(packageDirectory))
         return false;
@@ -129,12 +119,7 @@ static void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, c
 #endif
 }
 
-static void FillPackageRequest(
-    NWB::Core::Alloc::GlobalArena& arena,
-    NWB::Core::Crash::Detail::CrashRequest& request,
-    const CrashTestPath& spoolDirectory,
-    const AStringView crashId
-){
+static void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::Detail::CrashRequest& request, const CrashTestPath& spoolDirectory, const AStringView crashId){
     request = NWB::Core::Crash::Detail::CrashRequest{};
     request.platform = CurrentCrashPlatformKind();
     request.reasonKind = NWB::Core::Crash::Detail::CrashReasonKind::ManualDump;
@@ -244,12 +229,7 @@ TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
-        arena,
-        SpoolDirectory(arena, s_Group),
-        retention,
-        AStringView("crash-001")
-    ));
+    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention, AStringView("crash-001")));
 
     EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001)));
     EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002)));
@@ -275,10 +255,7 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
     EXPECT_FALSE(NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
     EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
     EXPECT_TRUE(PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName)));
-    EXPECT_TRUE(TextFileContains(
-            PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId) / CrashNames::s_UploadAttemptFileName,
-            AStringView(CrashNames::s_UploadAttemptRetryInterruptedState)
-        ));
+    EXPECT_TRUE(TextFileContains(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId) / CrashNames::s_UploadAttemptFileName, AStringView(CrashNames::s_UploadAttemptRetryInterruptedState)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -287,10 +264,7 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
 TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     TestArena testArena;
     auto& arena = testArena.arena;
-    NWB::Core::Alloc::PersistentArena installArena(
-        s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
-    );
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
     constexpr AStringView s_Group("crash_handler_handle_inheritance_test");
     RemoveTestArtifacts(arena, s_Group);
 
@@ -301,15 +275,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     SECURITY_ATTRIBUTES securityAttributes = {};
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
-    const HANDLE sentinelHandle = CreateFileW(
-        sentinelPath.c_str(),
-        GENERIC_READ | GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        &securityAttributes,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_TEMPORARY,
-        nullptr
-    );
+    const HANDLE sentinelHandle = CreateFileW(sentinelPath.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttributes, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr);
     ASSERT_NE(sentinelHandle, INVALID_HANDLE_VALUE);
 
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
@@ -334,10 +300,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
 TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     TestArena testArena;
     auto& arena = testArena.arena;
-    NWB::Core::Alloc::PersistentArena installArena(
-        s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
-    );
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
     constexpr AStringView s_Group("crash_desktop_handler_runtime_test");
     RemoveTestArtifacts(arena, s_Group);
 
@@ -362,11 +325,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     options.triggerFile = AStringView("tests/integration/crash/crash_package_tests.cpp");
     NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
     NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
-    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(
-        NWB::Core::Crash::Detail::CrashReasonKind::ManualDump,
-        0u,
-        options
-    );
+    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, options);
     EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
     char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
@@ -375,8 +334,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
     EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
     EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
-    // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
-    // this guards that .eh_frame-based capture keeps producing a full callstack.
+    // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so this guards that .eh_frame-based capture keeps producing a full callstack.
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
     NWB::Core::Crash::UninstallCrashHandler();
     RemoveTestArtifacts(arena, s_Group);
@@ -387,10 +345,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
 TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
     TestArena testArena;
     auto& arena = testArena.arena;
-    NWB::Core::Alloc::PersistentArena installArena(
-        s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
-    );
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
     constexpr AStringView s_Group("crash_gpu_text_only_runtime_test");
     RemoveTestArtifacts(arena, s_Group);
 
@@ -415,11 +370,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
     options.gpuDumpKind = NWB::Core::Crash::GpuCrashDumpKind::None;
     NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
     NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
-    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(
-        NWB::Core::Crash::Detail::CrashReasonKind::GpuCrash,
-        0u,
-        options
-    );
+    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(NWB::Core::Crash::Detail::CrashReasonKind::GpuCrash, 0u, options);
     EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
     char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
@@ -448,10 +399,7 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
     const pid_t childPid = fork();
     ASSERT_GE(childPid, 0);
     if(childPid == 0){
-        NWB::Core::Alloc::PersistentArena installArena(
-            s_SignalChildInstallArena,
-            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
-        );
+        NWB::Core::Alloc::PersistentArena installArena(s_SignalChildInstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CRASH_TESTS);
         config.version = AStringView("1");

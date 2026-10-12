@@ -32,10 +32,7 @@ UiEditClipboardController::~UiEditClipboardController(){
 }
 
 
-UiEditClipboardResult UiEditClipboardController::request(
-    const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action,
-    const Core::ClipboardChannel::Enum channel, const bool readOnly
-){
+UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel, const bool readOnly){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!owner.valid())
@@ -59,8 +56,7 @@ UiEditClipboardResult UiEditClipboardController::request(
         return { UiEditClipboardStatus::Unsupported };
     const auto result = reads ? m_service.requestReadText(channel) : m_service.requestWriteText(channel, model.selectedText());
     if(result.admission != Core::ClipboardAdmission::Accepted)
-        return { result.admission == Core::ClipboardAdmission::WrongThread
-            ? UiEditClipboardStatus::WrongThread : UiEditClipboardStatus::QueueFull };
+        return { result.admission == Core::ClipboardAdmission::WrongThread ? UiEditClipboardStatus::WrongThread : UiEditClipboardStatus::QueueFull };
     if(!result.token.valid())
         return { UiEditClipboardStatus::NativeFailure };
     m_token = result.token;
@@ -87,8 +83,7 @@ UiEditClipboardResult UiEditClipboardController::drain(const UiTextEditOwner& ow
         return { UiEditClipboardStatus::WrongThread };
     UiEditClipboardResult result{ UiEditClipboardStatus::Cancelled };
     if(poll == Core::ClipboardPollResult::Completed){
-        const auto operation = m_action == Ui::EditClipboardAction::Paste
-            ? Core::ClipboardOperation::ReadText : Core::ClipboardOperation::WriteText;
+        const auto operation = m_action == Ui::EditClipboardAction::Paste ? Core::ClipboardOperation::ReadText : Core::ClipboardOperation::WriteText;
         if(m_completion.token == m_token && m_completion.channel == m_channel && m_completion.operation == operation)
             result = applyCompletion(model, readOnly);
         else
@@ -139,10 +134,7 @@ UiEditClipboardResult UiEditClipboardController::applyCompletion(Ui::EditModel& 
             return { UiEditClipboardStatus::TooLarge };
         const auto source = AStringView(m_completion.text);
         const usize maxBytes = model.limits().maxBytes - retainedBytes;
-        auto normalized = model.textMode() == Ui::EditTextMode::Multiline
-            ? Ui::NormalizeMultilineText(m_insertText.get_allocator().arena(), source, maxBytes)
-            : Ui::NormalizeSingleLineText(m_insertText.get_allocator().arena(), source, maxBytes)
-        ;
+        auto normalized = model.textMode() == Ui::EditTextMode::Multiline ? Ui::NormalizeMultilineText(m_insertText.get_allocator().arena(), source, maxBytes) : Ui::NormalizeSingleLineText(m_insertText.get_allocator().arena(), source, maxBytes);
         if(!normalized)
             return { normalized.error() == Ui::EditTextStatus::TooLarge ? UiEditClipboardStatus::TooLarge : UiEditClipboardStatus::InvalidText };
         m_insertText = Move(*normalized);
@@ -151,8 +143,7 @@ UiEditClipboardResult UiEditClipboardController::applyCompletion(Ui::EditModel& 
     }
     if(!model.replaceSelection(AStringView(m_insertText)))
         return { UiEditClipboardStatus::ModelRejected };
-    return { UiEditClipboardStatus::Applied, model.revision() != revision,
-        model.anchor() != anchor || model.caret() != caret };
+    return { UiEditClipboardStatus::Applied, model.revision() != revision, model.anchor() != anchor || model.caret() != caret };
 }
 
 

@@ -42,20 +42,14 @@ template<typename PointerT, typename OperationT>
 }
 
 [[nodiscard]] inline bool ReadAllFileDescriptor(const int fd, void* const data, const usize byteCount)noexcept{
-    return TransferAllPosix(
-        static_cast<u8*>(data),
-        byteCount,
-        [fd](u8* const cursor, const usize remaining)noexcept{
+    return TransferAllPosix(static_cast<u8*>(data), byteCount, [fd](u8* const cursor, const usize remaining)noexcept{
             return read(fd, cursor, remaining);
         }
     );
 }
 
 [[nodiscard]] inline bool WriteAllFileDescriptor(const int fd, const void* const data, const usize byteCount)noexcept{
-    return TransferAllPosix(
-        static_cast<const u8*>(data),
-        byteCount,
-        [fd](const u8* const cursor, const usize remaining)noexcept{
+    return TransferAllPosix(static_cast<const u8*>(data), byteCount, [fd](const u8* const cursor, const usize remaining)noexcept{
             return write(fd, cursor, remaining);
         }
     );
@@ -72,10 +66,7 @@ template<typename PointerT, typename OperationT>
     usize remaining = byteCount;
     while(remaining > 0u){
         DWORD bytesRead = 0u;
-        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
-            ? Limit<DWORD>::s_Max
-            : static_cast<DWORD>(remaining)
-        ;
+        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max) ? Limit<DWORD>::s_Max : static_cast<DWORD>(remaining);
         if(!ReadFile(handle, cursor, requestSize, &bytesRead, nullptr) || bytesRead == 0u)
             return false;
 
@@ -90,10 +81,7 @@ template<typename PointerT, typename OperationT>
     usize remaining = byteCount;
     while(remaining > 0u){
         DWORD bytesWritten = 0u;
-        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
-            ? Limit<DWORD>::s_Max
-            : static_cast<DWORD>(remaining)
-        ;
+        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max) ? Limit<DWORD>::s_Max : static_cast<DWORD>(remaining);
         if(!WriteFile(handle, cursor, requestSize, &bytesWritten, nullptr) || bytesWritten == 0u)
             return false;
 

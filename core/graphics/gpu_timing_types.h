@@ -62,8 +62,8 @@ struct GpuTimingScopeDefinition{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A recorder-issued opaque value retained from recording until the matching accepted GPU query completes. The
-// default-invalid value keeps ordinary timing scopes out of the optional completed-sample listener path.
+// A recorder-issued opaque value retained from recording until the matching accepted GPU query completes.
+// The default-invalid value keeps ordinary timing scopes out of the optional completed-sample listener path.
 class GpuTimingSampleAttribution final{
     friend class GpuTimingRecorder;
     friend constexpr bool operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept;
@@ -87,16 +87,10 @@ private:
     u64 m_identity = 0u;
 };
 
-inline constexpr bool operator==(
-    const GpuTimingSampleAttribution& lhs,
-    const GpuTimingSampleAttribution& rhs
-)noexcept{
+inline constexpr bool operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
     return lhs.m_identity == rhs.m_identity;
 }
-inline constexpr bool operator!=(
-    const GpuTimingSampleAttribution& lhs,
-    const GpuTimingSampleAttribution& rhs
-)noexcept{
+inline constexpr bool operator!=(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -106,20 +100,20 @@ struct GpuTimingSample{
     u64 sourceFrameIndex = 0u;
     f64 durationSeconds = 0.0;
     Name scopeName = s_NameNone;
-    // Accepted native queue per attributed outcome; stays valid when the backend exposes durations
-    // but no absolute cross-submission comparable range.
+    // Accepted native queue per attributed outcome; stays valid when the backend exposes durations but no absolute cross-submission comparable range.
     GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
     GpuComparableTimestampRange comparableRange;
     GpuPhysicalQueueId physicalQueue;
     // False retires an attributed query whose value became unavailable (e.g. capture epoch change).
     // durationSeconds is meaningful only when true.
     bool published = false;
-    // Valid only for a published result with absolute comparable timestamps. Unpublished retirements keep
-    // physicalQueue but leave this range invalid even when raw query data existed.
+    // Valid only for a published result with absolute comparable timestamps.
+    // Unpublished retirements keep physicalQueue but leave this range invalid even when raw query data existed.
 };
 
-// Listener context is caller-owned; callbacks run unlocked under a recursive gate. External unsubscription waits;
-// callback-stack unsubscription must outlive its stack. Exceptions propagate; unpublished notices retire attribution only.
+// Listener context is caller-owned; callbacks run unlocked under a recursive gate.
+// External unsubscription waits; callback-stack unsubscription must outlive its stack.
+// Exceptions propagate; unpublished notices retire attribution only.
 struct GpuTimingSampleListener{
     void* context = nullptr;
     void (*invoke)(void* context, const GpuTimingSample& sample) = nullptr;
@@ -128,8 +122,7 @@ struct GpuTimingSampleListener{
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr; }
 };
 
-// Subscription identities are process-unique and never reused, so delayed snapshots cannot resolve
-// a removed subscription to a replacement context.
+// Subscription identities are process-unique and never reused, so delayed snapshots cannot resolve a removed subscription to a replacement context.
 class GpuTimingSampleSubscription final{
     friend class GpuTimingRecorder;
     friend constexpr bool operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept;
@@ -153,16 +146,10 @@ private:
     u64 m_identity = 0u;
 };
 
-inline constexpr bool operator==(
-    const GpuTimingSampleSubscription& lhs,
-    const GpuTimingSampleSubscription& rhs
-)noexcept{
+inline constexpr bool operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
     return lhs.m_identity == rhs.m_identity;
 }
-inline constexpr bool operator!=(
-    const GpuTimingSampleSubscription& lhs,
-    const GpuTimingSampleSubscription& rhs
-)noexcept{
+inline constexpr bool operator!=(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
     return !(lhs == rhs);
 }
 

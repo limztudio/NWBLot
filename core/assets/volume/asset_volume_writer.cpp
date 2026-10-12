@@ -85,23 +85,12 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     return config;
 }
 
-static bool PushManifestObjectFilePayloadToVolume(
-    const AssetsVolumeCookDetail::AssetVolumePackEntry& entry,
-    Core::Assets::AssetBytes& objectBytes,
-    Core::Filesystem::IFilesystem& filesystem
-){
+static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Assets::AssetBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
     const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
     if(!payload)
         return false;
-    if(
-        payload->identity.payloadSize != entry.identity.payloadSize
-        || payload->identity.payloadHash != entry.identity.payloadHash
-        || payload->identity.cookKeyHash != entry.identity.cookKeyHash
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: object cache identity mismatch '{}' for '{}'")
-            , PathToString<tchar>(entry.objectPath)
-            , StringConvert(entry.virtualPath.resolvedText())
-        );
+    if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), StringConvert(entry.virtualPath.resolvedText()));
         return false;
     }
 
@@ -112,17 +101,10 @@ static bool PushManifestObjectFilePayloadToVolume(
     return false;
 }
 
-static bool PushManifestEntryToVolume(
-    const AssetsVolumeCookDetail::AssetVolumePackEntry& entry,
-    Core::Assets::AssetBytes& objectBytes,
-    Core::Filesystem::IFilesystem& filesystem
-){
+static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Assets::AssetBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
     switch(entry.source){
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
-        if(
-            entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size())
-            || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())
-        ){
+        if(entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.resolvedText()));
             return false;
         }
@@ -141,11 +123,7 @@ static bool PushManifestEntryToVolume(
     return false;
 }
 
-static bool PushManifestToVolume(
-    Core::Assets::AssetArena& arena,
-    const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    Core::Filesystem::IFilesystem& filesystem
-){
+static bool PushManifestToVolume(Core::Assets::AssetArena& arena, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
     Core::Assets::AssetBytes objectBytes(arena);
     for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
         if(!PushManifestEntryToVolume(entry, objectBytes, filesystem))
@@ -159,10 +137,7 @@ static bool ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolume
     if(static_cast<u64>(manifest.entries.size()) == manifest.plannedFileCount)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest file count mismatch, planned {} but produced {}")
-        , manifest.plannedFileCount
-        , manifest.entries.size()
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest file count mismatch, planned {} but produced {}"), manifest.plannedFileCount, manifest.entries.size());
     return false;
 }
 
@@ -182,13 +157,7 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AssetVolumeWriteResult> WriteAssetVolume(
-    Core::Alloc::GlobalArena& arena,
-    const ResolvedCookPaths& resolvedPaths,
-    const AStringView configurationSafeName,
-    const AssetVolumePackManifest& manifest,
-    ScratchArena& scratchArena
-){
+Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& arena, const ResolvedCookPaths& resolvedPaths, const AStringView configurationSafeName, const AssetVolumePackManifest& manifest, ScratchArena& scratchArena){
     AssetVolumeWriteResult result;
 
     if(!__hidden_asset_volume_writer::ValidateManifestEntryCount(manifest))
@@ -198,27 +167,11 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(
     if(!volumeConfig)
         return MakeUnexpected(Failure{});
 
-    const StagedVolumePaths stagedVolumePaths = BuildStagedVolumePaths(
-        resolvedPaths.outputDirectory,
-        volumeConfig->volumeName,
-        configurationSafeName,
-        scratchArena
-    );
-    if(!Core::Filesystem::EnsureEmptyStagedDirectory(
-        stagedVolumePaths.stageDirectory,
-        s_AssetGathererLogPrefix,
-        "stage directory"
-    ))
+    const StagedVolumePaths stagedVolumePaths = BuildStagedVolumePaths(resolvedPaths.outputDirectory, volumeConfig->volumeName, configurationSafeName, scratchArena);
+    if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, s_AssetGathererLogPrefix, "stage directory"))
         return MakeUnexpected(Failure{});
-    Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(
-        stagedVolumePaths.stageDirectory,
-        s_AssetGathererLogPrefix
-    );
-    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(
-        stagedVolumePaths.backupDirectory,
-        s_AssetGathererLogPrefix,
-        "backup directory"
-    ))
+    Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, s_AssetGathererLogPrefix);
+    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, s_AssetGathererLogPrefix, "backup directory"))
         return MakeUnexpected(Failure{});
 
     u64 stagedFileCount = 0;

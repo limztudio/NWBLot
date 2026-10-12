@@ -15,7 +15,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A fixed pixel/dimension digital scramble preserves the progressive Sobol elementary intervals. The accepted sample index remains separate from this seed and the bounded history length. No texture or subgroup is needed.
+// A fixed pixel/dimension digital scramble preserves the progressive Sobol elementary intervals.
+// The accepted sample index remains separate from this seed and the bounded history length.
+// No texture or subgroup is needed.
 // Reference: https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sobol_Samplers
 uint nwbReflectionSamplingHash(uint value){
     value = (value ^ (value >> 16u)) * 0x7feb352du;
@@ -44,17 +46,11 @@ half3 nwbReflectionSchlick(const half3 f0, const half viewHalfCosine){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Isotropic visible-GGX sampling and the correlated Smith single-scattering estimator. Sampling H from the VNDF cancels D and the reflection Jacobian: throughput = F(V,H) * G2(V,L) / G1(V). This factor is bounded by one; bright incident radiance can still have variance, so no arbitrary radiance clamp is applied.
+// Isotropic visible-GGX sampling and the correlated Smith single-scattering estimator.
+// Sampling H from the VNDF cancels D and the reflection Jacobian: throughput = F(V,H) * G2(V,L) / G1(V).
+// This factor is bounded by one; bright incident radiance can still have variance, so no arbitrary radiance clamp is applied.
 // Reference: https://jcgt.org/published/0007/04/01/paper.pdf (Appendices A and B).
-void nwbReflectionSampleGgx(
-    const float3 normal,
-    const float3 viewDirection,
-    const half3 f0,
-    const float roughness,
-    const float2 random,
-    out float3 direction,
-    out half3 throughput
-){
+void nwbReflectionSampleGgx(const float3 normal, const float3 viewDirection, const half3 f0, const float roughness, const float2 random, out float3 direction, out half3 throughput){
     direction = reflect(-viewDirection, normal);
     const half viewCosine = half(saturate(dot(normal, viewDirection)));
     throughput = nwbReflectionSchlick(f0, viewCosine);
@@ -70,10 +66,7 @@ void nwbReflectionSampleGgx(
     stretchedView /= max(max(abs(stretchedView.x), abs(stretchedView.y)), stretchedView.z);
     stretchedView = normalize(stretchedView);
     const float tangentLength = dot(stretchedView.xy, stretchedView.xy);
-    const float3 diskTangent = tangentLength > 0.0
-        ? float3(-stretchedView.y, stretchedView.x, 0.0) * rsqrt(tangentLength)
-        : float3(1.0, 0.0, 0.0)
-    ;
+    const float3 diskTangent = tangentLength > 0.0 ? float3(-stretchedView.y, stretchedView.x, 0.0) * rsqrt(tangentLength) : float3(1.0, 0.0, 0.0);
     const float3 diskBitangent = cross(stretchedView, diskTangent);
     const float radius = sqrt(random.x);
     const float azimuth = 6.283185307179586 * random.y;

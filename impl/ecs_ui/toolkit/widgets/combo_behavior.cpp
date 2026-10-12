@@ -31,13 +31,8 @@ namespace __hidden_ui_combo_behavior{
     return source.enabled(*index);
 }
 
-[[nodiscard]] static bool SourceMatches(const IListDataSource& source, const u64 generation,
-    const u64 revision, const u64 count
-){
-    return
-        generation != 0u && revision != 0u && source.instanceGeneration() == generation
-        && source.revision() == revision && source.rowCount() == count
-    ;
+[[nodiscard]] static bool SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision, const u64 count){
+    return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision && source.rowCount() == count;
 }
 
 
@@ -109,10 +104,7 @@ bool ComboBehavior::Commit(ComboState& state, const IListDataSource& source, con
     const auto present = ResolveKey(source, count, key);
     if(!present || !*present)
         return false;
-    if(
-        !SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration
-        || !state.m_popup.isOpen()
-    )
+    if(!SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration || !state.m_popup.isOpen())
         return false;
     state.m_selectedKey = key;
     Close(state);

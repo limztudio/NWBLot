@@ -104,8 +104,7 @@ class ReferenceTests(unittest.TestCase):
         self.assertGreater(sum(abs(a - b) for a, b in zip(first, second)), 0.3)
 
     def test_mixed_modes_and_capacity_fail_without_environment(self):
-        for case, reason in (("optical_mixed", LIT_AMBIGUOUS), (LIT_OPTICAL_OVERFLOW, "medium_overflow"),
-            (LIT_OPTICAL_UNSPECIFIED, "unsupported")):
+        for case, reason in (("optical_mixed", LIT_AMBIGUOUS), (LIT_OPTICAL_OVERFLOW, "medium_overflow"), (LIT_OPTICAL_UNSPECIFIED, "unsupported")):
             actual, details = reference.trace_transmission(case, (0, 1.4, 0), (0, 0, -1))
             self.assertEqual(actual, (0.0, 0.0, 0.0))
             self.assertEqual(details[LIT_REASON], reason)
@@ -180,8 +179,7 @@ class ImageOracleTests(unittest.TestCase):
 
     def test_dense_receiver_cannot_claim_a_shorter_closed_collection(self):
         frame = self.synthetic_frame("optical_csg_dense")
-        with patch.object(smoke, "pixel_reference", return_value=((.9, .2, .05),
-            {LIT_REASON: "opaque_dense", LIT_CROSSINGS: 16})):
+        with patch.object(smoke, "pixel_reference", return_value=((.9, .2, .05), {LIT_REASON: "opaque_dense", LIT_CROSSINGS: 16})):
             with self.assertRaisesRegex(SmokeFailure, "eighteen distinct"):
                 self.analyze(frame, smoke.OpticalCapture("optical_csg_dense", "optical_csg_dense"))
 
@@ -207,8 +205,7 @@ class ImageOracleTests(unittest.TestCase):
             self.analyze(self.synthetic_frame(LIT_OPTICAL_CLEAR), smoke.OpticalCapture("optical_query_limit", LIT_OPTICAL_CLEAR, 1))
 
     def test_grouped_gap_cannot_pass_with_lost_interfaces_and_environment_radiance(self):
-        for case in ("optical_group_gap", "optical_csg_group_gap",
-            "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
+        for case in ("optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
             with self.subTest(case=case), self.assertRaises(SmokeFailure):
                 self.analyze(self.synthetic_frame(LIT_OPTICAL_CLEAR), smoke.OpticalCapture(case, case))
 
@@ -231,9 +228,7 @@ class StatisticsTests(unittest.TestCase):
         return "ReflectionSmokeOptics: " + " ".join(f"{name}={values[name]}" for name in smoke.OPTICS_FIELDS)
 
     def validate(self, text, spec=smoke.OpticalCapture(LIT_OPTICAL_CLEAR, LIT_OPTICAL_CLEAR), statistics_overrides=None):
-        sample = {LIT_SEQUENCE: 9, "generation": 2, "hardware_rays": 100, "frame": 9, "hardware_ready": 1,
-            "candidates": 100, "effective_budget": smoke.DEFAULT_RAY_BUDGET, "hardware_hits": 100,
-            "opaque_pixels": 100, "glass_pixels": 0, "fallback_pixels": 0}
+        sample = {LIT_SEQUENCE: 9, "generation": 2, "hardware_rays": 100, "frame": 9, "hardware_ready": 1, "candidates": 100, "effective_budget": smoke.DEFAULT_RAY_BUDGET, "hardware_hits": 100, "opaque_pixels": 100, "glass_pixels": 0, "fallback_pixels": 0}
         sample.update(statistics_overrides or {})
         statistics = [sample]
         with patch.object(smoke, "parse_statistics", return_value=statistics), patch.object(smoke, "validate_statistics"), \
@@ -255,8 +250,7 @@ class StatisticsTests(unittest.TestCase):
     def test_dense_opaque_plain_route_cannot_hide_optical_failures(self):
         values = {"transport_enabled": 0, "transparent_paths": 0, LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 200}
         spec = smoke.OpticalCapture("optical_csg_dense", "optical_csg_dense")
-        for counter in ("transport_enabled", "transparent_paths", "bootstrap_events", "unsupported_paths",
-            "limited_paths", "ambiguous_paths", "tir_events", "medium_overflow_paths"):
+        for counter in ("transport_enabled", "transparent_paths", "bootstrap_events", "unsupported_paths", "limited_paths", "ambiguous_paths", "tir_events", "medium_overflow_paths"):
             with self.subTest(counter=counter), self.assertRaises(SmokeFailure):
                 self.validate(self.log({**values, counter: 1}), spec)
 
@@ -269,14 +263,11 @@ class StatisticsTests(unittest.TestCase):
             self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 100, LIT_PHYSICAL_QUERIES: 101}))
 
     def test_receiver_reservation_without_physical_query_preserves_early_topology_rejection(self):
-        result = self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 100,
-            "transparent_paths": 0, "unsupported_paths": 100}),
-            smoke.OpticalCapture(LIT_OPTICAL_UNSPECIFIED, LIT_OPTICAL_UNSPECIFIED, ray_budget=100))
+        result = self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 100, "transparent_paths": 0, "unsupported_paths": 100}), smoke.OpticalCapture(LIT_OPTICAL_UNSPECIFIED, LIT_OPTICAL_UNSPECIFIED, ray_budget=100))
         self.assertEqual(result["optics"][-1][LIT_PHYSICAL_QUERIES], 100)
 
     def test_receiver_reservation_without_physical_query_preserves_complete_cut_coverage(self):
-        result = self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 100, "transparent_paths": 0}),
-            smoke.OpticalCapture(LIT_OPTICAL_CLEAR, LIT_OPTICAL_CLEAR, ray_budget=100),
+        result = self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 100, "transparent_paths": 0}), smoke.OpticalCapture(LIT_OPTICAL_CLEAR, LIT_OPTICAL_CLEAR, ray_budget=100),
             statistics_overrides={"hardware_hits": 0, "fallback_pixels": 100})
         self.assertEqual(result["optics"][-1][LIT_PHYSICAL_QUERIES], 100)
 
@@ -297,16 +288,14 @@ class StatisticsTests(unittest.TestCase):
             self.validate(self.log(), smoke.OpticalCapture(LIT_OPTICAL_UNSPECIFIED, LIT_OPTICAL_UNSPECIFIED))
 
     def test_grouped_gap_requires_completed_ambiguity_even_without_transparent_paths(self):
-        for case in ("optical_group_gap", "optical_csg_group_gap",
-            "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
+        for case in ("optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
             spec = smoke.OpticalCapture(case, case)
             with self.subTest(case=case), self.assertRaisesRegex(SmokeFailure, "negative optical fixture"):
                 self.validate(self.log({"transparent_paths": 0}), spec)
             self.validate(self.log({"transparent_paths": 0, "ambiguous_paths": 100}), spec)
 
     def test_negative_volume_cannot_pass_with_partial_ambiguity(self):
-        for case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp",
-            "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
+        for case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
             "optical_group_entry", "optical_csg_group_entry"):
             spec = smoke.OpticalCapture(case, case)
             for ambiguous in (1, 99):
@@ -334,19 +323,14 @@ class QueueCoverageTests(unittest.TestCase):
         admitted = min(217668, budget)
         rays = admitted + ray_delta
         ready = int(budget > 0)
-        sample = dict(sequence=sequence, generation=2, frame=sequence, mode=2, width=960, height=720,
-            requested_budget=budget, effective_budget=budget, queue_capacity=max(1, budget),
-            hardware_requested=1, hardware_available=ready, hardware_ready=ready,
-            token_queue=0, token_value=sequence + 100, physical_queue=0, device_generation=1,
-            candidates=217668 if budget else 0, hardware_rays=rays, hardware_hits=0, opaque_pixels=217668, glass_pixels=0,
+        sample = dict(sequence=sequence, generation=2, frame=sequence, mode=2, width=960, height=720, requested_budget=budget, effective_budget=budget, queue_capacity=max(1, budget), hardware_requested=1, hardware_available=ready, hardware_ready=ready,
+            token_queue=0, token_value=sequence + 100, physical_queue=0, device_generation=1, candidates=217668 if budget else 0, hardware_rays=rays, hardware_hits=0, opaque_pixels=217668, glass_pixels=0,
             fallback_pixels=217668, screen_attempts=0, screen_hits=0)
         budget_units = rays if queries is None else queries
-        values = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, 16, budget_units,
-            budget_units if physical_queries is None else physical_queries, 0, min(rays, 100) if transparent is None else transparent, 0, 0, 0, 0, 0, ready)))
+        values = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, 16, budget_units, budget_units if physical_queries is None else physical_queries, 0, min(rays, 100) if transparent is None else transparent, 0, 0, 0, 0, 0, ready)))
         history = dict(zip(HISTORY_FIELDS, (sequence, 2, sequence - 1, 1, 0, 0, sequence - 1, 0, 0, 0, 0, 0)))
         expected = (budget + smoke.CSG_TRACE_SLICE_RAYS - 1) // smoke.CSG_TRACE_SLICE_RAYS
-        packets = dict(zip(smoke.SLICE_PACKET_FIELDS, (sequence - 1, 23, 1, 0, 1, budget, expected,
-            expected, expected, expected, expected, expected, expected, expected)))
+        packets = dict(zip(smoke.SLICE_PACKET_FIELDS, (sequence - 1, 23, 1, 0, 1, budget, expected, expected, expected, expected, expected, expected, expected, expected)))
         return "ReflectionSmokeStatistics: " + " ".join(f"{name}={sample[name]}" for name in STATISTICS_FIELDS) + "\n" \
             + "ReflectionSmokeOptics: " + " ".join(f"{name}={values[name]}" for name in smoke.OPTICS_FIELDS) + "\n" \
             + "ReflectionSmokeHistory: " + " ".join(f"{name}={history[name]}" for name in HISTORY_FIELDS) + "\n" \
@@ -399,10 +383,8 @@ class QueueCoverageTests(unittest.TestCase):
 class CollectionReuseTests(unittest.TestCase):
     def evidence(self, spec, units, physical, limited=0, sequence=9):
         rays = 217668
-        statistics = dict(sequence=sequence, generation=2, frame=sequence, candidates=rays, effective_budget=rays,
-            hardware_rays=rays, hardware_hits=rays, opaque_pixels=rays, glass_pixels=0, fallback_pixels=0)
-        optical = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, spec.queries, units * rays, physical * rays,
-            0, rays, 0, limited * rays, 0, 0, 0, 1)))
+        statistics = dict(sequence=sequence, generation=2, frame=sequence, candidates=rays, effective_budget=rays, hardware_rays=rays, hardware_hits=rays, opaque_pixels=rays, glass_pixels=0, fallback_pixels=0)
+        optical = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, spec.queries, units * rays, physical * rays, 0, rays, 0, limited * rays, 0, 0, 0, 1)))
         return {"statistics": [statistics], "optics": [optical]}
 
     def test_closed_open_and_exhausted_controls_require_exact_physical_work(self):
@@ -487,8 +469,7 @@ class SlicePacketTests(unittest.TestCase):
             with self.subTest(budget=budget):
                 record = self.validate(self.log(budget), budget)["slice_packets"]["completed_frames"][0]
                 self.assertEqual(record["accepted_packets"], (budget + 8191) // 8192)
-        self.assertEqual(self.validate(self.log(smoke.DEFAULT_RAY_BUDGET), smoke.DEFAULT_RAY_BUDGET)
-            ["slice_packets"]["completed_frames"][0]["accepted_packets"], 169)
+        self.assertEqual(self.validate(self.log(smoke.DEFAULT_RAY_BUDGET), smoke.DEFAULT_RAY_BUDGET) ["slice_packets"]["completed_frames"][0]["accepted_packets"], 169)
 
     def test_cavity_requires_the_same_accepted_packet_proof(self):
         spec = smoke.OpticalCapture("optical_csg_cavity", "optical_csg_cavity", ray_budget=8193)
@@ -500,8 +481,7 @@ class SlicePacketTests(unittest.TestCase):
 
     def test_all_indirect_calls_in_one_packet_cannot_pass(self):
         with self.assertRaisesRegex(SmokeFailure, "distinct single-task"):
-            self.validate(self.log().replace("unique_packets=2", "unique_packets=1")
-                .replace("single_task_packets=2", "single_task_packets=0"))
+            self.validate(self.log().replace("unique_packets=2", "unique_packets=1") .replace("single_task_packets=2", "single_task_packets=0"))
 
     def test_unaccepted_recovery_merged_or_wrong_queue_packet_fails(self):
         for name in ("hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets", "single_task_packets", "graphics_packets"):
@@ -509,12 +489,10 @@ class SlicePacketTests(unittest.TestCase):
                 self.validate(self.log().replace(name + "=2", name + "=1"))
 
     def test_stale_frame_plan_or_physical_generation_cannot_pass(self):
-        for old, new in (("source_frame=8", "source_frame=7"), ("runtime_present=1", "runtime_present=0"),
-            ("plan_generation=23", "plan_generation=0"), ("graphics_queue=0", "graphics_queue=65535")):
+        for old, new in (("source_frame=8", "source_frame=7"), ("runtime_present=1", "runtime_present=0"), ("plan_generation=23", "plan_generation=0"), ("graphics_queue=0", "graphics_queue=65535")):
             with self.subTest(old=old), self.assertRaises(SmokeFailure):
                 self.validate(self.log().replace(old, new))
-        text = self.log().replace("ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=1",
-            "ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=2")
+        text = self.log().replace("ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=1", "ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=2")
         with self.assertRaisesRegex(SmokeFailure, "queue identity"):
             self.validate(text)
 
@@ -544,8 +522,7 @@ class SlicePacketTests(unittest.TestCase):
 
     def test_duplicate_or_malformed_packet_identity_fails(self):
         line = self.log().splitlines()[-1]
-        for text in (self.log() + "\n" + line, self.log() + " hardware_nodes=2",
-            self.log().replace("compiled_nodes=2", "compiled_nodes=-1"), self.log() + " junk"):
+        for text in (self.log() + "\n" + line, self.log() + " hardware_nodes=2", self.log().replace("compiled_nodes=2", "compiled_nodes=-1"), self.log() + " junk"):
             with self.subTest(text=text), self.assertRaises(SmokeFailure):
                 self.validate(text)
 
@@ -558,15 +535,13 @@ class ContextTransitionTests(unittest.TestCase):
             lines.append(f"ReflectionCsgContext: phase={phase} source_frame={begin} cut_receiver_primitives={cut_receiver_primitives} csg={csg}")
             for index in range(18):
                 queries = 217668 * (11 if cut_receiver_primitives == 12 else 2 if csg else 1)
-                sample = QueueCoverageTests().log(smoke.DEFAULT_RAY_BUDGET, sequence=begin + index + 1,
-                    queries=queries, physical_queries=217668 * (7 if cut_receiver_primitives == 12 else 2 if csg else 1),
+                sample = QueueCoverageTests().log(smoke.DEFAULT_RAY_BUDGET, sequence=begin + index + 1, queries=queries, physical_queries=217668 * (7 if cut_receiver_primitives == 12 else 2 if csg else 1),
                     transparent=217668 if cut_receiver_primitives == 12 else 0)
                 sample = sample.replace("hardware_hits=0", "hardware_hits=217668").replace("fallback_pixels=217668", "fallback_pixels=0")
                 if cut_receiver_primitives != 12:
                     sample = sample.replace("transport_enabled=1", "transport_enabled=0")
                 if not csg:
-                    for field in ("expected_slices", "hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets",
-                        "accepted_packets", "single_task_packets", "graphics_packets"):
+                    for field in ("expected_slices", "hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets", "single_task_packets", "graphics_packets"):
                         sample = sample.replace(field + "=169", field + "=1")
                 lines.append(sample)
             source = begin + 16
@@ -617,8 +592,7 @@ class ContextTransitionTests(unittest.TestCase):
                 context.analyze_evidence(self.log().replace("physical_queries=1523676", f"physical_queries={217668 * wrong}", 1))
 
     def test_context_phase_identity_or_completion_count_cannot_be_replayed(self):
-        for old, new in (("phase=3 source_frame=80 cut_receiver_primitives=12 csg=1", "phase=3 source_frame=80 cut_receiver_primitives=108 csg=1"),
-            ("completed_frames=18", "completed_frames=15"), ("complete captures=5", "complete captures=4")):
+        for old, new in (("phase=3 source_frame=80 cut_receiver_primitives=12 csg=1", "phase=3 source_frame=80 cut_receiver_primitives=108 csg=1"), ("completed_frames=18", "completed_frames=15"), ("complete captures=5", "complete captures=4")):
             with self.subTest(old=old), self.assertRaises(SmokeFailure):
                 context.analyze_evidence(self.log().replace(old, new, 1))
         with self.assertRaises(SmokeFailure):
@@ -627,8 +601,8 @@ class ContextTransitionTests(unittest.TestCase):
 
 class CombinedCausticTests(unittest.TestCase):
     def setUp(self):
-        # These small synthetic images isolate the broad toggle/ground checks. The mesh/radiometric oracle has
-        # separate full-resolution positive and deliberately missing-patch tests below.
+        # These small synthetic images isolate the broad toggle/ground checks.
+        # The mesh/radiometric oracle has separate full-resolution positive and deliberately missing-patch tests below.
         isolate_exterior = patch.object(caustic, LIT_ANALYZE_EXTERIOR_REFLECTION, return_value={"isolated_in_test": True})
         isolate_exterior.start()
         self.addCleanup(isolate_exterior.stop)
@@ -670,8 +644,7 @@ class CombinedCausticTests(unittest.TestCase):
             caustic.analyze_frames(frames)
 
     def test_capture_flags_clear_inherited_optical_state(self):
-        with patch.dict(caustic.os.environ, {LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFLECTION_SMOKE_TEMPORAL: "1",
-            LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BA: "1"}):
+        with patch.dict(caustic.os.environ, {LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFLECTION_SMOKE_TEMPORAL: "1", LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BA: "1"}):
             environment = caustic.capture_environment(LIT_REFLECTION_DISABLED)
         self.assertNotIn(LIT_NWB_REFRACTION_SMOKE_CASE, environment)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_TEMPORAL, environment)
@@ -691,8 +664,7 @@ class CombinedCausticTests(unittest.TestCase):
 
 
     def test_software_environment_drops_inherited_hardware_or_scene_override(self):
-        with patch.dict(caustic.os.environ, {LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED,
-            LIT_NWB_REFLECTION_SMOKE_MODE: "hardware", LIT_NWB_GPU_TIMING_FILE: "inherited.csv"}):
+        with patch.dict(caustic.os.environ, {LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFLECTION_SMOKE_MODE: "hardware", LIT_NWB_GPU_TIMING_FILE: "inherited.csv"}):
             environment = caustic.capture_environment(LIT_COMBINED, software_ray_tracing=True)
         self.assertNotIn(LIT_NWB_REFRACTION_SMOKE_CASE, environment)
         self.assertNotIn(LIT_NWB_GPU_TIMING_FILE, environment)

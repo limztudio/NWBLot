@@ -89,11 +89,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
     }
 
     ++m_nextMarkerSerial;
-    const CommandMarkerRecordingToken token{
-        .recordingLeaseSerial = m_recordingLeaseSerial,
-        .nativeRecordingID = m_nativeRecordingID,
-        .markerSerial = m_nextMarkerSerial,
-    };
+    const CommandMarkerRecordingToken token{ .recordingLeaseSerial = m_recordingLeaseSerial, .nativeRecordingID = m_nativeRecordingID, .markerSerial = m_nextMarkerSerial, };
     const bool useDebugUtils = m_context.extensions.extDebugUtils;
     const bool useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
     const bool useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
@@ -116,11 +112,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
                 m_hostReadbackBarrierTracker.registerDeviceOwnedBuffer(breadcrumb.buffer);
         }
     }
-    m_markerStack.push_back(MarkerStackEntry{
-        .token = token,
-        .usesDebugUtils = useDebugUtils,
-        .usesGpuMarkers = useGpuMarkers,
-    });
+    m_markerStack.push_back(MarkerStackEntry{ .token = token, .usesDebugUtils = useDebugUtils, .usesGpuMarkers = useGpuMarkers, });
     crashMarkerRollback.disarm();
 
     if(useDebugUtils){
@@ -185,12 +177,7 @@ void CommandList::closeTopMarkerWithoutCallbacks()noexcept{
         return;
 
     const MarkerStackEntry marker = m_markerStack.back();
-    if(
-        m_isRecording
-        && m_currentCmdBuf
-        && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
-        && marker.usesDebugUtils
-    )
+    if(m_isRecording && m_currentCmdBuf && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE && marker.usesDebugUtils)
         m_context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
     if(marker.usesGpuMarkers)
         m_gpuCrashMarkerTracker.popEvent();

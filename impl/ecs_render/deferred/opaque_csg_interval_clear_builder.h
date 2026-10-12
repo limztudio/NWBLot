@@ -48,16 +48,11 @@ struct OpaqueCsgIntervalClearResult{
 
 class OpaqueCsgIntervalClearBuilder final : NoCopy{
 public:
-    OpaqueCsgIntervalClearBuilder(
-        Core::GpuTaskGraph& graph
-    );
+    OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph);
 
 
 public:
-    [[nodiscard]] Expected<OpaqueCsgIntervalClearResult> declare(
-        const OpaqueCsgIntervalClearInputs& inputs,
-        GraphClearTimingRecordState& clearTimingState
-    );
+    [[nodiscard]] Expected<OpaqueCsgIntervalClearResult> declare(const OpaqueCsgIntervalClearInputs& inputs, GraphClearTimingRecordState& clearTimingState);
 
 
 private:

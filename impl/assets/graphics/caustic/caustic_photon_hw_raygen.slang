@@ -70,8 +70,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
 
 // The hardware raygen mirrors the SW photon sequence over the selected temporal-budget 2D grid.
-[shader("raygeneration")]
-void main(){
+[shader("raygeneration")] void main(){
     const uint photonIndex = DispatchRaysIndex().y * DispatchRaysDimensions().x + DispatchRaysIndex().x;
     if(photonIndex >= g_NwbCausticHwPushConstants.photonCount)
         return;
@@ -91,23 +90,13 @@ void main(){
     const float3 targetAabbMin = target.aabbMin.xyz;
     const float3 targetAabbMax = target.aabbMax.xyz;
 
-    const float2 cell = nwbCausticJitteredTemporalCell(
-        photonIndex,
-        g_NwbCausticHwPushConstants.gridSide,
-        g_NwbCausticHwPushConstants.frameIndex,
-        g_NwbCausticHwPushConstants.temporalPhaseCount
-    );
+    const float2 cell = nwbCausticJitteredTemporalCell(photonIndex, g_NwbCausticHwPushConstants.gridSide, g_NwbCausticHwPushConstants.frameIndex, g_NwbCausticHwPushConstants.temporalPhaseCount);
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
     if(!emission.valid)
         return;
 
-    const NwbCausticPhoton photon = nwbCausticCreatePhoton(
-        emission,
-        nwbCausticLightColor(light.colorIntensity),
-        g_NwbCausticHwPushConstants.emissionTargetCount,
-        g_NwbCausticHwPushConstants.photonCount
-    );
+    const NwbCausticPhoton photon = nwbCausticCreatePhoton(emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticHwPushConstants.emissionTargetCount, g_NwbCausticHwPushConstants.photonCount);
 
     const NwbCausticSplat splat = nwbCausticTracePhoton(photon);
     if(!splat.valid)

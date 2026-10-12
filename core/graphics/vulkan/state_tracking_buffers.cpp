@@ -25,20 +25,10 @@ namespace VulkanStateTrackingDetail{
 
 
 bool IsBufferStateRangeValid(const BufferRange range, const BufferDesc& description)noexcept{
-    return
-        range.hasExtent()
-        && range.byteOffset < description.byteSize
-        && (range.byteSize == BufferRange::s_AllBytes || range.byteSize <= description.byteSize - range.byteOffset)
-    ;
+    return range.hasExtent() && range.byteOffset < description.byteSize && (range.byteSize == BufferRange::s_AllBytes || range.byteSize <= description.byteSize - range.byteOffset);
 }
 
-VkBufferMemoryBarrier2 BuildBufferStateBarrier(
-    const VkBuffer buffer,
-    const BufferRange range,
-    const ResourceStates::Mask oldState,
-    const ResourceStates::Mask stateBits,
-    const bool rayTracingStageAvailable
-)noexcept{
+VkBufferMemoryBarrier2 BuildBufferStateBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool rayTracingStageAvailable)noexcept{
     const ResourceStates::Mask sourceState = oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common;
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(sourceState, rayTracingStageAvailable);
@@ -134,12 +124,7 @@ void StateTracker::beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask stat
     beginTrackingTransientBuffer(*buffer, state, range);
 }
 
-void StateTracker::beginTrackingTransientBuffer(
-    Buffer& buffer,
-    ResourceStates::Mask state,
-    const BufferRange range,
-    const bool seedOnly
-){
+void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, const BufferRange range, const bool seedOnly){
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc))
         return;
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
@@ -205,12 +190,7 @@ void StateTracker::beginTrackingTransientBuffer(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::setBufferState(
-    Buffer* bufferResource,
-    ResourceStates::Mask stateBits,
-    const bool forceMemoryDependency,
-    const BufferRange range
-){
+void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, const bool forceMemoryDependency, const BufferRange range){
     if(!bufferResource)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("set buffer state");
@@ -236,9 +216,7 @@ void CommandList::setBufferState(
         if(VulkanDetail::HasBufferDeviceWriteState(oldState) || VulkanDetail::HasBufferDeviceWriteState(stateBits))
             registerHostReadbackBuffer(buffer);
         if(VulkanStateTrackingDetail::NeedsResourceStateBarrier(oldState, stateBits, uavBarrierEnabled, forceMemoryDependency)){
-            m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(
-                buffer.m_buffer, piece, oldState, stateBits, m_context.extensions.khrRayTracingPipeline
-            ));
+            m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer.m_buffer, piece, oldState, stateBits, m_context.extensions.khrRayTracingPipeline));
         }
     };
 
@@ -271,20 +249,12 @@ void CommandList::setBufferState(
     m_pendingBufferBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::releaseBufferOwnership(
-    Buffer* buffer,
-    const CommandQueue::Enum destinationQueue,
-    const BufferRange range
-){
+void CommandList::releaseBufferOwnership(Buffer* buffer, const CommandQueue::Enum destinationQueue, const BufferRange range){
     if(buffer)
         releaseBufferOwnership(buffer, m_device.getPrimaryPhysicalQueue(destinationQueue), range);
 }
 
-void CommandList::releaseBufferOwnership(
-    Buffer* bufferResource,
-    const GpuPhysicalQueueId destinationQueue,
-    const BufferRange range
-){
+void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysicalQueueId destinationQueue, const BufferRange range){
     if(!bufferResource)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("release buffer ownership");

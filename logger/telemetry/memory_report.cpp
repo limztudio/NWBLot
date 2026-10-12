@@ -76,10 +76,7 @@ void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Tele
         source.totalUsedDeltaBytes += payload.delta.usedBytes;
 }
 
-void AppendTelemetryMemorySourcesJson(
-    AString<Core::Telemetry::TelemetryArena>& out,
-    const TelemetryReportSummary& summary
-){
+void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& out, const TelemetryReportSummary& summary){
     out += TelemetryMemoryReportDetail::s_MemorySourcesSectionHeader;
     for(usize sourceIndex = 0u; sourceIndex < s_TelemetryMemorySourceCount; ++sourceIndex){
         const auto memorySource = static_cast<Core::Perf::MemorySource::Enum>(sourceIndex);
@@ -95,19 +92,13 @@ void AppendTelemetryMemorySourcesJson(
             source.maxUsedBytes,
             source.maxPeakUsedBytes,
             source.totalUsedDeltaBytes,
-            sourceIndex + 1u == s_TelemetryMemorySourceCount
-                ? TelemetryMemoryReportDetail::s_JsonEntryTerminator
-                : TelemetryMemoryReportDetail::s_JsonEntrySeparator
+            sourceIndex + 1u == s_TelemetryMemorySourceCount ? TelemetryMemoryReportDetail::s_JsonEntryTerminator : TelemetryMemoryReportDetail::s_JsonEntrySeparator
         );
     }
     out += TelemetryMemoryReportDetail::s_MemorySourcesSectionFooter;
 }
 
-void AppendTelemetryMemoryRecordJson(
-    AString<Core::Telemetry::TelemetryArena>& out,
-    const Core::Telemetry::PerfMemoryPayload& payload,
-    const u32 streamId
-){
+void AppendTelemetryMemoryRecordJson(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::PerfMemoryPayload& payload, const u32 streamId){
     if(!out.empty())
         out += TelemetryMemoryReportDetail::s_MemoryRecordSeparator;
     out += TelemetryMemoryReportDetail::s_MemoryRecordOpen;
@@ -119,10 +110,7 @@ void AppendTelemetryMemoryRecordJson(
     const AStringView identity(identityText, NameDetail::s_DebugHashTextLength);
     char resolvedText[Core::Common::NameSymbols::s_MaxResolvedTextLength] = {};
     AStringView scopeText(payload.scopeText.data(), payload.scopeText.size());
-    if(
-        scopeText == identity
-        && Core::Common::NameSymbols::Resolve(payload.scopeName.hash(), resolvedText, sizeof(resolvedText))
-    )
+    if(scopeText == identity && Core::Common::NameSymbols::Resolve(payload.scopeName.hash(), resolvedText, sizeof(resolvedText)))
         scopeText = AStringView(resolvedText);
     out += TelemetryMemoryReportDetail::s_MemoryRecordScopeKey;
     AppendJsonQuotedText(out, scopeText);

@@ -136,21 +136,8 @@ public:
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
-        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
-            *m_world,
-            s_DirectionalLightPitch,
-            s_DirectionalLightYaw,
-            0.0f,
-            Float4(1.0f, 0.96f, 0.88f),
-            s_DirectionalLightIntensity
-        );
-        const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(
-            *m_world,
-            Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f),
-            Float4(0.60f, 0.76f, 1.00f),
-            s_PointLightIntensity,
-            s_PointLightRange
-        );
+        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
+        const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
         // Keep caustics enabled for the repro; NWB_FLICKER_TEST_NO_CAUSTICS selects the control.
         static const bool s_disableCaustics = [](){
             NWB::Core::Alloc::GlobalArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
@@ -205,14 +192,9 @@ public:
 
         SyncSmokeModelRuntimes(*m_world);
 
-        NWB_FATAL_ASSERT_MSG(
-            activeCamera.valid() && m_groundEntity.valid() && m_opaqueOwner.valid() && m_transparentOwner.valid(),
-            NWB_TEXT("FlickerTestSmokeProject failed to create all scene entities")
-        );
+        NWB_FATAL_ASSERT_MSG(activeCamera.valid() && m_groundEntity.valid() && m_opaqueOwner.valid() && m_transparentOwner.valid(), NWB_TEXT("FlickerTestSmokeProject failed to create all scene entities"));
 
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light"));
         return true;
     }
 

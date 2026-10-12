@@ -71,27 +71,15 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline u64 UpdateFnv64TextExact(u64 hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return UpdateFnv64(
-        hash,
-        reinterpret_cast<const u8*>(text.data()),
-        text.size() * sizeof(CharT)
-    );
+    return UpdateFnv64(hash, reinterpret_cast<const u8*>(text.data()), text.size() * sizeof(CharT));
 }
 
 [[nodiscard]] inline u64 ComputeFnv64Bytes(const void* data, const usize byteCount)noexcept{
-    return UpdateFnv64(
-        s_Fnv64OffsetBasis,
-        static_cast<const u8*>(data),
-        byteCount
-    );
+    return UpdateFnv64(s_Fnv64OffsetBasis, static_cast<const u8*>(data), byteCount);
 }
 
 inline void HashCombineHash(usize& seed, const usize hash)noexcept{
-    seed ^= hash
-        + s_HashCombineGoldenRatio
-        + (seed << s_HashCombineLeftShift)
-        + (seed >> s_HashCombineRightShift)
-    ;
+    seed ^= hash + s_HashCombineGoldenRatio + (seed << s_HashCombineLeftShift) + (seed >> s_HashCombineRightShift);
 }
 
 template<typename T>
@@ -198,11 +186,7 @@ namespace HashUtilsDetail{
 
 template<typename CharT>
 [[nodiscard]] inline constexpr CharT HexDigit(const usize nibble)noexcept(IsArithmetic_V<CharT>){
-    return static_cast<CharT>(
-        nibble < s_HexDecimalDigitCount
-            ? static_cast<usize>('0') + nibble
-            : static_cast<usize>('a') + (nibble - s_HexDecimalDigitCount)
-    );
+    return static_cast<CharT>(nibble < s_HexDecimalDigitCount ? static_cast<usize>('0') + nibble : static_cast<usize>('a') + (nibble - s_HexDecimalDigitCount));
 }
 
 template<typename StringT>

@@ -103,8 +103,7 @@ static_assert(sizeof(s_Defaults) / sizeof(s_Defaults[0u]) <= s_InputMaxBindings)
 
 
 void InputBindings::restoreDefaults(){
-    constexpr usize s_Count = sizeof(__hidden_ui_input_bindings_defaults::s_Defaults)
-        / sizeof(__hidden_ui_input_bindings_defaults::s_Defaults[0u]);
+    constexpr usize s_Count = sizeof(__hidden_ui_input_bindings_defaults::s_Defaults) / sizeof(__hidden_ui_input_bindings_defaults::s_Defaults[0u]);
     if(!set(__hidden_ui_input_bindings_defaults::s_Defaults, s_Count))
         TerminateInvariant();
 }

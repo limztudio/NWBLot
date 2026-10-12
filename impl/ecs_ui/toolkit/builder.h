@@ -57,7 +57,8 @@ public:
 public:
     [[nodiscard]] bool beginPanel(AStringView stableKey, const Rect& bounds, LayoutDirection::Enum direction = LayoutDirection::Column);
     [[nodiscard]] bool endPanel();
-    // Returns content visibility. A collapsed window still opens a scope and requires endWindow().
+    // Returns content visibility.
+    // A collapsed window still opens a scope and requires endWindow().
     // The borrowed WindowState must remain alive through that matching endWindow().
     [[nodiscard]] bool beginWindow(AStringView stableKey, StringView title, WindowState& state, const WindowOptions& options = {});
     [[nodiscard]] bool endWindow();
@@ -76,8 +77,7 @@ public:
     // Only visible rows are borrowed and shaped; stable keys must be unique and lookup/search efficient.
     [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options = {});
     // The complete bounded group borrows source/state through the enclosing scope or outermost popup end.
-    [[nodiscard]] RadioGroupResult radioGroup(AStringView stableKey, const IListDataSource& source,
-        RadioGroupState& state, const RadioGroupOptions& options = {});
+    [[nodiscard]] RadioGroupResult radioGroup(AStringView stableKey, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options = {});
     // Values and results become available after the successful enclosing scope or outermost popup end.
     [[nodiscard]] bool slider(AStringView stableKey, SliderState& state, const SliderOptions& options = {});
     // A passive declaration copies its finite fraction and resolved skin style.
@@ -91,22 +91,17 @@ public:
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
-    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source,
-        SearchComboState& state, const SearchComboOptions& options = {});
+    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options = {});
     // Attach to a preceding item in this same container. Models are borrowed until the enclosing scope ends.
-    [[nodiscard]] bool tooltip(AStringView stableKey, AStringView anchorKey, StringView text,
-        TooltipState& state, const TooltipOptions& options = {});
-    [[nodiscard]] ContextMenuResult contextMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source,
-        ContextMenuState& state, const ContextMenuOptions& options = {});
+    [[nodiscard]] bool tooltip(AStringView stableKey, AStringView anchorKey, StringView text, TooltipState& state, const TooltipOptions& options = {});
+    [[nodiscard]] ContextMenuResult contextMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
     // Multiline model and viewport remain lent through the enclosing scope or outermost popup end.
     [[nodiscard]] EditBoxResult textArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options = {});
     // Numeric model and editor state remain lent through the enclosing scope or outermost user popup end.
-    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model,
-        EditBoxState& state, const IntegerEditOptions& options = {});
-    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model,
-        EditBoxState& state, const FloatEditOptions& options = {});
+    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options = {});
+    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options = {});
     [[nodiscard]] bool balanced()const noexcept{ return !declarationBlocked() && !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
     void reset();
     // Observe accepted input without retaining target pointers across frame publication.
@@ -145,9 +140,7 @@ private:
     [[nodiscard]] bool paintWindowResize();
     [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
-    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, EditModel& model, EditBoxState& state,
-        const EditBoxOptions& options, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr,
-        FloatEditFrame* floatFrame = nullptr);
+    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr, FloatEditFrame* floatFrame = nullptr);
     [[nodiscard]] bool paintTextArea(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
     [[nodiscard]] bool paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);

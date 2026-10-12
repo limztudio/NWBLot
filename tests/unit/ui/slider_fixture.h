@@ -46,8 +46,7 @@ public:
 
 public:
     [[nodiscard]] virtual StringView text(u64 index)const override;
-    void arm(SliderCallbackMutation::Enum mutation, SliderState* state = nullptr,
-        Builder* builder = nullptr, PopupState* popup = nullptr);
+    void arm(SliderCallbackMutation::Enum mutation, SliderState* state = nullptr, Builder* builder = nullptr, PopupState* popup = nullptr);
     void clearCounters()const;
 
 
@@ -94,12 +93,9 @@ protected:
 protected:
     virtual void SetUp()override;
     void configureSliderSkin();
-    [[nodiscard]] bool declare(u64 generation, const SliderOptions& settings = Options(),
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
-    [[nodiscard]] bool prepare(u64 generation, const SliderOptions& settings = Options(),
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
-    [[nodiscard]] bool accept(u64 generation, const SliderOptions& settings = Options(),
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] bool declare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] bool prepare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] bool accept(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
     [[nodiscard]] bool sibling(AStringView key = "later");
     [[nodiscard]] WidgetId host()const;
     [[nodiscard]] WidgetId track()const;

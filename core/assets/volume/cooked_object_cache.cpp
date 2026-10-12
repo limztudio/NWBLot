@@ -44,12 +44,7 @@ static constexpr AStringView s_ObjectFileExtension = ".nwbobj";
 static constexpr AStringView s_ObjectCacheDirectoryName = "objects";
 static constexpr usize s_ObjectFileHashFieldCount = 3u;
 static constexpr usize s_ObjectFileHashSeparatorCount = s_ObjectFileHashFieldCount - 1u;
-static constexpr usize s_ObjectFileNameReserveBytes =
-    s_ObjectFileVersionPrefix.size()
-    + (NameDetail::s_HexDigitsPerHashLane * s_ObjectFileHashFieldCount)
-    + (s_ObjectFileHashSeparator.size() * s_ObjectFileHashSeparatorCount)
-    + s_ObjectFileExtension.size()
-;
+static constexpr usize s_ObjectFileNameReserveBytes = s_ObjectFileVersionPrefix.size() + (NameDetail::s_HexDigitsPerHashLane * s_ObjectFileHashFieldCount) + (s_ObjectFileHashSeparator.size() * s_ObjectFileHashSeparatorCount) + s_ObjectFileExtension.size();
 
 struct AssetVolumeObjectFileHeader{
     u32 magic = s_ObjectFileMagic;
@@ -70,12 +65,7 @@ static void AppendEncodedNameHashText(const NameHash& hash, ScratchString& outTe
         AppendHexU64(hash.qwords[lane], outText);
 }
 
-static Path BuildObjectFilePath(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const AssetVolumeObjectFileHeader& header,
-    ScratchArena& scratchArena
-){
+static Path BuildObjectFilePath(const Path& cacheDirectory, const AStringView configurationSafeName, const AssetVolumeObjectFileHeader& header, ScratchArena& scratchArena){
     ScratchString assetTypeDirectory{scratchArena};
     assetTypeDirectory.reserve(NameDetail::s_EncodedNameHashLength);
     AppendEncodedNameHashText(header.assetTypeHash, assetTypeDirectory);
@@ -93,11 +83,7 @@ static Path BuildObjectFilePath(
     return cacheDirectory / configurationSafeName / s_ObjectCacheDirectoryName / assetTypeDirectory / objectFileName;
 }
 
-static AssetVolumeObjectFileHeader BuildObjectFileHeader(
-    const Core::Assets::IAssetCodec& codec,
-    const Core::Assets::AssetBytes& payload,
-    const AStringView configurationSafeName
-){
+static AssetVolumeObjectFileHeader BuildObjectFileHeader(const Core::Assets::IAssetCodec& codec, const Core::Assets::AssetBytes& payload, const AStringView configurationSafeName){
     static constexpr u32 s_ObjectCookKeyVersion = 1u;
 
     AssetVolumeObjectFileHeader header;
@@ -116,18 +102,8 @@ static AssetVolumeObjectFileHeader BuildObjectFileHeader(
     return header;
 }
 
-static bool HeaderMatches(
-    const AssetVolumeObjectFileHeader& lhs,
-    const AssetVolumeObjectFileHeader& rhs
-){
-    return lhs.magic == rhs.magic
-        && lhs.version == rhs.version
-        && lhs.headerSize == rhs.headerSize
-        && lhs.assetTypeHash == rhs.assetTypeHash
-        && lhs.payloadSize == rhs.payloadSize
-        && lhs.payloadHash == rhs.payloadHash
-        && lhs.cookKeyHash == rhs.cookKeyHash
-    ;
+static bool HeaderMatches(const AssetVolumeObjectFileHeader& lhs, const AssetVolumeObjectFileHeader& rhs){
+    return lhs.magic == rhs.magic && lhs.version == rhs.version && lhs.headerSize == rhs.headerSize && lhs.assetTypeHash == rhs.assetTypeHash && lhs.payloadSize == rhs.payloadSize && lhs.payloadHash == rhs.payloadHash && lhs.cookKeyHash == rhs.cookKeyHash;
 }
 
 struct DecodedObjectFileHeader{
@@ -135,18 +111,12 @@ struct DecodedObjectFileHeader{
     usize payloadOffset = 0u;
 };
 
-static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(
-    const Path& objectPath,
-    Core::Assets::AssetBytes& objectBytes
-){
+static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& objectPath, Core::Assets::AssetBytes& objectBytes){
     const auto read = ReadBinaryFile(objectPath, objectBytes);
     if(!read){
         const ErrorCode& errorCode = read.error();
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read object cache '{}': {}")
-                , PathToString<tchar>(objectPath)
-                , StringConvert(errorCode.message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read object cache '{}': {}"), PathToString<tchar>(objectPath), StringConvert(errorCode.message()));
         }
         return MakeUnexpected(Failure{});
     }
@@ -171,12 +141,7 @@ static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(
     return DecodedObjectFileHeader{ .header = *header, .payloadOffset = cursor };
 }
 
-static bool WriteObjectFile(
-    const Path& objectPath,
-    const AssetVolumeObjectFileHeader& header,
-    const Core::Assets::AssetBytes& payload,
-    Core::Assets::AssetBytes& objectBytes
-){
+static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, Core::Assets::AssetBytes& objectBytes){
     if(payload.size() > Limit<usize>::s_Max - sizeof(AssetVolumeObjectFileHeader)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
         return false;
@@ -190,10 +155,7 @@ static bool WriteObjectFile(
     const auto directories = EnsureDirectories(objectPath.parentPath());
     if(!directories){
         const ErrorCode& errorCode = directories.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create object cache directory '{}': {}")
-            , PathToString<tchar>(objectPath.parentPath())
-            , StringConvert(errorCode.message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create object cache directory '{}': {}"), PathToString<tchar>(objectPath.parentPath()), StringConvert(errorCode.message()));
         return false;
     }
     if(WriteBinaryFile(objectPath, objectBytes))
@@ -203,12 +165,7 @@ static bool WriteObjectFile(
     return false;
 }
 
-static bool UpdateObjectFileIfChanged(
-    const Path& objectPath,
-    const AssetVolumeObjectFileHeader& header,
-    const Core::Assets::AssetBytes& payload,
-    Core::Assets::AssetBytes& objectBytes
-){
+static bool UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, Core::Assets::AssetBytes& objectBytes){
     const auto cached = ReadObjectFileHeader(objectPath, objectBytes);
     if(cached && HeaderMatches(cached->header, header))
         return true;
@@ -218,14 +175,7 @@ static bool UpdateObjectFileIfChanged(
 
 class AssetVolumeObjectCacheWriter final : public Core::Assets::ICookedAssetWriter{
 public:
-    AssetVolumeObjectCacheWriter(
-        Core::Assets::AssetArena& arena,
-        const Path& cacheDirectory,
-        const AStringView configurationSafeName,
-        AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-        ScratchArena& scratchArena,
-        Futex& objectCacheWriteMutex
-    )
+    AssetVolumeObjectCacheWriter(Core::Assets::AssetArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, ScratchArena& scratchArena, Futex& objectCacheWriteMutex)
         : m_cacheDirectory(cacheDirectory)
         , m_configurationSafeName(configurationSafeName)
         , m_manifest(manifest)
@@ -236,44 +186,22 @@ public:
     {}
 
 public:
-    virtual bool writeCookedAsset(
-        const TStringView assetKind,
-        const Name& virtualPath,
-        const Core::Assets::IAsset& asset,
-        const Core::Assets::IAssetCodec& codec
-    )override{
+    virtual bool writeCookedAsset(const TStringView assetKind, const Name& virtualPath, const Core::Assets::IAsset& asset, const Core::Assets::IAssetCodec& codec)override{
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize {} '{}'")
-                , assetKind
-                , StringConvert(virtualPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize {} '{}'"), assetKind, StringConvert(virtualPath.resolvedText()));
             return false;
         }
 
         const AssetVolumeObjectFileHeader header = BuildObjectFileHeader(codec, m_payloadBinary, m_configurationSafeName);
-        const Path objectPath = BuildObjectFilePath(
-            m_cacheDirectory,
-            m_configurationSafeName,
-            header,
-            m_scratchArena
-        );
+        const Path objectPath = BuildObjectFilePath(m_cacheDirectory, m_configurationSafeName, header, m_scratchArena);
         {
             ScopedLock lock(m_objectCacheWriteMutex);
             if(!UpdateObjectFileIfChanged(objectPath, header, m_payloadBinary, m_objectBinary))
                 return false;
         }
 
-        return AssetsVolumeCookDetail::AppendObjectFilePayloadToManifest(
-            m_manifest,
-            virtualPath,
-            objectPath,
-            AssetsVolumeCookDetail::AssetVolumePayloadIdentity{
-                header.payloadSize,
-                header.payloadHash,
-                header.cookKeyHash
-            }
-        );
+        return AssetsVolumeCookDetail::AppendObjectFilePayloadToManifest(m_manifest, virtualPath, objectPath, AssetsVolumeCookDetail::AssetVolumePayloadIdentity{ header.payloadSize, header.payloadHash, header.cookKeyHash });
     }
 
 private:
@@ -309,25 +237,12 @@ static bool BuildRegistryObjectBucketManifestEntries(
     Futex& objectCacheWriteMutex
 ){
     Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_CookArena);
-    AssetVolumeObjectCacheWriter cookedAssetWriter(
-        arena,
-        resolvedPaths.cacheDirectory,
-        configurationSafeName,
-        bucketManifest,
-        scratchArena,
-        objectCacheWriteMutex
-    );
-    Core::Assets::CookEntryWriteContext cookEntryWriteContext{
-        cookedAssetWriter,
-        bucketSeenVirtualPathHashes
-    };
+    AssetVolumeObjectCacheWriter cookedAssetWriter(arena, resolvedPaths.cacheDirectory, configurationSafeName, bucketManifest, scratchArena, objectCacheWriteMutex);
+    Core::Assets::CookEntryWriteContext cookEntryWriteContext{ cookedAssetWriter, bucketSeenVirtualPathHashes };
     return entryRegistry.writeBucket(bucketIndex, cookEntryWriteContext);
 }
 
-static bool RegisterMergedManifestVirtualPath(
-    const Name& virtualPath,
-    AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes
-){
+static bool RegisterMergedManifestVirtualPath(const Name& virtualPath, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
     if(!virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: registry manifest produced an empty virtual path"));
         return false;
@@ -340,11 +255,7 @@ static bool RegisterMergedManifestVirtualPath(
     return false;
 }
 
-static bool MergeRegistryObjectBucketManifests(
-    RegistryObjectBucketManifestVector& bucketManifests,
-    AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes
-){
+static bool MergeRegistryObjectBucketManifests(RegistryObjectBucketManifestVector& bucketManifests, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
     for(RegistryObjectBucketManifest& bucketManifest : bucketManifests){
         for(AssetsVolumeCookDetail::AssetVolumePackEntry& entry : bucketManifest.manifest.entries){
             if(!RegisterMergedManifestVirtualPath(entry.virtualPath, seenVirtualPathHashes))
@@ -398,16 +309,7 @@ bool BuildRegistryObjectManifestEntries(
             return;
 
         __hidden_cooked_object_cache::RegistryObjectBucketManifest& bucketManifest = bucketManifests[bucketIndex];
-        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(
-            arena,
-            resolvedPaths,
-            configurationSafeName,
-            parsedMetadata.entryRegistry,
-            bucketIndex,
-            bucketManifest.manifest,
-            bucketManifest.seenVirtualPathHashes,
-            objectCacheWriteMutex
-        ))
+        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(arena, resolvedPaths, configurationSafeName, parsedMetadata.entryRegistry, bucketIndex, bucketManifest.manifest, bucketManifest.seenVirtualPathHashes, objectCacheWriteMutex))
             return;
 
         failed.store(true, MemoryOrder::release);
@@ -415,32 +317,17 @@ bool BuildRegistryObjectManifestEntries(
     if(failed.load(MemoryOrder::acquire))
         return false;
 
-    return __hidden_cooked_object_cache::MergeRegistryObjectBucketManifests(
-        bucketManifests,
-        manifest,
-        seenVirtualPathHashes
-    );
+    return __hidden_cooked_object_cache::MergeRegistryObjectBucketManifests(bucketManifests, manifest, seenVirtualPathHashes);
 }
 
-Expected<CookedObjectPayloadView> ReadCookedObjectPayload(
-    const Path& objectPath,
-    const Name& expectedVirtualPath,
-    Core::Assets::AssetBytes& inOutObjectBytes
-){
+Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Core::Assets::AssetBytes& inOutObjectBytes){
     const auto decoded = __hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, inOutObjectBytes);
     if(!decoded){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid object cache '{}' for '{}'")
-            , PathToString<tchar>(objectPath)
-            , StringConvert(expectedVirtualPath.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid object cache '{}' for '{}'"), PathToString<tchar>(objectPath), StringConvert(expectedVirtualPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     const auto& header = decoded->header;
-    return CookedObjectPayloadView{
-        .data = inOutObjectBytes.data() + decoded->payloadOffset,
-        .size = static_cast<usize>(header.payloadSize),
-        .identity = { header.payloadSize, header.payloadHash, header.cookKeyHash },
-    };
+    return CookedObjectPayloadView{ .data = inOutObjectBytes.data() + decoded->payloadOffset, .size = static_cast<usize>(header.payloadSize), .identity = { header.payloadSize, header.payloadHash, header.cookKeyHash }, };
 }
 
 

@@ -32,13 +32,7 @@ bool nwbMeshSphereOutsideFrustum(const float3 center, const float radius){
     return false;
 }
 
-bool nwbMeshletBackfaceCull(
-    const float3 cameraPos,
-    const float3 center,
-    const float radius,
-    const float3 coneAxis,
-    const float coneCos
-){
+bool nwbMeshletBackfaceCull(const float3 cameraPos, const float3 center, const float radius, const float3 coneAxis, const float coneCos){
     const float3 toCamera = cameraPos - center;
     const float dist = length(toCamera);
     if(dist <= radius)
@@ -84,17 +78,8 @@ bool nwbMeshletCulled(const NwbMeshletCullContext context, const NwbMeshInstance
     if(!nwbMeshletConeCullEnabled())
         return false;
 
-    const float3 coneAxis = nwbSafeNormalize(
-        nwbRotateVectorByQuaternion(nwbMeshUnpackConeAxis(context.bounds.conePacked), instance.rotation),
-        float3(0.0, 0.0, 1.0)
-    );
-    return nwbMeshletBackfaceCull(
-        g_NwbMeshCameraPosition.xyz,
-        context.center,
-        context.radius,
-        coneAxis,
-        nwbMeshUnpackConeCutoff(context.bounds.conePacked)
-    );
+    const float3 coneAxis = nwbSafeNormalize(nwbRotateVectorByQuaternion(nwbMeshUnpackConeAxis(context.bounds.conePacked), instance.rotation), float3(0.0, 0.0, 1.0));
+    return nwbMeshletBackfaceCull(g_NwbMeshCameraPosition.xyz, context.center, context.radius, coneAxis, nwbMeshUnpackConeCutoff(context.bounds.conePacked));
 }
 
 bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instance){
@@ -121,10 +106,7 @@ float2 nwbMeshClipToFramebuffer(const float4 p){
     const float2 viewportSize = viewportMax - viewportMin;
     const float2 ndc = p.xy / p.w;
 
-    return float2(
-        viewportMin.x + (ndc.x * 0.5 + 0.5) * viewportSize.x,
-        viewportMax.y - (ndc.y * 0.5 + 0.5) * viewportSize.y
-    );
+    return float2(viewportMin.x + (ndc.x * 0.5 + 0.5) * viewportSize.x, viewportMax.y - (ndc.y * 0.5 + 0.5) * viewportSize.y);
 }
 
 
@@ -158,15 +140,7 @@ bool nwbMeshAllOutsideClipPlane(const float4 a, const float4 b, const float4 c){
 }
 
 bool nwbMeshInsideClipVolume(const float4 p){
-    return
-        p.w > 0.0
-        && p.x >= -p.w
-        && p.x <= p.w
-        && p.y >= -p.w
-        && p.y <= p.w
-        && p.z >= 0.0
-        && p.z <= p.w
-    ;
+    return p.w > 0.0 && p.x >= -p.w && p.x <= p.w && p.y >= -p.w && p.y <= p.w && p.z >= 0.0 && p.z <= p.w;
 }
 
 bool nwbMeshAllOutsideScissor(const float4 a, const float4 b, const float4 c){
@@ -193,15 +167,7 @@ bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[NWB_MESHLET_TRI
 }
 
 void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
-    const NwbMeshGeneratedVertex vertex = nwbMeshBuildGeneratedVertexWithRasterFlags(
-        float4(2.0, 2.0, 0.0, 1.0),
-        float3(0.0, 0.0, 1.0),
-        float4(1.0, 0.0, 0.0, 1.0),
-        float2(0.0),
-        half4(0.0h, 0.0h, 0.0h, 0.0h),
-        float3(0.0),
-        0u
-    );
+    const NwbMeshGeneratedVertex vertex = nwbMeshBuildGeneratedVertexWithRasterFlags(float4(2.0, 2.0, 0.0, 1.0), float3(0.0, 0.0, 1.0), float4(1.0, 0.0, 0.0, 1.0), float2(0.0), half4(0.0h, 0.0h, 0.0h, 0.0h), float3(0.0), 0u);
     for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
         nwbMeshGeneratedVertices()[primitiveBase + corner] = vertex;
 }

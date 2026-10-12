@@ -87,13 +87,7 @@ public:
     const TStringView meshPathText
     );
     template<typename MeshGeometryPayloadT>
-    [[nodiscard]] static bool ValidateSharedMeshPayload(
-    const MeshGeometryPayloadT& payload,
-    const usize skinCount,
-    const bool skinRequired,
-    const TStringView contextText,
-    const TStringView meshPathText
-    );
+    [[nodiscard]] static bool ValidateSharedMeshPayload(const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText);
 
 
 public:
@@ -105,13 +99,7 @@ public:
 
 
 template<typename MeshGeometryPayloadT>
-[[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(
-    const MeshGeometryPayloadT& payload,
-    const usize skinCount,
-    const bool skinRequired,
-    const TStringView contextText,
-    const TStringView meshPathText
-){
+[[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText){
     return ValidateSharedMeshPayload(
         payload.positionStream(),
         payload.normalStream(),

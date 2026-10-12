@@ -70,10 +70,7 @@ inline constexpr Name s_SetupTextureUploadIdentity("graphics.setup_texture.uploa
     if(depth > 1 && static_cast<u64>(depth - 1) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
         return MakeUnexpected(Failure{});
 
-    const u64 requiredBytes = depth > 1
-        ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch
-        : packedSlicePitch
-    ;
+    const u64 requiredBytes = depth > 1 ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch : packedSlicePitch;
     if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
         return MakeUnexpected(Failure{});
 
@@ -102,11 +99,7 @@ struct BufferSetupSubmissionData{
             .setQueueSharing(submissionData.uploadDesc.queueSharing)
             .setDirectConsumerQueue(submissionData.directConsumerQueue)
     );
-    const GpuUploadBlobId source = graph.copyUploadData(
-        submissionData.setupDesc.data,
-        submissionData.setupDesc.dataSize,
-        alignof(u32)
-    );
+    const GpuUploadBlobId source = graph.copyUploadData(submissionData.setupDesc.data, submissionData.setupDesc.dataSize, alignof(u32));
     if(!destination.valid() || !source.valid())
         return {};
 
@@ -114,11 +107,7 @@ struct BufferSetupSubmissionData{
     uploadTaskDesc
         .setIdentity(s_SetupBufferUploadIdentity)
         .setMarkerLabel("Setup Buffer Upload")
-        .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(
-            submissionData.setupDesc.dataSize,
-            submissionData.sameClassRouting.enabled,
-            submissionData.sameClassRouting.crossesQueueFamily
-        ))
+        .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(submissionData.setupDesc.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
     ;
     return graph.addUploadBufferTask(
         uploadTaskDesc,
@@ -150,17 +139,10 @@ struct TextureSetupSubmissionData{
             .setIdentity(s_SetupTextureResourceIdentity)
             .setMarkerLabel("Setup Texture")
             .setType(GpuGraphResourceType::Texture)
-            // Vulkan creates this texture in UNDEFINED layout. The upload task owns its first concrete transition;
-            // the task's finalState still publishes the caller-requested logical state.
-            .setInitialState(ResourceStates::Unknown)
-            .setQueueSharing(submissionData.uploadDesc.queueSharing)
-            .setDirectConsumerQueue(submissionData.directConsumerQueue)
-    );
-    const GpuUploadBlobId source = graph.copyUploadData(
-        submissionData.setupDesc.data,
-        submissionData.setupDesc.uploadDataSize,
-        alignof(u32)
-    );
+            // Vulkan creates this texture in UNDEFINED layout.
+            // The upload task owns its first concrete transition; the task's finalState still publishes the caller-requested logical state.
+            .setInitialState(ResourceStates::Unknown).setQueueSharing(submissionData.uploadDesc.queueSharing).setDirectConsumerQueue(submissionData.directConsumerQueue));
+    const GpuUploadBlobId source = graph.copyUploadData(submissionData.setupDesc.data, submissionData.setupDesc.uploadDataSize, alignof(u32));
     if(!destination.valid() || !source.valid())
         return {};
 
@@ -168,11 +150,7 @@ struct TextureSetupSubmissionData{
     uploadTaskDesc
         .setIdentity(s_SetupTextureUploadIdentity)
         .setMarkerLabel("Setup Texture Upload")
-        .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(
-            submissionData.setupDesc.uploadDataSize,
-            submissionData.sameClassRouting.enabled,
-            submissionData.sameClassRouting.crossesQueueFamily
-        ))
+        .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(submissionData.setupDesc.uploadDataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
     ;
     return graph.addUploadTextureTask(
         uploadTaskDesc,
@@ -222,21 +200,16 @@ bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
         );
         return false;
     }
-    // CommandList staging and graph-owned upload tasks both lower to VkBufferCopy. The API
-    // cannot truthfully report a successful upload for a region Vulkan rejects, so fail before creating either
-    // a native command list or a graph packet.
+    // CommandList staging and graph-owned upload tasks both lower to VkBufferCopy.
+    // The API cannot truthfully report a successful upload for a region Vulkan rejects, so fail before creating either a native command list or a graph packet.
     if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned")
-            , StringConvert(desc.bufferDesc.debugName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
-    // A retained buffer must publish a concrete state. Unknown would be restored at native close without a
-    // graph-visible final-state contract for the next consumer.
+    // A retained buffer must publish a concrete state.
+    // Unknown would be restored at native close without a graph-visible final-state contract for the next consumer.
     if(desc.bufferDesc.keepInitialState && desc.bufferDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state")
-            , StringConvert(desc.bufferDesc.debugName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
 
@@ -253,10 +226,7 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
     if(!ResolveTextureUploadAspect(formatInfo, desc.aspect)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil")
-            , StringConvert(desc.textureDesc.name.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
     const auto requiredBytes = __hidden_graphics_setup::ComputeTextureUploadByteSize(desc);
@@ -264,18 +234,14 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': invalid upload layout"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
-    // A retained texture must publish a concrete state. Leaving it Unknown makes command-list close restore an
-    // untracked layout, so no graph task or later consumer can safely describe the uploaded contents.
+    // A retained texture must publish a concrete state.
+    // Leaving it Unknown makes command-list close restore an untracked layout, so no graph task or later consumer can safely describe the uploaded contents.
     if(desc.textureDesc.keepInitialState && desc.textureDesc.initialState == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
     if(desc.uploadDataSize < *requiredBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data size {} is smaller than required size {}")
-            , StringConvert(desc.textureDesc.name.resolvedText())
-            , desc.uploadDataSize
-            , *requiredBytes
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data size {} is smaller than required size {}"), StringConvert(desc.textureDesc.name.resolvedText()), desc.uploadDataSize, *requiredBytes);
         return false;
     }
 
@@ -338,21 +304,10 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
     if(!desc.data || desc.dataSize == 0)
         return device.createBuffer(desc.bufferDesc);
 
-    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(
-        device,
-        desc.queue,
-        desc.dataSize,
-        desc.bufferDesc.initialState != ResourceStates::Unknown
-    );
-    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting =
-        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.dataSize)
-    ;
+    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(device, desc.queue, desc.dataSize, desc.bufferDesc.initialState != ResourceStates::Unknown);
+    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.dataSize);
     BufferDesc uploadDesc = desc.bufferDesc;
-    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(
-        uploadDesc.queueSharing,
-        consumerQueue,
-        sameClassRouting.crossesQueueFamily
-    );
+    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
     BufferHandle buffer = device.createBuffer(uploadDesc);
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
@@ -397,34 +352,17 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
 
     if(!desc.data || desc.uploadDataSize == 0)
         return device.createTexture(desc.textureDesc);
-    if(
-        desc.textureDesc.keepInitialState
-        && (desc.textureDesc.arraySize != 1u || desc.textureDesc.mipLevels != 1u)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': a fresh retained setup upload must cover every mip and array slice; use uploadTextureBatch")
-            , StringConvert(desc.textureDesc.name.resolvedText())
-        );
+    if(desc.textureDesc.keepInitialState && (desc.textureDesc.arraySize != 1u || desc.textureDesc.mipLevels != 1u)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': a fresh retained setup upload must cover every mip and array slice; use uploadTextureBatch"), StringConvert(desc.textureDesc.name.resolvedText()));
         return {};
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
     const bool requiresGraphicsConsumerQueue = formatInfo.hasDepth || formatInfo.hasStencil;
-    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(
-        device,
-        desc.queue,
-        desc.uploadDataSize,
-        desc.textureDesc.initialState != ResourceStates::Unknown,
-        requiresGraphicsConsumerQueue
-    );
-    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting =
-        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.uploadDataSize)
-    ;
+    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(device, desc.queue, desc.uploadDataSize, desc.textureDesc.initialState != ResourceStates::Unknown, requiresGraphicsConsumerQueue);
+    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.uploadDataSize);
     TextureDesc uploadDesc = desc.textureDesc;
-    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(
-        uploadDesc.queueSharing,
-        consumerQueue,
-        sameClassRouting.crossesQueueFamily
-    );
+    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
     TextureHandle texture = device.createTexture(uploadDesc);
     if(!texture){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.resolvedText()));

@@ -41,11 +41,7 @@ template<
 
     Vector<u32, Core::Alloc::ScratchArena> outIndices(primitiveIndexCount, scratchArena);
 
-    if(!ForEachMeshletTriangleCorner(
-        meshlets,
-        localVertexRefs,
-        primitiveIndices,
-        [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef) -> bool {
+    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef) -> bool {
             const bool skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
             const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
             const auto positionRef = DecodeMeshletPositionRef(deltaBytes, deltaByteCount, meshlet, localPositionIndex, skinRequired);
@@ -62,18 +58,8 @@ template<
     return outIndices;
 }
 
-[[nodiscard]] inline Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
-    Core::Alloc::ScratchArena& scratchArena,
-    const MeshGeometryPayload& payload
-){
-    return BuildMeshletTriangleIndices(
-        scratchArena,
-        payload.meshlets(),
-        payload.meshletLocalVertexRefs(),
-        payload.meshletPositionRefDeltas(),
-        payload.meshletPrimitiveIndices(),
-        payload.positionStream().size()
-    );
+[[nodiscard]] inline Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayload& payload){
+    return BuildMeshletTriangleIndices(scratchArena, payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletPositionRefDeltas(), payload.meshletPrimitiveIndices(), payload.positionStream().size());
 }
 
 

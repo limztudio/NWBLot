@@ -30,12 +30,7 @@ inline constexpr Name s_GpuTimingListenerScratchArena("graphics.gpu_timing.liste
 [[nodiscard]] static u64 AllocateSampleSubscriptionIdentity()noexcept{
     u64 identity = s_NextSampleSubscriptionIdentity.load(MemoryOrder::relaxed);
     while(identity != Limit<u64>::s_Max){
-        if(s_NextSampleSubscriptionIdentity.compare_exchange_weak(
-            identity,
-            identity + 1u,
-            MemoryOrder::relaxed,
-            MemoryOrder::relaxed
-        ))
+        if(s_NextSampleSubscriptionIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return identity;
     }
     return 0u;
@@ -58,10 +53,7 @@ public:
         , m_record(record)
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {
-        static_assert(
-            noexcept(SampleListenerRecordPtr(record)),
-            "GPU timing listener completion must retain its callback record without throwing"
-        );
+        static_assert(noexcept(SampleListenerRecordPtr(record)), "GPU timing listener completion must retain its callback record without throwing");
     }
     ~SampleCallbackCompletionScope()noexcept{
         {
@@ -99,11 +91,7 @@ GpuTimingSampleSubscription GpuTimingRecorder::subscribeSampleListener(const Gpu
     SampleListenerRecord* const listenerRecord = NewArenaObject<SampleListenerRecord>(m_arena, m_arena);
     if(!listenerRecord)
         return {};
-    SampleListenerRecordPtr record(
-        listenerRecord,
-        SampleListenerRecordPtr::deleter_type(&m_arena),
-        s_AdoptRef
-    );
+    SampleListenerRecordPtr record(listenerRecord, SampleListenerRecordPtr::deleter_type(&m_arena), s_AdoptRef);
 
     ScopedLock lock(m_sampleListenerMutex);
     const u64 identity = __hidden_gpu_timing_listener::AllocateSampleSubscriptionIdentity();
@@ -158,11 +146,7 @@ void GpuTimingRecorder::unsubscribeSampleListener(const GpuTimingSampleSubscript
     }
 }
 
-bool GpuTimingRecorder::setFeedbackCollectionScopes(
-    const GpuTimingSampleSubscription& subscription,
-    const NotNull<const Name*> scopeNames,
-    const usize scopeCount
-){
+bool GpuTimingRecorder::setFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const NotNull<const Name*> scopeNames, const usize scopeCount){
     if(scopeCount == 0u)
         return false;
     return replaceFeedbackCollectionScopes(subscription, scopeNames.get(), scopeCount);
@@ -172,11 +156,7 @@ bool GpuTimingRecorder::clearFeedbackCollectionScopes(const GpuTimingSampleSubsc
     return replaceFeedbackCollectionScopes(subscription, nullptr, 0u);
 }
 
-bool GpuTimingRecorder::replaceFeedbackCollectionScopes(
-    const GpuTimingSampleSubscription& subscription,
-    const Name* const scopeNames,
-    const usize scopeCount
-){
+bool GpuTimingRecorder::replaceFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Name* const scopeNames, const usize scopeCount){
     if(!subscription.valid() || (scopeCount != 0u && !scopeNames))
         return false;
 
@@ -247,9 +227,7 @@ bool GpuTimingRecorder::feedbackScopeDemandedLocked(const Name& scopeName)const 
     return demandIndex != m_feedbackScopeDemands.size() && m_feedbackScopeDemands[demandIndex].ownerCount != 0u;
 }
 
-void GpuTimingRecorder::addFeedbackScopeDemandsLocked(
-    const Vector<Name, Alloc::GlobalArena>& scopeNames
-)noexcept{
+void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept{
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         if(demandIndex != m_feedbackScopeDemands.size()){
@@ -257,16 +235,11 @@ void GpuTimingRecorder::addFeedbackScopeDemandsLocked(
                 ++m_feedbackScopeDemands[demandIndex].ownerCount;
             continue;
         }
-        m_feedbackScopeDemands.push_back(FeedbackScopeDemand{
-            .scopeName = scopeName,
-            .ownerCount = 1u,
-        });
+        m_feedbackScopeDemands.push_back(FeedbackScopeDemand{ .scopeName = scopeName, .ownerCount = 1u, });
     }
 }
 
-void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(
-    const Vector<Name, Alloc::GlobalArena>& scopeNames
-)noexcept{
+void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept{
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         NWB_ASSERT(demandIndex != m_feedbackScopeDemands.size());
@@ -287,9 +260,7 @@ void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTimingRecorder::SampleListenerRecordPtr GpuTimingRecorder::findSampleListenerLocked(
-    const GpuTimingSampleSubscription& subscription
-)noexcept{
+GpuTimingRecorder::SampleListenerRecordPtr GpuTimingRecorder::findSampleListenerLocked(const GpuTimingSampleSubscription& subscription)noexcept{
     if(!subscription.valid())
         return {};
 
@@ -325,10 +296,7 @@ void GpuTimingRecorder::eraseSampleListenerLocked(SampleListenerRecord& record)n
     }
 }
 
-void GpuTimingRecorder::dispatchCompletedSample(
-    const GpuTimingSample& sample,
-    const u64 subscriptionIdentityLimit
-){
+void GpuTimingRecorder::dispatchCompletedSample(const GpuTimingSample& sample, const u64 subscriptionIdentityLimit){
     u64 dispatchedIdentity = 0u;
     while(dispatchedIdentity < subscriptionIdentityLimit){
         SampleListenerRecordPtr nextRecord;
@@ -339,12 +307,7 @@ void GpuTimingRecorder::dispatchCompletedSample(
                 if(!record || record->removing)
                     continue;
                 const u64 identity = record->subscription.m_identity;
-                if(
-                    identity > dispatchedIdentity
-                    && identity <= subscriptionIdentityLimit
-                    && identity < nextIdentity
-                    && record->listener.valid()
-                ){
+                if(identity > dispatchedIdentity && identity <= subscriptionIdentityLimit && identity < nextIdentity && record->listener.valid()){
                     nextRecord = record;
                     nextIdentity = identity;
                 }
@@ -409,10 +372,7 @@ void GpuTimingRecorder::discardMarkedPendingAttributionsLocked()noexcept{
     m_pendingAttributionRetirements = false;
 }
 
-void GpuTimingRecorder::retirePendingAttributionsLocked(
-    SampleDispatchVector& outSamples,
-    const u64 subscriptionIdentityLimit
-){
+void GpuTimingRecorder::retirePendingAttributionsLocked(SampleDispatchVector& outSamples, const u64 subscriptionIdentityLimit){
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
         it.value()->retireAttributions(outSamples, subscriptionIdentityLimit);
     m_pendingAttributionRetirements = false;

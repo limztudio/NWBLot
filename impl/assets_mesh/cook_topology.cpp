@@ -45,12 +45,7 @@ struct TriangleEdge{
     return triangle;
 }
 
-static void JoinComponents(
-    Vector<u32, Core::Alloc::ScratchArena>& parents,
-    Vector<u8, Core::Alloc::ScratchArena>& ranks,
-    const u32 first,
-    const u32 second
-)noexcept{
+static void JoinComponents(Vector<u32, Core::Alloc::ScratchArena>& parents, Vector<u8, Core::Alloc::ScratchArena>& ranks, const u32 first, const u32 second)noexcept{
     u32 firstRoot = FindComponent(parents, first);
     u32 secondRoot = FindComponent(parents, second);
     if(firstRoot == secondRoot)
@@ -77,17 +72,10 @@ static void JoinComponents(
         return products.x == products.y;
     };
     // Each pair is evaluated only after the preceding cross component matched.
-    return equalProducts(SIMDVectorDouble{ abY, abZ }, SIMDVectorDouble{ acZ, acY })
-        && equalProducts(SIMDVectorDouble{ abZ, abX }, SIMDVectorDouble{ acX, acZ })
-        && equalProducts(SIMDVectorDouble{ abX, abY }, SIMDVectorDouble{ acY, acX });
+    return equalProducts(SIMDVectorDouble{ abY, abZ }, SIMDVectorDouble{ acZ, acY }) && equalProducts(SIMDVectorDouble{ abZ, abX }, SIMDVectorDouble{ acX, acZ }) && equalProducts(SIMDVectorDouble{ abX, abY }, SIMDVectorDouble{ acY, acX });
 }
 
-[[nodiscard]] static f64 RelativeTriangleVolume(
-    const Float3U& a,
-    const Float3U& b,
-    const Float3U& c,
-    const Float3U& origin
-)noexcept{
+[[nodiscard]] static f64 RelativeTriangleVolume(const Float3U& a, const Float3U& b, const Float3U& c, const Float3U& origin)noexcept{
     const SIMDVectorDouble aXAYValue = (SIMDVectorDouble{ static_cast<f64>(a.x), static_cast<f64>(a.y) } - SIMDVectorDouble{ origin.x, origin.y });
     const f64 aX = aXAYValue.x;
     const f64 aY = aXAYValue.y;
@@ -118,11 +106,7 @@ static void JoinComponents(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(
-    const Span<const Float3U> positions,
-    const Span<const u32> triangleIndices,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const Span<const Float3U> positions, const Span<const u32> triangleIndices, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_mesh_cook_topology;
     if(triangleIndices.empty() || triangleIndices.size() % s_MeshletTriangleIndexCount != 0u)
         return MakeUnexpected(Failure{});
@@ -182,9 +166,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(
             continue;
         const usize base = static_cast<usize>(triangle) * s_MeshletTriangleIndexCount;
         const Float3U& origin = positions[triangleIndices[static_cast<usize>(component) * s_MeshletTriangleIndexCount]];
-        componentVolumes[component] = NumericSimd::Add(componentVolumes[component], RelativeTriangleVolume(
-            positions[triangleIndices[base]], positions[triangleIndices[base + 1u]], positions[triangleIndices[base + 2u]], origin
-        ));
+        componentVolumes[component] = NumericSimd::Add(componentVolumes[component], RelativeTriangleVolume(positions[triangleIndices[base]], positions[triangleIndices[base + 1u]], positions[triangleIndices[base + 2u]], origin));
     }
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         const u32 component = FindComponent(parents, triangle);

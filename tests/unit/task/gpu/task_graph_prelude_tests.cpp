@@ -44,20 +44,10 @@ using namespace TaskGraphTestUtils;
 }
 
 [[nodiscard]] static Graphics::GpuTaskId AddPrelude(Graphics::GpuTaskGraph& graph){
-    return AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/prelude"),
-        "Normal Execution Prelude",
-        PrimaryGraphicsRequirements(),
-        PreludeScheduling(),
-        { .policy = Graphics::GpuTaskTimingPolicy::PacketOnly }
-    );
+    return AddTaskWithCommands(graph, Name("tests/task_graph/prelude"), "Normal Execution Prelude", PrimaryGraphicsRequirements(), PreludeScheduling(), { .policy = Graphics::GpuTaskTimingPolicy::PacketOnly });
 }
 
-[[nodiscard]] static bool HasPacketDependency(
-    const Graphics::GpuCompiledPacketView& consumer,
-    const Graphics::GpuSubmissionPacketId producer
-){
+[[nodiscard]] static bool HasPacketDependency(const Graphics::GpuCompiledPacketView& consumer, const Graphics::GpuSubmissionPacketId producer){
     if(!consumer.valid())
         return false;
     for(u32 index = 0u; index < consumer.plan->dependencyCount; ++index){
@@ -80,40 +70,21 @@ TEST(GpuTaskGraph, NormalExecutionPreludeGatesIndependentBranchesWithoutOrdering
     const Graphics::GpuTaskId prelude = AddPrelude(graph);
     ASSERT_TRUE(prelude.valid());
     ASSERT_TRUE(graph.setNormalExecutionPrelude(prelude));
-    const Graphics::GpuTaskId sceneRoot = AddTaskWithCommands(
-        graph, Name("tests/task_graph/prelude_scene_root"), "Scene Root",
-        { .requiredCapabilities = Graphics::GpuQueueCapability::Graphics }
-    );
-    const Graphics::GpuTaskId uiRoot = AddTaskWithCommands(
-        graph, Name("tests/task_graph/prelude_ui_root"), "UI Upload Root",
-        { .requiredCapabilities = Graphics::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id }
-    );
+    const Graphics::GpuTaskId sceneRoot = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_scene_root"), "Scene Root", { .requiredCapabilities = Graphics::GpuQueueCapability::Graphics });
+    const Graphics::GpuTaskId uiRoot = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_ui_root"), "UI Upload Root", { .requiredCapabilities = Graphics::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id });
     ASSERT_TRUE(sceneRoot.valid());
     ASSERT_TRUE(uiRoot.valid());
-    const Graphics::GpuTaskId sceneTail = AddTaskWithCommands(
-        graph, Name("tests/task_graph/prelude_scene_tail"), "Scene Tail",
-        { .requiredCapabilities = Graphics::GpuQueueCapability::Graphics }, {}, {}, &sceneRoot, 1u
-    );
-    const Graphics::GpuTaskId uiTail = AddTaskWithCommands(
-        graph, Name("tests/task_graph/prelude_ui_tail"), "UI Tail",
-        { .requiredCapabilities = Graphics::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id },
-        {}, {}, &uiRoot, 1u
-    );
+    const Graphics::GpuTaskId sceneTail = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_scene_tail"), "Scene Tail", { .requiredCapabilities = Graphics::GpuQueueCapability::Graphics }, {}, {}, &sceneRoot, 1u);
+    const Graphics::GpuTaskId uiTail = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_ui_tail"), "UI Tail", { .requiredCapabilities = Graphics::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id }, {}, {}, &uiRoot, 1u);
     ASSERT_TRUE(sceneTail.valid());
     ASSERT_TRUE(uiTail.valid());
     const Graphics::GpuTaskId terminalDependencies[] = { sceneTail, uiTail };
-    const Graphics::GpuTaskId terminal = AddTaskWithCommands(
-        graph, Name("tests/task_graph/prelude_terminal"), "Presentation Terminal",
-        PrimaryGraphicsRequirements(), {}, {}, terminalDependencies, LengthOf(terminalDependencies)
-    );
+    const Graphics::GpuTaskId terminal = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_terminal"), "Presentation Terminal", PrimaryGraphicsRequirements(), {}, {}, terminalDependencies, LengthOf(terminalDependencies));
     ASSERT_TRUE(terminal.valid());
     Graphics::GpuTaskSchedulingHint recoveryScheduling = PreludeScheduling();
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
     recoveryScheduling.isRecoverySubmission = true;
-    const Graphics::GpuTaskId recovery = AddTaskWithCommands(
-        graph, Name("tests/task_graph/prelude_recovery"), "Recovery Frontier",
-        PrimaryGraphicsRequirements(), recoveryScheduling
-    );
+    const Graphics::GpuTaskId recovery = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_recovery"), "Recovery Frontier", PrimaryGraphicsRequirements(), recoveryScheduling);
     ASSERT_TRUE(recovery.valid());
 
     {
@@ -180,15 +151,11 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsInvalidRegistrationAndClearsOnRe
     ASSERT_TRUE(prelude.valid());
     ASSERT_TRUE(graph.setNormalExecutionPrelude(prelude));
     EXPECT_FALSE(graph.setNormalExecutionPrelude(prelude));
-    const Graphics::GpuTaskId root = AddTask(
-        graph, Name("tests/task_graph/prelude_root_before_reset"), "Root Before Reset"
-    );
+    const Graphics::GpuTaskId root = AddTask(graph, Name("tests/task_graph/prelude_root_before_reset"), "Root Before Reset");
     ASSERT_TRUE(root.valid());
     graph.reset();
     EXPECT_FALSE(graph.setNormalExecutionPrelude(prelude));
-    const Graphics::GpuTaskId unguardedRoot = AddTask(
-        graph, Name("tests/task_graph/prelude_root_after_reset"), "Root After Reset"
-    );
+    const Graphics::GpuTaskId unguardedRoot = AddTask(graph, Name("tests/task_graph/prelude_root_after_reset"), "Root After Reset");
     ASSERT_TRUE(unguardedRoot.valid());
     const Graphics::GpuTaskId latePrelude = AddPrelude(graph);
     ASSERT_TRUE(latePrelude.valid());
@@ -204,10 +171,7 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots){
         Graphics::GpuTaskGraph graph(testArena.arena);
         Graphics::GpuTaskCommandRequirements transferOnly = PrimaryGraphicsRequirements();
         transferOnly.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
-        const Graphics::GpuTaskId task = AddTaskWithCommands(
-            graph, Name("tests/task_graph/prelude_transfer_only"), "Transfer Only Prelude",
-            transferOnly, PreludeScheduling()
-        );
+        const Graphics::GpuTaskId task = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_transfer_only"), "Transfer Only Prelude", transferOnly, PreludeScheduling());
         ASSERT_TRUE(task.valid());
         EXPECT_FALSE(graph.setNormalExecutionPrelude(task));
     }
@@ -215,40 +179,23 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots){
         Graphics::GpuTaskGraph graph(testArena.arena);
         Graphics::GpuTaskCommandRequirements external = PrimaryGraphicsRequirements();
         external.externalQueue = GraphicsQueue().id;
-        const Graphics::GpuTaskId task = AddTaskWithCommands(
-            graph, Name("tests/task_graph/prelude_external"), "External Queue Prelude",
-            external, PreludeScheduling()
-        );
+        const Graphics::GpuTaskId task = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_external"), "External Queue Prelude", external, PreludeScheduling());
         ASSERT_TRUE(task.valid());
         EXPECT_FALSE(graph.setNormalExecutionPrelude(task));
     }
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuTaskId task = AddTaskWithCommands(
-            graph, Name("tests/task_graph/prelude_mergeable"), "Mergeable Prelude",
-            PrimaryGraphicsRequirements()
-        );
+        const Graphics::GpuTaskId task = AddTaskWithCommands(graph, Name("tests/task_graph/prelude_mergeable"), "Mergeable Prelude", PrimaryGraphicsRequirements());
         ASSERT_TRUE(task.valid());
         EXPECT_FALSE(graph.setNormalExecutionPrelude(task));
     }
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId domain = AddHazardDomain(
-            graph, Name("tests/task_graph/prelude_resource"), "Prelude Resource"
-        );
+        const Graphics::GpuGraphResourceId domain = AddHazardDomain(graph, Name("tests/task_graph/prelude_resource"), "Prelude Resource");
         ASSERT_TRUE(domain.valid());
-        const Graphics::GpuTaskResourceUse use{
-            .resource = domain,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::Common,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        };
+        const Graphics::GpuTaskResourceUse use{ .resource = domain, .range = {}, .requiredState = Graphics::ResourceStates::Common, .access = Graphics::GpuTaskResourceAccess::ReadWrite, };
         Graphics::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/prelude_resource_use"))
-            .setMarkerLabel("Resource Using Prelude")
-            .setScheduling(PreludeScheduling())
-            .setResourceUses(&use, 1u)
-        ;
+        desc.setIdentity(Name("tests/task_graph/prelude_resource_use")).setMarkerLabel("Resource Using Prelude").setScheduling(PreludeScheduling()).setResourceUses(&use, 1u);
         const Graphics::GpuTaskId task = graph.addTask(desc, PrimaryGraphicsRequirements());
         ASSERT_TRUE(task.valid());
         EXPECT_FALSE(graph.setNormalExecutionPrelude(task));

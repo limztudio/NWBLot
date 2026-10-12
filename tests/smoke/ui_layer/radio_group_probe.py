@@ -13,13 +13,10 @@ DISPLAY = re.compile(rf"UiRadioGroupSmoke: display logical=({NUMBER})x({NUMBER})
 STATE = re.compile(r"UiRadioGroupSmoke: state sequence=(\d+) values=((?:\d+,){21}\d+)")
 GEOMETRY = re.compile(rf"UiRadioGroupSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 SKIN = re.compile(r"UiRadioGroupSmoke: skin=(default|alternate)")
-FIELDS = ("main_selected", "main_cursor", "focus_code", "changes", "activations", "before_clicks", "after_clicks",
-    "enabled", "source_revision", "source_generation", "reversed", "removed", "parent", "popup_selected",
-    "popup_cursor", "popup_changes", "popup_activations", "popup_count", "focus_scope", "label_reads",
-    "disabled_selected", "choice_count")
+FIELDS = ("main_selected", "main_cursor", "focus_code", "changes", "activations", "before_clicks", "after_clicks", "enabled", "source_revision", "source_generation", "reversed", "removed", "parent", "popup_selected",
+    "popup_cursor", "popup_changes", "popup_activations", "popup_count", "focus_scope", "label_reads", "disabled_selected", "choice_count")
 KEYS = (10, 20, 30, 40, 50)
-RECTANGLES = ("before", "group", "after", "open", "disabled_group", "parent", "popup_group", "popup_close",
-    "disabled_row30", "disabled_indicator30", "disabled_mark30") + tuple(
+RECTANGLES = ("before", "group", "after", "open", "disabled_group", "parent", "popup_group", "popup_close", "disabled_row30", "disabled_indicator30", "disabled_mark30") + tuple(
         f"{prefix}{part}{key}" for prefix in ("", "popup_") for key in KEYS for part in ("row", "indicator", "mark"))
 MARKER_TOLERANCE = 5
 SKIN_TOLERANCE = 8
@@ -34,8 +31,7 @@ def snapshot_from_logs(text):
         return None
     state = states[-1]
     sequence, values = int(state[1]), tuple(map(int, state[2].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text)
-        if int(match[1]) == sequence}
+    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
     if any(name not in rectangles for name in RECTANGLES):
         return None
     display = tuple(map(float, displays[-1].groups()))
@@ -46,8 +42,7 @@ def snapshot_from_logs(text):
         raise SmokeFailure("radio fixture reported a negative placement extent")
     if any(value > 0xFFFFFF for value in (*values, sequence)):
         raise SmokeFailure("radio fixture exceeds its two-part 24-bit displayed marker schema")
-    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)),
-        "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
+    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
 
 
 def center(rectangle):
@@ -67,8 +62,7 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
             raise SmokeFailure(f"radio probe '{name}' falls outside {width}x{height}: ({x},{y})")
         observed = rows[y][x]
         error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        result = {"name": name, "position": [x, y], "expected": list(color), "observed": list(observed),
-            "error": error, "passed": error <= tolerance}
+        result = {"name": name, "position": [x, y], "expected": list(color), "observed": list(observed), "error": error, "passed": error <= tolerance}
         probes.append(result)
         return result
 
@@ -78,8 +72,7 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
 
     for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
         for part in range(2):
-            probe(f"model_{index}_{part}", (16.0 + 12.0 * (index * 2 + part), snapshot["logical_extent"][1] - 14.0),
-                encoded_marker(value >> (part * 12)), MARKER_TOLERANCE)
+            probe(f"model_{index}_{part}", (16.0 + 12.0 * (index * 2 + part), snapshot["logical_extent"][1] - 14.0), encoded_marker(value >> (part * 12)), MARKER_TOLERANCE)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     gx, gy, gw, gh = rectangles["group"]
     probe("replacement_panel_gutter", (gx + gw - 8.0, gy + gh + 2.0), panel)
@@ -107,16 +100,12 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
         geometry_matches = geometry_matches and abs(mark[3] - indicator[3] * 0.4) <= 0.01
         if prefix == "disabled_" and snapshot["parent"] and contains(rectangles["parent"], indicator) \
                 and contains(rectangles["parent"], mark):
-            probes.append({"name": f"{prefix}indicator{key}_occluded_by_parent_popup", "occluded": True,
-                "occluding_rectangle": list(rectangles["parent"]), "indicator_rectangle": list(indicator),
-                "mark_rectangle": list(mark), "passed": True})
+            probes.append({"name": f"{prefix}indicator{key}_occluded_by_parent_popup", "occluded": True, "occluding_rectangle": list(rectangles["parent"]), "indicator_rectangle": list(indicator), "mark_rectangle": list(mark), "passed": True})
             return
         fill, border = CHECKED if key == selected else NORMAL
-        tint = (0.55, 0.55, 0.55, 0.6) if not enabled or key == 30 else (
-            (0.85, 0.85, 0.85, 1.0) if pressed == (prefix, key) else (1.0, 1.0, 1.0, 1.0))
+        tint = (0.55, 0.55, 0.55, 0.6) if not enabled or key == 30 else ((0.85, 0.85, 0.85, 1.0) if pressed == (prefix, key) else (1.0, 1.0, 1.0, 1.0))
         ix, iy, iw, ih = indicator
-        probe(f"{prefix}indicator{key}_fill", (ix + 4.0, iy + ih / 2.0),
-            compose(linear_channels(fill), 1.0, tint, backdrop))
+        probe(f"{prefix}indicator{key}_fill", (ix + 4.0, iy + ih / 2.0), compose(linear_channels(fill), 1.0, tint, backdrop))
         # At scaled DPI the first border pixel can include alpha/filtering. Compare authored samples at each pixel center.
         candidates = []
         # The whole-row focus overlay crosses the indicator's left edge; its right border remains independent.
@@ -159,7 +148,5 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
             for part in ("row", "indicator", "mark"):
                 geometry_matches = geometry_matches and rectangles[f"popup_{part}{key}"][2:] == (0.0, 0.0)
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
-    return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes,
-        "geometry_matches": geometry_matches, "passed": model_matches and geometry_matches
-            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot))
-            and all(item["passed"] for item in probes)}
+    return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes, "geometry_matches": geometry_matches, "passed": model_matches and geometry_matches
+            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot)) and all(item["passed"] for item in probes)}

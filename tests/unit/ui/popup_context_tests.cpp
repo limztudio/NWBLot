@@ -73,9 +73,7 @@ protected:
         return state;
     }
 
-    [[nodiscard]] PopupScope scope(const WidgetState& owner, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f },
-        const u64 instance = 1u, const u64 epoch = 1u
-    ){
+    [[nodiscard]] PopupScope scope(const WidgetState& owner, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f }, const u64 instance = 1u, const u64 epoch = 1u){
         PopupScope result;
         result.token = { owner.id, owner.declarationGeneration, instance, epoch };
         result.bounds = bounds;
@@ -90,10 +88,7 @@ protected:
         EXPECT_TRUE(m_context.addTarget(owner, target));
     }
 
-    [[nodiscard]] PopupFrame prepare(
-        const u64 generation, const bool open = false, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f },
-        const bool keepClosedChild = false, const bool autofocus = true
-    ){
+    [[nodiscard]] PopupFrame prepare(const u64 generation, const bool open = false, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f }, const bool keepClosedChild = false, const bool autofocus = true){
         PopupFrame frame;
         EXPECT_TRUE(begin(generation));
         frame.base = button("base", { 10.0f, 10.0f, 60.0f, 24.0f });

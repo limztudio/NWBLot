@@ -48,11 +48,7 @@ bool ECSRenderDetail::CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuData
     if(!csgFrameData.hasWork())
         return true;
 
-    return
-        bindingValid()
-        && receiverRangeCapacity >= csgFrameData.receiverRanges.size()
-        && cutterCapacity >= csgFrameData.cutters.size()
-    ;
+    return bindingValid() && receiverRangeCapacity >= csgFrameData.receiverRanges.size() && cutterCapacity >= csgFrameData.cutters.size();
 }
 
 Expected<u32> ECSRenderDetail::CsgGraphResourceSnapshot::findClipContextHeapSlot()const noexcept{

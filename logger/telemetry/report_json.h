@@ -37,50 +37,17 @@ inline constexpr AStringView s_JsonAcceptanceKey = ", \"acceptance\": ";
 
 
 [[nodiscard]] usize EstimateJsonReportReserve(const FrameGraphReportRecords& graphs)noexcept;
-void AppendFrameGraphPhysicalQueueJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueId& queue
-);
-void AppendFrameGraphQueueAssignmentJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphQueueAssignment& assignment
-);
-void AppendFrameGraphCompiledTaskJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompiledTask& compiledTask
-);
-void AppendFrameGraphCompileRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics
-);
-void AppendFrameGraphRecordingRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics
-);
-void AppendFrameGraphSubmissionRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics
-);
-void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics
-);
-void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics
-);
-void AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics
-);
-void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics
-);
-void AppendFrameGraphPacketSubmissionStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& statistics
-);
+void AppendFrameGraphPhysicalQueueJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPhysicalQueueId& queue);
+void AppendFrameGraphQueueAssignmentJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphQueueAssignment& assignment);
+void AppendFrameGraphCompiledTaskJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphCompiledTask& compiledTask);
+void AppendFrameGraphCompileRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphCompileRuntimeStatistics& statistics);
+void AppendFrameGraphRecordingRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics);
+void AppendFrameGraphSubmissionRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics);
+void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics);
+void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics);
+void AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics);
+void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics);
+void AppendFrameGraphPacketSubmissionStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& statistics);
 void AppendFrameGraphRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
@@ -90,18 +57,8 @@ void AppendFrameGraphRuntimeStatisticsJson(
     const bool physicalQueueRuntimeStatisticsPresent,
     const bool packetSubmissionStatisticsPresent
 );
-void AppendFrameGraphJson(
-    const FrameGraphReportRecord& record,
-    const usize graphIndex,
-    const bool finalGraph,
-    AString<TelemetryArena>& out
-);
-void BuildJson(
-    const TelemetryReportSummary& summary,
-    const FrameGraphReportRecords& graphs,
-    const AStringView memoryRecords,
-    AString<TelemetryArena>& out
-);
+void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize graphIndex, const bool finalGraph, AString<TelemetryArena>& out);
+void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportRecords& graphs, const AStringView memoryRecords, AString<TelemetryArena>& out);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

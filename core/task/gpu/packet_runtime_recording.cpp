@@ -27,11 +27,7 @@ NWB_CORE_BEGIN
 
 class GpuNativePacketRecorder::PacketArtifactPublicationScope final : NoCopy{
 public:
-    PacketArtifactPublicationScope(
-        GpuRecordedGraph& recordedGraph,
-        const GpuSubmissionPacketId packet,
-        const GpuRecordedGraph::ArtifactOperation& artifactAccess
-    )noexcept
+    PacketArtifactPublicationScope(GpuRecordedGraph& recordedGraph, const GpuSubmissionPacketId packet, const GpuRecordedGraph::ArtifactOperation& artifactAccess)noexcept
         : m_recordedGraph(recordedGraph)
         , m_artifactAccess(artifactAccess)
         , m_packet(packet)
@@ -99,25 +95,14 @@ public:
             TerminateInvariant();
         if(m_recordingLease.valid()){
             if(m_deferredAbort){
-                const bool abortDeferred = m_graph.deferPacketRecordingAbort(
-                    m_compiledGraph,
-                    m_planAccess,
-                    m_packet,
-                    m_recordingLease,
-                    *m_deferredAbort
-                );
+                const bool abortDeferred = m_graph.deferPacketRecordingAbort(m_compiledGraph, m_planAccess, m_packet, m_recordingLease, *m_deferredAbort);
                 NWB_FATAL_ASSERT_MSG(abortDeferred, "throwing packet recorder must transfer its exact recording claim");
                 if(!abortDeferred)
                     TerminateInvariant();
             }
             else{
                 m_recordedGraph.abandonPacketTimingTicketWithoutCallbacks(m_packet, m_artifactAccess);
-                const bool recordingAbandoned = m_graph.abandonPacketRecordingWithoutCallbacks(
-                    m_compiledGraph,
-                    m_planAccess,
-                    m_packet,
-                    m_recordingLease
-                );
+                const bool recordingAbandoned = m_graph.abandonPacketRecordingWithoutCallbacks(m_compiledGraph, m_planAccess, m_packet, m_recordingLease);
                 NWB_FATAL_ASSERT_MSG(recordingAbandoned, "throwing packet recorder must abandon its exact recording claim");
                 if(!recordingAbandoned)
                     TerminateInvariant();
@@ -126,14 +111,8 @@ public:
         if(m_deferredAbort)
             return;
 
-        const bool recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(
-            m_compiledGraph,
-            m_recordingAttemptGeneration
-        );
-        NWB_FATAL_ASSERT_MSG(
-            recordingAttemptResolved,
-            "throwing packet recorder must resolve a terminal recording-plan lease"
-        );
+        const bool recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
+        NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "throwing packet recorder must resolve a terminal recording-plan lease");
         if(!recordingAttemptResolved)
             TerminateInvariant();
     }
@@ -183,39 +162,19 @@ bool GpuNativePacketRecorder::recordPacket(
     if(!declarationAccess.valid())
         return false;
 
-    const u64 recordingAttemptGeneration =
-        outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess)
-    ;
+    const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess);
     if(
         !graph.matchesRecordingAttempt(compiledGraph, recordingAttemptGeneration)
         || !planAccess.validFor(declarationAccess)
         || m_device.getDeviceGeneration() != planAccess.deviceGeneration()
         || !planAccess.validPacket(packetID)
-        || !outRecordedGraph.validForWithinArtifactOperation(
-            graph,
-            declarationAccess,
-            compiledGraph,
-            planAccess,
-            artifactAccess
-        )
+        || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
     )
         return false;
     // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet that happens not to contain a primitive command
-    if(
-        commandIrCapture
-        && commandIrCapture->recordCount() != 0u
-        && (
-            commandIrCapture->graphGeneration() != planAccess.generation()
-            || commandIrCapture->planGeneration() != planAccess.planGeneration()
-        )
-    )
+    if(commandIrCapture && commandIrCapture->recordCount() != 0u && (commandIrCapture->graphGeneration() != planAccess.generation() || commandIrCapture->planGeneration() != planAccess.planGeneration()))
         return false;
-    if(
-        commandIrCapture
-        && commandIrCapture->recordCount() != 0u
-        && commandIrCapture->recordingAttemptGeneration()
-            != recordingAttemptGeneration
-    )
+    if(commandIrCapture && commandIrCapture->recordCount() != 0u && commandIrCapture->recordingAttemptGeneration() != recordingAttemptGeneration)
         return false;
     if(outRecordedGraph.findWithinArtifactOperation(packetID, artifactAccess))
         return false;
@@ -234,13 +193,7 @@ bool GpuNativePacketRecorder::recordPacket(
         || queue->queueClass >= CommandQueue::kCount
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
         || packet.recordsTiming != static_cast<bool>(packetTimingTicket)
-        || (
-            packetTimingTicket
-            && (
-                !m_timingRecorder
-                || outRecordedGraph.timingRecorderWithinArtifactOperation(artifactAccess) != m_timingRecorder
-            )
-        )
+        || (packetTimingTicket && (!m_timingRecorder || outRecordedGraph.timingRecorderWithinArtifactOperation(artifactAccess) != m_timingRecorder))
     )
         return false;
     const CommandListResourceStateHandoff* initialStates = nullptr;
@@ -250,13 +203,7 @@ bool GpuNativePacketRecorder::recordPacket(
     GpuTaskGraph::PacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
         if(deferredAbort){
-            const bool abortDeferred = graph.deferPacketRecordingAbort(
-                compiledGraph,
-                planAccess,
-                packetID,
-                recordingLease,
-                *deferredAbort
-            );
+            const bool abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *deferredAbort);
             NWB_FATAL_ASSERT_MSG(abortDeferred, "failed to transfer an active packet recording abort");
             if(!abortDeferred)
                 TerminateInvariant();
@@ -265,46 +212,17 @@ bool GpuNativePacketRecorder::recordPacket(
         outRecordedGraph.discardPacketTimingTicket(packetID, artifactAccess);
         graph.abortPacketRecording(compiledGraph, planAccess, packetID, recordingLease);
     };
-    if(!graph.beginPacketRecording(
-        compiledGraph,
-        planAccess,
-        packetID,
-        recordingAttemptGeneration,
-        recordingLease
-    ))
+    if(!graph.beginPacketRecording(compiledGraph, planAccess, packetID, recordingAttemptGeneration, recordingLease))
         return false;
     const GpuTaskGraph::PacketRecordingAccess recordingAccess(graph, compiledGraph, planAccess, recordingLease);
     if(!recordingAccess.validFor(graph, compiledGraph, planAccess, packetID)){
         abortPacketRecording();
         return false;
     }
-    PacketRecordingExceptionScope exceptionScope(
-        graph,
-        compiledGraph,
-        planAccess,
-        outRecordedGraph,
-        artifactAccess,
-        packetID,
-        recordingAttemptGeneration,
-        recordingLease,
-        deferredAbort,
-        commandIrCapture,
-        capturedPrefix,
-        packetStateSeed
-    );
+    PacketRecordingExceptionScope exceptionScope(graph, compiledGraph, planAccess, outRecordedGraph, artifactAccess, packetID, recordingAttemptGeneration, recordingLease, deferredAbort, commandIrCapture, capturedPrefix, packetStateSeed);
     const Timer recordingBegin = TimerNow();
 
-    if(!outRecordedGraph.buildPacketInitialStateSeed(
-        scratch,
-        stateFanInScratchArena,
-        graph,
-        declarationAccess,
-        compiledGraph,
-        planAccess,
-        artifactAccess,
-        packetID,
-        initialStates
-    )){
+    if(!outRecordedGraph.buildPacketInitialStateSeed(scratch, stateFanInScratchArena, graph, declarationAccess, compiledGraph, planAccess, artifactAccess, packetID, initialStates)){
         abortPacketRecording();
         return false;
     }
@@ -316,25 +234,13 @@ bool GpuNativePacketRecorder::recordPacket(
     }
     packetStateSeed->reset();
 
-    if(!preflightPacketResources(
-        graph,
-        declarationAccess,
-        compiledGraph,
-        planAccess,
-        recordingAccess,
-        packetID,
-        stateFanInScratchArena,
-        initialStates
-    )){
+    if(!preflightPacketResources(graph, declarationAccess, compiledGraph, planAccess, recordingAccess, packetID, stateFanInScratchArena, initialStates)){
         packetStateSeed->reset();
         abortPacketRecording();
         return false;
     }
 
-    if(
-        commandIrCapture
-        && !commandIrCapture->beginRecordingAttempt(recordingAttemptGeneration)
-    ){
+    if(commandIrCapture && !commandIrCapture->beginRecordingAttempt(recordingAttemptGeneration)){
         packetStateSeed->reset();
         abortPacketRecording();
         return false;
@@ -368,15 +274,7 @@ bool GpuNativePacketRecorder::recordPacket(
     CommandMarkerRecordingToken packetMarker;
     if(recorded && packetTimingTicket){
         packetTimingRecordingScope.emplace(*packetTimingTicket);
-        packetTiming.emplace(
-            *m_timingRecorder,
-            GpuPacketRecordingDetail::TimingScopeDefinition(
-                GpuPacketRecordingDetail::PacketTimingScopeName(declarationAccess, planAccess, packetID),
-                GpuPacketRecordingDetail::s_PacketMarkerLabel
-            ),
-            m_device,
-            *commandList
-        );
+        packetTiming.emplace(*m_timingRecorder, GpuPacketRecordingDetail::TimingScopeDefinition(GpuPacketRecordingDetail::PacketTimingScopeName(declarationAccess, planAccess, packetID), GpuPacketRecordingDetail::s_PacketMarkerLabel), m_device, *commandList);
     }
     else if(recorded){
         packetMarker = commandList->beginMarkerLease(GpuPacketRecordingDetail::s_PacketMarkerLabel);
@@ -392,11 +290,7 @@ bool GpuNativePacketRecorder::recordPacket(
         const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(task);
         const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
-        if(
-            !compiledTaskView.valid()
-            || compiledTask->packet != packetID
-            || compiledTask->timingPolicy != taskView.timing.policy
-        ){
+        if(!compiledTaskView.valid() || compiledTask->packet != packetID || compiledTask->timingPolicy != taskView.timing.policy){
             recorded = false;
             break;
         }
@@ -417,11 +311,7 @@ bool GpuNativePacketRecorder::recordPacket(
             if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
                 if(!GpuPacketRecordingDetail::HasExplicitKnownInitialState(declarationAccess, barrier, *commandList)){
                     const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source")
-                        , StringConvert(taskView.markerLabel)
-                        , StringConvert(resource.markerLabel)
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source"), StringConvert(taskView.markerLabel), StringConvert(resource.markerLabel));
                     recorded = false;
                     break;
                 }
@@ -429,71 +319,35 @@ bool GpuNativePacketRecorder::recordPacket(
                 // The immutable marker made record-time validation mandatory. The imported source is now authoritative, so lower a local copy without asking graph-initial lowering to seed Unknown.
                 GpuCompiledBarrier loweredBarrier = barrier;
                 loweredBarrier.isGraphInitialState = false;
-                recorded = graph.applyCompiledBarrier(
-                    compiledGraph,
-                    planAccess,
-                    recordingAccess,
-                    task,
-                    loweredBarrier,
-                    *commandList
-                );
+                recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, loweredBarrier, *commandList);
             }
             else
-                recorded = graph.applyCompiledBarrier(
-                    compiledGraph,
-                    planAccess,
-                    recordingAccess,
-                    task,
-                    barrier,
-                    *commandList
-                );
+                recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, barrier, *commandList);
         }
         // A retained state that already matches the compiler plan still needs a native tracker entry. Otherwise a later packet cannot import that graph-declared resource state, and a renderer thunk would need a redundantdirect transition merely to publish its handoff.
         if(recorded)
-            recorded = graph.seedTaskRetainedResourceStates(
-                compiledGraph,
-                planAccess,
-                recordingAccess,
-                task,
-                *commandList
-            );
+            recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
         if(recorded)
             commandList->commitBarriers();
         graphBarrierRecordingSeconds = Perf::AddTimingSeconds(graphBarrierRecordingSeconds, DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin));
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
         bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"),
-                StringConvert(taskView.markerLabel)
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"), StringConvert(taskView.markerLabel));
             recorded = false;
         }
         Optional<GpuTimingMeasure> taskTiming;
         CommandMarkerRecordingToken taskMarker;
         if(recorded){
             if(compiledTask->timingPolicy == GpuTaskTimingPolicy::Task){
-                taskTiming.emplace(
-                    *m_timingRecorder,
-                    GpuPacketRecordingDetail::TimingScopeDefinition(
-                        taskView.identity,
-                        taskView.markerLabel.empty()
-                            ? GpuPacketRecordingDetail::s_DefaultTaskMarkerLabel
-                            : taskView.markerLabel
-                    ),
-                    m_device,
-                    *commandList
-                );
+                taskTiming.emplace(*m_timingRecorder, GpuPacketRecordingDetail::TimingScopeDefinition(taskView.identity, taskView.markerLabel.empty() ? GpuPacketRecordingDetail::s_DefaultTaskMarkerLabel : taskView.markerLabel), m_device, *commandList);
             }
             else{
                 taskMarker = commandList->beginMarkerLease(taskView.markerLabel);
             }
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact || commandList->commandRecordingFailed()){
-                NWB_LOGGER_CRITICAL_WARNING(
-                    NWB_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"),
-                    StringConvert(taskView.markerLabel)
-                );
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"), StringConvert(taskView.markerLabel));
                 recorded = false;
             }
         }
@@ -511,19 +365,11 @@ bool GpuNativePacketRecorder::recordPacket(
             taskRecordSeconds = Perf::AddTimingSeconds(taskRecordSeconds, DurationInSeconds<f64>(TimerNow(), taskRecordBegin));
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
-                NWB_LOGGER_CRITICAL_WARNING(
-                    NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"),
-                    StringConvert(taskView.markerLabel)
-                );
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"), StringConvert(taskView.markerLabel));
                 recorded = false;
             }
             else if(commandList->commandRecordingFailed()){
-                NWB_LOGGER_CRITICAL_WARNING(
-                    NWB_TEXT("Gpu task graph: rejecting task '{}' because native command recording failed on exact queue {}:{}"),
-                    StringConvert(taskView.markerLabel),
-                    packet.queue.index,
-                    packet.queue.deviceGeneration
-                );
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because native command recording failed on exact queue {}:{}"), StringConvert(taskView.markerLabel), packet.queue.index, packet.queue.deviceGeneration);
                 recorded = false;
             }
             else if(!recorded && recordThunkInvoked){
@@ -551,16 +397,7 @@ bool GpuNativePacketRecorder::recordPacket(
             else
                 commandList->cancelTaskCapabilityTracking();
         }
-        if(
-            recorded
-            && (
-                !GpuPacketRecordingDetail::HasQueueCapabilities(
-                    taskView.commands.allowedCapabilities(),
-                    usedCapabilities
-                )
-                || !GpuPacketRecordingDetail::HasQueueCapabilities(queue->capabilities, usedCapabilities)
-            )
-        ){
+        if(recorded && (!GpuPacketRecordingDetail::HasQueueCapabilities(taskView.commands.allowedCapabilities(), usedCapabilities) || !GpuPacketRecordingDetail::HasQueueCapabilities(queue->capabilities, usedCapabilities))){
             NWB_LOGGER_CRITICAL_WARNING(
                 NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})"),
                 StringConvert(taskView.markerLabel),
@@ -600,14 +437,7 @@ bool GpuNativePacketRecorder::recordPacket(
         const GpuCompiledBarrier* const epilogueBarriers = compiledTaskView.epilogueBarriers;
         const Timer graphEpilogueRecordingBegin = TimerNow();
         for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex)
-            recorded = graph.applyCompiledBarrier(
-                compiledGraph,
-                planAccess,
-                recordingAccess,
-                task,
-                epilogueBarriers[barrierIndex],
-                *commandList
-            );
+            recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, epilogueBarriers[barrierIndex], *commandList);
         barrierCount += compiledTask->epilogueBarrierCount;
         if(recorded)
             commandList->commitBarriers();
@@ -692,92 +522,39 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess
 )const{
-    if(
-        !range.valid()
-        || !planAccess.validFor(compiledGraph)
-        || !artifactAccess.exclusiveFor(outRecordedGraph)
-        || !planAccess.validFor(declarationAccess)
-        || m_device.getDeviceGeneration() != planAccess.deviceGeneration()
-        || !planAccess.validPacketRange(range)
-    )
+    if(!range.valid() || !planAccess.validFor(compiledGraph) || !artifactAccess.exclusiveFor(outRecordedGraph) || !planAccess.validFor(declarationAccess) || m_device.getDeviceGeneration() != planAccess.deviceGeneration() || !planAccess.validPacketRange(range))
         return false;
     Alloc::ScratchArena timingScratchArena(GpuPacketRecordingDetail::s_PacketTimingScratchArena);
-    if(!GpuPacketRecordingDetail::PrepareCompiledTimingQueries(
-        declarationAccess,
-        planAccess,
-        m_timingRecorder,
-        timingScratchArena
-    ))
+    if(!GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, m_timingRecorder, timingScratchArena))
         return false;
-    const bool artifactMatchesPlan = outRecordedGraph.validForWithinArtifactOperation(
-        graph,
-        declarationAccess,
-        compiledGraph,
-        planAccess,
-        artifactAccess
-    );
-    if(artifactMatchesPlan && graph.matchesRecordingAttempt(
-            compiledGraph,
-            outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess)
-        )){
-        GpuTimingRecorder* const artifactTimingRecorder =
-            outRecordedGraph.timingRecorderWithinArtifactOperation(artifactAccess)
-        ;
+    const bool artifactMatchesPlan = outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess);
+    if(artifactMatchesPlan && graph.matchesRecordingAttempt(compiledGraph, outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess))){
+        GpuTimingRecorder* const artifactTimingRecorder = outRecordedGraph.timingRecorderWithinArtifactOperation(artifactAccess);
         return !artifactTimingRecorder || artifactTimingRecorder == m_timingRecorder;
     }
     if(!outRecordedGraph.prepareRecordingStorageCandidate(compiledGraph, planAccess, m_timingRecorder))
         return false;
 
     GpuTaskGraph::RecordingAttemptScope provisionalAttempt;
-    if(!graph.beginRecordingAttempt(
-        compiledGraph,
-        range.first,
-        declarationAccess,
-        planAccess,
-        provisionalAttempt
-    ))
+    if(!graph.beginRecordingAttempt(compiledGraph, range.first, declarationAccess, planAccess, provisionalAttempt))
         return false;
 
     const usize rangeBegin = range.first.index;
     const usize rangeEnd = rangeBegin + range.packetCount;
     for(usize packetIndex = rangeBegin + 1u; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
-        if(!graph.beginRecordingAttempt(
-            compiledGraph,
-            packetID,
-            declarationAccess,
-            planAccess,
-            provisionalAttempt
-        ))
+        if(!graph.beginRecordingAttempt(compiledGraph, packetID, declarationAccess, planAccess, provisionalAttempt))
             return false;
     }
 
-    if(!outRecordedGraph.validForWithinArtifactOperation(
-        graph,
-        declarationAccess,
-        compiledGraph,
-        planAccess,
-        artifactAccess
-    ) && !provisionalAttempt.m_graph)
+    if(!outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess) && !provisionalAttempt.m_graph)
         return false;
     if(!provisionalAttempt.m_graph)
         return true;
 
-    outRecordedGraph.publishStorageCandidate(
-        &graph,
-        compiledGraph,
-        planAccess,
-        provisionalAttempt.m_recordingAttemptGeneration,
-        artifactAccess
-    );
+    outRecordedGraph.publishStorageCandidate(&graph, compiledGraph, planAccess, provisionalAttempt.m_recordingAttemptGeneration, artifactAccess);
     provisionalAttempt.complete();
-    return outRecordedGraph.validForWithinArtifactOperation(
-        graph,
-        declarationAccess,
-        compiledGraph,
-        planAccess,
-        artifactAccess
-    );
+    return outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess);
 }
 
 

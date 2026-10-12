@@ -26,11 +26,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory,
-    const Assets::DiscoveredNwbFileVector& files, Vector<u8, Assets::ScratchArena>& selected,
-    Vector<usize, Assets::ScratchArena>& order,
-    Assets::ScratchArena& scratchArena
-){
+[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Assets::DiscoveredNwbFileVector& files, Vector<u8, Assets::ScratchArena>& selected, Vector<usize, Assets::ScratchArena>& order, Assets::ScratchArena& scratchArena){
     Assets::ScratchString input = PathToString(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(input);
@@ -88,21 +84,13 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
     }
     NWB::Path repoRoot = absoluteRoot->lexicallyNormal();
     const auto& sources = options.assetRoots.empty() ? options.inputs : options.assetRoots;
-    auto roots = Assets::ResolveAssetRoots(
-        repoRoot,
-        sources,
-        options.assetRoots.empty(),
-        Assets::AssetRootDuplicatePolicy::HostFilesystem,
-        scratchArena
-    );
+    auto roots = Assets::ResolveAssetRoots(repoRoot, sources, options.assetRoots.empty(), Assets::AssetRootDuplicatePolicy::HostFilesystem, scratchArena);
     if(!roots){
         const auto& error = roots.error();
         if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(error.inputPath));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'")
-                , StringConvert(sources[error.sourceIndex])
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), StringConvert(sources[error.sourceIndex]));
         return false;
     }
     if(roots->empty()){
@@ -127,9 +115,7 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
     return true;
 }
 
-Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
-    NWB::Core::Alloc::ScratchArena& scratchArena
-)const{
+Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena)const{
     using namespace __hidden_dependency_provider_catalog;
     DependencyInputSelection selection(scratchArena);
     auto& selected = selection.selected;
@@ -168,37 +154,26 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const
             }
         }
         if(!contained || (!SelectInput(path, directory, m_files, selected, order, scratchArena) && !directory)){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'")
-                , PathToString<tchar>(path)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'"), PathToString<tchar>(path));
             return MakeUnexpected(Failure{});
         }
     }
     return selection;
 }
 
-Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const usize index,
-    NWB::Core::Alloc::ScratchArena& scratchArena
-)const{
+Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const{
     using namespace __hidden_dependency_provider_catalog;
     if(index >= m_files.size())
         return MakeUnexpected(Failure{});
     Assets::ScratchString text(scratchArena);
     Core::Metascript::Document document(m_arena);
-    if(!Assets::ParseMetadataDocumentText(
-        m_files[index].filePath,
-        s_DiagnosticPrefix,
-        text,
-        document,
-        [&](const AStringView source){ return document.parse(source); }
+    if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, text, document, [&](const AStringView source){ return document.parse(source); }
     ))
         return MakeUnexpected(Failure{});
     return document;
 }
 
-Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& assetType,
-    NWB::Core::Alloc::ScratchArena& scratchArena
-)const{
+Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& assetType, NWB::Core::Alloc::ScratchArena& scratchArena)const{
     using namespace __hidden_dependency_provider_catalog;
     if(!virtualPath || !assetType)
         return MakeUnexpected(Failure{});
@@ -212,10 +187,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
         if(Name(document->assetType()) != assetType)
             continue;
         if(document->declarations().size() != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'")
-                , PathToString<tchar>(m_files[index].filePath)
-                , StringConvert(virtualPath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), StringConvert(virtualPath));
             return MakeUnexpected(Failure{});
         }
         if(matched != Limit<usize>::s_Max){
@@ -225,10 +197,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
         matched = index;
     }
     if(matched == Limit<usize>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'")
-            , StringConvert(assetType)
-            , StringConvert(virtualPath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), StringConvert(assetType), StringConvert(virtualPath));
         return MakeUnexpected(Failure{});
     }
     return matched;

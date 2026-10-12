@@ -171,10 +171,7 @@ struct CrashAck{
 };
 
 [[nodiscard]] inline bool CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
-    return ack.magic == s_AckMagic
-        && ack.version == s_RequestVersion
-        && AStringView(ack.crashId) == AStringView(request.crashId)
-    ;
+    return ack.magic == s_AckMagic && ack.version == s_RequestVersion && AStringView(ack.crashId) == AStringView(request.crashId);
 }
 
 struct CrashDumpRequestOptions{
@@ -231,9 +228,8 @@ struct CrashState{
     Futex mutex;
     u32 diagnosticCaptureCount = 0u;
     Atomic<u32> suppressedPlatformCrashCaptures{ 0u };
-    // Crash-transport channel guard: a single CAS claims the request pipe/event so concurrent faulting threads
-    // never interleave their fixed-POD writes. Deliberately distinct from `mutex` (which the assert/diagnostic
-    // path may already hold when a hard fault occurs), and an atomic (not a Futex) so it is signal/SEH-safe.
+    // Crash-transport channel guard: a single CAS claims the request pipe/event so concurrent faulting threads never interleave their fixed-POD writes.
+    // Deliberately distinct from `mutex` (which the assert/diagnostic path may already hold when a hard fault occurs), and an atomic (not a Futex) so it is signal/SEH-safe.
     Atomic<u32> transportInFlight{ 0u };
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)

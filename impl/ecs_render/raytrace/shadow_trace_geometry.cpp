@@ -31,12 +31,7 @@ inline constexpr u32 s_PositionMember = 0u;
 inline constexpr u32 s_IndexMember = 1u;
 inline constexpr u32 s_AttributeMember = 2u;
 inline constexpr u32 s_NodeMember = 3u;
-inline constexpr Core::BufferHandle MeshSnapshot::* s_BufferMembers[] = {
-    &MeshSnapshot::positionBuffer,
-    &MeshSnapshot::triangleIndexBuffer,
-    &MeshSnapshot::attributeBuffer,
-    &MeshSnapshot::swBvhNodeBuffer,
-};
+inline constexpr Core::BufferHandle MeshSnapshot::* s_BufferMembers[] = { &MeshSnapshot::positionBuffer, &MeshSnapshot::triangleIndexBuffer, &MeshSnapshot::attributeBuffer, &MeshSnapshot::swBvhNodeBuffer, };
 
 struct BufferRecord{
     usize firstMesh[LengthOf(s_BufferMembers)] = { s_MissingIndex, s_MissingIndex, s_MissingIndex, s_MissingIndex };
@@ -154,12 +149,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
     if(!selection.includeHardware && !selection.includeSoftware)
         return true;
 
-    const auto appendBuffer = [&](
-        const Core::BufferHandle& buffer,
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh,
-        const AStringView identitySuffix,
-        const u8 role
-    ){
+    const auto appendBuffer = [&](const Core::BufferHandle& buffer, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const AStringView identitySuffix, const u8 role){
         if(!buffer)
             return false;
         BufferRecord* const record = bufferIndex.find(buffer.get());
@@ -177,21 +167,11 @@ bool FreezePreparedShadowTraceGeometryBuffers(
             .buffer = buffer,
             .identity = identity,
             // Fresh buffers keep creation state; only normalized ones enter as ShaderResource.
-            .initialState = normalizedByAcceptedPacket
-                ? Core::ResourceStates::ShaderResource
-                : buffer->getCreationDescription().initialState,
-            .roles = role,
-            .normalizationPending = !normalizedByAcceptedPacket,
-        });
+            .initialState = normalizedByAcceptedPacket ? Core::ResourceStates::ShaderResource : buffer->getCreationDescription().initialState, .roles = role, .normalizationPending = !normalizedByAcceptedPacket, });
         record->preparedIndex = outPrepared.size() - 1u;
         return true;
     };
-    const auto appendSelected = [&]<typename SelectedBuffersT>(
-        const SelectedBuffersT& selectedBuffers,
-        const u32 memberIndex,
-        const AStringView identitySuffix,
-        const u8 role
-    ){
+    const auto appendSelected = [&]<typename SelectedBuffersT>(const SelectedBuffersT& selectedBuffers, const u32 memberIndex, const AStringView identitySuffix, const u8 role){
         for(Core::Buffer* const selectedBuffer : selectedBuffers){
             if(!selectedBuffer)
                 return false;
@@ -211,18 +191,8 @@ bool FreezePreparedShadowTraceGeometryBuffers(
             if(!mesh.runtimeMesh && !mesh.blasBuildPending)
                 continue;
             if(
-                !appendBuffer(
-                    mesh.positionBuffer,
-                    mesh,
-                    AStringView(":shadow_trace_hw_position"),
-                    PreparedShadowTraceGeometryRole::HardwarePosition
-                )
-                || !appendBuffer(
-                    mesh.triangleIndexBuffer,
-                    mesh,
-                    AStringView(":shadow_trace_hw_index"),
-                    PreparedShadowTraceGeometryRole::HardwareIndex
-                )
+                !appendBuffer(mesh.positionBuffer, mesh, AStringView(":shadow_trace_hw_position"), PreparedShadowTraceGeometryRole::HardwarePosition)
+                || !appendBuffer(mesh.triangleIndexBuffer, mesh, AStringView(":shadow_trace_hw_index"), PreparedShadowTraceGeometryRole::HardwareIndex)
             )
                 return false;
         }
@@ -233,24 +203,9 @@ bool FreezePreparedShadowTraceGeometryBuffers(
             if(!mesh.runtimeMesh && !mesh.swBvhBuildPending)
                 continue;
             if(
-                !appendBuffer(
-                    mesh.swBvhNodeBuffer,
-                    mesh,
-                    AStringView(":shadow_trace_sw_nodes"),
-                    PreparedShadowTraceGeometryRole::SoftwareNode
-                )
-                || !appendBuffer(
-                    mesh.positionBuffer,
-                    mesh,
-                    AStringView(":shadow_trace_sw_position"),
-                    PreparedShadowTraceGeometryRole::SoftwarePosition
-                )
-                || !appendBuffer(
-                    mesh.triangleIndexBuffer,
-                    mesh,
-                    AStringView(":shadow_trace_sw_index"),
-                    PreparedShadowTraceGeometryRole::SoftwareIndex
-                )
+                !appendBuffer(mesh.swBvhNodeBuffer, mesh, AStringView(":shadow_trace_sw_nodes"), PreparedShadowTraceGeometryRole::SoftwareNode)
+                || !appendBuffer(mesh.positionBuffer, mesh, AStringView(":shadow_trace_sw_position"), PreparedShadowTraceGeometryRole::SoftwarePosition)
+                || !appendBuffer(mesh.triangleIndexBuffer, mesh, AStringView(":shadow_trace_sw_index"), PreparedShadowTraceGeometryRole::SoftwareIndex)
             )
                 return false;
         }
@@ -260,53 +215,18 @@ bool FreezePreparedShadowTraceGeometryBuffers(
     bool collected = true;
     if(selection.includeHardware){
         collected =
-            appendSelected(
-                selection.hardwarePositions,
-                s_PositionMember,
-                AStringView(":shadow_trace_hw_position"),
-                PreparedShadowTraceGeometryRole::HardwarePosition
-            )
-            && appendSelected(
-                selection.hardwareIndices,
-                s_IndexMember,
-                AStringView(":shadow_trace_hw_index"),
-                PreparedShadowTraceGeometryRole::HardwareIndex
-            )
-            && appendSelected(
-                selection.hardwareAttributes,
-                s_AttributeMember,
-                AStringView(":shadow_trace_hw_attribute"),
-                PreparedShadowTraceGeometryRole::HardwareAttribute
-            )
+            appendSelected(selection.hardwarePositions, s_PositionMember, AStringView(":shadow_trace_hw_position"), PreparedShadowTraceGeometryRole::HardwarePosition)
+            && appendSelected(selection.hardwareIndices, s_IndexMember, AStringView(":shadow_trace_hw_index"), PreparedShadowTraceGeometryRole::HardwareIndex)
+            && appendSelected(selection.hardwareAttributes, s_AttributeMember, AStringView(":shadow_trace_hw_attribute"), PreparedShadowTraceGeometryRole::HardwareAttribute)
             && appendPendingBlasBuildInputs()
         ;
     }
     if(collected && selection.includeSoftware){
         collected =
-            appendSelected(
-                selection.softwareNodes,
-                s_NodeMember,
-                AStringView(":shadow_trace_sw_nodes"),
-                PreparedShadowTraceGeometryRole::SoftwareNode
-            )
-            && appendSelected(
-                selection.softwarePositions,
-                s_PositionMember,
-                AStringView(":shadow_trace_sw_position"),
-                PreparedShadowTraceGeometryRole::SoftwarePosition
-            )
-            && appendSelected(
-                selection.softwareIndices,
-                s_IndexMember,
-                AStringView(":shadow_trace_sw_index"),
-                PreparedShadowTraceGeometryRole::SoftwareIndex
-            )
-            && appendSelected(
-                selection.softwareAttributes,
-                s_AttributeMember,
-                AStringView(":shadow_trace_sw_attribute"),
-                PreparedShadowTraceGeometryRole::SoftwareAttribute
-            )
+            appendSelected(selection.softwareNodes, s_NodeMember, AStringView(":shadow_trace_sw_nodes"), PreparedShadowTraceGeometryRole::SoftwareNode)
+            && appendSelected(selection.softwarePositions, s_PositionMember, AStringView(":shadow_trace_sw_position"), PreparedShadowTraceGeometryRole::SoftwarePosition)
+            && appendSelected(selection.softwareIndices, s_IndexMember, AStringView(":shadow_trace_sw_index"), PreparedShadowTraceGeometryRole::SoftwareIndex)
+            && appendSelected(selection.softwareAttributes, s_AttributeMember, AStringView(":shadow_trace_sw_attribute"), PreparedShadowTraceGeometryRole::SoftwareAttribute)
             && appendPendingSwBvhBuildInputs()
         ;
     }

@@ -29,10 +29,7 @@ namespace __hidden_csg_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<CsgFrameStateCacheSignature> BuildCsgFrameStateCacheSignature(
-    Core::ECS::World& world,
-    const CsgShapeRegistry& shapeRegistry
-){
+[[nodiscard]] static Expected<CsgFrameStateCacheSignature> BuildCsgFrameStateCacheSignature(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry){
     CsgFrameStateCacheSignature signature;
     signature.shapeRegistryRevision = shapeRegistry.revision();
 
@@ -41,8 +38,7 @@ namespace __hidden_csg_frame_state{
 
     u64 contentHash = s_Fnv64OffsetBasis;
     auto cutterView = world.view<CsgCutterComponent>();
-    cutterView.each(
-        [&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
+    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
             Fnv64AppendValue(contentHash, entity.id);
             Fnv64AppendBool(contentHash, cutter.active);
             Fnv64AppendValue(contentHash, cutter.receiverGroup.hash());
@@ -55,8 +51,7 @@ namespace __hidden_csg_frame_state{
 
     auto receiverView = world.view<StaticCsgMeshComponent>();
     bool cacheable = true;
-    receiverView.each(
-        [&](const Core::ECS::EntityID entity, StaticCsgMeshComponent& typedReceiver){
+    receiverView.each([&](const Core::ECS::EntityID entity, StaticCsgMeshComponent& typedReceiver){
             const CsgReceiverComponent& receiver = typedReceiver;
             Fnv64AppendValue(contentHash, entity.id);
             Fnv64AppendBool(contentHash, receiver.enabled);
@@ -106,10 +101,7 @@ namespace __hidden_csg_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgFrameState RendererCsgSystem::buildFrameState(
-    Core::Alloc::ScratchArena& scratchArena,
-    IMaterialSurfaceLookup& materialSurfaceLookup
-){
+CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup){
     const auto signature = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(m_world, m_csgShapeRegistry);
     const bool cacheable = signature.has_value();
     if(cacheable && m_csgState.m_frameStateCacheValid && m_csgState.m_frameStateCacheSignature == *signature)
@@ -160,10 +152,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(
 
         if(resolvedMesh.runtime)
             frameStateCacheable = false;
-        const auto meshResult = resolvedMesh.runtime
-            ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh)
-            : m_meshSystem.createMeshResources(resolvedMesh.mesh)
-        ;
+        const auto meshResult = resolvedMesh.runtime ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh) : m_meshSystem.createMeshResources(resolvedMesh.mesh);
         if(!meshResult){
             frameStateCacheable = false;
             continue;
@@ -193,28 +182,14 @@ CsgFrameState RendererCsgSystem::buildFrameState(
             return clipInfo->cutterCount;
         };
 
-        const u32 opaqueCutterCount =
-            !materialInfo->transparent && receiver->affectOpaquePass
-            ? countPassCutters(CsgReceiverPass::Opaque)
-            : 0u
-        ;
-        const u32 transparentCutterCount =
-            materialInfo->transparent && receiver->affectTransparentPass
-            ? countPassCutters(CsgReceiverPass::Transparent)
-            : 0u
-        ;
+        const u32 opaqueCutterCount = !materialInfo->transparent && receiver->affectOpaquePass ? countPassCutters(CsgReceiverPass::Opaque) : 0u;
+        const u32 transparentCutterCount = materialInfo->transparent && receiver->affectTransparentPass ? countPassCutters(CsgReceiverPass::Transparent) : 0u;
         const bool opaqueWork = opaqueCutterCount > 0u;
         const bool transparentWork = transparentCutterCount > 0u;
         if(!opaqueWork && !transparentWork)
             continue;
 
-        AddCsgFrameReceiverWork(
-            state,
-            receiverKind,
-            opaqueWork,
-            transparentWork,
-            Max(opaqueCutterCount, transparentCutterCount)
-        );
+        AddCsgFrameReceiverWork(state, receiverKind, opaqueWork, transparentWork, Max(opaqueCutterCount, transparentCutterCount));
     }
 
     FinalizeCsgFrameState(state);

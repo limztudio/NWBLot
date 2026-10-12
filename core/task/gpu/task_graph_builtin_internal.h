@@ -24,22 +24,13 @@ namespace GpuTaskGraphBuiltinDetail{
 
 
 template<typename ResourceDesc>
-[[nodiscard]] inline bool BuiltInTaskCanMaterializeRetainedState(
-    const ResourceDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a different built-in state when it explicitly starts from that descriptor state:
-    // compiler-owned barriers then establish the primitive state and the recorded packet exports the restored state for the next packet. A mismatched graph declaration has no native source that this helper can prove, and a terminal external state must agree with the close-time restoration before the graph publishes its handoff.
+[[nodiscard]] inline bool BuiltInTaskCanMaterializeRetainedState(const ResourceDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState)noexcept{
+    // Retained resources restore to their descriptor state when a native packet closes.
+    // The graph may still use a different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then establish the primitive state and the recorded packet exports the restored state for the next packet.
+    // A mismatched graph declaration has no native source that this helper can prove, and a terminal external state must agree with the close-time restoration before the graph publishes its handoff.
     if(!resourceDesc.keepInitialState)
         return true;
-    return resourceDesc.initialState != ResourceStates::Unknown
-        && graphInitialState == resourceDesc.initialState
-        && (
-            externalFinalState == ResourceStates::Unknown
-            || externalFinalState == resourceDesc.initialState
-        )
-    ;
+    return resourceDesc.initialState != ResourceStates::Unknown && graphInitialState == resourceDesc.initialState && (externalFinalState == ResourceStates::Unknown || externalFinalState == resourceDesc.initialState);
 }
 
 inline void PublishAcceptedToken(QueueSubmissionToken* acceptedToken, const QueueSubmissionToken& token)noexcept{
@@ -98,14 +89,7 @@ struct CopiesTaskBase{
 };
 
 template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, typename EmitCopyFn>
-[[nodiscard]] inline bool RecordCopies(
-    const Payload& payload,
-    CommandList& commandList,
-    const GpuTaskRecordContext& context,
-    ValidateCopyFn&& isCopyValid,
-    CaptureCopyFn&& captureCopy,
-    EmitCopyFn&& emitCopy
-){
+[[nodiscard]] inline bool RecordCopies(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context, ValidateCopyFn&& isCopyValid, CaptureCopyFn&& captureCopy, EmitCopyFn&& emitCopy){
     if(!CopiesPayloadHasWork(payload))
         return false;
     for(const auto& copy : payload.copies){
@@ -119,40 +103,18 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
     return true;
 }
 
-[[nodiscard]] inline bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
-    const TextureDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
+[[nodiscard]] inline bool CopyOrClearTextureDestinationCanMaterializeRetainedState(const TextureDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState)noexcept{
     if(!resourceDesc.keepInitialState)
         return true;
-    if(
-        resourceDesc.initialState == ResourceStates::Unknown
-        || (
-            externalFinalState != ResourceStates::Unknown
-            && externalFinalState != resourceDesc.initialState
-        )
-    )
+    if(resourceDesc.initialState == ResourceStates::Unknown || (externalFinalState != ResourceStates::Unknown && externalFinalState != resourceDesc.initialState))
         return false;
     // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 
-[[nodiscard]] bool UploadTextureTaskCanMaterializeRetainedState(
-    const TextureDesc& resourceDesc,
-    ResourceStates::Mask graphInitialState,
-    ResourceStates::Mask externalFinalState,
-    ResourceStates::Mask uploadFinalState
-)noexcept;
+[[nodiscard]] bool UploadTextureTaskCanMaterializeRetainedState(const TextureDesc& resourceDesc, ResourceStates::Mask graphInitialState, ResourceStates::Mask externalFinalState, ResourceStates::Mask uploadFinalState)noexcept;
 
-[[nodiscard]] Expected<usize> ComputeTextureUploadByteSize(
-    const TextureDesc& textureDesc,
-    u32 arraySlice,
-    u32 mipLevel,
-    usize rowPitch,
-    usize depthPitch,
-    TextureUploadAspect::Enum aspect
-)noexcept;
+[[nodiscard]] Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, u32 arraySlice, u32 mipLevel, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect)noexcept;
 
 [[nodiscard]] inline bool BuiltinDeclarationHasNoCallerResourceUses(const GpuTaskDesc& desc)noexcept{
     return !desc.resourceUses && desc.resourceUseCount == 0u && !desc.resourceSetUses && desc.resourceSetUseCount == 0u;

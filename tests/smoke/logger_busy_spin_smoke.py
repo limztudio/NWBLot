@@ -11,24 +11,8 @@ import sys
 import time
 from types import SimpleNamespace
 
-from window_capture_smoke import (
-    SKIP_EXIT_CODE,
-    STRICT_LOG_FAILURE_MESSAGES,
-    SmokeFailure,
-    WindowsCapture,
-    WinRect,
-    collect_log_delta,
-    ensure_process_running,
-    launch_logserver,
-    read_bmp_24_rows,
-    request_windows_graceful_exit,
-    require_normal_process_exit,
-    snapshot_log_files,
-    terminate_process,
-    validate_expected_log_text,
-    wait_for_log_message,
-    write_status,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, WindowsCapture, WinRect, collect_log_delta, ensure_process_running, launch_logserver, read_bmp_24_rows, request_windows_graceful_exit, require_normal_process_exit,
+    snapshot_log_files, terminate_process, validate_expected_log_text, wait_for_log_message, write_status,)
 
 SETTLE_SECONDS = 1.0
 SAMPLE_SECONDS = 3.0
@@ -46,13 +30,8 @@ class FileTime(ctypes.Structure):
 
 
 class GuiThreadInfo(ctypes.Structure):
-    _fields_ = [
-        ("size", ctypes.c_uint32), ("flags", ctypes.c_uint32),
-        ("active", ctypes.c_void_p), ("focus", ctypes.c_void_p),
-        ("capture", ctypes.c_void_p), ("menu_owner", ctypes.c_void_p),
-        ("move_size", ctypes.c_void_p), ("caret", ctypes.c_void_p),
-        ("caret_rect", WinRect),
-    ]
+    _fields_ = [("size", ctypes.c_uint32), ("flags", ctypes.c_uint32), ("active", ctypes.c_void_p), ("focus", ctypes.c_void_p), ("capture", ctypes.c_void_p), ("menu_owner", ctypes.c_void_p), ("move_size", ctypes.c_void_p), ("caret", ctypes.c_void_p),
+        ("caret_rect", WinRect),]
 
 
 def bind_window_queries(user32):
@@ -62,10 +41,7 @@ def bind_window_queries(user32):
     user32.GetGUIThreadInfo.restype = ctypes.c_int
     user32.GetDlgItem.argtypes = [ctypes.c_void_p, ctypes.c_int]
     user32.GetDlgItem.restype = ctypes.c_void_p
-    user32.SendMessageTimeoutW.argtypes = [
-        ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t,
-        ctypes.c_uint, ctypes.c_uint, ctypes.POINTER(ctypes.c_size_t),
-    ]
+    user32.SendMessageTimeoutW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t, ctypes.c_uint, ctypes.c_uint, ctypes.POINTER(ctypes.c_size_t),]
     user32.SendMessageTimeoutW.restype = ctypes.c_ssize_t
 
 
@@ -92,10 +68,7 @@ def sample_idle_cpu(process, backend, handle):
 
     def read_times():
         creation, exit_time, kernel, user = (FileTime() for _ in range(4))
-        if not kernel32.GetProcessTimes(
-            process_handle, ctypes.byref(creation), ctypes.byref(exit_time),
-            ctypes.byref(kernel), ctypes.byref(user),
-        ):
+        if not kernel32.GetProcessTimes(process_handle, ctypes.byref(creation), ctypes.byref(exit_time), ctypes.byref(kernel), ctypes.byref(user),):
             raise SmokeFailure(f"GetProcessTimes failed: {ctypes.get_last_error()}")
         return ((kernel.high << 32) | kernel.low), ((user.high << 32) | user.low)
 
@@ -114,13 +87,7 @@ def sample_idle_cpu(process, backend, handle):
         wall_seconds = time.perf_counter() - wall_start
         kernel_seconds = (kernel_end - kernel_start) * FILETIME_SECONDS
         user_seconds = (user_end - user_start) * FILETIME_SECONDS
-        return {
-            "wall_seconds": wall_seconds,
-            "kernel_cpu_seconds": kernel_seconds,
-            "user_cpu_seconds": user_seconds,
-            "single_core_cpu_fraction": (kernel_seconds + user_seconds) / wall_seconds,
-            "foreground_active_checks": foreground_checks,
-        }
+        return { "wall_seconds": wall_seconds, "kernel_cpu_seconds": kernel_seconds, "user_cpu_seconds": user_seconds, "single_core_cpu_fraction": (kernel_seconds + user_seconds) / wall_seconds, "foreground_active_checks": foreground_checks, }
     finally:
         if not kernel32.CloseHandle(process_handle):
             raise SmokeFailure(f"CloseHandle failed: {ctypes.get_last_error()}")
@@ -131,9 +98,7 @@ def query_log_list(backend, handle, message, index=0, address=0):
     if not list_handle or not backend.user32.IsWindowVisible(list_handle):
         raise SmokeFailure("logger message list is not visible")
     result = ctypes.c_size_t()
-    if not backend.user32.SendMessageTimeoutW(
-        list_handle, message, index, address, SMTO_ABORTIFHUNG, 1000, ctypes.byref(result),
-    ):
+    if not backend.user32.SendMessageTimeoutW(list_handle, message, index, address, SMTO_ABORTIFHUNG, 1000, ctypes.byref(result),):
         raise SmokeFailure(f"logger message list did not answer query 0x{message:x}")
     value = ctypes.c_ssize_t(result.value).value
     if value < 0:
@@ -181,11 +146,7 @@ def capture_visible_messages(backend, handle, output, minimum_rows=1):
         if rect.left < 0 or rect.top < 0 or rect.right > capture.width or rect.bottom > capture.height:
             raise SmokeFailure("log rows are outside the captured client area")
         # Owner-drawn rows have no stored text for LB_GETTEXT. Require painted glyphs in every visible row.
-        dark_pixels = sum(
-            max(pixel) < 180
-            for row in rows[rect.top:rect.bottom]
-            for pixel in row[max(1, rect.left):max(1, rect.right - 1)]
-        )
+        dark_pixels = sum(max(pixel) < 180 for row in rows[rect.top:rect.bottom] for pixel in row[max(1, rect.left):max(1, rect.right - 1)])
         if dark_pixels < 20:
             raise SmokeFailure(f"logger row {index} has no visible log text ({dark_pixels} dark pixels)")
         visible_rows.append({"index": index, "text_pixels": dark_pixels, "rect": [rect.left, rect.top, rect.right, rect.bottom]})
@@ -209,9 +170,7 @@ def main(argv):
     args.working_directory = args.working_directory.resolve()
     args.output_directory = args.output_directory.resolve()
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    evidence = {"scenario": "active_logger_busy_spin", "executable": str(args.executable),
-                "settle_seconds": SETTLE_SECONDS, "sample_seconds": SAMPLE_SECONDS,
-                "max_cpu_fraction": args.max_cpu_fraction, "startup_received": False,
+    evidence = {"scenario": "active_logger_busy_spin", "executable": str(args.executable), "settle_seconds": SETTLE_SECONDS, "sample_seconds": SAMPLE_SECONDS, "max_cpu_fraction": args.max_cpu_fraction, "startup_received": False,
                 "clean_wm_close_exit": False, "screenshot_path": str(args.output_directory / "logger.bmp")}
     failures = []
     required_messages = []
@@ -222,8 +181,7 @@ def main(argv):
     try:
         backend = WindowsCapture()
         bind_window_queries(backend.user32)
-        launch_args = SimpleNamespace(no_logserver=False, logserver_executable=str(args.executable),
-                                      log_port=None, working_directory=args.working_directory, timeout=10.0)
+        launch_args = SimpleNamespace(no_logserver=False, logserver_executable=str(args.executable), log_port=None, working_directory=args.working_directory, timeout=10.0)
         process, port, directory, baseline, pattern = launch_logserver(launch_args, args.executable, os.environ.copy())
         evidence.update({"pid": process.pid, "port": port})
         handle = backend.wait_for_window(process.pid, 10.0)
@@ -257,14 +215,9 @@ def main(argv):
         wait_for_visible_log_rows(process, backend, handle, rows_before_wakeup + 1)
         evidence["post_idle_wakeup_seconds"] = time.monotonic() - wake_started
         evidence["post_idle_wakeup_received"] = True
-        evidence["screenshot_after_idle"] = capture_visible_messages(
-            backend, handle, wake_screenshot, rows_before_wakeup + 1,
-        )
+        evidence["screenshot_after_idle"] = capture_visible_messages(backend, handle, wake_screenshot, rows_before_wakeup + 1,)
         if evidence["cpu"]["single_core_cpu_fraction"] >= args.max_cpu_fraction:
-            raise SmokeFailure(
-                f"active idle logger consumed {evidence['cpu']['single_core_cpu_fraction']:.3f} of one CPU core; "
-                f"required < {args.max_cpu_fraction:.3f}"
-            )
+            raise SmokeFailure(f"active idle logger consumed {evidence['cpu']['single_core_cpu_fraction']:.3f} of one CPU core; " f"required < {args.max_cpu_fraction:.3f}")
     except Exception as error:
         failures.append(str(error))
     finally:

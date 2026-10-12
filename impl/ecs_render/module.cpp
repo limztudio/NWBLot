@@ -20,23 +20,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererSystem::RendererSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    ShaderPathResolveCallback shaderPathResolver
-)
+RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
-    , m_pipeline(MakeNotNullUnique(Core::MakeGlobalUnique<RendererFramePipeline>(
-        arena,
-        arena,
-        world,
-        graphics,
-        assetManager,
-        Move(shaderPathResolver)
-    )))
+    , m_pipeline(MakeNotNullUnique(Core::MakeGlobalUnique<RendererFramePipeline>(arena, arena, world, graphics, assetManager, Move(shaderPathResolver))))
 {
     readAccess<NWB::Impl::Scene::ActiveCameraComponent>();
     readAccess<NWB::Impl::Scene::TransformComponent>();

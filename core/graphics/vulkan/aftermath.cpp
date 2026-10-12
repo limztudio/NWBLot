@@ -136,15 +136,9 @@ bool Initialize(){
         return false;
     }
 
-    const auto enable = state.library.resolve<PFN_GFSDK_Aftermath_EnableGpuCrashDumps>(
-        arena, "GFSDK_Aftermath_EnableGpuCrashDumps"
-    );
-    const auto disable = state.library.resolve<PFN_GFSDK_Aftermath_DisableGpuCrashDumps>(
-        arena, "GFSDK_Aftermath_DisableGpuCrashDumps"
-    );
-    const auto getStatus = state.library.resolve<PFN_GFSDK_Aftermath_GetCrashDumpStatus>(
-        arena, "GFSDK_Aftermath_GetCrashDumpStatus"
-    );
+    const auto enable = state.library.resolve<PFN_GFSDK_Aftermath_EnableGpuCrashDumps>(arena, "GFSDK_Aftermath_EnableGpuCrashDumps");
+    const auto disable = state.library.resolve<PFN_GFSDK_Aftermath_DisableGpuCrashDumps>(arena, "GFSDK_Aftermath_DisableGpuCrashDumps");
+    const auto getStatus = state.library.resolve<PFN_GFSDK_Aftermath_GetCrashDumpStatus>(arena, "GFSDK_Aftermath_GetCrashDumpStatus");
     if(!enable || !disable || !getStatus){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath entry points could not be resolved; GPU crash dumps disabled."));
         state.library.close();
@@ -217,10 +211,7 @@ GpuCrashDumpView WaitForCrashDump(){
     for(;;){
         GFSDK_Aftermath_CrashDump_Status status = GFSDK_Aftermath_CrashDump_Status_Unknown;
         const GFSDK_Aftermath_Result statusResult = state.getStatus(&status);
-        if(
-            GFSDK_Aftermath_SUCCEED(statusResult)
-            && (status == GFSDK_Aftermath_CrashDump_Status_Finished || status == GFSDK_Aftermath_CrashDump_Status_CollectingDataFailed)
-        )
+        if(GFSDK_Aftermath_SUCCEED(statusResult) && (status == GFSDK_Aftermath_CrashDump_Status_Finished || status == GFSDK_Aftermath_CrashDump_Status_CollectingDataFailed))
             break;
         if(waited >= s_MaxWaitMilliseconds)
             break;

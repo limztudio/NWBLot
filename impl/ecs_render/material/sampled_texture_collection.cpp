@@ -16,11 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AppendPreparedMaterialSurfaceSampledTextures(
-    const MaterialSurfaceInfo& materialInfo,
-    const RendererMaterialResourceState& resources,
-    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
-){
+bool AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, const RendererMaterialResourceState& resources, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
     if(!materialInfo.resourceReferencesResolved)
         return false;
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
@@ -34,11 +30,7 @@ bool AppendPreparedMaterialSurfaceSampledTextures(
                 return false;
 
             const TextureGpuResource& textureResource = *foundTexture.value();
-            if(
-                !textureResource.valid()
-                || textureResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
-                || !textureResource.texture
-            )
+            if(!textureResource.valid() || textureResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage || !textureResource.texture)
                 return false;
 
             collector.append(textureResource.texture);
@@ -67,9 +59,7 @@ Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedM
     MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector(textures, scratchArena);
     const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
         const auto foundMaterial = materials.find(drawItem.pipelineKey.material);
-        return foundMaterial != materials.end()
-            && AppendPreparedMaterialSurfaceSampledTextures(foundMaterial.value(), resources, collector)
-        ;
+        return foundMaterial != materials.end() && AppendPreparedMaterialSurfaceSampledTextures(foundMaterial.value(), resources, collector);
     };
 
     for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
@@ -92,10 +82,7 @@ Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedM
     return textures;
 }
 
-bool MergePreparedShadowMaterialSampledTextures(
-    const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures,
-    MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector
-){
+bool MergePreparedShadowMaterialSampledTextures(const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
     for(const Core::TextureHandle& texture : sampledTextures){
         if(!texture || !texture->getCreationDescription().name)
             return false;
@@ -108,10 +95,7 @@ bool MergePreparedShadowMaterialSampledTextures(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShadowMaterialSampledTextureCollector::ShadowMaterialSampledTextureCollector(
-    Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures,
-    Core::Alloc::ScratchArena& scratchArena
-)
+ShadowMaterialSampledTextureCollector::ShadowMaterialSampledTextureCollector(Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures, Core::Alloc::ScratchArena& scratchArena)
     : m_output(textures, scratchArena)
     , m_scratchArena(scratchArena)
 {}

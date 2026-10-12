@@ -99,12 +99,7 @@ template<typename PayloadContainer>
         return false;
 
     usize payloadBytes = 0u;
-    if(
-        !AddBinaryReserveBytes(payloadBytes, sizeof(time))
-        || !AddBinaryReserveBytes(payloadBytes, sizeof(type))
-        || !AddBinaryRepeatedReserveBytes(payloadBytes, str.size(), sizeof(tchar))
-        || !AddBinaryReserveBytes(payloadBytes, sizeof(tchar))
-    )
+    if(!AddBinaryReserveBytes(payloadBytes, sizeof(time)) || !AddBinaryReserveBytes(payloadBytes, sizeof(type)) || !AddBinaryRepeatedReserveBytes(payloadBytes, str.size(), sizeof(tchar)) || !AddBinaryReserveBytes(payloadBytes, sizeof(tchar)))
         return false;
 
     if constexpr(requires(PayloadContainer& p, usize bytes){ p.reserve(bytes); })
@@ -121,11 +116,7 @@ template<typename PayloadContainer>
     return outPayload.size() == payloadBytes;
 }
 
-[[nodiscard]] inline Expected<MessageType, TStringView> ParseMessagePayload(
-    LogArena& arena,
-    const void* contents,
-    const usize totalSize
-){
+[[nodiscard]] inline Expected<MessageType, TStringView> ParseMessagePayload(LogArena& arena, const void* contents, const usize totalSize){
     if(totalSize < sizeof(Timer) + sizeof(Core::Common::LogType::Enum) + sizeof(tchar)){
         return MakeUnexpected(TStringView(NWB_TEXT("Received a truncated message")));
     }

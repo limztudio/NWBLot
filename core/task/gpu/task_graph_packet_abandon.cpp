@@ -17,19 +17,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::discardUnacceptedPacket(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId packet,
-    const u64 recordingAttemptGeneration,
-    const GpuGraphSubmissionBinding& submissionBinding
-)const{
+bool GpuTaskGraph::discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const{
     Expected<GpuCompiledPacketView> packetView = MakeUnexpected(Failure{});
-    if(
-        !(packetView = ResolvePacketView(compiledGraph, planAccess, packet))
-        || recordingAttemptGeneration == 0u
-        || !submissionBinding.valid()
-    )
+    if(!(packetView = ResolvePacketView(compiledGraph, planAccess, packet)) || recordingAttemptGeneration == 0u || !submissionBinding.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView->plan;
     const GpuTaskId* const tasks = packetView->tasks;
@@ -38,11 +28,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
     u64 notificationGeneration = 0u;
     {
         ScopedLock lock(m_lifecycleMutex);
-        if(
-            !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration)
-            || m_activeSubmissionBinding != submissionBinding
-            || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
-        )
+        if(!matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration) || m_activeSubmissionBinding != submissionBinding || m_submissionBindingState == SubmissionBindingState::ExceptionClosing)
             return false;
 
         bool hasUnacceptedTask = false;
@@ -50,14 +36,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
             if(!validTask(tasks[taskIndex]))
                 return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if(
-                (
-                    task.lifecycleState != TaskLifecycleState::Declared
-                    && task.lifecycleState != TaskLifecycleState::Recorded
-                    && task.lifecycleState != TaskLifecycleState::Discarded
-                )
-                || task.lifecycleAttemptGeneration != recordingAttemptGeneration
-            )
+            if((task.lifecycleState != TaskLifecycleState::Declared && task.lifecycleState != TaskLifecycleState::Recorded && task.lifecycleState != TaskLifecycleState::Discarded) || task.lifecycleAttemptGeneration != recordingAttemptGeneration)
                 return false;
             if(task.lifecycleState != TaskLifecycleState::Discarded)
                 hasUnacceptedTask = true;
@@ -82,11 +61,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
 
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        if(
-            task.discardNotificationGeneration == notificationGeneration
-            && task.payload
-            && task.discardPayload
-        )
+        if(task.discardNotificationGeneration == notificationGeneration && task.payload && task.discardPayload)
             task.discardPayload(task.payload);
     }
     return true;
@@ -102,20 +77,13 @@ bool GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
     const GpuGraphSubmissionBinding& submissionBinding
 )const noexcept{
     Expected<GpuCompiledPacketView> packetView = MakeUnexpected(Failure{});
-    if(
-        !(packetView = ResolvePacketView(compiledGraph, planAccess, packet))
-        || recordingAttemptGeneration == 0u
-        || !submissionBinding.valid()
-    )
+    if(!(packetView = ResolvePacketView(compiledGraph, planAccess, packet)) || recordingAttemptGeneration == 0u || !submissionBinding.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView->plan;
     const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    if(
-        !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration)
-        || m_activeSubmissionBinding != submissionBinding
-    )
+    if(!matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration) || m_activeSubmissionBinding != submissionBinding)
         return false;
 
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -123,11 +91,7 @@ bool GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
         if(
-            (
-                task.lifecycleState != TaskLifecycleState::Declared
-                && task.lifecycleState != TaskLifecycleState::Recorded
-                && task.lifecycleState != TaskLifecycleState::Discarded
-            )
+            (task.lifecycleState != TaskLifecycleState::Declared && task.lifecycleState != TaskLifecycleState::Recorded && task.lifecycleState != TaskLifecycleState::Discarded)
             || task.lifecycleAttemptGeneration != recordingAttemptGeneration
             || task.recordThunkInProgress
         )

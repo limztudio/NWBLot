@@ -45,23 +45,13 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     // All-occluder trace context; draw buffers hold one transparency class.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
-    ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
-        0,
-        ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(),
-        ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(),
-        scratchArena
-    );
+    ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
     instances.reserve(candidateCount);
     instanceBlases.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
-    MeshBufferSlotLookup meshSlotLookup(
-        0,
-        Hasher<const Core::Buffer*>(),
-        EqualTo<const Core::Buffer*>(),
-        scratchArena
-    );
+    MeshBufferSlotLookup meshSlotLookup(0, Hasher<const Core::Buffer*>(), EqualTo<const Core::Buffer*>(), scratchArena);
     meshSlotLookup.reserve(candidateCount);
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
@@ -90,18 +80,11 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
-        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(
-            *meshSystemPtr,
-            m_meshSystem,
-            entity
-        );
+        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
         // An entity without a mesh attachment contributes no geometry to the scene.
         if(!meshResult && meshResult.error() == RenderableMeshResolution::Absent)
             continue;
-        if(
-            !meshResult || !meshResult->meshResources.blas
-            || !meshResult->meshResources.triangleIndexBuffer || !meshResult->meshResources.attributeBuffer || !meshResult->meshResources.positionBuffer
-        ){
+        if(!meshResult || !meshResult->meshResources.blas || !meshResult->meshResources.triangleIndexBuffer || !meshResult->meshResources.attributeBuffer || !meshResult->meshResources.positionBuffer){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
@@ -158,12 +141,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
 
         const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(transformPtr){
-            const SIMDMatrix instanceWorld = MatrixAffineTransformation(
-                LoadFloat(transformPtr->scale),
-                VectorZero(),
-                LoadFloat(transformPtr->rotation),
-                LoadFloat(transformPtr->position)
-            );
+            const SIMDMatrix instanceWorld = MatrixAffineTransformation(LoadFloat(transformPtr->scale), VectorZero(), LoadFloat(transformPtr->rotation), LoadFloat(transformPtr->position));
             StoreFloat(instanceWorld, instanceDesc.transform);
         }
 
@@ -177,18 +155,9 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             if(materialInfo->transparent)
                 m_rayTracingState.m_sceneHasTransparentOccluder = true;
             // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight
-            if(
-                materialInfo->surfaceDispatchId != Limit<u32>::s_Max
-                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector)
-            )
+            if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
                 return false;
-            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(
-                entity,
-                *materialInfo,
-                transformPtr,
-                shadowMaterialTypedBytes,
-                shadowMutableTypedRanges
-            );
+            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, transformPtr, shadowMaterialTypedBytes, shadowMutableTypedRanges);
             if(!materialContext)
                 return false;
             shadowInstance = materialContext->instance;
@@ -208,15 +177,12 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
 
         const bool transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
-        instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK
-            | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
+        instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
         if(m_lightSpaceShadow.m_csg.gathering){
             const SIMDMatrix objectToWorld = LoadFloat(instanceDesc.transform);
             SIMDVectorSingle determinant;
             const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
-            AppendLightSpaceCsgReceiver(
-                m_lightSpaceShadow.m_csg, entity, transparent, objectToWorld, worldToObject, meshResult->meshResources
-            );
+            AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, transparent, objectToWorld, worldToObject, meshResult->meshResources);
             m_lightSpaceShadow.m_casters.push_back({
                 .triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer,
                 .meshletDescBuffer = meshResult->meshResources.meshletDescBuffer,
@@ -250,9 +216,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         Float3U opticalMin{};
         Float3U opticalMax{};
         bool opticalBoundsValid = false;
-        if(
-            transparent && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()
-        ){
+        if(transparent && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()){
             const auto bounds = ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax);
             if(bounds){
                 opticalMin = bounds->minimum;
@@ -260,10 +224,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
                 opticalBoundsValid = true;
             }
         }
-        const bool runtimeOpticalBounds =
-            transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer
-            && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
-        ;
+        const bool runtimeOpticalBounds = transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid();
         if(runtimeOpticalBounds)
             opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
         else
@@ -285,8 +246,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             if((csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
                 continue;
             const bool transparent = (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u;
-            instances[index].setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_CSG_INSTANCE_MASK
-                | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
+            instances[index].setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_CSG_INSTANCE_MASK | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
             instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
             m_lightSpaceShadow.m_casters[index].csg = true;
         }
@@ -329,11 +289,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
 
     if(!canReuseTlas && (!m_rayTracingState.m_tlas || m_rayTracingState.m_tlasMaxInstances < instances.size())){
-        const usize capacity = ::NextGrowingCapacity(
-            m_rayTracingState.m_tlasMaxInstances,
-            instances.size(),
-            s_TlasInitialInstanceCapacity
-        );
+        const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_tlasMaxInstances, instances.size(), s_TlasInitialInstanceCapacity);
 
         Core::RayTracingAccelStructDesc accelStructDesc(m_arena);
         accelStructDesc.setTopLevelMaxInstances(capacity);
@@ -367,10 +323,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
         const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
-        if(
-            !tlasHeapHandle.valid()
-            || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))
-        ){
+        if(!tlasHeapHandle.valid() || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             if(tlasHeapHandle.valid())
                 heap.free(tlasHeapHandle);
@@ -383,35 +336,21 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
-    const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
-        instanceMaterials,
-        shadowInstanceData,
-        shadowMaterialTypedBytes
-    );
+    const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
     u64 gatheredMaterialContentHash = hwMaterialContextHash;
     const bool canReuseHwMaterialContext =
         staticScene
         && !m_rayTracingState.m_sceneHasTransparentOccluder
         && m_rayTracingState.m_hwShadowMaterialContextHashValid
         && m_rayTracingState.m_hwShadowMaterialContextHash == hwMaterialContextHash
-        && HasPreparedShadowMaterialContextBuffers(
-            m_rayTracingState,
-            instanceMaterials.size(),
-            shadowInstanceData.size(),
-            materialTypedUploadBytes
-        )
+        && HasPreparedShadowMaterialContextBuffers(m_rayTracingState, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes)
     ;
     if(!canReuseHwMaterialContext){
         if(
             !ensureShadowInstanceMaterialBuffer(instances.size())
             || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
             || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
-            || !HasPreparedShadowMaterialContextBuffers(
-                m_rayTracingState,
-                instanceMaterials.size(),
-                shadowInstanceData.size(),
-                materialTypedUploadBytes
-            )
+            || !HasPreparedShadowMaterialContextBuffers(m_rayTracingState, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes)
         )
             return false;
         if(!capturePreparedShadowMaterialContext(
@@ -458,10 +397,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             Fnv64AppendValue(captureIdentity, caster.meshletBoundsSlot);
         }
         bool captureTrusted = staticScene && contentComplete;
-        if(
-            m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame
-            || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames
-        ){
+        if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
             captureIdentity = BuildLightSpaceCsgCaptureIdentity(
                 m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
                 shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),

@@ -14,11 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererShaderSystem::RendererShaderSystem(
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    RendererShaderPathResolveCallback& shaderPathResolver
-)
+RendererShaderSystem::RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)
     : m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(shaderPathResolver)

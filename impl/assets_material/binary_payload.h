@@ -50,18 +50,9 @@ struct MaterialTypedLayoutBlockBinary{
     u32 fieldCount = 0u;
     u32 byteSize = 0u;
 };
-static_assert(
-    sizeof(MaterialTypedLayoutBlockBinary) == sizeof(NameHash) + sizeof(u32) * 4u,
-    "MaterialTypedLayoutBlockBinary layout drifted"
-);
-static_assert(
-    IsStandardLayout_V<MaterialTypedLayoutBlockBinary>,
-    "MaterialTypedLayoutBlockBinary must stay binary-serializable"
-);
-static_assert(
-    IsTriviallyCopyable_V<MaterialTypedLayoutBlockBinary>,
-    "MaterialTypedLayoutBlockBinary must stay binary-serializable"
-);
+static_assert(sizeof(MaterialTypedLayoutBlockBinary) == sizeof(NameHash) + sizeof(u32) * 4u, "MaterialTypedLayoutBlockBinary layout drifted");
+static_assert(IsStandardLayout_V<MaterialTypedLayoutBlockBinary>, "MaterialTypedLayoutBlockBinary must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<MaterialTypedLayoutBlockBinary>, "MaterialTypedLayoutBlockBinary must stay binary-serializable");
 
 struct MaterialTypedLayoutFieldBinary{
     NameHash fieldNameHash = {};
@@ -69,18 +60,9 @@ struct MaterialTypedLayoutFieldBinary{
     u32 offset = 0u;
     UInt4U defaultValue = {};
 };
-static_assert(
-    sizeof(MaterialTypedLayoutFieldBinary) == sizeof(NameHash) + sizeof(u32) * 6u,
-    "MaterialTypedLayoutFieldBinary layout drifted"
-);
-static_assert(
-    IsStandardLayout_V<MaterialTypedLayoutFieldBinary>,
-    "MaterialTypedLayoutFieldBinary must stay binary-serializable"
-);
-static_assert(
-    IsTriviallyCopyable_V<MaterialTypedLayoutFieldBinary>,
-    "MaterialTypedLayoutFieldBinary must stay binary-serializable"
-);
+static_assert(sizeof(MaterialTypedLayoutFieldBinary) == sizeof(NameHash) + sizeof(u32) * 6u, "MaterialTypedLayoutFieldBinary layout drifted");
+static_assert(IsStandardLayout_V<MaterialTypedLayoutFieldBinary>, "MaterialTypedLayoutFieldBinary must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<MaterialTypedLayoutFieldBinary>, "MaterialTypedLayoutFieldBinary must stay binary-serializable");
 
 // Deserialization initializes the typed asset reference; runtime patches its resolved heap slot at constantByteOffset.
 struct MaterialResourceReferenceBinary{
@@ -90,18 +72,9 @@ struct MaterialResourceReferenceBinary{
     u32 resourceKind = MaterialResourceKind::None;
     u32 constantByteOffset = 0u;
 };
-static_assert(
-    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 2u,
-    "MaterialResourceReferenceBinary layout drifted"
-);
-static_assert(
-    IsStandardLayout_V<MaterialResourceReferenceBinary>,
-    "MaterialResourceReferenceBinary must stay binary-serializable"
-);
-static_assert(
-    IsTriviallyCopyable_V<MaterialResourceReferenceBinary>,
-    "MaterialResourceReferenceBinary must stay binary-serializable"
-);
+static_assert(sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 2u, "MaterialResourceReferenceBinary layout drifted");
+static_assert(IsStandardLayout_V<MaterialResourceReferenceBinary>, "MaterialResourceReferenceBinary must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<MaterialResourceReferenceBinary>, "MaterialResourceReferenceBinary must stay binary-serializable");
 
 inline constexpr usize s_TypedLayoutBlockBytes = sizeof(MaterialTypedLayoutBlockBinary);
 inline constexpr usize s_TypedLayoutFieldBytes = sizeof(MaterialTypedLayoutFieldBinary);
@@ -120,11 +93,7 @@ template<typename BlockVector>
 }
 
 template<typename BlockVector, typename FieldVector, typename ResourceReferenceVector>
-[[nodiscard]] inline bool ValidateMaterialResourceReferences(
-    const BlockVector& blocks,
-    const FieldVector& fields,
-    const ResourceReferenceVector& resourceReferences
-){
+[[nodiscard]] inline bool ValidateMaterialResourceReferences(const BlockVector& blocks, const FieldVector& fields, const ResourceReferenceVector& resourceReferences){
     usize resourceFieldCount = 0u;
     u32 constantByteBegin = 0u;
     for(const MaterialTypedLayoutBlock& block : blocks){
@@ -153,10 +122,7 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
                     continue;
                 if(foundReference)
                     return false;
-                if(
-                    resourceReference.resourceKind != expectedKind
-                    || resourceReference.constantByteOffset != expectedByteOffset
-                )
+                if(resourceReference.resourceKind != expectedKind || resourceReference.constantByteOffset != expectedByteOffset)
                     return false;
 
                 switch(expectedKind){

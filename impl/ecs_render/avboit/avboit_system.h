@@ -75,14 +75,7 @@ namespace ECSRenderDetail{
 
 class RendererAvboitSystem final : NoCopy{
 public:
-    RendererAvboitSystem(
-        Core::Alloc::GlobalArena& arena,
-        Core::GraphicsRuntime& graphics,
-        RendererAvboitState& avboitState,
-        RendererShaderSystem& shaderSystem,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem
-    );
+    RendererAvboitSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererAvboitState& avboitState, RendererShaderSystem& shaderSystem, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
 
 public:
     [[nodiscard]] bool shouldClearTargets(bool hasTransparentRenderers)const noexcept;
@@ -95,18 +88,8 @@ public:
     // Host owns the graph artifact; AVBOIT owns its stage identifiers; users see the stage boundary.
     void resetTaskGraphStage()noexcept;
     [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
-    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(
-        const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        bool clearTargets,
-        bool hasTransparentRenderers
-    )const;
-    [[nodiscard]] bool appendTaskGraphTimingTickets(
-        const RendererAvboitTaskGraphValidation& validation,
-        RendererAvboitTaskGraphTimingTickets& timingTickets,
-        Core::GpuTaskGraphTaskTimingTicket* bindings,
-        usize bindingCapacity,
-        usize& bindingCount
-    )const;
+    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledPlan, bool clearTargets, bool hasTransparentRenderers)const;
+    [[nodiscard]] bool appendTaskGraphTimingTickets(const RendererAvboitTaskGraphValidation& validation, RendererAvboitTaskGraphTimingTickets& timingTickets, Core::GpuTaskGraphTaskTimingTicket* bindings, usize bindingCapacity, usize& bindingCount)const;
 
 
 public:
@@ -144,9 +127,7 @@ public:
         bool occupancyComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate.
-        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false,
-        bool generatedGeometryReused = false
-    );
+        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false);
     void renderAvboitExtinctionPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -161,9 +142,7 @@ public:
         bool extinctionComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false,
-        bool generatedGeometryReused = false
-    );
+        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false);
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -178,21 +157,9 @@ public:
         bool accumulationComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false,
-        bool generatedGeometryReused = false
-    );
-    void dispatchAvboitDepthWarp(
-        Core::CommandList& commandList,
-        AvboitFrameTargets& targets,
-        Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution,
-        bool* timingRecorded = nullptr
-    );
-    void dispatchAvboitIntegration(
-        Core::CommandList& commandList,
-        AvboitFrameTargets& targets,
-        Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution,
-        bool* timingRecorded = nullptr
-    );
+        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false);
+    void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, bool* timingRecorded = nullptr);
+    void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, bool* timingRecorded = nullptr);
 
 private:
     Core::Alloc::GlobalArena& m_arena;

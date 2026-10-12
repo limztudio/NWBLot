@@ -66,14 +66,7 @@ def write_checker_png(path: pathlib.Path) -> None:
     for y in range(height):
         rows.append(0)
         for x in range(width):
-            rows.extend(
-                (
-                    (x * 37 + y * 11) & 0xFF,
-                    (x * 17 + y * 53) & 0xFF,
-                    (x * 71 + y * 29) & 0xFF,
-                    255 if (x + y) % 3 else 128,
-                )
-            )
+            rows.extend(((x * 37 + y * 11) & 0xFF, (x * 17 + y * 53) & 0xFF, (x * 71 + y * 29) & 0xFF, 255 if (x + y) % 3 else 128,))
 
     write_png_rows(path, width, height, 6, rows)
 
@@ -83,21 +76,12 @@ def write_rgba_png(path: pathlib.Path, width: int, height: int, color: tuple[int
     for y in range(height):
         rows.append(0)
         for x in range(width):
-            rows.extend(
-                (
-                    (color[0] + x * 7 + y * 13) & 0xFF,
-                    (color[1] + x * 11 + y * 5) & 0xFF,
-                    (color[2] + x * 3 + y * 17) & 0xFF,
-                    color[3],
-                )
-            )
+            rows.extend(((color[0] + x * 7 + y * 13) & 0xFF, (color[1] + x * 11 + y * 5) & 0xFF, (color[2] + x * 3 + y * 17) & 0xFF, color[3],))
 
     write_png_rows(path, width, height, 6, rows)
 
 
-def write_png_pixels(
-    path: pathlib.Path, width: int, height: int, color_type: int, pixels: tuple[tuple[int, ...], ...]
-) -> None:
+def write_png_pixels(path: pathlib.Path, width: int, height: int, color_type: int, pixels: tuple[tuple[int, ...], ...]) -> None:
     channel_count = 4 if color_type == 6 else 3 if color_type == 2 else 0
     if channel_count == 0:
         raise AssertionError(f"unsupported PNG fixture color type: {color_type}")
@@ -119,18 +103,13 @@ def write_rgb_pixels_png(path: pathlib.Path, width: int, height: int, pixels: tu
     write_png_pixels(path, width, height, 2, pixels)
 
 
-def write_rgba_pixels_png(
-    path: pathlib.Path, width: int, height: int, pixels: tuple[tuple[int, int, int, int], ...]
-) -> None:
+def write_rgba_pixels_png(path: pathlib.Path, width: int, height: int, pixels: tuple[tuple[int, int, int, int], ...]) -> None:
     write_png_pixels(path, width, height, 6, pixels)
 
 
 def require_matching_payloads(actual_path: pathlib.Path, expected_path: pathlib.Path, description: str) -> None:
     if actual_path.read_bytes() != expected_path.read_bytes():
-        raise AssertionError(
-            f"{description} produced a different UASTC payload than the equivalent RGBA reference "
-            f"({actual_path} != {expected_path})"
-        )
+        raise AssertionError(f"{description} produced a different UASTC payload than the equivalent RGBA reference " f"({actual_path} != {expected_path})")
 
 
 def float_to_rgbe(red: float, green: float, blue: float) -> bytes:
@@ -140,19 +119,10 @@ def float_to_rgbe(red: float, green: float, blue: float) -> bytes:
 
     mantissa, exponent = math.frexp(maximum)
     scale = mantissa * 256.0 / maximum
-    return bytes(
-        (
-            max(0, min(255, int(red * scale))),
-            max(0, min(255, int(green * scale))),
-            max(0, min(255, int(blue * scale))),
-            exponent + 128,
-        )
-    )
+    return bytes((max(0, min(255, int(red * scale))), max(0, min(255, int(green * scale))), max(0, min(255, int(blue * scale))), exponent + 128,))
 
 
-def write_radiance_hdr_pixels(
-    path: pathlib.Path, width: int, height: int, pixels: tuple[tuple[float, float, float, float], ...]
-) -> None:
+def write_radiance_hdr_pixels(path: pathlib.Path, width: int, height: int, pixels: tuple[tuple[float, float, float, float], ...]) -> None:
     if len(pixels) != width * height:
         raise AssertionError("Radiance fixture dimensions do not match the supplied pixel count")
     payload = bytearray(f"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {height} +X {width}\n".encode(LIT_ASCII))
@@ -165,16 +135,7 @@ def write_radiance_hdr(path: pathlib.Path) -> None:
     width = 4
     height = 2
     first_pixel = (4.5, 0.25, 1.5, 1.0)
-    pixels = (
-        first_pixel,
-        (0.5, 2.25, 7.0, 1.0),
-        (1.0, 1.0, 1.0, 1.0),
-        (0.125, 0.75, 3.5, 1.0),
-        (8.0, 0.5, 0.25, 1.0),
-        (0.25, 5.0, 0.5, 1.0),
-        (2.0, 3.0, 4.0, 1.0),
-        (0.5, 0.25, 0.125, 1.0),
-    )
+    pixels = (first_pixel, (0.5, 2.25, 7.0, 1.0), (1.0, 1.0, 1.0, 1.0), (0.125, 0.75, 3.5, 1.0), (8.0, 0.5, 0.25, 1.0), (0.25, 5.0, 0.5, 1.0), (2.0, 3.0, 4.0, 1.0), (0.5, 0.25, 0.125, 1.0),)
     write_radiance_hdr_pixels(path, width, height, pixels)
 
 
@@ -188,16 +149,7 @@ def write_openexr(path: pathlib.Path) -> None:
     width = 4
     height = 2
     first_pixel = (9.0, 0.5, 2.0, 0.375)
-    pixels = (
-        first_pixel,
-        (0.25, 4.0, 0.75, 1.0),
-        (1.25, 2.5, 6.0, 0.5),
-        (0.125, 0.25, 0.5, 1.0),
-        (3.0, 1.0, 0.5, 0.75),
-        (0.5, 7.5, 0.25, 1.0),
-        (2.0, 3.0, 4.0, 0.25),
-        (0.75, 0.5, 0.25, 1.0),
-    )
+    pixels = (first_pixel, (0.25, 4.0, 0.75, 1.0), (1.25, 2.5, 6.0, 0.5), (0.125, 0.25, 0.5, 1.0), (3.0, 1.0, 0.5, 0.75), (0.5, 7.5, 0.25, 1.0), (2.0, 3.0, 4.0, 0.25), (0.75, 0.5, 0.25, 1.0),)
     channels = bytearray()
     for channel in ("A", "B", "G", "R"):
         channels.extend(channel.encode(LIT_ASCII) + LIT_X00)
@@ -249,13 +201,7 @@ def require_texture_payload_byte_count(texture_path: pathlib.Path, expected_byte
         raise AssertionError(f"texture payload expected {expected_bytes} bytes, got {actual_bytes}: {texture_path}")
 
 
-def verify_publication_failure_preserves_outputs(
-    executable: str,
-    source_path: pathlib.Path,
-    metadata_path: pathlib.Path,
-    texture_path: pathlib.Path,
-    output_dir: pathlib.Path,
-) -> None:
+def verify_publication_failure_preserves_outputs(executable: str, source_path: pathlib.Path, metadata_path: pathlib.Path, texture_path: pathlib.Path, output_dir: pathlib.Path,) -> None:
     outputs = (texture_path, metadata_path)
     originals = tuple(path.read_bytes() for path in outputs)
     backups = tuple(pathlib.Path(str(path) + ".old") for path in outputs)
@@ -271,12 +217,7 @@ def verify_publication_failure_preserves_outputs(
         sentinel = b"unrelated recovery file"
         backup.write_bytes(sentinel)
         try:
-            result = subprocess.run(
-                [executable, str(source_path), "--force", LIT_LINEAR_2],
-                cwd=output_dir,
-                text=True,
-                capture_output=True,
-            )
+            result = subprocess.run([executable, str(source_path), "--force", LIT_LINEAR_2], cwd=output_dir, text=True, capture_output=True,)
             if result.returncode != 1:
                 raise AssertionError("tex_conv did not refuse an occupied publication backup path")
             if backup.read_bytes() != sentinel:
@@ -291,12 +232,7 @@ def verify_publication_failure_preserves_outputs(
             raise AssertionError("dangling-link fixture target unexpectedly exists")
         backups[0].symlink_to(missing_target.name)
         try:
-            result = subprocess.run(
-                [executable, str(source_path), "--force", LIT_LINEAR_2],
-                cwd=output_dir,
-                text=True,
-                capture_output=True,
-            )
+            result = subprocess.run([executable, str(source_path), "--force", LIT_LINEAR_2], cwd=output_dir, text=True, capture_output=True,)
             if result.returncode != 1 or not backups[0].is_symlink():
                 raise AssertionError("tex_conv did not preserve an occupied dangling backup link")
             require_preserved_pair()
@@ -308,10 +244,7 @@ def verify_publication_failure_preserves_outputs(
         from ctypes import wintypes
 
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.CreateFileW.argtypes = (
-            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
-            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
-        )
+        kernel32.CreateFileW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,)
         kernel32.CreateFileW.restype = wintypes.HANDLE
         kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
         kernel32.CloseHandle.restype = wintypes.BOOL
@@ -320,12 +253,7 @@ def verify_publication_failure_preserves_outputs(
         if handle == ctypes.c_void_p(-1).value:
             raise OSError(ctypes.get_last_error(), "could not lock publication fixture")
         try:
-            result = subprocess.run(
-                [executable, str(source_path), "--force", LIT_LINEAR_2],
-                cwd=output_dir,
-                text=True,
-                capture_output=True,
-            )
+            result = subprocess.run([executable, str(source_path), "--force", LIT_LINEAR_2], cwd=output_dir, text=True, capture_output=True,)
         finally:
             if not kernel32.CloseHandle(handle):
                 raise OSError(ctypes.get_last_error(), "could not release publication fixture")
@@ -335,12 +263,7 @@ def verify_publication_failure_preserves_outputs(
         if any(path.exists() for path in backups):
             raise AssertionError("rollback did not restore the previous output locations")
 
-    recovered = subprocess.run(
-        [executable, str(source_path), "--force"],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    recovered = subprocess.run([executable, str(source_path), "--force"], cwd=output_dir, text=True, capture_output=True,)
     if recovered.returncode != 0:
         raise AssertionError("tex_conv could not publish after the obstruction was removed")
     if tuple(path.read_bytes() for path in outputs) != originals:
@@ -385,165 +308,65 @@ def main() -> int:
     alpha_white_reference_path = output_dir / "alpha_white_reference.png"
     alpha_black_reference_path = output_dir / "alpha_black_reference.png"
     alpha_no_alpha_source_path = output_dir / "alpha_no_alpha_source.png"
-    alpha_output_bases = {
-        LIT_ORIGINAL: output_dir / "alpha_original",
-        LIT_ORIGINAL_MASK: output_dir / "alpha_original_mask",
-        LIT_MASK: output_dir / "alpha_mask",
-        LIT_MASK_REFERENCE: output_dir / "alpha_mask_reference",
-        LIT_WHITE: output_dir / "alpha_white",
-        LIT_WHITE_REFERENCE: output_dir / "alpha_white_reference",
-        LIT_BLACK: output_dir / "alpha_black",
-        LIT_BLACK_REFERENCE: output_dir / "alpha_black_reference",
-        LIT_NO_ALPHA: output_dir / "alpha_no_alpha",
-    }
-    alpha_input_paths = (
-        alpha_source_path,
-        alpha_mask_path,
-        alpha_original_mask_path,
-        alpha_mask_reference_path,
-        alpha_white_reference_path,
-        alpha_black_reference_path,
-        alpha_no_alpha_source_path,
-    )
-    alpha_output_paths = tuple(
-        path
-        for base in alpha_output_bases.values()
-        for path in (
-            base.with_suffix(LIT_NWB),
-            base.with_suffix(LIT_TEX),
-            pathlib.Path(f"{base}" + LIT_NWB_TMP_SUFFIX),
-            pathlib.Path(f"{base}" + LIT_TEX_TMP_SUFFIX),
-        )
-    )
+    alpha_output_bases = { LIT_ORIGINAL: output_dir / "alpha_original", LIT_ORIGINAL_MASK: output_dir / "alpha_original_mask", LIT_MASK: output_dir / "alpha_mask", LIT_MASK_REFERENCE: output_dir / "alpha_mask_reference", LIT_WHITE: output_dir / "alpha_white",
+        LIT_WHITE_REFERENCE: output_dir / "alpha_white_reference", LIT_BLACK: output_dir / "alpha_black", LIT_BLACK_REFERENCE: output_dir / "alpha_black_reference", LIT_NO_ALPHA: output_dir / "alpha_no_alpha", }
+    alpha_input_paths = (alpha_source_path, alpha_mask_path, alpha_original_mask_path, alpha_mask_reference_path, alpha_white_reference_path, alpha_black_reference_path, alpha_no_alpha_source_path,)
+    alpha_output_paths = tuple(path for base in alpha_output_bases.values() for path in (base.with_suffix(LIT_NWB), base.with_suffix(LIT_TEX), pathlib.Path(f"{base}" + LIT_NWB_TMP_SUFFIX), pathlib.Path(f"{base}" + LIT_TEX_TMP_SUFFIX),))
     cube_face_paths = [output_dir / f"cube_face_{face}.png" for face in range(6)]
     volume_slice_paths = [output_dir / f"volume_slice_{slice_index}.png" for slice_index in range(3)]
     hdr_cube_face_paths = [output_dir / f"hdr_cube_face_{face}.hdr" for face in range(6)]
     hdr_volume_slice_paths = [output_dir / f"hdr_volume_slice_{slice_index}.hdr" for slice_index in range(3)]
-    for path in (
-        source_path,
-        metadata_path,
-        texture_path,
-        cube_metadata_path,
-        cube_texture_path,
-        volume_metadata_path,
-        volume_texture_path,
-        radiance_source_path,
-        radiance_metadata_path,
-        radiance_texture_path,
-        radiance_white_metadata_path,
-        radiance_white_texture_path,
-        radiance_black_metadata_path,
-        radiance_black_texture_path,
-        openexr_source_path,
-        openexr_metadata_path,
-        openexr_texture_path,
-        hdr_cube_metadata_path,
-        hdr_cube_texture_path,
-        hdr_volume_metadata_path,
-        hdr_volume_texture_path,
-        *alpha_input_paths,
-        *alpha_output_paths,
-        pathlib.Path(str(metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(texture_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(cube_metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(cube_texture_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(volume_metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(volume_texture_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(radiance_metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(radiance_texture_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(radiance_white_metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(radiance_white_texture_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(radiance_black_metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(radiance_black_texture_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(openexr_metadata_path) + LIT_TMP_SUFFIX),
-        pathlib.Path(str(openexr_texture_path) + LIT_TMP_SUFFIX),
-        *cube_face_paths,
-        *volume_slice_paths,
-        *hdr_cube_face_paths,
-        *hdr_volume_slice_paths,
-    ):
+    for path in (source_path, metadata_path, texture_path, cube_metadata_path, cube_texture_path, volume_metadata_path, volume_texture_path, radiance_source_path, radiance_metadata_path, radiance_texture_path, radiance_white_metadata_path,
+        radiance_white_texture_path, radiance_black_metadata_path, radiance_black_texture_path, openexr_source_path, openexr_metadata_path, openexr_texture_path, hdr_cube_metadata_path, hdr_cube_texture_path, hdr_volume_metadata_path, hdr_volume_texture_path,
+        *alpha_input_paths, *alpha_output_paths, pathlib.Path(str(metadata_path) + LIT_TMP_SUFFIX), pathlib.Path(str(texture_path) + LIT_TMP_SUFFIX), pathlib.Path(str(cube_metadata_path) + LIT_TMP_SUFFIX), pathlib.Path(str(cube_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(volume_metadata_path) + LIT_TMP_SUFFIX), pathlib.Path(str(volume_texture_path) + LIT_TMP_SUFFIX), pathlib.Path(str(radiance_metadata_path) + LIT_TMP_SUFFIX), pathlib.Path(str(radiance_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_white_metadata_path) + LIT_TMP_SUFFIX), pathlib.Path(str(radiance_white_texture_path) + LIT_TMP_SUFFIX), pathlib.Path(str(radiance_black_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_black_texture_path) + LIT_TMP_SUFFIX), pathlib.Path(str(openexr_metadata_path) + LIT_TMP_SUFFIX), pathlib.Path(str(openexr_texture_path) + LIT_TMP_SUFFIX), *cube_face_paths, *volume_slice_paths, *hdr_cube_face_paths,
+        *hdr_volume_slice_paths,):
         path.unlink(missing_ok=True)
 
     write_checker_png(source_path)
-    result = subprocess.run(
-        [args.tex_conv, str(source_path)],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    result = subprocess.run([args.tex_conv, str(source_path)], cwd=output_dir, text=True, capture_output=True,)
     if result.returncode != 0:
-        raise AssertionError(
-            f"tex_conv failed with {result.returncode}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-        )
+        raise AssertionError(f"tex_conv failed with {result.returncode}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
     if not metadata_path.is_file() or not texture_path.is_file():
         raise AssertionError(f"tex_conv did not create {metadata_path} and {texture_path}")
 
     metadata = metadata_path.read_text(encoding=LIT_UTF_8)
-    for fragment in (
-        'asset.format = "uastc_ldr_4x4";',
-        'asset.color_space = "srgb";',
-        'asset.dimension = "2d";',
-        "asset.width = 7;",
-        "asset.height = 5;",
-        LIT_ASSET_HAS_ALPHA_1,
-    ):
+    for fragment in ('asset.format = "uastc_ldr_4x4";', 'asset.color_space = "srgb";', 'asset.dimension = "2d";', "asset.width = 7;", "asset.height = 5;", LIT_ASSET_HAS_ALPHA_1,):
         require_metadata_fragment(metadata, fragment)
 
     if texture_path.stat().st_size != 96:
         raise AssertionError(f"expected 96 UASTC bytes, got {texture_path.stat().st_size}")
 
-    overwrite = subprocess.run(
-        [args.tex_conv, str(source_path)],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    overwrite = subprocess.run([args.tex_conv, str(source_path)], cwd=output_dir, text=True, capture_output=True,)
     overwrite_output = f"{overwrite.stdout}\n{overwrite.stderr}"
     if overwrite.returncode != 1 or "Output already exists:" not in overwrite_output:
         raise AssertionError("tex_conv did not protect an existing output without --force")
     if "[ERROR]:" not in overwrite_output:
         raise AssertionError("tex_conv did not classify an existing-output rejection as an error")
 
-    verify_publication_failure_preserves_outputs(
-        args.tex_conv, source_path, metadata_path, texture_path, output_dir,
-    )
+    verify_publication_failure_preserves_outputs(args.tex_conv, source_path, metadata_path, texture_path, output_dir,)
 
-    # Keep the LDR alpha cases at one UASTC block per level. The expected payloads are
-    # separately encoded RGBA inputs, so byte-for-byte equality checks the effective
-    # alpha values rather than only the `has_alpha` metadata bit.
+    # Keep the LDR alpha cases at one UASTC block per level.
+    # The expected payloads are separately encoded RGBA inputs, so byte-for-byte equality checks the effective alpha values rather than only the `has_alpha` metadata bit.
     alpha_width = 4
     alpha_height = 4
-    alpha_rgb_pixels = tuple(
-        (
-            (19 + x * 43 + y * 7) & 0xFF,
-            (71 + x * 11 + y * 59) & 0xFF,
-            (137 + x * 29 + y * 17) & 0xFF,
-        )
-        for y in range(alpha_height)
-        for x in range(alpha_width)
-    )
+    alpha_rgb_pixels = tuple(((19 + x * 43 + y * 7) & 0xFF, (71 + x * 11 + y * 59) & 0xFF, (137 + x * 29 + y * 17) & 0xFF,) for y in range(alpha_height) for x in range(alpha_width))
     original_alpha_values = (255, 0, 71, 19, 168, 253, 3, 110, 47, 202, 88, 144, 30, 226, 62, 180)
     mask_red_values = (12, 46, 91, 153, 218, 33, 76, 129, 182, 241, 65, 112, 168, 205, 28, 187)
-    alpha_source_pixels = tuple(
-        (*color, alpha) for color, alpha in zip(alpha_rgb_pixels, original_alpha_values)
-    )
-    alpha_mask_reference_pixels = tuple(
-        (*color, alpha) for color, alpha in zip(alpha_rgb_pixels, mask_red_values)
-    )
+    alpha_source_pixels = tuple((*color, alpha) for color, alpha in zip(alpha_rgb_pixels, original_alpha_values))
+    alpha_mask_reference_pixels = tuple((*color, alpha) for color, alpha in zip(alpha_rgb_pixels, mask_red_values))
     alpha_white_reference_pixels = tuple((*color, 255) for color in alpha_rgb_pixels)
     alpha_black_reference_pixels = tuple((*color, 0) for color in alpha_rgb_pixels)
 
     def make_alpha_mask(red_values: tuple[int, ...]) -> tuple[tuple[int, int, int, int], ...]:
-        # The remaining components deliberately disagree with red. In particular,
-        # alpha is the inverse of red, proving that the mask's alpha channel is ignored.
-        return tuple(
-            (red, (red + 83) & 0xFF, (red + 159) & 0xFF, 255 - red) for red in red_values
-        )
+        # The remaining components deliberately disagree with red.
+        # In particular, alpha is the inverse of red, proving that the mask's alpha channel is ignored.
+        return tuple((red, (red + 83) & 0xFF, (red + 159) & 0xFF, 255 - red) for red in red_values)
 
     write_rgba_pixels_png(alpha_source_path, alpha_width, alpha_height, alpha_source_pixels)
-    write_rgba_pixels_png(
-        alpha_original_mask_path, alpha_width, alpha_height, make_alpha_mask(original_alpha_values)
-    )
+    write_rgba_pixels_png(alpha_original_mask_path, alpha_width, alpha_height, make_alpha_mask(original_alpha_values))
     write_rgba_pixels_png(alpha_mask_path, alpha_width, alpha_height, make_alpha_mask(mask_red_values))
     write_rgba_pixels_png(alpha_mask_reference_path, alpha_width, alpha_height, alpha_mask_reference_pixels)
     write_rgba_pixels_png(alpha_white_reference_path, alpha_width, alpha_height, alpha_white_reference_pixels)
@@ -551,17 +374,9 @@ def main() -> int:
     write_rgb_pixels_png(alpha_no_alpha_source_path, alpha_width, alpha_height, alpha_rgb_pixels)
 
     def convert_alpha_fixture(name: str, source: pathlib.Path, *arguments: str) -> None:
-        result = subprocess.run(
-            [args.tex_conv, str(source), *arguments, LIT_OUTPUT, str(alpha_output_bases[name])],
-            cwd=output_dir,
-            text=True,
-            capture_output=True,
-        )
+        result = subprocess.run([args.tex_conv, str(source), *arguments, LIT_OUTPUT, str(alpha_output_bases[name])], cwd=output_dir, text=True, capture_output=True,)
         if result.returncode != 0:
-            raise AssertionError(
-                f"tex_conv alpha fixture {name!r} failed with {result.returncode}"
-                f"\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-            )
+            raise AssertionError(f"tex_conv alpha fixture {name!r} failed with {result.returncode}" f"\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
 
     def alpha_metadata(name: str) -> str:
         return alpha_output_bases[name].with_suffix(LIT_NWB).read_text(encoding=LIT_UTF_8)
@@ -572,9 +387,7 @@ def main() -> int:
     # With no --alpha flag, an input alpha channel is retained.
     convert_alpha_fixture(LIT_ORIGINAL, alpha_source_path)
     convert_alpha_fixture(LIT_ORIGINAL_MASK, alpha_source_path, LIT_ALPHA, str(alpha_original_mask_path))
-    require_matching_payloads(
-        alpha_texture(LIT_ORIGINAL), alpha_texture(LIT_ORIGINAL_MASK), "the original-alpha fallback"
-    )
+    require_matching_payloads(alpha_texture(LIT_ORIGINAL), alpha_texture(LIT_ORIGINAL_MASK), "the original-alpha fallback")
     require_metadata_fragment(alpha_metadata(LIT_ORIGINAL), LIT_ASSET_HAS_ALPHA_1)
 
     # A mask uses its red channel, not its own alpha, green, or blue channels.
@@ -599,45 +412,19 @@ def main() -> int:
     require_metadata_fragment(alpha_metadata(LIT_NO_ALPHA), LIT_ASSET_HAS_ALPHA_0)
 
     write_radiance_hdr(radiance_source_path)
-    radiance = subprocess.run(
-        [
-            args.tex_conv,
-            str(radiance_source_path),
-            LIT_OUTPUT,
-            str(output_dir / "radiance"),
-            LIT_LINEAR_2,
-        ],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    radiance = subprocess.run([args.tex_conv, str(radiance_source_path), LIT_OUTPUT, str(output_dir / "radiance"), LIT_LINEAR_2,], cwd=output_dir, text=True, capture_output=True,)
     if radiance.returncode != 0:
-        raise AssertionError(
-            f"tex_conv Radiance HDR failed with {radiance.returncode}\nstdout:\n{radiance.stdout}\nstderr:\n{radiance.stderr}"
-    )
+        raise AssertionError(f"tex_conv Radiance HDR failed with {radiance.returncode}\nstdout:\n{radiance.stdout}\nstderr:\n{radiance.stderr}")
     radiance_metadata = radiance_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(radiance_metadata, 'asset.format = "uastc_hdr_4x4";')
-    for fragment in (
-        'asset.dimension = "2d";',
-        LIT_ASSET_WIDTH_4,
-        LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = "opaque";',
-    ):
+    for fragment in ('asset.dimension = "2d";', LIT_ASSET_WIDTH_4, LIT_ASSET_HEIGHT_2, 'asset.alpha_mode = "opaque";',):
         require_metadata_fragment(radiance_metadata, fragment)
     require_metadata_field_absent(radiance_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
     require_texture_payload_byte_count(radiance_texture_path, 48)
 
-    radiance_white = subprocess.run(
-        [args.tex_conv, str(radiance_source_path), LIT_ALPHA, LIT_WHITE, LIT_OUTPUT, str(output_dir / "radiance_white")],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    radiance_white = subprocess.run([args.tex_conv, str(radiance_source_path), LIT_ALPHA, LIT_WHITE, LIT_OUTPUT, str(output_dir / "radiance_white")], cwd=output_dir, text=True, capture_output=True,)
     if radiance_white.returncode != 0:
-        raise AssertionError(
-            f"tex_conv HDR --alpha white failed with {radiance_white.returncode}"
-            f"\nstdout:\n{radiance_white.stdout}\nstderr:\n{radiance_white.stderr}"
-        )
+        raise AssertionError(f"tex_conv HDR --alpha white failed with {radiance_white.returncode}" f"\nstdout:\n{radiance_white.stdout}\nstderr:\n{radiance_white.stderr}")
     radiance_white_metadata = radiance_white_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(radiance_white_metadata, 'asset.format = "uastc_hdr_4x4";')
     require_metadata_fragment(radiance_white_metadata, 'asset.alpha_mode = "opaque";')
@@ -645,17 +432,9 @@ def main() -> int:
     require_texture_payload_byte_count(radiance_white_texture_path, 48)
     require_matching_payloads(radiance_white_texture_path, radiance_texture_path, "HDR --alpha white")
 
-    radiance_black = subprocess.run(
-        [args.tex_conv, str(radiance_source_path), LIT_ALPHA, LIT_BLACK, LIT_OUTPUT, str(output_dir / "radiance_black")],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    radiance_black = subprocess.run([args.tex_conv, str(radiance_source_path), LIT_ALPHA, LIT_BLACK, LIT_OUTPUT, str(output_dir / "radiance_black")], cwd=output_dir, text=True, capture_output=True,)
     if radiance_black.returncode != 0:
-        raise AssertionError(
-            f"tex_conv HDR --alpha black failed with {radiance_black.returncode}"
-            f"\nstdout:\n{radiance_black.stdout}\nstderr:\n{radiance_black.stderr}"
-        )
+        raise AssertionError(f"tex_conv HDR --alpha black failed with {radiance_black.returncode}" f"\nstdout:\n{radiance_black.stdout}\nstderr:\n{radiance_black.stderr}")
     radiance_black_metadata = radiance_black_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(radiance_black_metadata, 'asset.format = "uastc_hdr_4x4";')
     require_metadata_fragment(radiance_black_metadata, 'asset.alpha_mode = "constant_unorm8";')
@@ -664,95 +443,36 @@ def main() -> int:
     require_matching_payloads(radiance_black_texture_path, radiance_texture_path, "HDR --alpha black RGB stream")
 
     write_openexr(openexr_source_path)
-    openexr = subprocess.run(
-        [args.tex_conv, str(openexr_source_path), LIT_OUTPUT, str(output_dir / "openexr")],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    openexr = subprocess.run([args.tex_conv, str(openexr_source_path), LIT_OUTPUT, str(output_dir / "openexr")], cwd=output_dir, text=True, capture_output=True,)
     if openexr.returncode != 0:
-        raise AssertionError(
-            f"tex_conv OpenEXR failed with {openexr.returncode}\nstdout:\n{openexr.stdout}\nstderr:\n{openexr.stderr}"
-    )
+        raise AssertionError(f"tex_conv OpenEXR failed with {openexr.returncode}\nstdout:\n{openexr.stdout}\nstderr:\n{openexr.stderr}")
     openexr_metadata = openexr_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(openexr_metadata, 'asset.format = "uastc_hdr_4x4";')
-    for fragment in (
-        'asset.dimension = "2d";',
-        LIT_ASSET_WIDTH_4,
-        LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = "uastc_ldr_4x4";',
-    ):
+    for fragment in ('asset.dimension = "2d";', LIT_ASSET_WIDTH_4, LIT_ASSET_HEIGHT_2, 'asset.alpha_mode = "uastc_ldr_4x4";',):
         require_metadata_fragment(openexr_metadata, fragment)
     require_metadata_field_absent(openexr_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
     require_texture_payload_byte_count(openexr_texture_path, 96)
 
     for face_index, face_path in enumerate(hdr_cube_face_paths):
-        write_radiance_hdr_pixels(
-            face_path,
-            2,
-            2,
-            (
-                (2.0 + face_index, 0.25, 1.0, 1.0),
-                (0.5, 3.0 + face_index, 0.25, 1.0),
-                (0.25, 0.5, 4.0 + face_index, 1.0),
-                (1.0, 1.0, 1.0, 1.0),
-            ),
-        )
-    hdr_cube = subprocess.run(
-        [
-            args.tex_conv,
-            LIT_CUBE,
-            *(str(face_path) for face_path in hdr_cube_face_paths),
-            LIT_OUTPUT,
-            str(output_dir / "hdr_cube"),
-        ],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+        write_radiance_hdr_pixels(face_path, 2, 2, ((2.0 + face_index, 0.25, 1.0, 1.0), (0.5, 3.0 + face_index, 0.25, 1.0), (0.25, 0.5, 4.0 + face_index, 1.0), (1.0, 1.0, 1.0, 1.0),),)
+    hdr_cube = subprocess.run([args.tex_conv, LIT_CUBE, *(str(face_path) for face_path in hdr_cube_face_paths), LIT_OUTPUT, str(output_dir / "hdr_cube"),], cwd=output_dir, text=True, capture_output=True,)
     if hdr_cube.returncode != 0:
-        raise AssertionError(
-            f"tex_conv HDR cube failed with {hdr_cube.returncode}\nstdout:\n{hdr_cube.stdout}\nstderr:\n{hdr_cube.stderr}"
-    )
+        raise AssertionError(f"tex_conv HDR cube failed with {hdr_cube.returncode}\nstdout:\n{hdr_cube.stdout}\nstderr:\n{hdr_cube.stderr}")
     hdr_cube_metadata = hdr_cube_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(hdr_cube_metadata, 'asset.format = "uastc_hdr_4x4";')
-    for fragment in (
-        'asset.dimension = "cube";',
-        LIT_ASSET_WIDTH_2,
-        LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = "opaque";',
-    ):
+    for fragment in ('asset.dimension = "cube";', LIT_ASSET_WIDTH_2, LIT_ASSET_HEIGHT_2, 'asset.alpha_mode = "opaque";',):
         require_metadata_fragment(hdr_cube_metadata, fragment)
     require_metadata_field_absent(hdr_cube_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
     require_texture_payload_byte_count(hdr_cube_texture_path, 192)
 
     for slice_path in hdr_volume_slice_paths:
         write_radiance_hdr(slice_path)
-    hdr_volume = subprocess.run(
-        [
-            args.tex_conv,
-            LIT_VOLUME,
-            *(str(slice_path) for slice_path in hdr_volume_slice_paths),
-            LIT_OUTPUT,
-            str(output_dir / "hdr_volume"),
-        ],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    hdr_volume = subprocess.run([args.tex_conv, LIT_VOLUME, *(str(slice_path) for slice_path in hdr_volume_slice_paths), LIT_OUTPUT, str(output_dir / "hdr_volume"),], cwd=output_dir, text=True, capture_output=True,)
     if hdr_volume.returncode != 0:
-        raise AssertionError(
-            f"tex_conv HDR volume failed with {hdr_volume.returncode}\nstdout:\n{hdr_volume.stdout}\nstderr:\n{hdr_volume.stderr}"
-    )
+        raise AssertionError(f"tex_conv HDR volume failed with {hdr_volume.returncode}\nstdout:\n{hdr_volume.stdout}\nstderr:\n{hdr_volume.stderr}")
     hdr_volume_metadata = hdr_volume_metadata_path.read_text(encoding=LIT_UTF_8)
     require_metadata_fragment(hdr_volume_metadata, 'asset.format = "uastc_hdr_4x4";')
-    for fragment in (
-        'asset.dimension = "volume";',
-        LIT_ASSET_DEPTH_3,
-        LIT_ASSET_WIDTH_4,
-        LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = "opaque";',
-    ):
+    for fragment in ('asset.dimension = "volume";', LIT_ASSET_DEPTH_3, LIT_ASSET_WIDTH_4, LIT_ASSET_HEIGHT_2, 'asset.alpha_mode = "opaque";',):
         require_metadata_fragment(hdr_volume_metadata, fragment)
     require_metadata_field_absent(hdr_volume_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
     require_texture_payload_byte_count(hdr_volume_texture_path, 80)
@@ -760,30 +480,13 @@ def main() -> int:
     # Faces are supplied in the on-disk/Basis convention: +X, -X, +Y, -Y, +Z, -Z.
     for face_index, face_path in enumerate(cube_face_paths):
         write_rgba_png(face_path, 2, 2, (face_index * 31, face_index * 17, face_index * 47, 255))
-    cube = subprocess.run(
-        [
-            args.tex_conv,
-            LIT_CUBE,
-            *(str(face_path) for face_path in cube_face_paths),
-            LIT_OUTPUT,
-            str(output_dir / LIT_CUBE_2),
-        ],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    cube = subprocess.run([args.tex_conv, LIT_CUBE, *(str(face_path) for face_path in cube_face_paths), LIT_OUTPUT, str(output_dir / LIT_CUBE_2),], cwd=output_dir, text=True, capture_output=True,)
     if cube.returncode != 0:
-        raise AssertionError(
-            f"tex_conv --cube failed with {cube.returncode}\nstdout:\n{cube.stdout}\nstderr:\n{cube.stderr}"
-        )
+        raise AssertionError(f"tex_conv --cube failed with {cube.returncode}\nstdout:\n{cube.stdout}\nstderr:\n{cube.stderr}")
     if not cube_metadata_path.is_file() or not cube_texture_path.is_file():
         raise AssertionError("tex_conv --cube did not create the requested pair")
     cube_metadata = cube_metadata_path.read_text(encoding=LIT_UTF_8)
-    for fragment in (
-        'asset.dimension = "cube";',
-        LIT_ASSET_WIDTH_2,
-        LIT_ASSET_HEIGHT_2,
-    ):
+    for fragment in ('asset.dimension = "cube";', LIT_ASSET_WIDTH_2, LIT_ASSET_HEIGHT_2,):
         require_metadata_fragment(cube_metadata, fragment)
     if cube_texture_path.stat().st_size != 192:
         raise AssertionError(f"expected 192 cube UASTC bytes, got {cube_texture_path.stat().st_size}")
@@ -791,31 +494,13 @@ def main() -> int:
     # Volume inputs are ordered z=0 through z=depth-1. 4x2x3 exercises a depth-reduced complete 3D mip chain.
     for slice_index, slice_path in enumerate(volume_slice_paths):
         write_rgba_png(slice_path, 4, 2, (slice_index * 43, 80 + slice_index * 19, 170 - slice_index * 23, 255))
-    volume = subprocess.run(
-        [
-            args.tex_conv,
-            LIT_VOLUME,
-            *(str(slice_path) for slice_path in volume_slice_paths),
-            LIT_OUTPUT,
-            str(output_dir / LIT_VOLUME_2),
-        ],
-        cwd=output_dir,
-        text=True,
-        capture_output=True,
-    )
+    volume = subprocess.run([args.tex_conv, LIT_VOLUME, *(str(slice_path) for slice_path in volume_slice_paths), LIT_OUTPUT, str(output_dir / LIT_VOLUME_2),], cwd=output_dir, text=True, capture_output=True,)
     if volume.returncode != 0:
-        raise AssertionError(
-            f"tex_conv --volume failed with {volume.returncode}\nstdout:\n{volume.stdout}\nstderr:\n{volume.stderr}"
-        )
+        raise AssertionError(f"tex_conv --volume failed with {volume.returncode}\nstdout:\n{volume.stdout}\nstderr:\n{volume.stderr}")
     if not volume_metadata_path.is_file() or not volume_texture_path.is_file():
         raise AssertionError("tex_conv --volume did not create the requested pair")
     volume_metadata = volume_metadata_path.read_text(encoding=LIT_UTF_8)
-    for fragment in (
-        'asset.dimension = "volume";',
-        LIT_ASSET_DEPTH_3,
-        LIT_ASSET_WIDTH_4,
-        LIT_ASSET_HEIGHT_2,
-    ):
+    for fragment in ('asset.dimension = "volume";', LIT_ASSET_DEPTH_3, LIT_ASSET_WIDTH_4, LIT_ASSET_HEIGHT_2,):
         require_metadata_fragment(volume_metadata, fragment)
     if volume_texture_path.stat().st_size != 80:
         raise AssertionError(f"expected 80 volume UASTC bytes, got {volume_texture_path.stat().st_size}")

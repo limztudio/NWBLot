@@ -24,20 +24,9 @@ namespace __hidden_ui_image_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PaintBuilder::prepareImages(
-    const SharedGlyphPage* const glyphPages,
-    const usize glyphCount,
-    const SharedSdfAtlasPage* const sdfPages,
-    const usize sdfCount,
-    const SharedImageSource* const textureImages,
-    const usize textureCount
-){
+bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const usize glyphCount, const SharedSdfAtlasPage* const sdfPages, const usize sdfCount, const SharedImageSource* const textureImages, const usize textureCount){
     NWB_ASSERT(m_recording);
-    if(
-        glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages
-        || (glyphCount != 0u && !glyphPages) || (sdfCount != 0u && !sdfPages)
-        || (textureCount != 0u && !textureImages)
-    )
+    if(glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages || (glyphCount != 0u && !glyphPages) || (sdfCount != 0u && !sdfPages) || (textureCount != 0u && !textureImages))
         return false;
     usize addedGlyphs = 0u;
     for(usize candidate = 0u; candidate < glyphCount; ++candidate){
@@ -110,8 +99,7 @@ bool PaintBuilder::prepareImages(
         if(!found)
             ++addedTextures;
     }
-    const usize existingCount =
-        m_snapshot.m_glyphPages.size() + m_snapshot.m_sdfPages.size() + m_snapshot.m_textureImages.size();
+    const usize existingCount = m_snapshot.m_glyphPages.size() + m_snapshot.m_sdfPages.size() + m_snapshot.m_textureImages.size();
     if(existingCount > s_PaintMaxImages || addedGlyphs + addedSdf + addedTextures > s_PaintMaxImages - existingCount)
         return false;
     // All image kinds are admitted before any binding is published, including append-only coverage upgrades.

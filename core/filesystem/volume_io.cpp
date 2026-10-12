@@ -67,51 +67,27 @@ ACompactString LastErrnoMessage(){
 }
 
 void LogFailure(AStringView volumeName, AStringView operation, AStringView detail){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: {}")
-        , StringConvert(volumeName)
-        , StringConvert(operation)
-        , StringConvert(detail)
-    );
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: {}"), StringConvert(volumeName), StringConvert(operation), StringConvert(detail));
 }
 
 void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}")
-        , StringConvert(volumeName)
-        , StringConvert(operation)
-        , StringConvert(path.native())
-        , StringConvert(detail)
-    );
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}"), StringConvert(volumeName), StringConvert(operation), StringConvert(path.native()), StringConvert(detail));
 }
 
 void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}")
-        , StringConvert(volumeName)
-        , StringConvert(operation)
-        , StringConvert(path.native())
-        , errorCode.value()
-        , StringConvert(errorCode.message())
-    );
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}"), StringConvert(volumeName), StringConvert(operation), StringConvert(path.native()), errorCode.value(), StringConvert(errorCode.message()));
 }
 
-Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(
-    const AStringView volumeName,
-    const Path& segmentPath
-){
+Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeName, const Path& segmentPath){
     VolumeHeaderDisk header{};
 
-    GlobalFilesystemDetail::InputFileStream stream(
-        segmentPath,
-        GlobalFilesystemDetail::InputFileStream::binary
-    );
+    GlobalFilesystemDetail::InputFileStream stream(segmentPath, GlobalFilesystemDetail::InputFileStream::binary);
     if(!stream.is_open()){
         LogFailureWithPath(volumeName, FilesystemVolumeDetail::s_VolumeOpMountOpenHeader, segmentPath, LastErrnoMessage());
         return MakeUnexpected(Failure{});
     }
 
-    stream.read(
-        reinterpret_cast<char*>(&header),
-        static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(header))
-    );
+    stream.read(reinterpret_cast<char*>(&header), static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(header)));
     if(stream.good())
         return header;
     if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(header)))
@@ -122,15 +98,7 @@ Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(
 }
 
 template<typename SegmentPaths, typename ChunkFunc>
-static bool ForEachSegmentChunk(
-    const AStringView volumeName,
-    const AStringView operation,
-    const SegmentPaths& segmentPaths,
-    const u64 segmentSize,
-    const u64 offset,
-    const u64 byteCount,
-    ChunkFunc&& chunkFunc
-){
+static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView operation, const SegmentPaths& segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, ChunkFunc&& chunkFunc){
     if(segmentSize == 0){
         LogFailure(volumeName, operation, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
@@ -149,13 +117,7 @@ static bool ForEachSegmentChunk(
     }
     const u64 capacityBytes = static_cast<u64>(segmentPaths.size()) * segmentSize;
     if(endOffset > capacityBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}")
-            , StringConvert(volumeName)
-            , StringConvert(operation)
-            , offset
-            , endOffset
-            , capacityBytes
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"), StringConvert(volumeName), StringConvert(operation), offset, endOffset, capacityBytes);
         return false;
     }
 
@@ -214,16 +176,7 @@ static bool TransferSegmentChunk(
 }
 
 template<typename SegmentPaths, typename Bytes, typename TransferChunk>
-static bool TransferVolumeBytes(
-    const AStringView volumeName,
-    const AStringView operation,
-    const SegmentPaths& segmentPaths,
-    const u64 segmentSize,
-    const u64 offset,
-    const u64 byteCount,
-    Bytes& bytes,
-    TransferChunk&& transferChunk
-){
+static bool TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const SegmentPaths& segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, Bytes& bytes, TransferChunk&& transferChunk){
     return ForEachSegmentChunk(
         volumeName,
         operation,
@@ -231,21 +184,8 @@ static bool TransferVolumeBytes(
         segmentSize,
         offset,
         byteCount,
-        [&](
-            const usize segmentIndex,
-            const GlobalFilesystemDetail::StreamOffset streamOffset,
-            const GlobalFilesystemDetail::StreamSize streamChunkSize,
-            const u64 chunkBytes
-        ){
-            return transferChunk(
-                volumeName,
-                segmentPaths,
-                segmentIndex,
-                streamOffset,
-                streamChunkSize,
-                chunkBytes,
-                bytes
-            );
+        [&](const usize segmentIndex, const GlobalFilesystemDetail::StreamOffset streamOffset, const GlobalFilesystemDetail::StreamSize streamChunkSize, const u64 chunkBytes){
+            return transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes);
         }
     );
 }
@@ -260,10 +200,7 @@ static bool ReadSegmentBytes(
     const u64 chunkBytes,
     u8*& outputBytes
 ){
-    GlobalFilesystemDetail::InputFileStream stream(
-        segmentPaths[segmentIndex],
-        GlobalFilesystemDetail::InputFileStream::binary
-    );
+    GlobalFilesystemDetail::InputFileStream stream(segmentPaths[segmentIndex], GlobalFilesystemDetail::InputFileStream::binary);
     return TransferSegmentChunk(
         volumeName,
         segmentPaths,
@@ -302,12 +239,7 @@ static bool WriteSegmentBytes(
     const u64 chunkBytes,
     const u8*& inputBytes
 ){
-    GlobalFilesystemDetail::FileStream stream(
-        segmentPaths[segmentIndex],
-        GlobalFilesystemDetail::FileStream::binary
-            | GlobalFilesystemDetail::FileStream::in
-            | GlobalFilesystemDetail::FileStream::out
-    );
+    GlobalFilesystemDetail::FileStream stream(segmentPaths[segmentIndex], GlobalFilesystemDetail::FileStream::binary | GlobalFilesystemDetail::FileStream::in | GlobalFilesystemDetail::FileStream::out);
     return TransferSegmentChunk(
         volumeName,
         segmentPaths,
@@ -346,15 +278,7 @@ struct ReadSegmentBytesOp{
         const u64 chunkBytes,
         u8*& outputBytes
     )const{
-        return ReadSegmentBytes(
-            volumeName,
-            segmentPaths,
-            segmentIndex,
-            streamOffset,
-            streamChunkSize,
-            chunkBytes,
-            outputBytes
-        );
+        return ReadSegmentBytes(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, outputBytes);
     }
 };
 
@@ -369,15 +293,7 @@ struct WriteSegmentBytesOp{
         const u64 chunkBytes,
         const u8*& inputBytes
     )const{
-        return WriteSegmentBytes(
-            volumeName,
-            segmentPaths,
-            segmentIndex,
-            streamOffset,
-            streamChunkSize,
-            chunkBytes,
-            inputBytes
-        );
+        return WriteSegmentBytes(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, inputBytes);
     }
 };
 
@@ -393,11 +309,7 @@ struct WriteSegmentBytesOp{
 
 bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     if(m_maxSegments != 0 && segmentIndex >= m_maxSegments){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}")
-            , StringConvert(m_volumeName)
-            , segmentIndex
-            , m_maxSegments
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}"), StringConvert(m_volumeName), segmentIndex, m_maxSegments);
         return false;
     }
     if(m_segmentSize == 0){
@@ -406,49 +318,28 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     }
 
     const Path path = segmentPath(segmentIndex);
-    GlobalFilesystemDetail::OutputFileStream stream(
-        path,
-        GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
-    );
+    GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc);
     if(!stream.is_open()){
-        FilesystemVolumeDetail::LogFailureWithPath(
-            m_volumeName,
-            FilesystemVolumeDetail::s_VolumeOpCreateSegmentOpen,
-            path,
-            FilesystemVolumeDetail::LastErrnoMessage()
-        );
+        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentOpen, path, FilesystemVolumeDetail::LastErrnoMessage());
         return false;
     }
 
     const auto streamOffset = FilesystemVolumeDetail::ToStreamOff(m_segmentSize - 1);
     if(!streamOffset){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset")
-            , StringConvert(m_volumeName)
-            , m_segmentSize
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"), StringConvert(m_volumeName), m_segmentSize);
         return false;
     }
 
     stream.seekp(*streamOffset);
     if(!stream.good()){
-        FilesystemVolumeDetail::LogFailureWithPath(
-            m_volumeName,
-            FilesystemVolumeDetail::s_VolumeOpCreateSegmentSeek,
-            path,
-            FilesystemVolumeDetail::LastErrnoMessage()
-        );
+        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentSeek, path, FilesystemVolumeDetail::LastErrnoMessage());
         return false;
     }
 
     char zero = 0;
     stream.write(&zero, 1);
     if(!stream.good()){
-        FilesystemVolumeDetail::LogFailureWithPath(
-            m_volumeName,
-            FilesystemVolumeDetail::s_VolumeOpCreateSegmentWrite,
-            path,
-            FilesystemVolumeDetail::LastErrnoMessage()
-        );
+        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentWrite, path, FilesystemVolumeDetail::LastErrnoMessage());
         return false;
     }
 
@@ -457,11 +348,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     else if(segmentIndex < m_segmentPaths.size())
         m_segmentPaths[segmentIndex] = path;
     else{
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})")
-            , StringConvert(m_volumeName)
-            , segmentIndex
-            , m_segmentPaths.size()
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})"), StringConvert(m_volumeName), segmentIndex, m_segmentPaths.size());
         return false;
     }
 
@@ -486,11 +373,7 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
             return true;
 
         if(!m_writable){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only")
-                , StringConvert(m_volumeName)
-                , requiredBytes
-                , capacity
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only"), StringConvert(m_volumeName), requiredBytes, capacity);
             return false;
         }
         if(!createSegmentLocked(m_segmentPaths.size()))
@@ -550,16 +433,7 @@ bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 b
     }
 
     u8* outputBytes = static_cast<u8*>(data);
-    return FilesystemVolumeDetail::TransferVolumeBytes(
-        m_volumeName,
-        FilesystemVolumeDetail::s_VolumeOpReadBytes,
-        m_segmentPaths,
-        m_segmentSize,
-        offset,
-        byteCount,
-        outputBytes,
-        FilesystemVolumeDetail::ReadSegmentBytesOp{}
-    );
+    return FilesystemVolumeDetail::TransferVolumeBytes(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, m_segmentPaths, m_segmentSize, offset, byteCount, outputBytes, FilesystemVolumeDetail::ReadSegmentBytesOp{});
 }
 
 bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const u64 byteCount){
@@ -583,16 +457,7 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     }
 
     const u8* inputBytes = static_cast<const u8*>(data);
-    return FilesystemVolumeDetail::TransferVolumeBytes(
-        m_volumeName,
-        FilesystemVolumeDetail::s_VolumeOpWriteBytes,
-        m_segmentPaths,
-        m_segmentSize,
-        offset,
-        byteCount,
-        inputBytes,
-        FilesystemVolumeDetail::WriteSegmentBytesOp{}
-    );
+    return FilesystemVolumeDetail::TransferVolumeBytes(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, m_segmentPaths, m_segmentSize, offset, byteCount, inputBytes, FilesystemVolumeDetail::WriteSegmentBytesOp{});
 }
 
 

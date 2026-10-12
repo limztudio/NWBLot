@@ -10,9 +10,7 @@ macro(nwb_configure_build_configs)
         if("${CMAKE_BUILD_TYPE}" STREQUAL "")
             set(CMAKE_BUILD_TYPE "dbg" CACHE STRING "" FORCE)
         elseif(NOT CMAKE_BUILD_TYPE IN_LIST NWB_BUILD_CONFIGURATIONS)
-            message(FATAL_ERROR
-                "Unsupported CMAKE_BUILD_TYPE '${CMAKE_BUILD_TYPE}'. Expected exactly dbg, opt, or fin."
-            )
+            message(FATAL_ERROR "Unsupported CMAKE_BUILD_TYPE '${CMAKE_BUILD_TYPE}'. Expected exactly dbg, opt, or fin.")
         endif()
         set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${NWB_BUILD_CONFIGURATIONS})
     endif()

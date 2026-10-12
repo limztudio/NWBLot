@@ -47,10 +47,7 @@ public:
 
 public:
     [[nodiscard]] bool configure(AStringView selection, Impl::ReflectionSettings& settings);
-    [[nodiscard]] bool update(
-        const Impl::ReflectionStatistics& statistics,
-        const Core::Perf::TimingView& timing,
-        Impl::ReflectionSettings& settings);
+    [[nodiscard]] bool update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings);
     [[nodiscard]] bool shouldCapture(u64 graphicsFrame)const noexcept{ return m_finalReset && graphicsFrame == m_finalSource; }
     [[nodiscard]] bool canFinish(const Impl::ReflectionStatistics& statistics, u64 capturedSource)const;
 

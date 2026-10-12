@@ -95,22 +95,13 @@ static void ExpectDelta(const Perf::MemoryDelta& actual, const Perf::MemoryDelta
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-[[nodiscard]] static const Telemetry::EventRecord* FindOwnerEvent(
-    Telemetry::TelemetryArena& arena,
-    const Telemetry::EventView& events,
-    const Name& owner,
-    const Perf::MemorySource::Enum source
-){
+[[nodiscard]] static const Telemetry::EventRecord* FindOwnerEvent(Telemetry::TelemetryArena& arena, const Telemetry::EventView& events, const Name& owner, const Perf::MemorySource::Enum source){
     for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
         const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
         if(!event || event->header.kind != Telemetry::EventKind::MemoryFrame)
             continue;
         const auto parsed = Telemetry::ParsePerfMemoryPayload(arena, event->payload.data(), event->payload.size());
-        if(
-            parsed
-            && parsed->scopeName == owner
-            && parsed->snapshot.source == source
-        )
+        if(parsed && parsed->scopeName == owner && parsed->snapshot.source == source)
             return event;
     }
     return nullptr;
@@ -133,12 +124,7 @@ static void ExpectDelta(const Perf::MemoryDelta& actual, const Perf::MemoryDelta
 }
 
 template<typename Number>
-static void ExpectJsonNumber(
-    Core::Alloc::ScratchArena& scratchArena,
-    const AStringView record,
-    const AStringView field,
-    const Number value
-){
+static void ExpectJsonNumber(Core::Alloc::ScratchArena& scratchArena, const AStringView record, const AStringView field, const Number value){
     AString<Core::Alloc::ScratchArena> expected(scratchArena);
     expected.reserve(field.size() + 32u);
     StringAppendFormat(expected, "\"{}\": {}", field, value);
@@ -205,9 +191,7 @@ TEST(AllocationOwnerTelemetry, SeparatesRecorderSourcesAndKeepsPreviousFrameDuri
     recorder.setEnabled(true);
     const Perf::MemoryView view(recorder);
     const Name owner("tests/telemetry/recorder_source_collision");
-    const Perf::MemorySource::Enum sources[] = {
-        Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking,
-    };
+    const Perf::MemorySource::Enum sources[] = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking, };
     Perf::MemoryScopeId scopes[LengthOf(sources)];
     Perf::MemorySnapshot previous[LengthOf(sources)];
     for(usize sourceIndex = 0u; sourceIndex < LengthOf(sources); ++sourceIndex){
@@ -406,10 +390,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
 TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndividualArenaPeak){
     TestArena testArena;
     char sequenceText[32u] = {};
-    const Name ownerName = DeriveName(
-        Name("tests/telemetry/shared_arena_peak/"),
-        FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText)
-    );
+    const Name ownerName = DeriveName(Name("tests/telemetry/shared_arena_peak/"), FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText));
     Perf::Session perfSession(testArena.arena);
     perfSession.setCaptureOptions(Perf::CaptureOptions{ .enabled = true, .memory = true });
     Core::Alloc::GlobalArena firstArena(ownerName);
@@ -471,9 +452,7 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const Name owner("tests/telemetry/shared_source_identity");
-    const Perf::MemorySource::Enum sources[] = {
-        Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking,
-    };
+    const Perf::MemorySource::Enum sources[] = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking, };
     for(usize sourceIndex = 0u; sourceIndex < LengthOf(sources); ++sourceIndex){
         Perf::MemorySnapshot snapshot = MakeSnapshot(owner, sources[sourceIndex]);
         // The explicit scope aliases the same arena; their values must remain separate in summaries.
@@ -535,18 +514,10 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     // Exact hash fallback text reproduces an opt/fin producer that has no local symbol sidecar loaded.
-    ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, firstOwner, firstHashText, MakeSnapshot(firstOwner, Perf::MemorySource::Arena), TelemetryTestDetail::MakeTestMemoryDelta(-1), 91u
-    ));
-    ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, secondOwner, secondHashText, MakeSnapshot(secondOwner, Perf::MemorySource::Arena), TelemetryTestDetail::MakeTestMemoryDelta(-1), 92u
-    ));
-    ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, firstOwner, "Producer Display Name", MakeSnapshot(firstOwner, Perf::MemorySource::ExplicitScope), TelemetryTestDetail::MakeTestMemoryDelta(-1), 93u
-    ));
-    ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, unknownOwner, unknownHashText, MakeSnapshot(unknownOwner, Perf::MemorySource::HeapBacking), TelemetryTestDetail::MakeTestMemoryDelta(-1), 94u
-    ));
+    ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, firstOwner, firstHashText, MakeSnapshot(firstOwner, Perf::MemorySource::Arena), TelemetryTestDetail::MakeTestMemoryDelta(-1), 91u));
+    ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, secondOwner, secondHashText, MakeSnapshot(secondOwner, Perf::MemorySource::Arena), TelemetryTestDetail::MakeTestMemoryDelta(-1), 92u));
+    ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, firstOwner, "Producer Display Name", MakeSnapshot(firstOwner, Perf::MemorySource::ExplicitScope), TelemetryTestDetail::MakeTestMemoryDelta(-1), 93u));
+    ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, unknownOwner, unknownHashText, MakeSnapshot(unknownOwner, Perf::MemorySource::HeapBacking), TelemetryTestDetail::MakeTestMemoryDelta(-1), 94u));
     Log::TelemetryReport report(testArena.arena);
     auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
     ASSERT_TRUE(reportResult4);
@@ -557,11 +528,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     EXPECT_EQ(NWB::Tests::CountText(beforeRecord, firstHashText), s_ExpectedDualCount);
 
     AString<Core::Alloc::GlobalArena> namesymText(testArena.arena);
-    StringAppendFormat(
-        namesymText,
-        "{}\tproducer=runtime\n{}\truntime\tOwners/Loaded First\n{}\truntime\tOwners/Loaded Second\n",
-        NameSymbols::s_FileHeader, firstHashText, secondHashText
-    );
+    StringAppendFormat(namesymText, "{}\tproducer=runtime\n{}\truntime\tOwners/Loaded First\n{}\truntime\tOwners/Loaded Second\n", NameSymbols::s_FileHeader, firstHashText, secondHashText);
     ASSERT_TRUE(NameSymbols::LoadFromMemory(AStringView(namesymText.data(), namesymText.size())));
     auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
     ASSERT_TRUE(reportResult5);

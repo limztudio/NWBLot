@@ -30,9 +30,7 @@ bool Context::addPartTarget(const WidgetState& owner, const WidgetId part, HitTa
     return true;
 }
 
-Expected<ControlAction> Context::takeControlAction(
-    const WidgetState& state, const bool enabled, const ControlToken& token
-){
+Expected<ControlAction> Context::takeControlAction(const WidgetState& state, const bool enabled, const ControlToken& token){
     if(m_failed || !currentDeclaration(state))
         return MakeUnexpected(Failure{});
     if(!enabled){
@@ -45,9 +43,7 @@ Expected<ControlAction> Context::takeControlAction(
     return m_input.consumeControlAction(state.id, state.declarationGeneration, token);
 }
 
-Expected<PointerGesture> Context::takePartPointerGesture(
-    const WidgetState& owner, const WidgetId part, const bool enabled
-){
+Expected<PointerGesture> Context::takePartPointerGesture(const WidgetState& owner, const WidgetId part, const bool enabled){
     if(m_failed || !currentDeclaration(owner))
         return MakeUnexpected(Failure{});
     if(!enabled){

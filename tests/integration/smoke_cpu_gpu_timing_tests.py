@@ -104,17 +104,14 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
         self.assertEqual(gpu[LIT_EXCLUDED_SAMPLES], 5)
 
     def test_wrong_window_options_or_incomplete_file_fail(self):
-        mutations = ((LIT_WINDOW_80_560_100_580_30, "window 81 560 100 580 30"),
-            ("100 580 30", "100 580 29"), ("memory=0", "memory=1"), (LIT_COMPLETE_12_6, ""))
+        mutations = ((LIT_WINDOW_80_560_100_580_30, "window 81 560 100 580 30"), ("100 580 30", "100 580 29"), ("memory=0", "memory=1"), (LIT_COMPLETE_12_6, ""))
         for before, after in mutations:
             with self.subTest(before=before), self.assertRaises(SmokeFailure):
                 diagnostic.parse_publications(publication_text().replace(before, after), MEASUREMENT)
 
     def test_invalid_duration_and_source_provenance_fail(self):
         target = LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009
-        mutations = ("sample 1 0 1 580 560 579 570 581 3 0.009 0.003 0.003 0.003",
-            target.replace(LIT_N_0_009, "nan"), target.replace(LIT_N_0_009, "0.9"),
-            target.replace("570 572 3", "570 572 0"), target.replace("580 560", "99 80"))
+        mutations = ("sample 1 0 1 580 560 579 570 581 3 0.009 0.003 0.003 0.003", target.replace(LIT_N_0_009, "nan"), target.replace(LIT_N_0_009, "0.9"), target.replace("570 572 3", "570 572 0"), target.replace("580 560", "99 80"))
         for replacement in mutations:
             with self.subTest(replacement=replacement), self.assertRaises(SmokeFailure):
                 diagnostic.parse_publications(publication_text().replace(target, replacement), MEASUREMENT)
@@ -128,8 +125,7 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
 
     def test_scope_identity_and_footer_count_fail(self):
         text = publication_text()
-        for candidate in (text.replace(LIT_SCOPE_1_0_RENDERER_FRAME, "scope 0 0 1 renderer.frame"),
-                text.replace(LIT_COMPLETE_12_6, "complete 11 6")):
+        for candidate in (text.replace(LIT_SCOPE_1_0_RENDERER_FRAME, "scope 0 0 1 renderer.frame"), text.replace(LIT_COMPLETE_12_6, "complete 11 6")):
             with self.assertRaises(SmokeFailure):
                 diagnostic.parse_publications(candidate, MEASUREMENT)
 
@@ -142,14 +138,12 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
             path.write_text(publication_text(), encoding=LIT_UTF_8)
             result = diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True, "stress")
             self.assertTrue(result[LIT_REQUESTED])
-            for log, requested in (("", True), (complete_log(13), True), (complete_log(), False),
-                    (complete_log() + diagnostic.ENABLED, True)):
+            for log, requested in (("", True), (complete_log(13), True), (complete_log(), False), (complete_log() + diagnostic.ENABLED, True)):
                 with self.subTest(log=log, requested=requested), self.assertRaises(SmokeFailure):
                     diagnostic.verify_capture(log, path, MEASUREMENT, requested, "stress")
 
     def test_stale_sample_generation_and_zero_scope_generation_fail(self):
-        for candidate in (publication_text().replace("sample 1 0 1 ", "sample 1 0 2 "),
-                publication_text().replace("scope 1 0 1 ", "scope 1 0 0 ")):
+        for candidate in (publication_text().replace("sample 1 0 1 ", "sample 1 0 2 "), publication_text().replace("scope 1 0 1 ", "scope 1 0 0 ")):
             with self.subTest(candidate=candidate[-100:]), self.assertRaises(SmokeFailure):
                 diagnostic.parse_publications(candidate, MEASUREMENT)
 
@@ -157,8 +151,7 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             path = Path(directory) / LIT_CPU_GPU_TIMING_TXT
             path.write_text(publication_text(), encoding=LIT_UTF_8)
-            for log in (complete_log().replace("owner=stress", "owner=reflection"),
-                    complete_log().replace("owner=stress ", ""), complete_log() + diagnostic.COMPLETE.rstrip()):
+            for log in (complete_log().replace("owner=stress", "owner=reflection"), complete_log().replace("owner=stress ", ""), complete_log() + diagnostic.COMPLETE.rstrip()):
                 with self.subTest(log=log), self.assertRaises(SmokeFailure):
                     diagnostic.verify_capture(log, path, MEASUREMENT, True, "stress")
 

@@ -21,11 +21,7 @@ bool InputRouter::validKeyboardOwners()const{
                 return false;
             continue;
         }
-        if(
-            !source.enabled || !source.focusable || !source.textEditable || source.owner.valid()
-            || source.navigable || source.scrollable || source.keyboardOwner == source.id
-            || source.keyboardOwnerDeclarationGeneration == 0u || !source.keyboardControl.valid()
-        )
+        if(!source.enabled || !source.focusable || !source.textEditable || source.owner.valid() || source.navigable || source.scrollable || source.keyboardOwner == source.id || source.keyboardOwnerDeclarationGeneration == 0u || !source.keyboardControl.valid())
             return false;
         usize begin = 0u;
         usize end = m_stagedLookup.size();
@@ -53,10 +49,7 @@ const HitTarget* InputRouter::keyboardHost(const HitTarget& source)const{
     if(!source.textEditable || !source.keyboardOwner.valid() || !source.keyboardControl.valid() || !isInteractive(source))
         return nullptr;
     const HitTarget* host = findTarget(source.keyboardOwner, source.keyboardOwnerDeclarationGeneration);
-    if(
-        host == nullptr || !isInteractive(*host) || !host->focusable || !host->navigable || host->owner.valid()
-        || host->control != source.keyboardControl || host->popup != source.popup || host->layer != source.layer
-    )
+    if(host == nullptr || !isInteractive(*host) || !host->focusable || !host->navigable || host->owner.valid() || host->control != source.keyboardControl || host->popup != source.popup || host->layer != source.layer)
         return nullptr;
     return host;
 }

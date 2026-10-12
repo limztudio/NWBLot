@@ -62,10 +62,7 @@ template<typename UsageFlags, typename CreateFlags>
 
     u32 physicalQueueFamilyCount = 0u;
     instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
-    if(
-        physicalQueueFamilyCount == 0u
-        || provenance.queueFamilyIndexCount > physicalQueueFamilyCount
-    ){
+    if(physicalQueueFamilyCount == 0u || provenance.queueFamilyIndexCount > physicalQueueFamilyCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native queue-family count is invalid"), StringConvert(logPrefix));
         return false;
     }
@@ -90,11 +87,7 @@ template<typename UsageFlags, typename CreateFlags>
         if(!ResourceQueueSharing::IncludesQueueClass(queueSharing, queue.queueClass))
             continue;
         hasLogicalQueue = true;
-        if(!ResourceQueueSharing::QueueFamilyIndexListContains(
-            provenance.queueFamilyIndices,
-            provenance.queueFamilyIndexCount,
-            queue.familyIndex
-        )){
+        if(!ResourceQueueSharing::QueueFamilyIndexListContains(provenance.queueFamilyIndices, provenance.queueFamilyIndexCount, queue.familyIndex)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native sharing omits a logically admitted queue family"), StringConvert(logPrefix));
             return false;
         }

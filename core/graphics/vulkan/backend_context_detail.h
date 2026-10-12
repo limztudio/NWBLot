@@ -39,8 +39,8 @@ using ScratchStringStream = AStringStream<Alloc::ScratchArena>;
 using ScratchStringSet = HashSet<ScratchString, Alloc::ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 
 static constexpr u64 s_BytesPerMiB = 1024ull * 1024ull;
-// HDR10 metadata mirrors the Rec.2020/ST.2084 transform. Keep values named so a policy change cannot leave
-// the advertised Vulkan metadata behind.
+// HDR10 metadata mirrors the Rec.2020/ST.2084 transform.
+// Keep values named so a policy change cannot leave the advertised Vulkan metadata behind.
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryRed = { 0.708f, 0.292f };
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryGreen = { 0.170f, 0.797f };
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryBlue = { 0.131f, 0.046f };
@@ -50,11 +50,9 @@ static constexpr f32 s_Hdr10MinimumLuminance = 0.005f;
 static constexpr f32 s_Hdr10MaximumFrameAverageLightLevel = 400.0f;
 static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
 
-// Transfer is guaranteed for Graphics/Compute families, but Graphics does not imply Compute. Keep the registry
-// faithful to family flags so a cross-family Graphics queue never receives Compute work by inheritance.
-[[nodiscard]] inline constexpr GpuQueueCapability::Mask QueueCapabilitiesForQueueFlags(
-    const VkQueueFlags queueFlags
-)noexcept{
+// Transfer is guaranteed for Graphics/Compute families, but Graphics does not imply Compute.
+// Keep the registry faithful to family flags so a cross-family Graphics queue never receives Compute work by inheritance.
+[[nodiscard]] inline constexpr GpuQueueCapability::Mask QueueCapabilitiesForQueueFlags(const VkQueueFlags queueFlags)noexcept{
     u8 capabilities = 0u;
     if((queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u){
         capabilities |= static_cast<u8>(GpuQueueCapability::Graphics);
@@ -202,12 +200,7 @@ inline StringView BoolToString(bool value)noexcept{
 
 inline ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 version){
     auto ss = MakeScratchStringStream(arena);
-    ss << VK_API_VERSION_MAJOR(version)
-       << "."
-       << VK_API_VERSION_MINOR(version)
-       << "."
-       << VK_API_VERSION_PATCH(version)
-    ;
+    ss << VK_API_VERSION_MAJOR(version) << "." << VK_API_VERSION_MINOR(version) << "." << VK_API_VERSION_PATCH(version);
     if(VK_API_VERSION_VARIANT(version) != 0)
         ss << " variant " << VK_API_VERSION_VARIANT(version);
     return ss.str();
@@ -263,8 +256,8 @@ inline void SetHdr10Metadata(const VolkDeviceTable& deviceDispatch, const VkDevi
 
     VkHdrMetadataEXT metadata = {};
     metadata.sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT;
-    // Rec.2020 primaries and D65 white point. These values match the HDR10/PQ transform used by the final
-    // presentation shaders, which maps scene highlights to a 1,000-nit mastering target.
+    // Rec.2020 primaries and D65 white point.
+    // These values match the HDR10/PQ transform used by the final presentation shaders, which maps scene highlights to a 1,000-nit mastering target.
     metadata.displayPrimaryRed = s_Hdr10DisplayPrimaryRed;
     metadata.displayPrimaryGreen = s_Hdr10DisplayPrimaryGreen;
     metadata.displayPrimaryBlue = s_Hdr10DisplayPrimaryBlue;
@@ -343,10 +336,7 @@ inline bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
     case DeviceExtensionFeature::RayTracingLinearSweptSpheres:
         return supported.rayTracingLinearSweptSpheres.spheres == VK_TRUE || supported.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE;
     case DeviceExtensionFeature::MeshShader:
-        return
-            SupportsRequestedValue(requested.meshShader.taskShader, supported.meshShader.taskShader)
-            && SupportsRequestedValue(requested.meshShader.meshShader, supported.meshShader.meshShader)
-        ;
+        return SupportsRequestedValue(requested.meshShader.taskShader, supported.meshShader.taskShader) && SupportsRequestedValue(requested.meshShader.meshShader, supported.meshShader.meshShader);
     case DeviceExtensionFeature::FragmentShadingRate:
         return
             SupportsRequestedValue(requested.fragmentShadingRate.pipelineFragmentShadingRate, supported.fragmentShadingRate.pipelineFragmentShadingRate)
@@ -358,10 +348,7 @@ inline bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
     case DeviceExtensionFeature::DeviceFault:
         return SupportsRequestedValue(requested.deviceFault.deviceFault, supported.deviceFault.deviceFault);
     case DeviceExtensionFeature::TextureCompressionAstcHdr:
-        return SupportsRequestedValue(
-            requested.textureCompressionAstcHdr.textureCompressionASTC_HDR,
-            supported.textureCompressionAstcHdr.textureCompressionASTC_HDR
-        );
+        return SupportsRequestedValue(requested.textureCompressionAstcHdr.textureCompressionASTC_HDR, supported.textureCompressionAstcHdr.textureCompressionASTC_HDR);
     case DeviceExtensionFeature::None:
     case DeviceExtensionFeature::Count:
     default:
@@ -405,12 +392,7 @@ inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& 
     }
 }
 
-inline VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-    VkDebugUtilsMessageTypeFlagsEXT types,
-    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
-    void* userData
-){
+inline VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData){
     const i32 messageId = callbackData ? callbackData->messageIdNumber : 0;
     const auto* backend = static_cast<const BackendContext*>(userData);
     if(backend && backend->isValidationMessageIdIgnored(messageId))
@@ -418,14 +400,7 @@ inline VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 
     const AStringView messageIdName = callbackData && callbackData->pMessageIdName ? callbackData->pMessageIdName : "";
     const AStringView message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
-    NWB_LOGGER_WARNING(
-        NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"),
-        StringConvert(DebugUtilsSeverityToString(severity)),
-        static_cast<u32>(types),
-        messageId,
-        StringConvert(messageIdName),
-        StringConvert(message)
-    );
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"), StringConvert(DebugUtilsSeverityToString(severity)), static_cast<u32>(types), messageId, StringConvert(messageIdName), StringConvert(message));
 
     return VK_FALSE;
 }

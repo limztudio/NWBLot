@@ -76,10 +76,7 @@ static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
         default: break;
         }
     }
-    return
-        hasHead && hasCmap && hasMaxp && hasHhea && hasHmtx
-        && (signature == s_TrueTypeSignature ? hasGlyf && hasLoca : hasCff)
-    ;
+    return hasHead && hasCmap && hasMaxp && hasHhea && hasHmtx && (signature == s_TrueTypeSignature ? hasGlyf && hasLoca : hasCff);
 }
 
 
@@ -137,11 +134,7 @@ public:
         const FT_Error faceError = FT_New_Memory_Face(m_library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &m_face);
         if(faceError != 0)
             return false;
-        return
-            m_face->num_faces == 1 && m_face->num_glyphs > 0 && m_face->units_per_EM > 0u
-            && FT_IS_SFNT(m_face) && FT_IS_SCALABLE(m_face) && !FT_HAS_MULTIPLE_MASTERS(m_face)
-            && FT_Select_Charmap(m_face, FT_ENCODING_UNICODE) == 0
-        ;
+        return m_face->num_faces == 1 && m_face->num_glyphs > 0 && m_face->units_per_EM > 0u && FT_IS_SFNT(m_face) && FT_IS_SCALABLE(m_face) && !FT_HAS_MULTIPLE_MASTERS(m_face) && FT_Select_Charmap(m_face, FT_ENCODING_UNICODE) == 0;
     }
 
 

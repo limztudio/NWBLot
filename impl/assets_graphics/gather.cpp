@@ -45,12 +45,7 @@ static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MergeGatheredGraphicsAsset(
-    const Name& virtualPath,
-    Core::Assets::AssetBytes& existingPayload,
-    const void* incomingPayload,
-    const usize incomingSize
-){
+bool MergeGatheredGraphicsAsset(const Name& virtualPath, Core::Assets::AssetBytes& existingPayload, const void* incomingPayload, const usize incomingSize){
     if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
         return false;
     if(incomingSize > 0u && incomingPayload == nullptr)
@@ -99,14 +94,8 @@ bool MergeGatheredGraphicsAsset(
         }
 
         const auto& previous = records[found.value()];
-        if(previous.shaderName != record.shaderName || previous.stage != record.stage
-            || previous.variantName != record.variantName || previous.sourceChecksum != record.sourceChecksum
-            || previous.bytecodeChecksum != record.bytecodeChecksum){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting shader index record '{}' variant '{}' stage '{}'")
-                , StringConvert(record.shaderName.resolvedText())
-                , StringConvert(record.variantName)
-                , StringConvert(record.stage.resolvedText())
-            );
+        if(previous.shaderName != record.shaderName || previous.stage != record.stage || previous.variantName != record.variantName || previous.sourceChecksum != record.sourceChecksum || previous.bytecodeChecksum != record.bytecodeChecksum){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting shader index record '{}' variant '{}' stage '{}'"), StringConvert(record.shaderName.resolvedText()), StringConvert(record.variantName), StringConvert(record.stage.resolvedText()));
             return false;
         }
     }

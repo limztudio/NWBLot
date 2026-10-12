@@ -23,21 +23,9 @@ static constexpr AStringView s_QoiExtension = ".qoi";
 static constexpr AStringView s_ExrExtension = ".exr";
 static constexpr AStringView s_HdrExtension = ".hdr";
 
-static constexpr AStringView s_SupportedInputExtensions[] = {
-    s_PngExtension,
-    s_JpgExtension,
-    s_JpegExtension,
-    s_JfifExtension,
-    s_TgaExtension,
-    s_QoiExtension,
-    s_ExrExtension,
-    s_HdrExtension,
-};
+static constexpr AStringView s_SupportedInputExtensions[] = { s_PngExtension, s_JpgExtension, s_JpegExtension, s_JfifExtension, s_TgaExtension, s_QoiExtension, s_ExrExtension, s_HdrExtension, };
 
-static constexpr AStringView s_HdrInputExtensions[] = {
-    s_ExrExtension,
-    s_HdrExtension,
-};
+static constexpr AStringView s_HdrInputExtensions[] = { s_ExrExtension, s_HdrExtension, };
 
 bool IsSupportedInputPath(const Path& path){
     return PathHasListedExtension(path, s_SupportedInputExtensions);

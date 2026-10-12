@@ -18,10 +18,7 @@ NWB_IMPL_BEGIN
 
 bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font){
     const Core::Assets::AssetBytes& source = font.fontBytes();
-    if(
-        payload.font.name() != font.virtualPath() || payload.faceIndex != font.faceIndex()
-        || ComputeSha256({ source.data(), source.size() }) != payload.fontSha256 || source.size() < s_FontSfntHeaderBytes
-    ){
+    if(payload.font.name() != font.virtualPath() || payload.faceIndex != font.faceIndex() || ComputeSha256({ source.data(), source.size() }) != payload.fontSha256 || source.size() < s_FontSfntHeaderBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
         return false;
     }
@@ -59,10 +56,7 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
                 break;
             }
         }
-        if(
-            !exported || exported->bytes.size() != sourceTable.bytes.size()
-            || NWB_MEMCMP(exported->bytes.data(), sourceTable.bytes.data(), sourceTable.bytes.size()) != 0
-        ){
+        if(!exported || exported->bytes.size() != sourceTable.bytes.size() || NWB_MEMCMP(exported->bytes.data(), sourceTable.bytes.data(), sourceTable.bytes.size()) != 0){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
             return false;
         }

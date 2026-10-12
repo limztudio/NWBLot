@@ -34,7 +34,8 @@ struct NwbMeshSurface{
     half   refractionIor;
     half3  shadowAbsorptionTint;
     half   renderCoverage;
-    // Explicit reflection inputs. The material's BXDF retains ownership of param0/param1 meanings.
+    // Explicit reflection inputs.
+    // The material's BXDF retains ownership of param0/param1 meanings.
     // F0 is linear RGB reflectance at normal incidence; perceptual roughness ranges from smooth (0) to rough (1).
     half3  specularF0;
     half   perceptualRoughness;

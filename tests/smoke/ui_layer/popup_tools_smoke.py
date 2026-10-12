@@ -10,12 +10,8 @@ import time
 from popup_tools_native import PopupToolsNativeInput
 from popup_tools_probe import center, observe_popup_tools, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -33,9 +29,7 @@ class PopupToolsRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = {"tooltip": 0, "open": 0, "cursor": 0, "command": 0, "commits": 0, "anchor_clicks": 0,
-            "underlying": 0, "sentinel_focused": 0, "enabled": 1, "reversed": 0, "source_revision": 1,
-            "source_generation": 1, "text_bytes": 8}
+        self.expected = {"tooltip": 0, "open": 0, "cursor": 0, "command": 0, "commits": 0, "anchor_clicks": 0, "underlying": 0, "sentinel_focused": 0, "enabled": 1, "reversed": 0, "source_revision": 1, "source_generation": 1, "text_bytes": 8}
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -75,8 +69,7 @@ class PopupToolsRun:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
-            report = observe_popup_tools(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra)
+            report = observe_popup_tools(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
                 for field in dynamic:
@@ -86,16 +79,13 @@ class PopupToolsRun:
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(),
-            "observation": report}
+        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"popup tools displayed-state gate '{name}' failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "failure": self.failure_report,
-            "input_path": "Win32 physical hover positioning with posted motion/buttons/Menu keys and native Shift+F10 modifiers"
-                if self.native.windows else "X11 XSendEvent keys/button1/button3 and XSetInputFocus",
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report,
+            "input_path": "Win32 physical hover positioning with posted motion/buttons/Menu keys and native Shift+F10 modifiers" if self.native.windows else "X11 XSendEvent keys/button1/button3 and XSetInputFocus",
             "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
         (self.args.output_directory / "popup_tools.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
@@ -118,9 +108,7 @@ class PopupToolsRun:
         self.native.button(True, *anchor)
         self.checkpoint("held_primary_suppresses_tooltip", tooltip=0, sentinel_focused=0)
         self.native.button(False, *anchor)
-        # Park the pointer off the anchor before the gate: the 1.0s hover delay
-        # would otherwise reshow the tooltip mid-capture under load, while the
-        # activation itself only depends on the press/release sequence.
+        # Park the pointer off the anchor before the gate: the 1.0s hover delay would otherwise reshow the tooltip mid-capture under load, while the activation itself only depends on the press/release sequence.
         self.hover("counter")
         self.checkpoint("primary_release_activates_anchor", anchor_clicks=1)
         self.hover("counter")
@@ -171,8 +159,7 @@ class PopupToolsRun:
         self.checkpoint("held_key_previews_once", cursor=4)
         self.hover("counter")
         self.native.tap("F6")
-        self.checkpoint("source_replacement_dismisses_and_retires_owner", open=0, source_generation=2,
-            source_revision=3, dynamic=("cursor",))
+        self.checkpoint("source_replacement_dismisses_and_retires_owner", open=0, source_generation=2, source_revision=3, dynamic=("cursor",))
         self.native.key("Down", True, repeat=True)
         self.native.key("Down", False)
         self.checkpoint("stale_held_key_cannot_reopen_or_activate")
@@ -187,8 +174,7 @@ class PopupToolsRun:
         self.hover("counter")
         self.checkpoint("enable_restores_attachment", enabled=1)
         self.click("anchor")
-        # Same hover-delay race as the first activation: park off the anchor so
-        # the 1.0s tooltip cannot reshow during the 10s capture window.
+        # Same hover-delay race as the first activation: park off the anchor so the 1.0s tooltip cannot reshow during the 10s capture window.
         self.hover("counter")
         self.checkpoint("fresh_primary_focuses_enabled_anchor", anchor_clicks=2)
         self.hover("counter")

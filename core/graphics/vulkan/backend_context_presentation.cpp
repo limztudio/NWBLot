@@ -61,25 +61,12 @@ BeginFrameResult BackendContext::beginFrame(){
     }
 
     u32 acquiredIndex = Limit<u32>::s_Max;
-    const VkResult acquireResult = m_deviceDispatch.vkAcquireNextImageKHR(
-        m_vulkanDevice,
-        m_swapChain,
-        UINT64_MAX,
-        slot.semaphore,
-        slot.fence,
-        &acquiredIndex
-    );
+    const VkResult acquireResult = m_deviceDispatch.vkAcquireNextImageKHR(m_vulkanDevice, m_swapChain, UINT64_MAX, slot.semaphore, slot.fence, &acquiredIndex);
     if(acquireResult == VK_ERROR_OUT_OF_DATE_KHR){
         VkSurfaceCapabilitiesKHR surfaceCaps = {};
-        const VkResult capabilitiesResult = m_instanceDispatch.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-            m_vulkanPhysicalDevice,
-            m_windowSurface,
-            &surfaceCaps
-        );
+        const VkResult capabilitiesResult = m_instanceDispatch.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
         if(capabilitiesResult != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities for a requested resize. {}")
-                , ResultToString(capabilitiesResult)
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities for a requested resize. {}"), ResultToString(capabilitiesResult));
             return result;
         }
         if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX){
@@ -172,19 +159,8 @@ bool BackendContext::abandonAcquiredFrame(){
         return false;
     }
 
-    const bool currentImageReady =
-        m_swapChain
-        && m_swapChainIndex < m_swapChainImages.size()
-        && m_swapChainIndex < m_presentSemaphores.size()
-        && m_swapChainImages[m_swapChainIndex].rhiHandle
-        && m_presentSemaphores[m_swapChainIndex] != VK_NULL_HANDLE
-    ;
-    const bool presentationSignalIdle =
-        m_framePresentationSignalState == FramePresentationSignalState::Idle
-        && m_framePresentationSemaphore == VK_NULL_HANDLE
-        && !m_framePresentationQueue.valid()
-        && m_framePresentationSwapChainIndex == Limit<u32>::s_Max
-    ;
+    const bool currentImageReady = m_swapChain && m_swapChainIndex < m_swapChainImages.size() && m_swapChainIndex < m_presentSemaphores.size() && m_swapChainImages[m_swapChainIndex].rhiHandle && m_presentSemaphores[m_swapChainIndex] != VK_NULL_HANDLE;
+    const bool presentationSignalIdle = m_framePresentationSignalState == FramePresentationSignalState::Idle && m_framePresentationSemaphore == VK_NULL_HANDLE && !m_framePresentationQueue.valid() && m_framePresentationSwapChainIndex == Limit<u32>::s_Max;
     const bool presentationSignalTracked =
         currentImageReady
         && m_framePresentationSignalState != FramePresentationSignalState::Idle
@@ -192,8 +168,8 @@ bool BackendContext::abandonAcquiredFrame(){
         && m_framePresentationSwapChainIndex == m_swapChainIndex
     ;
     const bool abandonmentReady = currentImageReady && (presentationSignalIdle || presentationSignalTracked);
-    // Invalidate presentation identity before touching signal state. Keeping m_frameAcquired set quarantines the
-    // WSI image even if retirement or draining fails, so no later beginFrame, claim, or present can reuse it.
+    // Invalidate presentation identity before touching signal state.
+    // Keeping m_frameAcquired set quarantines the WSI image even if retirement or draining fails, so no later beginFrame, claim, or present can reuse it.
     m_swapChainIndex = Limit<u32>::s_Max;
     if(!abandonmentReady){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Acquired-frame abandonment preconditions failed; forcing device teardown."));
@@ -263,11 +239,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
     bool frameSignalAccepted = false;
     {
         ScopedLock presentationLock(m_framePresentationMutex);
-        frameSignalAccepted =
-            m_framePresentationSignalState == FramePresentationSignalState::Accepted
-            && m_framePresentationSwapChainIndex == m_swapChainIndex
-            && m_framePresentationSemaphore == semaphore
-        ;
+        frameSignalAccepted = m_framePresentationSignalState == FramePresentationSignalState::Accepted && m_framePresentationSwapChainIndex == m_swapChainIndex && m_framePresentationSemaphore == semaphore;
     }
 
     if(!frameSignalAccepted){
@@ -278,17 +250,9 @@ Expected<bool, PresentationFailure> BackendContext::present(){
         }
 
         SwapChainImage& swapChainImage = m_swapChainImages[m_swapChainIndex];
-        const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy =
-            VulkanDetail::ResolveDirectPresentTransitionPolicy(
-                swapChainImage.presentationState.nativeInitialState()
-            )
-        ;
+        const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy = VulkanDetail::ResolveDirectPresentTransitionPolicy(swapChainImage.presentationState.nativeInitialState());
         const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-        if(
-            !swapChainImage.rhiHandle
-            || transitionPolicy == VulkanDetail::DirectPresentTransitionPolicy::Invalid
-            || !primaryGraphicsQueue.valid()
-        ){
+        if(!swapChainImage.rhiHandle || transitionPolicy == VulkanDetail::DirectPresentTransitionPolicy::Invalid || !primaryGraphicsQueue.valid()){
             if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
                 captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentationSignalCancellationContext);
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after invalid direct presentation state."));
@@ -319,14 +283,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
         QueueSubmissionDesc submitDesc;
         submitDesc.setPreSubmitHook(presentationSignalHook);
         CommandList* const directCommandLists[] = { directCommandList };
-        const auto directSubmission = m_rhiDevice->executeCommandListsInternal(
-            directCommandLists,
-            LengthOf(directCommandLists),
-            primaryGraphicsQueue,
-            submitDesc,
-            false,
-            Device::DeviceLossDiagnosticPolicy::Defer
-        );
+        const auto directSubmission = m_rhiDevice->executeCommandListsInternal(directCommandLists, LengthOf(directCommandLists), primaryGraphicsQueue, submitDesc, false, Device::DeviceLossDiagnosticPolicy::Defer);
         if(!directSubmission){
             if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after submit rejection."));
@@ -346,11 +303,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
     }
 
     UniqueLock<Futex> presentationLock(m_framePresentationMutex);
-    frameSignalAccepted =
-        m_framePresentationSignalState == FramePresentationSignalState::Accepted
-        && m_framePresentationSwapChainIndex == m_swapChainIndex
-        && m_framePresentationSemaphore == semaphore
-    ;
+    frameSignalAccepted = m_framePresentationSignalState == FramePresentationSignalState::Accepted && m_framePresentationSwapChainIndex == m_swapChainIndex && m_framePresentationSemaphore == semaphore;
     if(!frameSignalAccepted){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Presentation signal state changed before native present."));
         return MakeUnexpected(PresentationFailure{ presentationAccepted });
@@ -378,12 +331,11 @@ Expected<bool, PresentationFailure> BackendContext::present(){
     }
     res = *nativePresent;
     presentationAccepted = VulkanDetail::IsQueuePresentationAccepted(res);
-    const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition =
-        VulkanDetail::ClassifyQueuePresentWaitDisposition(res);
+    const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition = VulkanDetail::ClassifyQueuePresentWaitDisposition(res);
     m_swapChainImages[m_swapChainIndex].presentationState.observeQueuePresentWaitDisposition(presentWaitDisposition);
     if(presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::Consumed){
-        // Host/device OOM and unknown failures do not prove the accepted binary signal was consumed. Preserve its
-        // tracking until successful idle-and-replacement quarantine or terminal teardown.
+        // Host/device OOM and unknown failures do not prove the accepted binary signal was consumed.
+        // Preserve its tracking until successful idle-and-replacement quarantine or terminal teardown.
         if(presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost){
             m_rhiDevice->markDeviceLost();
             captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentContext, &presentationLock);
@@ -407,9 +359,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
     m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     presentationLock.unlock();
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present consumed synchronization but requires recreation. {}")
-            , ResultToString(res)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present consumed synchronization but requires recreation. {}"), ResultToString(res));
         return MakeUnexpected(PresentationFailure{ presentationAccepted });
     }
 
@@ -443,11 +393,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
         return MakeUnexpected(PresentationFailure{ presentationAccepted });
     }
 
-    if(!m_rhiDevice->setEventQueryInternal(
-        *query,
-        CommandQueue::Graphics,
-        Device::DeviceLossDiagnosticPolicy::Defer
-    )){
+    if(!m_rhiDevice->setEventQueryInternal(*query, CommandQueue::Graphics, Device::DeviceLossDiagnosticPolicy::Defer)){
         m_queryPool.push_back(query);
         if(!m_rhiDevice->isDeviceLost())
             m_rhiDevice->quarantineDevice();
@@ -483,49 +429,26 @@ void BackendContext::resetDirectPresentCommandList()noexcept{
     m_directPresentQueue = {};
 }
 
-bool BackendContext::recordDirectPresentTransition(
-    const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy,
-    Texture* backbufferTexture
-){
+bool BackendContext::recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture){
     CommandList* const directCommandList = m_directPresentCommandList.get();
     if(!directCommandList || !backbufferTexture)
         return false;
     directCommandList->open();
-    if(
-        !directCommandList->hasCommandBuffer()
-        || !directCommandList->isRecording()
-        || directCommandList->commandRecordingFailed()
-    ){
+    if(!directCommandList->hasCommandBuffer() || !directCommandList->isRecording() || directCommandList->commandRecordingFailed()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to open the direct presentation command list."));
         return false;
     }
     if(transitionPolicy == VulkanDetail::DirectPresentTransitionPolicy::PreservePresent){
-        directCommandList->beginTrackingTextureState(
-            backbufferTexture,
-            s_AllSubresources,
-            ResourceStates::Present
-        );
+        directCommandList->beginTrackingTextureState(backbufferTexture, s_AllSubresources, ResourceStates::Present);
     }
-    directCommandList->setTextureState(
-        backbufferTexture,
-        s_AllSubresources,
-        ResourceStates::Present
-    );
+    directCommandList->setTextureState(backbufferTexture, s_AllSubresources, ResourceStates::Present);
     directCommandList->commitBarriers();
-    if(
-        !directCommandList->hasCommandBuffer()
-        || !directCommandList->isRecording()
-        || directCommandList->commandRecordingFailed()
-    ){
+    if(!directCommandList->hasCommandBuffer() || !directCommandList->isRecording() || directCommandList->commandRecordingFailed()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to record the direct presentation transition."));
         return false;
     }
     directCommandList->close();
-    if(
-        !directCommandList->hasCommandBuffer()
-        || directCommandList->isRecording()
-        || directCommandList->commandRecordingFailed()
-    ){
+    if(!directCommandList->hasCommandBuffer() || directCommandList->isRecording() || directCommandList->commandRecordingFailed()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to close the direct presentation command list."));
         return false;
     }

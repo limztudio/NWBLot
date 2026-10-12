@@ -36,8 +36,7 @@ TEST(LightSpaceShadowStorage, ReservesWholeCasterAndRoundedMeshletGroupDraws){
     ASSERT_EQ(plan->lightCount, 2u);
     ASSERT_EQ(plan->viewCount, 7u);
     EXPECT_EQ(plan->drawArgumentByteSize, 7u * 7u * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
-    LightSpaceShadowStorageCapacity capacity{ plan->countByteSize, plan->eventByteSize, plan->viewByteSize,
-        plan->drawArgumentByteSize, plan->textureResolution, plan->viewCount };
+    LightSpaceShadowStorageCapacity capacity{ plan->countByteSize, plan->eventByteSize, plan->viewByteSize, plan->drawArgumentByteSize, plan->textureResolution, plan->viewCount };
     EXPECT_TRUE(LightSpaceShadowStorageFits(*plan, capacity));
     --capacity.drawArgumentBytes;
     EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
@@ -92,11 +91,9 @@ TEST(LightSpaceShadowStorage, CanSelectSmallerCurrentPlanWithoutAllocatingAndDec
     ASSERT_TRUE(larger);
     smaller = BuildLightSpacePlan(SoftwareShadowSettings{}, &point, 1u, Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(smaller);
-    const LightSpaceShadowStorageCapacity capacity{ larger->countByteSize, larger->eventByteSize, larger->viewByteSize, larger->drawArgumentByteSize,
-        larger->textureResolution, larger->viewCount };
+    const LightSpaceShadowStorageCapacity capacity{ larger->countByteSize, larger->eventByteSize, larger->viewByteSize, larger->drawArgumentByteSize, larger->textureResolution, larger->viewCount };
     EXPECT_TRUE(LightSpaceShadowStorageFits(*smaller, capacity));
-    const LightSpaceShadowStorageCapacity small{ smaller->countByteSize, smaller->eventByteSize, smaller->viewByteSize, smaller->drawArgumentByteSize,
-        smaller->textureResolution, smaller->viewCount };
+    const LightSpaceShadowStorageCapacity small{ smaller->countByteSize, smaller->eventByteSize, smaller->viewByteSize, smaller->drawArgumentByteSize, smaller->textureResolution, smaller->viewCount };
     EXPECT_FALSE(LightSpaceShadowStorageFits(*larger, small));
     EXPECT_FALSE(LightSpaceShadowStorageFits(LightSpacePlan{}, capacity));
 }

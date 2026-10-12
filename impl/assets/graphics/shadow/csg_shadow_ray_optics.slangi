@@ -18,16 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbCsgShadowRayBoundaryOptics(
-    const uint contextSlot,
-    const uint materialSlot,
-    const uint instanceIndex,
-    const NwbCsgRayBoundary boundary,
-    const float3 origin,
-    const float3 direction,
-    out half3 absorption,
-    out half transmission
-){
+bool nwbCsgShadowRayBoundaryOptics(const uint contextSlot, const uint materialSlot, const uint instanceIndex, const NwbCsgRayBoundary boundary, const float3 origin, const float3 direction, out half3 absorption, out half transmission){
     absorption = half3(0.0h);
     transmission = half(1.0h);
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
@@ -58,8 +49,7 @@ bool nwbCsgShadowRayBoundaryOptics(
         const float3 geometricNormal = nwbRayTraceTriangleGeometricNormal(material, boundary.primitive, nwbCsgRayWorldToObject(instance));
         if(dot(hit.worldNormal, hit.worldNormal) == 0.0 || dot(geometricNormal, geometricNormal) == 0.0)
             return false;
-        cosine = lerp(nwbShadowCosineToRay(geometricNormal, direction), nwbShadowCosineToRay(hit.worldNormal, direction),
-            nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal)));
+        cosine = lerp(nwbShadowCosineToRay(geometricNormal, direction), nwbShadowCosineToRay(hit.worldNormal, direction), nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal)));
     }
     if(!all(isfinite(hit.worldPosition)) || !all(isfinite(hit.worldNormal)) || !all(isfinite(hit.uv0)))
         return false;
@@ -101,15 +91,7 @@ struct NwbCsgShadowRayOpenVisitor : NwbCsgRayOpenVisitor{
     float3 direction;
     NwbCsgShadowOpenOptics optics;
 
-    [mutating] uint visit(
-        const uint primitive,
-        const float distance,
-        const float2 barycentrics,
-        const float minimum,
-        const float maximum,
-        __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-        const uint cutCount
-    ){
+    [mutating] uint visit(const uint primitive, const float distance, const float2 barycentrics, const float minimum, const float maximum, __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], const uint cutCount){
         if(!nwbCsgRayOpenBoundaryVisible(distance, minimum, maximum, cuts, cutCount))
             return 0u;
         NwbCsgRayBoundary boundary = (NwbCsgRayBoundary)0;

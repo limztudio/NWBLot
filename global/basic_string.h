@@ -59,11 +59,7 @@ template<typename ArenaT>
 using TStringStream = BasicStringStream<tchar, ArenaT>;
 
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultBasicStringStream = std::basic_stringstream<
-    T,
-    std::char_traits<T>,
-    ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena>
->;
+using DefaultBasicStringStream = std::basic_stringstream< T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena> >;
 template<typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultAStringStream = DefaultBasicStringStream<char, ArenaT, DefaultArena>;
 template<typename ArenaT, ArenaT& (*DefaultArena)()>
@@ -239,8 +235,7 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src){
         if(codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeHighSurrogateMax && (i + 1) < src.size()){
             const u32 low = static_cast<u32>(src[i + 1]);
             if(low >= s_UnicodeLowSurrogateMin && low <= s_UnicodeLowSurrogateMax){
-                codePoint = s_Utf8FourByteMinCodePoint
-                    + (((codePoint - s_UnicodeHighSurrogateMin) << s_Utf16SurrogatePayloadBits) | (low - s_UnicodeLowSurrogateMin));
+                codePoint = s_Utf8FourByteMinCodePoint + (((codePoint - s_UnicodeHighSurrogateMin) << s_Utf16SurrogatePayloadBits) | (low - s_UnicodeLowSurrogateMin));
                 ++i;
             }
             else
@@ -281,8 +276,7 @@ inline void WriteUtf8AsWString(Out& out, const AStringView src){
             const u8 second = static_cast<u8>(src[i]);
             if((second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker){
                 ++i;
-                codePoint = (static_cast<u32>(first & s_Utf8TwoBytePayloadMask) << s_Utf8ContinuationPayloadBits)
-                    | static_cast<u32>(second & s_Utf8ContinuationPayloadMask);
+                codePoint = (static_cast<u32>(first & s_Utf8TwoBytePayloadMask) << s_Utf8ContinuationPayloadBits) | static_cast<u32>(second & s_Utf8ContinuationPayloadMask);
             }
         }
         else if((first & s_Utf8ThreeByteMask) == s_Utf8ThreeByteMarker && (i + 1u) < src.size()){
@@ -301,11 +295,7 @@ inline void WriteUtf8AsWString(Out& out, const AStringView src){
             const u8 second = static_cast<u8>(src[i]);
             const u8 third = static_cast<u8>(src[i + 1u]);
             const u8 fourth = static_cast<u8>(src[i + 2u]);
-            if(
-                (second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker
-                && (third & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker
-                && (fourth & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker
-            ){
+            if((second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker && (third & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker && (fourth & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker){
                 i += 3u;
                 codePoint =
                     (static_cast<u32>(first & s_Utf8FourBytePayloadMask) << (s_Utf8ContinuationPayloadBits * 3u))

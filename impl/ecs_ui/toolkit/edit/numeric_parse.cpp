@@ -80,17 +80,11 @@ namespace __hidden_ui_numeric_parse{
 
 
 bool ValidateIntegerBounds(const IntegerBounds& bounds)noexcept{
-    return
-        bounds.minimum <= bounds.maximum
-        && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp)
-    ;
+    return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
 bool ValidateFloatBounds(const FloatBounds& bounds)noexcept{
-    return
-        IsFinite(bounds.minimum) && IsFinite(bounds.maximum) && bounds.minimum <= bounds.maximum
-        && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp)
-    ;
+    return IsFinite(bounds.minimum) && IsFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
 Expected<i64, NumericParseStatus::Enum> ParseIntegerDraft(const AStringView text)noexcept{

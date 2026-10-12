@@ -42,48 +42,22 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuExternalCompletionId completions[] = {
-        graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/merged_external_a"))
-                .setMarkerLabel("Merged External A")
-        ),
-        graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/merged_external_b"))
-                .setMarkerLabel("Merged External B")
-        ),
-        graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/merged_external_c"))
-                .setMarkerLabel("Merged External C")
-        ),
+        graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/merged_external_a")).setMarkerLabel("Merged External A")),
+        graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/merged_external_b")).setMarkerLabel("Merged External B")),
+        graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/merged_external_c")).setMarkerLabel("Merged External C")),
     };
     for(const Graphics::GpuExternalCompletionId completion : completions)
         ASSERT_TRUE(completion.valid());
 
-    const Graphics::GpuExternalCompletionId firstExternalDependencies[] = {
-        completions[1u],
-        completions[0u],
-        completions[1u],
-    };
+    const Graphics::GpuExternalCompletionId firstExternalDependencies[] = { completions[1u], completions[0u], completions[1u], };
     Graphics::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
     Graphics::GpuTaskDesc firstDesc;
-    firstDesc
-        .setIdentity(Name("tests/task_graph/merged_external_first"))
-        .setMarkerLabel("Merged External First")
-        .setScheduling(firstScheduling)
-        .setExternalDependencies(firstExternalDependencies, LengthOf(firstExternalDependencies))
-    ;
+    firstDesc.setIdentity(Name("tests/task_graph/merged_external_first")).setMarkerLabel("Merged External First").setScheduling(firstScheduling).setExternalDependencies(firstExternalDependencies, LengthOf(firstExternalDependencies));
     const Graphics::GpuTaskId first = graph.addTask(firstDesc);
     ASSERT_TRUE(first.valid());
 
-    const Graphics::GpuExternalCompletionId secondExternalDependencies[] = {
-        completions[0u],
-        completions[s_ThirdElementIndex],
-        completions[1u],
-        completions[s_ThirdElementIndex],
-    };
+    const Graphics::GpuExternalCompletionId secondExternalDependencies[] = { completions[0u], completions[s_ThirdElementIndex], completions[1u], completions[s_ThirdElementIndex], };
     Graphics::GpuTaskSchedulingHint secondScheduling;
     secondScheduling.allowPacketMerge = true;
     secondScheduling.mergeWithPrevious = true;
@@ -99,10 +73,7 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     ASSERT_TRUE(second.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -110,9 +81,7 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
-    const auto& analysisDependencies =
-        analysis.externalDependencies()
-    ;
+    const auto& analysisDependencies = analysis.externalDependencies();
     ASSERT_EQ(analysisDependencies.size(), 5u);
     EXPECT_EQ(analysisDependencies[0u].completion, completions[1u]);
     EXPECT_EQ(analysisDependencies[0u].consumer, first);
@@ -143,95 +112,39 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo producerQueue = DedicatedComputeQueue();
-    const Graphics::QueueSubmissionToken completionToken{
-        .value = 41u,
-        .physicalQueueIndex = producerQueue.id.index,
-        .deviceGeneration = producerQueue.id.deviceGeneration,
-        .queue = producerQueue.queueClass,
-    };
-    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/packet_external"))
-            .setMarkerLabel("External Completion")
-            .setToken(completionToken)
-    );
+    const Graphics::QueueSubmissionToken completionToken{ .value = 41u, .physicalQueueIndex = producerQueue.id.index, .deviceGeneration = producerQueue.id.deviceGeneration, .queue = producerQueue.queueClass, };
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/packet_external")).setMarkerLabel("External Completion").setToken(completionToken));
     ASSERT_TRUE(completion.valid());
     Graphics::GpuTaskDesc firstDesc;
-    firstDesc
-        .setIdentity(Name("tests/task_graph/packet_first"))
-        .setMarkerLabel("Packet First")
-    ;
-    const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(
-        firstDesc,
-        PacketLifecycleTask::Payload{}
-    );
+    firstDesc.setIdentity(Name("tests/task_graph/packet_first")).setMarkerLabel("Packet First");
+    const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(firstDesc, PacketLifecycleTask::Payload{});
     ASSERT_TRUE(first.valid());
 
     Graphics::GpuTaskDesc secondDesc;
-    secondDesc
-        .setIdentity(Name("tests/task_graph/packet_second"))
-        .setMarkerLabel("Packet Second")
-        .setDependencies(&first, 1u)
-        .setExternalDependencies(&completion, 1u)
-    ;
-    const Graphics::GpuTaskId second = graph.addTask<PacketLifecycleTask>(
-        secondDesc,
-        PacketLifecycleTask::Payload{}
-    );
+    secondDesc.setIdentity(Name("tests/task_graph/packet_second")).setMarkerLabel("Packet Second").setDependencies(&first, 1u).setExternalDependencies(&completion, 1u);
+    const Graphics::GpuTaskId second = graph.addTask<PacketLifecycleTask>(secondDesc, PacketLifecycleTask::Payload{});
     ASSERT_TRUE(second.valid());
 
     Graphics::GpuTaskDesc transferDesc;
-    transferDesc
-        .setIdentity(Name("tests/task_graph/packet_transfer"))
-        .setMarkerLabel("Packet Transfer")
-    ;
-    const Graphics::GpuTaskId transfer = graph.addTask<PacketLifecycleTask>(
-        transferDesc,
-        PacketLifecycleTask::Payload{}
-    );
+    transferDesc.setIdentity(Name("tests/task_graph/packet_transfer")).setMarkerLabel("Packet Transfer");
+    const Graphics::GpuTaskId transfer = graph.addTask<PacketLifecycleTask>(transferDesc, PacketLifecycleTask::Payload{});
     ASSERT_TRUE(transfer.valid());
 
-    const Graphics::GpuGraphResourceId recoveryDomain = AddHazardDomain(
-        graph,
-        Name("tests/task_graph/packet_recovery_domain"),
-        "Frame Recovery Timing"
-    );
+    const Graphics::GpuGraphResourceId recoveryDomain = AddHazardDomain(graph, Name("tests/task_graph/packet_recovery_domain"), "Frame Recovery Timing");
     ASSERT_TRUE(recoveryDomain.valid());
-    const Graphics::GpuTaskResourceUse recoveryUses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = recoveryDomain,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::Common,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-    };
+    const Graphics::GpuTaskResourceUse recoveryUses[] = { Graphics::GpuTaskResourceUse{ .resource = recoveryDomain, .range = {}, .requiredState = Graphics::ResourceStates::Common, .access = Graphics::GpuTaskResourceAccess::ReadWrite, }, };
     Graphics::GpuTaskSchedulingHint recoveryScheduling;
     recoveryScheduling.forceSubmissionBoundary = true;
     recoveryScheduling.allowPacketMerge = false;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
     recoveryScheduling.isRecoverySubmission = true;
     Graphics::GpuTaskDesc recoveryDesc;
-    recoveryDesc
-        .setIdentity(Name("tests/task_graph/packet_recovery"))
-        .setMarkerLabel("Frame Recovery")
-        .setScheduling(recoveryScheduling)
-        .setResourceUses(recoveryUses, LengthOf(recoveryUses))
-    ;
-    const Graphics::GpuTaskId recovery = graph.addTask<PacketLifecycleTask>(
-        recoveryDesc,
-        PacketLifecycleTask::Payload{}
-    );
+    recoveryDesc.setIdentity(Name("tests/task_graph/packet_recovery")).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryUses, LengthOf(recoveryUses));
+    const Graphics::GpuTaskId recovery = graph.addTask<PacketLifecycleTask>(recoveryDesc, PacketLifecycleTask::Payload{});
     ASSERT_TRUE(recovery.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-        DedicatedTransferQueue(),
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), DedicatedTransferQueue(), };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -275,10 +188,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         EXPECT_TRUE(compiledPlan.taskJoinsAcceptedQueueFrontier(recovery));
         EXPECT_FALSE(compiledPlan.taskJoinsAcceptedQueueFrontier({}));
         EXPECT_EQ(compiledPlan.queueInfoForTask({}), nullptr);
-        const Graphics::GpuSubmissionPacketRange firstTwoPacketRange = compiledPlan.packetRange(
-            firstPacket,
-            secondPacket
-        );
+        const Graphics::GpuSubmissionPacketRange firstTwoPacketRange = compiledPlan.packetRange(firstPacket, secondPacket);
         ASSERT_TRUE(firstTwoPacketRange.valid());
         EXPECT_TRUE(compiledPlan.validPacketRange(firstTwoPacketRange));
         EXPECT_EQ(firstTwoPacketRange.first, firstPacket);
@@ -295,10 +205,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         EXPECT_FALSE(compiledPlan.packetRange(secondPacket, firstPacket).valid());
         EXPECT_FALSE(compiledPlan.packetRangeForTasks(second, first).valid());
         EXPECT_FALSE(compiledPlan.packetRangeForTasks(first, {}).valid());
-        EXPECT_FALSE(compiledPlan.validPacketRange(Graphics::GpuSubmissionPacketRange{
-            .first = firstPacket,
-            .packetCount = compiledPlan.packetCount() + 1u,
-        }));
+        EXPECT_FALSE(compiledPlan.validPacketRange(Graphics::GpuSubmissionPacketRange{ .first = firstPacket, .packetCount = compiledPlan.packetCount() + 1u, }));
         const Graphics::GpuCompiledPacketView secondPacketView = compiledPlan.packet(secondPacket);
         ASSERT_TRUE(secondPacketView.valid());
         ASSERT_EQ(secondPacketView.plan->taskCount, 1u);
@@ -323,32 +230,12 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
 TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/recording_frontier_first"),
-        "Recording Frontier First"
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/recording_frontier_second"),
-        "Recording Frontier Second"
-    );
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/recording_frontier_first"), "Recording Frontier First");
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/recording_frontier_second"), "Recording Frontier Second");
     const Graphics::GpuTaskId thirdDependencies[] = { first };
-    const Graphics::GpuTaskId third = AddTask(
-        graph,
-        Name("tests/task_graph/recording_frontier_third"),
-        "Recording Frontier Third",
-        thirdDependencies,
-        LengthOf(thirdDependencies)
-    );
+    const Graphics::GpuTaskId third = AddTask(graph, Name("tests/task_graph/recording_frontier_third"), "Recording Frontier Third", thirdDependencies, LengthOf(thirdDependencies));
     const Graphics::GpuTaskId fourthDependencies[] = { second, third };
-    const Graphics::GpuTaskId fourth = AddTask(
-        graph,
-        Name("tests/task_graph/recording_frontier_fourth"),
-        "Recording Frontier Fourth",
-        fourthDependencies,
-        LengthOf(fourthDependencies)
-    );
+    const Graphics::GpuTaskId fourth = AddTask(graph, Name("tests/task_graph/recording_frontier_fourth"), "Recording Frontier Fourth", fourthDependencies, LengthOf(fourthDependencies));
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
@@ -378,9 +265,7 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     bool hasSecondProducer = false;
     bool hasThirdProducer = false;
     for(const Graphics::GpuPacketDependency& dependency : {
-        compiledPlan.packet(fourthPacket).dependencies[0u],
-        compiledPlan.packet(fourthPacket).dependencies[1u],
-    }){
+        compiledPlan.packet(fourthPacket).dependencies[0u], compiledPlan.packet(fourthPacket).dependencies[1u], }){
         hasSecondProducer = hasSecondProducer || dependency.producer == secondPacket;
         hasThirdProducer = hasThirdProducer || dependency.producer == thirdPacket;
     }
@@ -391,39 +276,18 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
 TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/stable_packet_dependency_first"),
-        "Stable Packet Dependency First"
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/stable_packet_dependency_second"),
-        "Stable Packet Dependency Second"
-    );
-    const Graphics::GpuTaskId third = AddTask(
-        graph,
-        Name("tests/task_graph/stable_packet_dependency_third"),
-        "Stable Packet Dependency Third"
-    );
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/stable_packet_dependency_first"), "Stable Packet Dependency First");
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/stable_packet_dependency_second"), "Stable Packet Dependency Second");
+    const Graphics::GpuTaskId third = AddTask(graph, Name("tests/task_graph/stable_packet_dependency_third"), "Stable Packet Dependency Third");
     const Graphics::GpuTaskId consumerDependencies[] = { third, first, second };
-    const Graphics::GpuTaskId consumer = AddTask(
-        graph,
-        Name("tests/task_graph/stable_packet_dependency_consumer"),
-        "Stable Packet Dependency Consumer",
-        consumerDependencies,
-        LengthOf(consumerDependencies)
-    );
+    const Graphics::GpuTaskId consumer = AddTask(graph, Name("tests/task_graph/stable_packet_dependency_consumer"), "Stable Packet Dependency Consumer", consumerDependencies, LengthOf(consumerDependencies));
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
     ASSERT_TRUE(consumer.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -456,17 +320,9 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
 TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
-        graph,
-        Name("tests/task_graph/recording_frontier_state_seed_buffer"),
-        "Recording Frontier State Seed Buffer"
-    );
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(graph, Name("tests/task_graph/recording_frontier_state_seed_buffer"), "Recording Frontier State Seed Buffer");
     ASSERT_TRUE(buffer.valid());
-    const Graphics::GpuTaskId orderingProducer = AddTask(
-        graph,
-        Name("tests/task_graph/recording_frontier_ordering_producer"),
-        "Recording Frontier Ordering Producer"
-    );
+    const Graphics::GpuTaskId orderingProducer = AddTask(graph, Name("tests/task_graph/recording_frontier_ordering_producer"), "Recording Frontier Ordering Producer");
     ASSERT_TRUE(orderingProducer.valid());
 
     const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
@@ -475,29 +331,14 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     scheduling.allowPacketMerge = false;
     scheduling.allowParallelRecording = true;
 
-    const Graphics::GpuTaskResourceUse producerUse{
-        .resource = buffer,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::CopyDest,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
+    const Graphics::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
     Graphics::GpuTaskDesc producerDesc;
-    producerDesc
-        .setIdentity(Name("tests/task_graph/recording_frontier_state_seed_producer"))
-        .setMarkerLabel("Recording Frontier State Seed Producer")
-        .setScheduling(scheduling)
-        .setResourceUses(&producerUse, 1u)
-    ;
+    producerDesc.setIdentity(Name("tests/task_graph/recording_frontier_state_seed_producer")).setMarkerLabel("Recording Frontier State Seed Producer").setScheduling(scheduling).setResourceUses(&producerUse, 1u);
     const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
 
     const Graphics::GpuTaskId consumerDependencies[] = { producer, orderingProducer };
-    const Graphics::GpuTaskResourceUse consumerUse{
-        .resource = buffer,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::CopySource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
+    const Graphics::GpuTaskResourceUse consumerUse{ .resource = buffer, .range = {}, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Read, };
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc
         .setIdentity(Name("tests/task_graph/recording_frontier_state_seed_consumer"))
@@ -529,8 +370,8 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, s_ExpectedDualCount);
     const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
-    // The state seed projects producerPacket a second time after both scheduling dependencies. Deduplication retains
-    // the original scheduling order rather than moving that producer to the end.
+    // The state seed projects producerPacket a second time after both scheduling dependencies.
+    // Deduplication retains the original scheduling order rather than moving that producer to the end.
     EXPECT_EQ(dependencies[0u].producer, producerPacket);
     EXPECT_EQ(dependencies[1u].producer, orderingProducerPacket);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);

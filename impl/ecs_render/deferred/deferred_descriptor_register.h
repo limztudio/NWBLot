@@ -35,12 +35,7 @@ namespace DeferredDescriptorRegisterDetail{
     Core::TextureDimension::Enum dimension
 );
 
-[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterStorageTexture(
-    Core::GpuDescriptorHeap& heap,
-    Core::Texture* texture,
-    Core::Format::Enum format,
-    Core::TextureDimension::Enum dimension
-);
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterStorageTexture(Core::GpuDescriptorHeap& heap, Core::Texture* texture, Core::Format::Enum format, Core::TextureDimension::Enum dimension);
 
 [[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterSampler(Core::GpuDescriptorHeap& heap, Core::Sampler* sampler);
 

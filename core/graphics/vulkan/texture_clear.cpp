@@ -25,10 +25,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
     }
-    const VkImageUsageFlags requiredUsage = m_renderPassActive
-        ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
-        : VK_IMAGE_USAGE_TRANSFER_DST_BIT
-    ;
+    const VkImageUsageFlags requiredUsage = m_renderPassActive ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
@@ -38,19 +35,13 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         return;
     }
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture.m_creationDesc,
-        TextureSubresourceMipResolve::Range
-    );
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or invalid"));
         return;
     }
 
-    const f32 clearDepthValue = clearDepth
-        ? VulkanTextureDetail::ClampClearFloat(depth, 0.0f, 1.0f)
-        : 0.0f
-    ;
+    const f32 clearDepthValue = clearDepth ? VulkanTextureDetail::ClampClearFloat(depth, 0.0f, 1.0f) : 0.0f;
 
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = clearDepthValue;
@@ -58,15 +49,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
 
     if(m_renderPassActive){
         const Rect fullRect(0, Limit<i32>::s_Max, 0, Limit<i32>::s_Max);
-        if(clearActiveRenderPassDepthStencilTextureRect(
-            texture,
-            resolvedSubresources,
-            fullRect,
-            clearDepth,
-            clearDepthValue,
-            clearStencil,
-            stencil
-        ))
+        if(clearActiveRenderPassDepthStencilTextureRect(texture, resolvedSubresources, fullRect, clearDepth, clearDepthValue, clearStencil, stencil))
             retainResource(&texture);
         return;
     }
@@ -95,13 +78,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
     retainResource(&texture);
 }
 
-bool CommandList::clearActiveRenderPassColorTextureRect(
-    Texture& texture,
-    const TextureSubresourceSet& resolvedSubresources,
-    const Rect& rect,
-    const VkClearColorValue& clearValue,
-    TStringView valueName
-){
+bool CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName){
     static_cast<void>(valueName);
     constexpr TStringView s_OperationName = NWB_TEXT("clear color attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
@@ -109,21 +86,13 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
         return false;
     }
 
-    const auto clearTarget = VulkanTextureDetail::FindTextureColorAttachmentClearTarget(
-        texture,
-        resolvedSubresources,
-        m_renderPassFramebuffer->getDescription()
-    );
+    const auto clearTarget = VulkanTextureDetail::FindTextureColorAttachmentClearTarget(texture, resolvedSubresources, m_renderPassFramebuffer->getDescription());
     if(!clearTarget){
         rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active color attachments"));
         return false;
     }
 
-    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(
-        texture.m_creationDesc,
-        resolvedSubresources.baseMipLevel,
-        rect
-    );
+    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(texture.m_creationDesc, resolvedSubresources.baseMipLevel, rect);
     if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
         return true;
     if(clearTarget->isReadOnly){
@@ -136,15 +105,8 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
     clearAttachment.colorAttachment = clearTarget->colorAttachmentIndex;
     clearAttachment.clearValue.color = clearValue;
 
-    const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(
-        resolvedSubresources,
-        clearTarget->resolvedSubresources,
-        resolvedRect
-    );
-    if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(
-        clearRect,
-        m_renderPassFramebuffer->getFramebufferInfo()
-    )){
+    const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(resolvedSubresources, clearTarget->resolvedSubresources, resolvedRect);
+    if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
         rejectCommandRecording(s_OperationName, NWB_TEXT("clear rect is outside the active render area"));
         return false;
     }
@@ -155,15 +117,7 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
     return true;
 }
 
-bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
-    Texture& texture,
-    const TextureSubresourceSet& resolvedSubresources,
-    const Rect& rect,
-    const bool clearDepth,
-    const f32 depth,
-    const bool clearStencil,
-    const u8 stencil
-){
+bool CommandList::clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
     constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
         rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a depth/stencil attachment is required"));
@@ -187,11 +141,7 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
         return false;
     }
 
-    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(
-        texture.m_creationDesc,
-        resolvedSubresources.baseMipLevel,
-        rect
-    );
+    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(texture.m_creationDesc, resolvedSubresources.baseMipLevel, rect);
     if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
         return true;
 
@@ -215,27 +165,11 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
     return true;
 }
 
-void CommandList::clearDepthStencilTextureRect(
-    Texture& texture,
-    TextureSubresourceSet subresources,
-    const Rect& rect,
-    const bool clearDepth,
-    const f32 depth,
-    const bool clearStencil,
-    const u8 stencil
-){
+void CommandList::clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
     clearDepthStencilTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
 }
 
-void CommandList::clearDepthStencilTextureBox(
-    Texture& texture,
-    TextureSubresourceSet subresources,
-    const Box& box,
-    const bool clearDepth,
-    const f32 depth,
-    const bool clearStencil,
-    const u8 stencil
-){
+void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
     if(!publicCommandStateAccessible())
         return;
     if(!clearDepth && !clearStencil)
@@ -267,18 +201,12 @@ void CommandList::clearDepthStencilTextureBox(
     const Box baseResolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
     if(VulkanTextureDetail::TextureClearBoxEmpty(baseResolvedBox))
         return;
-    const VkImageUsageFlags requiredUsage = m_renderPassActive
-        ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
-        : VK_IMAGE_USAGE_TRANSFER_DST_BIT
-    ;
+    const VkImageUsageFlags requiredUsage = m_renderPassActive ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
-    const f32 clearDepthValue = clearDepth
-        ? VulkanTextureDetail::ClampClearFloat(depth, 0.0f, 1.0f)
-        : 0.0f
-    ;
+    const f32 clearDepthValue = clearDepth ? VulkanTextureDetail::ClampClearFloat(depth, 0.0f, 1.0f) : 0.0f;
     if(!m_renderPassActive && desc.sampleCount != 1u){
         rejectCommandRecording(s_OperationName, NWB_TEXT("bounded multisampled clears require active rendering"));
         return;
@@ -291,15 +219,7 @@ void CommandList::clearDepthStencilTextureBox(
         }
 
         const Rect rect(baseResolvedBox.minX, baseResolvedBox.maxX, baseResolvedBox.minY, baseResolvedBox.maxY);
-        if(clearActiveRenderPassDepthStencilTextureRect(
-            texture,
-            resolvedSubresources,
-            rect,
-            clearDepth,
-            clearDepthValue,
-            clearStencil,
-            stencil
-        ))
+        if(clearActiveRenderPassDepthStencilTextureRect(texture, resolvedSubresources, rect, clearDepth, clearDepthValue, clearStencil, stencil))
             retainResource(&texture);
         return;
     }
@@ -308,18 +228,12 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     }
 
-    const auto depthPattern = clearDepth
-        ? VulkanTextureDetail::BuildTextureDepthClearPattern(desc.format, clearDepthValue)
-        : Expected<VulkanTextureDetail::TextureClearPattern<VulkanTextureDetail::s_TextureClearDepthPatternBytes>>{}
-    ;
+    const auto depthPattern = clearDepth ? VulkanTextureDetail::BuildTextureDepthClearPattern(desc.format, clearDepthValue) : Expected<VulkanTextureDetail::TextureClearPattern<VulkanTextureDetail::s_TextureClearDepthPatternBytes>>{};
     if(!depthPattern){
         rejectCommandRecording(s_OperationName, NWB_TEXT("depth clear pattern is unsupported for the texture format"));
         return;
     }
-    const auto stencilPattern = clearStencil
-        ? VulkanTextureDetail::BuildTextureStencilClearPattern(desc.format, stencil)
-        : Expected<VulkanTextureDetail::TextureClearPattern<VulkanTextureDetail::s_TextureClearStencilPatternBytes>>{}
-    ;
+    const auto stencilPattern = clearStencil ? VulkanTextureDetail::BuildTextureStencilClearPattern(desc.format, stencil) : Expected<VulkanTextureDetail::TextureClearPattern<VulkanTextureDetail::s_TextureClearStencilPatternBytes>>{};
     if(!stencilPattern){
         rejectCommandRecording(s_OperationName, NWB_TEXT("stencil clear pattern is unsupported for the texture format"));
         return;
@@ -380,15 +294,8 @@ void CommandList::clearDepthStencilTextureBox(
             if(VulkanTextureDetail::TextureClearBoxEmpty(mipPlan.resolvedBox))
                 continue;
 
-            const VulkanTextureDetail::TextureClearUploadLayout& uploadLayout = aspect == VK_IMAGE_ASPECT_DEPTH_BIT
-                ? mipPlan.depthLayout
-                : mipPlan.stencilLayout
-            ;
-            const auto staging = prepareUploadStaging(
-                uploadLayout.clearByteCount,
-                NWB_TEXT("clearDepthStencilTextureBox"),
-                uploadLayout.stagingAlignment
-            );
+            const VulkanTextureDetail::TextureClearUploadLayout& uploadLayout = aspect == VK_IMAGE_ASPECT_DEPTH_BIT ? mipPlan.depthLayout : mipPlan.stencilLayout;
+            const auto staging = prepareUploadStaging(uploadLayout.clearByteCount, NWB_TEXT("clearDepthStencilTextureBox"), uploadLayout.stagingAlignment);
             if(!staging){
                 rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation failed"));
                 return false;
@@ -408,12 +315,7 @@ void CommandList::clearDepthStencilTextureBox(
                 rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation returned an invalid range"));
                 return false;
             }
-            VulkanTextureDetail::FillTextureClearBytes(
-                stagingBytes,
-                uploadLayout.clearByteCount,
-                clearPattern,
-                clearPatternSize
-            );
+            VulkanTextureDetail::FillTextureClearBytes(stagingBytes, uploadLayout.clearByteCount, clearPattern, clearPatternSize);
 
             if(uploadLayout.mergeArrayLayerCopies){
                 Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
@@ -424,11 +326,7 @@ void CommandList::clearDepthStencilTextureBox(
                     region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * uploadLayout.layerPitch;
                     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
                     region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
-                    region.imageExtent = {
-                        static_cast<u32>(mipPlan.resolvedBox.width()),
-                        static_cast<u32>(mipPlan.resolvedBox.height()),
-                        1u
-                    };
+                    region.imageExtent = { static_cast<u32>(mipPlan.resolvedBox.width()), static_cast<u32>(mipPlan.resolvedBox.height()), 1u };
                     regions[regionIndex++] = region;
                 }
 
@@ -444,11 +342,7 @@ void CommandList::clearDepthStencilTextureBox(
                     region.bufferOffset = stagingOffset;
                     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
                     region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
-                    region.imageExtent = {
-                        static_cast<u32>(mipPlan.resolvedBox.width()),
-                        static_cast<u32>(mipPlan.resolvedBox.height()),
-                        1u
-                    };
+                    region.imageExtent = { static_cast<u32>(mipPlan.resolvedBox.width()), static_cast<u32>(mipPlan.resolvedBox.height()), 1u };
                     regions[regionIndex++] = region;
                 }
 

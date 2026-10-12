@@ -24,11 +24,7 @@ namespace VulkanStateTrackingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void NormalizeBarrierScopeForQueueCapabilities(
-    const GpuQueueCapability::Mask capabilities,
-    VkPipelineStageFlags2& stageMask,
-    VkAccessFlags2& accessMask
-)noexcept{
+void NormalizeBarrierScopeForQueueCapabilities(const GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept{
     const u8 capabilityBits = static_cast<u8>(capabilities);
     const bool graphicsCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
     const bool computeCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
@@ -40,12 +36,7 @@ void NormalizeBarrierScopeForQueueCapabilities(
         return;
     }
 
-    constexpr VkPipelineStageFlags2 s_UniversalStageMask =
-        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT
-        | VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT
-        | VK_PIPELINE_STAGE_2_HOST_BIT
-        | VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
-    ;
+    constexpr VkPipelineStageFlags2 s_UniversalStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT | VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT | VK_PIPELINE_STAGE_2_HOST_BIT | VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     constexpr VkPipelineStageFlags2 s_TransferStageMask =
         VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT
         | VK_PIPELINE_STAGE_2_TRANSFER_BIT
@@ -80,18 +71,8 @@ void NormalizeBarrierScopeForQueueCapabilities(
         | VK_PIPELINE_STAGE_2_INVOCATION_MASK_BIT_HUAWEI
         | VK_PIPELINE_STAGE_2_CLUSTER_CULLING_SHADER_BIT_HUAWEI
     ;
-    constexpr VkPipelineStageFlags2 s_ComputeOnlyStageMask =
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
-        | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
-        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-        | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT
-    ;
-    constexpr VkPipelineStageFlags2 s_GraphicsOrComputeStageMask =
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT
-        | VK_PIPELINE_STAGE_2_COMMAND_PREPROCESS_BIT_EXT
-        | VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT
-        | VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT
-    ;
+    constexpr VkPipelineStageFlags2 s_ComputeOnlyStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    constexpr VkPipelineStageFlags2 s_GraphicsOrComputeStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_COMMAND_PREPROCESS_BIT_EXT | VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT | VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT;
     VkPipelineStageFlags2 allowedStageMask = s_UniversalStageMask | s_TransferStageMask;
     if(graphicsCapable)
         allowedStageMask |= s_GraphicsOnlyStageMask | s_GraphicsOrComputeStageMask;
@@ -119,10 +100,7 @@ void NormalizeBarrierScopeForQueueCapabilities(
         | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI
         | VK_PIPELINE_STAGE_2_CLUSTER_CULLING_SHADER_BIT_HUAWEI
     ;
-    constexpr VkPipelineStageFlags2 s_BuildInputShaderReadStageMask =
-        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-        | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT
-    ;
+    constexpr VkPipelineStageFlags2 s_BuildInputShaderReadStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
     constexpr VkPipelineStageFlags2 s_AccelerationStructureReadShaderStageMask =
         VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT
         | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT
@@ -136,14 +114,8 @@ void NormalizeBarrierScopeForQueueCapabilities(
         | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI
         | VK_PIPELINE_STAGE_2_CLUSTER_CULLING_SHADER_BIT_HUAWEI
     ;
-    constexpr VkPipelineStageFlags2 s_TransferReadAccessStageMask =
-        (s_TransferStageMask & ~(VK_PIPELINE_STAGE_2_CLEAR_BIT | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR))
-        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-    ;
-    constexpr VkPipelineStageFlags2 s_TransferWriteAccessStageMask =
-        (s_TransferStageMask & ~VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR)
-        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-    ;
+    constexpr VkPipelineStageFlags2 s_TransferReadAccessStageMask = (s_TransferStageMask & ~(VK_PIPELINE_STAGE_2_CLEAR_BIT | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR)) | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+    constexpr VkPipelineStageFlags2 s_TransferWriteAccessStageMask = (s_TransferStageMask & ~VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR) | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
     const bool allCommands = (stageMask & VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) != 0u;
     const bool allGraphics = graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT) != 0u;
     const auto stripUnless = [&](const VkAccessFlags2 affectedAccess, const bool supported){
@@ -151,80 +123,16 @@ void NormalizeBarrierScopeForQueueCapabilities(
             accessMask &= ~affectedAccess;
     };
 
-    stripUnless(
-        VK_ACCESS_2_INDEX_READ_BIT,
-        graphicsCapable
-            && (
-                allCommands
-                || allGraphics
-                || (stageMask & (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT)) != 0u
-            )
-    );
-    stripUnless(
-        VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
-        graphicsCapable
-            && (
-                allCommands
-                || allGraphics
-                || (stageMask & (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT)) != 0u
-            )
-    );
-    stripUnless(
-        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-        graphicsCapable
-            && (
-                allCommands
-                || allGraphics
-                || (stageMask & VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT) != 0u
-            )
-    );
-    stripUnless(
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT) != 0u)
-    );
-    stripUnless(
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-        graphicsCapable
-            && (
-                allCommands
-                || allGraphics
-                || (stageMask & (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT)) != 0u
-            )
-    );
-    stripUnless(
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        graphicsCapable
-            && (
-                allCommands
-                || allGraphics
-                || (stageMask & (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT)) != 0u
-            )
-    );
-    stripUnless(
-        VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT,
-        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_TRANSFORM_FEEDBACK_BIT_EXT) != 0u)
-    );
-    stripUnless(
-        VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR,
-        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR) != 0u)
-    );
-    stripUnless(
-        VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT,
-        graphicsCapable
-            && (
-                allCommands
-                || allGraphics
-                || (stageMask & (VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI)) != 0u
-            )
-    );
-    stripUnless(
-        VK_ACCESS_2_SHADER_READ_BIT,
-        (graphicsCapable || computeCapable)
-            && (
-                allCommands
-                || (stageMask & (s_ShaderPipelineStageMask | s_BuildInputShaderReadStageMask)) != 0u
-            )
-    );
+    stripUnless(VK_ACCESS_2_INDEX_READ_BIT, graphicsCapable && (allCommands || allGraphics || (stageMask & (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT)) != 0u));
+    stripUnless(VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT, graphicsCapable && (allCommands || allGraphics || (stageMask & (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT)) != 0u));
+    stripUnless(VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT, graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT) != 0u));
+    stripUnless(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT) != 0u));
+    stripUnless(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, graphicsCapable && (allCommands || allGraphics || (stageMask & (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT)) != 0u));
+    stripUnless(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, graphicsCapable && (allCommands || allGraphics || (stageMask & (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT)) != 0u));
+    stripUnless(VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT, graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_TRANSFORM_FEEDBACK_BIT_EXT) != 0u));
+    stripUnless(VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR, graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR) != 0u));
+    stripUnless(VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT, graphicsCapable && (allCommands || allGraphics || (stageMask & (VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI)) != 0u));
+    stripUnless(VK_ACCESS_2_SHADER_READ_BIT, (graphicsCapable || computeCapable) && (allCommands || (stageMask & (s_ShaderPipelineStageMask | s_BuildInputShaderReadStageMask)) != 0u));
     stripUnless(
         VK_ACCESS_2_UNIFORM_READ_BIT
             | VK_ACCESS_2_SHADER_WRITE_BIT
@@ -237,73 +145,23 @@ void NormalizeBarrierScopeForQueueCapabilities(
     stripUnless(
         VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
         (graphicsCapable || computeCapable || transferCapable)
-            && (
-                allCommands
-                || (stageMask & (
-                    VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT
-                    | VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
-                    | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-                    | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR
-                )) != 0u
-            )
+            && (allCommands || (stageMask & (VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR)) != 0u)
     );
-    stripUnless(
-        VK_ACCESS_2_TRANSFER_READ_BIT,
-        allCommands || (stageMask & s_TransferReadAccessStageMask) != 0u
-    );
-    stripUnless(
-        VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        allCommands || (stageMask & s_TransferWriteAccessStageMask) != 0u
-    );
+    stripUnless(VK_ACCESS_2_TRANSFER_READ_BIT, allCommands || (stageMask & s_TransferReadAccessStageMask) != 0u);
+    stripUnless(VK_ACCESS_2_TRANSFER_WRITE_BIT, allCommands || (stageMask & s_TransferWriteAccessStageMask) != 0u);
     stripUnless(
         VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
         allCommands
-            || (stageMask & (
-                VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-                | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR
-                | s_AccelerationStructureReadShaderStageMask
-            )) != 0u
+            || (stageMask & (VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR | s_AccelerationStructureReadShaderStageMask)) != 0u
     );
-    stripUnless(
-        VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
-        allCommands
-            || (stageMask & (
-                VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-                | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR
-            )) != 0u
-    );
-    stripUnless(
-        VK_ACCESS_2_MICROMAP_READ_BIT_EXT,
-        computeCapable
-            && (stageMask & (VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR)) != 0u
-    );
-    stripUnless(
-        VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT,
-        computeCapable && (stageMask & VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT) != 0u
-    );
-    stripUnless(
-        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT,
-        (graphicsCapable || computeCapable)
-            && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT) != 0u)
-    );
-    stripUnless(
-        VK_ACCESS_2_COMMAND_PREPROCESS_READ_BIT_EXT | VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_EXT,
-        (graphicsCapable || computeCapable)
-            && (allCommands || (stageMask & VK_PIPELINE_STAGE_2_COMMAND_PREPROCESS_BIT_EXT) != 0u)
-    );
-    stripUnless(
-        VK_ACCESS_2_FRAGMENT_DENSITY_MAP_READ_BIT_EXT,
-        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_FRAGMENT_DENSITY_PROCESS_BIT_EXT) != 0u)
-    );
-    stripUnless(
-        VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI,
-        graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_INVOCATION_MASK_BIT_HUAWEI) != 0u
-    );
-    stripUnless(
-        VK_ACCESS_2_MEMORY_DECOMPRESSION_READ_BIT_EXT | VK_ACCESS_2_MEMORY_DECOMPRESSION_WRITE_BIT_EXT,
-        (graphicsCapable || computeCapable)
-            && (stageMask & VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT) != 0u
-    );
+    stripUnless(VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR, allCommands || (stageMask & (VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR)) != 0u);
+    stripUnless(VK_ACCESS_2_MICROMAP_READ_BIT_EXT, computeCapable && (stageMask & (VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR)) != 0u);
+    stripUnless(VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT, computeCapable && (stageMask & VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT) != 0u);
+    stripUnless(VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT, (graphicsCapable || computeCapable) && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT) != 0u));
+    stripUnless(VK_ACCESS_2_COMMAND_PREPROCESS_READ_BIT_EXT | VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_EXT, (graphicsCapable || computeCapable) && (allCommands || (stageMask & VK_PIPELINE_STAGE_2_COMMAND_PREPROCESS_BIT_EXT) != 0u));
+    stripUnless(VK_ACCESS_2_FRAGMENT_DENSITY_MAP_READ_BIT_EXT, graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_FRAGMENT_DENSITY_PROCESS_BIT_EXT) != 0u));
+    stripUnless(VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI, graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_INVOCATION_MASK_BIT_HUAWEI) != 0u);
+    stripUnless(VK_ACCESS_2_MEMORY_DECOMPRESSION_READ_BIT_EXT | VK_ACCESS_2_MEMORY_DECOMPRESSION_WRITE_BIT_EXT, (graphicsCapable || computeCapable) && (stageMask & VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT) != 0u);
 
     if(hadAccess && accessMask == 0u)
         stageMask = VK_PIPELINE_STAGE_2_NONE;
@@ -339,45 +197,24 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
 }
 
 
-bool NeedsResourceStateBarrier(
-    const ResourceStates::Mask oldState,
-    const ResourceStates::Mask stateBits,
-    const bool uavBarrierEnabled,
-    const bool forceMemoryDependency
-)noexcept{
+bool NeedsResourceStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool uavBarrierEnabled, const bool forceMemoryDependency)noexcept{
     return oldState != stateBits || forceMemoryDependency || (oldState == stateBits && uavBarrierEnabled);
 }
 
-bool ImageBarrierOverlapsTextureSubresources(
-    const VkImageMemoryBarrier2& barrier,
-    const VkImage image,
-    const VkImageAspectFlags aspectMask,
-    const TextureSubresourceSet& subresources
-)noexcept{
+bool ImageBarrierOverlapsTextureSubresources(const VkImageMemoryBarrier2& barrier, const VkImage image, const VkImageAspectFlags aspectMask, const TextureSubresourceSet& subresources)noexcept{
     if(barrier.image != image || (barrier.subresourceRange.aspectMask & aspectMask) == 0u)
         return false;
-    if(
-        barrier.subresourceRange.levelCount == 0u
-        || barrier.subresourceRange.layerCount == 0u
-        || subresources.numMipLevels == 0u
-        || subresources.numArraySlices == 0u
-    )
+    if(barrier.subresourceRange.levelCount == 0u || barrier.subresourceRange.layerCount == 0u || subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
         return false;
 
     const u64 barrierMipEnd = static_cast<u64>(barrier.subresourceRange.baseMipLevel) + barrier.subresourceRange.levelCount;
     const u64 attachmentMipEnd = static_cast<u64>(subresources.baseMipLevel) + subresources.numMipLevels;
-    if(
-        static_cast<u64>(barrier.subresourceRange.baseMipLevel) >= attachmentMipEnd
-        || static_cast<u64>(subresources.baseMipLevel) >= barrierMipEnd
-    )
+    if(static_cast<u64>(barrier.subresourceRange.baseMipLevel) >= attachmentMipEnd || static_cast<u64>(subresources.baseMipLevel) >= barrierMipEnd)
         return false;
 
     const u64 barrierLayerEnd = static_cast<u64>(barrier.subresourceRange.baseArrayLayer) + barrier.subresourceRange.layerCount;
     const u64 attachmentLayerEnd = static_cast<u64>(subresources.baseArraySlice) + subresources.numArraySlices;
-    return
-        static_cast<u64>(barrier.subresourceRange.baseArrayLayer) < attachmentLayerEnd
-        && static_cast<u64>(subresources.baseArraySlice) < barrierLayerEnd
-    ;
+    return static_cast<u64>(barrier.subresourceRange.baseArrayLayer) < attachmentLayerEnd && static_cast<u64>(subresources.baseArraySlice) < barrierLayerEnd;
 }
 
 void AppendTextureStateBarrier(
@@ -390,14 +227,7 @@ void AppendTextureStateBarrier(
     const ResourceStates::Mask stateBits,
     const bool rayTracingStageAvailable
 ){
-    barriers.push_back(BuildTextureStateBarrier(
-        image,
-        aspectMask,
-        TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
-        oldState,
-        stateBits,
-        rayTracingStageAvailable
-    ));
+    barriers.push_back(BuildTextureStateBarrier(image, aspectMask, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), oldState, stateBits, rayTracingStageAvailable));
 }
 
 void AppendTextureStateBarriersBefore(
@@ -429,11 +259,7 @@ void AppendTextureStateBarriersBefore(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::executePipelineBarrier(
-    const Span<VkMemoryBarrier2> memoryBarriers,
-    const Span<VkImageMemoryBarrier2> imageBarriers,
-    const Span<VkBufferMemoryBarrier2> bufferBarriers
-){
+void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarriers, const Span<VkImageMemoryBarrier2> imageBarriers, const Span<VkBufferMemoryBarrier2> bufferBarriers){
     if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
         return;
 
@@ -453,26 +279,16 @@ void CommandList::executePipelineBarrier(
             if(!attachment.texture)
                 return false;
 
-            const TextureSubresourceSet resolvedSubresources = attachment.subresources.resolve(
-                attachment.texture->m_creationDesc,
-                TextureSubresourceMipResolve::Single
-            );
+            const TextureSubresourceSet resolvedSubresources = attachment.subresources.resolve(attachment.texture->m_creationDesc, TextureSubresourceMipResolve::Single);
             for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
-                if(VulkanStateTrackingDetail::ImageBarrierOverlapsTextureSubresources(
-                    depInfo.pImageMemoryBarriers[index],
-                    attachment.texture->m_image,
-                    attachment.texture->m_aspectMask,
-                    resolvedSubresources
-                ))
+                if(VulkanStateTrackingDetail::ImageBarrierOverlapsTextureSubresources(depInfo.pImageMemoryBarriers[index], attachment.texture->m_image, attachment.texture->m_aspectMask, resolvedSubresources))
                     return true;
             }
             return false;
         };
 
         const FramebufferDesc& framebufferDesc = resumeFramebuffer->m_desc;
-        bool attachmentTransitioned = attachmentOverlapsBarrier(framebufferDesc.depthAttachment)
-            || attachmentOverlapsBarrier(framebufferDesc.shadingRateAttachment)
-        ;
+        bool attachmentTransitioned = attachmentOverlapsBarrier(framebufferDesc.depthAttachment) || attachmentOverlapsBarrier(framebufferDesc.shadingRateAttachment);
         for(const FramebufferAttachment& attachment : framebufferDesc.colorAttachments)
             attachmentTransitioned = attachmentTransitioned || attachmentOverlapsBarrier(attachment);
         if(attachmentTransitioned)
@@ -485,10 +301,7 @@ void CommandList::executePipelineBarrier(
 
     // Cross-queue semaphore waits cover unsupported producer scopes; lower them to NONE on the exact queue.
     const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo
-        ? exactQueueInfo->capabilities
-        : GpuQueueCapability::None
-    ;
+    const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo ? exactQueueInfo->capabilities : GpuQueueCapability::None;
     const u8 exactCapabilityBits = static_cast<u8>(exactQueueCapabilities);
     const bool graphicsCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
     const bool computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
@@ -514,10 +327,7 @@ void CommandList::executePipelineBarrier(
             m_renderPassFramebuffer = resumeFramebuffer;
         }
         else
-            rejectCommandRecording(
-                NWB_TEXT("pipeline barrier"),
-                NWB_TEXT("dynamic rendering could not resume after the barrier")
-            );
+            rejectCommandRecording(NWB_TEXT("pipeline barrier"), NWB_TEXT("dynamic rendering could not resume after the barrier"));
     }
 }
 
@@ -528,8 +338,7 @@ void CommandList::commitBarriers(){
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
         return;
 
-    executePipelineBarrier(
-        {},
+    executePipelineBarrier({},
         { m_pendingImageBarriers.data(), m_pendingImageBarriers.size() },
         { m_pendingBufferBarriers.data(), m_pendingBufferBarriers.size() }
     );
@@ -538,12 +347,7 @@ void CommandList::commitBarriers(){
     m_pendingBufferBarriers.clear();
 }
 
-void CommandList::setTextureState(
-    Texture* textureResource,
-    TextureSubresourceSet subresources,
-    ResourceStates::Mask stateBits,
-    const bool forceMemoryDependency
-){
+void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, const bool forceMemoryDependency){
     if(!textureResource)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("set texture state");
@@ -553,10 +357,7 @@ void CommandList::setTextureState(
         return;
 
     Texture& texture = *textureResource;
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture.m_creationDesc,
-        TextureSubresourceMipResolve::Range
-    );
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
         return;
@@ -576,10 +377,7 @@ void CommandList::setTextureState(
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-            const ResourceStates::Mask subresourceOldState = permanentState == ResourceStates::Unknown
-                ? m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel)
-                : permanentState
-            ;
+            const ResourceStates::Mask subresourceOldState = permanentState == ResourceStates::Unknown ? m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel) : permanentState;
 
             if(firstSubresource){
                 oldState = subresourceOldState;
@@ -589,46 +387,16 @@ void CommandList::setTextureState(
                 usePerSubresourceBarriers = true;
                 firstBarrierIndex = m_pendingImageBarriers.size();
                 ::ContainerDetail::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
-                if(VulkanStateTrackingDetail::NeedsResourceStateBarrier(
-                    oldState,
-                    stateBits,
-                    uavBarrierEnabled,
-                    forceMemoryDependency
-                )){
-                    VulkanStateTrackingDetail::AppendTextureStateBarriersBefore(
-                        m_pendingImageBarriers,
-                        texture.m_image,
-                        texture.m_aspectMask,
-                        resolvedSubresources,
-                        mipEnd,
-                        arraySlice,
-                        mipLevel,
-                        oldState,
-                        stateBits,
-                        m_context.extensions.khrRayTracingPipeline
-                    );
+                if(VulkanStateTrackingDetail::NeedsResourceStateBarrier(oldState, stateBits, uavBarrierEnabled, forceMemoryDependency)){
+                    VulkanStateTrackingDetail::AppendTextureStateBarriersBefore(m_pendingImageBarriers, texture.m_image, texture.m_aspectMask, resolvedSubresources, mipEnd, arraySlice, mipLevel, oldState, stateBits, m_context.extensions.khrRayTracingPipeline);
                 }
             }
 
-            const bool subresourceNeedsBarrier = VulkanStateTrackingDetail::NeedsResourceStateBarrier(
-                subresourceOldState,
-                stateBits,
-                uavBarrierEnabled,
-                forceMemoryDependency
-            );
+            const bool subresourceNeedsBarrier = VulkanStateTrackingDetail::NeedsResourceStateBarrier(subresourceOldState, stateBits, uavBarrierEnabled, forceMemoryDependency);
             if(subresourceNeedsBarrier){
                 needsBarrier = true;
                 if(usePerSubresourceBarriers){
-                    VulkanStateTrackingDetail::AppendTextureStateBarrier(
-                        m_pendingImageBarriers,
-                        texture.m_image,
-                        texture.m_aspectMask,
-                        arraySlice,
-                        mipLevel,
-                        subresourceOldState,
-                        stateBits,
-                        m_context.extensions.khrRayTracingPipeline
-                    );
+                    VulkanStateTrackingDetail::AppendTextureStateBarrier(m_pendingImageBarriers, texture.m_image, texture.m_aspectMask, arraySlice, mipLevel, subresourceOldState, stateBits, m_context.extensions.khrRayTracingPipeline);
                 }
             }
         }
@@ -639,14 +407,7 @@ void CommandList::setTextureState(
         return;
 
     if(!usePerSubresourceBarriers){
-        VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(
-            texture.m_image,
-            texture.m_aspectMask,
-            resolvedSubresources,
-            oldState,
-            stateBits,
-            m_context.extensions.khrRayTracingPipeline
-        );
+        VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(texture.m_image, texture.m_aspectMask, resolvedSubresources, oldState, stateBits, m_context.extensions.khrRayTracingPipeline);
 
         if(permanentState == ResourceStates::Unknown)
             m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
@@ -674,11 +435,7 @@ void CommandList::setTextureState(
     m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::setAccelStructState(
-    RayTracingAccelStruct* accelStructResource,
-    ResourceStates::Mask stateBits,
-    const bool forceMemoryDependency
-){
+void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits, const bool forceMemoryDependency){
     if(!accelStructResource)
         return;
 

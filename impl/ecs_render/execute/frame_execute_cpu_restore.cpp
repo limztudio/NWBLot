@@ -19,54 +19,34 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FrameExecuteCpuRestore::RestorePrefixCpuState(
-    RendererMeshSystem& meshSystem,
-    RendererDeferredSystem& deferredSystem
-){
+void FrameExecuteCpuRestore::RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem){
     // Rejected recording invalidates upload mirrors.
     meshSystem.invalidateMeshViewBufferUploadMirror();
     deferredSystem.invalidateSceneLightingUploadMirrors();
 }
 
 
-void FrameExecuteCpuRestore::RestoreShadowCpuState(
-    RendererRayTracingState& rayTracingState,
-    const RayTracingFrameCpuStateSnapshot& snapshot
-){
+void FrameExecuteCpuRestore::RestoreShadowCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot){
     rayTracingState.restoreShadowPacketCpuState(snapshot);
 }
 
 
-void FrameExecuteCpuRestore::RestoreCausticsCpuState(
-    RendererRayTracingState& rayTracingState,
-    const RayTracingFrameCpuStateSnapshot& snapshot
-){
+void FrameExecuteCpuRestore::RestoreCausticsCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot){
     rayTracingState.restoreCausticPacketCpuState(snapshot);
 }
 
 
-void FrameExecuteCpuRestore::RestoreSurfelGiCpuState(
-    RendererRayTracingState& rayTracingState,
-    const RayTracingFrameCpuStateSnapshot& snapshot
-){
+void FrameExecuteCpuRestore::RestoreSurfelGiCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot){
     rayTracingState.restoreSurfelGiPacketCpuState(snapshot);
 }
 
 
-void FrameExecuteCpuRestore::RestoreAvboitCpuState(
-    RendererAvboitSystem& avboitSystem,
-    const bool targetsNeedClear
-){
+void FrameExecuteCpuRestore::RestoreAvboitCpuState(RendererAvboitSystem& avboitSystem, const bool targetsNeedClear){
     avboitSystem.restoreTargetClearState(targetsNeedClear);
 }
 
 
-void FrameExecuteCpuRestore::RestorePostGbufferEffectsCpuState(
-    RendererRayTracingState& rayTracingState,
-    RendererAvboitSystem& avboitSystem,
-    const RayTracingFrameCpuStateSnapshot& snapshot,
-    const bool avboitTargetsNeedClear
-){
+void FrameExecuteCpuRestore::RestorePostGbufferEffectsCpuState(RendererRayTracingState& rayTracingState, RendererAvboitSystem& avboitSystem, const RayTracingFrameCpuStateSnapshot& snapshot, const bool avboitTargetsNeedClear){
     RestoreCausticsCpuState(rayTracingState, snapshot);
     RestoreSurfelGiCpuState(rayTracingState, snapshot);
     RestoreAvboitCpuState(avboitSystem, avboitTargetsNeedClear);

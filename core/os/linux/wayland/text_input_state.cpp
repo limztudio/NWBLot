@@ -47,17 +47,10 @@ bool CanApplyWaylandTextInputDeletion(
         || anchorByte - wire.m_offsetByte != wire.m_anchorByte || caretByte - wire.m_offsetByte != wire.m_caretByte
     )
         return false;
-    return
-        beforeBytes <= Min(wire.m_anchorByte, wire.m_caretByte)
-        && afterBytes <= wire.m_lengthBytes - Max(wire.m_anchorByte, wire.m_caretByte)
-    ;
+    return beforeBytes <= Min(wire.m_anchorByte, wire.m_caretByte) && afterBytes <= wire.m_lengthBytes - Max(wire.m_anchorByte, wire.m_caretByte);
 }
 
-WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(
-    const AStringView text,
-    const usize anchorByte,
-    const usize caretByte
-)noexcept{
+WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(const AStringView text, const usize anchorByte, const usize caretByte)noexcept{
     using namespace __hidden_wayland_text_input_state;
     if(anchorByte > text.size() || caretByte > text.size())
         return {};
@@ -93,12 +86,7 @@ void WaylandTextInputSurroundingState::reset()noexcept{
     m_revision = 0u;
 }
 
-WaylandTextInputSurrounding WaylandTextInputSurroundingState::update(
-    const AStringView text,
-    const usize anchorByte,
-    const usize caretByte,
-    const u64 revision
-)noexcept{
+WaylandTextInputSurrounding WaylandTextInputSurroundingState::update(const AStringView text, const usize anchorByte, const usize caretByte, const u64 revision)noexcept{
     const WaylandTextInputSurrounding slice = SliceWaylandTextInputSurrounding(text, anchorByte, caretByte);
     if(slice.available){
         m_offsetByte = slice.offsetByte;
@@ -124,10 +112,7 @@ TextInputRect WaylandTextInputRectForPixels(const TextInputRect pixels, const i3
     const i64 edgeY = y + pixels.height;
     const i64 lastX = edgeX >= 0 ? (edgeX + scale - 1) / scale : -((-edgeX) / scale);
     const i64 lastY = edgeY >= 0 ? (edgeY + scale - 1) / scale : -((-edgeY) / scale);
-    return {
-        static_cast<i32>(firstX), static_cast<i32>(firstY),
-        static_cast<i32>(Max(lastX - firstX, i64(1))), static_cast<i32>(Max(lastY - firstY, i64(1)))
-    };
+    return { static_cast<i32>(firstX), static_cast<i32>(firstY), static_cast<i32>(Max(lastX - firstX, i64(1))), static_cast<i32>(Max(lastY - firstY, i64(1))) };
 }
 
 
@@ -142,11 +127,7 @@ void WaylandTextInputSerialTracker::reset()noexcept{
     m_recordCount = 0u;
 }
 
-void WaylandTextInputSerialTracker::record(
-    const u32 serial,
-    const TextInputSessionToken token,
-    const u64 revision
-)noexcept{
+void WaylandTextInputSerialTracker::record(const u32 serial, const TextInputSessionToken token, const u64 revision)noexcept{
     if(!token.valid()){
         reset();
         return;
@@ -162,10 +143,7 @@ void WaylandTextInputSerialTracker::record(
     m_recordCount = Min(m_recordCount + 1u, s_MaxRecords);
 }
 
-WaylandTextInputProvenance WaylandTextInputSerialTracker::resolve(
-    const u32 serial,
-    const TextInputSessionToken current
-)const noexcept{
+WaylandTextInputProvenance WaylandTextInputSerialTracker::resolve(const u32 serial, const TextInputSessionToken current)const noexcept{
     using namespace __hidden_wayland_text_input_state;
     if(!current.valid() || m_token != current)
         return {};

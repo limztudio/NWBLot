@@ -34,8 +34,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer,
-    u32 rayCapacity, u64 sourceFrame, bool csg);
+void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, u32 rayCapacity, u64 sourceFrame, bool csg);
 
 // Synchronized diagnostic fixture; captures and packet receipts retain exact source-frame evidence.
 class ReflectionCsgContextProbe final{

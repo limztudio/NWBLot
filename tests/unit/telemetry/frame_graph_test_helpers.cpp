@@ -14,53 +14,16 @@ namespace TelemetryTestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void BuildTestFrameGraph(
-    Telemetry::TelemetryArena& arena,
-    Telemetry::FrameGraphNodeDescs& nodes,
-    Telemetry::FrameGraphEdgeDescs& edges
-){
+void BuildTestFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
     nodes = Telemetry::FrameGraphNodeDescs(arena);
     edges = Telemetry::FrameGraphEdgeDescs(arena);
 
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{
-        .name = Name("gbuffer"),
-        .label = AStringView("GBuffer Pass"),
-        .kind = Telemetry::FrameGraphNodeKind::Pass,
-        .flags = 1u,
-        .queueAssignment = {},
-        .compiledTask = {},
-        .runtimeStatistics = {},
-    });
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{
-        .name = Name("albedo"),
-        .label = AStringView("Albedo Texture"),
-        .kind = Telemetry::FrameGraphNodeKind::Resource,
-        .flags = 0u,
-        .queueAssignment = {},
-        .compiledTask = {},
-        .runtimeStatistics = {},
-    });
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{
-        .name = Name("lighting"),
-        .label = AStringView("Lighting Pass"),
-        .kind = Telemetry::FrameGraphNodeKind::Pass,
-        .flags = 0u,
-        .queueAssignment = {},
-        .compiledTask = {},
-        .runtimeStatistics = {},
-    });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("gbuffer"), .label = AStringView("GBuffer Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 1u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("albedo"), .label = AStringView("Albedo Texture"), .kind = Telemetry::FrameGraphNodeKind::Resource, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("lighting"), .label = AStringView("Lighting Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
 
-    edges.push_back(Telemetry::FrameGraphEdgeDesc{
-        .fromNodeIndex = 0u,
-        .toNodeIndex = 1u,
-        .kind = Telemetry::FrameGraphEdgeKind::Writes,
-    });
-    edges.push_back(Telemetry::FrameGraphEdgeDesc{
-        .fromNodeIndex = 1u,
-        .toNodeIndex = 2u,
-        .kind = Telemetry::FrameGraphEdgeKind::Reads,
-        .flags = 2u,
-    });
+    edges.push_back(Telemetry::FrameGraphEdgeDesc{ .fromNodeIndex = 0u, .toNodeIndex = 1u, .kind = Telemetry::FrameGraphEdgeKind::Writes, });
+    edges.push_back(Telemetry::FrameGraphEdgeDesc{ .fromNodeIndex = 1u, .toNodeIndex = 2u, .kind = Telemetry::FrameGraphEdgeKind::Reads, .flags = 2u, });
 }
 
 Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment(){
@@ -69,14 +32,7 @@ Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment(){
     assignment.plannedQueue = { .index = 3u, .deviceGeneration = 17u };
     assignment.acceptedQueue = assignment.plannedQueue;
     assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
-    assignment.score = {
-        .overlap = 7,
-        .queueLoad = 3,
-        .incomingCrossings = 2,
-        .outgoingCrossings = 1,
-        .ownershipTransfers = 4,
-        .total = -3,
-    };
+    assignment.score = { .overlap = 7, .queueLoad = 3, .incomingCrossings = 2, .outgoingCrossings = 1, .ownershipTransfers = 4, .total = -3, };
     assignment.queueClass = Telemetry::FrameGraphQueueClass::Compute;
     assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Scored;
     assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::All;
@@ -91,14 +47,7 @@ Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment(){
     assignment.initialQueue = { .index = 4u, .deviceGeneration = 17u };
     assignment.plannedQueue = { .index = 5u, .deviceGeneration = 17u };
     assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
-    assignment.score = {
-        .overlap = 6,
-        .queueLoad = 1,
-        .incomingCrossings = 2,
-        .outgoingCrossings = 3,
-        .ownershipTransfers = 4,
-        .total = -4,
-    };
+    assignment.score = { .overlap = 6, .queueLoad = 1, .incomingCrossings = 2, .outgoingCrossings = 3, .ownershipTransfers = 4, .total = -4, };
     assignment.queueClass = Telemetry::FrameGraphQueueClass::Transfer;
     assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Scored;
     assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
@@ -107,17 +56,8 @@ Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment(){
     return assignment;
 }
 
-Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(
-    const u64 planGeneration,
-    const u32 packetIndex,
-    const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision
-){
-    return Telemetry::FrameGraphCompiledTask{
-        .planGeneration = planGeneration,
-        .packetIndex = packetIndex,
-        .packetizationDecision = packetizationDecision,
-        .present = true,
-    };
+Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision){
+    return Telemetry::FrameGraphCompiledTask{ .planGeneration = planGeneration, .packetIndex = packetIndex, .packetizationDecision = packetizationDecision, .present = true, };
 }
 
 Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
@@ -208,9 +148,7 @@ Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
     };
 }
 
-Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(
-    const u16 queueIndex
-){
+Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex){
     if(queueIndex == 1u){
         return Telemetry::FrameGraphPhysicalQueueRuntimeStatistics{
             .graphGeneration = 51u,
@@ -320,54 +258,25 @@ Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueR
     };
 }
 
-void BuildTestPhysicalQueueRuntimeStatistics(
-    Telemetry::TelemetryArena& arena,
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& records
-){
+void BuildTestPhysicalQueueRuntimeStatistics(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& records){
     records = Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
-    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
-        .ownerNodeIndex = 0u,
-        .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u),
-    });
-    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
-        .ownerNodeIndex = 0u,
-        .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u),
-    });
+    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u), });
+    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u), });
 }
 
-void BuildTestAssignedFrameGraph(
-    Telemetry::TelemetryArena& arena,
-    Telemetry::FrameGraphNodeDescs& nodes,
-    Telemetry::FrameGraphEdgeDescs& edges
-){
+void BuildTestAssignedFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
     BuildTestFrameGraph(arena, nodes, edges);
     nodes[0u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
     nodes[2u].queueAssignment = MakeNotAcceptedFrameGraphQueueAssignment();
 }
 
-void BuildTestCompiledFrameGraph(
-    Telemetry::TelemetryArena& arena,
-    Telemetry::FrameGraphNodeDescs& nodes,
-    Telemetry::FrameGraphEdgeDescs& edges
-){
+void BuildTestCompiledFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
     BuildTestAssignedFrameGraph(arena, nodes, edges);
-    nodes[0u].compiledTask = MakeFrameGraphCompiledTask(
-        41u,
-        7u,
-        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
-    );
-    nodes[2u].compiledTask = MakeFrameGraphCompiledTask(
-        41u,
-        7u,
-        Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit
-    );
+    nodes[0u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, Telemetry::FrameGraphTaskPacketizationDecision::FirstTask);
+    nodes[2u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit);
 }
 
-void BuildTestRuntimeFrameGraph(
-    Telemetry::TelemetryArena& arena,
-    Telemetry::FrameGraphNodeDescs& nodes,
-    Telemetry::FrameGraphEdgeDescs& edges
-){
+void BuildTestRuntimeFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
     BuildTestCompiledFrameGraph(arena, nodes, edges);
     nodes[0u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
     nodes[2u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
@@ -465,14 +374,8 @@ void BuildTestPacketSubmissionFrameGraph(
     computeStatistics.submission.acceptedFrontierSubmissionCount = 1u;
     computeStatistics.submission.submissionSeconds = 0.25;
 
-    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
-        .ownerNodeIndex = 0u,
-        .statistics = computeStatistics,
-    });
-    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
-        .ownerNodeIndex = 0u,
-        .statistics = graphicsStatistics,
-    });
+    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = computeStatistics, });
+    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = graphicsStatistics, });
 
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
         .packetGeneration = 72u,

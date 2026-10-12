@@ -26,11 +26,7 @@ namespace GpuPacketRuntimeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateExternalDependencyTokens(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketRange& range
-)noexcept{
+[[nodiscard]] bool ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept{
     if(!planAccess.validFor(declarationAccess) || !planAccess.validPacketRange(range))
         return false;
 
@@ -47,19 +43,8 @@ namespace GpuPacketRuntimeDetail{
     return true;
 }
 
-[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
-    const GpuTaskGraphResourceView& resource,
-    const GpuCompiledBarrier& barrier
-)noexcept{
-    if(
-        resource.initialOwnerHandoffSourceCount == 0u
-        || !resource.initialOwnerHandoffSources
-        || (
-            resource.type != GpuGraphResourceType::Texture
-            && resource.type != GpuGraphResourceType::Buffer
-            && resource.type != GpuGraphResourceType::AccelStruct
-        )
-    )
+[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(const GpuTaskGraphResourceView& resource, const GpuCompiledBarrier& barrier)noexcept{
+    if(resource.initialOwnerHandoffSourceCount == 0u || !resource.initialOwnerHandoffSources || (resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer && resource.type != GpuGraphResourceType::AccelStruct))
         return nullptr;
 
     const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
@@ -68,12 +53,8 @@ namespace GpuPacketRuntimeDetail{
         if(
             source.sourceQueue != barrier.sourceQueue
             || source.destinationQueue != barrier.destinationQueue
-            || (resource.type == GpuGraphResourceType::Texture
-                && !source.range.textureSubresources.contains(barrier.range.textureSubresources)
-            )
-            || (resource.type == GpuGraphResourceType::Buffer
-                && !source.range.bufferRange.contains(barrier.range.bufferRange)
-            )
+            || (resource.type == GpuGraphResourceType::Texture && !source.range.textureSubresources.contains(barrier.range.textureSubresources))
+            || (resource.type == GpuGraphResourceType::Buffer && !source.range.bufferRange.contains(barrier.range.bufferRange))
         )
             continue;
         if(result)
@@ -105,19 +86,8 @@ struct PacketRecordingIntervalEntry{
     u32 packetIndex = 0u;
 };
 
-[[nodiscard]] bool LessPacketRecordingIntervalEntry(
-    const PacketRecordingIntervalEntry& left,
-    const PacketRecordingIntervalEntry& right
-)noexcept{
-    return left.beginNanoseconds < right.beginNanoseconds
-        || (
-            left.beginNanoseconds == right.beginNanoseconds
-            && (
-                left.endNanoseconds < right.endNanoseconds
-                || (left.endNanoseconds == right.endNanoseconds && left.packetIndex < right.packetIndex)
-            )
-        )
-    ;
+[[nodiscard]] bool LessPacketRecordingIntervalEntry(const PacketRecordingIntervalEntry& left, const PacketRecordingIntervalEntry& right)noexcept{
+    return left.beginNanoseconds < right.beginNanoseconds || (left.beginNanoseconds == right.beginNanoseconds && (left.endNanoseconds < right.endNanoseconds || (left.endNanoseconds == right.endNanoseconds && left.packetIndex < right.packetIndex)));
 }
 
 
@@ -173,10 +143,7 @@ struct GpuRecordedGraph::ArtifactStorage final : NoCopy{
 
 bool GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
     if(!stateFanInScratchArena){
-        stateFanInScratchArena = MakeGlobalUnique<Alloc::ScratchArena>(
-            arena,
-            GpuPacketRuntimeDetail::s_PacketStateFanInScratchArena
-        );
+        stateFanInScratchArena = MakeGlobalUnique<Alloc::ScratchArena>(arena, GpuPacketRuntimeDetail::s_PacketStateFanInScratchArena);
     }
     return stateFanInScratchArena != nullptr;
 }
@@ -225,12 +192,7 @@ GpuRecordedGraph::~GpuRecordedGraph(){
             operationState = m_operationState.load(MemoryOrder::acquire);
             continue;
         }
-        if(m_operationState.compare_exchange_weak(
-            operationState,
-            operationState | s_ArtifactOperationWriterBit,
-            MemoryOrder::acq_rel,
-            MemoryOrder::acquire
-        )){
+        if(m_operationState.compare_exchange_weak(operationState, operationState | s_ArtifactOperationWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire)){
             operationState |= s_ArtifactOperationWriterBit;
             break;
         }
@@ -264,13 +226,7 @@ bool GpuRecordedGraph::tryReset(const GpuCompiledGraph& compiledGraph){
     if(m_activeStorage->recordingAttemptGeneration != 0u){
         if(m_activeStorage->compiledObjectIdentity != planAccess.objectIdentity())
             return false;
-        if(compiledGraph.matchesActiveAttemptIdentity(
-            m_activeStorage->graphIdentity,
-            m_activeStorage->compiledObjectIdentity,
-            m_activeStorage->planGeneration,
-            m_activeStorage->recordingAttemptGeneration,
-            planAccess
-        ))
+        if(compiledGraph.matchesActiveAttemptIdentity(m_activeStorage->graphIdentity, m_activeStorage->compiledObjectIdentity, m_activeStorage->planGeneration, m_activeStorage->recordingAttemptGeneration, planAccess))
             return false;
     }
     if(!prepareResetStorageCandidate(compiledGraph, planAccess))
@@ -284,10 +240,7 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     if(tryReset(compiledGraph))
         return;
 
-    NWB_FATAL_ASSERT_MSG(
-        false,
-        "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt"
-    );
+    NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt");
     TerminateInvariant();
 }
 
@@ -299,9 +252,7 @@ void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactSto
         for(usize commandListIndex = 0u; commandListIndex < GpuRecordedPacket::s_MaxCommandLists; ++commandListIndex){
             CommandList* const commandList = packet.ownedCommandLists[commandListIndex].get();
             if(commandList){
-                commandList->revokeGraphRecordingPublication(
-                    packet.commandListRecordingLeaseSerials[commandListIndex]
-                );
+                commandList->revokeGraphRecordingPublication(packet.commandListRecordingLeaseSerials[commandListIndex]);
             }
         }
     }
@@ -349,15 +300,8 @@ void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)no
     storage.valid = false;
 }
 
-bool GpuRecordedGraph::prepareStorageCandidateLayout(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess
-){
-    if(
-        !planAccess.validFor(compiledGraph)
-        || !planAccess.valid()
-        || !m_candidateStorage
-    )
+bool GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
+    if(!planAccess.validFor(compiledGraph) || !planAccess.valid() || !m_candidateStorage)
         return false;
 
     ArtifactStorage& candidate = *m_candidateStorage;
@@ -398,10 +342,7 @@ bool GpuRecordedGraph::prepareStorageCandidateLayout(
     return true;
 }
 
-bool GpuRecordedGraph::prepareResetStorageCandidate(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess
-){
+bool GpuRecordedGraph::prepareResetStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
     if(!prepareStorageCandidateLayout(compiledGraph, planAccess))
         return false;
 
@@ -414,11 +355,7 @@ bool GpuRecordedGraph::prepareResetStorageCandidate(
     return true;
 }
 
-bool GpuRecordedGraph::prepareRecordingStorageCandidate(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    GpuTimingRecorder* const timingRecorder
-){
+bool GpuRecordedGraph::prepareRecordingStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* const timingRecorder){
     if(!prepareStorageCandidateLayout(compiledGraph, planAccess))
         return false;
 
@@ -459,13 +396,7 @@ bool GpuRecordedGraph::prepareRecordingStorageCandidate(
     return true;
 }
 
-void GpuRecordedGraph::publishStorageCandidate(
-    const GpuTaskGraph* const graphIdentity,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const u64 recordingAttemptGeneration,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+void GpuRecordedGraph::publishStorageCandidate(const GpuTaskGraph* const graphIdentity, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const u64 recordingAttemptGeneration, const ArtifactOperation& artifactAccess)noexcept{
     const bool candidateValid = planAccess.validFor(compiledGraph)
         && ArtifactOperation::ActiveExclusiveFor(*this)
         && artifactAccess.exclusiveFor(*this)
@@ -489,11 +420,7 @@ void GpuRecordedGraph::publishStorageCandidate(
     RetireStorageWithoutCallbacks(*m_candidateStorage);
 }
 
-bool GpuRecordedGraph::validForWithinArtifactOperation(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const ArtifactOperation& artifactAccess
-)const noexcept{
+bool GpuRecordedGraph::validForWithinArtifactOperation(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const ArtifactOperation& artifactAccess)const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();
     return planAccess.validFor(compiledGraph)
         && artifactAccess.validFor(*this)
@@ -531,10 +458,7 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(
     ;
 }
 
-bool GpuRecordedGraph::validFor(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess
-)const noexcept{
+bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     if(!planAccess.validFor(compiledGraph))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
@@ -543,24 +467,13 @@ bool GpuRecordedGraph::validFor(
     return validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation);
 }
 
-bool GpuRecordedGraph::validFor(
-    const GpuTaskGraph& graph,
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess
-)const noexcept{
+bool GpuRecordedGraph::validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
     if(!artifactOperation.valid())
         return false;
-    return validForWithinArtifactOperation(
-        graph,
-        declarationAccess,
-        compiledGraph,
-        planAccess,
-        artifactOperation
-    );
+    return validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation);
 }
 
 
@@ -570,10 +483,7 @@ u64 GpuRecordedGraph::recordingAttemptGeneration()const noexcept{
 }
 
 
-GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess
-)const noexcept{
+GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     GpuTaskGraphRecordingStatistics statistics;
     if(!planAccess.validFor(compiledGraph))
         return statistics;
@@ -594,10 +504,7 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
     statistics.readyFrontierWorkerCapacitySeconds = storage.readyFrontierWorkerCapacitySeconds;
     for(usize packetIndex = 0u; packetIndex < storage.packetCount; ++packetIndex){
         const GpuRecordedPacket& recordedPacket = storage.packets[packetIndex];
-        if(
-            recordedPacket.commandListCount == 0u
-            || recordedPacket.packet != planAccess.packetIdAt(packetIndex)
-        )
+        if(recordedPacket.commandListCount == 0u || recordedPacket.packet != planAccess.packetIdAt(packetIndex))
             continue;
 
         ++statistics.packetCount;
@@ -616,11 +523,7 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
     return statistics;
 }
 
-GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueRecordingStatistics(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuPhysicalQueueId& queue
-)const noexcept{
+GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept{
     if(!planAccess.validFor(compiledGraph))
         return {};
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
@@ -645,10 +548,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
     for(usize packetIndex = 0u; packetIndex < storage.packetCount; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
         const GpuRecordedPacket& recordedPacket = storage.packets[packetIndex];
-        if(
-            recordedPacket.commandListCount == 0u
-            || recordedPacket.packet != packet
-        )
+        if(recordedPacket.commandListCount == 0u || recordedPacket.packet != packet)
             continue;
 
         const GpuCompiledPacketView packetView = planAccess.packet(packet);
@@ -685,85 +585,47 @@ Optional<GpuRecordedPacket> GpuRecordedGraph::packetSnapshot(const GpuSubmission
     return recordedPacket ? Optional<GpuRecordedPacket>(*recordedPacket) : Optional<GpuRecordedPacket>();
 }
 
-bool GpuRecordedGraph::hasTaskFinalStateSeed(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuTaskId task
-)const noexcept{
+bool GpuRecordedGraph::hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task)const noexcept{
     if(!planAccess.validFor(compiledGraph))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
     if(!artifactOperation.valid())
         return false;
-    if(
-        !validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation)
-        || !planAccess.findTask(task).valid()
-    )
+    if(!validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation) || !planAccess.findTask(task).valid())
         return false;
 
     const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
     const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactOperation);
-    return findWithinArtifactOperation(packet, artifactOperation)
-        && stateSeed
-        && stateSeed->validForDeviceGeneration(m_activeStorage->deviceGeneration)
-    ;
+    return findWithinArtifactOperation(packet, artifactOperation) && stateSeed && stateSeed->validForDeviceGeneration(m_activeStorage->deviceGeneration);
 }
 
-bool GpuRecordedGraph::copyTaskFinalStateSeed(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuTaskId task,
-    CommandListResourceStateHandoff& outStateSeed
-)const{
+bool GpuRecordedGraph::copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const{
     if(!planAccess.validFor(compiledGraph))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
     if(!artifactOperation.valid())
         return false;
-    if(
-        !validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation)
-        || !planAccess.findTask(task).valid()
-    )
+    if(!validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation) || !planAccess.findTask(task).valid())
         return false;
 
     const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
     const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactOperation);
-    return findWithinArtifactOperation(packet, artifactOperation)
-        && stateSeed
-        && stateSeed->validForDeviceGeneration(m_activeStorage->deviceGeneration)
-        && outStateSeed.copyFrom(*stateSeed)
-    ;
+    return findWithinArtifactOperation(packet, artifactOperation) && stateSeed && stateSeed->validForDeviceGeneration(m_activeStorage->deviceGeneration) && outStateSeed.copyFrom(*stateSeed);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const GpuRecordedPacket* GpuRecordedGraph::findWithinArtifactOperation(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)const noexcept{
+const GpuRecordedPacket* GpuRecordedGraph::findWithinArtifactOperation(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();
-    if(
-        !artifactAccess.validFor(*this)
-        || !storage
-        || !storage->valid
-        || !packet.valid()
-        || packet.generation != storage->planGeneration
-        || packet.index >= storage->packetCount
-    )
+    if(!artifactAccess.validFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
         return nullptr;
     const GpuRecordedPacket& recordedPacket = storage->packets[packet.index];
-    return recordedPacket.packet == packet && recordedPacket.commandListCount != 0u
-        ? &recordedPacket
-        : nullptr
-    ;
+    return recordedPacket.packet == packet && recordedPacket.commandListCount != 0u ? &recordedPacket : nullptr;
 }
 
-void GpuRecordedGraph::discardPacketTimingTicket(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-){
+void GpuRecordedGraph::discardPacketTimingTicket(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess){
     GpuTimingSubmissionTicket* const ticket = packetTimingTicket(packet, artifactAccess);
     if(!ticket)
         return;
@@ -771,10 +633,7 @@ void GpuRecordedGraph::discardPacketTimingTicket(
     m_activeStorage->packetTimingTickets[packet.index].reset();
 }
 
-void GpuRecordedGraph::abandonPacketTimingTicketWithoutCallbacks(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+void GpuRecordedGraph::abandonPacketTimingTicketWithoutCallbacks(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{
     GpuTimingSubmissionTicket* const ticket = packetTimingTicket(packet, artifactAccess);
     if(!ticket)
         return;
@@ -782,104 +641,46 @@ void GpuRecordedGraph::abandonPacketTimingTicketWithoutCallbacks(
     m_activeStorage->packetTimingTickets[packet.index].reset();
 }
 
-GpuTimingSubmissionTicket* GpuRecordedGraph::packetTimingTicket(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)const noexcept{
+GpuTimingSubmissionTicket* GpuRecordedGraph::packetTimingTicket(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();
-    if(
-        !artifactAccess.validFor(*this)
-        || !storage
-        || !storage->valid
-        || !packet.valid()
-        || packet.generation != storage->planGeneration
-        || packet.index >= storage->packetCount
-    )
+    if(!artifactAccess.validFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
         return nullptr;
     return storage->packetTimingTickets[packet.index].get();
 }
 
-CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{
     ArtifactStorage* const storage = m_activeStorage.get();
-    if(
-        !artifactAccess.validFor(*this)
-        || !storage
-        || !storage->valid
-        || !packet.valid()
-        || packet.generation != storage->planGeneration
-        || packet.index >= storage->packetCount
-    )
+    if(!artifactAccess.validFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
         return nullptr;
     return &storage->packetStateSeeds[packet.index];
 }
 
-const CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)const noexcept{
+const CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();
-    if(
-        !artifactAccess.validFor(*this)
-        || !storage
-        || !storage->valid
-        || !packet.valid()
-        || packet.generation != storage->planGeneration
-        || packet.index >= storage->packetCount
-    )
+    if(!artifactAccess.validFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
         return nullptr;
     return &storage->packetStateSeeds[packet.index];
 }
 
-GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::packetRecordingScratch(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::packetRecordingScratch(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{
     ArtifactStorage* const storage = m_activeStorage.get();
-    if(
-        !artifactAccess.exclusiveFor(*this)
-        || !storage
-        || !storage->valid
-        || !packet.valid()
-        || packet.generation != storage->planGeneration
-        || packet.index >= storage->packetCount
-    )
+    if(!artifactAccess.exclusiveFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
         return nullptr;
     return &storage->packetRecordingScratch[packet.index];
 }
 
-GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::serialRecordingScratch(
-    const ArtifactOperation& artifactAccess
-)noexcept{
-    return artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid
-        ? &m_activeStorage->serialRecordingScratch
-        : nullptr
-    ;
+GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::serialRecordingScratch(const ArtifactOperation& artifactAccess)noexcept{
+    return artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid ? &m_activeStorage->serialRecordingScratch : nullptr;
 }
 
-GpuRecordedPacket* GpuRecordedGraph::packetStorage(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+GpuRecordedPacket* GpuRecordedGraph::packetStorage(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{
     ArtifactStorage* const storage = m_activeStorage.get();
-    if(
-        !artifactAccess.exclusiveFor(*this)
-        || !storage
-        || !storage->valid
-        || !packet.valid()
-        || packet.generation != storage->planGeneration
-        || packet.index >= storage->packetCount
-    )
+    if(!artifactAccess.exclusiveFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
         return nullptr;
     return &storage->packets[packet.index];
 }
 
-void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(
-    const GpuSubmissionPacketId& packet,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{
     GpuRecordedPacket* const recordedPacket = packetStorage(packet, artifactAccess);
     CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactAccess);
     const bool publicationValid = recordedPacket && stateSeed && artifactAccess.exclusiveFor(*this);
@@ -890,9 +691,7 @@ void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(
     for(usize commandListIndex = 0u; commandListIndex < GpuRecordedPacket::s_MaxCommandLists; ++commandListIndex){
         CommandList* const commandList = recordedPacket->ownedCommandLists[commandListIndex].get();
         if(commandList){
-            commandList->revokeGraphRecordingPublication(
-                recordedPacket->commandListRecordingLeaseSerials[commandListIndex]
-            );
+            commandList->revokeGraphRecordingPublication(recordedPacket->commandListRecordingLeaseSerials[commandListIndex]);
         }
     }
     static_assert(noexcept(*recordedPacket = GpuRecordedPacket{}));
@@ -901,38 +700,20 @@ void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(
     stateSeed->reset();
 }
 
-GpuTimingRecorder* GpuRecordedGraph::timingRecorderWithinArtifactOperation(
-    const ArtifactOperation& artifactAccess
-)const noexcept{
-    return artifactAccess.validFor(*this) && m_activeStorage && m_activeStorage->valid
-        ? m_activeStorage->timingRecorder
-        : nullptr
-    ;
+GpuTimingRecorder* GpuRecordedGraph::timingRecorderWithinArtifactOperation(const ArtifactOperation& artifactAccess)const noexcept{
+    return artifactAccess.validFor(*this) && m_activeStorage && m_activeStorage->valid ? m_activeStorage->timingRecorder : nullptr;
 }
 
-u64 GpuRecordedGraph::recordingAttemptGenerationWithinArtifactOperation(
-    const ArtifactOperation& artifactAccess
-)const noexcept{
-    return artifactAccess.validFor(*this) && m_activeStorage && m_activeStorage->valid
-        ? m_activeStorage->recordingAttemptGeneration
-        : 0u
-    ;
+u64 GpuRecordedGraph::recordingAttemptGenerationWithinArtifactOperation(const ArtifactOperation& artifactAccess)const noexcept{
+    return artifactAccess.validFor(*this) && m_activeStorage && m_activeStorage->valid ? m_activeStorage->recordingAttemptGeneration : 0u;
 }
 
-void GpuRecordedGraph::addRecordingElapsedSeconds(
-    const f64 elapsedSeconds,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+void GpuRecordedGraph::addRecordingElapsedSeconds(const f64 elapsedSeconds, const ArtifactOperation& artifactAccess)noexcept{
     if(artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid)
         m_activeStorage->recordingElapsedSeconds += elapsedSeconds;
 }
 
-void GpuRecordedGraph::addReadyFrontierStatistics(
-    const f64 elapsedSeconds,
-    const f64 workerBusySeconds,
-    const f64 workerCapacitySeconds,
-    const ArtifactOperation& artifactAccess
-)noexcept{
+void GpuRecordedGraph::addReadyFrontierStatistics(const f64 elapsedSeconds, const f64 workerBusySeconds, const f64 workerCapacitySeconds, const ArtifactOperation& artifactAccess)noexcept{
     if(!artifactAccess.exclusiveFor(*this) || !m_activeStorage || !m_activeStorage->valid)
         return;
     m_activeStorage->readyFrontierElapsedSeconds += elapsedSeconds;
@@ -948,11 +729,7 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     const ArtifactOperation& artifactAccess
 ){
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph::PacketRecordingIntervalEntry;
-    const bool artifactAccessValid = planAccess.validFor(compiledGraph)
-        && artifactAccess.exclusiveFor(*this)
-        && m_activeStorage
-        && m_activeStorage->valid
-    ;
+    const bool artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;
     NWB_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
     if(!artifactAccessValid)
         TerminateInvariant();
@@ -963,38 +740,20 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     Vector<IntervalEntry, Alloc::ScratchArena> intervalEntries(scratchArena);
     intervalEntries.reserve(packetIndices.size());
     for(const u32 packetIndex : packetIndices){
-        if(
-            packetIndex >= storage.packetCount
-        )
+        if(packetIndex >= storage.packetCount)
             continue;
         const GpuRecordedPacket& recordedPacket = storage.packets[packetIndex];
-        if(
-            recordedPacket.commandListCount == 0u
-            || recordedPacket.packet != planAccess.packetIdAt(packetIndex)
-            || recordedPacket.recordingBeginNanoseconds >= recordedPacket.recordingEndNanoseconds
-        )
+        if(recordedPacket.commandListCount == 0u || recordedPacket.packet != planAccess.packetIdAt(packetIndex) || recordedPacket.recordingBeginNanoseconds >= recordedPacket.recordingEndNanoseconds)
             continue;
-        intervalEntries.push_back(IntervalEntry{
-            .beginNanoseconds = recordedPacket.recordingBeginNanoseconds,
-            .endNanoseconds = recordedPacket.recordingEndNanoseconds,
-            .packetIndex = packetIndex,
-        });
+        intervalEntries.push_back(IntervalEntry{ .beginNanoseconds = recordedPacket.recordingBeginNanoseconds, .endNanoseconds = recordedPacket.recordingEndNanoseconds, .packetIndex = packetIndex, });
     }
-    Sort(
-        intervalEntries.begin(),
-        intervalEntries.end(),
-        __hidden_gpu_packet_runtime_recorded_graph::LessPacketRecordingIntervalEntry
-    );
+    Sort(intervalEntries.begin(), intervalEntries.end(), __hidden_gpu_packet_runtime_recorded_graph::LessPacketRecordingIntervalEntry);
 
     u64 maximumPreviousEndNanoseconds = 0u;
     for(usize intervalIndex = 0u; intervalIndex < intervalEntries.size(); ++intervalIndex){
         const IntervalEntry& interval = intervalEntries[intervalIndex];
-        const bool overlapsPrevious = intervalIndex != 0u
-            && interval.beginNanoseconds < maximumPreviousEndNanoseconds
-        ;
-        const bool overlapsNext = intervalIndex + 1u < intervalEntries.size()
-            && intervalEntries[intervalIndex + 1u].beginNanoseconds < interval.endNanoseconds
-        ;
+        const bool overlapsPrevious = intervalIndex != 0u && interval.beginNanoseconds < maximumPreviousEndNanoseconds;
+        const bool overlapsNext = intervalIndex + 1u < intervalEntries.size() && intervalEntries[intervalIndex + 1u].beginNanoseconds < interval.endNanoseconds;
         if(overlapsPrevious || overlapsNext)
             storage.packetRecordingOverlaps[interval.packetIndex] = 1u;
         maximumPreviousEndNanoseconds = Max(maximumPreviousEndNanoseconds, interval.endNanoseconds);

@@ -48,12 +48,7 @@ RUNNER_SCRIPT = Path("tests") / "ab" / "async_shadow_m4" / "run.py"
 SYNC_TARGET = "nwb_async_shadow_m4_sync_benchmark"
 ASYNC_TARGET = "nwb_async_shadow_m4_async_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
-REQUIRED_DEFINES = {
-    "NWB_BUILD_LOADER": LIT_ON,
-    "NWB_BUILD_LOGSERVER": LIT_ON,
-    "NWB_BUILD_PIPELINE": LIT_ON,
-    "NWB_BUILD_TESTS": LIT_ON,
-}
+REQUIRED_DEFINES = { "NWB_BUILD_LOADER": LIT_ON, "NWB_BUILD_LOGSERVER": LIT_ON, "NWB_BUILD_PIPELINE": LIT_ON, "NWB_BUILD_TESTS": LIT_ON, }
 
 
 @dataclass(frozen=True)
@@ -70,30 +65,10 @@ def default_output_directory(root: Path) -> Path:
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> M4Paths:
-    sync_executable = ROOT_LAUNCHER.resolve_executable_path(
-        settings,
-        SYNC_TARGET,
-        args.sync_executable,
-        None,
-        args.dry_run,
-    )
-    async_executable = ROOT_LAUNCHER.resolve_executable_path(
-        settings,
-        ASYNC_TARGET,
-        args.async_executable,
-        None,
-        args.dry_run,
-    )
-    runtime_directory = (
-        ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir)
-        if args.runtime_dir is not None
-        else settings.build_dir / RUNTIME_DIRECTORY / settings.config
-    )
-    output_directory = (
-        ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir)
-        if args.output_dir is not None
-        else default_output_directory(settings.root)
-    )
+    sync_executable = ROOT_LAUNCHER.resolve_executable_path(settings, SYNC_TARGET, args.sync_executable, None, args.dry_run,)
+    async_executable = ROOT_LAUNCHER.resolve_executable_path(settings, ASYNC_TARGET, args.async_executable, None, args.dry_run,)
+    runtime_directory = (ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / RUNTIME_DIRECTORY / settings.config)
+    output_directory = (ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir) if args.output_dir is not None else default_output_directory(settings.root))
     return M4Paths(sync_executable, async_executable, runtime_directory, output_directory)
 
 
@@ -102,18 +77,7 @@ def build_benchmark_targets(args: argparse.Namespace, settings, environment) -> 
 
 
 def runner_command(args: argparse.Namespace, paths: M4Paths) -> List[object]:
-    command: List[object] = [
-        sys.executable,
-        REPO / RUNNER_SCRIPT,
-        LIT_SYNC_EXECUTABLE,
-        paths.sync_executable,
-        LIT_ASYNC_EXECUTABLE,
-        paths.async_executable,
-        LIT_RUNTIME_DIR,
-        paths.runtime_directory,
-        LIT_OUTPUT_DIR,
-        paths.output_directory,
-    ]
+    command: List[object] = [sys.executable, REPO / RUNNER_SCRIPT, LIT_SYNC_EXECUTABLE, paths.sync_executable, LIT_ASYNC_EXECUTABLE, paths.async_executable, LIT_RUNTIME_DIR, paths.runtime_directory, LIT_OUTPUT_DIR, paths.output_directory,]
     if args.gpu_validation:
         command.append(LIT_GPU_VALIDATION)
     if args.no_logserver:
@@ -143,18 +107,8 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
     parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
-    validation_group.add_argument(
-        LIT_GPU_VALIDATION,
-        dest=LIT_GPU_VALIDATION_2,
-        action=LIT_STORE_TRUE,
-        help="Enable selected-backend GPU validation (the default).",
-    )
-    validation_group.add_argument(
-        "--no-gpu-validation",
-        dest=LIT_GPU_VALIDATION_2,
-        action="store_false",
-        help="Do not pass --gpudbg to the paired benchmark processes.",
-    )
+    validation_group.add_argument(LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable selected-backend GPU validation (the default).",)
+    validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg to the paired benchmark processes.",)
     parser.set_defaults(gpu_validation=True)
     return parser
 

@@ -62,14 +62,12 @@ inline void Compress(u32 (&state)[8u], const u8 (&block)[64u])noexcept{
     for(u32 index = 16u; index < 64u; ++index){
         const u32 a = words[index - 15u];
         const u32 b = words[index - 2u];
-        words[index] = words[index - 16u] + (Rotate(a, 7u) ^ Rotate(a, 18u) ^ (a >> 3u))
-            + words[index - 7u] + (Rotate(b, 17u) ^ Rotate(b, 19u) ^ (b >> 10u));
+        words[index] = words[index - 16u] + (Rotate(a, 7u) ^ Rotate(a, 18u) ^ (a >> 3u)) + words[index - 7u] + (Rotate(b, 17u) ^ Rotate(b, 19u) ^ (b >> 10u));
     }
     u32 a = state[0u], b = state[1u], c = state[2u], d = state[3u];
     u32 e = state[4u], f = state[5u], g = state[6u], h = state[7u];
     for(u32 index = 0u; index < 64u; ++index){
-        const u32 first = h + (Rotate(e, 6u) ^ Rotate(e, 11u) ^ Rotate(e, 25u))
-            + ((e & f) ^ (~e & g)) + s_RoundConstants[index] + words[index];
+        const u32 first = h + (Rotate(e, 6u) ^ Rotate(e, 11u) ^ Rotate(e, 25u)) + ((e & f) ^ (~e & g)) + s_RoundConstants[index] + words[index];
         const u32 second = (Rotate(a, 2u) ^ Rotate(a, 13u) ^ Rotate(a, 22u)) + ((a & b) ^ (a & c) ^ (b & c));
         h = g; g = f; f = e; e = d + first; d = c; c = b; b = a; a = first + second;
     }

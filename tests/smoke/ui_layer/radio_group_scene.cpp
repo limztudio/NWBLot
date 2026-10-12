@@ -152,11 +152,7 @@ bool IsUiLayerRadioGroupSkinSmokeEnabled(){
 }
 
 SharedUiRadioGroupSmokeScene CreateUiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiRadioGroupSmokeScene(
-        NewArenaObject<RefCounter<UiRadioGroupSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiRadioGroupSmokeScene(NewArenaObject<RefCounter<UiRadioGroupSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

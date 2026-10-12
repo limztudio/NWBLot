@@ -247,9 +247,7 @@ TEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainTheirProfil
     constexpr usize s_ScopeCount = 3u;
     constexpr u64 s_Frame = 19u;
     CpuTaskScheduler scheduler(0u);
-    const Name names[s_ScopeCount] = {
-        Name("tests.cpu.empty_scope"), Name("tests.cpu.completed_scope"), Name("tests.cpu.canceled_scope")
-    };
+    const Name names[s_ScopeCount] = { Name("tests.cpu.empty_scope"), Name("tests.cpu.completed_scope"), Name("tests.cpu.canceled_scope") };
     CpuTaskScope empty(scheduler, scheduler.registerProfileLabel(names[0u]));
     CpuTaskScope completed(scheduler, scheduler.registerProfileLabel(names[1u]));
     CpuTaskScope canceled(scheduler, scheduler.registerProfileLabel(names[s_ThirdElementIndex]));

@@ -30,42 +30,18 @@ static_assert(static_cast<u8>(TextureCopyQueueRequirement::Graphics) == static_c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TextureClearContract> ResolveTextureClearContract(
-    const TextureDesc& description,
-    const TextureSubresourceSet& subresources,
-    const TextureClearValueKind::Enum valueKind,
-    const bool clearDepth,
-    const bool clearStencil
-)noexcept{
-    const auto nativeContract = VulkanTextureDetail::ResolveTextureClearContract(
-        description, subresources,
-        static_cast<VulkanTextureDetail::TextureClearValueKind::Enum>(valueKind),
-        clearDepth, clearStencil
-    );
+Expected<TextureClearContract> ResolveTextureClearContract(const TextureDesc& description, const TextureSubresourceSet& subresources, const TextureClearValueKind::Enum valueKind, const bool clearDepth, const bool clearStencil)noexcept{
+    const auto nativeContract = VulkanTextureDetail::ResolveTextureClearContract(description, subresources, static_cast<VulkanTextureDetail::TextureClearValueKind::Enum>(valueKind), clearDepth, clearStencil);
     if(!nativeContract)
         return MakeUnexpected(nativeContract.error());
-    return TextureClearContract{
-        .subresources = nativeContract->subresources,
-        .queueRequirement = static_cast<TextureClearQueueRequirement::Enum>(nativeContract->queueRequirement),
-    };
+    return TextureClearContract{ .subresources = nativeContract->subresources, .queueRequirement = static_cast<TextureClearQueueRequirement::Enum>(nativeContract->queueRequirement), };
 }
 
-Expected<TextureCopyContract> ResolveTextureCopyContract(
-    const TextureDesc& sourceDescription,
-    const TextureSlice& sourceSlice,
-    const TextureDesc& destinationDescription,
-    const TextureSlice& destinationSlice
-)noexcept{
-    const auto nativeContract = VulkanTextureDetail::ResolveTextureCopyContract(
-        sourceDescription, sourceSlice, destinationDescription, destinationSlice
-    );
+Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDescription, const TextureSlice& sourceSlice, const TextureDesc& destinationDescription, const TextureSlice& destinationSlice)noexcept{
+    const auto nativeContract = VulkanTextureDetail::ResolveTextureCopyContract(sourceDescription, sourceSlice, destinationDescription, destinationSlice);
     if(!nativeContract)
         return MakeUnexpected(nativeContract.error());
-    return TextureCopyContract{
-        .sourceSlice = nativeContract->sourceSlice,
-        .destinationSlice = nativeContract->destinationSlice,
-        .queueRequirement = static_cast<TextureCopyQueueRequirement::Enum>(nativeContract->queueRequirement),
-    };
+    return TextureCopyContract{ .sourceSlice = nativeContract->sourceSlice, .destinationSlice = nativeContract->destinationSlice, .queueRequirement = static_cast<TextureCopyQueueRequirement::Enum>(nativeContract->queueRequirement), };
 }
 
 

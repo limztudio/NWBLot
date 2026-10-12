@@ -134,11 +134,7 @@ u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindEntry> ParseMaterialBindSource(
-    const Path& bindFilePath,
-    MaterialCookArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
     auto doc = MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena);
     if(!doc)
         return MakeUnexpected(Failure{});
@@ -150,12 +146,7 @@ Expected<MaterialBindEntry> ParseMaterialBindSource(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(
-    const MaterialBindEntry& bindEntry,
-    const Name& contextName,
-    MaterialCookArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return MaterialBindDetail::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, arena, scratchArena);
 }
 
@@ -163,31 +154,15 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayout(
-    const Name& materialInterface,
-    const MaterialBindEntry& bindEntry,
-    MaterialBindTypedLayoutCache& inOutCache,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    return MaterialBindDetail::FindOrBuildMaterialBindTypedLayoutImpl(
-        materialInterface,
-        bindEntry,
-        inOutCache,
-        scratchArena
-    );
+Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, Core::Alloc::ScratchArena& scratchArena){
+    return MaterialBindDetail::FindOrBuildMaterialBindTypedLayoutImpl(materialInterface, bindEntry, inOutCache, scratchArena);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CopyMaterialBindTypedLayoutDefaults(
-    const MaterialBindTypedLayout& layout,
-    u64& outLayoutHash,
-    Material::TypedLayoutBlockVector& outBlocks,
-    Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes
-){
+void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes){
     outLayoutHash = layout.layoutHash;
     outBlocks.reserve(layout.typedLayoutBlocks.size());
     outBlocks.assign(layout.typedLayoutBlocks.begin(), layout.typedLayoutBlocks.end());
@@ -201,23 +176,10 @@ void CopyMaterialBindTypedLayoutDefaults(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyMaterialBindTypedLayoutParameters(
-    const MaterialBindTypedLayout& layout,
-    const Name& materialName,
-    const MaterialBindParameterMap& parameters,
-    Material::TypedBlockByteVector& inOutBlockBytes,
-    Material::ResourceReferenceVector& outResourceReferences
-){
+bool ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layout, const Name& materialName, const MaterialBindParameterMap& parameters, Material::TypedBlockByteVector& inOutBlockBytes, Material::ResourceReferenceVector& outResourceReferences){
     outResourceReferences.clear();
     for(const auto& [parameterName, parameterValue] : parameters){
-        if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(
-            layout,
-            materialName,
-            parameterName,
-            parameterValue,
-            inOutBlockBytes,
-            outResourceReferences
-        ))
+        if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(layout, materialName, parameterName, parameterValue, inOutBlockBytes, outResourceReferences))
             return false;
     }
 

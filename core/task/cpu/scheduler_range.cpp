@@ -16,14 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CpuTaskScheduler::parallelRange(
-    const usize begin,
-    const usize end,
-    const usize grainSize,
-    const CpuTaskOptions options,
-    const void* const context,
-    const RangeFunction invoke
-){
+void CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const void* const context, const RangeFunction invoke){
     CpuTaskScope chunks(*this);
     chunks.m_allowCallerWork = true;
     const usize count = end - begin;
@@ -51,10 +44,7 @@ void CpuTaskScheduler::parallelRange(
     bool wakeJoiners;
     {
         ScopedLock lock(m_mutex);
-        if(
-            m_aborting || options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background
-            || options.target > CpuTaskTarget::MainThread
-        )
+        if(m_aborting || options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
             throw RuntimeException("CPU task scheduler rejected a parallel range");
         for(usize chunk = 0u; chunk < chunkCount; ++chunk){
             const TaskHandle handle = reserveTaskLocked();
@@ -77,10 +67,7 @@ void CpuTaskScheduler::parallelRange(
         const TaskHandle parentHandle = s_Execution && &s_Execution->scheduler == this ? s_Execution->task : TaskHandle{};
         TaskNode* const parent = resolveLocked(parentHandle);
         const usize children = parent ? AddSize(parent->children, chunkCount) : 0u;
-        const bool runInline =
-            chunkCount == 1u && (isMainThread() || isExecuting())
-            && (options.target != CpuTaskTarget::MainThread || isMainThread())
-        ;
+        const bool runInline = chunkCount == 1u && (isMainThread() || isExecuting()) && (options.target != CpuTaskTarget::MainThread || isMainThread());
         if(parent)
             parent->children = children;
         for(u32 index = reservedHead; index != TaskHandle::s_InvalidIndex;){

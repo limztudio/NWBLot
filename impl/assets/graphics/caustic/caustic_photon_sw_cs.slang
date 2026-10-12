@@ -15,13 +15,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::push_constant]]
-ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticSwPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticSwPushConstants;
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticSwMaterialContextSlots[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticSwMaterialContextSlots[];
 #pragma warning(pop)
 #define g_NwbCausticSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbCausticSwPushConstants.deferredResourcesHeapSlot]
 #define g_NwbCausticSwMaterialContextSlots g_NwbHeapCausticSwMaterialContextSlots[g_NwbCausticSwPushConstants.materialContextSlotsHeapSlot]
@@ -71,8 +69,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapCausticSwInstanceBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapCausticSwInstanceBuffers[];
 #pragma warning(pop)
 
 StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapCausticSwInstances(const uint slot){
@@ -82,10 +79,8 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapCausticSwInstances(c
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the global heap descriptor tables.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticSwEmissionTargets[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticSwViews[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticSwEmissionTargets[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticSwViews[];
 #pragma warning(pop)
 
 Texture2D<float4> nwbCausticSwGbufferDepth(){
@@ -123,10 +118,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
 #if NWB_RT_CSG_ENABLED
     if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u){
-        const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(
-            g_NwbCausticSwMaterialContextSlots.materialSlots.w, g_NwbCausticSwMaterialContextSlots.sceneSlots.z,
-            instanceIndex, worldOrigin, worldDirection, tMin, closest.t
-        );
+        const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(g_NwbCausticSwMaterialContextSlots.materialSlots.w, g_NwbCausticSwMaterialContextSlots.sceneSlots.z, instanceIndex, worldOrigin, worldDirection, tMin, closest.t);
         if(candidate.hit || candidate.failure != 0u)
             closest = candidate;
         return;
@@ -143,42 +135,24 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop]
-    while(stackPointer > 0u){
+    [loop] while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop]
-        while(true){
+        [loop] while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 const uint triangle = nwbBvhLeafPrimitive(node);
                 const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-                const uint3 triIndices = nwbHeapRawBuffer(material.indexSlot).Load3(
-                    indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES
-                );
+                const uint3 triIndices = nwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
                 const uint i0 = triIndices.x;
                 const uint i1 = triIndices.y;
                 const uint i2 = triIndices.z;
-                const float3 v0 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
-                const float3 v1 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
-                const float3 v2 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
-                const NwbRayTriangleHit triangleHit = nwbRayTriangleMollerTrumbore(
-                    origin,
-                    direction,
-                    tMin,
-                    closest.t,
-                    v0,
-                    v1,
-                    v2
-                );
+                const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const NwbRayTriangleHit triangleHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, closest.t, v0, v1, v2);
                 if(triangleHit.hit){
                     closest.hit = true;
                     closest.t = triangleHit.t;
@@ -190,28 +164,12 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
 
                     if(refractive){
                         const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-                        const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(
-                            material.attributeSlot,
-                            attributeBase
-                        );
-                        const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(
-                            material.attributeSlot,
-                            attributeBase + 1u
-                        );
-                        const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(
-                            material.attributeSlot,
-                            attributeBase + 2u
-                        );
-                        const float3 objectShadingNormal =
-                            float3(a0.normal) * triangleHit.w
-                            + float3(a1.normal) * triangleHit.u
-                            + float3(a2.normal) * triangleHit.v
-                        ;
+                        const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
+                        const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+                        const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
+                        const float3 objectShadingNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
 
-                        const float3 worldShadingNormal = nwbSafeNormalize(
-                            nwbSwBvhTransformNormal(instance, objectShadingNormal),
-                            float3(0.0, 0.0, 1.0)
-                        );
+                        const float3 worldShadingNormal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
                         closest.shadingNormal = worldShadingNormal;
 
                         NwbShadowHit hit;
@@ -271,15 +229,13 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop]
-    while(stackPointer > 0u){
+    [loop] while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop]
-        while(true){
+        [loop] while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
 #if NWB_RT_CSG_ENABLED
@@ -350,23 +306,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 targetAabbMin = target.aabbMin.xyz;
     const float3 targetAabbMax = target.aabbMax.xyz;
 
-    const float2 cell = nwbCausticJitteredTemporalCell(
-        photonIndex,
-        g_NwbCausticSwPushConstants.gridSide,
-        g_NwbCausticSwPushConstants.frameIndex,
-        g_NwbCausticSwPushConstants.temporalPhaseCount
-    );
+    const float2 cell = nwbCausticJitteredTemporalCell(photonIndex, g_NwbCausticSwPushConstants.gridSide, g_NwbCausticSwPushConstants.frameIndex, g_NwbCausticSwPushConstants.temporalPhaseCount);
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
     if(!emission.valid)
         return;
 
-    const NwbCausticPhoton photon = nwbCausticCreatePhoton(
-        emission,
-        nwbCausticLightColor(light.colorIntensity),
-        g_NwbCausticSwPushConstants.emissionTargetCount,
-        g_NwbCausticSwPushConstants.photonCount
-    );
+    const NwbCausticPhoton photon = nwbCausticCreatePhoton(emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticSwPushConstants.emissionTargetCount, g_NwbCausticSwPushConstants.photonCount);
 
     const NwbCausticSplat splat = nwbCausticTracePhoton(photon);
     if(!splat.valid)

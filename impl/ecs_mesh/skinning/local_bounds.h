@@ -66,11 +66,7 @@ struct MeshSkinningLocalBoundsTask{
         Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket);
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 

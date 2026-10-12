@@ -71,8 +71,7 @@ public:
 
 
 public:
-    explicit Sampler(Core::Assets::AssetArena&)noexcept
-    {}
+    explicit Sampler(Core::Assets::AssetArena&)noexcept {}
     Sampler(Core::Assets::AssetArena&, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<Sampler>(virtualPath)
     {}

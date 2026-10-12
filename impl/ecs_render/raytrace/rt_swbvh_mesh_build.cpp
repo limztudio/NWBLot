@@ -22,9 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareMeshBlasResources(
-    ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
-){
+bool RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
 
@@ -48,10 +46,7 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(
         .setIndexCount(meshResources.meshletPrimitiveIndexCount)
     ;
     Core::RayTracingGeometryDesc geometry;
-    geometry
-        .setTriangles(triangles)
-        .setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
-    ;
+    geometry.setTriangles(triangles).setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation);
     Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
     if(meshResources.runtimeMesh)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;

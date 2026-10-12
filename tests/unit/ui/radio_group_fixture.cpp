@@ -98,9 +98,7 @@ void RadioSource::resetCounters()const{
     m_endAccepted = false;
 }
 
-void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site,
-    const u64 keyValue, const bool awayAndBack
-){
+void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site, const u64 keyValue, const bool awayAndBack){
     m_state = &state;
     m_selected = keyValue;
     m_site = site;
@@ -208,8 +206,7 @@ void RadioGroupFixture::configureRadioSkin(const bool fallbackOnly){
     configureSkin();
     UiSkin::RegionVector regions(m_arena);
     regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-    constexpr StringView s_Names[]{ "radio.normal", "radio.checked", "radio.mark",
-        "checkbox.normal", "checkbox.checked", "checkbox.mark" };
+    constexpr StringView s_Names[]{ "radio.normal", "radio.checked", "radio.mark", "checkbox.normal", "checkbox.checked", "checkbox.mark" };
     for(u32 index = 0u; index < 6u; ++index){
         if(fallbackOnly && index < 3u)
             continue;
@@ -229,9 +226,7 @@ bool RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& o
     return declareSource(generation, m_source, m_state, options, bounds);
 }
 
-bool RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state,
-    const RadioGroupOptions& options, const Rect& bounds
-){
+bool RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
     if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
         return false;
     m_result = m_builder.radioGroup("radio", source, state, options);
@@ -316,8 +311,7 @@ usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& n
         return 0u;
     constexpr f32 s_UvTolerance = 0.00000024f;
     const f32 left = static_cast<f32>(region->rectangle.x) / static_cast<f32>(m_skin.atlasWidth());
-    const f32 right = static_cast<f32>(region->rectangle.x + region->rectangle.width)
-        / static_cast<f32>(m_skin.atlasWidth());
+    const f32 right = static_cast<f32>(region->rectangle.x + region->rectangle.width) / static_cast<f32>(m_skin.atlasWidth());
     usize count = 0u;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Skin)
@@ -325,10 +319,7 @@ usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& n
         for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
             const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            if(
-                Abs(first.texCoord.x - left) <= s_UvTolerance
-                && Abs(opposite.texCoord.x - right) <= s_UvTolerance
-            )
+            if(Abs(first.texCoord.x - left) <= s_UvTolerance && Abs(opposite.texCoord.x - right) <= s_UvTolerance)
                 ++count;
         }
     }

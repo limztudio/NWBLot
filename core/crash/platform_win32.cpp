@@ -50,10 +50,7 @@ static void DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
 }
 
 static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo){
-    const u32 exceptionCode = exceptionInfo && exceptionInfo->ExceptionRecord
-        ? static_cast<u32>(exceptionInfo->ExceptionRecord->ExceptionCode)
-        : 0u
-    ;
+    const u32 exceptionCode = exceptionInfo && exceptionInfo->ExceptionRecord ? static_cast<u32>(exceptionInfo->ExceptionRecord->ExceptionCode) : 0u;
 
     Detail::CrashDumpRequestOptions options;
     options.exceptionPointers = static_cast<u64>(reinterpret_cast<usize>(exceptionInfo));
@@ -131,9 +128,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 
     storage.exceptionRecord = EXCEPTION_RECORD{};
     storage.exceptionRecord.ExceptionCode = s_ManualDumpExceptionCode;
-    storage.exceptionRecord.ExceptionAddress = reinterpret_cast<void*>(static_cast<usize>(
-        __hidden_crash_win32::ContextInstructionPointer(storage.context)
-    ));
+    storage.exceptionRecord.ExceptionAddress = reinterpret_cast<void*>(static_cast<usize>(__hidden_crash_win32::ContextInstructionPointer(storage.context)));
     storage.exceptionPointers.ExceptionRecord = &storage.exceptionRecord;
     storage.exceptionPointers.ContextRecord = &storage.context;
 
@@ -158,15 +153,14 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
-    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting)
-    // must not re-enter and corrupt the in-flight request or self-deadlock on the channel.
+    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting) must not re-enter and corrupt the in-flight request or self-deadlock on the channel.
     static thread_local bool s_inTransport = false;
     if(s_inTransport)
         return CrashDumpTransportStatus::Failed;
     s_inTransport = true;
 
-    // Serialize concurrent writers: if two threads fault at once, only one owns the single request pipe + ack
-    // event; the other bails (its sibling's report is still written). One async-safe CAS, never blocks.
+    // Serialize concurrent writers: if two threads fault at once, only one owns the single request pipe + ack event; the other bails (its sibling's report is still written).
+    // One async-safe CAS, never blocks.
     u32 expected = 0u;
     if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
         s_inTransport = false;
@@ -190,8 +184,8 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
             break;
         }
 
-        // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full
-        // timeout. Falls back to a single-object wait if the handler process handle is unavailable.
+        // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full timeout.
+        // Falls back to a single-object wait if the handler process handle is unavailable.
         HANDLE waitHandles[__hidden_crash_win32::s_CrashWaitHandleCount] = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
         const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? __hidden_crash_win32::s_CrashWaitHandleCount : 1u;
         const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles, FALSE, waitMilliseconds);
@@ -205,10 +199,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
                 status = CrashDumpTransportStatus::Failed;
                 break;
             }
-            status = ack.packageWritten
-                ? CrashDumpTransportStatus::PackageWritten
-                : CrashDumpTransportStatus::PackageWriteFailed
-            ;
+            status = ack.packageWritten ? CrashDumpTransportStatus::PackageWritten : CrashDumpTransportStatus::PackageWriteFailed;
             break;
         }
         if(waitResult == WAIT_TIMEOUT){
@@ -237,8 +228,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
-    // Size the request pipe for a whole CrashRequest so a single write never blocks waiting for the handler to
-    // drain (the POD exceeds the 64 KB default), which combined with the handler-death wakeup bounds the writer.
+    // Size the request pipe for a whole CrashRequest so a single write never blocks waiting for the handler to drain (the POD exceeds the 64 KB default), which combined with the handler-death wakeup bounds the writer.
     if(!CreatePipe(&requestReadHandle, &requestWriteHandle, &securityAttributes, static_cast<DWORD>(sizeof(CrashRequest))))
         return false;
 
@@ -330,15 +320,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     }
 
     HANDLE inheritedHandles[] = { requestReadHandle, ackWriteHandle, ackEvent };
-    if(!UpdateProcThreadAttribute(
-        attributeList,
-        0u,
-        PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-        inheritedHandles,
-        sizeof(inheritedHandles),
-        nullptr,
-        nullptr
-    )){
+    if(!UpdateProcThreadAttribute(attributeList, 0u, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles, sizeof(inheritedHandles), nullptr, nullptr)){
         DeleteProcThreadAttributeList(attributeList);
         DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);
         CloseHandle(requestReadHandle);
@@ -357,18 +339,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 
     PROCESS_INFORMATION processInfo = {};
     const DWORD creationFlags = CREATE_NO_WINDOW | DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT;
-    const BOOL created = CreateProcess(
-        handlerExecutablePath.c_str(),
-        commandLine.data(),
-        nullptr,
-        nullptr,
-        TRUE,
-        creationFlags,
-        nullptr,
-        nullptr,
-        &startupInfo.StartupInfo,
-        &processInfo
-    );
+    const BOOL created = CreateProcess(handlerExecutablePath.c_str(), commandLine.data(), nullptr, nullptr, TRUE, creationFlags, nullptr, nullptr, &startupInfo.StartupInfo, &processInfo);
 
     DeleteProcThreadAttributeList(attributeList);
     DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);

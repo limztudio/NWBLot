@@ -67,11 +67,7 @@ inline constexpr u32 s_CliOptionPresentCount = 0u;
 
 
 int ExitValidation(const CLI::App& app, const AStringView option, const AStringView message){
-    return app.exit(
-        CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())),
-        NWB_COUT,
-        NWB_CERR
-    );
+    return app.exit(CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())), NWB_COUT, NWB_CERR);
 }
 
 Expected<AString> PromptString(const AStringView label, const AStringView defaultValue, bool& prompted){
@@ -178,12 +174,7 @@ bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& pr
     return true;
 }
 
-bool ConfigurePromptsAfterLoad(
-    ImportOptions& options,
-    const OptionPresence& presence,
-    const UtilityVector<MeshInstance>& visibleInstances,
-    bool& prompted
-){
+bool ConfigurePromptsAfterLoad(ImportOptions& options, const OptionPresence& presence, const UtilityVector<MeshInstance>& visibleInstances, bool& prompted){
     if(!presence.assetType && !options.acceptDefaults){
         AString prompt = "Asset type (";
         prompt += OutputAssetTypeOptionsText();
@@ -245,10 +236,7 @@ bool ConfigurePromptsAfterLoad(
     return true;
 }
 
-Expected<bool> SelectedMeshesUseSkinning(
-    const UtilityVector<MeshInstance>& instances,
-    const UtilityVector<usize>& selection
-){
+Expected<bool> SelectedMeshesUseSkinning(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection){
     bool sawStatic = false;
     bool sawSkinned = false;
     for(const usize instanceIndex : selection){
@@ -276,10 +264,7 @@ bool AssetTypeRequiresSkinning(const OutputAssetType::Enum assetType)noexcept{
 }
 
 bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType)noexcept{
-    return assetType == OutputAssetType::Bunch
-        || assetType == OutputAssetType::Model
-        || AssetTypeRequiresSkinning(assetType)
-    ;
+    return assetType == OutputAssetType::Bunch || assetType == OutputAssetType::Model || AssetTypeRequiresSkinning(assetType);
 }
 
 bool IsNwbRefreshMode(const ImportOptions& options){
@@ -301,13 +286,7 @@ void WriteCanonicalizeReport(AStringStream& report, const SourceMeshCanonicalize
     WriteRefreshCount(report, s_IndicesStreamLabel, canonicalizeReport.before.indices, canonicalizeReport.after.indices);
 }
 
-int RunNwbRefresh(
-    const CLI::App& app,
-    ImportOptions& options,
-    const OptionPresence& presence,
-    Core::CpuTaskScheduler& cpuScheduler,
-    bool& prompted
-){
+int RunNwbRefresh(const CLI::App& app, ImportOptions& options, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, bool& prompted){
     if(options.listMeshes)
         return ExitValidation(app, "--list-meshes", "Only valid for FBX input.");
 
@@ -333,10 +312,7 @@ int RunNwbRefresh(
         return s_FbxToNwbExitFailure;
 
     AStringStream report;
-    report
-        << "Refreshed " << PathToGenericString<AString>(outputPath) << "\n"
-        << "  input: " << PathToGenericString<AString>(inputPath) << "\n"
-    ;
+    report << "Refreshed " << PathToGenericString<AString>(outputPath) << "\n" << "  input: " << PathToGenericString<AString>(inputPath) << "\n";
     WriteCanonicalizeReport(report, *canonicalizeReport);
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
     return s_FbxToNwbExitSuccess;
@@ -378,17 +354,9 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     CLI::Option* assetTypeOption = app.add_option(__hidden_command_line::s_FbxToNwbAssetTypeOption.data(), assetType, assetTypeDescription);
     app.add_option(__hidden_command_line::s_FbxToNwbVirtualRootOption.data(), virtualRoot, "Virtual asset root used when output path is outside an assets directory");
     CLI::Option* meshOption = app.add_option(__hidden_command_line::s_FbxToNwbMeshOption.data(), meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
-    CLI::Option* normalModeOption = app.add_option(
-        __hidden_command_line::s_FbxToNwbNormalModeOption.data(),
-        normalMode,
-        "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals"
-    );
+    CLI::Option* normalModeOption = app.add_option(__hidden_command_line::s_FbxToNwbNormalModeOption.data(), normalMode, "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals");
     CLI::Option* scaleOption = app.add_option(__hidden_command_line::s_FbxToNwbScaleOption.data(), options.scale, "Additional uniform scale applied after import");
-    app.add_option(
-        __hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption.data(),
-        options.triangleAreaLengthSquaredEpsilon,
-        "Minimum squared triangle cross-product length kept during import"
-    );
+    app.add_option(__hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption.data(), options.triangleAreaLengthSquaredEpsilon, "Minimum squared triangle cross-product length kept during import");
     CLI::Option* defaultColorOption = app.add_option(__hidden_command_line::s_FbxToNwbDefaultColorOption.data(), defaultColorText, "Default RGBA color, for example 1,1,1,1");
     CLI::Option* preserveSpaceOption = app.add_flag(__hidden_command_line::s_FbxToNwbPreserveSpaceFlag.data(), options.preserveSpace, "Keep the FBX source axes and units");
     CLI::Option* includeHiddenOption = app.add_flag(__hidden_command_line::s_FbxToNwbIncludeHiddenFlag.data(), options.includeHidden, "Include hidden FBX mesh nodes");
@@ -430,24 +398,12 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         presence.refreshNwb = refreshNwbOption->count() > __hidden_command_line::s_CliOptionPresentCount;
 
         if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbInputOption,
-                "Input FBX or NWB path is required."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbInputOption, "Input FBX or NWB path is required.");
 
         if(!IsFinite(options.scale) || options.scale <= 0.0)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbScaleOption,
-                "Must be a positive finite number."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbScaleOption, "Must be a positive finite number.");
         if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption,
-                "Must be a finite non-negative number."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.");
 
         const auto inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath));
         if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
@@ -455,11 +411,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile || !*inputIsRegularFile)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbInputOption,
-                "Input path must name an existing regular file."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbInputOption, "Input path must name an existing regular file.");
 
         if(__hidden_command_line::IsNwbRefreshMode(options))
             return __hidden_command_line::RunNwbRefresh(app, options, presence, cpuScheduler, prompted);
@@ -488,49 +440,25 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!ValidateAssetTypeText(options.assetType))
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbAssetTypeOption,
-                OutputAssetTypeErrorText()
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText());
         if(!ValidateNormalModeText(options.normalMode))
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbNormalModeOption,
-                NormalModeErrorText()
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbNormalModeOption, NormalModeErrorText());
 
         const auto defaultColor = ParseColorText(options.defaultColorText);
         if(!defaultColor)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbDefaultColorOption,
-                "Must contain four finite numbers, for example 1,1,1,1."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.");
 
         auto selectionResult = SelectMeshInstances(instances, options.meshSelector);
         if(!selectionResult)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbMeshOption,
-                "Must select an available zero-based index, node name, or mesh name."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.");
 
         const UtilityVector<usize>& selection = *selectionResult;
         const auto assetTypeResult = ParseAssetTypeText(options.assetType);
         if(!assetTypeResult)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbAssetTypeOption,
-                OutputAssetTypeErrorText()
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText());
         const OutputAssetType::Enum assetTypeValue = *assetTypeResult;
         if(options.separateAssets && assetTypeValue != OutputAssetType::Bunch)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbSeparateAssetsFlag,
-                "Only valid with asset type 'bunch'."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.");
         bool usesSkinning = false;
         bool wantsSkinning = false;
         if(__hidden_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
@@ -540,19 +468,11 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             usesSkinning = wantsSkinning = *selectedUsesSkinning;
         }
         if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning)
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbAssetTypeOption,
-                "Selected source mesh is not skinned; requested asset type requires skinning."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbAssetTypeOption, "Selected source mesh is not skinned; requested asset type requires skinning.");
 
         const Path outputPath(UtilityDetail::Arena(), options.outputPath);
         if(outputPath.empty())
-            return __hidden_command_line::ExitValidation(
-                app,
-                __hidden_command_line::s_FbxToNwbOutputOption,
-                "Output path is empty."
-            );
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbOutputOption, "Output path is empty.");
         if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
@@ -567,16 +487,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         const bool sawVertexUvs = built->sawVertexUvs;
         const SourceTangentReport& tangentReport = built->tangentReport;
 
-        if(!WriteNwbAsset(
-            outputPath,
-            mesh,
-            options.assetType,
-            options.virtualRoot,
-            options.separateAssets,
-            skeletonJoints,
-            skeletonBindPoseMatrices,
-            inverseBindMatrices
-        ))
+        if(!WriteNwbAsset(outputPath, mesh, options.assetType, options.virtualRoot, options.separateAssets, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices))
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
         AStringStream report;
@@ -596,9 +507,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         if(!skeletonJoints.empty())
             report << "  skeleton_joints: " << skeletonJoints.size() << "\n";
         if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
-            report
-                << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n"
-                << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
+            report << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n" << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
         }
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 

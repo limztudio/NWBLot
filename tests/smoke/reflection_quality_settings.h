@@ -17,8 +17,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ApplyReflectionQualitySmokeSettings(
-    Impl::RendererSystem& renderer, const Impl::ReflectionSettings& baseSettings, Core::Alloc::GlobalArena& arena);
+[[nodiscard]] bool ApplyReflectionQualitySmokeSettings(Impl::RendererSystem& renderer, const Impl::ReflectionSettings& baseSettings, Core::Alloc::GlobalArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

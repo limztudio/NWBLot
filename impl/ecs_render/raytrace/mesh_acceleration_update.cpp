@@ -17,26 +17,11 @@ NWB_IMPL_BEGIN
 
 
 bool RequiresMeshBlasUpdate(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)noexcept{
-    return
-        mesh.blasBuildPending
-        || !mesh.blasBuildAccepted
-        || (mesh.runtimeMesh && (
-            mesh.runtimeGeometryContentRevision == 0u
-            || mesh.runtimeGeometryContentRevision != mesh.blasGeometryContentRevision
-        ))
-    ;
+    return mesh.blasBuildPending || !mesh.blasBuildAccepted || (mesh.runtimeMesh && (mesh.runtimeGeometryContentRevision == 0u || mesh.runtimeGeometryContentRevision != mesh.blasGeometryContentRevision));
 }
 
 bool RequiresMeshSwBvhUpdate(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)noexcept{
-    return
-        mesh.swBvhBuildPending
-        || !mesh.swBvhTopologyBuilt
-        || !mesh.swBvhBuildAccepted
-        || (mesh.runtimeMesh && (
-            mesh.runtimeGeometryContentRevision == 0u
-            || mesh.runtimeGeometryContentRevision != mesh.swBvhGeometryContentRevision
-        ))
-    ;
+    return mesh.swBvhBuildPending || !mesh.swBvhTopologyBuilt || !mesh.swBvhBuildAccepted || (mesh.runtimeMesh && (mesh.runtimeGeometryContentRevision == 0u || mesh.runtimeGeometryContentRevision != mesh.swBvhGeometryContentRevision));
 }
 
 

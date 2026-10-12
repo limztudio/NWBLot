@@ -20,8 +20,8 @@ NWB_CORE_BEGIN
 
 
 namespace Format{
-    // Every ASTC block footprint has these three consecutive storage variants in Enum: UNORM, UNORM_SRGB, and
-    // HDR float. Keep the classifier tied to those semantic layout values instead of the raw enum offsets.
+    // Every ASTC block footprint has these three consecutive storage variants in Enum: UNORM, UNORM_SRGB, and HDR float.
+    // Keep the classifier tied to those semantic layout values instead of the raw enum offsets.
     inline constexpr u32 s_AstcVariantsPerBlockFootprint = 3u;
     inline constexpr u32 s_AstcHdrVariantOffset = 2u;
 
@@ -158,9 +158,7 @@ namespace Format{
     }
 
     [[nodiscard]] constexpr bool IsASTCHdrFormat(const Enum format)noexcept{
-        return IsASTCCompressedFormat(format)
-            && (static_cast<u32>(format) - static_cast<u32>(ASTC_4x4_UNORM)) % s_AstcVariantsPerBlockFootprint == s_AstcHdrVariantOffset
-        ;
+        return IsASTCCompressedFormat(format) && (static_cast<u32>(format) - static_cast<u32>(ASTC_4x4_UNORM)) % s_AstcVariantsPerBlockFootprint == s_AstcHdrVariantOffset;
     }
 
     [[nodiscard]] constexpr bool IsBlockCompressedFormat(const Enum format)noexcept{
@@ -259,8 +257,8 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
 [[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;
 [[nodiscard]] u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept;
 
-// Combined depth/stencil copies address one aspect plane at a time. Automatic infers single-aspect formats;
-// a combined format requires an explicit Depth or Stencil selection.
+// Combined depth/stencil copies address one aspect plane at a time.
+// Automatic infers single-aspect formats; a combined format requires an explicit Depth or Stencil selection.
 namespace TextureUploadAspect{
     enum Enum : u8{
         Automatic,
@@ -278,14 +276,8 @@ struct TextureUploadAspectLayout{
     u32 bytesPerBlock = 0u;
 };
 
-[[nodiscard]] Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(
-    const FormatInfo& formatInfo,
-    TextureUploadAspect::Enum requestedAspect
-)noexcept;
-[[nodiscard]] Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(
-    const FormatInfo& formatInfo,
-    TextureUploadAspect::Enum requestedAspect
-)noexcept;
+[[nodiscard]] Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(const FormatInfo& formatInfo, TextureUploadAspect::Enum requestedAspect)noexcept;
+[[nodiscard]] Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(const FormatInfo& formatInfo, TextureUploadAspect::Enum requestedAspect)noexcept;
 
 namespace FormatSupport{
     static constexpr auto s_FormatSupportNoneBase = 0;

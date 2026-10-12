@@ -50,10 +50,7 @@ template<typename ShaderPathResolver>
         return false;
     }
 
-    const Name& stageName = archiveStageName
-        ? *archiveStageName
-        : Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType)
-    ;
+    const Name& stageName = archiveStageName ? *archiveStageName : Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: unsupported shader stage {}"), ownerName, static_cast<u32>(shaderType));
         return false;
@@ -70,21 +67,11 @@ template<typename ShaderPathResolver>
 
     const auto shaderVirtualPath = shaderPathResolver(shaderName, variantName, stageName);
     if(!shaderVirtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'")
-            , ownerName
-            , StringConvert(shaderName.resolvedText())
-            , StringConvert(variantName)
-            , StringConvert(stageName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'"), ownerName, StringConvert(shaderName.resolvedText()), StringConvert(variantName), StringConvert(stageName.resolvedText()));
         return false;
     }
     if(!*shaderVirtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'")
-            , ownerName
-            , StringConvert(shaderName.resolvedText())
-            , StringConvert(variantName)
-            , StringConvert(stageName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'"), ownerName, StringConvert(shaderName.resolvedText()), StringConvert(variantName), StringConvert(stageName.resolvedText()));
         return false;
     }
 
@@ -97,11 +84,7 @@ template<typename ShaderPathResolver>
 
     auto loadedAsset = assetManager.loadSync(assetType, *shaderVirtualPath);
     if(!loadedAsset){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
-            , ownerName
-            , StringConvert(assetType.resolvedText())
-            , StringConvert(shaderVirtualPath->resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'"), ownerName, StringConvert(assetType.resolvedText()), StringConvert(shaderVirtualPath->resolvedText()));
         return false;
     }
     if(!*loadedAsset || (*loadedAsset)->assetType() != assetType){
@@ -121,11 +104,7 @@ template<typename ShaderPathResolver>
     auto& device = graphics.getDevice();
     outShader = device.createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
     if(!outShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'")
-            , ownerName
-            , StringConvert(debugName.resolvedText())
-            , StringConvert(shaderVirtualPath->resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'"), ownerName, StringConvert(debugName.resolvedText()), StringConvert(shaderVirtualPath->resolvedText()));
         return false;
     }
 
@@ -147,18 +126,7 @@ template<typename ShaderT, typename ShaderPathResolver>
     const Name* archiveStageName = nullptr
 ){
     static_assert(Core::ShaderType::IsValid(ShaderT::s_Stage));
-    return LoadForStage(
-        outShader,
-        shaderName,
-        variantName,
-        Core::ShaderType::ToMask(ShaderT::s_Stage),
-        debugName,
-        graphics,
-        assetManager,
-        shaderPathResolver,
-        ownerName,
-        archiveStageName
-    );
+    return LoadForStage(outShader, shaderName, variantName, Core::ShaderType::ToMask(ShaderT::s_Stage), debugName, graphics, assetManager, shaderPathResolver, ownerName, archiveStageName);
 }
 
 

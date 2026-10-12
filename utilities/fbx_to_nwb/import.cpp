@@ -19,14 +19,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshBuildResult> BuildMesh(
-    const UtilityVector<MeshInstance>& instances,
-    const UtilityVector<usize>& selection,
-    const ImportOptions& options,
-    const bool wantsSkinning,
-    const Vec4& defaultColor,
-    Core::CpuTaskScheduler& cpuScheduler
-){
+Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection, const ImportOptions& options, const bool wantsSkinning, const Vec4& defaultColor, Core::CpuTaskScheduler& cpuScheduler){
     MeshBuildResult result;
     const auto estimatedTriangleCorners = FbxMeshBuild::EstimateSelectedTriangleCorners(instances, selection);
     if(!estimatedTriangleCorners)
@@ -47,21 +40,7 @@ Expected<MeshBuildResult> BuildMesh(
     FbxSkinDetail::ExportContext skinContext;
     for(const usize instanceIndex : selection){
         NWB_ASSERT(instanceIndex < instances.size());
-        if(
-            !FbxMeshBuild::AppendInstanceMesh(
-                instances[instanceIndex],
-                options,
-                wantsSkinning,
-                *normalMode,
-                defaultColor,
-                triangleIndices,
-                meshContext,
-                skinContext,
-                result.sawVertexColors,
-                result.sawVertexUvs,
-                usedDefaultUvs
-            )
-        ){
+        if(!FbxMeshBuild::AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs)){
             return MakeUnexpected(Failure{});
         }
     }

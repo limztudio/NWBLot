@@ -86,12 +86,7 @@ void ReflectionFeedbackState::reset(const u16 deviceGeneration)noexcept{
     m_quarantined = false;
 }
 
-ReflectionFeedbackPlan ReflectionFeedbackState::plan(
-    const ReflectionSceneContentStamp& stamp,
-    const ReflectionSettings& settings,
-    const bool enabled,
-    const u64 graphicsFrameIndex
-)noexcept{
+ReflectionFeedbackPlan ReflectionFeedbackState::plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const bool enabled, const u64 graphicsFrameIndex)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     ReflectionFeedbackPlan result;
@@ -110,10 +105,7 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(
         result.resetReason = m_resourcesChanged ? ReflectionFeedbackResetReason::ResourcesChanged : ReflectionFeedbackResetReason::FirstObservation;
     else if(enabled != m_enabled || !__hidden_reflection_feedback::SameScreenSettings(settings, m_settings))
         result.resetReason = ReflectionFeedbackResetReason::SettingsChanged;
-    else if(
-        stamp.geometry != m_stamp.geometry || stamp.material != m_stamp.material
-        || stamp.lighting != m_stamp.lighting || stamp.trusted != m_stamp.trusted
-    )
+    else if(stamp.geometry != m_stamp.geometry || stamp.material != m_stamp.material || stamp.lighting != m_stamp.lighting || stamp.trusted != m_stamp.trusted)
         result.resetReason = ReflectionFeedbackResetReason::SceneChanged;
     else if(stamp.view != m_stamp.view)
         result.resetReason = ReflectionFeedbackResetReason::ViewChanged;
@@ -121,10 +113,7 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(
     result.epoch = m_epoch + (result.reset ? 1u : 0u);
     result.startGraphicsFrame = result.reset ? graphicsFrameIndex : m_startGraphicsFrame;
     result.probeIndex = result.reset ? 0u : m_nextProbeIndex;
-    result.eligible =
-        !m_quarantined && enabled && stamp.trusted && settings.traceMode == ReflectionTraceMode::Hybrid
-        && settings.maxHardwareRaysPerFrame > 0u
-    ;
+    result.eligible = !m_quarantined && enabled && stamp.trusted && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
     result.reused = result.eligible && m_eligible && !result.reset;
     result.previousBank = m_acceptedBank;
     // Never overwrite the accepted bank.
@@ -139,10 +128,7 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(
 bool ReflectionFeedbackState::reserve(const ReflectionFeedbackPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    if(
-        m_quarantined || m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation
-        || plan.sequence == 0u || plan.sequence <= m_acceptedSequence || plan.acceptedSequence != m_acceptedSequence
-    )
+    if(m_quarantined || m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation || plan.sequence == 0u || plan.sequence <= m_acceptedSequence || plan.acceptedSequence != m_acceptedSequence)
         return false;
     m_reservedSequence = plan.sequence;
     return true;
@@ -155,11 +141,7 @@ void ReflectionFeedbackState::discard(const ReflectionFeedbackPlan& plan)noexcep
         m_reservedSequence = 0u;
 }
 
-bool ReflectionFeedbackState::accept(
-    const ReflectionFeedbackPlan& plan,
-    const Core::QueueSubmissionToken& token,
-    const bool hardwareReady
-)noexcept{
+bool ReflectionFeedbackState::accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(plan.generation != m_generation || plan.sequence != m_reservedSequence)
@@ -168,10 +150,7 @@ bool ReflectionFeedbackState::accept(
     if(
         !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration
         || token.queue != Core::CommandQueue::Graphics
-        || (m_acceptedToken.valid() && (
-            !token.matchesPhysicalQueue(m_acceptedToken.physicalQueueIndex, m_acceptedToken.deviceGeneration)
-            || token.value <= m_acceptedToken.value
-        ))
+        || (m_acceptedToken.valid() && (!token.matchesPhysicalQueue(m_acceptedToken.physicalQueueIndex, m_acceptedToken.deviceGeneration) || token.value <= m_acceptedToken.value))
     ){
         // Accepted work blocks discard-based overwrite proof.
         m_quarantined = true;
@@ -199,11 +178,7 @@ bool ReflectionFeedbackState::accept(
 
 
 ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration){
-    return ReflectionFeedbackControlHandle(
-        NewArenaObject<ReflectionFeedbackControl>(arena, deviceGeneration),
-        ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return ReflectionFeedbackControlHandle(NewArenaObject<ReflectionFeedbackControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

@@ -70,12 +70,7 @@ struct ShaderVariantDefineAssignment{
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] inline Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(
-    Core::GraphicsArena& arena,
-    const AStringView baseVariant,
-    const ShaderVariantDefineAssignment* defineAssignments,
-    const usize defineAssignmentCount
-){
+[[nodiscard]] inline Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const ShaderVariantDefineAssignment* defineAssignments, const usize defineAssignmentCount){
     Core::GraphicsString variant(arena);
     if(baseVariant.empty() || !defineAssignments || defineAssignmentCount == 0u)
         return MakeUnexpected(Failure{});

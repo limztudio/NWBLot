@@ -75,29 +75,16 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
             return false;
         }
     }
-    const Name shaderNames[] = {
-        AssetsGraphicsShadow::s_HardwareTransparentGatherShaderName,
-        AssetsGraphicsShadow::s_HardwareTransparentEvaluateShaderName,
-        AssetsGraphicsShadow::s_HardwareTransparentOverflowShaderName,
-    };
+    const Name shaderNames[] = { AssetsGraphicsShadow::s_HardwareTransparentGatherShaderName, AssetsGraphicsShadow::s_HardwareTransparentEvaluateShaderName, AssetsGraphicsShadow::s_HardwareTransparentOverflowShaderName, };
     for(u32 i = 0u; i < LengthOf(state.m_pipelines); ++i){
         if(state.m_pipelines[i])
             continue;
-        if(!m_shaderSystem.loadShader<ComputeShader>(
-            state.m_shaders[i], shaderNames[i], Core::ShaderArchive::s_DefaultVariant,
-            "ECSRender_HardwareTransparentShadow"
-        )){
+        if(!m_shaderSystem.loadShader<ComputeShader>(state.m_shaders[i], shaderNames[i], Core::ShaderArchive::s_DefaultVariant, "ECSRender_HardwareTransparentShadow")){
             state.m_pipelineFailed = true;
             return false;
         }
         Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc
-            .setComputeShader(state.m_shaders[i])
-            .addBindingLayout(state.m_bindingLayout)
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-            .addBindingLayout(heap.getAccelStructLayout())
-        ;
+        pipelineDesc.setComputeShader(state.m_shaders[i]).addBindingLayout(state.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
         state.m_pipelines[i] = device.createComputePipeline(pipelineDesc);
         if(!state.m_pipelines[i]){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
@@ -114,13 +101,8 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         return false;
     }
     if(pixels > state.m_pixelsCapacity){
-        const u64 sizes[] = {
-            pixels * NWB_HW_TRANSPARENT_WORDS_PER_RAY * sizeof(u32),
-            pixels * sizeof(u32), NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS * sizeof(u32),
-        };
-        const Name names[] = {
-            Name("hardware_shadow_crossings"), Name("hardware_shadow_overflow_list"), Name("hardware_shadow_overflow_args"),
-        };
+        const u64 sizes[] = { pixels * NWB_HW_TRANSPARENT_WORDS_PER_RAY * sizeof(u32), pixels * sizeof(u32), NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS * sizeof(u32), };
+        const Name names[] = { Name("hardware_shadow_crossings"), Name("hardware_shadow_overflow_list"), Name("hardware_shadow_overflow_args"), };
         Core::BufferHandle buffers[3];
         Core::GpuDescriptorHandle descriptors[3]{};
         ScopeExit retireUnpublished([&]()noexcept{
@@ -182,11 +164,7 @@ bool RendererRayTracingSystem::hardwareTransparentShadowReady()const noexcept{
     return m_shadowVisibilityHardwareSupported && m_rayTracingState.m_hardwareTransparentShadow.m_ready;
 }
 
-void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const u32 frameIndex
-){
+void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandList& commandList, DeferredFrameTargets& targets, const u32 frameIndex){
     auto& state = m_rayTracingState.m_hardwareTransparentShadow;
     NWB_ASSERT(state.m_ready);
     auto& device = m_graphics.getDevice();
@@ -262,11 +240,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
     commandList.setBufferState(state.m_overflowArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     if(!state.m_dispatchLogged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware transparent shadow traversal ({}x{}, {} instances)")
-            , static_cast<u64>(targets.width)
-            , static_cast<u64>(targets.height)
-            , static_cast<u64>(m_rayTracingState.m_tlasInstanceCount)
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware transparent shadow traversal ({}x{}, {} instances)"), static_cast<u64>(targets.width), static_cast<u64>(targets.height), static_cast<u64>(m_rayTracingState.m_tlasInstanceCount));
         state.m_dispatchLogged = true;
     }
 }

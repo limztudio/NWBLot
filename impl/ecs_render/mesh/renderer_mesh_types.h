@@ -36,19 +36,10 @@ struct InstanceGpuData{
 };
 static_assert(offsetof(InstanceGpuData, rotation) == sizeof(f32) * NWB_MESH_INSTANCE_ROTATION_FLOAT_OFFSET, "InstanceGpuData rotation must be first");
 static_assert(offsetof(InstanceGpuData, translation) == sizeof(f32) * NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET, "InstanceGpuData translation must follow rotation");
-static_assert(
-    offsetof(InstanceGpuData, translation) + offsetof(Float3UInt, w) == sizeof(f32) * NWB_MESH_INSTANCE_MATERIAL_MUTABLE_BYTE_OFFSET_FLOAT_OFFSET,
-    "InstanceGpuData mutable offset must pack into translation.w"
-);
+static_assert(offsetof(InstanceGpuData, translation) + offsetof(Float3UInt, w) == sizeof(f32) * NWB_MESH_INSTANCE_MATERIAL_MUTABLE_BYTE_OFFSET_FLOAT_OFFSET, "InstanceGpuData mutable offset must pack into translation.w");
 static_assert(offsetof(InstanceGpuData, scale) == sizeof(f32) * NWB_MESH_INSTANCE_SCALE_FLOAT_OFFSET, "InstanceGpuData scale must follow translation payload");
-static_assert(
-    offsetof(InstanceGpuData, scale) + offsetof(Float3UInt, w) == sizeof(u32) * NWB_MESH_INSTANCE_ENTITY_ID_WORD_OFFSET,
-    "InstanceGpuData full entity identity must follow scale.xyz"
-);
-static_assert(
-    offsetof(InstanceGpuData, geometryHeapSlots) == sizeof(f32) * NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET,
-    "InstanceGpuData geometry heap slots must follow the transform payload"
-);
+static_assert(offsetof(InstanceGpuData, scale) + offsetof(Float3UInt, w) == sizeof(u32) * NWB_MESH_INSTANCE_ENTITY_ID_WORD_OFFSET, "InstanceGpuData full entity identity must follow scale.xyz");
+static_assert(offsetof(InstanceGpuData, geometryHeapSlots) == sizeof(f32) * NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET, "InstanceGpuData geometry heap slots must follow the transform payload");
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * NWB_MESH_INSTANCE_FLOAT_COUNT, "InstanceGpuData stride must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
@@ -110,13 +101,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     CsgReceiverCpuBounds csgLocalBounds;
 
     [[nodiscard]] bool valid()const noexcept{
-        return
-            meshName != s_NameNone
-            && buffersValid()
-            && meshletCount > 0
-            && meshletPrimitiveIndexCount > 0
-            && solidTriangleWords != nullptr
-        ;
+        return meshName != s_NameNone && buffersValid() && meshletCount > 0 && meshletPrimitiveIndexCount > 0 && solidTriangleWords != nullptr;
     }
 };
 

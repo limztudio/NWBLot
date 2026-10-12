@@ -82,16 +82,11 @@ struct HardwareCausticsStageResult{
 
 class HardwareCausticsStageBuilder final : NoCopy{
 public:
-    HardwareCausticsStageBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererRayTracingSystem& raytracingSystem
-    );
+    HardwareCausticsStageBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
 
 
 public:
-    [[nodiscard]] Expected<HardwareCausticsStageResult> declare(
-        const HardwareCausticsStageInputs& inputs
-    );
+    [[nodiscard]] Expected<HardwareCausticsStageResult> declare(const HardwareCausticsStageInputs& inputs);
 
 
 private:

@@ -159,10 +159,7 @@ inline int BoundedCopy(CharT* dest, const std::size_t destSize, const CharT* src
     }
 
     const std::size_t srcLength = BoundedLength(src, destSize);
-    const std::size_t copyCount = srcLength < (destSize - 1u)
-        ? srcLength
-        : (destSize - 1u)
-    ;
+    const std::size_t copyCount = srcLength < (destSize - 1u) ? srcLength : (destSize - 1u);
     if(copyCount > 0u)
         std::char_traits<CharT>::copy(dest, src, copyCount);
     dest[copyCount] = CharT{};
@@ -179,10 +176,7 @@ inline int BoundedNCopy(CharT* dest, const std::size_t destSize, const CharT* sr
     }
 
     const std::size_t requestedCount = BoundedLength(src, count);
-    const std::size_t copyCount = requestedCount < (destSize - 1u)
-        ? requestedCount
-        : (destSize - 1u)
-    ;
+    const std::size_t copyCount = requestedCount < (destSize - 1u) ? requestedCount : (destSize - 1u);
     if(copyCount > 0u)
         std::char_traits<CharT>::copy(dest, src, copyCount);
     dest[copyCount] = CharT{};

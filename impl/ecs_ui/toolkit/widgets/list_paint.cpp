@@ -24,21 +24,12 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     if(!listMatches(frame))
         return false;
     const Rect clip = visibleClip(box.clip);
-    auto placement = ScrollLayout::Calculate(
-        box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
-        frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset()
-    );
+    auto placement = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset());
     if(!placement)
         return false;
-    if(
-        !ListBehavior::EnsureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement->viewport.height)
-        || !listStateMatches(frame)
-    )
+    if(!ListBehavior::EnsureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement->viewport.height) || !listStateMatches(frame))
         return false;
-    placement = ScrollLayout::Calculate(
-        box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
-        frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset()
-    );
+    placement = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset());
     if(!placement)
         return false;
     // The dataset never determines allocation or target capacity; excessive visible density rejects this frame.
@@ -64,8 +55,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     host.scrollable = item.enabled;
     host.scrollStep = static_cast<f64>(frame.options.rowHeight) * static_cast<f64>(frame.options.wheelRows);
     const f64 page = Floor(static_cast<f64>(placement->viewport.height) / static_cast<f64>(frame.options.rowHeight));
-    host.pageRows = page >= static_cast<f64>(frame.rowCount) ? Max<u64>(1u, frame.rowCount)
-        : Max<u64>(1u, static_cast<u64>(page));
+    host.pageRows = page >= static_cast<f64>(frame.rowCount) ? Max<u64>(1u, frame.rowCount) : Max<u64>(1u, static_cast<u64>(page));
     host.gestureMaximum = placement->maxOffset;
     host.focusOnCommit = frame.focusOnCommit;
     if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, *placement))
@@ -103,8 +93,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
 
 bool Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
     const WidgetId rows = MakeWidgetId(item.state.id, "rows");
-    const bool focused = m_context.input().focus() == item.state.id
-        || (frame.keyboardFocus.valid() && m_context.input().focus() == frame.keyboardFocus);
+    const bool focused = m_context.input().focus() == item.state.id || (frame.keyboardFocus.valid() && m_context.input().focus() == frame.keyboardFocus);
     for(u64 index = placement.firstRow; index < placement.endRow; ++index){
         if(!listStateMatches(frame))
             return false;
@@ -129,12 +118,8 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
         auto layout = m_text.layout(request);
         if(!layout)
             return false;
-        const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key,
-            m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
-        if(!SelectablePainter::Paint(
-            m_paint, m_text, *m_skin, *layout, *rectangle, placement.contentClip, frame.style.row, flags,
-            frame.widgetStyle.text, frame.widgetStyle.disabledText
-        ))
+        const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
+        if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, *layout, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
             return false;
         if(item.enabled){
             HitTarget target;

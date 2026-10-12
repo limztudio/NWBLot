@@ -73,12 +73,7 @@ public:
     virtual ~ICookedAssetWriter() = default;
 
 public:
-    virtual bool writeCookedAsset(
-        TStringView assetKind,
-        const Name& virtualPath,
-        const IAsset& asset,
-        const IAssetCodec& codec
-    ) = 0;
+    virtual bool writeCookedAsset(TStringView assetKind, const Name& virtualPath, const IAsset& asset, const IAssetCodec& codec) = 0;
 };
 
 
@@ -93,19 +88,8 @@ public:
     [[nodiscard]] virtual usize size()const noexcept = 0;
 
 public:
-    virtual bool parseDocument(
-        const Path& assetRoot,
-        AStringView virtualRoot,
-        const Path& nwbFilePath,
-        const Core::Metascript::Document& doc,
-        CookEntryParseContext& context
-    ) = 0;
-    virtual bool parseValue(
-        Name virtualPath,
-        const Path& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        CookEntryParseContext& context
-    ) = 0;
+    virtual bool parseDocument(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context) = 0;
+    virtual bool parseValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context) = 0;
     virtual bool writeCookedAssets(CookEntryWriteContext& context) = 0;
 };
 
@@ -149,11 +133,7 @@ template<typename StringT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool RegisterParsedVirtualPath(
-    const TStringView assetKind,
-    const Name& virtualPath,
-    CookEntryPathHashSet& inOutSeenVirtualPathHashes
-){
+[[nodiscard]] inline bool RegisterParsedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
     if(!virtualPath)
         return true;
 
@@ -161,18 +141,11 @@ template<typename StringT>
     if(inOutSeenVirtualPathHashes.insert(pathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}")
-        , StringConvert(virtualPath.resolvedText())
-        , assetKind
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}"), StringConvert(virtualPath.resolvedText()), assetKind);
     return false;
 }
 
-[[nodiscard]] inline bool RegisterCookedVirtualPath(
-    const TStringView assetKind,
-    const Name& virtualPath,
-    CookEntryPathHashSet& inOutSeenVirtualPathHashes
-){
+[[nodiscard]] inline bool RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
     if(!virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind);
         return false;
@@ -182,10 +155,7 @@ template<typename StringT>
     if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'")
-        , assetKind
-        , StringConvert(virtualPath.resolvedText())
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'"), assetKind, StringConvert(virtualPath.resolvedText()));
     return false;
 }
 
@@ -202,31 +172,12 @@ template<typename StringT>
 template<typename EntryT, typename AssetT, typename CodecT>
 class CookEntryBucket final : public CookEntryBucketTyped<EntryT>{
 public:
-    using DocumentParseFunction = Expected<EntryT> (*)(
-        const Path& assetRoot,
-        AStringView virtualRoot,
-        const Path& nwbFilePath,
-        const Core::Metascript::Document& doc,
-        CookEntryParseContext& context
-    );
-    using ValueParseFunction = Expected<EntryT> (*)(
-        Name virtualPath,
-        const Path& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        CookEntryParseContext& context
-    );
+    using DocumentParseFunction = Expected<EntryT> (*)(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context);
+    using ValueParseFunction = Expected<EntryT> (*)(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context);
     using BuildAssetFunction = Expected<AssetT> (*)(EntryT& entry, AssetArena& arena);
 
 public:
-    CookEntryBucket(
-        CookArena& arena,
-        const Name& assetType,
-        const TStringView assetKindText,
-        DocumentParseFunction parseDocument,
-        ValueParseFunction parseValue,
-        BuildAssetFunction buildAsset,
-        const bool logBuildFailure
-    )
+    CookEntryBucket(CookArena& arena, const Name& assetType, const TStringView assetKindText, DocumentParseFunction parseDocument, ValueParseFunction parseValue, BuildAssetFunction buildAsset, const bool logBuildFailure)
         : m_entries(arena)
         , m_assetKindText(assetKindText)
         , m_parseDocument(parseDocument)
@@ -242,18 +193,9 @@ public:
     [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept override{ return m_entries; }
 
 public:
-    virtual bool parseDocument(
-        const Path& assetRoot,
-        const AStringView virtualRoot,
-        const Path& nwbFilePath,
-        const Core::Metascript::Document& doc,
-        CookEntryParseContext& context
-    )override{
+    virtual bool parseDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context)override{
         if(!m_parseDocument){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'")
-                , StringConvert(m_assetType.resolvedText())
-                , PathToString<tchar>(nwbFilePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'"), StringConvert(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
@@ -264,17 +206,9 @@ public:
         return appendParsedEntry(Move(*entry), context);
     }
 
-    virtual bool parseValue(
-        const Name virtualPath,
-        const Path& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        CookEntryParseContext& context
-    )override{
+    virtual bool parseValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context)override{
         if(!m_parseValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
-                , StringConvert(m_assetType.resolvedText())
-                , PathToString<tchar>(nwbFilePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'"), StringConvert(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
@@ -290,30 +224,18 @@ public:
         Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
 
         for(EntryT& entry : m_entries){
-            if(!CookEntryRegistryDetail::RegisterCookedVirtualPath(
-                m_assetKindText,
-                CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
-                context.seenVirtualPathHashes
-            ))
+            if(!CookEntryRegistryDetail::RegisterCookedVirtualPath(m_assetKindText, CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath), context.seenVirtualPathHashes))
                 return false;
 
             auto asset = m_buildAsset(entry, assetArena);
             if(!asset){
                 if(m_logBuildFailure){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'")
-                        , m_assetKindText
-                        , StringConvert(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath))
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'"), m_assetKindText, StringConvert(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath)));
                 }
                 return false;
             }
 
-            if(!context.writer.writeCookedAsset(
-                m_assetKindText,
-                CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
-                *asset,
-                codec
-            ))
+            if(!context.writer.writeCookedAsset(m_assetKindText, CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath), *asset, codec))
                 return false;
         }
 
@@ -322,11 +244,7 @@ public:
 
 private:
     bool appendParsedEntry(EntryT&& entry, CookEntryParseContext& context){
-        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(
-            m_assetKindText,
-            CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
-            context.seenVirtualPathHashes
-        ))
+        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(m_assetKindText, CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath), context.seenVirtualPathHashes))
             return false;
 
         m_entries.push_back(Move(entry));
@@ -371,9 +289,7 @@ public:
         auto bucket = MakeUnique<BucketT>(m_arena);
         ICookEntryBucket* bucketPtr = bucket.get();
         if(!m_lookup.emplace(assetType, bucketPtr).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
-                , StringConvert(assetType.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'"), StringConvert(assetType.resolvedText()));
             return false;
         }
 
@@ -397,26 +313,14 @@ public:
             return false;
         }
         if(!buildAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function")
-                , StringConvert(assetType.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function"), StringConvert(assetType.resolvedText()));
             return false;
         }
 
-        auto bucket = MakeUnique<CookEntryBucket<EntryT, AssetT, CodecT>>(
-            m_arena,
-            assetType,
-            assetKindText,
-            parseDocument,
-            parseValue,
-            buildAsset,
-            logBuildFailure
-        );
+        auto bucket = MakeUnique<CookEntryBucket<EntryT, AssetT, CodecT>>(m_arena, assetType, assetKindText, parseDocument, parseValue, buildAsset, logBuildFailure);
         ICookEntryBucket* bucketPtr = bucket.get();
         if(!m_lookup.emplace(assetType, bucketPtr).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
-                , StringConvert(assetType.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'"), StringConvert(assetType.resolvedText()));
             return false;
         }
 
@@ -439,40 +343,21 @@ public:
         return static_cast<CookEntryBucketTyped<EntryT>*>(bucket.get())->entries();
     }
 
-    [[nodiscard]] bool parseDocument(
-        const Name& assetType,
-        const Path& assetRoot,
-        const AStringView virtualRoot,
-        const Path& nwbFilePath,
-        const Core::Metascript::Document& doc,
-        CookEntryParseContext& context
-    ){
+    [[nodiscard]] bool parseDocument(const Name& assetType, const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context){
         ICookEntryBucket* bucket = find(assetType);
         if(bucket)
             return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'")
-            , StringConvert(assetType.resolvedText())
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), StringConvert(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    [[nodiscard]] bool parseValue(
-        const Name& assetType,
-        const Name virtualPath,
-        const Path& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        CookEntryParseContext& context
-    ){
+    [[nodiscard]] bool parseValue(const Name& assetType, const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context){
         ICookEntryBucket* bucket = find(assetType);
         if(bucket)
             return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'")
-            , StringConvert(assetType.resolvedText())
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), StringConvert(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -528,14 +413,7 @@ template<typename EntryT, typename AssetT, typename CodecT>
     typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
     const bool logBuildFailure = true
 ){
-    return RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(
-        registry,
-        assetKindText,
-        parseDocument,
-        nullptr,
-        buildAsset,
-        logBuildFailure
-    );
+    return RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(registry, assetKindText, parseDocument, nullptr, buildAsset, logBuildFailure);
 }
 
 template<typename EntryT, typename AssetT, typename CodecT>
@@ -547,32 +425,16 @@ template<typename EntryT, typename AssetT, typename CodecT>
     typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
     const bool logBuildFailure = true
 ){
-    return registry.registerType<EntryT, AssetT, CodecT>(
-        AssetT::AssetTypeName(),
-        assetKindText,
-        parseDocument,
-        parseValue,
-        buildAsset,
-        logBuildFailure
-    );
+    return registry.registerType<EntryT, AssetT, CodecT>(AssetT::AssetTypeName(), assetKindText, parseDocument, parseValue, buildAsset, logBuildFailure);
 }
 
 template<typename EntryT, typename BuildFunction>
-[[nodiscard]] inline auto ForwardCookBuild(
-    EntryT& entry,
-    AssetArena& arena,
-    BuildFunction buildAsset
-)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&> && IsNothrowDestructible_V<BuildFunction>){
+[[nodiscard]] inline auto ForwardCookBuild(EntryT& entry, AssetArena& arena, BuildFunction buildAsset)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&> && IsNothrowDestructible_V<BuildFunction>){
     return buildAsset(entry, arena);
 }
 
 template<typename EntryT, typename ScratchT, typename BuildFunction>
-[[nodiscard]] inline auto ForwardCookBuildWithScratch(
-    EntryT& entry,
-    AssetArena& arena,
-    ScratchT& scratch,
-    BuildFunction buildAsset
-)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&, ScratchT&> && IsNothrowDestructible_V<BuildFunction>){
+[[nodiscard]] inline auto ForwardCookBuildWithScratch(EntryT& entry, AssetArena& arena, ScratchT& scratch, BuildFunction buildAsset)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&, ScratchT&> && IsNothrowDestructible_V<BuildFunction>){
     return buildAsset(entry, arena, scratch);
 }
 

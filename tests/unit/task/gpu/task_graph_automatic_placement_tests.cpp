@@ -35,47 +35,17 @@ void ExpectComputeStagePlacement(const u64 computeQueueLoad, const Graphics::Com
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskSchedulingHint graphicsScheduling;
     graphicsScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    const Graphics::GpuTaskId producer = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_stage_graphics_producer"),
-        "Automatic Stage Graphics Producer",
-        GraphicsCommands(),
-        graphicsScheduling
-    );
+    const Graphics::GpuTaskId producer = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_graphics_producer"), "Automatic Stage Graphics Producer", GraphicsCommands(), graphicsScheduling);
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskSchedulingHint stageScheduling;
     stageScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    const Graphics::GpuTaskId stage = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_stage_compute"),
-        "Automatic Compute Stage",
-        ComputeCommands(),
-        stageScheduling,
-        {},
-        &producer,
-        1u
-    );
+    const Graphics::GpuTaskId stage = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_compute"), "Automatic Compute Stage", ComputeCommands(), stageScheduling, {}, &producer, 1u);
     ASSERT_TRUE(stage.valid());
-    const Graphics::GpuTaskId consumer = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_stage_graphics_consumer"),
-        "Automatic Stage Graphics Consumer",
-        GraphicsCommands(),
-        graphicsScheduling,
-        {},
-        &stage,
-        1u
-    );
+    const Graphics::GpuTaskId consumer = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_graphics_consumer"), "Automatic Stage Graphics Consumer", GraphicsCommands(), graphicsScheduling, {}, &stage, 1u);
     ASSERT_TRUE(consumer.valid());
 
-    const Graphics::GpuTaskId independent = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_stage_independent_graphics"),
-        "Automatic Stage Independent Graphics",
-        GraphicsCommands(),
-        graphicsScheduling
-    );
+    const Graphics::GpuTaskId independent = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_independent_graphics"), "Automatic Stage Independent Graphics", GraphicsCommands(), graphicsScheduling);
     ASSERT_TRUE(independent.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
@@ -116,30 +86,12 @@ TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGro
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Large;
-    const Graphics::GpuTaskId graphics = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_diagnostics_graphics"),
-        "Automatic Diagnostics Graphics",
-        GraphicsCommands(),
-        scheduling
-    );
+    const Graphics::GpuTaskId graphics = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_diagnostics_graphics"), "Automatic Diagnostics Graphics", GraphicsCommands(), scheduling);
     ASSERT_TRUE(graphics.valid());
-    const Graphics::GpuTaskId firstCompute = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_diagnostics_first_compute"),
-        "Automatic Diagnostics First Compute",
-        ComputeCommands(),
-        scheduling
-    );
+    const Graphics::GpuTaskId firstCompute = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_diagnostics_first_compute"), "Automatic Diagnostics First Compute", ComputeCommands(), scheduling);
     ASSERT_TRUE(firstCompute.valid());
     scheduling.mergeWithPrevious = true;
-    const Graphics::GpuTaskId secondCompute = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_diagnostics_second_compute"),
-        "Automatic Diagnostics Second Compute",
-        ComputeCommands(),
-        scheduling
-    );
+    const Graphics::GpuTaskId secondCompute = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_diagnostics_second_compute"), "Automatic Diagnostics Second Compute", ComputeCommands(), scheduling);
     ASSERT_TRUE(secondCompute.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
@@ -176,40 +128,13 @@ TEST(GpuTaskGraph, ExtendsMergedGroupAfterLegalityWitnessFallsBackToGraphics){
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Large;
-    const Graphics::GpuTaskId first = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_witness_compute"),
-        "Automatic Witness Compute",
-        ComputeCommands(),
-        scheduling
-    );
+    const Graphics::GpuTaskId first = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_witness_compute"), "Automatic Witness Compute", ComputeCommands(), scheduling);
     ASSERT_TRUE(first.valid());
     scheduling.mergeWithPrevious = true;
-    const Graphics::GpuTaskCommandRequirements primaryGraphicsCommands{
-        .requiredCapabilities = Graphics::GpuQueueCapability::Graphics,
-        .requiresPrimaryGraphicsQueue = true,
-    };
-    const Graphics::GpuTaskId graphics = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_witness_graphics"),
-        "Automatic Witness Graphics",
-        primaryGraphicsCommands,
-        scheduling,
-        {},
-        &first,
-        1u
-    );
+    const Graphics::GpuTaskCommandRequirements primaryGraphicsCommands{ .requiredCapabilities = Graphics::GpuQueueCapability::Graphics, .requiresPrimaryGraphicsQueue = true, };
+    const Graphics::GpuTaskId graphics = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_witness_graphics"), "Automatic Witness Graphics", primaryGraphicsCommands, scheduling, {}, &first, 1u);
     ASSERT_TRUE(graphics.valid());
-    const Graphics::GpuTaskId last = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_witness_final_compute"),
-        "Automatic Witness Final Compute",
-        ComputeCommands(),
-        scheduling,
-        {},
-        &graphics,
-        1u
-    );
+    const Graphics::GpuTaskId last = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_witness_final_compute"), "Automatic Witness Final Compute", ComputeCommands(), scheduling, {}, &graphics, 1u);
     ASSERT_TRUE(last.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
@@ -240,26 +165,11 @@ TEST(GpuTaskGraph, SplitsMergedGroupForDisjointExternalQueueContracts){
     scheduling.cost = Graphics::GpuTaskCostHint::Large;
     Graphics::GpuTaskCommandRequirements commands = ComputeCommands();
     commands.externalQueue = queues[1u].id;
-    const Graphics::GpuTaskId first = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_witness_external_compute"),
-        "Automatic Witness External Compute",
-        commands,
-        scheduling
-    );
+    const Graphics::GpuTaskId first = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_witness_external_compute"), "Automatic Witness External Compute", commands, scheduling);
     ASSERT_TRUE(first.valid());
     scheduling.mergeWithPrevious = true;
     commands.externalQueue = queues[0u].id;
-    const Graphics::GpuTaskId second = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/automatic_witness_external_graphics"),
-        "Automatic Witness External Graphics",
-        commands,
-        scheduling,
-        {},
-        &first,
-        1u
-    );
+    const Graphics::GpuTaskId second = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_witness_external_graphics"), "Automatic Witness External Graphics", commands, scheduling, {}, &first, 1u);
     ASSERT_TRUE(second.valid());
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);

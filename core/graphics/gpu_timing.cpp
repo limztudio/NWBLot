@@ -82,9 +82,7 @@ void GpuTimingRecorder::setQueryCollectionEnabled(const bool enabled){
 }
 
 GpuTimingSampleAttribution GpuTimingRecorder::allocateSampleAttribution()noexcept{
-    return GpuTimingSampleAttribution(__hidden_gpu_timing::AllocateMonotonicIdentity(
-        __hidden_gpu_timing::s_NextSampleAttributionIdentity
-    ));
+    return GpuTimingSampleAttribution(__hidden_gpu_timing::AllocateMonotonicIdentity(__hidden_gpu_timing::s_NextSampleAttributionIdentity));
 }
 
 bool GpuTimingRecorder::queryCollectionEnabled()const{
@@ -158,13 +156,7 @@ void GpuTimingRecorder::collect(Device& device){
         {
             ScopedLock recorderLock(m_mutex);
             publishFrameIndex = m_currentFrameIndex;
-            publishPerformanceSamples = collectLocked(
-                device,
-                subscriptionIdentityLimit,
-                completedSamples,
-                performanceSamples,
-                scratchArena
-            );
+            publishPerformanceSamples = collectLocked(device, subscriptionIdentityLimit, completedSamples, performanceSamples, scratchArena);
         }
         for(const GpuTimingSinkSample& sample : performanceSamples)
             m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
@@ -190,13 +182,7 @@ void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){
         bool publishPerformanceSamples = false;
         {
             ScopedLock recorderLock(m_mutex);
-            publishPerformanceSamples = collectLocked(
-                device,
-                subscriptionIdentityLimit,
-                completedSamples,
-                performanceSamples,
-                scratchArena
-            );
+            publishPerformanceSamples = collectLocked(device, subscriptionIdentityLimit, completedSamples, performanceSamples, scratchArena);
         }
         for(const GpuTimingSinkSample& sample : performanceSamples)
             m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
@@ -242,11 +228,7 @@ bool GpuTimingRecorder::requestScopeQueries(const Name& scopeName, const u32 que
     return true;
 }
 
-bool GpuTimingRecorder::prepareOverlapMetric(
-    const Name& firstScope,
-    const Name& secondScope,
-    const Name& outputScope
-){
+bool GpuTimingRecorder::prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope){
     ScopedLock lock(m_mutex);
     syncActiveState();
     if(m_accumulators.find(outputScope) != m_accumulators.end() || feedbackScopeDemandedLocked(outputScope))
@@ -265,33 +247,15 @@ bool GpuTimingRecorder::preparePacketEnvelopeMetrics(
     ScopedLock lock(m_mutex);
     syncActiveState();
     const GpuPacketEnvelopeMetricQueueOutput* const queueOutputs = queueOutputInputs.get();
-    if(
-        scopeCount == 0u
-        || !queueOverlapScope
-        || queueOutputCount == 0u
-        || queueOutputCount > scopeCount
-    )
+    if(scopeCount == 0u || !queueOverlapScope || queueOutputCount == 0u || queueOutputCount > scopeCount)
         return false;
-    if(
-        m_accumulators.find(queueOverlapScope) != m_accumulators.end()
-        || feedbackScopeDemandedLocked(queueOverlapScope)
-    )
+    if(m_accumulators.find(queueOverlapScope) != m_accumulators.end() || feedbackScopeDemandedLocked(queueOverlapScope))
         return false;
     for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
-        if(
-            m_accumulators.find(queueOutputs[outputIndex].internalIdleScopeName) != m_accumulators.end()
-            || feedbackScopeDemandedLocked(queueOutputs[outputIndex].internalIdleScopeName)
-        )
+        if(m_accumulators.find(queueOutputs[outputIndex].internalIdleScopeName) != m_accumulators.end() || feedbackScopeDemandedLocked(queueOutputs[outputIndex].internalIdleScopeName))
             return false;
     }
-    return m_metricCorrelator.preparePacketEnvelopeMetrics(
-        sourceFrameIndex,
-        scopeInputs,
-        scopeCount,
-        queueOverlapScope,
-        queueOutputInputs,
-        queueOutputCount
-    );
+    return m_metricCorrelator.preparePacketEnvelopeMetrics(sourceFrameIndex, scopeInputs, scopeCount, queueOverlapScope, queueOutputInputs, queueOutputCount);
 }
 
 bool GpuTimingRecorder::materializeRequestedQueries(Device& device){
@@ -341,8 +305,7 @@ void GpuTimingRecorder::endScope(CommandList& commandList, GpuTimingScope& scope
 
     GpuTimingAccumulator::QueryEndResult endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
     {
-        // Do not retain this lock while publishing into the ticket: terminal ticket paths take the ticket first and
-        // then release or quarantine query ownership through the recorder.
+        // Do not retain this lock while publishing into the ticket: terminal ticket paths take the ticket first and then release or quarantine query ownership through the recorder.
         ScopedLock lock(m_mutex);
         GpuTimingAccumulator* accumulator = findAccumulator(scope);
         if(accumulator)
@@ -392,10 +355,7 @@ bool GpuTimingRecorder::recordDeferredScopeEnd(CommandList& commandList, const G
     return accumulator && accumulator->recordQueryEnd(commandList, scope);
 }
 
-bool GpuTimingRecorder::validateScopeSubmission(
-    const GpuTimingScope& scope,
-    const QueueSubmissionToken& token
-){
+bool GpuTimingRecorder::validateScopeSubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token){
     if(!scope.valid())
         return true;
 
@@ -404,11 +364,7 @@ bool GpuTimingRecorder::validateScopeSubmission(
     return accumulator && accumulator->validateQuerySubmission(scope, token);
 }
 
-bool GpuTimingRecorder::confirmScope(
-    const GpuTimingScope& scope,
-    const QueueSubmissionToken& token,
-    const bool publishSample
-)noexcept{
+bool GpuTimingRecorder::confirmScope(const GpuTimingScope& scope, const QueueSubmissionToken& token, const bool publishSample)noexcept{
     if(!scope.valid())
         return true;
 
@@ -418,13 +374,7 @@ bool GpuTimingRecorder::confirmScope(
         return false;
 
     const bool confirmed = accumulator->confirmQuery(scope, token, publishSample);
-    if(
-        !confirmed
-        && accumulator->quarantineQuery(
-            scope,
-            m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-        )
-    )
+    if(!confirmed && accumulator->quarantineQuery(scope, m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
         m_pendingAttributionRetirements = true;
     return confirmed;
 }
@@ -439,13 +389,7 @@ bool GpuTimingRecorder::prepareDeferredScopeForRecovery(const GpuTimingScope& sc
         return false;
 
     const bool prepared = accumulator->prepareQueryForRecovery(scope);
-    if(
-        !prepared
-        && accumulator->quarantineQuery(
-            scope,
-            m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-        )
-    )
+    if(!prepared && accumulator->quarantineQuery(scope, m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
         m_pendingAttributionRetirements = true;
     return prepared;
 }
@@ -465,13 +409,7 @@ void GpuTimingRecorder::discardScope(GpuTimingScope& scope){
 
     ScopedLock lock(m_mutex);
     GpuTimingAccumulator* accumulator = findAccumulator(discardedScope);
-    if(
-        accumulator
-        && accumulator->discardQuery(
-            discardedScope,
-            m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-        )
-    )
+    if(accumulator && accumulator->discardQuery(discardedScope, m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
         m_pendingAttributionRetirements = true;
 }
 
@@ -490,13 +428,7 @@ void GpuTimingRecorder::abandonScopeWithoutCallbacks(GpuTimingScope& scope)noexc
 
     NothrowScopedLock lock(m_mutex);
     GpuTimingAccumulator* const accumulator = findAccumulator(abandonedScope);
-    if(
-        accumulator
-        && accumulator->abandonQuery(
-            abandonedScope,
-            m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-        )
-    )
+    if(accumulator && accumulator->abandonQuery(abandonedScope, m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
         m_pendingAttributionRetirements = true;
 }
 
@@ -506,13 +438,7 @@ void GpuTimingRecorder::quarantineScope(const GpuTimingScope& scope)noexcept{
 
     NothrowScopedLock lock(m_mutex);
     GpuTimingAccumulator* accumulator = findAccumulator(scope);
-    if(
-        accumulator
-        && accumulator->quarantineQuery(
-            scope,
-            m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-        )
-    )
+    if(accumulator && accumulator->quarantineQuery(scope, m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
         m_pendingAttributionRetirements = true;
 }
 
@@ -546,21 +472,12 @@ GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& sco
     if(!inserted)
         return it.value().get();
 
-    if(it.value()->setCaptureEnabled(
-        m_performanceCollectionActive || feedbackScopeDemandedLocked(scopeName),
-        m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-    ))
+    if(it.value()->setCaptureEnabled(m_performanceCollectionActive || feedbackScopeDemandedLocked(scopeName), m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
         m_pendingAttributionRetirements = true;
     return it.value().get();
 }
 
-bool GpuTimingRecorder::collectLocked(
-    Device& device,
-    const u64 subscriptionIdentityLimit,
-    SampleDispatchVector& completedSamples,
-    GpuTimingSinkSampleVector& performanceSamples,
-    Alloc::ScratchArena& scratchArena
-){
+bool GpuTimingRecorder::collectLocked(Device& device, const u64 subscriptionIdentityLimit, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena){
     syncActiveState();
     reservePendingAttributionSamplesLocked(completedSamples);
     const bool publishPerformanceSamples = m_performanceCollectionActive;
@@ -579,17 +496,7 @@ bool GpuTimingRecorder::collectLocked(
         return publishPerformanceSamples;
 
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
-        it.value()->collect(
-            device,
-            *this,
-            m_epoch,
-            m_performanceCaptureEpoch,
-            subscriptionIdentityLimit,
-            publishPerformanceSamples,
-            completedSamples,
-            performanceSamples,
-            scratchArena
-        );
+        it.value()->collect(device, *this, m_epoch, m_performanceCaptureEpoch, subscriptionIdentityLimit, publishPerformanceSamples, completedSamples, performanceSamples, scratchArena);
     return publishPerformanceSamples;
 }
 
@@ -628,10 +535,7 @@ void GpuTimingRecorder::syncActiveState(const u64 subscriptionIdentityLimit)noex
     m_accumulatorsActive = m_performanceCollectionActive || !m_feedbackScopeDemands.empty();
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it){
         GpuTimingAccumulator& accumulator = *it.value();
-        if(accumulator.setCaptureEnabled(
-            m_performanceCollectionActive || feedbackScopeDemandedLocked(it.key()),
-            subscriptionIdentityLimit
-        ))
+        if(accumulator.setCaptureEnabled(m_performanceCollectionActive || feedbackScopeDemandedLocked(it.key()), subscriptionIdentityLimit))
             m_pendingAttributionRetirements = true;
     }
 }

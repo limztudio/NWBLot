@@ -28,24 +28,8 @@ namespace __hidden_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool LoadComputeShader(
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver,
-    Core::ShaderHandle& shader,
-    const Name& shaderName,
-    const Name& debugName
-){
-    return ShaderAssetLoader::Load<ComputeShader>(
-        shader,
-        shaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        debugName,
-        graphics,
-        assetManager,
-        shaderPathResolver,
-        NWB_TEXT("MeshSkinningSystem")
-    );
+static bool LoadComputeShader(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver, Core::ShaderHandle& shader, const Name& shaderName, const Name& debugName){
+    return ShaderAssetLoader::Load<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, debugName, graphics, assetManager, shaderPathResolver, NWB_TEXT("MeshSkinningSystem"));
 }
 
 
@@ -68,9 +52,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
 
     if(!m_skinningBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc
-            .setVisibility(Core::ShaderType::Compute)
-        ;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         // Streams live in the global heap; local layout is push constants only.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshSkinningPushConstants)));
 
@@ -81,26 +63,14 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(
-        m_graphics,
-        m_assetManager,
-        m_shaderPathResolver,
-        m_skinningComputeShader,
-        AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName,
-        Name("ECSMeshSkinning_SkinningCS")
-    ))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_skinningComputeShader, AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName, Name("ECSMeshSkinning_SkinningCS")))
         return false;
 
     if(m_skinningComputePipeline)
         return true;
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_skinningComputeShader)
-        .addBindingLayout(m_skinningBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_skinningComputeShader).addBindingLayout(m_skinningBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_skinningComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_skinningComputePipeline)
         return true;
@@ -119,9 +89,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
 
     if(!m_boundsBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc
-            .setVisibility(Core::ShaderType::Compute)
-        ;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         // Per-runtime selector is a global UniformBuffer entry via push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletBoundsPushConstants)));
 
@@ -132,26 +100,14 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(
-        m_graphics,
-        m_assetManager,
-        m_shaderPathResolver,
-        m_boundsComputeShader,
-        AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName,
-        Name("ECSMeshSkinning_MeshletBoundsCS")
-    ))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_boundsComputeShader, AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName, Name("ECSMeshSkinning_MeshletBoundsCS")))
         return false;
 
     if(m_boundsComputePipeline)
         return true;
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_boundsComputeShader)
-        .addBindingLayout(m_boundsBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_boundsComputeShader).addBindingLayout(m_boundsBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_boundsComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_boundsComputePipeline)
         return true;
@@ -165,24 +121,12 @@ bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
         return true;
     if(!ensureBoundsPipeline())
         return false;
-    if(!__hidden_pipeline::LoadComputeShader(
-        m_graphics,
-        m_assetManager,
-        m_shaderPathResolver,
-        m_localBoundsComputeShader,
-        AssetsGraphicsSkinnedMesh::s_LocalBoundsComputeShaderName,
-        Name("ECSMeshSkinning_LocalBoundsCS")
-    ))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_localBoundsComputeShader, AssetsGraphicsSkinnedMesh::s_LocalBoundsComputeShaderName, Name("ECSMeshSkinning_LocalBoundsCS")))
         return false;
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_localBoundsComputeShader)
-        .addBindingLayout(m_boundsBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_localBoundsComputeShader).addBindingLayout(m_boundsBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_localBoundsComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_localBoundsComputePipeline)
         return true;
@@ -200,9 +144,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
 
     if(!m_repackBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc
-            .setVisibility(Core::ShaderType::Compute)
-        ;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         // Per-runtime selector is a global UniformBuffer entry via push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletRepackPushConstants)));
 
@@ -213,26 +155,14 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(
-        m_graphics,
-        m_assetManager,
-        m_shaderPathResolver,
-        m_repackComputeShader,
-        AssetsGraphicsSkinnedMesh::s_RepackNormalsComputeShaderName,
-        Name("ECSMeshSkinning_RepackNormalsCS")
-    ))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_repackComputeShader, AssetsGraphicsSkinnedMesh::s_RepackNormalsComputeShaderName, Name("ECSMeshSkinning_RepackNormalsCS")))
         return false;
 
     if(m_repackComputePipeline)
         return true;
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_repackComputeShader)
-        .addBindingLayout(m_repackBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_repackComputeShader).addBindingLayout(m_repackBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_repackComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_repackComputePipeline)
         return true;

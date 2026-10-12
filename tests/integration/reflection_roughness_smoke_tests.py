@@ -196,8 +196,7 @@ class ReflectionCompletedHistoryTests(unittest.TestCase):
             validate_history(text, stats, CaptureSpec(LIT_DEFORM, case=LIT_TEMPORAL_DEFORM, roughness=0))
 
     def test_raw_and_held_deformation_advance_without_history(self):
-        samples = [self.sample(count=0, start=0, eligible=0, reused=0),
-            self.sample(2, 44, count=0, epoch=3, start=0, eligible=0, reused=0)]
+        samples = [self.sample(count=0, start=0, eligible=0, reused=0), self.sample(2, 44, count=0, epoch=3, start=0, eligible=0, reused=0)]
         text, stats = self.evidence(samples, 41)
         validate_history(text, stats, CaptureSpec(LIT_RAW, temporal=False))
         text, stats = self.evidence(samples, 41, mutation=41)
@@ -229,8 +228,7 @@ class ReflectionCompletedHistoryTests(unittest.TestCase):
         validate_history(text, stats, spec)
 
     def test_environment_removes_inherited_controls(self):
-        with patch.dict(os.environ, {"NWB_REFLECTION_SMOKE_MODE": "disabled", LIT_NWB_REFLECTION_SMOKE_DEBUG: "source",
-            LIT_NWB_REFLECTION_SMOKE_SEED: "900", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0"}):
+        with patch.dict(os.environ, {"NWB_REFLECTION_SMOKE_MODE": "disabled", LIT_NWB_REFLECTION_SMOKE_DEBUG: "source", LIT_NWB_REFLECTION_SMOKE_SEED: "900", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0"}):
             env = spec_environment(CaptureSpec(LIT_RAW, temporal=False, samples=8))
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_SEED], "0")
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_DEBUG, env)

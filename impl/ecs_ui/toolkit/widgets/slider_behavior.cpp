@@ -29,10 +29,7 @@ namespace __hidden_ui_slider_behavior{
 }
 
 [[nodiscard]] static bool SameRect(const Rect& lhs, const Rect& rhs)noexcept{
-    return
-        BitCast<u32>(lhs.x) == BitCast<u32>(rhs.x) && BitCast<u32>(lhs.y) == BitCast<u32>(rhs.y)
-        && BitCast<u32>(lhs.width) == BitCast<u32>(rhs.width) && BitCast<u32>(lhs.height) == BitCast<u32>(rhs.height)
-    ;
+    return BitCast<u32>(lhs.x) == BitCast<u32>(rhs.x) && BitCast<u32>(lhs.y) == BitCast<u32>(rhs.y) && BitCast<u32>(lhs.width) == BitCast<u32>(rhs.width) && BitCast<u32>(lhs.height) == BitCast<u32>(rhs.height);
 }
 
 [[nodiscard]] static bool ValidPlacement(const SliderPlacement& placement)noexcept{
@@ -59,10 +56,7 @@ namespace __hidden_ui_slider_behavior{
 }
 
 [[nodiscard]] static bool SamePress(const InputActionId& lhs, const InputActionId& rhs)noexcept{
-    return
-        lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration
-        && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence
-    ;
+    return lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence;
 }
 
 [[nodiscard]] static bool ValidGesture(const PointerGesture& gesture)noexcept{
@@ -129,8 +123,7 @@ Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, co
             normalized = 1.0;
         else{
             const f64 span = maximum - minimum;
-            normalized = IsFinite(span) ? (value - minimum) / span
-                : (value * 0.5 - minimum * 0.5) / (maximum * 0.5 - minimum * 0.5);
+            normalized = IsFinite(span) ? (value - minimum) / span : (value * 0.5 - minimum * 0.5) / (maximum * 0.5 - minimum * 0.5);
         }
     }
     if(!IsFinite(normalized))
@@ -146,8 +139,7 @@ Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, 
     if(normalized == 1.0)
         value = maximum;
     else if(normalized > 0.0 && minimum != maximum){
-        value = minimum < 0.0 && maximum > 0.0 ? minimum * (1.0 - normalized) + maximum * normalized
-            : minimum + (maximum - minimum) * normalized;
+        value = minimum < 0.0 && maximum > 0.0 ? minimum * (1.0 - normalized) + maximum * normalized : minimum + (maximum - minimum) * normalized;
         value = ClampValue(value, minimum, maximum);
     }
     if(!IsFinite(value))
@@ -178,12 +170,7 @@ bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, con
     return true;
 }
 
-bool SliderBehavior::Apply(
-    SliderState& state,
-    const SliderOptions& options,
-    const ControlAction& action,
-    SliderResult& result
-)noexcept{
+bool SliderBehavior::Apply(SliderState& state, const SliderOptions& options, const ControlAction& action, SliderResult& result)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
@@ -234,12 +221,7 @@ bool SliderBehavior::Apply(
     return true;
 }
 
-bool SliderBehavior::Seek(
-    SliderState& state,
-    const SliderOptions& options,
-    const PointerGesture& gesture,
-    SliderResult& result
-)noexcept{
+bool SliderBehavior::Seek(SliderState& state, const SliderOptions& options, const PointerGesture& gesture, SliderResult& result)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
@@ -256,8 +238,7 @@ bool SliderBehavior::Seek(
         result = accepted;
         return true;
     }
-    const f64 normalized = Clamp((static_cast<f64>(gesture.position.x) - gesture.referenceRectangle.x)
-        / gesture.referenceRectangle.width, 0.0, 1.0);
+    const f64 normalized = Clamp((static_cast<f64>(gesture.position.x) - gesture.referenceRectangle.x) / gesture.referenceRectangle.width, 0.0, 1.0);
     const auto value = Interpolate(options.minimum, options.maximum, normalized);
     if(!value)
         return false;
@@ -271,12 +252,7 @@ bool SliderBehavior::Seek(
     return true;
 }
 
-bool SliderBehavior::Drag(
-    SliderState& state,
-    const SliderOptions& options,
-    const PointerGesture& gesture,
-    SliderResult& result
-)noexcept{
+bool SliderBehavior::Drag(SliderState& state, const SliderOptions& options, const PointerGesture& gesture, SliderResult& result)noexcept{
     using namespace __hidden_ui_slider_behavior;
     const f64 baseline = BitCast<f64>(gesture.value);
     if(

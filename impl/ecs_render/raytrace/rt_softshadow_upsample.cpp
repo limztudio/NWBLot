@@ -25,36 +25,20 @@ bool RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
     auto& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        resolve.m_combinedUpsample.m_shader,
-        AssetsGraphicsShadow::s_SoftResolveCombinedShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_CombinedShadowUpsample"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(resolve.m_combinedUpsample.m_shader, AssetsGraphicsShadow::s_SoftResolveCombinedShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowUpsample")){
         resolve.m_combinedUpsampleFailed = true;
         return false;
     }
     Core::ComputePipelineDesc desc;
-    desc
-        .setComputeShader(resolve.m_combinedUpsample.m_shader)
-        .addBindingLayout(resolve.m_bindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    desc.setComputeShader(resolve.m_combinedUpsample.m_shader).addBindingLayout(resolve.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     resolve.m_combinedUpsample.m_pipeline = device.createComputePipeline(desc);
     resolve.m_combinedUpsampleFailed = !resolve.m_combinedUpsample.m_pipeline;
     return !resolve.m_combinedUpsampleFailed;
 }
 
-bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const bool transparentReady
-){
+bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const bool transparentReady){
     const auto& resolve = m_rayTracingState.m_softShadowResolve;
-    const Core::ComputePipelineHandle& pipeline = transparentReady
-        ? resolve.m_combinedUpsample.m_pipeline : resolve.m_scalar.m_upsample.m_pipeline;
+    const Core::ComputePipelineHandle& pipeline = transparentReady ? resolve.m_combinedUpsample.m_pipeline : resolve.m_scalar.m_upsample.m_pipeline;
     if(
         !pipeline
         || !m_rayTracingState.m_softShadowReady
@@ -104,11 +88,7 @@ bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(
     commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline.get());
     commandList.setPushConstants(&push, sizeof(push));
-    commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)),
-        DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)),
-        1u
-    );
+    commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), 1u);
     // The original terminal fold is the only successful history-advance endpoint. Opaque recovery does not advance it.
     if(transparentReady && m_rayTracingState.m_softShadowTemporalReady)
         m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = true;

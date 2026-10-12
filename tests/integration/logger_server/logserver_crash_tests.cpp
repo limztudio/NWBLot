@@ -107,9 +107,7 @@ static void AppendDecimalText(CrashTestText& outText, const u64 value){
         return false;
 
     const AStringView searchPath(pathText->data(), pathText->size());
-    return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer")
-        || ExecutableAvailableInPath(arena, searchPath, "addr2line")
-    ;
+    return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer") || ExecutableAvailableInPath(arena, searchPath, "addr2line");
 }
 
 static void LinuxSilenceExpectedCrashChildConsole(){
@@ -129,12 +127,7 @@ static void LinuxSilenceExpectedCrashChildConsole(){
         close(nullFd);
 }
 
-[[nodiscard]] static bool PendingDirectoryContainsManifestTexts(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const CrashTestPath& pendingDirectory,
-    const AStringView firstNeedle,
-    const AStringView secondNeedle
-){
+[[nodiscard]] static bool PendingDirectoryContainsManifestTexts(NWB::Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView firstNeedle, const AStringView secondNeedle){
     const auto directory = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(pendingDirectory);
     if(!directory)
         return false;
@@ -189,44 +182,22 @@ NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservati
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB::Log::CrashIngestResult ProcessCrashArchive(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView testGroup,
-    const AStringView stem,
-    const CrashTestText& archive,
-    const NWB::Log::CrashIngestConfig& config
-){
+static NWB::Log::CrashIngestResult ProcessCrashArchive(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive, const NWB::Log::CrashIngestConfig& config){
     EXPECT_TRUE(WriteArchive(arena, testGroup, stem, archive));
     return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchive(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView testGroup,
-    const AStringView stem,
-    const CrashTestText& archive
-){
+static NWB::Log::CrashIngestResult ProcessCrashArchive(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive){
     const NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
     return ProcessCrashArchive(arena, testGroup, stem, archive, config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView testGroup,
-    const AStringView stem,
-    const CrashTestBytes& archive,
-    const NWB::Log::CrashIngestConfig& config
-){
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive, const NWB::Log::CrashIngestConfig& config){
     EXPECT_TRUE(WriteArchiveBytes(arena, testGroup, stem, archive));
     return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView testGroup,
-    const AStringView stem,
-    const CrashTestBytes& archive
-){
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
     const NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
     return ProcessCrashArchiveBytes(arena, testGroup, stem, archive, config);
 }
@@ -254,10 +225,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     const pid_t childPid = fork();
     ASSERT_GE(childPid, 0);
     if(childPid == 0){
-        NWB::Core::Alloc::PersistentArena installArena(
-            s_AssertChildInstallArena,
-            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
-        );
+        NWB::Core::Alloc::PersistentArena installArena(s_AssertChildInstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView("logserver_crash_tests");
         config.version = AStringView("1");
@@ -288,21 +256,9 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     CrashTestText expectedAbortCode(arena);
     expectedAbortCode += "\"reason_code\": ";
     AppendDecimalText(expectedAbortCode, static_cast<u64>(SIGABRT));
-    EXPECT_FALSE(PendingDirectoryContainsManifestTexts(
-            arena,
-            pendingDirectory,
-            AStringView("\"reason_kind\": \"signal\""),
-            AStringView(expectedAbortCode.data(), expectedAbortCode.size())
-        ));
+    EXPECT_FALSE(PendingDirectoryContainsManifestTexts(arena, pendingDirectory, AStringView("\"reason_kind\": \"signal\""), AStringView(expectedAbortCode.data(), expectedAbortCode.size())));
 
-    const auto assertPackageDirectory = WaitForTriggerPackage(
-            arena,
-            pendingDirectory,
-            expectedAssertCategory,
-            "false",
-            AStringView(),
-            "tests/integration/logger_server/logserver_crash_tests.cpp"
-        );
+    const auto assertPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, expectedAssertCategory, "false", AStringView(), "tests/integration/logger_server/logserver_crash_tests.cpp");
     EXPECT_TRUE(assertPackageDirectory);
 
     ASSERT_TRUE(assertPackageDirectory);
@@ -338,10 +294,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
     TestArena testArena;
     auto& arena = testArena.arena;
-    NWB::Core::Alloc::PersistentArena installArena(
-        s_RecoverableErrorInstallArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
-    );
+    NWB::Core::Alloc::PersistentArena installArena(s_RecoverableErrorInstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
     constexpr AStringView s_Group("logger_server_recoverable_error_observe_test");
     constexpr AStringView s_Stem("recoverable_error_observe_001");
     constexpr AStringView s_ErrorMessage("recoverable logger error observation");
@@ -364,14 +317,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     }
 
     const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
-    const auto errorPackageDirectory = WaitForTriggerPackage(
-            arena,
-            pendingDirectory,
-            NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
-            AStringView(),
-            s_ErrorMessage,
-            "tests/integration/logger_server/logserver_crash_tests.cpp"
-        );
+    const auto errorPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError, AStringView(), s_ErrorMessage, "tests/integration/logger_server/logserver_crash_tests.cpp");
     EXPECT_TRUE(errorPackageDirectory);
     EXPECT_TRUE(continuedAfterError);
     NWB::Core::Crash::UninstallCrashHandler();
@@ -575,16 +521,7 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(
-        arena,
-        archive,
-        "missing-event-manifest-test",
-        s_LINUX,
-        s_CRASH,
-        s_SIGNAL,
-        11u,
-        ManifestEventField::Omit
-    );
+    BeginArchiveWithManifest(arena, archive, "missing-event-manifest-test", s_LINUX, s_CRASH, s_SIGNAL, 11u, ManifestEventField::Omit);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
     EXPECT_FALSE(result.accepted);

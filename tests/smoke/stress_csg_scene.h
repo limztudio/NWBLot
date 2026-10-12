@@ -38,13 +38,7 @@ namespace NWB::Tests::Smoke{
 
 class StressCsgScene final{
 public:
-    [[nodiscard]] bool initialize(
-        Core::ECS::World& world,
-        Core::Alloc::GlobalArena& arena,
-        const Core::ECS::EntityID* owners,
-        usize ownerCount,
-        bool opaqueOnly
-    );
+    [[nodiscard]] bool initialize(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const Core::ECS::EntityID* owners, usize ownerCount, bool opaqueOnly);
     [[nodiscard]] bool update(Core::ECS::World& world, f32 yaw);
 
 private:

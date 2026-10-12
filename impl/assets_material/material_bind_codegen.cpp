@@ -64,10 +64,7 @@ static Path BuildMaterialBindIncludeRoot(const Path& cacheDirectory, const AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<CookString> BuildMaterialBindIncludeVirtualPathImpl(
-    CookArena& arena,
-    const MaterialBindEntry& entry
-){
+static Expected<CookString> BuildMaterialBindIncludeVirtualPathImpl(CookArena& arena, const MaterialBindEntry& entry){
     if(entry.virtualPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'"), StringConvert(entry.source));
         return MakeUnexpected(Failure{});
@@ -111,20 +108,12 @@ static CookString BuildMaterialBindIncludeGuard(CookArena& arena, const AStringV
     return guard;
 }
 
-static bool RegisterGeneratedMaterialBindSymbol(
-    const AStringView includePath,
-    const AStringView symbol,
-    ScratchHashSet<ScratchString>& inOutSymbols,
-    ScratchArena& scratchArena
-){
+static bool RegisterGeneratedMaterialBindSymbol(const AStringView includePath, const AStringView symbol, ScratchHashSet<ScratchString>& inOutSymbols, ScratchArena& scratchArena){
     ScratchString scratchSymbol(symbol, scratchArena);
     if(inOutSymbols.insert(Move(scratchSymbol)).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': generated symbol '{}' is ambiguous")
-        , StringConvert(includePath)
-        , StringConvert(symbol)
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': generated symbol '{}' is ambiguous"), StringConvert(includePath), StringConvert(symbol));
     return false;
 }
 
@@ -176,10 +165,7 @@ static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutF
         "Float3",
         "Float4"
     };
-    static_assert(
-        LengthOf(s_TypeNames)
-        == static_cast<usize>(static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u)
-    );
+    static_assert(LengthOf(s_TypeNames) == static_cast<usize>(static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u));
 
     if(!IsMaterialLayoutNumericFieldType(fieldType))
         return AStringView();
@@ -207,11 +193,7 @@ static AStringView MaterialBindResourceHeapAccessorName(const MaterialLayoutFiel
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static CookString BuildMaterialBindFieldLookupFunctionName(
-    CookArena& arena,
-    const MaterialLayoutFieldType::Enum fieldType,
-    const MaterialBlockClass::Enum blockClass
-){
+static CookString BuildMaterialBindFieldLookupFunctionName(CookArena& arena, const MaterialLayoutFieldType::Enum fieldType, const MaterialBlockClass::Enum blockClass){
     CookString functionName(arena);
     const AStringView storageName = MaterialBindFieldLookupFunctionStorageName(blockClass);
     const AStringView typeName = MaterialBindFieldLookupFunctionTypeName(fieldType);
@@ -225,14 +207,7 @@ static CookString BuildMaterialBindFieldLookupFunctionName(
 }
 
 
-static bool AppendMaterialBindConstantPrefix(
-    const AStringView includePath,
-    const AStringView symbol,
-    const AStringView type,
-    ScratchHashSet<ScratchString>& inOutSymbols,
-    ScratchArena& scratchArena,
-    CookString& inOutSource
-){
+static bool AppendMaterialBindConstantPrefix(const AStringView includePath, const AStringView symbol, const AStringView type, ScratchHashSet<ScratchString>& inOutSymbols, ScratchArena& scratchArena, CookString& inOutSource){
     if(!RegisterGeneratedMaterialBindSymbol(includePath, symbol, inOutSymbols, scratchArena))
         return false;
 
@@ -248,14 +223,7 @@ static void AppendMaterialBindConstantSuffix(CookString& inOutSource){
     inOutSource += ";\n";
 }
 
-static bool AppendMaterialBindU32Constant(
-    const AStringView includePath,
-    const AStringView symbol,
-    const u32 value,
-    ScratchHashSet<ScratchString>& inOutSymbols,
-    ScratchArena& scratchArena,
-    CookString& inOutSource
-){
+static bool AppendMaterialBindU32Constant(const AStringView includePath, const AStringView symbol, const u32 value, ScratchHashSet<ScratchString>& inOutSymbols, ScratchArena& scratchArena, CookString& inOutSource){
     if(!AppendMaterialBindConstantPrefix(includePath, symbol, "uint", inOutSymbols, scratchArena, inOutSource))
         return false;
 
@@ -264,14 +232,7 @@ static bool AppendMaterialBindU32Constant(
     return true;
 }
 
-static bool AppendMaterialBindU64Constant(
-    const AStringView includePath,
-    const AStringView symbol,
-    const u64 value,
-    ScratchHashSet<ScratchString>& inOutSymbols,
-    ScratchArena& scratchArena,
-    CookString& inOutSource
-){
+static bool AppendMaterialBindU64Constant(const AStringView includePath, const AStringView symbol, const u64 value, ScratchHashSet<ScratchString>& inOutSymbols, ScratchArena& scratchArena, CookString& inOutSource){
     if(!AppendMaterialBindConstantPrefix(includePath, symbol, "uint2", inOutSymbols, scratchArena, inOutSource))
         return false;
 
@@ -286,26 +247,16 @@ struct MaterialBindGeneratedLayoutBlock{
     const MaterialTypedLayoutBlock* block = nullptr;
 };
 
-static Expected<MaterialBindGeneratedLayoutBlock> ResolveMaterialBindGeneratedLayoutBlock(
-    const AStringView includePath,
-    const MaterialBindInstance& instance,
-    const MaterialBindTypedLayout& layout
-){
+static Expected<MaterialBindGeneratedLayoutBlock> ResolveMaterialBindGeneratedLayoutBlock(const AStringView includePath, const MaterialBindInstance& instance, const MaterialBindTypedLayout& layout){
     const auto blockIt = layout.blockLookup.find(Name(AStringView(instance.name)));
     if(blockIt == layout.blockLookup.end()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' has no typed layout block")
-            , StringConvert(includePath)
-            , StringConvert(instance.name)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' has no typed layout block"), StringConvert(includePath), StringConvert(instance.name));
         return MakeUnexpected(Failure{});
     }
 
     const auto& blockEntry = blockIt.value();
     if(blockEntry.blockIndex >= layout.typedLayoutBlocks.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout block index is out of range")
-            , StringConvert(includePath)
-            , StringConvert(instance.name)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout block index is out of range"), StringConvert(includePath), StringConvert(instance.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -313,11 +264,7 @@ static Expected<MaterialBindGeneratedLayoutBlock> ResolveMaterialBindGeneratedLa
 }
 
 
-static u32* MaterialBindStorageByteSizePointer(
-    const MaterialBlockClass::Enum blockClass,
-    u32& inOutConstantByteSize,
-    u32& inOutMutableByteSize
-)noexcept{
+static u32* MaterialBindStorageByteSizePointer(const MaterialBlockClass::Enum blockClass, u32& inOutConstantByteSize, u32& inOutMutableByteSize)noexcept{
     switch(blockClass){
     case MaterialBlockClass::MaterialConstant: return &inOutConstantByteSize;
     case MaterialBlockClass::MaterialMutable: return &inOutMutableByteSize;
@@ -331,10 +278,7 @@ struct MaterialBindStorageByteSizes{
     u32 mutableBytes = 0u;
 };
 
-static Expected<MaterialBindStorageByteSizes> ComputeMaterialBindStorageByteSizes(
-    const AStringView includePath,
-    const MaterialBindTypedLayout& layout
-){
+static Expected<MaterialBindStorageByteSizes> ComputeMaterialBindStorageByteSizes(const AStringView includePath, const MaterialBindTypedLayout& layout){
     MaterialBindStorageByteSizes sizes;
 
     for(const MaterialTypedLayoutBlock& block : layout.typedLayoutBlocks){
@@ -354,11 +298,7 @@ static Expected<MaterialBindStorageByteSizes> ComputeMaterialBindStorageByteSize
     return sizes;
 }
 
-static Expected<u32> ComputeMaterialBindBlockStorageByteBegin(
-    const AStringView includePath,
-    const MaterialBindTypedLayout& layout,
-    const u32 blockIndex
-){
+static Expected<u32> ComputeMaterialBindBlockStorageByteBegin(const AStringView includePath, const MaterialBindTypedLayout& layout, const u32 blockIndex){
     u32 byteBegin = 0u;
     if(blockIndex >= layout.typedLayoutBlocks.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block index is out of range"), StringConvert(includePath));
@@ -404,14 +344,7 @@ static bool AppendMaterialBindLayoutConstants(
         char laneDigits[TextDetail::s_DecimalTextBufferBytes] = {};
         laneSuffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const CookString symbol = BuildMaterialBindGeneratedSymbol(arena, {}, AStringView(laneSuffix));
-        if(!AppendMaterialBindU64Constant(
-            includePath,
-            symbol,
-            interfaceHash.qwords[lane],
-            inOutSymbols,
-            scratchArena,
-            inOutSource
-        ))
+        if(!AppendMaterialBindU64Constant(includePath, symbol, interfaceHash.qwords[lane], inOutSymbols, scratchArena, inOutSource))
             return false;
     }
 
@@ -425,59 +358,17 @@ static bool AppendMaterialBindLayoutConstants(
 
     if(!AppendMaterialBindU64Constant(includePath, layoutHashSymbol, layout.layoutHash, inOutSymbols, scratchArena, inOutSource))
         return false;
-    if(!AppendMaterialBindU32Constant(
-        includePath,
-        blockCountSymbol,
-        static_cast<u32>(layout.typedLayoutBlocks.size()),
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindU32Constant(includePath, blockCountSymbol, static_cast<u32>(layout.typedLayoutBlocks.size()), inOutSymbols, scratchArena, inOutSource))
         return false;
-    if(!AppendMaterialBindU32Constant(
-        includePath,
-        fieldCountSymbol,
-        static_cast<u32>(layout.typedLayoutFields.size()),
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindU32Constant(includePath, fieldCountSymbol, static_cast<u32>(layout.typedLayoutFields.size()), inOutSymbols, scratchArena, inOutSource))
         return false;
-    if(!AppendMaterialBindU32Constant(
-        includePath,
-        storageConstantSymbol,
-        static_cast<u32>(MaterialBlockClass::MaterialConstant),
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindU32Constant(includePath, storageConstantSymbol, static_cast<u32>(MaterialBlockClass::MaterialConstant), inOutSymbols, scratchArena, inOutSource))
         return false;
-    if(!AppendMaterialBindU32Constant(
-        includePath,
-        storageMutableSymbol,
-        static_cast<u32>(MaterialBlockClass::MaterialMutable),
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindU32Constant(includePath, storageMutableSymbol, static_cast<u32>(MaterialBlockClass::MaterialMutable), inOutSymbols, scratchArena, inOutSource))
         return false;
-    if(!AppendMaterialBindU32Constant(
-        includePath,
-        constantByteSizeSymbol,
-        constantByteSize,
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindU32Constant(includePath, constantByteSizeSymbol, constantByteSize, inOutSymbols, scratchArena, inOutSource))
         return false;
-    if(!AppendMaterialBindU32Constant(
-        includePath,
-        mutableByteSizeSymbol,
-        mutableByteSize,
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindU32Constant(includePath, mutableByteSizeSymbol, mutableByteSize, inOutSymbols, scratchArena, inOutSource))
         return false;
 
     if(entry.instances.size() != layout.typedLayoutBlocks.size()){
@@ -496,29 +387,12 @@ static bool AppendMaterialBindLayoutConstants(
             return false;
         const u32 blockStorageByteBegin = *blockStorageByteBeginResult;
 
-        const CookString storageSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_STORAGE");
-        const CookString offsetSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BYTE_OFFSET");
-        const CookString sizeSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BYTE_SIZE");
-        if(!AppendMaterialBindU32Constant(
-            includePath,
-            storageSymbol,
-            static_cast<u32>(block->blockClass),
-            inOutSymbols,
-            scratchArena,
-            inOutSource
-        ))
+        const CookString storageSymbol = BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_STORAGE");
+        const CookString offsetSymbol = BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BYTE_OFFSET");
+        const CookString sizeSymbol = BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BYTE_SIZE");
+        if(!AppendMaterialBindU32Constant(includePath, storageSymbol, static_cast<u32>(block->blockClass), inOutSymbols, scratchArena, inOutSource))
             return false;
-        if(!AppendMaterialBindU32Constant(
-            includePath,
-            offsetSymbol,
-            blockStorageByteBegin,
-            inOutSymbols,
-            scratchArena,
-            inOutSource
-        ))
+        if(!AppendMaterialBindU32Constant(includePath, offsetSymbol, blockStorageByteBegin, inOutSymbols, scratchArena, inOutSource))
             return false;
         if(!AppendMaterialBindU32Constant(includePath, sizeSymbol, block->byteSize, inOutSymbols, scratchArena, inOutSource))
             return false;
@@ -540,44 +414,22 @@ static bool AppendMaterialBindFieldConstants(
 ){
     const AStringView defaultAttribute = field.defaultArgument();
     if(defaultAttribute.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' must declare a default attribute")
-            , StringConvert(includePath)
-            , StringConvert(bindStruct.name)
-            , StringConvert(field.name)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' must declare a default attribute"), StringConvert(includePath), StringConvert(bindStruct.name), StringConvert(field.name));
         return false;
     }
 
     const auto keyResult = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name));
     if(!keyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' exceeds ACompactString capacity")
-            , StringConvert(includePath)
-            , StringConvert(bindStruct.name)
-            , StringConvert(field.name)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' exceeds ACompactString capacity"), StringConvert(includePath), StringConvert(bindStruct.name), StringConvert(field.name));
         return false;
     }
     const ACompactString& keyText = *keyResult;
     const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText.view());
 
-    if(!AppendMaterialBindU64Constant(
-        includePath,
-        keySymbol,
-        keyHash,
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, inOutSymbols, scratchArena, inOutSource))
         return false;
 
-    if(!AppendMaterialBindConstantPrefix(
-        includePath,
-        defaultSymbol,
-        AStringView(field.type),
-        inOutSymbols,
-        scratchArena,
-        inOutSource
-    ))
+    if(!AppendMaterialBindConstantPrefix(includePath, defaultSymbol, AStringView(field.type), inOutSymbols, scratchArena, inOutSource))
         return false;
 
     inOutSource += defaultAttribute;
@@ -585,13 +437,7 @@ static bool AppendMaterialBindFieldConstants(
     return true;
 }
 
-static void AppendMaterialBindFieldAccessor(
-    const MaterialBindField& field,
-    const AStringView byteOffsetSymbol,
-    const AStringView functionName,
-    const AStringView loadFunctionName,
-    CookString& inOutSource
-){
+static void AppendMaterialBindFieldAccessor(const MaterialBindField& field, const AStringView byteOffsetSymbol, const AStringView functionName, const AStringView loadFunctionName, CookString& inOutSource){
     inOutSource += field.type;
     inOutSource += ' ';
     inOutSource += functionName;
@@ -615,10 +461,7 @@ static bool AppendMaterialBindResourceFieldAccessor(
     CookString& inOutSource
 ){
     if(blockClass != MaterialBlockClass::MaterialConstant){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': resource accessor '{}' must use constant storage")
-            , StringConvert(includePath)
-            , StringConvert(functionName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': resource accessor '{}' must use constant storage"), StringConvert(includePath), StringConvert(functionName));
         return false;
     }
 
@@ -660,10 +503,7 @@ static bool AppendMaterialBindGeneratedInstance(
     const MaterialTypedLayoutBlock* layoutBlock = generatedBlock->block;
 
     if(layoutBlock->fieldCount != bindStruct.fields.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout field count mismatch")
-            , StringConvert(includePath)
-            , StringConvert(instance.name)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout field count mismatch"), StringConvert(includePath), StringConvert(instance.name));
         return false;
     }
 
@@ -675,118 +515,55 @@ static bool AppendMaterialBindGeneratedInstance(
     for(u32 fieldOffset = 0u; fieldOffset < layoutBlock->fieldCount; ++fieldOffset){
         const usize layoutFieldIndex = static_cast<usize>(layoutBlock->fieldBegin) + fieldOffset;
         if(layoutFieldIndex >= layout.typedLayoutFields.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout field range exceeds layout")
-                , StringConvert(includePath)
-                , StringConvert(instance.name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout field range exceeds layout"), StringConvert(includePath), StringConvert(instance.name));
             return false;
         }
 
         const MaterialBindField& field = bindStruct.fields[fieldOffset];
         const MaterialTypedLayoutField& layoutField = layout.typedLayoutFields[layoutFieldIndex];
         if(layoutField.fieldName != Name(AStringView(field.name))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' typed layout metadata mismatch")
-                , StringConvert(includePath)
-                , StringConvert(bindStruct.name)
-                , StringConvert(field.name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' typed layout metadata mismatch"), StringConvert(includePath), StringConvert(bindStruct.name), StringConvert(field.name));
             return false;
         }
         if(layoutField.offset > Limit<u32>::s_Max - layoutBlockStorageByteBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' byte offset exceeds u32")
-                , StringConvert(includePath)
-                , StringConvert(bindStruct.name)
-                , StringConvert(field.name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' byte offset exceeds u32"), StringConvert(includePath), StringConvert(bindStruct.name), StringConvert(field.name));
             return false;
         }
 
         const bool isResourceField = IsMaterialLayoutResourceFieldType(layoutField.fieldType);
-        const CookString byteOffsetSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_BYTE_OFFSET");
-        const CookString functionName =
-            BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
-        if(!RegisterGeneratedMaterialBindSymbol(
-            includePath,
-            AStringView(functionName),
-            inOutSymbols,
-            scratchArena
-        ))
+        const CookString byteOffsetSymbol = BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_BYTE_OFFSET");
+        const CookString functionName = BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
+        if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(functionName), inOutSymbols, scratchArena))
             return false;
 
         const u32 fieldByteOffset = layoutBlockStorageByteBegin + layoutField.offset;
-        if(!AppendMaterialBindU32Constant(
-            includePath,
-            byteOffsetSymbol,
-            fieldByteOffset,
-            inOutSymbols,
-            scratchArena,
-            inOutSource
-        ))
+        if(!AppendMaterialBindU32Constant(includePath, byteOffsetSymbol, fieldByteOffset, inOutSymbols, scratchArena, inOutSource))
             return false;
         inOutSource += '\n';
         if(isResourceField){
-            if(!AppendMaterialBindResourceFieldAccessor(
-                includePath,
-                layoutField.fieldType,
-                layoutBlock->blockClass,
-                byteOffsetSymbol,
-                functionName,
-                inOutSource
-            )){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' has unsupported resource type '{}'")
-                    , StringConvert(includePath)
-                    , StringConvert(bindStruct.name)
-                    , StringConvert(field.name)
-                    , StringConvert(field.type)
-                );
+            if(!AppendMaterialBindResourceFieldAccessor(includePath, layoutField.fieldType, layoutBlock->blockClass, byteOffsetSymbol, functionName, inOutSource)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' has unsupported resource type '{}'"), StringConvert(includePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(field.type));
                 return false;
             }
             inOutSource += '\n';
             continue;
         }
 
-        const CookString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(
-            arena,
-            layoutField.fieldType,
-            layoutBlock->blockClass
-        );
+        const CookString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(arena, layoutField.fieldType, layoutBlock->blockClass);
         if(loadFunctionName.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' has unsupported load type '{}'")
-                , StringConvert(includePath)
-                , StringConvert(bindStruct.name)
-                , StringConvert(field.name)
-                , StringConvert(field.type)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' has unsupported load type '{}'"), StringConvert(includePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(field.type));
             return false;
         }
-        const CookString keySymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_KEY");
-        const CookString defaultSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_DEFAULT");
-        if(!AppendMaterialBindFieldConstants(
-            includePath,
-            bindStruct,
-            instance,
-            field,
-            keySymbol,
-            defaultSymbol,
-            inOutSymbols,
-            scratchArena,
-            inOutSource
-        ))
+        const CookString keySymbol = BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_KEY");
+        const CookString defaultSymbol = BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_DEFAULT");
+        if(!AppendMaterialBindFieldConstants(includePath, bindStruct, instance, field, keySymbol, defaultSymbol, inOutSymbols, scratchArena, inOutSource))
             return false;
         AppendMaterialBindFieldAccessor(field, byteOffsetSymbol, functionName, AStringView(loadFunctionName), inOutSource);
         inOutSource += '\n';
     }
 
     const CookString blockFunctionName = BuildMaterialBindAccessorName(arena, { AStringView(instance.name) });
-    if(!RegisterGeneratedMaterialBindSymbol(
-        includePath,
-        AStringView(blockFunctionName),
-        inOutSymbols,
-        scratchArena
-    ))
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(blockFunctionName), inOutSymbols, scratchArena))
         return false;
 
     inOutSource += bindStruct.name;
@@ -800,8 +577,7 @@ static bool AppendMaterialBindGeneratedInstance(
         if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type)))
             continue;
 
-        const CookString functionName =
-            BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
+        const CookString functionName = BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
         inOutSource += "    value.";
         inOutSource += field.name;
         inOutSource += " = ";
@@ -815,11 +591,7 @@ static bool AppendMaterialBindGeneratedInstance(
 }
 
 
-Expected<CookString> BuildMaterialBindIncludeSourceImpl(
-    CookArena& arena,
-    const MaterialBindEntry& entry,
-    ScratchArena& scratchArena
-){
+Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const MaterialBindEntry& entry, ScratchArena& scratchArena){
     CookString source(arena);
 
     auto includePathResult = BuildMaterialBindIncludeVirtualPathImpl(arena, entry);
@@ -829,22 +601,12 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(
 
     const CookString includeGuard = BuildMaterialBindIncludeGuard(arena, AStringView(includePath));
 
-    const auto layoutResult = BuildMaterialBindTypedLayout(
-        entry,
-        Name(AStringView(entry.virtualPath)),
-        arena,
-        scratchArena
-    );
+    const auto layoutResult = BuildMaterialBindTypedLayout(entry, Name(AStringView(entry.virtualPath)), arena, scratchArena);
     if(!layoutResult)
         return MakeUnexpected(Failure{});
     const MaterialBindTypedLayout& layout = *layoutResult;
 
-    ScratchHashSet<ScratchString> generatedSymbols{
-        0,
-        Hasher<ScratchString>(),
-        EqualTo<ScratchString>(),
-        scratchArena
-    };
+    ScratchHashSet<ScratchString> generatedSymbols{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
 
     source += "// generated by NWBLot material bind cook\n";
     AppendMaterialBindGeneratedSeparator(source, 3u);
@@ -865,15 +627,7 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(
     source += "#endif\n\n\n";
     AppendMaterialBindGeneratedSeparator(source, 3u);
 
-    if(!AppendMaterialBindLayoutConstants(
-        arena,
-        AStringView(includePath),
-        entry,
-        layout,
-        generatedSymbols,
-        scratchArena,
-        source
-    ))
+    if(!AppendMaterialBindLayoutConstants(arena, AStringView(includePath), entry, layout, generatedSymbols, scratchArena, source))
         return MakeUnexpected(Failure{});
 
     source += "\n";
@@ -892,12 +646,7 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(
     }
 
     for(const MaterialBindStruct& bindStruct : entry.structs){
-        if(!RegisterGeneratedMaterialBindSymbol(
-            AStringView(includePath),
-            AStringView(bindStruct.name),
-            generatedSymbols,
-            scratchArena
-        ))
+        if(!RegisterGeneratedMaterialBindSymbol(AStringView(includePath), AStringView(bindStruct.name), generatedSymbols, scratchArena))
             return MakeUnexpected(Failure{});
 
         source += "struct ";
@@ -919,24 +668,11 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(
     for(const MaterialBindInstance& instance : entry.instances){
         const MaterialBindStruct* bindStruct = entry.findStruct(AStringView(instance.type));
         if(!bindStruct){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' references unknown struct type '{}'")
-                , StringConvert(includePath)
-                , StringConvert(instance.name)
-                , StringConvert(instance.type)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' references unknown struct type '{}'"), StringConvert(includePath), StringConvert(instance.name), StringConvert(instance.type));
             return MakeUnexpected(Failure{});
         }
 
-        if(!AppendMaterialBindGeneratedInstance(
-            arena,
-            AStringView(includePath),
-            instance,
-            *bindStruct,
-            layout,
-            generatedSymbols,
-            scratchArena,
-            source
-        ))
+        if(!AppendMaterialBindGeneratedInstance(arena, AStringView(includePath), instance, *bindStruct, layout, generatedSymbols, scratchArena, source))
             return MakeUnexpected(Failure{});
     }
 
@@ -949,13 +685,7 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(
 
 
 
-Expected<Path> EmitMaterialBindIncludes(
-    CookArena& arena,
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    ScratchArena& scratchArena
-){
+Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena){
     Path includeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Material bind include generation"))
         return MakeUnexpected(Failure{});
@@ -983,10 +713,7 @@ Expected<Path> EmitMaterialBindIncludes(
         const Path outputPath = includeRoot / AStringView(includePath);
         auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}")
-                , PathToString<tchar>(outputPath.parentPath())
-                , StringConvert(ensureDirectoriesResult.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
             return MakeUnexpected(Failure{});
         }
 

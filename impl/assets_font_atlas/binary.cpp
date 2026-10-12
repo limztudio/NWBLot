@@ -32,9 +32,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
 [[nodiscard]] static Expected<u32> ReadU32(const Core::Assets::AssetBytes& bytes, usize& cursor)noexcept{
     if(cursor > bytes.size() || bytes.size() - cursor < 4u)
         return MakeUnexpected(Failure{});
-    const u32 value = static_cast<u32>(bytes[cursor]) | (static_cast<u32>(bytes[cursor + 1u]) << 8u)
-        | (static_cast<u32>(bytes[cursor + 2u]) << 16u) | (static_cast<u32>(bytes[cursor + 3u]) << 24u)
-    ;
+    const u32 value = static_cast<u32>(bytes[cursor]) | (static_cast<u32>(bytes[cursor + 1u]) << 8u) | (static_cast<u32>(bytes[cursor + 2u]) << 16u) | (static_cast<u32>(bytes[cursor + 3u]) << 24u);
     cursor += 4u;
     return value;
 }
@@ -112,10 +110,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
     return glyph;
 }
 
-[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(
-    const Core::Assets::AssetBytes& bytes,
-    Core::Assets::AssetArena& arena
-){
+[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(const Core::Assets::AssetBytes& bytes, Core::Assets::AssetArena& arena){
     usize cursor = 0u;
     FontAtlasPayload payload(arena);
     const auto magic = ReadU32(bytes, cursor);
@@ -130,10 +125,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
     const auto reserved = ReadU32(bytes, cursor);
     if(!reserved)
         return MakeUnexpected(reserved.error());
-    if(
-        *magic != FontAtlasBinaryPayload::s_Magic || *version != FontAtlasBinaryPayload::s_Version
-        || *encoding != s_FontAtlasDistanceEncoding || *reserved != 0u
-    )
+    if(*magic != FontAtlasBinaryPayload::s_Magic || *version != FontAtlasBinaryPayload::s_Version || *encoding != s_FontAtlasDistanceEncoding || *reserved != 0u)
         return MakeUnexpected(Failure{});
     NameHash identity = {};
     for(u64& lane : identity.qwords){
@@ -196,17 +188,10 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
     const auto tableCount = ReadU32(bytes, cursor);
     if(!tableCount)
         return MakeUnexpected(tableCount.error());
-    if(
-        *glyphCount == 0u || *glyphCount > s_FontAtlasMaxGlyphCount || *glyphCount != payload.sourceGlyphCount
-        || *groupCount == 0u || *groupCount > s_FontAtlasMaxGroupCount || *tableCount > 3u
-        || *raster > FontAtlasRasterMode::Bitmap
-    )
+    if(*glyphCount == 0u || *glyphCount > s_FontAtlasMaxGlyphCount || *glyphCount != payload.sourceGlyphCount || *groupCount == 0u || *groupCount > s_FontAtlasMaxGroupCount || *tableCount > 3u || *raster > FontAtlasRasterMode::Bitmap)
         return MakeUnexpected(Failure{});
     payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
-    const u64 minimumRemaining = static_cast<u64>(*glyphCount) * FontAtlasBinaryPayload::s_GlyphBytes
-        + static_cast<u64>(*groupCount) * FontAtlasBinaryPayload::s_GroupHeaderBytes
-        + static_cast<u64>(*tableCount) * FontAtlasBinaryPayload::s_TableHeaderBytes
-    ;
+    const u64 minimumRemaining = static_cast<u64>(*glyphCount) * FontAtlasBinaryPayload::s_GlyphBytes + static_cast<u64>(*groupCount) * FontAtlasBinaryPayload::s_GroupHeaderBytes + static_cast<u64>(*tableCount) * FontAtlasBinaryPayload::s_TableHeaderBytes;
     if(cursor > bytes.size() || minimumRemaining > bytes.size() - cursor)
         return MakeUnexpected(Failure{});
     payload.glyphs.resize(*glyphCount);
@@ -237,16 +222,10 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
             return MakeUnexpected(byteCount.error());
         if(!ReadBytes(bytes, cursor, sizeof(group.sha256.bytes), group.sha256.bytes))
             return MakeUnexpected(Failure{});
-        if(
-            group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent
-            || group.channelCount == 0u || group.channelCount > 4u
-        )
+        if(group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent || group.channelCount == 0u || group.channelCount > 4u)
             return MakeUnexpected(Failure{});
         const u64 expectedBytes = static_cast<u64>(group.width) * group.height * group.channelCount;
-        if(
-            expectedBytes != *byteCount || pixelBytes + *byteCount > s_FontAtlasMaxPixelBytes
-            || cursor > bytes.size() || *byteCount > bytes.size() - cursor
-        )
+        if(expectedBytes != *byteCount || pixelBytes + *byteCount > s_FontAtlasMaxPixelBytes || cursor > bytes.size() || *byteCount > bytes.size() - cursor)
             return MakeUnexpected(Failure{});
         group.pixels.resize(*byteCount);
         if(!ReadBytes(bytes, cursor, *byteCount, group.pixels.data()))
@@ -267,10 +246,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
             return MakeUnexpected(byteCount.error());
         if(!ReadBytes(bytes, cursor, sizeof(table.sha256.bytes), table.sha256.bytes))
             return MakeUnexpected(Failure{});
-        if(
-            *byteCount == 0u || tableBytes + *byteCount > s_FontAtlasMaxPositioningBytes
-            || cursor > bytes.size() || *byteCount > bytes.size() - cursor
-        )
+        if(*byteCount == 0u || tableBytes + *byteCount > s_FontAtlasMaxPositioningBytes || cursor > bytes.size() || *byteCount > bytes.size() - cursor)
             return MakeUnexpected(Failure{});
         table.bytes.resize(*byteCount);
         if(!ReadBytes(bytes, cursor, *byteCount, table.bytes.data()))
@@ -293,10 +269,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(
-    const FontAtlasPayload& payload,
-    Core::Assets::AssetArena& arena
-){
+Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::AssetArena& arena){
     using namespace __hidden_font_atlas_binary;
     if(!ValidateFontAtlasPayload(payload))
         return MakeUnexpected(Failure{});
@@ -350,10 +323,7 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(
     return binary;
 }
 
-Expected<FontAtlasPayload> DeserializeFontAtlasPayload(
-    const Core::Assets::AssetBytes& binary,
-    Core::Assets::AssetArena& arena
-){
+Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Core::Assets::AssetBytes& binary, Core::Assets::AssetArena& arena){
     auto payload = __hidden_font_atlas_binary::Deserialize(binary, arena);
     if(!payload){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));

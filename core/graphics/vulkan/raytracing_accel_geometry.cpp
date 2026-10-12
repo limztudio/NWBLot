@@ -93,24 +93,13 @@ Expected<u64> ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elem
     return spanCount * stride + elementSize;
 }
 u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo)noexcept{
-    const u32 componentCount = static_cast<u32>(formatInfo.hasRed)
-        + static_cast<u32>(formatInfo.hasGreen)
-        + static_cast<u32>(formatInfo.hasBlue)
-        + static_cast<u32>(formatInfo.hasAlpha)
-    ;
+    const u32 componentCount = static_cast<u32>(formatInfo.hasRed) + static_cast<u32>(formatInfo.hasGreen) + static_cast<u32>(formatInfo.hasBlue) + static_cast<u32>(formatInfo.hasAlpha);
     if(componentCount == 0u || formatInfo.bytesPerBlock == 0u)
         return 0u;
 
     return Max<u64>(static_cast<u64>(formatInfo.bytesPerBlock) / componentCount, 1u);
 }
-bool ValidateAccelStructBuildInputRange(
-    Buffer* bufferResource,
-    u64 offset,
-    u64 byteSize,
-    u64 requiredAddressAlignment,
-    TStringView operation,
-    TStringView resourceName
-){
+bool ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, u64 requiredAddressAlignment, TStringView operation, TStringView resourceName){
     auto* buffer = bufferResource;
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
@@ -134,27 +123,14 @@ bool ValidateAccelStructBuildInputRange(
         return false;
     }
     if(requiredAddressAlignment > 1u && (address % requiredAddressAlignment) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to {}: {} buffer device address is not {}-byte aligned")
-            , operation
-            , resourceName
-            , requiredAddressAlignment
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer device address is not {}-byte aligned"), operation, resourceName, requiredAddressAlignment);
         return false;
     }
 
     return true;
 }
 
-bool ValidateStridedBuildInputRange(
-    Buffer* buffer,
-    u64 offset,
-    u32 elementCount,
-    u64 stride,
-    u64 elementSize,
-    TStringView operation,
-    TStringView resourceName
-){
+bool ValidateStridedBuildInputRange(Buffer* buffer, u64 offset, u32 elementCount, u64 stride, u64 elementSize, TStringView operation, TStringView resourceName){
     const auto byteSizeResult = ComputeStridedRangeByteSize(elementCount, stride, elementSize);
     if(!byteSizeResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range overflows"), operation, resourceName);
@@ -165,12 +141,7 @@ bool ValidateStridedBuildInputRange(
     return ValidateAccelStructBuildInputRange(buffer, offset, byteSize, 1u, operation, resourceName);
 }
 
-Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
-    const VulkanContext& context,
-    const RayTracingGeometryDesc& geomDesc,
-    TStringView operation,
-    bool requireBuffers
-){
+Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, bool requireBuffers){
     BlasGeometry result;
     auto& geometry = result.geometry;
     auto& spheresData = result.spheresData;
@@ -225,14 +196,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
                 return MakeUnexpected(Failure{});
             }
             const u64 vertexByteSize = *vertexByteSizeResult;
-            if(!ValidateAccelStructBuildInputRange(
-                triangles.vertexBuffer,
-                triangles.vertexOffset,
-                vertexByteSize,
-                vertexComponentAlignment,
-                operation,
-                NWB_TEXT("triangle vertex")
-            ))
+            if(!ValidateAccelStructBuildInputRange(triangles.vertexBuffer, triangles.vertexOffset, vertexByteSize, vertexComponentAlignment, operation, NWB_TEXT("triangle vertex")))
                 return MakeUnexpected(Failure{});
         }
 
@@ -252,14 +216,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
             if(requireBuffers){
                 const u64 indexElementSize = triangles.indexFormat == Format::R16_UINT ? sizeof(u16) : sizeof(u32);
                 const u64 indexByteSize = static_cast<u64>(triangles.indexCount) * indexElementSize;
-                if(!ValidateAccelStructBuildInputRange(
-                    triangles.indexBuffer,
-                    triangles.indexOffset,
-                    indexByteSize,
-                    indexElementSize,
-                    operation,
-                    NWB_TEXT("triangle index")
-                ))
+                if(!ValidateAccelStructBuildInputRange(triangles.indexBuffer, triangles.indexOffset, indexByteSize, indexElementSize, operation, NWB_TEXT("triangle index")))
                     return MakeUnexpected(Failure{});
             }
             primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
@@ -300,10 +257,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
         primitiveCount = aabbs.count;
     }
     else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
-        if(
-            !context.extensions.nvRayTracingLinearSweptSpheres
-            || context.rayTracingLinearSweptSpheresFeatures.spheres != VK_TRUE
-        ){
+        if(!context.extensions.nvRayTracingLinearSweptSpheres || context.rayTracingLinearSweptSpheresFeatures.spheres != VK_TRUE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere geometry requires VK_NV_ray_tracing_linear_swept_spheres with spheres support"), operation);
             return MakeUnexpected(Failure{});
         }
@@ -351,25 +305,9 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
             return MakeUnexpected(Failure{});
         }
         if(requireBuffers){
-            if(!ValidateStridedBuildInputRange(
-                spheres.vertexBuffer,
-                spheres.vertexPositionOffset,
-                spheres.vertexCount,
-                spheres.vertexPositionStride,
-                vertexFormatInfo.bytesPerBlock,
-                operation,
-                NWB_TEXT("sphere position")
-            ))
+            if(!ValidateStridedBuildInputRange(spheres.vertexBuffer, spheres.vertexPositionOffset, spheres.vertexCount, spheres.vertexPositionStride, vertexFormatInfo.bytesPerBlock, operation, NWB_TEXT("sphere position")))
                 return MakeUnexpected(Failure{});
-            if(!ValidateStridedBuildInputRange(
-                spheres.vertexBuffer,
-                spheres.vertexRadiusOffset,
-                spheres.vertexCount,
-                spheres.vertexRadiusStride,
-                radiusFormatInfo.bytesPerBlock,
-                operation,
-                NWB_TEXT("sphere radius")
-            ))
+            if(!ValidateStridedBuildInputRange(spheres.vertexBuffer, spheres.vertexRadiusOffset, spheres.vertexCount, spheres.vertexRadiusStride, radiusFormatInfo.bytesPerBlock, operation, NWB_TEXT("sphere radius")))
                 return MakeUnexpected(Failure{});
         }
 
@@ -391,15 +329,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
                 return MakeUnexpected(Failure{});
             }
             if(requireBuffers){
-                if(!ValidateStridedBuildInputRange(
-                    spheres.indexBuffer,
-                    spheres.indexOffset,
-                    spheres.indexCount,
-                    spheres.indexStride,
-                    indexElementSize,
-                    operation,
-                    NWB_TEXT("sphere index")
-                ))
+                if(!ValidateStridedBuildInputRange(spheres.indexBuffer, spheres.indexOffset, spheres.indexCount, spheres.indexStride, indexElementSize, operation, NWB_TEXT("sphere index")))
                     return MakeUnexpected(Failure{});
             }
             primitiveCount = spheres.indexCount;
@@ -415,10 +345,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
         spheresData.indexStride = spheres.indexBuffer ? spheres.indexStride : 0;
     }
     else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
-        if(
-            !context.extensions.nvRayTracingLinearSweptSpheres
-            || context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres != VK_TRUE
-        ){
+        if(!context.extensions.nvRayTracingLinearSweptSpheres || context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres != VK_TRUE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS geometry requires VK_NV_ray_tracing_linear_swept_spheres with linearSweptSpheres support"), operation);
             return MakeUnexpected(Failure{});
         }
@@ -493,25 +420,9 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
         }
 
         if(requireBuffers){
-            if(!ValidateStridedBuildInputRange(
-                lss.vertexBuffer,
-                lss.vertexPositionOffset,
-                requiredVertexCount,
-                lss.vertexPositionStride,
-                vertexFormatInfo.bytesPerBlock,
-                operation,
-                NWB_TEXT("LSS position")
-            ))
+            if(!ValidateStridedBuildInputRange(lss.vertexBuffer, lss.vertexPositionOffset, requiredVertexCount, lss.vertexPositionStride, vertexFormatInfo.bytesPerBlock, operation, NWB_TEXT("LSS position")))
                 return MakeUnexpected(Failure{});
-            if(!ValidateStridedBuildInputRange(
-                lss.vertexBuffer,
-                lss.vertexRadiusOffset,
-                requiredVertexCount,
-                lss.vertexRadiusStride,
-                radiusFormatInfo.bytesPerBlock,
-                operation,
-                NWB_TEXT("LSS radius")
-            ))
+            if(!ValidateStridedBuildInputRange(lss.vertexBuffer, lss.vertexRadiusOffset, requiredVertexCount, lss.vertexRadiusStride, radiusFormatInfo.bytesPerBlock, operation, NWB_TEXT("LSS radius")))
                 return MakeUnexpected(Failure{});
         }
 
@@ -543,15 +454,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
                 return MakeUnexpected(Failure{});
             }
             if(requireBuffers){
-                if(!ValidateStridedBuildInputRange(
-                    lss.indexBuffer,
-                    lss.indexOffset,
-                    requiredIndexCount,
-                    lss.indexStride,
-                    indexElementSize,
-                    operation,
-                    NWB_TEXT("LSS index")
-                ))
+                if(!ValidateStridedBuildInputRange(lss.indexBuffer, lss.indexOffset, requiredIndexCount, lss.indexStride, indexElementSize, operation, NWB_TEXT("LSS index")))
                     return MakeUnexpected(Failure{});
             }
             lssData.indexStride = lss.indexStride;
@@ -580,10 +483,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
     return result;
 }
 
-Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(
-    const RayTracingAccelStructBuildFlags::Mask buildFlags,
-    const TStringView operationName
-){
+Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(const RayTracingAccelStructBuildFlags::Mask buildFlags, const TStringView operationName){
     constexpr u8 s_KnownFlags =
         static_cast<u8>(RayTracingAccelStructBuildFlags::AllowUpdate)
         | static_cast<u8>(RayTracingAccelStructBuildFlags::PreferFastTrace)
@@ -597,10 +497,7 @@ Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration-structure build flags contain unknown bits"), operationName);
         return MakeUnexpected(Failure{});
     }
-    if(
-        (buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
-        && (buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
-    ){
+    if((buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace) && (buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: fast-trace and fast-build flags are mutually exclusive"), operationName);
         return MakeUnexpected(Failure{});
     }

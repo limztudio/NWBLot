@@ -58,13 +58,7 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     , m_telemetrySession(m_projectObjectArena)
     , m_frameGraphRegistry(m_projectObjectArena)
     , m_telemetryUploadBytes(m_projectObjectArena)
-    , m_graphics(
-        m_graphicsAllocator,
-        m_cpuTasks,
-        m_gpuTasks,
-        m_perfSession.gpuTimingSink(),
-        &m_perfSession.cpuTimingSink()
-    )
+    , m_graphics(m_graphicsAllocator, m_cpuTasks, m_gpuTasks, m_perfSession.gpuTimingSink(), &m_perfSession.cpuTimingSink())
 {
     auto& frameData = data<Common::FrameData>();
     frameData.width() = width;
@@ -123,10 +117,7 @@ void Frame::cleanup(){
         if(!flushTelemetryUpload(true))
             NWB_LOGGER_WARNING(NWB_TEXT("Frame: telemetry upload flush failed during cleanup"));
     }
-    NWB_FATAL_ASSERT_MSG(
-        m_graphics.destroy(),
-        NWB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss")
-    );
+    NWB_FATAL_ASSERT_MSG(m_graphics.destroy(), NWB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss"));
 }
 void Frame::requestQuit()noexcept{
     m_quitRequested = true;
@@ -227,8 +218,7 @@ bool Frame::updateFrame(f32 delta){
     m_perfSession.publishFrame();
     discardUnpublishedProfile.release();
     if(m_telemetrySession.captureOptions().perfEnabled()){
-        const Telemetry::PerfSessionRecordResult perfRecordResult =
-            m_telemetrySession.recordPerfReport(m_perfSession.report());
+        const Telemetry::PerfSessionRecordResult perfRecordResult = m_telemetrySession.recordPerfReport(m_perfSession.report());
         if(!perfRecordResult.ok())
             NWB_LOGGER_WARNING(NWB_TEXT("Frame: one or more perf telemetry records failed"));
     }

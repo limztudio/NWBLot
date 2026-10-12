@@ -10,12 +10,8 @@ import time
 from edit_native import EditNativeInput
 from popup_probe import center, observe_popup, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -32,8 +28,7 @@ class PopupRun:
         self.deadline = time.monotonic() + args.timeout
         self.snapshot = None
         self.stages = []
-        self.expected = {"open": 0, "modal": 0, "underlying": 0, "selected": 0, "checked": 0,
-            "edit_focused": 0, "outside_focused": 0, "edge": 0, "right": 0, "visible": 1, "text_bytes": 5}
+        self.expected = {"open": 0, "modal": 0, "underlying": 0, "selected": 0, "checked": 0, "edit_focused": 0, "outside_focused": 0, "edge": 0, "right": 0, "visible": 1, "text_bytes": 5}
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -71,10 +66,8 @@ class PopupRun:
         raise SmokeFailure(f"popup displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "input_path": "Win32 posted keys/pointer/WM_CHAR messages with native Shift modifiers"
-                if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus",
-            "runtime_limit": "Synthetic text bypasses live IME. No native Wayland, physical pointer-grab, or native Linux qualification."}
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/WM_CHAR messages with native Shift modifiers"
+                if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus", "runtime_limit": "Synthetic text bypasses live IME. No native Wayland, physical pointer-grab, or native Linux qualification."}
         (self.args.output_directory / "popup.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):

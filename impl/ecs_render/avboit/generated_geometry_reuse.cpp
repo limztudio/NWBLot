@@ -25,13 +25,7 @@ namespace __hidden_generated_geometry_reuse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EligibleGroup(
-    const MaterialPassDrawItemPartitions& draws,
-    const InstanceGpuDataVector& instances,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const MaterialPipelinePass::Enum pass,
-    Core::Alloc::ScratchArena& arena
-){
+[[nodiscard]] bool EligibleGroup(const MaterialPassDrawItemPartitions& draws, const InstanceGpuDataVector& instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MaterialPipelinePass::Enum pass, Core::Alloc::ScratchArena& arena){
     if(
         !MaterialPipelinePassUsesRendererAvboit(pass)
         || draws.regular.computeDrawItems.empty() || !draws.regular.meshDrawItems.empty()
@@ -99,10 +93,7 @@ namespace __hidden_generated_geometry_reuse{
     return true;
 }
 
-[[nodiscard]] bool FrameBindingsMatch(
-    const ECSRenderDetail::MeshFrameBindingSnapshot& left,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& right
-)noexcept{
+[[nodiscard]] bool FrameBindingsMatch(const ECSRenderDetail::MeshFrameBindingSnapshot& left, const ECSRenderDetail::MeshFrameBindingSnapshot& right)noexcept{
     return
         left.instanceBuffer == right.instanceBuffer && left.materialTypedBuffer == right.materialTypedBuffer
         && left.meshView.buffer == right.meshView.buffer && left.meshView.heapHandle == right.meshView.heapHandle
@@ -177,10 +168,7 @@ bool AvboitGeneratedGeometryReuse::matches(
     }
     for(usize index = 0u; index < m_draws.size(); ++index){
         const MaterialPassDrawItem& current = draws.regular.computeDrawItems[index];
-        if(
-            !__hidden_generated_geometry_reuse::DrawInputsMatch(m_draws[index], current)
-            || NWB_MEMCMP(&m_instances[index], &instances[current.instanceIndex], sizeof(InstanceGpuData)) != 0
-        ){
+        if(!__hidden_generated_geometry_reuse::DrawInputsMatch(m_draws[index], current) || NWB_MEMCMP(&m_instances[index], &instances[current.instanceIndex], sizeof(InstanceGpuData)) != 0){
             reset();
             return false;
         }

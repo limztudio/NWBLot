@@ -50,12 +50,7 @@ inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
 ){
     char taskIndexBuffer[32u] = {};
     Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(DeriveName(Name("tests/task_graph_analysis/task_"), FormatDecimal(taskIndex, taskIndexBuffer)))
-        .setMarkerLabel("Analysis Test Task")
-        .setDependencies(dependencies, dependencyCount)
-        .setResourceUses(resourceUses, resourceUseCount)
-    ;
+    desc.setIdentity(DeriveName(Name("tests/task_graph_analysis/task_"), FormatDecimal(taskIndex, taskIndexBuffer))).setMarkerLabel("Analysis Test Task").setDependencies(dependencies, dependencyCount).setResourceUses(resourceUses, resourceUseCount);
     return graph.addTask(desc);
 }
 
@@ -67,12 +62,7 @@ static void ExpectEdgeEqual(const Graphics::GpuTaskDependencyEdge& expected, con
     EXPECT_EQ(actual.hazard, expected.hazard);
 }
 
-static void ExpectDagAnalysis(
-    const Graphics::GpuTaskGraph& graph,
-    Graphics::GpuTaskGraphAnalysis& analysis,
-    const Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& expectedEdges,
-    Core::Alloc::ScratchArena& scratchArena
-){
+static void ExpectDagAnalysis(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis, const Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& expectedEdges, Core::Alloc::ScratchArena& scratchArena){
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     ASSERT_TRUE(declarations.valid());
     const Graphics::GpuTaskGraphCompiler compiler;
@@ -128,8 +118,7 @@ static void ExpectDagAnalysis(
             const Graphics::GpuTaskId sourceTask = declarations.taskAt(source).id;
             const Graphics::GpuTaskId destinationTask = declarations.taskAt(destination).id;
             EXPECT_EQ(schedulingReachability.reaches(sourceTask, destinationTask), reachable[source * taskCount + destination] != 0u);
-            EXPECT_EQ(schedulingReachability.transitivelyIndependent(sourceTask, destinationTask),
-                source != destination && !reachable[source * taskCount + destination] && !reachable[destination * taskCount + source]);
+            EXPECT_EQ(schedulingReachability.transitivelyIndependent(sourceTask, destinationTask), source != destination && !reachable[source * taskCount + destination] && !reachable[destination * taskCount + source]);
         }
     }
 
@@ -191,20 +180,13 @@ static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize task
         const usize dependencyCount = Min(chainIndex, LengthOf(dependencies));
         for(usize offset = 0u; offset < dependencyCount; ++offset){
             const usize sourceIndex = chainIndex - offset - 1u;
-            dependencies[offset] = {
-                .generation = generation,
-                .index = static_cast<u32>(reversed ? taskCount - sourceIndex - 1u : sourceIndex),
-            };
+            dependencies[offset] = { .generation = generation, .index = static_cast<u32>(reversed ? taskCount - sourceIndex - 1u : sourceIndex), };
         }
         ASSERT_TRUE(AddTask(graph, declarationIndex, dependencies, dependencyCount).valid());
     }
 }
 
-static void ExpectReducedShortcutChain(
-    const Graphics::GpuTaskGraphAnalysis& analysis,
-    const usize taskCount,
-    const bool reversed
-){
+static void ExpectReducedShortcutChain(const Graphics::GpuTaskGraphAnalysis& analysis, const usize taskCount, const bool reversed){
     ASSERT_EQ(analysis.edges().size(), taskCount * 2u - 3u);
     ASSERT_EQ(analysis.schedulingEdges().size(), taskCount - 1u);
     for(usize edgeIndex = 0u; edgeIndex + 1u < taskCount; ++edgeIndex){
@@ -223,11 +205,7 @@ namespace ReadyOrderShape{
     };
 };
 
-static void DeclareReadyOrderGraph(
-    Graphics::GpuTaskGraph& graph,
-    const usize taskCount,
-    const ReadyOrderShape::Enum shape
-){
+static void DeclareReadyOrderGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const ReadyOrderShape::Enum shape){
     u64 generation = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
@@ -235,24 +213,17 @@ static void DeclareReadyOrderGraph(
     }
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         const usize half = taskCount / 2u;
-        const bool hasDependency = shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u < taskCount
-            : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex < half : taskIndex >= half;
-        const usize producerIndex = !hasDependency ? 0u : shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u
-            : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex + half : taskIndex - half;
+        const bool hasDependency = shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u < taskCount : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex < half : taskIndex >= half;
+        const usize producerIndex = !hasDependency ? 0u : shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex + half : taskIndex - half;
         const Graphics::GpuTaskId dependency{ .generation = generation, .index = static_cast<u32>(producerIndex) };
         ASSERT_TRUE(AddTask(graph, taskIndex, hasDependency ? &dependency : nullptr, hasDependency ? 1u : 0u).valid());
     }
 }
 
-static void ExpectReadyOrder(
-    const Graphics::GpuTaskGraphAnalysis& analysis,
-    const usize taskCount,
-    const ReadyOrderShape::Enum shape
-){
+static void ExpectReadyOrder(const Graphics::GpuTaskGraphAnalysis& analysis, const usize taskCount, const ReadyOrderShape::Enum shape){
     ASSERT_EQ(analysis.topologicalOrder().size(), taskCount);
     for(usize index = 0u; index < taskCount; ++index){
-        const usize expected = shape == ReadyOrderShape::ReverseChain ? taskCount - index - 1u
-            : shape == ReadyOrderShape::ConsumerFirstPairs ? (index % 2u == 0u ? taskCount / 2u + index / 2u : index / 2u) : index;
+        const usize expected = shape == ReadyOrderShape::ReverseChain ? taskCount - index - 1u : shape == ReadyOrderShape::ConsumerFirstPairs ? (index % 2u == 0u ? taskCount / 2u + index / 2u : index / 2u) : index;
         EXPECT_EQ(analysis.topologicalOrder()[index].index, expected);
     }
 }
@@ -260,9 +231,7 @@ static void ExpectReadyOrder(
 
 TEST(GpuTaskGraphAnalysis, PreservesLowestReadyIdAcrossRepeatedBackwardReleasesAndPartialIndexWords){
     constexpr usize s_Counts[] = { 130u, 8194u };
-    constexpr ReadyOrderShape::Enum s_Shapes[] = {
-        ReadyOrderShape::ConsumerFirstPairs, ReadyOrderShape::ProducerFirstPairs, ReadyOrderShape::ReverseChain,
-    };
+    constexpr ReadyOrderShape::Enum s_Shapes[] = { ReadyOrderShape::ConsumerFirstPairs, ReadyOrderShape::ProducerFirstPairs, ReadyOrderShape::ReverseChain, };
     for(const usize count : s_Counts){
         for(const auto shape : s_Shapes){
             SCOPED_TRACE(count);
@@ -412,12 +381,7 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
         Graphics::GpuTaskResourceUse uses[6u] = {};
         const usize resourceCount = taskIndex == 1u ? 2u : 3u;
         for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
-            uses[resourceIndex * 2u] = Graphics::GpuTaskResourceUse{
-                .resource = resources[resourceIndex],
-                .range = {},
-                .requiredState = Graphics::ResourceStates::UnorderedAccess,
-                .access = accesses[taskIndex][resourceIndex],
-            };
+            uses[resourceIndex * 2u] = Graphics::GpuTaskResourceUse{ .resource = resources[resourceIndex], .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = accesses[taskIndex][resourceIndex], };
             uses[resourceIndex * 2u + 1u] = uses[resourceIndex * 2u];
         }
         const Graphics::GpuTaskId dependencies[] = { tasks[0u], tasks[0u] };
@@ -427,27 +391,9 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
 
     Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> expectedEdges(scratchArena);
     expectedEdges.reserve(3u);
-    expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{
-        .producer = tasks[0u],
-        .consumer = tasks[1u],
-        .resource = {},
-        .resourceVersion = {},
-        .hazard = Graphics::GpuTaskHazardType::Explicit,
-    });
-    expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{
-        .producer = tasks[1u],
-        .consumer = tasks[2u],
-        .resource = resources[0u],
-        .resourceVersion = {},
-        .hazard = Graphics::GpuTaskHazardType::ReadAfterWrite,
-    });
-    expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{
-        .producer = tasks[0u],
-        .consumer = tasks[2u],
-        .resource = resources[2u],
-        .resourceVersion = {},
-        .hazard = Graphics::GpuTaskHazardType::ReadAfterWrite,
-    });
+    expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{ .producer = tasks[0u], .consumer = tasks[1u], .resource = {}, .resourceVersion = {}, .hazard = Graphics::GpuTaskHazardType::Explicit, });
+    expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{ .producer = tasks[1u], .consumer = tasks[2u], .resource = resources[0u], .resourceVersion = {}, .hazard = Graphics::GpuTaskHazardType::ReadAfterWrite, });
+    expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{ .producer = tasks[0u], .consumer = tasks[2u], .resource = resources[2u], .resourceVersion = {}, .hazard = Graphics::GpuTaskHazardType::ReadAfterWrite, });
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_NO_FATAL_FAILURE(ExpectDagAnalysis(graph, analysis, expectedEdges, scratchArena));
     EXPECT_EQ(analysis.explicitEdgeCount(), 1u);

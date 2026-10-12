@@ -33,14 +33,7 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ReserveCsgStructuredBuffer(
-    Core::GraphicsRuntime& graphics,
-    Core::BufferHandle& buffer,
-    usize& inOutCapacity,
-    const usize requiredCount,
-    const usize elementByteSize,
-    const Name& debugName
-){
+[[nodiscard]] static bool ReserveCsgStructuredBuffer(Core::GraphicsRuntime& graphics, Core::BufferHandle& buffer, usize& inOutCapacity, const usize requiredCount, const usize elementByteSize, const Name& debugName){
     if(requiredCount == 0u)
         return true;
     if(buffer && inOutCapacity >= requiredCount)
@@ -70,28 +63,15 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static Expected<Core::GpuDescriptorHandle> AcquireCsgBufferHeapHandle(
-    Core::Device& device,
-    Core::Buffer& buffer,
-    const Core::GpuDescriptorClass::Enum descriptorClass
-){
+[[nodiscard]] static Expected<Core::GpuDescriptorHandle> AcquireCsgBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return MakeUnexpected(Failure{});
 
-    NWB_ASSERT(
-        descriptorClass == Core::GpuDescriptorClass::StorageBuffer
-        || descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-    );
-    if(
-        descriptorClass != Core::GpuDescriptorClass::StorageBuffer
-        && descriptorClass != Core::GpuDescriptorClass::UniformBuffer
-    )
+    NWB_ASSERT(descriptorClass == Core::GpuDescriptorClass::StorageBuffer || descriptorClass == Core::GpuDescriptorClass::UniformBuffer);
+    if(descriptorClass != Core::GpuDescriptorClass::StorageBuffer && descriptorClass != Core::GpuDescriptorClass::UniformBuffer)
         return MakeUnexpected(Failure{});
-    const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
-        : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer)
-    ;
+    const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer);
     const Core::GpuDescriptorHandle acquired = heap.allocate(descriptorClass);
     if(!acquired.valid() || !heap.write(acquired, descriptorWrite)){
         if(acquired.valid())
@@ -102,11 +82,7 @@ namespace __hidden_csg_resources{
     return acquired;
 }
 
-[[nodiscard]] static bool ReplaceCsgStorageBufferHeapHandle(
-    Core::Device& device,
-    Core::Buffer& buffer,
-    Core::GpuDescriptorHandle& inOutHandle
-){
+[[nodiscard]] static bool ReplaceCsgStorageBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
     const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, Core::GpuDescriptorClass::StorageBuffer);
     if(!acquired){
         // The buffer was replaced; drop the stale handle for a later retry.
@@ -124,12 +100,7 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static bool EnsureCsgBufferHeapHandle(
-    Core::Device& device,
-    Core::Buffer& buffer,
-    const Core::GpuDescriptorClass::Enum descriptorClass,
-    Core::GpuDescriptorHandle& inOutHandle
-){
+[[nodiscard]] static bool EnsureCsgBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, Core::GpuDescriptorHandle& inOutHandle){
     if(inOutHandle.valid())
         return inOutHandle.descriptorClass() == descriptorClass;
     const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, descriptorClass);
@@ -169,23 +140,12 @@ bool RendererCsgSystem::createCsgClipResources(){
 
 bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = m_csgState.m_receiverRangeBufferCapacity;
-    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(
-        m_graphics,
-        m_csgState.m_receiverRangeBuffer,
-        m_csgState.m_receiverRangeBufferCapacity,
-        rangeCount,
-        sizeof(CsgReceiverRangeGpuData),
-        ECSRenderDetail::s_CsgReceiverRangeBufferName
-    )){
+    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, m_csgState.m_receiverRangeBuffer, m_csgState.m_receiverRangeBufferCapacity, rangeCount, sizeof(CsgReceiverRangeGpuData), ECSRenderDetail::s_CsgReceiverRangeBufferName)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
         return false;
     }
 
-    if(m_csgState.m_receiverRangeBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgStorageBufferHeapHandle(
-        m_graphics.getDevice(),
-        *m_csgState.m_receiverRangeBuffer.get(),
-        m_csgState.m_receiverRangeBufferHeapHandle
-    )){
+    if(m_csgState.m_receiverRangeBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgStorageBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_receiverRangeBuffer.get(), m_csgState.m_receiverRangeBufferHeapHandle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG receiver range buffer in the descriptor heap"));
         return false;
     }
@@ -194,23 +154,12 @@ bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeC
 
 bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     const usize oldCapacity = m_csgState.m_cutterBufferCapacity;
-    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(
-        m_graphics,
-        m_csgState.m_cutterBuffer,
-        m_csgState.m_cutterBufferCapacity,
-        cutterCount,
-        sizeof(CsgCutterGpuData),
-        ECSRenderDetail::s_CsgCutterBufferName
-    )){
+    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, m_csgState.m_cutterBuffer, m_csgState.m_cutterBufferCapacity, cutterCount, sizeof(CsgCutterGpuData), ECSRenderDetail::s_CsgCutterBufferName)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cutter buffer"));
         return false;
     }
 
-    if(m_csgState.m_cutterBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgStorageBufferHeapHandle(
-        m_graphics.getDevice(),
-        *m_csgState.m_cutterBuffer.get(),
-        m_csgState.m_cutterBufferHeapHandle
-    )){
+    if(m_csgState.m_cutterBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgStorageBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_cutterBuffer.get(), m_csgState.m_cutterBufferHeapHandle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG cutter buffer in the descriptor heap"));
         return false;
     }
@@ -222,22 +171,13 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
         return true;
     NWB_ASSERT(receiverRangeCount <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
-    if(
-        !reserveCsgReceiverRangeBufferCapacity(receiverRangeCount)
-        || !reserveCsgCutterBufferCapacity(cutterCount)
-    )
+    if(!reserveCsgReceiverRangeBufferCapacity(receiverRangeCount) || !reserveCsgCutterBufferCapacity(cutterCount))
         return false;
     if(!createCsgIntervalSampleStateBuffer())
         return false;
     if(!m_csgState.m_clipContextSlotsBuffer){
         Core::BufferDesc bufferDesc;
-        bufferDesc
-            .setByteSize(sizeof(CsgClipContextSlots))
-            .setIsConstantBuffer(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName("engine/csg/clip_context_slots")
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
+        bufferDesc.setByteSize(sizeof(CsgClipContextSlots)).setIsConstantBuffer(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName("engine/csg/clip_context_slots").enableAutomaticStateTracking(Core::ResourceStates::Common);
         m_csgState.m_clipContextSlotsBuffer = m_graphics.createBuffer(bufferDesc);
         if(!m_csgState.m_clipContextSlotsBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
@@ -245,30 +185,10 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
         }
     }
     if(
-        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
-            m_graphics.getDevice(),
-            *m_csgState.m_receiverRangeBuffer.get(),
-            Core::GpuDescriptorClass::StorageBuffer,
-            m_csgState.m_receiverRangeBufferHeapHandle
-        )
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
-            m_graphics.getDevice(),
-            *m_csgState.m_cutterBuffer.get(),
-            Core::GpuDescriptorClass::StorageBuffer,
-            m_csgState.m_cutterBufferHeapHandle
-        )
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
-            m_graphics.getDevice(),
-            *m_csgState.m_clipContextSlotsBuffer.get(),
-            Core::GpuDescriptorClass::UniformBuffer,
-            m_csgState.m_clipContextSlotsHeapHandle
-        )
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
-            m_graphics.getDevice(),
-            *m_csgState.m_intervalSampleStateBuffer.get(),
-            Core::GpuDescriptorClass::UniformBuffer,
-            m_csgState.m_intervalSampleStateHeapHandle
-        )
+        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_receiverRangeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, m_csgState.m_receiverRangeBufferHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_cutterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, m_csgState.m_cutterBufferHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_clipContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_clipContextSlotsHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_intervalSampleStateBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_intervalSampleStateHeapHandle)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG clip context heap registration is incomplete"));
         return false;
@@ -311,11 +231,7 @@ Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
     CsgClipContextSlots contextSlots{};
     if(!csgFrameData.hasWork())
         return contextSlots;
-    if(
-        !csgResources.frameReady(csgFrameData)
-        || !frameBindings.bindingValid()
-        || !targets.bindless.slotsBufferDescriptor.valid()
-    )
+    if(!csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid() || !targets.bindless.slotsBufferDescriptor.valid())
         return MakeUnexpected(Failure{});
 
     // Freeze indirections now; later records must not see another generation.

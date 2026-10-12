@@ -49,19 +49,15 @@ namespace __hidden_ui_popup_layout{
     }
 }
 
-[[nodiscard]] static f64 Available(const PopupOptions& options, const DisplayMetrics& display,
-    const PopupPlacementSide::Enum side
-)noexcept{
+[[nodiscard]] static f64 Available(const PopupOptions& options, const DisplayMetrics& display, const PopupPlacementSide::Enum side)noexcept{
     const f64 gap = options.gap;
     switch(side){
     case PopupPlacementSide::Below:
-        return Clamp(static_cast<f64>(display.logicalHeight) - options.anchor.y - options.anchor.height - gap,
-            0.0, static_cast<f64>(display.logicalHeight));
+        return Clamp(static_cast<f64>(display.logicalHeight) - options.anchor.y - options.anchor.height - gap, 0.0, static_cast<f64>(display.logicalHeight));
     case PopupPlacementSide::Above:
         return Clamp(static_cast<f64>(options.anchor.y) - gap, 0.0, static_cast<f64>(display.logicalHeight));
     case PopupPlacementSide::Right:
-        return Clamp(static_cast<f64>(display.logicalWidth) - options.anchor.x - options.anchor.width - gap,
-            0.0, static_cast<f64>(display.logicalWidth));
+        return Clamp(static_cast<f64>(display.logicalWidth) - options.anchor.x - options.anchor.width - gap, 0.0, static_cast<f64>(display.logicalWidth));
     case PopupPlacementSide::Left:
         return Clamp(static_cast<f64>(options.anchor.x) - gap, 0.0, static_cast<f64>(display.logicalWidth));
     default:
@@ -115,16 +111,14 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
         x -= static_cast<f64>(options.gap) + width;
         break;
     case PopupPlacementSide::Center:{
-        const SIMDVectorDouble centered = (SIMDVectorDouble{ display.logicalWidth, display.logicalHeight }
-            - SIMDVectorDouble{ width, height }) * SIMDVectorDouble{ 0.5, 0.5 };
+        const SIMDVectorDouble centered = (SIMDVectorDouble{ display.logicalWidth, display.logicalHeight } - SIMDVectorDouble{ width, height }) * SIMDVectorDouble{ 0.5, 0.5 };
         x = centered.x;
         y = centered.y;
         break;
     }
     }
     const SIMDVectorDouble origin = SIMDVectorDouble{ x, y };
-    const SIMDVectorDouble maximum = SIMDVectorDouble{ display.logicalWidth, display.logicalHeight }
-        - SIMDVectorDouble{ width, height };
+    const SIMDVectorDouble maximum = SIMDVectorDouble{ display.logicalWidth, display.logicalHeight } - SIMDVectorDouble{ width, height };
     const SIMDVectorDouble zero = { 0.0, 0.0 };
     const SIMDVectorDouble constrained = (origin > zero) ? ((origin > maximum) ? maximum : origin) : zero;
     x = constrained.x;

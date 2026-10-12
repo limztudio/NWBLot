@@ -97,12 +97,7 @@ struct SourceVertexRefHasher{
 
 struct SourceVertexRefEqual{
     bool operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
-        return lhs.position == rhs.position
-            && lhs.normal == rhs.normal
-            && lhs.tangent == rhs.tangent
-            && lhs.uv0 == rhs.uv0
-            && lhs.color == rhs.color
-            && lhs.skin == rhs.skin;
+        return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
     }
 };
 
@@ -134,35 +129,15 @@ struct SourceMeshBuildContext{
 
 class FbxSourceMeshStreams final : NoCopy{
 public:
-    static void ReserveSourceMeshStreams(
-        SourceMeshStreams& mesh,
-        const usize estimatedTriangleCorners,
-        const bool wantsSkinning
-    );
-    static void ReserveSourceMeshBuildContext(
-        SourceMeshBuildContext& context,
-        const usize estimatedTriangleCorners,
-        const bool wantsSkinning
-    );
+    static void ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const bool wantsSkinning);
+    static void ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning);
     [[nodiscard]] static bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh);
     static void DropSourceMeshTangents(SourceMeshStreams& mesh);
-    [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(
-        const ufbx_mesh& mesh,
-        UtilityVector<u32>& inOutTriangleIndices
-    );
+    [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityVector<u32>& inOutTriangleIndices);
     template<typename Value, typename Lookup>
-    [[nodiscard]] static Expected<u32> InternSourceValue(
-        UtilityVector<Value>& stream,
-        Lookup& lookup,
-        const Value& value,
-        const AStringView streamName);
-    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(
-        SourceMeshStreams& mesh,
-        const bool usedDefaultUvs);
-    [[nodiscard]] static Expected<u32> InternSourceCorner(
-        SourceMeshBuildContext& context,
-        const SourceTriangleCorner& corner,
-        const bool wantsSkinning);
+    [[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName);
+    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs);
+    [[nodiscard]] static Expected<u32> InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const bool wantsSkinning);
 
 
 public:
@@ -174,12 +149,7 @@ public:
 
 
 template<typename Value, typename Lookup>
-[[nodiscard]] Expected<u32> FbxSourceMeshStreams::InternSourceValue(
-    UtilityVector<Value>& stream,
-    Lookup& lookup,
-    const Value& value,
-    const AStringView streamName
-){
+[[nodiscard]] Expected<u32> FbxSourceMeshStreams::InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName){
     auto found = lookup.find(value);
     if(found != lookup.end()){
         return found.value();

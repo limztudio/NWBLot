@@ -21,15 +21,11 @@ Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditMod
     return editBorrowed(widget, model, options, m_context.popupToken(), nullptr);
 }
 
-Ui::EditBoxResult UiEditBoxHost::editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup
-){
+Ui::EditBoxResult UiEditBoxHost::editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup){
     return editBorrowed(widget, model, options, popup, nullptr);
 }
 
-Ui::EditBoxResult UiEditBoxHost::editActions(const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions
-){
+Ui::EditBoxResult UiEditBoxHost::editActions(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions){
     return editBorrowed(widget, model, options, popup, &actions);
 }
 
@@ -41,9 +37,7 @@ Ui::EditBoxResult UiEditBoxHost::editNavigated(const Ui::WidgetState& widget, Ui
     return editBorrowed(widget, model, options, popup, &actions, &borrowed);
 }
 
-Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation
-){
+Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
     if(rejectBorrowedMutation())
         return {};
     if(navigation && model.textMode() != Ui::EditTextMode::Multiline)
@@ -74,16 +68,12 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
     }
     else{
         const u64 navigationInstance = navigation ? navigation->state.instanceGeneration() : 0u;
-        const bool rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr)
-            || entry->navigationInstanceGeneration != navigationInstance;
+        const bool rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr) || entry->navigationInstanceGeneration != navigationInstance;
         const bool policyChanged = actions && (entry->enabled != options.enabled || entry->readOnly != options.readOnly);
         abandon = actions && (rebound || policyChanged);
         if(rebound || policyChanged || !entry->expected.matches(model)){
             entry->navigationResetPending = navigation != nullptr;
-            if(
-                m_session.owner() == entry->owner || (m_clipboard.pending() && m_clipboardOwner == entry->owner)
-                || (m_primary.pending() && m_primaryOwner == entry->owner)
-            )
+            if(m_session.owner() == entry->owner || (m_clipboard.pending() && m_clipboardOwner == entry->owner) || (m_primary.pending() && m_primaryOwner == entry->owner))
                 cancelTransfers();
             discard(entry->owner);
             entry->owner = owner;
@@ -146,10 +136,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
             if(!apply(*entry, model, options, event, result, actions, navigation)){
                 result.valid = false;
                 discard(owner);
-                if(
-                    m_session.owner() == owner || (m_clipboard.pending() && m_clipboardOwner == owner)
-                    || (m_primary.pending() && m_primaryOwner == owner)
-                )
+                if(m_session.owner() == owner || (m_clipboard.pending() && m_clipboardOwner == owner) || (m_primary.pending() && m_primaryOwner == owner))
                     cancelTransfers();
                 return result;
             }
@@ -198,10 +185,7 @@ void UiEditBoxHost::synchronizeSession(Entry& entry, Ui::EditModel& model, const
         model.cancelComposition();
         return;
     }
-    if(
-        entry.displayed.generation == 0u || entry.displayed.modelGeneration != entry.owner.modelGeneration
-        || entry.displayed.popup != entry.popup
-    )
+    if(entry.displayed.generation == 0u || entry.displayed.modelGeneration != entry.owner.modelGeneration || entry.displayed.popup != entry.popup)
         return;
     if(m_session.token().valid() && m_session.owner() != entry.owner && !m_session.cancel())
         TerminateInvariant();
@@ -214,9 +198,7 @@ void UiEditBoxHost::synchronizeSession(Entry& entry, Ui::EditModel& model, const
         entry.rejectedNative = {};
     }
     else{
-        const auto admission = m_session.adoptLocal(entry.owner, model, nativeCaret(entry.displayed), inputMethod
-            ? Core::TextInputChangeCause::InputMethod : Core::TextInputChangeCause::Other
-        );
+        const auto admission = m_session.adoptLocal(entry.owner, model, nativeCaret(entry.displayed), inputMethod ? Core::TextInputChangeCause::InputMethod : Core::TextInputChangeCause::Other);
         if(admission != Core::TextInputAdmission::Accepted){
             model.cancelComposition();
             if(!m_session.cancel())

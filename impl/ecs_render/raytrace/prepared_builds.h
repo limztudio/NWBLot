@@ -19,17 +19,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Material surface hooks in the shadow, caustic, and GI trace paths select texture assets through typed bindless
-// slots. Keep the exact preflight-resolved handles beside the trace geometry so graph declaration never has to
-// inspect mutable material caches while recording.
-using PreparedShadowTraceMaterialSampledTextureVector = Vector<
-    Core::TextureHandle,
-    Core::Alloc::GlobalArena
->;
+// Material surface hooks in the shadow, caustic, and GI trace paths select texture assets through typed bindless slots.
+// Keep the exact preflight-resolved handles beside the trace geometry so graph declaration never has to inspect mutable material caches while recording.
+using PreparedShadowTraceMaterialSampledTextureVector = Vector< Core::TextureHandle, Core::Alloc::GlobalArena >;
 
 
-// A BLAS build derives its geometry directly from retained buffers. Keep the resolved operation rather than a
-// MeshResources pointer: runtime meshes can be replaced or pruned between preflight and native recording.
+// A BLAS build derives its geometry directly from retained buffers. Keep the resolved operation rather than a MeshResources pointer: runtime meshes can be replaced or pruned between preflight and native recording.
 struct PreparedMeshBlasBuild{
     Name meshName = s_NameNone;
     Core::BufferHandle positionBuffer;
@@ -52,15 +47,11 @@ struct PreparedMeshBlasBuild{
     bool performRefit = false;
 };
 
-using PreparedMeshBlasBuildVector = Vector<
-    PreparedMeshBlasBuild,
-    Core::Alloc::GlobalArena
->;
+using PreparedMeshBlasBuildVector = Vector< PreparedMeshBlasBuild, Core::Alloc::GlobalArena >;
 
 
-// The software mesh builder shares global sort/payload/counter storage, so one frozen operation retains both its
-// mesh-local inputs/outputs and the exact shared scratch generation. Never retain MeshResources pointers: runtime
-// geometry can be replaced or pruned between preflight and Shadow Preparation recording.
+// The software mesh builder shares global sort/payload/counter storage, so one frozen operation retains both its mesh-local inputs/outputs and the exact shared scratch generation.
+// Never retain MeshResources pointers: runtime geometry can be replaced or pruned between preflight and Shadow Preparation recording.
 struct PreparedMeshSwBvhBuild{
     Name meshName = s_NameNone;
     Core::BufferHandle positionBuffer;
@@ -98,14 +89,10 @@ struct PreparedMeshSwBvhBuild{
     bool performRefit = false;
 };
 
-using PreparedMeshSwBvhBuildVector = Vector<
-    PreparedMeshSwBvhBuild,
-    Core::Alloc::GlobalArena
->;
+using PreparedMeshSwBvhBuildVector = Vector< PreparedMeshSwBvhBuild, Core::Alloc::GlobalArena >;
 
 
-// The scene-level software traversal consumes one descriptor-table entry per distinct mesh. Retain owning buffer
-// handles so recording consumes the same resources captured during preparation.
+// The scene-level software traversal consumes one descriptor-table entry per distinct mesh. Retain owning buffer handles so recording consumes the same resources captured during preparation.
 struct PreparedSceneSwBvhMesh{
     Name meshName = s_NameNone;
     Core::BufferHandle nodeBuffer;
@@ -126,10 +113,7 @@ struct PreparedSceneSwBvhMesh{
     bool runtimeMesh = false;
 };
 
-using PreparedSceneSwBvhMeshVector = Vector<
-    PreparedSceneSwBvhMesh,
-    Core::Alloc::GlobalArena
->;
+using PreparedSceneSwBvhMeshVector = Vector< PreparedSceneSwBvhMesh, Core::Alloc::GlobalArena >;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

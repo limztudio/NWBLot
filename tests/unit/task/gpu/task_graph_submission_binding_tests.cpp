@@ -132,9 +132,7 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
     }
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     Graphics::GpuTaskSubmissionDetail::TaskSubmissionBindings resolved(scratch);
-    ASSERT_TRUE(resolved.resolve(
-        declarations, plan, plan.allPacketRange(), timingBindings.data(), timingBindings.size(), hookBindings.data(), hookBindings.size()
-    ));
+    ASSERT_TRUE(resolved.resolve(declarations, plan, plan.allPacketRange(), timingBindings.data(), timingBindings.size(), hookBindings.data(), hookBindings.size()));
     Vector<Graphics::GpuTimingSubmissionTicket*, Graphics::Alloc::ScratchArena> packetTickets(scratch);
     packetTickets.reserve(resolved.timingTickets.size());
     const usize collectAllocationCount = scratch.memoryStats().allocationCount;
@@ -214,9 +212,7 @@ TEST(GpuTaskSubmissionBindings, RejectsLateDuplicateAnchorsCrossPacketTicketsAnd
     hookBindings.back().task = hookBindings.front().task;
     EXPECT_FALSE(resolved.resolve(declarations, plan, range, nullptr, 0u, hookBindings.data(), hookBindings.size()));
     hookBindings.back() = lastHook;
-    ASSERT_TRUE(resolved.resolve(
-        declarations, plan, range, timingBindings.data(), timingBindings.size(), hookBindings.data(), hookBindings.size()
-    ));
+    ASSERT_TRUE(resolved.resolve(declarations, plan, range, timingBindings.data(), timingBindings.size(), hookBindings.data(), hookBindings.size()));
     EXPECT_EQ(fixture.hookInvocationCount, 0u);
 }
 

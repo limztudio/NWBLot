@@ -7,8 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from refraction_capture_smoke import (  # noqa: E402
-    FOREGROUND_REGION, GLASS_REGION, SmokeFailure, compare_refraction_frames, region_pixels,
-)
+    FOREGROUND_REGION, GLASS_REGION, SmokeFailure, compare_refraction_frames, region_pixels,)
 
 LIT_DID_NOT_DISPLACE = "did not displace"
 LIT_MAIN = "__main__"
@@ -19,8 +18,7 @@ class RefractionCaptureAnalysisTests(unittest.TestCase):
     height = 300
 
     def make_frame(self):
-        rows = [[(235, 235, 235) if (x // 8) % 2 else (20, 20, 20)
-            for x in range(self.width)] for _ in range(self.height)]
+        rows = [[(235, 235, 235) if (x // 8) % 2 else (20, 20, 20) for x in range(self.width)] for _ in range(self.height)]
         for x, y in region_pixels(self.width, self.height, FOREGROUND_REGION):
             if 181 <= y < 190:
                 rows[y][x] = (225, 35, 35)

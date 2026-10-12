@@ -23,43 +23,24 @@ namespace __hidden_texture_transfer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ResolveMipExtentsMatch(
-    const TextureDesc& destinationDesc,
-    const TextureSubresourceSet& destinationSubresources,
-    const TextureDesc& sourceDesc,
-    const TextureSubresourceSet& sourceSubresources
-){
+[[nodiscard]] inline bool ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources){
     for(MipLevel mipOffset = 0u; mipOffset < sourceSubresources.numMipLevels; ++mipOffset){
-        const VkExtent3D sourceExtent = VulkanDetail::GetTextureMipExtent(
-            sourceDesc,
-            sourceSubresources.baseMipLevel + mipOffset
-        );
-        const VkExtent3D destinationExtent = VulkanDetail::GetTextureMipExtent(
-            destinationDesc,
-            destinationSubresources.baseMipLevel + mipOffset
-        );
-        if(
-            sourceExtent.width != destinationExtent.width
-            || sourceExtent.height != destinationExtent.height
-            || sourceExtent.depth != destinationExtent.depth
-        )
+        const VkExtent3D sourceExtent = VulkanDetail::GetTextureMipExtent(sourceDesc, sourceSubresources.baseMipLevel + mipOffset);
+        const VkExtent3D destinationExtent = VulkanDetail::GetTextureMipExtent(destinationDesc, destinationSubresources.baseMipLevel + mipOffset);
+        if(sourceExtent.width != destinationExtent.width || sourceExtent.height != destinationExtent.height || sourceExtent.depth != destinationExtent.depth)
             return false;
     }
     return true;
 }
 
-// Buffer-image copies address exactly one image aspect. Validate against the texture's full native metadata,
-// then lower the selected upload plane into its own Vulkan aspect and byte layout.
+// Buffer-image copies address exactly one image aspect.
+// Validate against the texture's full native metadata, then lower the selected upload plane into its own Vulkan aspect and byte layout.
 struct TextureUploadCopyAspect{
     VkImageAspectFlags aspectMask = 0u;
     VulkanDetail::TextureFormatBlockLayout formatLayout;
 };
 
-[[nodiscard]] inline Expected<TextureUploadCopyAspect> ResolveTextureUploadCopyAspect(
-    const TextureDesc& textureDesc,
-    const VkImageAspectFlags textureAspectMask,
-    const TextureUploadAspect::Enum requestedAspect
-){
+[[nodiscard]] inline Expected<TextureUploadCopyAspect> ResolveTextureUploadCopyAspect(const TextureDesc& textureDesc, const VkImageAspectFlags textureAspectMask, const TextureUploadAspect::Enum requestedAspect){
     TextureUploadCopyAspect result{};
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
@@ -118,27 +99,12 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
         return;
     }
-    if(!validateTextureForGpuState(
-        &src,
-        ResourceStates::CopySource,
-        s_OperationName,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-    ))
+    if(!validateTextureForGpuState(&src, ResourceStates::CopySource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
         return;
-    if(!validateTextureForGpuState(
-        &dest,
-        ResourceStates::CopyDest,
-        s_OperationName,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT
-    ))
+    if(!validateTextureForGpuState(&dest, ResourceStates::CopyDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
         return;
 
-    const auto contract = VulkanTextureDetail::ResolveTextureCopyContract(
-        src.m_creationDesc,
-        srcSlice,
-        dest.m_creationDesc,
-        destSlice
-    );
+    const auto contract = VulkanTextureDetail::ResolveTextureCopyContract(src.m_creationDesc, srcSlice, dest.m_creationDesc, destSlice);
     if(!contract){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the image-copy contract"));
         return;
@@ -165,19 +131,14 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture descriptions and native image metadata must agree"));
         return;
     }
-    if(
-        (src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u
-        || (dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u
-    ){
+    if((src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u || (dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination images require transfer usage"));
         return;
     }
 
     VkFormatProperties formatProperties{};
     m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
-    constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
-        | VK_FORMAT_FEATURE_TRANSFER_DST_BIT
-    ;
+    constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
     if((formatProperties.optimalTilingFeatures & s_RequiredFormatFeatures) != s_RequiredFormatFeatures){
         rejectCommandRecording(s_OperationName, NWB_TEXT("native format lacks optimal-tiling transfer support"));
         return;
@@ -214,31 +175,11 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     }
 
     VkImageCopy region{};
-    region.srcSubresource = VulkanDetail::BuildImageSubresourceLayers(
-        contract->aspectMask,
-        contract->sourceSlice.mipLevel,
-        contract->sourceSlice.arraySlice
-    );
-    region.srcOffset = {
-        static_cast<i32>(contract->sourceSlice.x),
-        static_cast<i32>(contract->sourceSlice.y),
-        static_cast<i32>(contract->sourceSlice.z),
-    };
-    region.dstSubresource = VulkanDetail::BuildImageSubresourceLayers(
-        contract->aspectMask,
-        contract->destinationSlice.mipLevel,
-        contract->destinationSlice.arraySlice
-    );
-    region.dstOffset = {
-        static_cast<i32>(contract->destinationSlice.x),
-        static_cast<i32>(contract->destinationSlice.y),
-        static_cast<i32>(contract->destinationSlice.z),
-    };
-    region.extent = {
-        contract->destinationSlice.width,
-        contract->destinationSlice.height,
-        contract->destinationSlice.depth,
-    };
+    region.srcSubresource = VulkanDetail::BuildImageSubresourceLayers(contract->aspectMask, contract->sourceSlice.mipLevel, contract->sourceSlice.arraySlice);
+    region.srcOffset = { static_cast<i32>(contract->sourceSlice.x), static_cast<i32>(contract->sourceSlice.y), static_cast<i32>(contract->sourceSlice.z), };
+    region.dstSubresource = VulkanDetail::BuildImageSubresourceLayers(contract->aspectMask, contract->destinationSlice.mipLevel, contract->destinationSlice.arraySlice);
+    region.dstOffset = { static_cast<i32>(contract->destinationSlice.x), static_cast<i32>(contract->destinationSlice.y), static_cast<i32>(contract->destinationSlice.z), };
+    region.extent = { contract->destinationSlice.width, contract->destinationSlice.height, contract->destinationSlice.depth, };
 
     switch(contract->queueRequirement){
     case VulkanTextureDetail::TextureCopyQueueRequirement::Graphics:
@@ -246,10 +187,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
             return;
         break;
     case VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics:
-        if(!recordAndValidateAnyCommandCapability(
-            GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
-            s_OperationName
-        ))
+        if(!recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, s_OperationName))
             return;
         break;
     default:
@@ -261,18 +199,10 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     endActiveRenderPass();
     if(m_commandRecordingFailed)
         return;
-    setTextureState(
-        &src,
-        TextureSubresourceSet(contract->sourceSlice.mipLevel, 1u, contract->sourceSlice.arraySlice, 1u),
-        ResourceStates::CopySource
-    );
+    setTextureState(&src, TextureSubresourceSet(contract->sourceSlice.mipLevel, 1u, contract->sourceSlice.arraySlice, 1u), ResourceStates::CopySource);
     if(m_commandRecordingFailed)
         return;
-    setTextureState(
-        &dest,
-        TextureSubresourceSet(contract->destinationSlice.mipLevel, 1u, contract->destinationSlice.arraySlice, 1u),
-        ResourceStates::CopyDest
-    );
+    setTextureState(&dest, TextureSubresourceSet(contract->destinationSlice.mipLevel, 1u, contract->destinationSlice.arraySlice, 1u), ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
 
@@ -282,15 +212,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     retainResource(&dest);
 }
 
-bool CommandList::tryWriteTexture(
-    Texture& dest,
-    u32 arraySlice,
-    u32 mipLevel,
-    const void* data,
-    usize rowPitch,
-    usize depthPitch,
-    TextureUploadAspect::Enum aspect
-){
+bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect){
     constexpr TStringView s_OperationName = NWB_TEXT("write texture");
     if(!data){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source data is null"));
@@ -307,12 +229,7 @@ bool CommandList::tryWriteTexture(
         rejectCommandRecording(s_OperationName, NWB_TEXT("destination subresource is out of bounds"));
         return false;
     }
-    if(!validateTextureForGpuState(
-        &dest,
-        ResourceStates::CopyDest,
-        s_OperationName,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT
-    ))
+    if(!validateTextureForGpuState(&dest, ResourceStates::CopyDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
         return false;
 
     if(!VulkanTextureDetail::IsTextureImageInfoConsistent(texDesc, dest.m_imageInfo)){
@@ -370,30 +287,19 @@ bool CommandList::tryWriteTexture(
         rejectCommandRecording(s_OperationName, NWB_TEXT("upload size exceeds addressable memory"));
         return false;
     }
-    const u32 uploadAlignmentRequirement = copyAspectMask == VK_IMAGE_ASPECT_COLOR_BIT
-        ? copyFormatLayout.bytesPerBlock
-        : static_cast<u32>(sizeof(u32))
-    ;
+    const u32 uploadAlignmentRequirement = copyAspectMask == VK_IMAGE_ASPECT_COLOR_BIT ? copyFormatLayout.bytesPerBlock : static_cast<u32>(sizeof(u32));
     const auto uploadAlignment = VulkanDetail::TryComputeUploadSuballocationAlignment(uploadAlignmentRequirement);
     if(!uploadAlignment){
         rejectCommandRecording(s_OperationName, NWB_TEXT("upload buffer offset alignment overflows"));
         return false;
     }
     const bool depthStencilCopy = copyAspectMask != VK_IMAGE_ASPECT_COLOR_BIT;
-    const GpuQueueCapability::Mask requiredCapabilities = depthStencilCopy
-        ? GpuQueueCapability::Graphics
-        : GpuQueueCapability::Transfer
-    ;
+    const GpuQueueCapability::Mask requiredCapabilities = depthStencilCopy ? GpuQueueCapability::Graphics : GpuQueueCapability::Transfer;
     if(!recordAndValidateCommandCapability(requiredCapabilities, s_OperationName))
         return false;
 
     const usize uploadSize = static_cast<usize>(copyLayout->requiredSize);
-    const auto staging = prepareUploadStaging(
-        data,
-        uploadSize,
-        NWB_TEXT("writeTexture"),
-        *uploadAlignment
-    );
+    const auto staging = prepareUploadStaging(data, uploadSize, NWB_TEXT("writeTexture"), *uploadAlignment);
     if(!staging){
         rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation failed"));
         return false;
@@ -430,15 +336,7 @@ bool CommandList::tryWriteTexture(
     return true;
 }
 
-void CommandList::writeTexture(
-    Texture& dest,
-    u32 arraySlice,
-    u32 mipLevel,
-    const void* data,
-    usize rowPitch,
-    usize depthPitch,
-    TextureUploadAspect::Enum aspect
-){
+void CommandList::writeTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect){
     if(!tryWriteTexture(dest, arraySlice, mipLevel, data, rowPitch, depthPitch, aspect))
         return;
 }
@@ -459,19 +357,9 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
         return;
     }
-    if(!validateTextureForGpuState(
-        &src,
-        ResourceStates::ResolveSource,
-        s_OperationName,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-    ))
+    if(!validateTextureForGpuState(&src, ResourceStates::ResolveSource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
         return;
-    if(!validateTextureForGpuState(
-        &dest,
-        ResourceStates::ResolveDest,
-        s_OperationName,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT
-    ))
+    if(!validateTextureForGpuState(&dest, ResourceStates::ResolveDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
         return;
     if(
         !VulkanTextureDetail::IsTextureDescShapeValid(src.m_creationDesc)
@@ -483,19 +371,11 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture descriptions and native image metadata must agree"));
         return;
     }
-    if(
-        src.m_creationDesc.sampleCount <= 1u
-        || dest.m_creationDesc.sampleCount != 1u
-        || !VulkanDetail::IsSupportedSampleCount(src.m_creationDesc.sampleCount)
-    ){
+    if(src.m_creationDesc.sampleCount <= 1u || dest.m_creationDesc.sampleCount != 1u || !VulkanDetail::IsSupportedSampleCount(src.m_creationDesc.sampleCount)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source must be multisampled and destination must be single-sampled"));
         return;
     }
-    if(
-        src.m_creationDesc.format != dest.m_creationDesc.format
-        || src.m_imageInfo.format == VK_FORMAT_UNDEFINED
-        || src.m_imageInfo.format != dest.m_imageInfo.format
-    ){
+    if(src.m_creationDesc.format != dest.m_creationDesc.format || src.m_imageInfo.format == VK_FORMAT_UNDEFINED || src.m_imageInfo.format != dest.m_imageInfo.format){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native formats must match exactly"));
         return;
     }
@@ -518,60 +398,27 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture aspect or block metadata disagrees with its format"));
         return;
     }
-    if(
-        (dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u
-        || (src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u
-    ){
+    if((dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u || (src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination images require transfer usage"));
         return;
     }
 
-    const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(
-        src.m_creationDesc,
-        TextureSubresourceMipResolve::Range
-    );
-    const TextureSubresourceSet resolvedDst = dstSubresources.resolve(
-        dest.m_creationDesc,
-        TextureSubresourceMipResolve::Range
-    );
-    if(
-        !VulkanDetail::IsTextureSubresourceRangeValid(resolvedSrc)
-        || !VulkanDetail::IsTextureSubresourceRangeValid(resolvedDst)
-    ){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("source and destination subresource ranges must resolve inside their textures")
-        );
+    const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src.m_creationDesc, TextureSubresourceMipResolve::Range);
+    const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest.m_creationDesc, TextureSubresourceMipResolve::Range);
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSrc) || !VulkanDetail::IsTextureSubresourceRangeValid(resolvedDst)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination subresource ranges must resolve inside their textures"));
         return;
     }
-    if(
-        resolvedSrc.numMipLevels != resolvedDst.numMipLevels
-        || resolvedSrc.numArraySlices != resolvedDst.numArraySlices
-        || !__hidden_texture_transfer::ResolveMipExtentsMatch(
-            dest.m_creationDesc,
-            resolvedDst,
-            src.m_creationDesc,
-            resolvedSrc
-        )
-    ){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("source and destination subresource counts and mip extents must match")
-        );
+    if(resolvedSrc.numMipLevels != resolvedDst.numMipLevels || resolvedSrc.numArraySlices != resolvedDst.numArraySlices || !__hidden_texture_transfer::ResolveMipExtentsMatch(dest.m_creationDesc, resolvedDst, src.m_creationDesc, resolvedSrc)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination subresource counts and mip extents must match"));
         return;
     }
 
     VkFormatProperties formatProperties{};
     m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
-    constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
-        | VK_FORMAT_FEATURE_TRANSFER_DST_BIT
-        | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
-    ;
+    constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
     if((formatProperties.optimalTilingFeatures & s_RequiredFormatFeatures) != s_RequiredFormatFeatures){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("native format lacks optimal-tiling transfer or color-attachment support")
-        );
+        rejectCommandRecording(s_OperationName, NWB_TEXT("native format lacks optimal-tiling transfer or color-attachment support"));
         return;
     }
 
@@ -598,19 +445,10 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
     if(
         sourceFormatResult != VK_SUCCESS
         || destinationFormatResult != VK_SUCCESS
-        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(
-            src.m_imageInfo,
-            sourceFormatProperties
-        )
-        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(
-            dest.m_imageInfo,
-            destinationFormatProperties
-        )
+        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(src.m_imageInfo, sourceFormatProperties)
+        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(dest.m_imageInfo, destinationFormatProperties)
     ){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("native image formats do not support the requested shapes and sample counts")
-        );
+        rejectCommandRecording(s_OperationName, NWB_TEXT("native image formats do not support the requested shapes and sample counts"));
         return;
     }
 
@@ -623,19 +461,9 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         const VkExtent3D srcExtent = VulkanDetail::GetTextureMipExtent(src.m_creationDesc, srcMipLevel);
 
         VkImageResolve region{};
-        region.srcSubresource = VulkanDetail::BuildImageSubresourceLayers(
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            srcMipLevel,
-            resolvedSrc.baseArraySlice,
-            resolvedSrc.numArraySlices
-        );
+        region.srcSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, srcMipLevel, resolvedSrc.baseArraySlice, resolvedSrc.numArraySlices);
         region.srcOffset = { 0, 0, 0 };
-        region.dstSubresource = VulkanDetail::BuildImageSubresourceLayers(
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            dstMipLevel,
-            resolvedDst.baseArraySlice,
-            resolvedDst.numArraySlices
-        );
+        region.dstSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, dstMipLevel, resolvedDst.baseArraySlice, resolvedDst.numArraySlices);
         region.dstOffset = { 0, 0, 0 };
         region.extent = srcExtent;
         regions[mipOffset] = region;
@@ -651,15 +479,7 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
     if(m_commandRecordingFailed)
         return;
 
-    m_context.deviceDispatch.vkCmdResolveImage(
-        m_currentCmdBuf->m_cmdBuf,
-        src.m_image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dest.m_image,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        static_cast<u32>(regions.size()),
-        regions.data()
-    );
+    m_context.deviceDispatch.vkCmdResolveImage(m_currentCmdBuf->m_cmdBuf, src.m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
 
     retainResource(&src);
     retainResource(&dest);

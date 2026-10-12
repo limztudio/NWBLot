@@ -74,58 +74,33 @@ TEST(Telemetry, PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCounts)
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
     Telemetry::FrameGraphBuilder builder(nodes, edges, pendingNameEdges, records, 915u);
 
-    const Telemetry::FrameGraphNodeHandle owner = builder.addPass(
-        Name("runtime_owner"),
-        "Runtime owner",
-        Telemetry::FrameGraphPassMetadata{
-            .queueAssignment = {},
-            .compiledTask = {},
-            .runtimeStatistics = MakeFrameGraphRuntimeStatistics(),
-        }
-    );
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics =
-        MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
-    ;
+    const Telemetry::FrameGraphNodeHandle owner = builder.addPass(Name("runtime_owner"), "Runtime owner", Telemetry::FrameGraphPassMetadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = MakeFrameGraphRuntimeStatistics(), });
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, statistics));
     statistics.compile.taskCount = 0u;
 
     ASSERT_EQ(records.size(), 1u);
     EXPECT_EQ(records[0u].statistics.compile.taskCount, 50u);
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics outOfBounds =
-        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
-    ;
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics outOfBounds = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u);
     outOfBounds.compile.taskCount = 79u;
     outOfBounds.compile.packetCount = 78u;
     outOfBounds.compile.mergedTaskCount = 1u;
     EXPECT_FALSE(builder.addPhysicalQueueRuntimeStatistics(owner, outOfBounds));
     EXPECT_EQ(records.size(), 1u);
 
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics derivedOutOfBounds =
-        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
-    ;
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics derivedOutOfBounds = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u);
     derivedOutOfBounds.compile.taskCount = 29u;
     derivedOutOfBounds.compile.mergedTaskCount = s_ExpectedDualCount;
     derivedOutOfBounds.recording.taskCount = 13u;
     EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(derivedOutOfBounds));
-    EXPECT_FALSE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
-        derivedOutOfBounds,
-        MakeFrameGraphRuntimeStatistics()
-    ));
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(derivedOutOfBounds, MakeFrameGraphRuntimeStatistics()));
     EXPECT_FALSE(builder.addPhysicalQueueRuntimeStatistics(owner, derivedOutOfBounds));
     EXPECT_EQ(records.size(), 1u);
 
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics reorderedSubmissionDuration =
-        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
-    ;
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics reorderedSubmissionDuration = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u);
     reorderedSubmissionDuration.submission.submissionSeconds = 0.021000000000000004;
-    EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
-        reorderedSubmissionDuration,
-        MakeFrameGraphRuntimeStatistics()
-    ));
-    EXPECT_FALSE(builder.addPhysicalQueueRuntimeStatistics(
-        owner,
-        MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
-    ));
+    EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(reorderedSubmissionDuration, MakeFrameGraphRuntimeStatistics()));
+    EXPECT_FALSE(builder.addPhysicalQueueRuntimeStatistics(owner, MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)));
 }
 
 

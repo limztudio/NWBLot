@@ -21,15 +21,12 @@ NWB_IMPL_UI_BEGIN
 // Shape event-current text during a synchronous host loan; the resolver keeps no model or layout between keys.
 class TextAreaNavigationResolver final : public IEditNavigationResolver{
 public:
-    TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context,
-        const TextAreaState& state, f32 fontSize,
-        u32 scriptTag = TextScriptTag('L', 'a', 't', 'n'), StringView language = "en");
+    TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context, const TextAreaState& state, f32 fontSize, u32 scriptTag = TextScriptTag('L', 'a', 't', 'n'), StringView language = "en");
     virtual ~TextAreaNavigationResolver()noexcept override = default;
 
 
 public:
-    [[nodiscard]] virtual EditNavigationResult resolve(const EditModel& model, EditNavigationDirection::Enum direction,
-        const EditNavigationSnapshot& preferred, f32 viewportHeight)override;
+    [[nodiscard]] virtual EditNavigationResult resolve(const EditModel& model, EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, f32 viewportHeight)override;
 
 
 private:

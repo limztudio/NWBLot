@@ -96,8 +96,7 @@ TEST_F(UiSliderLifetimeTests, ChangedRangeDropsTheOldDragAndRetainsAnAuthoritati
     EXPECT_FALSE(m_state.result().dragging);
     EXPECT_FALSE(m_context.input().capture().valid());
     const SliderPlacement& placement = m_state.placement();
-    EXPECT_FLOAT_EQ(placement.thumb.x + placement.thumb.width * 0.5f,
-        placement.centerTravel.x + placement.centerTravel.width);
+    EXPECT_FLOAT_EQ(placement.thumb.x + placement.thumb.width * 0.5f, placement.centerTravel.x + placement.centerTravel.width);
 }
 
 TEST_F(UiSliderLifetimeTests, ChangedFinalTrackGeometryFencesTheCopiedDragBeforeApplication){

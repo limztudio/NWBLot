@@ -71,10 +71,7 @@ NWB_IMPL_BEGIN
 struct MeshSkinningRuntimeInstance;
 struct RuntimeSkinPayloadScratch;
 
-static_assert(
-    SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
-    , "Skeleton skinning mode values must match the shader ABI"
-);
+static_assert(SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION, "Skeleton skinning mode values must match the shader ABI");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,10 +181,7 @@ private:
                 && storageHandle(bindlessHeapHandles.meshletLocalBounds)
                 && storageHandle(bindlessHeapHandles.localBounds)
             ;
-            return common
-                && (!hasActiveSkin || (storageHandle(bindlessHeapHandles.skinInfluences) && storageHandle(bindlessHeapHandles.jointPalette)))
-                && (!hasAttributeBuffer || storageHandle(bindlessHeapHandles.attributeBuffer))
-            ;
+            return common && (!hasActiveSkin || (storageHandle(bindlessHeapHandles.skinInfluences) && storageHandle(bindlessHeapHandles.jointPalette))) && (!hasAttributeBuffer || storageHandle(bindlessHeapHandles.attributeBuffer));
         }
     };
 
@@ -208,9 +202,7 @@ private:
 
 
 public:
-    using ShaderPathResolveCallback = Function<
-        Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName)
-    >;
+    using ShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
 
 
 private:
@@ -218,14 +210,7 @@ private:
 
 
 public:
-    MeshSkinningSystem(
-        Core::Alloc::GlobalArena& arena,
-        Core::ECS::World& world,
-        Core::GraphicsRuntime& graphics,
-        Core::Assets::AssetManager& assetManager,
-        IRuntimeMeshRegistry& runtimeMeshRegistry,
-        ShaderPathResolveCallback shaderPathResolver
-    );
+    MeshSkinningSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, IRuntimeMeshRegistry& runtimeMeshRegistry, ShaderPathResolveCallback shaderPathResolver);
     virtual ~MeshSkinningSystem()noexcept override;
 
 
@@ -252,36 +237,13 @@ private:
     [[nodiscard]] bool repackPipelineReady()const noexcept;
     // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     [[nodiscard]] bool submitFrameSkinningGraph();
-    [[nodiscard]] bool prepareRuntimeMeshResources(
-        MeshSkinningRuntimeInstance& instance,
-        const SkeletonJointPaletteComponent* jointPalette,
-        const SkeletonPoseComponent* skeletonPose,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-    [[nodiscard]] bool recordGraphOwnedSkinningDeformation(
-        const MeshSkinningGraphDispatchPlan& plan,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
-    [[nodiscard]] bool recordGraphOwnedSkinningPostDispatch(
-        const MeshSkinningGraphDispatchPlan& plan,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] bool prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] bool recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     void confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept;
-    void collectLiveSkinningStateBuffers(
-        Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers,
-        Core::Alloc::ScratchArena& scratchArena
-    )const;
-    [[nodiscard]] bool replaceAcceptedSkinningState(
-        const Core::CommandListResourceStateHandoff& state,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-    [[nodiscard]] Expected<RuntimeResourcePreparation> ensureRuntimeResources(
-        MeshSkinningRuntimeInstance& instance,
-        const RuntimeSkinPayloadScratch& payload,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    void collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] bool replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<RuntimeResourcePreparation> ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
@@ -302,8 +264,7 @@ private:
     // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> m_frameDispatchPlans;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_frameLiveBuffers;
-    // Frame graph compiler artifacts. Declared once with the system and reset per submission
-    // so render() only redeclares into reused storage instead of constructing graph objects.
+    // Frame graph compiler artifacts. Declared once with the system and reset per submission so render() only redeclares into reused storage instead of constructing graph objects.
     Core::GpuTaskGraph m_frameTaskGraph;
     Core::GpuTaskGraphAnalysis m_frameTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_frameTaskGraphQueueAssignments;

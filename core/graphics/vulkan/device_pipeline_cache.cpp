@@ -46,13 +46,7 @@ static constexpr usize s_PipelineCacheUuidOffset = 16u;
     ;
 }
 
-static Expected<UniquePtr<Filesystem::IFilesystem>> MountPipelineCacheVolume(
-    const Path& directory,
-    const AStringView volumeName,
-    const bool createIfMissing,
-    Filesystem::VolumeUsage::Enum usage,
-    const Filesystem::FilesystemFactory& factory
-){
+static Expected<UniquePtr<Filesystem::IFilesystem>> MountPipelineCacheVolume(const Path& directory, const AStringView volumeName, const bool createIfMissing, Filesystem::VolumeUsage::Enum usage, const Filesystem::FilesystemFactory& factory){
     Filesystem::VolumeMountDesc mountDesc(directory.arena());
     if(!mountDesc.volumeName.assign(volumeName))
         return MakeUnexpected(Failure{});
@@ -70,12 +64,7 @@ static Expected<UniquePtr<Filesystem::IFilesystem>> MountPipelineCacheVolume(
     return volume;
 }
 
-static Expected<Vector<u8, Alloc::ScratchArena>> RetrievePipelineCacheData(
-    const VolkDeviceTable& deviceDispatch,
-    VkDevice device,
-    VkPipelineCache pipelineCache,
-    Alloc::ScratchArena& scratchArena
-){
+static Expected<Vector<u8, Alloc::ScratchArena>> RetrievePipelineCacheData(const VolkDeviceTable& deviceDispatch, VkDevice device, VkPipelineCache pipelineCache, Alloc::ScratchArena& scratchArena){
     Vector<u8, Alloc::ScratchArena> data(scratchArena);
 
     for(usize attempt = 0u; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
@@ -88,10 +77,7 @@ static Expected<Vector<u8, Alloc::ScratchArena>> RetrievePipelineCacheData(
         if(cacheSize == 0)
             return data;
         if(cacheSize > static_cast<size_t>(Limit<usize>::s_Max)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}.")
-                , static_cast<u64>(cacheSize)
-                , static_cast<u64>(Limit<usize>::s_Max)
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}."), static_cast<u64>(cacheSize), static_cast<u64>(Limit<usize>::s_Max));
             return MakeUnexpected(Failure{});
         }
 
@@ -134,10 +120,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-PipelineCacheDataValidation::Enum ValidatePipelineCacheData(
-    const BinaryByteView cacheData,
-    const VkPhysicalDeviceProperties& properties
-)noexcept{
+PipelineCacheDataValidation::Enum ValidatePipelineCacheData(const BinaryByteView cacheData, const VkPhysicalDeviceProperties& properties)noexcept{
     if(cacheData.data() == nullptr || cacheData.size() < s_PipelineCacheHeaderVersionOneSize)
         return PipelineCacheDataValidation::Malformed;
 
@@ -176,18 +159,9 @@ Expected<GraphicsBytes> Device::loadPipelineCacheData(){
     if(!m_filesystemFactory && !::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
         return MakeUnexpected(Failure{});
 
-    auto volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(
-            m_pipelineCacheDirectory,
-            m_pipelineCacheVolumeName,
-            false,
-            Filesystem::VolumeUsage::RuntimeReadOnly,
-            m_filesystemFactory
-        );
+    auto volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(m_pipelineCacheDirectory, m_pipelineCacheVolumeName, false, Filesystem::VolumeUsage::RuntimeReadOnly, m_filesystemFactory);
     if(!volume){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'.")
-            , StringConvert(m_pipelineCacheVolumeName)
-            , PathToString<tchar>(m_pipelineCacheDirectory)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'."), StringConvert(m_pipelineCacheVolumeName), PathToString<tchar>(m_pipelineCacheDirectory));
         return MakeUnexpected(Failure{});
     }
 
@@ -198,19 +172,12 @@ Expected<GraphicsBytes> Device::loadPipelineCacheData(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read pipeline cache data from runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return MakeUnexpected(Failure{});
     }
-    const VulkanDetail::PipelineCacheDataValidation::Enum validation = VulkanDetail::ValidatePipelineCacheData(
-        BinaryByteView{ data.data(), data.size() },
-        m_context.physicalDeviceProperties
-    );
+    const VulkanDetail::PipelineCacheDataValidation::Enum validation = VulkanDetail::ValidatePipelineCacheData(BinaryByteView{ data.data(), data.size() }, m_context.physicalDeviceProperties);
     if(validation != VulkanDetail::PipelineCacheDataValidation::Usable){
         if(validation == VulkanDetail::PipelineCacheDataValidation::Malformed)
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring malformed pipeline cache data in runtime volume '{}'.")
-                , StringConvert(m_pipelineCacheVolumeName)
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring malformed pipeline cache data in runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         else
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Discarding incompatible pipeline cache data in runtime volume '{}'; starting empty.")
-                , StringConvert(m_pipelineCacheVolumeName)
-            );
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Discarding incompatible pipeline cache data in runtime volume '{}'; starting empty."), StringConvert(m_pipelineCacheVolumeName));
         return MakeUnexpected(Failure{});
     }
 
@@ -219,10 +186,7 @@ Expected<GraphicsBytes> Device::loadPipelineCacheData(){
         return MakeUnexpected(Failure{});
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Loaded pipeline cache runtime volume '{}' ({} bytes).")
-        , StringConvert(m_pipelineCacheVolumeName)
-        , data.size()
-    );
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Loaded pipeline cache runtime volume '{}' ({} bytes)."), StringConvert(m_pipelineCacheVolumeName), data.size());
     return data;
 }
 
@@ -237,10 +201,7 @@ void Device::savePipelineCacheData(){
     if(cacheData->empty())
         return;
 
-    const VulkanDetail::PipelineCacheDataValidation::Enum validation = VulkanDetail::ValidatePipelineCacheData(
-        BinaryByteView{ cacheData->data(), cacheData->size() },
-        m_context.physicalDeviceProperties
-    );
+    const VulkanDetail::PipelineCacheDataValidation::Enum validation = VulkanDetail::ValidatePipelineCacheData(BinaryByteView{ cacheData->data(), cacheData->size() }, m_context.physicalDeviceProperties);
     if(validation != VulkanDetail::PipelineCacheDataValidation::Usable){
         if(validation == VulkanDetail::PipelineCacheDataValidation::Malformed)
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned malformed pipeline cache data; skipping cache write."));
@@ -249,31 +210,16 @@ void Device::savePipelineCacheData(){
         return;
     }
 
-    auto volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(
-            m_pipelineCacheDirectory,
-            m_pipelineCacheVolumeName,
-            true,
-            Filesystem::VolumeUsage::RuntimeReadWrite,
-            m_filesystemFactory
-        );
+    auto volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(m_pipelineCacheDirectory, m_pipelineCacheVolumeName, true, Filesystem::VolumeUsage::RuntimeReadWrite, m_filesystemFactory);
     if(!volume){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'.")
-            , StringConvert(m_pipelineCacheVolumeName)
-            , PathToString<tchar>(m_pipelineCacheDirectory)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'."), StringConvert(m_pipelineCacheVolumeName), PathToString<tchar>(m_pipelineCacheDirectory));
         if(m_filesystemFactory)
             return;
         if(!Filesystem::RemoveVolumeSegments(m_pipelineCacheDirectory, m_pipelineCacheVolumeName)){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
         }
-        volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(
-                m_pipelineCacheDirectory,
-                m_pipelineCacheVolumeName,
-                true,
-                Filesystem::VolumeUsage::RuntimeReadWrite,
-                m_filesystemFactory
-            );
+        volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(m_pipelineCacheDirectory, m_pipelineCacheVolumeName, true, Filesystem::VolumeUsage::RuntimeReadWrite, m_filesystemFactory);
         if(!volume){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
@@ -294,10 +240,7 @@ void Device::savePipelineCacheData(){
         return;
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Saved pipeline cache runtime volume '{}' ({} bytes).")
-        , StringConvert(m_pipelineCacheVolumeName)
-        , cacheData->size()
-    );
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Saved pipeline cache runtime volume '{}' ({} bytes)."), StringConvert(m_pipelineCacheVolumeName), cacheData->size());
 }
 
 

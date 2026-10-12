@@ -34,30 +34,20 @@ struct WaylandTextInputProvenance{
 class WaylandTextInputSurroundingState;
 
 // v3 deletion excludes the selected range and may address only the exact surrounding slice sent to the compositor.
-[[nodiscard]] bool CanApplyWaylandTextInputDeletion(
-    const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire,
-    usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes
-)noexcept;
+[[nodiscard]] bool CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
 
 // v3 messages accept at most 4000 UTF-8 bytes and must contain the entire selection.
-[[nodiscard]] WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(
-    AStringView text, usize anchorByte, usize caretByte
-)noexcept;
+[[nodiscard]] WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(AStringView text, usize anchorByte, usize caretByte)noexcept;
 
 // Record only a surrounding snapshot that fits and was sent to the compositor.
 class WaylandTextInputSurroundingState final{
-    friend bool CanApplyWaylandTextInputDeletion(
-        const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire,
-        usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes
-    )noexcept;
+    friend bool CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
 
 
 public:
     void reset()noexcept;
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
-    [[nodiscard]] WaylandTextInputSurrounding update(
-        AStringView text, usize anchorByte, usize caretByte, u64 revision
-    )noexcept;
+    [[nodiscard]] WaylandTextInputSurrounding update(AStringView text, usize anchorByte, usize caretByte, u64 revision)noexcept;
 
 
 private:

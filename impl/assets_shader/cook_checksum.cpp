@@ -71,9 +71,7 @@ static Path NormalizeDependencyRootAliasPath(Path path){
     return path;
 }
 
-[[nodiscard]] static AStringView ShaderOptimizationLevelText(
-    const ShaderOptimizationLevel::Enum optimizationLevel
-)noexcept{
+[[nodiscard]] static AStringView ShaderOptimizationLevelText(const ShaderOptimizationLevel::Enum optimizationLevel)noexcept{
     switch(optimizationLevel){
     case ShaderOptimizationLevel::None: return __hidden_shader_cook_checksum::s_NoneOptName;
     case ShaderOptimizationLevel::Default: return __hidden_shader_cook_checksum::s_DefaultOptName;
@@ -93,11 +91,7 @@ static Path NormalizeDependencyRootAliasPath(Path path){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
-    const CookVector<Path>& dependencies,
-    const InitializerList<DependencyRootAlias> dependencyRootAliases,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies, const InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena){
     static constexpr u8 s_NewlineByte = '\n';
     static constexpr u8 s_ZeroByte = 0;
 
@@ -120,10 +114,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
         __hidden_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena};
         const auto rootPath = AbsolutePath(rootAlias.root);
         if(!rootPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}")
-                , PathToString<tchar>(rootAlias.root)
-                , StringConvert(rootPath.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), StringConvert(rootPath.error().message()));
             return MakeUnexpected(Failure{});
         }
 
@@ -144,10 +135,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
         SortedDependencyItem item(m_memoryArena);
         auto normalizedDependencyResult = AbsolutePath(dependency);
         if(!normalizedDependencyResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}")
-                , PathToString<tchar>(dependency)
-                , StringConvert(normalizedDependencyResult.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), StringConvert(normalizedDependencyResult.error().message()));
             return MakeUnexpected(Failure{});
         }
         Path normalizedDependency = normalizedDependencyResult->lexicallyNormal();
@@ -160,9 +148,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
                 bestRootAlias = &rootAlias;
         }
         if(!bestRootAlias){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases")
-                , PathToString<tchar>(dependency)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
             return MakeUnexpected(Failure{});
         }
 
@@ -189,29 +175,17 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
         auto readBinaryFileResult = ReadBinaryFile(item.path, dependencyBytes);
         if(!readBinaryFileResult){
             if(readBinaryFileResult.error()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}")
-                    , PathToString<tchar>(item.path)
-                    , StringConvert(readBinaryFileResult.error().message())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(item.path), StringConvert(readBinaryFileResult.error().message()));
             }
             else{
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(item.path));
             }
             return MakeUnexpected(Failure{});
         }
-        if(
-            dependencyBytes.size() >= TextDetail::s_Utf8BomByteCount
-            && dependencyBytes[0u] == TextDetail::s_Utf8BomByte0
-            && dependencyBytes[1u] == TextDetail::s_Utf8BomByte1
-            && dependencyBytes[2u] == TextDetail::s_Utf8BomByte2
-        )
+        if(dependencyBytes.size() >= TextDetail::s_Utf8BomByteCount && dependencyBytes[0u] == TextDetail::s_Utf8BomByte0 && dependencyBytes[1u] == TextDetail::s_Utf8BomByte1 && dependencyBytes[2u] == TextDetail::s_Utf8BomByte2)
             result.compilerInputsHaveBom = true;
         if(!dependencyBytes.empty()){
-            result.checksum = UpdateFnv64(
-                result.checksum,
-                dependencyBytes.data(),
-                dependencyBytes.size()
-            );
+            result.checksum = UpdateFnv64(result.checksum, dependencyBytes.data(), dependencyBytes.size());
         }
 
         result.checksum = UpdateFnv64(result.checksum, &s_ZeroByte, 1);
@@ -220,13 +194,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
     return result;
 }
 
-u64 ShaderCook::computeSourceChecksum(
-    const ShaderEntry& entry,
-    const AStringView variantSignature,
-    const u64 dependencyChecksum,
-    const u64 compilerFingerprint,
-    Core::Alloc::ScratchArena& scratchArena
-){
+u64 ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, const u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena){
     static constexpr AStringView s_ChecksumVersionTag = "shader-source-v4";
     const u8 newlineByte = '\n';
 
@@ -241,10 +209,7 @@ u64 ShaderCook::computeSourceChecksum(
     appendChecksumLine(AStringView(entry.name));
     appendChecksumLine(entry.stage.view());
     appendChecksumLine(entry.archiveStage.view());
-    appendChecksumLine(entry.rayQuery
-        ? SlangShaderCompiler::s_Spirv15RayQueryTargetProfileText
-        : SlangShaderCompiler::s_Spirv15TargetProfileText
-    );
+    appendChecksumLine(entry.rayQuery ? SlangShaderCompiler::s_Spirv15RayQueryTargetProfileText : SlangShaderCompiler::s_Spirv15TargetProfileText);
     appendChecksumLine(__hidden_cook_checksum::ShaderOptimizationLevelText(entry.optimizationLevel));
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);

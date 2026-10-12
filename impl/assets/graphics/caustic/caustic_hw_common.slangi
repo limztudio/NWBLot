@@ -22,14 +22,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::push_constant]]
-ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticHwPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticHwPushConstants;
 
 // The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap. The per-hit surface dispatch reads the same shadow-owned material buffers as the SW path through the heap selector below.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticHwMaterialContextSlots[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticHwMaterialContextSlots[];
 #pragma warning(pop)
 #define g_NwbCausticHwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbCausticHwPushConstants.deferredResourcesHeapSlot]
 #define g_NwbCausticHwMaterialContextSlots g_NwbHeapCausticHwMaterialContextSlots[g_NwbCausticHwPushConstants.materialContextSlotsHeapSlot]
@@ -75,10 +73,8 @@ struct NwbCausticHwPayload{
 // The caustic-specific producer inputs share the global heap's StorageBuffer / UniformBuffer tables with the trace material context and mesh-frame view. Their slots are uniform for one ray dispatch and ride the photon push block, so no NonUniformResourceIndex decoration is needed here.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the global heap descriptor tables.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwEmissionTargets[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticHwViews[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwEmissionTargets[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticHwViews[];
 #pragma warning(pop)
 
 

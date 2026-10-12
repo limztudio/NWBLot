@@ -60,21 +60,11 @@ using CsgShapeCookEntryVector = CookVector<CsgShapeCookEntry>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(
-    CookArena& cookArena,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(CookArena& cookArena, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
 
 [[nodiscard]] bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries);
 
-[[nodiscard]] Expected<Path> EmitCsgShapeModuleIncludes(
-    const Path& cacheDirectory,
-    AStringView configurationSafeName,
-    const CsgShapeCookEntryVector& csgShapeEntries,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<Path> EmitCsgShapeModuleIncludes(const Path& cacheDirectory, AStringView configurationSafeName, const CsgShapeCookEntryVector& csgShapeEntries, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

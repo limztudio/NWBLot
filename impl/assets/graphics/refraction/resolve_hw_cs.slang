@@ -16,8 +16,7 @@
 
 #pragma warning(push)
 #pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapRefractionMaterialContexts[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapRefractionMaterialContexts[];
 #pragma warning(pop)
 #define g_NwbRefractionMaterialContext g_NwbHeapRefractionMaterialContexts[g_NwbRefractionPush.materialContextSlotsHeapSlot]
 
@@ -78,10 +77,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
     const float entryDistance = length(entry.position - camera);
     const float associationTolerance = max(entry.bias * 8.0, entryDistance * 0.0002);
-    const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(
-        g_NwbRefractionMaterialContext.sceneSlots.z, camera, entry.incident,
-        max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance
-    );
+    const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(g_NwbRefractionMaterialContext.sceneSlots.z, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
 #if NWB_RT_CSG_ENABLED
     if(entryHit.failure != 0u)
         return float4(0.0, 0.0, 0.0, 1.0);
@@ -103,10 +99,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     float pathLength = 0.0;
     // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel reflectance is one, so only the accumulated Beer-Lambert distance changes until the ray finally transmits.
     for(uint internalBounce = 0u; internalBounce <= 2u; ++internalBounce){
-        exitHit = nwbRefractionClosestExitInterface(
-            g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias,
-            internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance
-        );
+        exitHit = nwbRefractionClosestExitInterface(g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance);
 #if NWB_RT_CSG_ENABLED
         if(exitHit.failure != 0u)
             return float4(0.0, 0.0, 0.0, 1.0);
@@ -134,7 +127,8 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     half3 accumulated = half3(0.0h);
     // Layer transmittance and backdrop coverage are (0, 1) bounded factors, so half arithmetic is sufficient here.
     half transmittance = half(1.0h);
-    // Normally one background query. Up to two flat transparent hits may be evaluated before a final opaque query.
+    // Normally one background query.
+    // Up to two flat transparent hits may be evaluated before a final opaque query.
     // Further glass or an incomplete continuation uses the exit-based approximation below without tracing a new volume.
     for(uint layer = 0u; layer < 3u; ++layer){
         const NwbRayTraceSurfaceHit background = nwbRayTraceClosestSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);

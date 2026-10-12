@@ -150,11 +150,7 @@ bool IsUiLayerTextAreaSmokeEnabled(){ return ReadSmokeEnvironmentFlag("NWB_UI_LA
 bool IsUiLayerTextAreaSkinSmokeEnabled(){ return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA_SKIN"); }
 
 SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard){
-    return SharedUiTextAreaSmokeScene(
-        NewArenaObject<RefCounter<UiTextAreaSmokeScene>>(arena, arena, clipboard),
-        ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiTextAreaSmokeScene(NewArenaObject<RefCounter<UiTextAreaSmokeScene>>(arena, arena, clipboard), ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

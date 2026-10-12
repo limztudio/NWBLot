@@ -33,10 +33,7 @@ template<typename CharT, typename ArenaT>
     return TrimView<CharT>(BasicStringView<CharT>{text});
 }
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
-[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text)noexcept(
-    noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()})
-    && IsArithmetic_V<typename StringT::value_type>
-){
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return TrimView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
 }
@@ -55,10 +52,7 @@ template<typename CharT, typename ArenaT>
     return TrimLeftView<CharT>(BasicStringView<CharT>{text});
 }
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
-[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(const StringT& text)noexcept(
-    noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()})
-    && IsArithmetic_V<typename StringT::value_type>
-){
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return TrimLeftView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
 }
@@ -87,10 +81,7 @@ template<typename CharT>
 [[nodiscard]] inline constexpr bool IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file)noexcept(IsArithmetic_V<CharT>){
     if(root == file)
         return true;
-    return
-        !root.empty() && file.size() > root.size() && StartsWith(file, root)
-        && (root.back() == static_cast<CharT>('/') || file[root.size()] == static_cast<CharT>('/'))
-    ;
+    return !root.empty() && file.size() > root.size() && StartsWith(file, root) && (root.back() == static_cast<CharT>('/') || file[root.size()] == static_cast<CharT>('/'));
 }
 
 
@@ -129,11 +120,7 @@ template<typename StringT>
 
 
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> JoinUrlWithEndpoint(
-    ArenaT& arena,
-    const BasicStringView<CharT> baseUrl,
-    const BasicStringView<CharT> endpoint
-){
+[[nodiscard]] inline BasicString<CharT, ArenaT> JoinUrlWithEndpoint(ArenaT& arena, const BasicStringView<CharT> baseUrl, const BasicStringView<CharT> endpoint){
     BasicString<CharT, ArenaT> output(BasicStringView<CharT>(baseUrl.data(), baseUrl.size()), arena);
     if(output.empty() || endpoint.empty())
         return output;
@@ -240,11 +227,7 @@ inline void StripUtf8Bom(StringT& inOutText){
     const u8 byte0 = static_cast<u8>(inOutText[0]);
     const u8 byte1 = static_cast<u8>(inOutText[1]);
     const u8 byte2 = static_cast<u8>(inOutText[2]);
-    const bool hasUtf8Bom =
-        byte0 == TextDetail::s_Utf8BomByte0
-        && byte1 == TextDetail::s_Utf8BomByte1
-        && byte2 == TextDetail::s_Utf8BomByte2
-    ;
+    const bool hasUtf8Bom = byte0 == TextDetail::s_Utf8BomByte0 && byte1 == TextDetail::s_Utf8BomByte1 && byte2 == TextDetail::s_Utf8BomByte2;
     if(hasUtf8Bom)
         inOutText.erase(0, TextDetail::s_Utf8BomByteCount);
 }
@@ -278,8 +261,7 @@ struct DecodedUtf8CodePoint{
         if(!IsUtf8Continuation(c1))
             return MakeUnexpected(Failure{});
 
-        unicode = (static_cast<u32>(c0 & BasicStringDetail::s_Utf8TwoBytePayloadMask) << BasicStringDetail::s_Utf8ContinuationPayloadBits)
-            | static_cast<u32>(c1 & BasicStringDetail::s_Utf8ContinuationPayloadMask);
+        unicode = (static_cast<u32>(c0 & BasicStringDetail::s_Utf8TwoBytePayloadMask) << BasicStringDetail::s_Utf8ContinuationPayloadBits) | static_cast<u32>(c1 & BasicStringDetail::s_Utf8ContinuationPayloadMask);
         if(unicode < BasicStringDetail::s_Utf8TwoByteMinCodePoint)
             return MakeUnexpected(Failure{});
         return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8TwoByteLength };

@@ -165,13 +165,7 @@ public:
 
 
 public:
-    RendererMeshSystem(
-        Core::Alloc::GlobalArena& arena,
-        Core::ECS::World& world,
-        Core::GraphicsRuntime& graphics,
-        Core::Assets::AssetManager& assetManager,
-        RendererMeshState& meshState
-    );
+    RendererMeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererMeshState& meshState);
 
 
 public:
@@ -185,27 +179,13 @@ public:
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
     [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
-    [[nodiscard]] bool confirmObjectGeometryCache(
-        const Name& meshKey,
-        const RuntimeMeshBuffers& sourceBuffers,
-        const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected,
-        bool runtimeMesh
-    );
+    [[nodiscard]] bool confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, bool runtimeMesh);
     void pruneRuntimeMeshResources();
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(
-        const Name& meshName
-    )const;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(
-        const RenderableMeshDesc& mesh
-    )const;
-    [[nodiscard]] bool commitRayTracingResourceSnapshot(
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
-        ECSRenderDetail::MeshRayTracingResourceSnapshot& desired
-    );
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected
-    );
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(const Name& meshName)const;
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& mesh)const;
+    [[nodiscard]] bool commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired);
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected);
     void discardRayTracingBuildState()noexcept;
     [[nodiscard]] Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> collectSoftwareBvhParentBuildStates(Core::Alloc::ScratchArena& arena)const;
     void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
@@ -214,9 +194,7 @@ public:
     [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
     [[nodiscard]] Expected<Float44> snapshotAcceptedMeshViewWorldToClip()const noexcept;
     // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
-    [[nodiscard]] ECSRenderDetail::MeshViewBufferUpload prepareMeshViewBufferUpload(
-        f32 fallbackAspectRatio
-    )const;
+    [[nodiscard]] ECSRenderDetail::MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const;
     void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
     void invalidateMeshViewBufferUploadMirror()noexcept;
     [[nodiscard]] bool prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);

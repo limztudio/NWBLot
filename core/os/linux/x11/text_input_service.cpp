@@ -27,11 +27,7 @@ namespace __hidden_x11_text_input{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<XIMStyle, 3u> s_PreferredStyles{
-    XIMPreeditCallbacks | XIMStatusNothing,
-    XIMPreeditNothing | XIMStatusNothing,
-    XIMPreeditNone | XIMStatusNone,
-};
+static constexpr Array<XIMStyle, 3u> s_PreferredStyles{ XIMPreeditCallbacks | XIMStatusNothing, XIMPreeditNothing | XIMStatusNothing, XIMPreeditNone | XIMStatusNone, };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,10 +149,7 @@ TextInputCapabilities X11TextInputService::capabilities()const noexcept{
     return { available, available && (m_style & XIMPreeditCallbacks) != 0u, false, false, TextInputBackend::X11Xim };
 }
 
-TextInputAdmission::Enum X11TextInputService::startNativeSession(
-    const TextInputSessionToken token,
-    const TextInputSessionDesc& desc
-){
+TextInputAdmission::Enum X11TextInputService::startNativeSession(const TextInputSessionToken token, const TextInputSessionDesc& desc){
     if(m_shuttingDown)
         return TextInputAdmission::Unavailable;
     if(m_reopenPending){
@@ -210,10 +203,7 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
             releaseContext();
     });
 
-    XPoint spot{
-        static_cast<short>(Clamp<i32>(caret.x, -32768, 32767)),
-        static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, -32768, 32767)),
-    };
+    XPoint spot{ static_cast<short>(Clamp<i32>(caret.x, -32768, 32767)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, -32768, 32767)), };
     XVaNestedList attributes = XVaCreateNestedList(0, XNSpotLocation, &spot, nullptr);
     if(!attributes)
         return TextInputAdmission::NativeFailure;
@@ -261,16 +251,10 @@ bool X11TextInputService::createContext(){
         XICCallback done{ reinterpret_cast<XPointer>(this), &OnPreeditDone };
         XICCallback draw{ reinterpret_cast<XPointer>(this), &OnPreeditDraw };
         XICCallback caret{ reinterpret_cast<XPointer>(this), &OnPreeditCaret };
-        XVaNestedList attributes = XVaCreateNestedList(
-            0, XNPreeditStartCallback, &start, XNPreeditDoneCallback, &done,
-            XNPreeditDrawCallback, &draw, XNPreeditCaretCallback, &caret, nullptr
-        );
+        XVaNestedList attributes = XVaCreateNestedList(0, XNPreeditStartCallback, &start, XNPreeditDoneCallback, &done, XNPreeditDrawCallback, &draw, XNPreeditCaretCallback, &caret, nullptr);
         if(!attributes)
             return false;
-        m_context = XCreateIC(
-            m_method, XNInputStyle, m_style, XNClientWindow, m_window,
-            XNFocusWindow, m_window, XNPreeditAttributes, attributes, nullptr
-        );
+        m_context = XCreateIC(m_method, XNInputStyle, m_style, XNClientWindow, m_window, XNFocusWindow, m_window, XNPreeditAttributes, attributes, nullptr);
         XFree(attributes);
     }
     if(!m_context)
@@ -320,11 +304,7 @@ void X11TextInputService::releaseContext()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<ITextInputService> CreateX11TextInputService(
-    Alloc::GlobalArena& arena,
-    Display& display,
-    const u64 window
-){
+GlobalUniquePtr<ITextInputService> CreateX11TextInputService(Alloc::GlobalArena& arena, Display& display, const u64 window){
     auto service = MakeGlobalUnique<X11TextInputService>(arena, arena, display, static_cast<Window>(window));
     if(!service->initialize())
         return nullptr;

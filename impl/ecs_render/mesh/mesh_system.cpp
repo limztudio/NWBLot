@@ -16,13 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMeshSystem::RendererMeshSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    RendererMeshState& meshState
-)
+RendererMeshSystem::RendererMeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererMeshState& meshState)
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)

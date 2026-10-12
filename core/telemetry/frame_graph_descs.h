@@ -74,12 +74,8 @@ struct FrameGraphPayload{
 
 using FrameGraphNodeDescs = Vector<FrameGraphNodeDesc, TelemetryArena>;
 using FrameGraphEdgeDescs = Vector<FrameGraphEdgeDesc, TelemetryArena>;
-using FrameGraphPhysicalQueueRuntimeStatisticsRecords =
-    Vector<FrameGraphPhysicalQueueRuntimeStatisticsRecord, TelemetryArena>
-;
-using FrameGraphPacketSubmissionStatisticsRecords =
-    Vector<FrameGraphPacketSubmissionStatisticsRecord, TelemetryArena>
-;
+using FrameGraphPhysicalQueueRuntimeStatisticsRecords = Vector<FrameGraphPhysicalQueueRuntimeStatisticsRecord, TelemetryArena>;
+using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmissionStatisticsRecord, TelemetryArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,23 +90,10 @@ using FrameGraphPacketSubmissionStatisticsRecords =
 [[nodiscard]] bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept;
 [[nodiscard]] bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept;
 [[nodiscard]] bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept;
-[[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-    const FrameGraphPhysicalQueueRuntimeStatistics& statistics
-)noexcept;
-[[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
-    const FrameGraphPhysicalQueueRuntimeStatistics& statistics,
-    const FrameGraphRuntimeStatistics& ownerStatistics
-)noexcept;
-[[nodiscard]] bool IsValidFrameGraphPacketSubmissionStatistics(
-    const FrameGraphPacketSubmissionStatisticsRecord& statistics
-)noexcept;
-[[nodiscard]] bool BuildFrameGraphPayload(
-    TelemetryArena& arena,
-    u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    TelemetryBytes& outPayload
-);
+[[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept;
+[[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
+[[nodiscard]] bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept;
+[[nodiscard]] bool BuildFrameGraphPayload(TelemetryArena& arena, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, TelemetryBytes& outPayload);
 [[nodiscard]] bool BuildFrameGraphPayload(
     TelemetryArena& arena,
     u64 frameIndex,
@@ -129,21 +112,8 @@ using FrameGraphPacketSubmissionStatisticsRecords =
     TelemetryBytes& outPayload
 );
 [[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordFrameGraph(
-    Recorder& recorder,
-    u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    u32 streamId = 0u
-);
-[[nodiscard]] bool RecordFrameGraph(
-    Recorder& recorder,
-    u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    u32 streamId = 0u
-);
+[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, u32 streamId = 0u);
+[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, u32 streamId = 0u);
 [[nodiscard]] bool RecordFrameGraph(
     Recorder& recorder,
     u64 frameIndex,

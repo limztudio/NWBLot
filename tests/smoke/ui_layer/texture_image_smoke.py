@@ -10,12 +10,8 @@ import time
 from guarded_native import GuardedNativeInput
 from texture_image_probe import center, observe_texture_image, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -28,12 +24,8 @@ class TextureImageRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = {
-            "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0,
-            "parent": 0, "child": 0, "popup_count": 0, "image_targets": 0,
-            "declared_source": 1, "post_handle_empty": 1, "replacement_count": 0, "replacement_alternate": 0,
-            "eviction_remaining": 0, "eviction_completed": 0, "builder_source": 1, "builder_handle_empty": 1,
-        }
+        self.expected = { "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0, "parent": 0, "child": 0, "popup_count": 0, "image_targets": 0, "declared_source": 1, "post_handle_empty": 1, "replacement_count": 0, "replacement_alternate": 0,
+            "eviction_remaining": 0, "eviction_completed": 0, "builder_source": 1, "builder_handle_empty": 1, }
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -69,8 +61,7 @@ class TextureImageRun:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
-            report = observe_texture_image(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra)
+            report = observe_texture_image(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
@@ -78,25 +69,16 @@ class TextureImageRun:
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(),
-            "observation": report}
+        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"image displayed-state gate '{name}' failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {
-            "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "failure": self.failure_report,
-            "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
-                if self.native.windows else "X11 XSendEvent keys/buttons and XSetInputFocus",
-            "runtime_limit": "No native Wayland, physical button injection or live IME coverage.",
-            "overlay_contract": ("Actual Builder source widgets paint in the parent/child popup family above "
-                "late base sentinels; primitive UV/crop checks remain separate."),
-            "builder_contract": ("A passive Stretch/Fixed image retains copied source/options after the caller "
-                "resets its handle and changes width, height and tint before deferred painting."),
-            "cache_contract": ("F7 creates and displays one fresh same-path payload per accepted paint callback "
-                "for 72 versions."),
-        }
+        report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
+                if self.native.windows else "X11 XSendEvent keys/buttons and XSetInputFocus", "runtime_limit": "No native Wayland, physical button injection or live IME coverage.",
+            "overlay_contract": ("Actual Builder source widgets paint in the parent/child popup family above " "late base sentinels; primitive UV/crop checks remain separate."),
+            "builder_contract": ("A passive Stretch/Fixed image retains copied source/options after the caller " "resets its handle and changes width, height and tint before deferred painting."),
+            "cache_contract": ("F7 creates and displays one fresh same-path payload per accepted paint callback " "for 72 versions."), }
         (self.args.output_directory / "texture_image.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):
@@ -116,47 +98,33 @@ class TextureImageRun:
         self.checkpoint("actual_builder_image_stays_passive_after_pointer_and_keys", focus_code=0)
         old_generation = self.snapshot["generations"][2]
         self.native.tap("F6")
-        self.checkpoint("same_identity_new_payload_preserves_original_source_pixels", replacement_count=1,
-            replacement_alternate=1, extra=lambda snapshot: snapshot["generations"][:2] == original_generations
-                and snapshot["generations"][2] != old_generation)
+        self.checkpoint("same_identity_new_payload_preserves_original_source_pixels", replacement_count=1, replacement_alternate=1, extra=lambda snapshot: snapshot["generations"][:2] == original_generations and snapshot["generations"][2] != old_generation)
         old_generation = self.snapshot["generations"][2]
         self.native.tap("F6")
-        self.checkpoint("second_fresh_version_restores_default_payload", replacement_count=2,
-            replacement_alternate=0, extra=lambda snapshot: snapshot["generations"][:2] == original_generations
-                and snapshot["generations"][2] != old_generation)
+        self.checkpoint("second_fresh_version_restores_default_payload", replacement_count=2, replacement_alternate=0, extra=lambda snapshot: snapshot["generations"][:2] == original_generations and snapshot["generations"][2] != old_generation)
         old_generation = self.snapshot["generations"][2]
         self.native.tap("F7")
-        self.checkpoint("72_accepted_versions_preserve_originals_and_final_payload", replacement_count=74,
-            replacement_alternate=0, eviction_remaining=0, eviction_completed=72, stage_timeout=30.0,
-            extra=lambda snapshot: snapshot["generations"][:2] == original_generations
-                and snapshot["generations"][2] != old_generation)
+        self.checkpoint("72_accepted_versions_preserve_originals_and_final_payload", replacement_count=74, replacement_alternate=0, eviction_remaining=0, eviction_completed=72, stage_timeout=30.0,
+            extra=lambda snapshot: snapshot["generations"][:2] == original_generations and snapshot["generations"][2] != old_generation)
         self.native.tap("F4")
-        self.checkpoint("paint_declaration_copies_source_handle_rectangle_uv_and_tint",
-            phase=1, declared_source=2, builder_source=2)
+        self.checkpoint("paint_declaration_copies_source_handle_rectangle_uv_and_tint", phase=1, declared_source=2, builder_source=2)
         old_extent = self.snapshot["logical_extent"]
         old_width = self.snapshot["rectangles"]["frozen"][2]
         target_extent = round(old_extent[0]) + 96, round(old_extent[1]) + 64
         physical_extent = self.point(*target_extent)
         self.backend.resize_client(self.handle, *physical_extent)
-        self.checkpoint("resize_preserves_owned_versions_and_recomputes_image_rectangles", extent=physical_extent,
-            extra=lambda snapshot: snapshot["rectangles"]["frozen"][2] != old_width
-                and snapshot["generations"][:2] == original_generations
-                and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0
-                and abs(snapshot["logical_extent"][1] - target_extent[1]) < 1.0)
+        self.checkpoint("resize_preserves_owned_versions_and_recomputes_image_rectangles", extent=physical_extent, extra=lambda snapshot: snapshot["rectangles"]["frozen"][2] != old_width and snapshot["generations"][:2] == original_generations
+                and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0 and abs(snapshot["logical_extent"][1] - target_extent[1]) < 1.0)
         self.native.tap("F5")
-        self.checkpoint("actual_builder_child_parent_images_cover_late_base_sentinels", parent=1, child=1,
-            popup_count=2, focus_code=4)
+        self.checkpoint("actual_builder_child_parent_images_cover_late_base_sentinels", parent=1, child=1, popup_count=2, focus_code=4)
         self.native.tap("Tab")
         self.checkpoint("accepted_child_keyboard_scope_remains_active", focus_code=4)
         self.native.tap("Escape")
-        self.checkpoint("child_close_retires_builder_source_image_and_restores_parent", parent=1, child=0,
-            popup_count=1, focus_code=3)
+        self.checkpoint("child_close_retires_builder_source_image_and_restores_parent", parent=1, child=0, popup_count=1, focus_code=3)
         self.native.tap("Escape")
-        self.checkpoint("parent_close_retires_builder_source_image_and_restores_root", parent=0, child=0,
-            popup_count=0, focus_code=0)
+        self.checkpoint("parent_close_retires_builder_source_image_and_restores_root", parent=0, child=0, popup_count=0, focus_code=0)
         self.native.tap("F4")
-        self.checkpoint("final_original_and_replacement_versions_remain_independent",
-            phase=0, declared_source=1, builder_source=1)
+        self.checkpoint("final_original_and_replacement_versions_remain_independent", phase=0, declared_source=1, builder_source=1)
 
 def run(args):
     if not args.executable.is_file():
@@ -203,11 +171,9 @@ def run(args):
                             texture_image_run.native.restore_pointer()
                     finally:
                         backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"],
-        STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
     texture_image_run.write_report(True)
-    print(f"UI concrete texture image: {len(texture_image_run.stages)} matching native/GPU gates "
-        f"with {args.skin} atlas", flush=True)
+    print(f"UI concrete texture image: {len(texture_image_run.stages)} matching native/GPU gates " f"with {args.skin} atlas", flush=True)
     return 0
 
 

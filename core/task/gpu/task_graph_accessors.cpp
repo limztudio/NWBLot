@@ -34,11 +34,7 @@ bool GpuTaskGraph::validResourceSet(const GpuGraphResourceSetId& id)const noexce
 }
 
 bool GpuTaskGraph::validUploadBlob(const GpuUploadBlobId& id)const noexcept{
-    return id.valid()
-        && id.generation == m_generation
-        && id.index < m_uploadBlobs.size()
-        && !m_uploadBlobs[id.index].bytes.empty()
-    ;
+    return id.valid() && id.generation == m_generation && id.index < m_uploadBlobs.size() && !m_uploadBlobs[id.index].bytes.empty();
 }
 
 bool GpuTaskGraph::validPipeline(const GpuGraphPipelineId& id)const noexcept{
@@ -61,19 +57,13 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
         .timing = task.timing,
         .dependencies = task.dependencyCount > 0u ? m_dependencies.data() + task.dependencyOffset : nullptr,
         .dependencyCount = task.dependencyCount,
-        .externalDependencies = task.externalDependencyCount > 0u
-            ? m_externalDependencies.data() + task.externalDependencyOffset
-            : nullptr,
+        .externalDependencies = task.externalDependencyCount > 0u ? m_externalDependencies.data() + task.externalDependencyOffset : nullptr,
         .externalDependencyCount = task.externalDependencyCount,
-        .externalStateSources = task.externalStateSourceCount > 0u
-            ? m_externalStateSources.data() + task.externalStateSourceOffset
-            : nullptr,
+        .externalStateSources = task.externalStateSourceCount > 0u ? m_externalStateSources.data() + task.externalStateSourceOffset : nullptr,
         .externalStateSourceCount = task.externalStateSourceCount,
         .resourceUses = task.resourceUseCount > 0u ? m_resourceUses.data() + task.resourceUseOffset : nullptr,
         .resourceUseCount = task.resourceUseCount,
-        .resourceVersionUses = task.resourceVersionUseCount > 0u
-            ? m_resourceVersionUses.data() + task.resourceVersionUseOffset
-            : nullptr,
+        .resourceVersionUses = task.resourceVersionUseCount > 0u ? m_resourceVersionUses.data() + task.resourceVersionUseOffset : nullptr,
         .resourceVersionUseCount = task.resourceVersionUseCount,
         .payloadObjectSize = task.payloadObjectSize,
         .directResourceUseCount = task.directResourceUseCount,
@@ -92,15 +82,11 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .id = GpuGraphResourceId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = resource.identity,
         .markerLabel = markerLabel(resource.markerLabelOffset, resource.markerLabelSize),
-        .initialOwnerHandoffSources = resource.initialOwnerHandoffSourceCount != 0u
-            ? m_initialOwnerHandoffSources.data() + resource.initialOwnerHandoffSourceOffset
-            : nullptr,
+        .initialOwnerHandoffSources = resource.initialOwnerHandoffSourceCount != 0u ? m_initialOwnerHandoffSources.data() + resource.initialOwnerHandoffSourceOffset : nullptr,
         .initialOwnerHandoffSourceCount = resource.initialOwnerHandoffSourceCount,
         .initialAvailabilityCompletion = resource.initialAvailabilityCompletion,
         .queueAdmission = ResourceQueueAdmissionSnapshot{
-            .queueFamilyIndices = resource.queueFamilyIndexCount != 0u
-                ? m_queueFamilyIndices.data() + resource.queueFamilyIndexOffset
-                : nullptr,
+            .queueFamilyIndices = resource.queueFamilyIndexCount != 0u ? m_queueFamilyIndices.data() + resource.queueFamilyIndexOffset : nullptr,
             .queueFamilyIndexCount = resource.queueFamilyIndexCount,
             .admittedQueueClasses = resource.queueSharing,
             .usesConcurrentSharing = resource.usesConcurrentSharing,
@@ -120,12 +106,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
 GpuTaskGraphResourceVersionView GpuTaskGraph::resourceVersionAt(const usize index)const{
     NWB_ASSERT(index < m_resourceVersions.size());
     const GpuGraphResourceVersionNode& version = m_resourceVersions[index];
-    return GpuTaskGraphResourceVersionView{
-        .id = GpuGraphResourceVersionId{ .generation = m_generation, .index = static_cast<u32>(index) },
-        .resource = version.resource,
-        .range = version.range,
-        .origin = version.origin,
-    };
+    return GpuTaskGraphResourceVersionView{ .id = GpuGraphResourceVersionId{ .generation = m_generation, .index = static_cast<u32>(index) }, .resource = version.resource, .range = version.range, .origin = version.origin, };
 }
 
 GpuTaskGraphResourceSetView GpuTaskGraph::resourceSetAt(const usize index)const{
@@ -167,9 +148,7 @@ GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usiz
     };
 }
 
-const QueueSubmissionToken* GpuTaskGraph::externalCompletionToken(
-    const GpuExternalCompletionId& completion
-)const noexcept{
+const QueueSubmissionToken* GpuTaskGraph::externalCompletionToken(const GpuExternalCompletionId& completion)const noexcept{
     if(!validExternalCompletion(completion) || !m_externalCompletions[completion.index].hasToken)
         return nullptr;
     return &m_externalCompletions[completion.index].token;

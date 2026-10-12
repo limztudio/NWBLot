@@ -57,8 +57,7 @@ template<typename Element, usize Count>
 [[nodiscard]] NWB_INLINE bool EqualElements(const Element* lhs, const Element* rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     // Clang bool vectors use packed bits; wide integers are not supported native lane elements.
-    if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32>
-        || (IsIntegral_V<Element> && !IsSame_V<Element, bool> && sizeof(Element) <= sizeof(u64)))){
+    if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32> || (IsIntegral_V<Element> && !IsSame_V<Element, bool> && sizeof(Element) <= sizeof(u64)))){
         constexpr usize lanes = 16u / sizeof(Element);
         for(usize first = 0u; first < Count; first += lanes){
             const usize count = Count - first < lanes ? Count - first : lanes;
@@ -72,9 +71,7 @@ template<typename Element, usize Count>
                 const UInt4 rhsMagnitude = BitCast<UInt4>(rhsPacket) & UInt4{ 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu };
                 const UInt4 infinity{ 0x7F800000u, 0x7F800000u, 0x7F800000u, 0x7F800000u };
                 const UInt4 minimumNormal{ 0x00800000u, 0x00800000u, 0x00800000u, 0x00800000u };
-                const auto exceptional = (lhsMagnitude > infinity) | (rhsMagnitude > infinity)
-                    | ((lhsMagnitude != UInt4{}) & (lhsMagnitude < minimumNormal))
-                    | ((rhsMagnitude != UInt4{}) & (rhsMagnitude < minimumNormal));
+                const auto exceptional = (lhsMagnitude > infinity) | (rhsMagnitude > infinity) | ((lhsMagnitude != UInt4{}) & (lhsMagnitude < minimumNormal)) | ((rhsMagnitude != UInt4{}) & (rhsMagnitude < minimumNormal));
                 if(__builtin_reduce_or(exceptional) != 0){
                     // Preserve skipped NaN/denormal flags and traps after an earlier mismatch.
                     for(usize lane = 0u; lane < count; ++lane){
@@ -1460,8 +1457,7 @@ template<typename Matrix>
         value._11;
         value._22;
         value._33;
-    })
-[[nodiscard]] constexpr Matrix MatrixIdentity()noexcept(noexcept(Matrix{})){
+    }) [[nodiscard]] constexpr Matrix MatrixIdentity()noexcept(noexcept(Matrix{})){
     Matrix matrix = {};
     using Element = RemoveCVRef_T<decltype(matrix._11)>;
     matrix._11 = Element{ 1 };

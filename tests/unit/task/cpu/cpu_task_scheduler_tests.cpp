@@ -224,16 +224,9 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
     Atomic<bool> rejected{ false };
     CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
     ScopeExit releaseGrandchild([&]()noexcept{ grandchildGate.open(); });
-    const auto parent = scheduler.submit([
-        &scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)
-    ]() mutable{
-        const auto child = scheduler.submit([
-            &scheduler, &grandchildGate, &retirements, &total, &rejected, &parentCapture,
-            childCapture = LifetimeProbe(retirements, 13u)
-        ]() mutable{
-            const auto grandchild = scheduler.submit([
-                &grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)
-            ](){
+    const auto parent = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)]() mutable{
+        const auto child = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, &parentCapture, childCapture = LifetimeProbe(retirements, 13u)]() mutable{
+            const auto grandchild = scheduler.submit([&grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)](){
                 grandchildGate.block();
                 total.store(parentCapture.value + childCapture.value + grandchildCapture.value, MemoryOrder::release);
             });
@@ -241,8 +234,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
                 rejected.store(true, MemoryOrder::release);
         });
         if(!child.valid())
-            rejected.store(true, MemoryOrder::release);
-    });
+            rejected.store(true, MemoryOrder::release); });
     const auto dependent = scheduler.submit([&]()noexcept{
         retirementsSeenByDependent.store(retirements.load(MemoryOrder::acquire), MemoryOrder::release);
     }, parent);
@@ -389,9 +381,7 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     EXPECT_TRUE(WaitUntil(occupied.entered));
     Atomic<u32> cursor{ 0u };
     u32 order[3u]{};
-    const CpuTaskPriority::Enum priorities[3u] = {
-        CpuTaskPriority::Background, CpuTaskPriority::Normal, CpuTaskPriority::Critical
-    };
+    const CpuTaskPriority::Enum priorities[3u] = { CpuTaskPriority::Background, CpuTaskPriority::Normal, CpuTaskPriority::Critical };
     for(u32 index = 0u; index < 3u; ++index){
         CpuTaskOptions options;
         options.priority = priorities[index];
@@ -651,10 +641,7 @@ TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope
         EXPECT_TRUE(scope.submit([&](){
             parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
             EXPECT_TRUE(scheduler.submit([&](){
-                if(
-                    !WaitUntil(parentGate.entered)
-                    || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire)
-                )
+                if(!WaitUntil(parentGate.entered) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
                     ExitTestProcess(0u);
                 scope.wait();
             }).valid());

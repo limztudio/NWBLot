@@ -169,13 +169,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     m_skinnedMeshObjects.clear();
 
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(
-        binary,
-        cursor,
-        ModelBinaryPayload::s_ModelMagic,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("model")
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(binary, cursor, ModelBinaryPayload::s_ModelMagic, NWB_TEXT("Model::loadBinary"), NWB_TEXT("model"));
     if(!headerResult)
         return false;
     const ModelBinaryPayload::ModelHeaderBinary& header = *headerResult;
@@ -184,32 +178,11 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     Core::Assets::AssetVector<ModelBinaryPayload::ModelStaticMeshObjectBinary> staticMeshObjectBinaries(m_staticMeshObjects.get_allocator().arena());
     Core::Assets::AssetVector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary> skinnedMeshObjectBinaries(m_skinnedMeshObjects.get_allocator().arena());
 
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        cursor,
-        header.skeletonObjectCount,
-        skeletonObjectBinaries,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("skeleton objects")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.skeletonObjectCount, skeletonObjectBinaries, NWB_TEXT("Model::loadBinary"), NWB_TEXT("skeleton objects")))
         return false;
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        cursor,
-        header.staticMeshObjectCount,
-        staticMeshObjectBinaries,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("static mesh objects")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.staticMeshObjectCount, staticMeshObjectBinaries, NWB_TEXT("Model::loadBinary"), NWB_TEXT("static mesh objects")))
         return false;
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        cursor,
-        header.skinnedMeshObjectCount,
-        skinnedMeshObjectBinaries,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("skinned mesh objects")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.skinnedMeshObjectCount, skinnedMeshObjectBinaries, NWB_TEXT("Model::loadBinary"), NWB_TEXT("skinned mesh objects")))
         return false;
 
     m_skeletonObjects.reserve(skeletonObjectBinaries.size());
@@ -244,9 +217,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         m_skinnedMeshObjects.push_back(object);
     }
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Model::loadBinary"))
-        && validatePayload(scratchArena)
-    ;
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Model::loadBinary")) && validatePayload(scratchArena);
 }
 
 

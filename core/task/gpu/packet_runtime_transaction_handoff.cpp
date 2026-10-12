@@ -23,10 +23,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidForCompiledPlan(
-    const GpuTaskGraphExternalResourceHandoff& handoff,
-    const GpuCompiledGraph::ReadView& planAccess
-)noexcept{
+[[nodiscard]] bool ValidForCompiledPlan(const GpuTaskGraphExternalResourceHandoff& handoff, const GpuCompiledGraph::ReadView& planAccess)noexcept{
     if(
         !handoff.valid()
         || !planAccess.valid()
@@ -52,28 +49,16 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
             || !sourceQueueInfo
             || !producer.token.valid()
             || producer.token.queue != sourceQueueInfo->queueClass
-            || !producer.token.matchesPhysicalQueue(
-                producer.sourceQueue.index,
-                producer.sourceQueue.deviceGeneration
-            )
+            || !producer.token.matchesPhysicalQueue(producer.sourceQueue.index, producer.sourceQueue.deviceGeneration)
         )
             return false;
 
         bool coveredByWait = false;
         for(usize waitIndex = 0u; waitIndex < handoff.waitTokenCount; ++waitIndex){
             const QueueSubmissionToken& wait = handoff.waitTokens[waitIndex];
-            if(
-                !wait.valid()
-                || !wait.hasPhysicalQueueIdentity()
-                || wait.deviceGeneration != planAccess.deviceGeneration()
-            )
+            if(!wait.valid() || !wait.hasPhysicalQueueIdentity() || wait.deviceGeneration != planAccess.deviceGeneration())
                 return false;
-            coveredByWait = coveredByWait || (
-                wait.queue == producer.token.queue
-                && wait.physicalQueueIndex == producer.token.physicalQueueIndex
-                && wait.deviceGeneration == producer.token.deviceGeneration
-                && wait.value >= producer.token.value
-            );
+            coveredByWait = coveredByWait || (wait.queue == producer.token.queue && wait.physicalQueueIndex == producer.token.physicalQueueIndex && wait.deviceGeneration == producer.token.deviceGeneration && wait.value >= producer.token.value);
         }
         if(!coveredByWait)
             return false;
@@ -99,10 +84,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
     }
 
     if(handoff.producerCount != 1u){
-        return !handoff.producerTask.valid()
-            && !handoff.sourceQueue.valid()
-            && !handoff.token.valid()
-        ;
+        return !handoff.producerTask.valid() && !handoff.sourceQueue.valid() && !handoff.token.valid();
     }
     const GpuTaskGraphExternalResourceHandoffProducer& producer = handoff.producers[0u];
     return handoff.producerTask == producer.producerTask
@@ -195,49 +177,27 @@ bool GpuTaskGraphExternalResourceHandoffSnapshot::valid()const noexcept{
     return value() != nullptr;
 }
 
-bool GpuTaskGraphExternalResourceHandoffSnapshot::validFor(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess
-)const noexcept{
+bool GpuTaskGraphExternalResourceHandoffSnapshot::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     const GpuTaskGraphExternalResourceHandoff* const handoff = value();
-    return planAccess.validFor(compiledGraph)
-        && handoff
-        && m_activeStorage->compiledObjectIdentity == planAccess.objectIdentity()
-        && __hidden_gpu_packet_runtime_transaction_handoff::ValidForCompiledPlan(*handoff, planAccess)
-    ;
+    return planAccess.validFor(compiledGraph) && handoff && m_activeStorage->compiledObjectIdentity == planAccess.objectIdentity() && __hidden_gpu_packet_runtime_transaction_handoff::ValidForCompiledPlan(*handoff, planAccess);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuGraphSubmissionAcceptanceSnapshot> GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(
-    const GpuCompiledGraph::ReadView& compiledPlan,
-    Alloc::ScratchArena& scratchArena
-)const{
+Expected<GpuGraphSubmissionAcceptanceSnapshot> GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(const GpuCompiledGraph::ReadView& compiledPlan, Alloc::ScratchArena& scratchArena)const{
     if(!compiledPlan.valid())
         return MakeUnexpected(Failure{});
-    GpuGraphSubmissionAcceptanceSnapshot snapshot{
-        .packetTokens = Vector<QueueSubmissionToken, Alloc::ScratchArena>(compiledPlan.packetCount(), scratchArena),
-    };
+    GpuGraphSubmissionAcceptanceSnapshot snapshot{ .packetTokens = Vector<QueueSubmissionToken, Alloc::ScratchArena>(compiledPlan.packetCount(), scratchArena), };
 
     NothrowScopedLock lock(m_mutex);
-    if(
-        !m_valid
-        || m_generation != compiledPlan.generation()
-        || m_planGeneration != compiledPlan.planGeneration()
-        || m_deviceGeneration != compiledPlan.deviceGeneration()
-        || m_packets.size() != compiledPlan.packetCount()
-        || m_acceptanceRevision == 0u
-    )
+    if(!m_valid || m_generation != compiledPlan.generation() || m_planGeneration != compiledPlan.planGeneration() || m_deviceGeneration != compiledPlan.deviceGeneration() || m_packets.size() != compiledPlan.packetCount() || m_acceptanceRevision == 0u)
         return MakeUnexpected(Failure{});
 
     for(usize packetIndex = 0u; packetIndex < snapshot.packetTokens.size(); ++packetIndex){
         const PacketRuntime& runtime = m_packets[packetIndex];
-        snapshot.packetTokens[packetIndex] = runtime.state == PacketRuntimeState::Accepted
-            ? runtime.token
-            : QueueSubmissionToken{}
-        ;
+        snapshot.packetTokens[packetIndex] = runtime.state == PacketRuntimeState::Accepted ? runtime.token : QueueSubmissionToken{};
     }
     snapshot.recordingAttemptGeneration = m_recordingAttemptGeneration;
     snapshot.acceptanceRevision = m_acceptanceRevision;
@@ -250,10 +210,7 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmiss
 }
 
 
-QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuTaskId task
-)const noexcept{
+QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task)const noexcept{
     if(!planAccess.valid())
         return {};
     NothrowScopedLock lock(m_mutex);
@@ -269,10 +226,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
     const GpuGraphResourceId resource,
     GpuTaskGraphExternalResourceHandoffSnapshot& outSnapshot
 )const{
-    GpuRecordedGraph::ArtifactOperation artifactOperation(
-        recordedGraph,
-        GpuRecordedGraph::ArtifactOperationMode::Read
-    );
+    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Read);
     if(!artifactOperation.valid())
         return false;
     NothrowScopedLock lock(m_mutex);
@@ -283,24 +237,14 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
         || !planAccess.validFor(compiledGraph)
         || !validForLocked(planAccess)
         || m_recordingAttemptGeneration == 0u
-        || !recordedGraph.validForWithinArtifactOperation(
-            graph,
-            declarationAccess,
-            compiledGraph,
-            planAccess,
-            artifactOperation
-        )
+        || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
         || m_recordingAttemptGeneration
             != recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation)
     )
         return false;
 
     const GpuCompiledExternalResourceExportView exportView = planAccess.externalResourceExport(resource);
-    if(
-        !exportView.valid()
-        || !outSnapshot.m_activeStorage
-        || !outSnapshot.m_candidateStorage
-    )
+    if(!exportView.valid() || !outSnapshot.m_activeStorage || !outSnapshot.m_candidateStorage)
         return false;
     const GpuCompiledExternalResourceExport& exportInfo = *exportView.plan;
     const GpuCompiledExternalResourceExportSource* const sources = exportView.sources;
@@ -315,14 +259,8 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
             !packet.valid()
             || !source.sourceQueue.valid()
             || !producerToken.valid()
-            || !producerToken.matchesPhysicalQueue(
-                source.sourceQueue.index,
-                source.sourceQueue.deviceGeneration
-            )
-            || !recordedGraph.packetStateSeed(
-                planAccess.packetForTask(source.producerTask),
-                artifactOperation
-            )
+            || !producerToken.matchesPhysicalQueue(source.sourceQueue.index, source.sourceQueue.deviceGeneration)
+            || !recordedGraph.packetStateSeed(planAccess.packetForTask(source.producerTask), artifactOperation)
         )
             return false;
 
@@ -342,24 +280,12 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
             break;
         }
         if(!foundProducer){
-            candidate.producers.push_back(GpuTaskGraphExternalResourceHandoffProducer{
-                .producerTask = source.producerTask,
-                .sourceQueue = source.sourceQueue,
-                .token = producerToken,
-            });
+            candidate.producers.push_back(GpuTaskGraphExternalResourceHandoffProducer{ .producerTask = source.producerTask, .sourceQueue = source.sourceQueue, .token = producerToken, });
         }
-        candidate.terminalRanges.push_back(GpuTaskGraphExternalResourceHandoffRange{
-            .range = source.range,
-            .producerTask = source.producerTask,
-            .sourceQueue = source.sourceQueue,
-            .token = producerToken,
-        });
+        candidate.terminalRanges.push_back(GpuTaskGraphExternalResourceHandoffRange{ .range = source.range, .producerTask = source.producerTask, .sourceQueue = source.sourceQueue, .token = producerToken, });
 
         for(QueueSubmissionToken& wait : candidate.waitTokens){
-            if(
-                wait.physicalQueueIndex != producerToken.physicalQueueIndex
-                || wait.deviceGeneration != producerToken.deviceGeneration
-            )
+            if(wait.physicalQueueIndex != producerToken.physicalQueueIndex || wait.deviceGeneration != producerToken.deviceGeneration)
                 continue;
             if(wait.queue != producerToken.queue)
                 return false;
@@ -379,15 +305,8 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
         return false;
 
     if(candidate.producers.size() == 1u){
-        const CommandListResourceStateHandoff* const sourceState = recordedGraph.packetStateSeed(
-            planAccess.packetForTask(candidate.producers[0u].producerTask),
-            artifactOperation
-        );
-        if(
-            !sourceState
-            || !sourceState->validForDeviceGeneration(planAccess.deviceGeneration())
-            || !candidate.stateSource.copyFrom(*sourceState)
-        )
+        const CommandListResourceStateHandoff* const sourceState = recordedGraph.packetStateSeed(planAccess.packetForTask(candidate.producers[0u].producerTask), artifactOperation);
+        if(!sourceState || !sourceState->validForDeviceGeneration(planAccess.deviceGeneration()) || !candidate.stateSource.copyFrom(*sourceState))
             return false;
     }
     else{
@@ -398,10 +317,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
         const CommandListResourceStateHandoff* firstSourceStates = nullptr;
         for(u32 sourceIndex = 0u; sourceIndex < exportInfo.sourceCount; ++sourceIndex){
             const GpuCompiledExternalResourceExportSource& source = sources[sourceIndex];
-            const CommandListResourceStateHandoff* const sourceStates = recordedGraph.packetStateSeed(
-                planAccess.packetForTask(source.producerTask),
-                artifactOperation
-            );
+            const CommandListResourceStateHandoff* const sourceStates = recordedGraph.packetStateSeed(planAccess.packetForTask(source.producerTask), artifactOperation);
             if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()))
                 return false;
             if(!firstSourceStates)
@@ -413,33 +329,15 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
                 Texture* const texture = declarationAccess.textureForResource(resource);
                 if(
                     !texture
-                    || !sourceStates->coversTextureRangeWithOwnership(
-                        texture,
-                        source.range.textureSubresources,
-                        source.sourceQueue,
-                        exportInfo.destinationQueue
-                    )
-                    || !stateSubset.buildTextureRangeSubset(
-                        *sourceStates,
-                        texture,
-                        source.range.textureSubresources
-                    )
+                    || !sourceStates->coversTextureRangeWithOwnership(texture, source.range.textureSubresources, source.sourceQueue, exportInfo.destinationQueue)
+                    || !stateSubset.buildTextureRangeSubset(*sourceStates, texture, source.range.textureSubresources)
                 )
                     return false;
                 break;
             }
             case GpuGraphResourceType::Buffer:{
                 Buffer* const buffer = declarationAccess.bufferForResource(resource);
-                if(
-                    !buffer
-                    || !sourceStates->coversBufferWithOwnership(
-                        buffer,
-                        source.sourceQueue,
-                        exportInfo.destinationQueue,
-                        source.range.bufferRange
-                    )
-                    || !stateSubset.buildBufferRangeSubset(*sourceStates, buffer, source.range.bufferRange)
-                )
+                if(!buffer || !sourceStates->coversBufferWithOwnership(buffer, source.sourceQueue, exportInfo.destinationQueue, source.range.bufferRange) || !stateSubset.buildBufferRangeSubset(*sourceStates, buffer, source.range.bufferRange))
                     return false;
                 break;
             }
@@ -447,37 +345,24 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
                 RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(resource);
                 Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
                 Buffer* const buffers[] = { backingBuffer };
-                if(!backingBuffer || !stateSubset.buildResourceSubset(
-                    *sourceStates,
-                    nullptr,
-                    0u,
-                    buffers,
-                    LengthOf(buffers),
-                    m_externalResourceHandoffBuildScratch
-                ))
+                if(!backingBuffer || !stateSubset.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, LengthOf(buffers), m_externalResourceHandoffBuildScratch))
                     return false;
                 break;
             }
             default:
                 return false;
             }
-            // A terminal export reasserts its required final state, so an absent range means the recorded packet
-            // cannot safely publish this source. Never reconstruct it from a descriptor creation state.
+            // A terminal export reasserts its required final state, so an absent range means the recorded packet cannot safely publish this source.
+            // Never reconstruct it from a descriptor creation state.
             if(stateSubset.empty())
                 return false;
         }
-        // Start from a valid, resource-empty base.  This lets buildFanIn verify that independent terminal ranges
-        // are actually disjoint (including ownership metadata) rather than treating an earlier branch as the base
-        // and accidentally allowing a later branch to overwrite it.
+        // Start from a valid, resource-empty base.
+        // This lets buildFanIn verify that independent terminal ranges are actually disjoint (including ownership metadata) rather than treating an earlier branch as the base and accidentally allowing a later branch to overwrite it.
         if(
             !firstSourceStates
             || !candidate.stateMerge.buildResourceSubset(*firstSourceStates, nullptr, 0u, nullptr, 0u, m_externalResourceHandoffBuildScratch)
-            || !candidate.stateSource.buildFanIn(
-                candidate.stateMerge,
-                candidate.stateBranchPointers.data(),
-                exportInfo.sourceCount,
-                m_externalResourceHandoffBuildScratch
-            )
+            || !candidate.stateSource.buildFanIn(candidate.stateMerge, candidate.stateBranchPointers.data(), exportInfo.sourceCount, m_externalResourceHandoffBuildScratch)
         )
             return false;
     }
@@ -504,19 +389,13 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
     if(!__hidden_gpu_packet_runtime_transaction_handoff::ValidForCompiledPlan(candidate.handoff, planAccess))
         return false;
 
-    static_assert(
-        noexcept(Swap(outSnapshot.m_activeStorage, outSnapshot.m_candidateStorage)),
-        "external handoff owner publication must be non-throwing"
-    );
+    static_assert(noexcept(Swap(outSnapshot.m_activeStorage, outSnapshot.m_candidateStorage)), "external handoff owner publication must be non-throwing");
     Swap(outSnapshot.m_activeStorage, outSnapshot.m_candidateStorage);
     outSnapshot.m_candidateStorage->reset();
     return true;
 }
 
-bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
-    const GpuPhysicalQueueId& destinationQueue,
-    Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens
-)const{
+bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const{
     ScopedLock lock(m_mutex);
     if(!m_valid || !destinationQueue.valid() || destinationQueue.deviceGeneration != m_deviceGeneration)
         return false;
@@ -524,69 +403,37 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
     for(const LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == destinationQueue)
             continue;
-        if(
-            !latest.queue.valid()
-            || latest.queue.deviceGeneration != m_deviceGeneration
-            || !latest.token.valid()
-            || !latest.token.matchesPhysicalQueue(latest.queue.index, latest.queue.deviceGeneration)
-        )
+        if(!latest.queue.valid() || latest.queue.deviceGeneration != m_deviceGeneration || !latest.token.valid() || !latest.token.matchesPhysicalQueue(latest.queue.index, latest.queue.deviceGeneration))
             return false;
-        // The transaction holds one newest accepted token per physical queue, so this cannot duplicate a producer
-        // even when a queue accepted several packets before the recovery tail is armed.
+        // The transaction holds one newest accepted token per physical queue, so this cannot duplicate a producer even when a queue accepted several packets before the recovery tail is armed.
         outTokens.push_back(latest.token);
     }
     return true;
 }
 
-QueueSubmissionToken GpuGraphSubmissionTransaction::packetTokenLocked(
-    const GpuSubmissionPacketId& packet
-)const noexcept{
-    if(
-        !m_valid
-        || !packet.valid()
-        || packet.generation != m_planGeneration
-        || packet.index >= m_packets.size()
-    )
+QueueSubmissionToken GpuGraphSubmissionTransaction::packetTokenLocked(const GpuSubmissionPacketId& packet)const noexcept{
+    if(!m_valid || !packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packets.size())
         return {};
     const PacketRuntime& runtime = m_packets[packet.index];
     return runtime.state == PacketRuntimeState::Accepted ? runtime.token : QueueSubmissionToken{};
 }
 
-QueueSubmissionToken GpuGraphSubmissionTransaction::taskTokenLocked(
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuTaskId task
-)const noexcept{
+QueueSubmissionToken GpuGraphSubmissionTransaction::taskTokenLocked(const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task)const noexcept{
     if(!validForLocked(planAccess))
         return {};
     return packetTokenLocked(planAccess.packetForTask(task));
 }
 
-GpuTaskGraphRuntimeStatistics CollectGpuTaskGraphRuntimeStatistics(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuRecordedGraph& recordedGraph,
-    const GpuGraphSubmissionTransaction& transaction
-)noexcept{
-    GpuRecordedGraph::ArtifactOperation artifactOperation(
-        recordedGraph,
-        GpuRecordedGraph::ArtifactOperationMode::Read
-    );
+GpuTaskGraphRuntimeStatistics CollectGpuTaskGraphRuntimeStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuRecordedGraph& recordedGraph, const GpuGraphSubmissionTransaction& transaction)noexcept{
+    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Read);
     if(!artifactOperation.valid())
         return {};
-    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
-        transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket,
-        &artifactOperation
-    );
+    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket, &artifactOperation);
     if(!submissionOperation.valid())
         return {};
     if(!planAccess.validFor(compiledGraph))
         return {};
-    return GpuTaskGraphRuntimeStatistics{
-        .compile = planAccess.compileStatistics(),
-        .recording = recordedGraph.recordingStatistics(compiledGraph, planAccess),
-        .submission = transaction.submissionStatistics(),
-    };
+    return GpuTaskGraphRuntimeStatistics{ .compile = planAccess.compileStatistics(), .recording = recordedGraph.recordingStatistics(compiledGraph, planAccess), .submission = transaction.submissionStatistics(), };
 }
 
 

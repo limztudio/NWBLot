@@ -92,10 +92,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         return false;
     }
 
-    irradianceHistoryDesc
-        .setFormat(targets.surfelIrradianceFormat)
-        .setName("engine/temporal/lagged_surfel_irradiance")
-    ;
+    irradianceHistoryDesc.setFormat(targets.surfelIrradianceFormat).setName("engine/temporal/lagged_surfel_irradiance");
     history.surfelIrradiance = m_graphics.createTexture(irradianceHistoryDesc);
     if(!history.surfelIrradiance){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
@@ -168,13 +165,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     }
 
     history.slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(
-        !history.slotsBufferDescriptor.valid()
-        || !heap.write(
-            history.slotsBufferDescriptor,
-            Core::DescriptorWriteItem::ConstantBuffer(0u, history.slotsBuffer.get())
-        )
-    ){
+    if(!history.slotsBufferDescriptor.valid() || !heap.write(history.slotsBufferDescriptor, Core::DescriptorWriteItem::ConstantBuffer(0u, history.slotsBuffer.get()))){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;

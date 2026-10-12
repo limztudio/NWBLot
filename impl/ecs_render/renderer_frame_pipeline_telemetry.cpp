@@ -50,9 +50,7 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
     }
 }
 
-[[nodiscard]] static AStringView OwnershipTransferRouteLabel(
-    const Core::GpuOwnershipTransferRoute::Enum route
-)noexcept{
+[[nodiscard]] static AStringView OwnershipTransferRouteLabel(const Core::GpuOwnershipTransferRoute::Enum route)noexcept{
     switch(route){
     case Core::GpuOwnershipTransferRoute::Internal:
         return "Internal";
@@ -65,9 +63,7 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
     }
 }
 
-[[nodiscard]] static AStringView ResourceQueueSharingLabel(
-    const Core::ResourceQueueSharing::Mask queueSharing
-)noexcept{
+[[nodiscard]] static AStringView ResourceQueueSharingLabel(const Core::ResourceQueueSharing::Mask queueSharing)noexcept{
     switch(queueSharing){
     case Core::ResourceQueueSharing::Exclusive:
         return "Exclusive";
@@ -90,10 +86,7 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
     }
 }
 
-static void AppendCommandArenaWorkerStatistics(
-    AString<Core::Alloc::GlobalArena>& label,
-    const Core::GpuCommandArenaWorkerStatistics& statistics
-){
+static void AppendCommandArenaWorkerStatistics(AString<Core::Alloc::GlobalArena>& label, const Core::GpuCommandArenaWorkerStatistics& statistics){
     StringAppendFormat(
         label,
         "\n    Worker arena domain={} index={}: epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
@@ -134,14 +127,8 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
 
     const CsgFrameState& csgFrameState = m_preparedCsgFrameState;
     const bool hasCsgFrameWork = m_preparedCsgFrameStateValid && !csgFrameState.empty();
-    const bool hasOpaqueCsgFrameWork =
-        hasCsgFrameWork
-        && (csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork)
-    ;
-    const bool hasTransparentCsgFrameWork =
-        hasCsgFrameWork
-        && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork)
-    ;
+    const bool hasOpaqueCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork);
+    const bool hasTransparentCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
     const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
     const bool hasAvboitWork = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
 
@@ -149,25 +136,12 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     if(builder.frameIndex() == m_frameGraphSourceFrameIndex)
         deferredRuntimeStatistics = deferredTaskGraphRuntimeStatistics();
     Core::Telemetry::FrameGraphPassMetadata rendererFrameMetadata;
-    rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
-        deferredRuntimeStatistics,
-        builder.frameIndex(),
-        m_frameGraphSourceFrameIndex
-    );
+    rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics(deferredRuntimeStatistics, builder.frameIndex(), m_frameGraphSourceFrameIndex);
     const Core::GpuPhysicalQueueTopology runtimeQueueTopology = deferredCompiledPlan.queueTopology();
     Core::Alloc::ScratchArena physicalQueueRuntimeStatisticsScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<
-        Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics,
-        Core::Alloc::ScratchArena
-    > physicalQueueRuntimeStatistics(physicalQueueRuntimeStatisticsScratch);
-    Vector<
-        Core::GpuTaskGraphPacketSubmissionStatistics,
-        Core::Alloc::ScratchArena
-    > packetSubmissionStatistics(physicalQueueRuntimeStatisticsScratch);
-    if(
-        rendererFrameMetadata.runtimeStatistics.present
-        && (!runtimeQueueTopology.queues || runtimeQueueTopology.queueCount == 0u)
-    )
+    Vector< Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics, Core::Alloc::ScratchArena > physicalQueueRuntimeStatistics(physicalQueueRuntimeStatisticsScratch);
+    Vector< Core::GpuTaskGraphPacketSubmissionStatistics, Core::Alloc::ScratchArena > packetSubmissionStatistics(physicalQueueRuntimeStatisticsScratch);
+    if(rendererFrameMetadata.runtimeStatistics.present && (!runtimeQueueTopology.queues || runtimeQueueTopology.queueCount == 0u))
         rendererFrameMetadata.runtimeStatistics = {};
     if(rendererFrameMetadata.runtimeStatistics.present){
         physicalQueueRuntimeStatistics.reserve(runtimeQueueTopology.queueCount);
@@ -176,21 +150,11 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queueStatistics =
                 ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
                     deferredCompiledPlan.physicalQueueCompileStatistics(queue),
-                    m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(
-                        m_deferredLightingCompiledGraph,
-                        deferredCompiledPlan,
-                        queue
-                    ),
-                    m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(
-                        deferredCompiledPlan,
-                        queue
-                    )
+                    m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(m_deferredLightingCompiledGraph, deferredCompiledPlan, queue),
+                    m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(deferredCompiledPlan, queue)
                 )
             ;
-            if(!Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
-                queueStatistics,
-                rendererFrameMetadata.runtimeStatistics
-            )){
+            if(!Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(queueStatistics, rendererFrameMetadata.runtimeStatistics)){
                 rendererFrameMetadata.runtimeStatistics = {};
                 physicalQueueRuntimeStatistics.clear();
                 break;
@@ -209,19 +173,11 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 break;
             }
 
-            const Core::GpuTaskGraphPacketSubmissionStatistics packetStatistics =
-                m_deferredLightingSubmissionTransaction.packetSubmissionStatistics(
-                    deferredCompiledPlan,
-                    packet
-                )
-            ;
+            const Core::GpuTaskGraphPacketSubmissionStatistics packetStatistics = m_deferredLightingSubmissionTransaction.packetSubmissionStatistics(deferredCompiledPlan, packet);
             if(packetStatistics.valid())
                 packetSubmissionStatistics.push_back(packetStatistics);
         }
-        if(
-            rendererFrameMetadata.runtimeStatistics.present
-            && packetSubmissionStatistics.size() != deferredRuntimeStatistics.submission.nativeSubmissionCount
-        ){
+        if(rendererFrameMetadata.runtimeStatistics.present && packetSubmissionStatistics.size() != deferredRuntimeStatistics.submission.nativeSubmissionCount){
             rendererFrameMetadata.runtimeStatistics = {};
             physicalQueueRuntimeStatistics.clear();
             packetSubmissionStatistics.clear();
@@ -320,22 +276,13 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             recordingStatistics.readyFrontierWorkerUtilization() * __hidden_frame_graph_export::s_PercentScaleTelemetry
         );
 
-        // Borrows immutable plan topology + packet slots under the renderer serialization contract; no overlap with
-        // recording/reset/recompile, and never the mutable live registry (recompile can move the owning plan).
+        // Borrows immutable plan topology + packet slots under the renderer serialization contract; no overlap with recording/reset/recompile, and never the mutable live registry (recompile can move the owning plan).
         for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
             const Core::GpuPhysicalQueueInfo& queueInfo = runtimeQueueTopology.queues[queueIndex];
-            const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics =
-                physicalQueueRuntimeStatistics[queueIndex]
-            ;
-            const Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& queueStatistics =
-                queueRuntimeStatistics.submission
-            ;
-            const Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& queueCompileStatistics =
-                queueRuntimeStatistics.compile
-            ;
-            const bool hasTerminalSubmissionWork =
-                queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u
-            ;
+            const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics = physicalQueueRuntimeStatistics[queueIndex];
+            const Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& queueStatistics = queueRuntimeStatistics.submission;
+            const Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& queueCompileStatistics = queueRuntimeStatistics.compile;
+            const bool hasTerminalSubmissionWork = queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u;
             const bool hasLogicalOwnershipTelemetry =
                 queueCompileStatistics.incomingLogicalOwnershipTransferCount != 0u
                 || queueCompileStatistics.outgoingLogicalOwnershipTransferCount != 0u
@@ -347,12 +294,8 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             ;
             if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)
                 continue;
-            const Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& queueRecordingStatistics =
-                queueRuntimeStatistics.recording
-            ;
-            const Core::GpuCommandArenaStatistics commandArenaStatistics =
-                m_graphics.getDevice().getCommandArenaStatistics(queueInfo.id)
-            ;
+            const Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& queueRecordingStatistics = queueRuntimeStatistics.recording;
+            const Core::GpuCommandArenaStatistics commandArenaStatistics = m_graphics.getDevice().getCommandArenaStatistics(queueInfo.id);
             if(!commandArenaStatistics.valid())
                 continue;
 
@@ -421,18 +364,12 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 commandArenaStatistics.nativeHandleStorageLowerBoundBytes
             );
 
-            const Core::GpuCommandArenaWorkerStatistics directCommandArenaStatistics =
-                m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u)
-            ;
+            const Core::GpuCommandArenaWorkerStatistics directCommandArenaStatistics = m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u);
             if(directCommandArenaStatistics.valid())
-                __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(
-                    m_frameGraphRendererLabel,
-                    directCommandArenaStatistics
-                );
+                __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, directCommandArenaStatistics);
 
-            // Recorded packets retain the exact worker domain/index used for native allocation. Walk the immutable
-            // compiled order and reject any identity already seen on this queue; telemetry packet counts are small,
-            // so this allocation-free quadratic pass is preferable to persistent mutable enumeration storage.
+            // Recorded packets retain the exact worker domain/index used for native allocation.
+            // Walk the immutable compiled order and reject any identity already seen on this queue; telemetry packet counts are small, so this allocation-free quadratic pass is preferable to persistent mutable enumeration storage.
             for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){
                 const Core::GpuSubmissionPacketId packet = deferredCompiledPlan.packetIdAt(packetIndex);
                 const Core::GpuCompiledPacketView packetView = deferredCompiledPlan.packet(packet);
@@ -440,30 +377,20 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                     return false;
                 if(packetView.plan->queue != queueInfo.id)
                     continue;
-                const Optional<Core::GpuRecordedPacket> recordedPacket =
-                    m_deferredLightingRecordedGraph.packetSnapshot(packet)
-                ;
+                const Optional<Core::GpuRecordedPacket> recordedPacket = m_deferredLightingRecordedGraph.packetSnapshot(packet);
                 if(!recordedPacket || recordedPacket->recordingWorkerIndex == 0u)
                     continue;
 
                 bool alreadyAppended = false;
                 for(usize previousPacketIndex = 0u; previousPacketIndex < packetIndex; ++previousPacketIndex){
-                    const Core::GpuSubmissionPacketId previousPacket =
-                        deferredCompiledPlan.packetIdAt(previousPacketIndex)
-                    ;
+                    const Core::GpuSubmissionPacketId previousPacket = deferredCompiledPlan.packetIdAt(previousPacketIndex);
                     const Core::GpuCompiledPacketView previousPacketView = deferredCompiledPlan.packet(previousPacket);
                     if(!previousPacketView.valid())
                         return false;
                     if(previousPacketView.plan->queue != queueInfo.id)
                         continue;
-                    const Optional<Core::GpuRecordedPacket> previousRecordedPacket =
-                        m_deferredLightingRecordedGraph.packetSnapshot(previousPacket)
-                    ;
-                    if(
-                        previousRecordedPacket
-                        && previousRecordedPacket->recordingWorkerDomain == recordedPacket->recordingWorkerDomain
-                        && previousRecordedPacket->recordingWorkerIndex == recordedPacket->recordingWorkerIndex
-                    ){
+                    const Optional<Core::GpuRecordedPacket> previousRecordedPacket = m_deferredLightingRecordedGraph.packetSnapshot(previousPacket);
+                    if(previousRecordedPacket && previousRecordedPacket->recordingWorkerDomain == recordedPacket->recordingWorkerDomain && previousRecordedPacket->recordingWorkerIndex == recordedPacket->recordingWorkerIndex){
                         alreadyAppended = true;
                         break;
                     }
@@ -471,27 +398,14 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 if(alreadyAppended)
                     continue;
 
-                const Core::GpuCommandArenaWorkerStatistics workerCommandArenaStatistics =
-                    m_graphics.getDevice().getCommandArenaWorkerStatistics(
-                        queueInfo.id,
-                        recordedPacket->recordingWorkerDomain,
-                        recordedPacket->recordingWorkerIndex
-                    )
-                ;
+                const Core::GpuCommandArenaWorkerStatistics workerCommandArenaStatistics = m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, recordedPacket->recordingWorkerDomain, recordedPacket->recordingWorkerIndex);
                 if(workerCommandArenaStatistics.valid())
-                    __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(
-                        m_frameGraphRendererLabel,
-                        workerCommandArenaStatistics
-                    );
+                    __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, workerCommandArenaStatistics);
             }
         }
 
-        const usize logicalOwnershipTransferCount =
-            deferredCompiledPlan.logicalOwnershipTransferCount()
-        ;
-        const Core::GpuCompiledOwnershipTransfer* const logicalOwnershipTransfers =
-            deferredCompiledPlan.logicalOwnershipTransfers()
-        ;
+        const usize logicalOwnershipTransferCount = deferredCompiledPlan.logicalOwnershipTransferCount();
+        const Core::GpuCompiledOwnershipTransfer* const logicalOwnershipTransfers = deferredCompiledPlan.logicalOwnershipTransfers();
         if(logicalOwnershipTransfers){
             for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex){
                 const Core::GpuCompiledOwnershipTransfer& transfer = logicalOwnershipTransfers[transferIndex];
@@ -568,9 +482,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         );
     }
 
-    const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics =
-        device.getDescriptorHeap().lifecycleStatistics()
-    ;
+    const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics = device.getDescriptorHeap().lifecycleStatistics();
     StringAppendFormat(
         m_frameGraphRendererLabel,
         "\nDescriptor heap lifecycle (device-wide current): initialized={} "
@@ -590,24 +502,15 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         descriptorHeapLifecycleStatistics.abandonedHeapUseCount
     );
 
-    const Handle rendererFrame = builder.addPass(
-        Name("ecs_render/frame"),
-        AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()),
-        rendererFrameMetadata
-    );
-    for(
-        const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics
-        : physicalQueueRuntimeStatistics
-    ){
+    const Handle rendererFrame = builder.addPass(Name("ecs_render/frame"), AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()), rendererFrameMetadata);
+    for(const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics : physicalQueueRuntimeStatistics){
         if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
             NWB_ASSERT(false);
             return false;
         }
     }
     for(const Core::GpuTaskGraphPacketSubmissionStatistics& packetStatistics : packetSubmissionStatistics){
-        const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord telemetryStatistics =
-            ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index)
-        ;
+        const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord telemetryStatistics = ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index);
         if(!builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)){
             NWB_ASSERT(false);
             return false;
@@ -731,13 +634,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
 
     if(m_deferredLightingTaskGraphScheduled){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(
-            deferredTaskGraphView,
-            m_deferredLightingTaskGraphQueueAssignments,
-            deferredCompiledPlan,
-            m_deferredLightingSubmissionTransaction,
-            scratchArena
-        )){
+        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(deferredTaskGraphView, m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, m_deferredLightingSubmissionTransaction, scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
         }
         else{
@@ -746,12 +643,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 .compiledPlan = &deferredCompiledPlan,
                 .queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,
             };
-            if(!deferredTaskGraphView.appendFrameGraphTelemetry(
-                builder,
-                m_deferredLightingTaskGraphAnalysis,
-                scratchArena,
-                deferredLightingTelemetryOptions
-            ))
+            if(!deferredTaskGraphView.appendFrameGraphTelemetry(builder, m_deferredLightingTaskGraphAnalysis, scratchArena, deferredLightingTelemetryOptions))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
         }
     }

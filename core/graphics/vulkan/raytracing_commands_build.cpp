@@ -67,24 +67,12 @@ AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
     return signature;
 }
 
-bool AccelStructGeometryBuildSignaturesEqual(
-    const AccelStructGeometryBuildSignature& previous,
-    const AccelStructGeometryBuildSignature& current
-){
-    if(
-        previous.geometryType != current.geometryType
-        || previous.geometryFlags != current.geometryFlags
-        || previous.primitiveCount != current.primitiveCount
-    )
+bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current){
+    if(previous.geometryType != current.geometryType || previous.geometryFlags != current.geometryFlags || previous.primitiveCount != current.primitiveCount)
         return false;
 
     if(previous.geometryType == VK_GEOMETRY_TYPE_TRIANGLES_KHR){
-        return
-            previous.vertexFormat == current.vertexFormat
-            && previous.indexType == current.indexType
-            && previous.maxVertex == current.maxVertex
-            && previous.transformDataPresent == current.transformDataPresent
-        ;
+        return previous.vertexFormat == current.vertexFormat && previous.indexType == current.indexType && previous.maxVertex == current.maxVertex && previous.transformDataPresent == current.transformDataPresent;
     }
     if(previous.geometryType == VK_GEOMETRY_TYPE_SPHERES_NV){
         return
@@ -143,10 +131,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
             || !m_context.deviceDispatch.vkCmdTraceRaysKHR
         )
     ){
-        rejectCommandRecording(
-            NWB_TEXT("set ray-tracing state"),
-            NWB_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready")
-        );
+        rejectCommandRecording(NWB_TEXT("set ray-tracing state"), NWB_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready"));
         return;
     }
 
@@ -168,11 +153,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 }
 
 
-Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(
-    const u64 buildScratchSize,
-    const u64 scratchAlignment,
-    TStringView operationName
-){
+Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 buildScratchSize, const u64 scratchAlignment, TStringView operationName){
     if(buildScratchSize == 0u)
         return VkDeviceAddress{0u};
     if(!m_currentCmdBuf || m_nativeRecordingID == 0u || scratchAlignment == 0u){
@@ -188,22 +169,12 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(
 
     const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
     const u64 completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
-    const auto allocation = m_device.m_scratchManager.suballocateBuffer(
-        scratchAllocationSize,
-        m_currentCmdBuf.get(),
-        m_nativeRecordingID,
-        physicalQueue,
-        completedVersion,
-        1u
-    );
+    const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion, 1u);
     if(!allocation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
         return MakeUnexpected(Failure{});
     }
-    if(!isBufferReadyForCommandQueue(
-        allocation->buffer,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-    )){
+    if(!isBufferReadyForCommandQueue(allocation->buffer, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch buffer is not ready for device-address access"), operationName);
         return MakeUnexpected(Failure{});
     }
@@ -240,29 +211,17 @@ Expected<bool> CommandList::validateAccelStructBuildSignature(
         geometrySignatures,
         geometrySignatureCount,
         operationName
-    ](
-        const VkAccelerationStructureTypeKHR priorAccelStructType,
-        const VkBuildAccelerationStructureFlagsKHR priorBuildFlags,
-        const AccelStructGeometryBuildSignature* const priorGeometrySignatures,
-        const usize priorGeometrySignatureCount
-    ) -> bool{
+    ](const VkAccelerationStructureTypeKHR priorAccelStructType, const VkBuildAccelerationStructureFlagsKHR priorBuildFlags, const AccelStructGeometryBuildSignature* const priorGeometrySignatures, const usize priorGeometrySignatureCount) -> bool{
         if((priorBuildFlags & VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR) == 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: the prior accepted build did not allow updates"), operationName);
             return false;
         }
-        if(
-            priorAccelStructType != accelStructType
-            || priorBuildFlags != buildFlags
-            || priorGeometrySignatureCount != geometrySignatureCount
-        ){
+        if(priorAccelStructType != accelStructType || priorBuildFlags != buildFlags || priorGeometrySignatureCount != geometrySignatureCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: update build signature does not match the prior build"), operationName);
             return false;
         }
         for(usize geometryIndex = 0u; geometryIndex < geometrySignatureCount; ++geometryIndex){
-            if(!__hidden_raytracing_commands_build::AccelStructGeometryBuildSignaturesEqual(
-                priorGeometrySignatures[geometryIndex],
-                geometrySignatures[geometryIndex]
-            )){
+            if(!__hidden_raytracing_commands_build::AccelStructGeometryBuildSignaturesEqual(priorGeometrySignatures[geometryIndex], geometrySignatures[geometryIndex])){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: update build signature does not match the prior build"), operationName);
                 return false;
             }
@@ -284,19 +243,11 @@ Expected<bool> CommandList::validateAccelStructBuildSignature(
     if(!performUpdate)
         return acceptedRole != nullptr;
     if(!acceptedRole){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to {}: PerformUpdate requires a previously accepted build or an earlier same-command-buffer build")
-            , operationName
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: PerformUpdate requires a previously accepted build or an earlier same-command-buffer build"), operationName);
         return MakeUnexpected(Failure{});
     }
 
-    if(!validatePriorSignature(
-        acceptedRole->accelStructType,
-        acceptedRole->buildFlags,
-        acceptedRole->geometrySignatures.data(),
-        acceptedRole->geometrySignatures.size()
-    ))
+    if(!validatePriorSignature(acceptedRole->accelStructType, acceptedRole->buildFlags, acceptedRole->geometrySignatures.data(), acceptedRole->geometrySignatures.size()))
         return MakeUnexpected(Failure{});
     return true;
 }
@@ -310,11 +261,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     TStringView operationName
 ){
     Buffer* const backingBuffer = as.getBackingBuffer();
-    if(
-        !m_device.isAccelStructReadyForGpuUse(&as)
-        || !backingBuffer
-        || !isBufferAdmittedToCommandQueue(*backingBuffer)
-    ){
+    if(!m_device.isAccelStructReadyForGpuUse(&as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is not ready"), operationName);
         return false;
     }
@@ -340,34 +287,15 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     geometry.geometry.instances.data.deviceAddress = instanceDataAddress;
 
     const auto primitiveCount = static_cast<u32>(numInstances);
-    const AccelStructGeometryBuildSignature geometrySignature =
-        __hidden_raytracing_commands_build::MakeAccelStructGeometryBuildSignature(
-            geometry,
-            nullptr,
-            nullptr,
-            primitiveCount,
-            false
-        )
-    ;
-    const auto hasPriorBuildResult = validateAccelStructBuildSignature(
-        as,
-        VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
-        vkBuildFlags,
-        &geometrySignature,
-        1u,
-        performUpdate,
-        operationName
-    );
+    const AccelStructGeometryBuildSignature geometrySignature = __hidden_raytracing_commands_build::MakeAccelStructGeometryBuildSignature(geometry, nullptr, nullptr, primitiveCount, false);
+    const auto hasPriorBuildResult = validateAccelStructBuildSignature(as, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, vkBuildFlags, &geometrySignature, 1u, performUpdate, operationName);
     if(!hasPriorBuildResult)
         return false;
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
     buildInfo.flags = vkBuildFlags;
-    buildInfo.mode = performUpdate
-        ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
-        : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR
-    ;
+    buildInfo.mode = performUpdate ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.srcAccelerationStructure = performUpdate ? as.m_accelStruct : VK_NULL_HANDLE;
     buildInfo.dstAccelerationStructure = as.m_accelStruct;
     buildInfo.geometryCount = 1;
@@ -384,10 +312,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     }
 
     const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
-    const u64 scratchAlignment = Max<u64>(
-        static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
-        1u
-    );
+    const u64 scratchAlignment = Max<u64>(static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment), 1u);
     const auto scratchAddressResult = suballocateBuildScratchAddress(scratchSize, scratchAlignment, NWB_TEXT("allocate TLAS scratch buffer"));
     if(!scratchAddressResult)
         return false;
@@ -409,13 +334,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
     rangeInfo.primitiveCount = primitiveCount;
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(
-        as,
-        VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
-        vkBuildFlags,
-        &geometrySignature,
-        1u
-    )){
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, vkBuildFlags, &geometrySignature, 1u)){
         rejectCommandRecording(operationName, NWB_TEXT("failed to retain acceleration-structure build signature"));
         return false;
     }
@@ -454,11 +373,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     }
     Buffer* const backingBuffer = as->getBackingBuffer();
-    if(
-        !m_device.isAccelStructReadyForGpuUse(as)
-        || !backingBuffer
-        || !isBufferAdmittedToCommandQueue(*backingBuffer)
-    ){
+    if(!m_device.isAccelStructReadyForGpuUse(as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is not ready"));
         return;
     }
@@ -501,13 +416,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
         const RayTracingGeometryTriangles& triangles = pGeometries[i].geometryData.triangles;
         if(!triangles.opacityMicromap){
-            if(
-                triangles.ommIndexBuffer
-                || triangles.ommIndexBufferOffset != 0u
-                || triangles.pOmmUsageCounts
-                || triangles.numOmmUsageCounts != 0u
-                || triangles.ommIndexFormat != Format::UNKNOWN
-            ){
+            if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u || triangles.pOmmUsageCounts || triangles.numOmmUsageCounts != 0u || triangles.ommIndexFormat != Format::UNKNOWN){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM metadata requires an opacity micromap"));
                 return;
             }
@@ -532,9 +441,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
     opacityMicromapUsageCounts.resize(totalOpacityMicromapUsageCount);
 
-    constexpr VkBufferUsageFlags s_BuildInputUsage =
-        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-    ;
+    constexpr VkBufferUsageFlags s_BuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> bool{
         if(!buffer)
             return true;
@@ -550,10 +457,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         const RayTracingGeometryDesc& geometryDesc = pGeometries[i];
         if(geometryDesc.geometryType == RayTracingGeometryType::Triangles){
             const RayTracingGeometryTriangles& triangles = geometryDesc.geometryData.triangles;
-            if(
-                !validateBuildInput(triangles.vertexBuffer, NWB_TEXT("triangle vertex"))
-                || !validateBuildInput(triangles.indexBuffer, NWB_TEXT("triangle index"))
-            )
+            if(!validateBuildInput(triangles.vertexBuffer, NWB_TEXT("triangle vertex")) || !validateBuildInput(triangles.indexBuffer, NWB_TEXT("triangle index")))
                 return;
         }
         else if(geometryDesc.geometryType == RayTracingGeometryType::AABBs){
@@ -562,18 +466,12 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
         else if(geometryDesc.geometryType == RayTracingGeometryType::Spheres){
             const RayTracingGeometrySpheres& spheres = geometryDesc.geometryData.spheres;
-            if(
-                !validateBuildInput(spheres.vertexBuffer, NWB_TEXT("sphere vertex"))
-                || !validateBuildInput(spheres.indexBuffer, NWB_TEXT("sphere index"))
-            )
+            if(!validateBuildInput(spheres.vertexBuffer, NWB_TEXT("sphere vertex")) || !validateBuildInput(spheres.indexBuffer, NWB_TEXT("sphere index")))
                 return;
         }
         else if(geometryDesc.geometryType == RayTracingGeometryType::Lss){
             const RayTracingGeometryLss& lss = geometryDesc.geometryData.lss;
-            if(
-                !validateBuildInput(lss.vertexBuffer, NWB_TEXT("LSS vertex"))
-                || !validateBuildInput(lss.indexBuffer, NWB_TEXT("LSS index"))
-            )
+            if(!validateBuildInput(lss.vertexBuffer, NWB_TEXT("LSS vertex")) || !validateBuildInput(lss.indexBuffer, NWB_TEXT("LSS index")))
                 return;
         }
 
@@ -589,39 +487,26 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             blasScratch.geometries[i].pNext = &blasScratch.spheresData[i];
         else if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV)
             blasScratch.geometries[i].pNext = &blasScratch.lssData[i];
-        if(
-            pGeometries[i].geometryType == RayTracingGeometryType::Triangles
-            && pGeometries[i].geometryData.triangles.opacityMicromap
-        ){
+        if(pGeometries[i].geometryType == RayTracingGeometryType::Triangles && pGeometries[i].geometryData.triangles.opacityMicromap){
             const RayTracingGeometryTriangles& triangles = pGeometries[i].geometryData.triangles;
             OpacityMicromap* const opacityMicromap = triangles.opacityMicromap;
             if(&opacityMicromap->m_context != &m_context){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap belongs to another device"));
                 return;
             }
-            if(
-                !m_currentCmdBuf->hasPendingOpacityMicromapBuild(*opacityMicromap)
-                && !opacityMicromap->m_acceptedConstructed.load(MemoryOrder::acquire)
-            ){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap has not been constructed by an accepted or earlier same-command-buffer build")
-                );
+            if(!m_currentCmdBuf->hasPendingOpacityMicromapBuild(*opacityMicromap) && !opacityMicromap->m_acceptedConstructed.load(MemoryOrder::acquire)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap has not been constructed by an accepted or earlier same-command-buffer build"));
                 return;
             }
 
-            constexpr VkBufferUsageFlags s_MicromapStorageUsage =
-                VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-            ;
+            constexpr VkBufferUsageFlags s_MicromapStorageUsage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
             Buffer* const micromapStorage = opacityMicromap->m_dataBuffer.get();
             if(!isBufferReadyForCommandQueue(micromapStorage, s_MicromapStorageUsage)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap storage is not ready"));
                 return;
             }
             const BufferDesc& micromapStorageDesc = micromapStorage->getCreationDescription();
-            if(
-                !micromapStorageDesc.isAccelStructStorage
-                || opacityMicromap->m_micromap == VK_NULL_HANDLE
-            ){
+            if(!micromapStorageDesc.isAccelStructStorage || opacityMicromap->m_micromap == VK_NULL_HANDLE){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap is invalid"));
                 return;
             }
@@ -630,9 +515,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             u64 ommIndexStride = 0u;
             if(triangles.ommIndexFormat == Format::UNKNOWN){
                 if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Vulkan: Failed to build BLAS: implicit triangle OMM indices cannot specify a buffer")
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: implicit triangle OMM indices cannot specify a buffer"));
                     return;
                 }
             }
@@ -645,9 +528,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 ommIndexStride = sizeof(u32);
             }
             else{
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index format must be UNKNOWN, R16_UINT, or R32_UINT")
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index format must be UNKNOWN, R16_UINT, or R32_UINT"));
                 return;
             }
 
@@ -664,15 +545,11 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 const u64 ommIndexByteSize = static_cast<u64>(blasScratch.primitiveCounts[i]) * ommIndexStride;
                 const u64 validatedOmmIndexByteSize = ommIndexByteSize != 0u ? ommIndexByteSize : 1u;
                 if(!ommIndexDesc.isAccelStructBuildInput){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer lacks build-input provenance")
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer lacks build-input provenance"));
                     return;
                 }
                 if(!VulkanDetail::IsBufferRangeInBounds(ommIndexDesc, triangles.ommIndexBufferOffset, validatedOmmIndexByteSize)){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer range is outside the buffer")
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer range is outside the buffer"));
                     return;
                 }
 
@@ -700,16 +577,9 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM usage count has an invalid format"));
                     return;
                 }
-                const u32 maxSubdivisionLevel = format == VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT
-                    ? opacityMicromap->m_maxOpacity2StateSubdivisionLevel
-                    : opacityMicromap->m_maxOpacity4StateSubdivisionLevel
-                ;
+                const u32 maxSubdivisionLevel = format == VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT ? opacityMicromap->m_maxOpacity2StateSubdivisionLevel : opacityMicromap->m_maxOpacity4StateSubdivisionLevel;
                 if(usage.subdivisionLevel > maxSubdivisionLevel){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM subdivision level {} exceeds device limit {}")
-                        , usage.subdivisionLevel
-                        , maxSubdivisionLevel
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM subdivision level {} exceeds device limit {}"), usage.subdivisionLevel, maxSubdivisionLevel);
                     return;
                 }
 
@@ -720,9 +590,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             }
 
             VkAccelerationStructureTrianglesOpacityMicromapEXT& ommGeometry = opacityMicromapGeometries[i];
-            ommGeometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT
-            );
+            ommGeometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureTrianglesOpacityMicromapEXT>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT);
             ommGeometry.indexType = ommIndexType;
             ommGeometry.indexBuffer.deviceAddress = ommIndexAddress;
             ommGeometry.indexStride = ommIndexStride;
@@ -738,13 +606,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             ++transformCount;
         }
 
-        geometrySignatures[i] = __hidden_raytracing_commands_build::MakeAccelStructGeometryBuildSignature(
-            blasScratch.geometries[i],
-            &blasScratch.spheresData[i],
-            &blasScratch.lssData[i],
-            blasScratch.primitiveCounts[i],
-            pGeometries[i].useTransform
-        );
+        geometrySignatures[i] = __hidden_raytracing_commands_build::MakeAccelStructGeometryBuildSignature(blasScratch.geometries[i], &blasScratch.spheresData[i], &blasScratch.lssData[i], blasScratch.primitiveCounts[i], pGeometries[i].useTransform);
     }
 
     // OMM update invariants also cover the micromap handle and its index/usage metadata. Those details are not persisted in the AS signature, so this path remains fail-closed.
@@ -772,10 +634,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
         VkAccelerationStructureTrianglesOpacityMicromapEXT& ommGeometry = opacityMicromapGeometries[i];
         const u32 usageCount = pGeometries[i].geometryData.triangles.numOmmUsageCounts;
-        ommGeometry.pUsageCounts = usageCount != 0u
-            ? opacityMicromapUsageCounts.data() + opacityMicromapUsageOffsets[i]
-            : nullptr
-        ;
+        ommGeometry.pUsageCounts = usageCount != 0u ? opacityMicromapUsageCounts.data() + opacityMicromapUsageOffsets[i] : nullptr;
         blasScratch.geometries[i].geometry.triangles.pNext = &ommGeometry;
     }
 
@@ -888,10 +747,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     buildInfo.flags = vkBuildFlags;
-    buildInfo.mode = performUpdate
-        ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
-        : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR
-    ;
+    buildInfo.mode = performUpdate ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.srcAccelerationStructure = performUpdate ? as->m_accelStruct : VK_NULL_HANDLE;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
@@ -908,10 +764,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
 
     const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
-    const u64 scratchAlignment = Max<u64>(
-        static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
-        1u
-    );
+    const u64 scratchAlignment = Max<u64>(static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment), 1u);
     const auto scratchAddressResult = suballocateBuildScratchAddress(scratchSize, scratchAlignment, NWB_TEXT("allocate BLAS scratch buffer"));
     if(!scratchAddressResult)
         return;
@@ -941,17 +794,8 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
-    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(
-        *as,
-        VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-        vkBuildFlags,
-        geometrySignatures.data(),
-        geometrySignatures.size()
-    )){
-        rejectCommandRecording(
-            NWB_TEXT("build bottom-level acceleration structure"),
-            NWB_TEXT("failed to retain acceleration-structure build signature")
-        );
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(*as, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, vkBuildFlags, geometrySignatures.data(), geometrySignatures.size())){
+        rejectCommandRecording(NWB_TEXT("build bottom-level acceleration structure"), NWB_TEXT("failed to retain acceleration-structure build signature"));
         return;
     }
     m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);

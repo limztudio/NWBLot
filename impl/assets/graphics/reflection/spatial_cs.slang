@@ -33,8 +33,7 @@ struct NwbReflectionSpatialView{
 };
 #pragma warning(push)
 #pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbReflectionSpatialView, Std140DataLayout> g_NwbHeapReflectionSpatialViews[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbReflectionSpatialView, Std140DataLayout> g_NwbHeapReflectionSpatialViews[];
 #pragma warning(pop)
 
 #define g_NwbReflectionSpatialResources g_NwbHeapDeferredBindlessResources[g_NwbReflectionSpatial.deferredResourcesSlot]
@@ -156,10 +155,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     }
     const float focalX = length(g_NwbReflectionSpatialView.worldToClip[0].xyz);
     const float focalY = length(g_NwbReflectionSpatialView.worldToClip[1].xyz);
-    const float pixelFootprint = max(
-        2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.width) * focalX, 1e-6),
-        2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.height) * focalY, 1e-6)
-    );
+    const float pixelFootprint = max(2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.width) * focalX, 1e-6), 2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.height) * focalY, 1e-6));
     const float3 viewDirection = nwbSafeNormalize(g_NwbReflectionSpatialView.cameraPosition.xyz - position, normal);
     const float tangentFootprint = pixelFootprint / max(abs(dot(normal, viewDirection)), 0.05);
     const half roughness = half(saturate(float(specular.a)));
@@ -221,7 +217,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
                 -half(50.0h) * roughnessDifference * roughnessDifference
             ));
             // Accumulate in FP32: weighted HDR sums can exceed FP16 range before normalization.
-            // True zero samples participate normally. Rejecting black samples or clamping bright samples biases energy, and filtered output must never be used as the next temporal-history bank.
+            // True zero samples participate normally.
+            // Rejecting black samples or clamping bright samples biases energy, and filtered output must never be used as the next temporal-history bank.
             sum += neighbor.rgb * float(weight);
             weightSum += float(weight);
         }

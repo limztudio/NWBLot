@@ -24,9 +24,7 @@ namespace Tests::Smoke{
 
 
 // Reconstruct a single-line fixture's selection from the canonical geometry for its framebuffer probe.
-[[nodiscard]] Impl::Ui::Rect CaptureEditSelection(
-    Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model,
-    const Impl::Ui::EditBoxPlacement& placement, f32 fontSize);
+[[nodiscard]] Impl::Ui::Rect CaptureEditSelection(Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxPlacement& placement, f32 fontSize);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

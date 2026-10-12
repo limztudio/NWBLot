@@ -236,10 +236,7 @@ inline void CloseFileDescriptor(int& fd)noexcept{
         return 0;
 
     const u64 remaining = deadlineMilliseconds - now;
-    return remaining > static_cast<u64>(INT_MAX)
-        ? INT_MAX
-        : static_cast<int>(remaining)
-    ;
+    return remaining > static_cast<u64>(INT_MAX) ? INT_MAX : static_cast<int>(remaining);
 }
 
 inline void KillAndReapProcess(const pid_t childPid)noexcept{
@@ -335,11 +332,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<int, ProcessExecutionFailure::Enum> RunProcessRedirectedToFile(
-    ArenaT& arena,
-    const Span<const AStringView> arguments,
-    const AStringView outputPath
-){
+[[nodiscard]] inline Expected<int, ProcessExecutionFailure::Enum> RunProcessRedirectedToFile(ArenaT& arena, const Span<const AStringView> arguments, const AStringView outputPath){
     if(outputPath.empty() || outputPath.find('\0') != AStringView::npos)
         return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -363,15 +356,7 @@ template<typename ArenaT>
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
 
-    HANDLE outputHandle = CreateFileA(
-        nativeOutputPath.c_str(),
-        GENERIC_WRITE,
-        FILE_SHARE_READ,
-        &securityAttributes,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr
-    );
+    HANDLE outputHandle = CreateFileA(nativeOutputPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &securityAttributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(outputHandle == INVALID_HANDLE_VALUE)
         return MakeUnexpected(ProcessExecutionFailure::OutputOpenFailed);
 
@@ -383,18 +368,7 @@ template<typename ArenaT>
     startupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 
     PROCESS_INFORMATION processInfo = {};
-    const BOOL created = CreateProcessA(
-        nativeExecutable.c_str(),
-        commandLine.data(),
-        nullptr,
-        nullptr,
-        TRUE,
-        CREATE_NO_WINDOW,
-        nullptr,
-        nullptr,
-        &startupInfo,
-        &processInfo
-    );
+    const BOOL created = CreateProcessA(nativeExecutable.c_str(), commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo);
     CloseHandle(outputHandle);
     if(!created)
         return MakeUnexpected(ProcessExecutionFailure::CreateFailed);
@@ -410,11 +384,7 @@ template<typename ArenaT>
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
     static_cast<void>(arena);
 
-    const int outputFileDescriptor = ::open(
-        nativeOutputPath.c_str(),
-        O_CREAT | O_TRUNC | O_WRONLY,
-        ProcessExecutionDetail::s_RedirectedOutputFileMode
-    );
+    const int outputFileDescriptor = ::open(nativeOutputPath.c_str(), O_CREAT | O_TRUNC | O_WRONLY, ProcessExecutionDetail::s_RedirectedOutputFileMode);
     if(outputFileDescriptor < 0)
         return MakeUnexpected(ProcessExecutionFailure::OutputOpenFailed);
 
@@ -510,10 +480,7 @@ template<typename ArenaT, typename StringT>
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
     const u64 timeoutStartMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
-    const u64 deadlineMilliseconds = timeoutMilliseconds == 0u || timeoutStartMilliseconds == 0u
-        ? 0u
-        : timeoutStartMilliseconds + static_cast<u64>(timeoutMilliseconds)
-    ;
+    const u64 deadlineMilliseconds = timeoutMilliseconds == 0u || timeoutStartMilliseconds == 0u ? 0u : timeoutStartMilliseconds + static_cast<u64>(timeoutMilliseconds);
 
     const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
     if(flags >= 0){
@@ -525,10 +492,7 @@ template<typename ArenaT, typename StringT>
     }
 
     char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes] = {};
-    const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer)
-        ? readBufferBytes
-        : sizeof(buffer)
-    ;
+    const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer) ? readBufferBytes : sizeof(buffer);
     bool readSucceeded = true;
     bool outputTruncated = false;
     bool timedOut = false;
@@ -557,10 +521,7 @@ template<typename ArenaT, typename StringT>
         const ssize_t readBytes = ::read(pipeFds[0], buffer, effectiveReadBufferBytes);
         if(readBytes > 0){
             const usize length = static_cast<usize>(readBytes);
-            const usize remainingOutputBytes = outOutput.size() < maxOutputBytes
-                ? maxOutputBytes - outOutput.size()
-                : 0u
-            ;
+            const usize remainingOutputBytes = outOutput.size() < maxOutputBytes ? maxOutputBytes - outOutput.size() : 0u;
             if(length <= remainingOutputBytes)
                 outOutput.append(buffer, length);
             else{
@@ -593,11 +554,7 @@ template<typename ArenaT, typename StringT>
     }
 
     const bool processSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds);
-    return readSucceeded
-        && !outputTruncated
-        && processSucceeded
-        && !outOutput.empty()
-    ;
+    return readSucceeded && !outputTruncated && processSucceeded && !outOutput.empty();
 }
 
 

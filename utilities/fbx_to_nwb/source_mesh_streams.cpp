@@ -16,11 +16,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FbxSourceMeshStreams::ReserveSourceMeshStreams(
-    SourceMeshStreams& mesh,
-    const usize estimatedTriangleCorners,
-    const bool wantsSkinning
-){
+void FbxSourceMeshStreams::ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const bool wantsSkinning){
     mesh.positions.reserve(estimatedTriangleCorners);
     mesh.normals.reserve(estimatedTriangleCorners);
     mesh.uv0.reserve(estimatedTriangleCorners);
@@ -33,11 +29,7 @@ void FbxSourceMeshStreams::ReserveSourceMeshStreams(
 }
 
 
-void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(
-    SourceMeshBuildContext& context,
-    const usize estimatedTriangleCorners,
-    const bool wantsSkinning
-){
+void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning){
     context.positions.reserve(estimatedTriangleCorners);
     context.normals.reserve(estimatedTriangleCorners);
     context.uv0.reserve(estimatedTriangleCorners);
@@ -94,10 +86,7 @@ void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 
-bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(
-    const ufbx_mesh& mesh,
-    UtilityVector<u32>& inOutTriangleIndices
-){
+bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityVector<u32>& inOutTriangleIndices){
     if(mesh.max_face_triangles > Limit<usize>::s_Max / s_TriangleIndexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return false;
@@ -110,10 +99,7 @@ bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(
 }
 
 
-Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(
-    SourceMeshStreams& mesh,
-    const bool usedDefaultUvs
-){
+Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs){
     using RebuildVertex = ::TangentFrameRebuildVertex;
 
     SourceTangentReport outTangentReport;
@@ -130,12 +116,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
-        rebuildVertices.push_back(RebuildVertex{
-            Float4(position.x, position.y, position.z, 0.0f),
-            Float4(normal.x, normal.y, normal.z, 0.0f),
-            Float4(1.0f, 0.0f, 0.0f, 1.0f),
-            mesh.uv0[ref.uv0],
-        });
+        rebuildVertices.push_back(RebuildVertex{ Float4(position.x, position.y, position.z, 0.0f), Float4(normal.x, normal.y, normal.z, 0.0f), Float4(1.0f, 0.0f, 0.0f, 1.0f), mesh.uv0[ref.uv0], });
     }
 
     UtilityVector<u32> rebuildIndices;
@@ -181,15 +162,8 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(
         SourceVertexRef& ref = mesh.vertexRefs[vertexRefIndex];
         const Vec3& storedNormal = mesh.normals[ref.normal];
         const Float4& storedTangent = rebuildVertices[vertexRefIndex].tangent;
-        const SIMDVectorSingle normal = ::FrameNormalizeDirection(
-            LoadFloat(storedNormal),
-            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        );
-        const SIMDVectorSingle tangent = ::FrameResolveTangent(
-            normal,
-            VectorSetW(LoadFloat(storedTangent), 0.0f),
-            ::FrameFallbackTangent(normal)
-        );
+        const SIMDVectorSingle normal = ::FrameNormalizeDirection(LoadFloat(storedNormal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+        const SIMDVectorSingle tangent = ::FrameResolveTangent(normal, VectorSetW(LoadFloat(storedTangent), 0.0f), ::FrameFallbackTangent(normal));
         if(!::FrameValidDirection(tangent)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
             return MakeUnexpected(Failure{});
@@ -205,20 +179,12 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(
     }
     outTangentReport.degenerateUvTriangleCount = rebuildResult->degenerateUvTriangleCount;
     outTangentReport.fallbackTangentVertexCount = rebuildResult->fallbackTangentVertexCount;
-    outTangentReport.mode =
-        usedDefaultUvs || rebuildResult->degenerateUvTriangleCount != 0u || rebuildResult->fallbackTangentVertexCount != 0u
-        ? SourceTangentMode::GeneratedFallback
-        : SourceTangentMode::GeneratedUv
-    ;
+    outTangentReport.mode = usedDefaultUvs || rebuildResult->degenerateUvTriangleCount != 0u || rebuildResult->fallbackTangentVertexCount != 0u ? SourceTangentMode::GeneratedFallback : SourceTangentMode::GeneratedUv;
     return outTangentReport;
 }
 
 
-Expected<u32> FbxSourceMeshStreams::InternSourceCorner(
-    SourceMeshBuildContext& context,
-    const SourceTriangleCorner& corner,
-    const bool wantsSkinning
-){
+Expected<u32> FbxSourceMeshStreams::InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const bool wantsSkinning){
     SourceVertexRef ref;
     const auto positionIndex = InternSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel);
     if(!positionIndex)

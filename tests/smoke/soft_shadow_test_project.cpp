@@ -58,8 +58,7 @@ using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 
 
 // Opaque and glass casters expose contact-to-distant penumbras under directional, point and spot lights.
-// NWB_SOFT_SHADOW_TEST_ANGLE and NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS control softness;
-// NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins yaw for A/B captures.
+// NWB_SOFT_SHADOW_TEST_ANGLE and NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS control softness; NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins yaw for A/B captures.
 static constexpr SoftShadowModelRef s_Model{"project/characters/body/model"};
 static constexpr SoftShadowMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
@@ -186,27 +185,14 @@ public:
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
-        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
-            *m_world,
-            s_DirectionalLightPitch,
-            s_DirectionalLightYaw,
-            0.0f,
-            Float4(1.00f, 0.96f, 0.88f),
-            s_DirectionalLightIntensity
-        );
+        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.00f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight)){
             light->angularRadius = ConfiguredAngularRadius();
             if(m_timingEnabled)
                 light->enableCaustics = false;
         }
 
-        const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(
-            *m_world,
-            Float4(1.5f, 2.2f, 0.3f, 0.0f),
-            Float4(1.00f, 0.35f, 0.30f),
-            s_PointLightIntensity,
-            s_PointLightRange
-        );
+        const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(1.5f, 2.2f, 0.3f, 0.0f), Float4(1.00f, 0.35f, 0.30f), s_PointLightIntensity, s_PointLightRange);
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(pointLight)){
             light->sourceRadius = ConfiguredSourceRadius();
             if(m_timingEnabled)
@@ -248,17 +234,7 @@ public:
 
         // The opaque caster provides the contact-hardening reference.
         bool tintApplied = false;
-        m_characterOwner = CreateTintedModelEntity(
-            *m_world,
-            m_context.objectArena,
-            s_Model,
-            opaqueMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.86f, 0.80f, 0.74f, 1.0f),
-            Float4(0.7f, 0.0f, -1.1f, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            tintApplied
-        );
+        m_characterOwner = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), tintApplied);
         if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
@@ -271,20 +247,13 @@ public:
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             // Coverage and absorption share authored tint/density; Beer-Lambert integrates the actual mesh chord.
-            Float4(0.20f, 0.55f, 0.12f, 0.6f),
-            Float4(-0.6f, 0.0f, -1.1f, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            glassTintApplied
-        );
+            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), glassTintApplied);
         if(!glassTintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
 
         SyncSmokeModelRuntimes(*m_world);
 
-        NWB_FATAL_ASSERT_MSG(
-            activeCamera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(),
-            NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities")
-        );
+        NWB_FATAL_ASSERT_MSG(activeCamera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(), NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
 
         if(m_timingEnabled){
             const NWB::Core::ECS::EntityID lights[] = { directionalLight, pointLight, spotLight };
@@ -295,22 +264,13 @@ public:
                     return false;
                 }
             }
-            const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
-                && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: natural shadow route {}")
-                , hardwareAvailable ? NWB_TEXT("hardware") : NWB_TEXT("software")
-            );
+            const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: natural shadow route {}"), hardwareAvailable ? NWB_TEXT("hardware") : NWB_TEXT("software"));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: caustic emission 0"));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: indirect response hemi-ambient"));
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: source extents angular={} radius={}")
-                , static_cast<f64>(ConfiguredAngularRadius())
-                , static_cast<f64>(ConfiguredSourceRadius())
-            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: source extents angular={} radius={}"), static_cast<f64>(ConfiguredAngularRadius()), static_cast<f64>(ConfiguredSourceRadius()));
         }
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad")
-            , static_cast<f64>(ConfiguredAngularRadius())
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad"), static_cast<f64>(ConfiguredAngularRadius()));
         return true;
     }
 
@@ -330,10 +290,7 @@ public:
                 // The capture runner waits for this marker before its settle delay and client capture.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"),
-                    m_rendererBaselineRenderedFrameCount
-                );
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"), m_rendererBaselineRenderedFrameCount);
             }
             return true;
         }

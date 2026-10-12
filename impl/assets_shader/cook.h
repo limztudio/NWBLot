@@ -164,62 +164,26 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<ShaderEntry> parseShaderMeta(
-        const Path& nwbFilePath,
-        const Core::Metascript::Document& doc,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-    [[nodiscard]] Expected<IncludeEntry> parseIncludeMeta(
-        const Path& nwbFilePath,
-        const Core::Metascript::Document& doc,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] Expected<ShaderEntry> parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<IncludeEntry> parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
 
-    bool validateVariantSignature(
-        AStringView contextLabel,
-        AStringView variantSignature,
-        const CookMap<CookString, DefineEntry>& defineValues,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    bool validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
 
     void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata);
 
-    bool gatherShaderDependencies(
-        const Path& sourcePath,
-        const CookVector<Path>& includeDirectories,
-        Span<const AStringView> externallyPlannedMacroIncludes,
-        CookVector<Path>& outDependencies,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    bool gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, Span<const AStringView> externallyPlannedMacroIncludes, CookVector<Path>& outDependencies, Core::Alloc::ScratchArena& scratchArena);
 
-    bool expandDefineCombinations(
-        const CookMap<CookString, DefineEntry>& defineValues,
-        CookVector<DefineCombo>& outCombinations,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations, Core::Alloc::ScratchArena& scratchArena);
 
-    CookString buildVariantName(
-        const DefineCombo& combo,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
 
     struct DependencyChecksum{
         u64 checksum = 0u;
         bool compilerInputsHaveBom = false;
     };
 
-    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(
-        const CookVector<Path>& dependencies,
-        InitializerList<DependencyRootAlias> dependencyRootAliases,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-    [[nodiscard]] u64 computeSourceChecksum(
-        const ShaderEntry& entry,
-        const AStringView variantSignature,
-        u64 dependencyChecksum,
-        u64 compilerFingerprint,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(const CookVector<Path>& dependencies, InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] u64 computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, u64 dependencyChecksum, u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

@@ -40,24 +40,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::ContainsTriangleValue(
-    SIMDVectorSingle sphereValue,
-    SIMDVectorSingle v0,
-    SIMDVectorSingle v1,
-    SIMDVectorSingle v2
-)noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::ContainsTriangleValue(SIMDVectorSingle sphereValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
     const SIMDVectorSingle points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::s_TriangleVertexCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return IntersectsTriangleValue(sphereValue, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::ContainsTriangleValue(
-    SIMDVectorDouble sphereValue,
-    SIMDVectorDouble v0,
-    SIMDVectorDouble v1,
-    SIMDVectorDouble v2
-)noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::ContainsTriangleValue(SIMDVectorDouble sphereValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
     const SIMDVectorDouble points[CollisionDoubleDetail::s_DoubleTriangleVertexCount] = { v0, v1, v2 };
     if(CollisionDoubleDetail::PointsInsideSphere(points, CollisionDoubleDetail::s_DoubleTriangleVertexCount, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
@@ -68,24 +58,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingSphere::IntersectsTriangleValue(
-    SIMDVectorSingle sphereValue,
-    SIMDVectorSingle v0,
-    SIMDVectorSingle v1,
-    SIMDVectorSingle v2
-)noexcept{
+[[nodiscard]] inline bool NWB_SIMD_CALL BoundingSphere::IntersectsTriangleValue(SIMDVectorSingle sphereValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
     const SIMDVectorSingle centerVector = CollisionDetail::SphereCenter(sphereValue);
     const SIMDVectorSingle sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVectorSingle closestPoint = CollisionDetail::ClosestPointOnTriangle(centerVector, v0, v1, v2);
     return CollisionDetail::Vector4AllTrue(VectorLessOrEqual(Vector3LengthSq(VectorSubtract(closestPoint, centerVector)), VectorMultiply(sphereRadius, sphereRadius)));
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingDoubleSphere::IntersectsTriangleValue(
-    SIMDVectorDouble sphereValue,
-    SIMDVectorDouble v0,
-    SIMDVectorDouble v1,
-    SIMDVectorDouble v2
-)noexcept{
+[[nodiscard]] inline bool NWB_SIMD_CALL BoundingDoubleSphere::IntersectsTriangleValue(SIMDVectorDouble sphereValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
     const SIMDVectorDouble centerVector = CollisionDoubleDetail::SphereCenter(sphereValue);
     const SIMDVectorDouble sphereRadius = CollisionDoubleDetail::SphereRadius(sphereValue);
     const SIMDVectorDouble closestPoint = CollisionDoubleDetail::ClosestPointOnTriangle(centerVector, v0, v1, v2);
@@ -156,12 +136,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::ContainedByValue(SIMDVectorSingle sphereValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::ContainedByValue(
+    SIMDVectorSingle sphereValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
+)noexcept{
     const SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
     return CollisionDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::ContainedByValue(SIMDVectorDouble sphereValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::ContainedByValue(
+    SIMDVectorDouble sphereValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
+)noexcept{
     const SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
     return CollisionDoubleDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
@@ -188,10 +172,7 @@
     }
 
     const SIMDVectorSingle distance = VectorSqrt(distanceSquared);
-    const SIMDVectorSingle newRadius = VectorMultiply(
-        VectorAdd(distance, VectorAdd(radius0, radius1)),
-        s_SIMDOneHalf
-    );
+    const SIMDVectorSingle newRadius = VectorMultiply(VectorAdd(distance, VectorAdd(radius0, radius1)), s_SIMDOneHalf);
     SIMDVectorSingle newCenter = center0;
     if(Vector4Greater(distance, VectorReplicate(CollisionDetail::s_RayEpsilon)))
         newCenter = VectorMultiplyAdd(delta, VectorDivide(VectorSubtract(newRadius, radius0), distance), center0);
@@ -217,10 +198,7 @@
     }
 
     const SIMDVectorDouble distance = VectorDoubleSqrt(distanceSquared);
-    const SIMDVectorDouble newRadius = VectorDoubleMultiply(
-        VectorDoubleAdd(distance, VectorDoubleAdd(radius0, radius1)),
-        s_DoubleSIMDOneHalf
-    );
+    const SIMDVectorDouble newRadius = VectorDoubleMultiply(VectorDoubleAdd(distance, VectorDoubleAdd(radius0, radius1)), s_DoubleSIMDOneHalf);
     SIMDVectorDouble newCenter = center0;
     if(VectorDouble4Greater(distance, VectorDoubleReplicate(CollisionDoubleDetail::s_DoubleRayEpsilon)))
         newCenter = VectorDoubleMultiplyAdd(delta, VectorDoubleDivide(VectorDoubleSubtract(newRadius, radius0), distance), center0);
@@ -331,7 +309,9 @@
     return ContainmentType::Intersects;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::containsOrientedBoxValues(const SIMDVectorDouble sphereValue, const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::containsOrientedBoxValues(
+    const SIMDVectorDouble sphereValue, const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation
+)const noexcept{
     if(!intersectsOrientedBoxValues(sphereValue, boxCenter, boxExtents, boxOrientation))
         return ContainmentType::Disjoint;
 
@@ -346,37 +326,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::containsFrustumValues(const SIMDVectorSingle sphereValue, const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::containsFrustumValues(
+    const SIMDVectorSingle sphereValue, const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue,
+    const f32 farPlaneValue
+)const noexcept{
     SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(
-        frustumOrigin,
-        frustumOrientation,
-        rightSlopeValue,
-        leftSlopeValue,
-        topSlopeValue,
-        bottomSlopeValue,
-        nearPlaneValue,
-        farPlaneValue,
-        corners
-    );
+    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
     if(CollisionDetail::PointsInsideSphere(corners, BoundingFrustum::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::containsFrustumValues(const SIMDVectorDouble sphereValue, const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::containsFrustumValues(
+    const SIMDVectorDouble sphereValue, const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue,
+    const f64 farPlaneValue
+)const noexcept{
     SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(
-        frustumOrigin,
-        frustumOrientation,
-        rightSlopeValue,
-        leftSlopeValue,
-        topSlopeValue,
-        bottomSlopeValue,
-        nearPlaneValue,
-        farPlaneValue,
-        corners
-    );
+    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
     if(CollisionDoubleDetail::PointsInsideSphere(corners, BoundingDoubleFrustum::s_DoubleCornerCount, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
@@ -448,12 +414,7 @@ inline void NWB_SIMD_CALL BoundingSphere::transform(BoundingSphere& outSphere, c
     StoreFloat(TransformSphereValue(LoadFloat(centerRadius), matrix), outSphere.centerRadius);
 }
 
-inline void NWB_SIMD_CALL BoundingSphere::transform(
-    BoundingSphere& outSphere,
-    const f32 scale,
-    const SIMDVectorSingle rotation,
-    const SIMDVectorSingle translation
-)const noexcept{
+inline void NWB_SIMD_CALL BoundingSphere::transform(BoundingSphere& outSphere, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)const noexcept{
     StoreFloat(TransformSphereValue(LoadFloat(centerRadius), scale, rotation, translation), outSphere.centerRadius);
 }
 
@@ -461,12 +422,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(BoundingDoubleSphere& 
     StoreDouble(TransformSphereValue(LoadDouble(centerRadius), matrix), outSphere.centerRadius);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
-    BoundingDoubleSphere& outSphere,
-    const f64 scale,
-    const SIMDVectorDouble rotation,
-    const SIMDVectorDouble translation
-)const noexcept{
+inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(BoundingDoubleSphere& outSphere, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)const noexcept{
     StoreDouble(TransformSphereValue(LoadDouble(centerRadius), scale, rotation, translation), outSphere.centerRadius);
 }
 
@@ -478,11 +434,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
     return ContainsPointValue(LoadFloat(centerRadius), point);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::contains(
-    const SIMDVectorSingle v0,
-    const SIMDVectorSingle v1,
-    const SIMDVectorSingle v2
-)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::contains(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
     return ContainsTriangleValue(LoadFloat(centerRadius), v0, v1, v2);
 }
 
@@ -508,11 +460,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
     return ContainsPointValue(LoadDouble(centerRadius), point);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::contains(
-    const SIMDVectorDouble v0,
-    const SIMDVectorDouble v1,
-    const SIMDVectorDouble v2
-)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::contains(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
     return ContainsTriangleValue(LoadDouble(centerRadius), v0, v1, v2);
 }
 
@@ -554,11 +502,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
     return frustum.intersectsSphereValues(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadFloat(centerRadius));
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingSphere::intersects(
-    const SIMDVectorSingle v0,
-    const SIMDVectorSingle v1,
-    const SIMDVectorSingle v2
-)const noexcept{
+[[nodiscard]] inline bool NWB_SIMD_CALL BoundingSphere::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
     return IntersectsTriangleValue(LoadFloat(centerRadius), v0, v1, v2);
 }
 
@@ -566,10 +510,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
     return IntersectsPlaneValue(LoadFloat(centerRadius), plane);
 }
 
-[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingSphere::intersects(
-    SIMDVectorSingle origin,
-    SIMDVectorSingle direction
-)const noexcept{
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingSphere::intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept{
     return IntersectsRayValue(LoadFloat(centerRadius), origin, direction);
 }
 
@@ -589,11 +530,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
     return frustum.intersectsSphereValues(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadDouble(centerRadius));
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingDoubleSphere::intersects(
-    const SIMDVectorDouble v0,
-    const SIMDVectorDouble v1,
-    const SIMDVectorDouble v2
-)const noexcept{
+[[nodiscard]] inline bool NWB_SIMD_CALL BoundingDoubleSphere::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
     return IntersectsTriangleValue(LoadDouble(centerRadius), v0, v1, v2);
 }
 
@@ -601,10 +538,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
     return IntersectsPlaneValue(LoadDouble(centerRadius), plane);
 }
 
-[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL BoundingDoubleSphere::intersects(
-    SIMDVectorDouble origin,
-    SIMDVectorDouble direction
-)const noexcept{
+[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL BoundingDoubleSphere::intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept{
     return IntersectsRayValue(LoadDouble(centerRadius), origin, direction);
 }
 
@@ -612,25 +546,11 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::containedBy(
-    SIMDVectorSingle plane0,
-    SIMDVectorSingle plane1,
-    SIMDVectorSingle plane2,
-    SIMDVectorSingle plane3,
-    SIMDVectorSingle plane4,
-    SIMDVectorSingle plane5
-)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept{
     return ContainedByValue(LoadFloat(centerRadius), plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::containedBy(
-    SIMDVectorDouble plane0,
-    SIMDVectorDouble plane1,
-    SIMDVectorDouble plane2,
-    SIMDVectorDouble plane3,
-    SIMDVectorDouble plane4,
-    SIMDVectorDouble plane5
-)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
     return ContainedByValue(LoadDouble(centerRadius), plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
@@ -638,11 +558,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingSphere::CreateMerged(
-    BoundingSphere& outSphere,
-    const BoundingSphere& sphere0,
-    const BoundingSphere& sphere1
-)noexcept{
+inline void BoundingSphere::CreateMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept{
     bool directCopy = false;
     bool copyFirst = true;
     const SIMDVectorSingle mergedValue = MergeSphereValues(LoadFloat(sphere0.centerRadius), LoadFloat(sphere1.centerRadius), directCopy, copyFirst);
@@ -654,11 +570,7 @@ inline void BoundingSphere::CreateMerged(
     StoreFloat(mergedValue, outSphere.centerRadius);
 }
 
-inline void BoundingDoubleSphere::CreateMerged(
-    BoundingDoubleSphere& outSphere,
-    const BoundingDoubleSphere& sphere0,
-    const BoundingDoubleSphere& sphere1
-)noexcept{
+inline void BoundingDoubleSphere::CreateMerged(BoundingDoubleSphere& outSphere, const BoundingDoubleSphere& sphere0, const BoundingDoubleSphere& sphere1)noexcept{
     bool directCopy = false;
     bool copyFirst = true;
     const SIMDVectorDouble mergedValue = MergeSphereValues(LoadDouble(sphere0.centerRadius), LoadDouble(sphere1.centerRadius), directCopy, copyFirst);
@@ -694,12 +606,7 @@ inline void BoundingDoubleSphere::CreateFromBoundingBox(BoundingDoubleSphere& ou
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingSphere::CreateFromPoints(
-    BoundingSphere& outSphere,
-    const usize count,
-    const Float3U* points,
-    const usize stride
-)noexcept{
+inline void BoundingSphere::CreateFromPoints(BoundingSphere& outSphere, const usize count, const Float3U* points, const usize stride)noexcept{
     NWB_ASSERT(points != nullptr);
     NWB_ASSERT(count > 0u);
     SIMDVectorSingle centerVector = VectorZero();
@@ -717,12 +624,7 @@ inline void BoundingSphere::CreateFromPoints(
 }
 
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-inline void BoundingDoubleSphere::CreateFromPoints(
-    BoundingDoubleSphere& outSphere,
-    const usize count,
-    const PointT* points,
-    const usize stride
-)noexcept{
+inline void BoundingDoubleSphere::CreateFromPoints(BoundingDoubleSphere& outSphere, const usize count, const PointT* points, const usize stride)noexcept{
     NWB_ASSERT(points != nullptr);
     NWB_ASSERT(count > 0u);
     NWB_ASSERT(stride >= sizeof(PointT));
@@ -747,33 +649,13 @@ inline void BoundingDoubleSphere::CreateFromPoints(
 
 inline void BoundingSphere::CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
     SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(
-        LoadFloat(frustum.origin),
-        LoadFloat(frustum.orientation),
-        frustum.rightSlope,
-        frustum.leftSlope,
-        frustum.topSlope,
-        frustum.bottomSlope,
-        frustum.nearPlane,
-        frustum.farPlane,
-        corners
-    );
+    CollisionDetail::FrustumCorners(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
     StoreFloat(SphereFromCornersValue(corners, BoundingFrustum::s_CornerCount), outSphere.centerRadius);
 }
 
 inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept{
     SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(
-        LoadDouble(frustum.origin),
-        LoadDouble(frustum.orientation),
-        frustum.rightSlope,
-        frustum.leftSlope,
-        frustum.topSlope,
-        frustum.bottomSlope,
-        frustum.nearPlane,
-        frustum.farPlane,
-        corners
-    );
+    CollisionDoubleDetail::FrustumCorners(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
     StoreDouble(SphereFromCornersValue(corners, BoundingDoubleFrustum::s_DoubleCornerCount), outSphere.centerRadius);
 }
 

@@ -25,14 +25,11 @@ namespace __hidden_ui_window_behavior{
 
 
 [[nodiscard]] bool ValidBounds(const Rect& bounds)noexcept{
-    return IsFinite(bounds.x) && IsFinite(bounds.y) && IsFinite(bounds.width) && IsFinite(bounds.height)
-        && bounds.width >= 0.0f && bounds.height >= 0.0f && IsFinite(bounds.x + bounds.width)
-        && IsFinite(bounds.y + bounds.height);
+    return IsFinite(bounds.x) && IsFinite(bounds.y) && IsFinite(bounds.width) && IsFinite(bounds.height) && bounds.width >= 0.0f && bounds.height >= 0.0f && IsFinite(bounds.x + bounds.width) && IsFinite(bounds.y + bounds.height);
 }
 
 [[nodiscard]] bool SameGesture(const InputActionId& lhs, const InputActionId& rhs)noexcept{
-    return lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration
-        && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence;
+    return lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence;
 }
 
 struct PointerDisplacement{
@@ -48,8 +45,7 @@ struct PointerDisplacement{
         || gesture.referenceRectangle.height <= 0.0f || gesture.state > PointerGestureState::Completed
     )
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble displacement = SIMDVectorDouble{ gesture.position.x, gesture.position.y }
-        - SIMDVectorDouble{ gesture.origin.x, gesture.origin.y };
+    const SIMDVectorDouble displacement = SIMDVectorDouble{ gesture.position.x, gesture.position.y } - SIMDVectorDouble{ gesture.origin.x, gesture.origin.y };
     return PointerDisplacement{ displacement.x, displacement.y };
 }
 
@@ -119,11 +115,7 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
 
 bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize)noexcept{
     const auto displacement = __hidden_ui_window_behavior::Displacement(gesture);
-    if(
-        !displacement
-        || !IsFinite(minimumSize.x) || minimumSize.x <= 0.0f
-        || !IsFinite(minimumSize.y) || minimumSize.y <= 0.0f
-    )
+    if(!displacement || !IsFinite(minimumSize.x) || minimumSize.x <= 0.0f || !IsFinite(minimumSize.y) || minimumSize.y <= 0.0f)
         return false;
     WindowGestureState resizing = state.resizeGesture;
     if(!__hidden_ui_window_behavior::SameGesture(resizing.id, gesture.id)){
@@ -148,18 +140,10 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
 }
 
 bool WindowBehavior::Constrain(WindowState& state, const DisplayMetrics& display, const f32 titleHeight)noexcept{
-    if(
-        !IsFinite(display.logicalWidth) || display.logicalWidth <= 0.0f
-        || !IsFinite(display.logicalHeight) || display.logicalHeight <= 0.0f
-        || !IsFinite(titleHeight) || titleHeight <= 0.0f
-        || !__hidden_ui_window_behavior::ValidBounds(state.bounds)
-    )
+    if(!IsFinite(display.logicalWidth) || display.logicalWidth <= 0.0f || !IsFinite(display.logicalHeight) || display.logicalHeight <= 0.0f || !IsFinite(titleHeight) || titleHeight <= 0.0f || !__hidden_ui_window_behavior::ValidBounds(state.bounds))
         return false;
     const f32 height = state.collapsed ? titleHeight : state.bounds.height;
-    const SIMDVectorSingle remaining = VectorSubtract(
-        VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight),
-        VectorSet(state.bounds.width, height, state.bounds.width, height)
-    );
+    const SIMDVectorSingle remaining = VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight), VectorSet(state.bounds.width, height, state.bounds.width, height));
     const SIMDVectorSingle maximum = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
     const SIMDVectorSingle origin = VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y);
     const SIMDVectorSingle positive = VectorSelect(VectorZero(), origin, VectorGreater(origin, VectorZero()));

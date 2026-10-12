@@ -268,16 +268,7 @@ static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const D
         if(!moduleName.empty())
             moduleNameText.assign(moduleName.data(), moduleName.size());
         const wchar* imageName = moduleNameText.empty() ? nullptr : moduleNameText.c_str();
-        const DWORD64 loadedBase = SymLoadModuleExW(
-            symbolProcess,
-            nullptr,
-            imageName,
-            nullptr,
-            module.BaseOfImage,
-            module.SizeOfImage,
-            nullptr,
-            0u
-        );
+        const DWORD64 loadedBase = SymLoadModuleExW(symbolProcess, nullptr, imageName, nullptr, module.BaseOfImage, module.SizeOfImage, nullptr, 0u);
         if(loadedBase != 0u)
             ++loadedCount;
     }
@@ -434,17 +425,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
         AppendResolvedSymbol(arena, symbolProcess, outReport, frameIndex, frame.AddrPC.Offset);
         decodedAnyFrame = true;
 
-        if(!StackWalk64(
-            machineType,
-            symbolProcess,
-            nullptr,
-            &frame,
-            &walkContext,
-            ReadProcessMemoryFromDump,
-            SymFunctionTableAccess64,
-            SymGetModuleBase64,
-            nullptr
-        ))
+        if(!StackWalk64(machineType, symbolProcess, nullptr, &frame, &walkContext, ReadProcessMemoryFromDump, SymFunctionTableAccess64, SymGetModuleBase64, nullptr))
             break;
     }
 

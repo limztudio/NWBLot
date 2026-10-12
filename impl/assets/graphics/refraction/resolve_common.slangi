@@ -35,8 +35,7 @@ struct NwbRefractionView{
 };
 #pragma warning(push)
 #pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbRefractionView, Std140DataLayout> g_NwbHeapRefractionViews[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRefractionView, Std140DataLayout> g_NwbHeapRefractionViews[];
 #pragma warning(pop)
 
 #define g_NwbRefractionResources g_NwbHeapDeferredBindlessResources[g_NwbRefractionPush.deferredResourcesHeapSlot]
@@ -101,11 +100,7 @@ half nwbRefractionFresnelTransmission(const half ior, const half cosine){
 
 half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const half ior, const half entryCosine, const half exitCosine){
     // Tint/Beer attenuation plus two bounded Fresnel transmissions stay in (0, 1]; half color math is sufficient.
-    return half3(exp(log(clamp(float3(tint), float3(1e-4), float3(1.0)))
-        * max(thickness, 0.0))
-        * float3(nwbRefractionFresnelTransmission(ior, entryCosine))
-        * float3(nwbRefractionFresnelTransmission(ior, exitCosine)))
-    ;
+    return half3(exp(log(clamp(float3(tint), float3(1e-4), float3(1.0))) * max(thickness, 0.0)) * float3(nwbRefractionFresnelTransmission(ior, entryCosine)) * float3(nwbRefractionFresnelTransmission(ior, exitCosine)));
 }
 
 struct NwbRefractionEntry{

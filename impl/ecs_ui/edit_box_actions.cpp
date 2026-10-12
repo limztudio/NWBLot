@@ -17,9 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-    Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation
-){
+bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
     const u64 revision = model.revision();
     const u64 externalRevision = model.externalRevision();
     const u64 selectionGeneration = model.selectionGeneration();
@@ -38,15 +36,11 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
         result.submitted |= command.submitted;
         result.cancelled |= command.cancelled;
         if(actions && (command.submitted || command.cancelled)){
-            if(!applyAction(
-                entry, model, options, command.submitted ? Ui::EditAction::Submit : Ui::EditAction::Cancel, result, *actions, navigation
-            ))
+            if(!applyAction(entry, model, options, command.submitted ? Ui::EditAction::Submit : Ui::EditAction::Cancel, result, *actions, navigation))
                 return false;
         }
         if(command.cancelled){
-            const bool cancelFocus = !actions || (
-                entry.focused && entry.focusGeneration == event.focusGeneration && m_context.input().focus() == entry.widget.id
-            );
+            const bool cancelFocus = !actions || (entry.focused && entry.focusGeneration == event.focusGeneration && m_context.input().focus() == entry.widget.id);
             if(actions){
                 entry.retiredFocusGeneration = Max(entry.retiredFocusGeneration, event.focusGeneration);
                 if(entry.focusGeneration == event.focusGeneration)
@@ -79,10 +73,7 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     else if(event.kind == UiEditBoxEventKind::Native){
         if(options.readOnly || event.native.token == entry.rejectedNative)
             return true;
-        if(
-            event.native.kind == Core::TextInputEventKind::Commit && event.native.text.size() == 1u
-            && (static_cast<u8>(event.native.text.front()) < 32u || event.native.text.front() == 127)
-        )
+        if(event.native.kind == Core::TextInputEventKind::Commit && event.native.text.size() == 1u && (static_cast<u8>(event.native.text.front()) < 32u || event.native.text.front() == 127))
             return true;
         const bool matching = model.revision() == event.surroundingModelRevision
             && model.externalRevision() == event.geometryExternalRevision
@@ -119,8 +110,7 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
             if(!range)
                 return true;
             const usize anchor = event.wordPosition < entry.wordDragStart ? entry.wordDragEnd : entry.wordDragStart;
-            const usize caret = event.wordPosition < entry.wordDragStart ? range->begin
-                : event.wordPosition >= entry.wordDragEnd ? range->end : entry.wordDragEnd;
+            const usize caret = event.wordPosition < entry.wordDragStart ? range->begin : event.wordPosition >= entry.wordDragEnd ? range->end : entry.wordDragEnd;
             if(!model.setSelection(anchor, caret))
                 return true;
         }
@@ -135,17 +125,13 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
         if(event.completed)
             entry.wordDragging = false;
         if(model.hasSelection() && m_clipboardService.capabilities(Core::ClipboardChannel::PrimarySelection).writeText){
-            const auto request = m_primary.request(entry.owner, model, Ui::EditClipboardAction::PublishSelection,
-                Core::ClipboardChannel::PrimarySelection, options.readOnly
-            );
+            const auto request = m_primary.request(entry.owner, model, Ui::EditClipboardAction::PublishSelection, Core::ClipboardChannel::PrimarySelection, options.readOnly);
             if(request.status == UiEditClipboardStatus::Pending)
                 m_primaryOwner = entry.owner;
         }
     }
     else if(event.kind == UiEditBoxEventKind::PastePrimary){
-        const auto request = m_clipboard.request(entry.owner, model, Ui::EditClipboardAction::Paste,
-            Core::ClipboardChannel::PrimarySelection, options.readOnly
-        );
+        const auto request = m_clipboard.request(entry.owner, model, Ui::EditClipboardAction::Paste, Core::ClipboardChannel::PrimarySelection, options.readOnly);
         if(request.status == UiEditClipboardStatus::Pending)
             m_clipboardOwner = entry.owner;
     }
@@ -163,19 +149,12 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     }
     if(m_borrowRejected)
         return false;
-    if(
-        navigation && (
-            model.revision() != revision || model.externalRevision() != externalRevision
-            || model.selectionGeneration() != selectionGeneration || model.compositionGeneration() != compositionGeneration
-        )
-    )
+    if(navigation && (model.revision() != revision || model.externalRevision() != externalRevision || model.selectionGeneration() != selectionGeneration || model.compositionGeneration() != compositionGeneration))
         navigation->state.reset();
     return true;
 }
 
-bool UiEditBoxHost::applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-    const Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation
-){
+bool UiEditBoxHost::applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
     const u64 revision = model.revision();
     const u64 selectionGeneration = model.selectionGeneration();
     const u64 compositionGeneration = model.compositionGeneration();

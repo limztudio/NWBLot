@@ -26,16 +26,7 @@ float3 nwbBvhSafeInvDir(const float3 direction){
     return 1.0 / safe;
 }
 
-bool nwbBvhRayAabbInterval(
-    const float3 origin,
-    const float3 invDir,
-    const float tMin,
-    const float tMax,
-    const float3 boxMin,
-    const float3 boxMax,
-    const float padding,
-    out float outTEntry
-){
+bool nwbBvhRayAabbInterval(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, const float padding, out float outTEntry){
     const float3 t0 = (boxMin - padding - origin) * invDir;
     const float3 t1 = (boxMax + padding - origin) * invDir;
     const float3 tSmall = min(t0, t1);
@@ -46,29 +37,12 @@ bool nwbBvhRayAabbInterval(
     return tNear <= tFar;
 }
 
-bool nwbBvhRayAabb(
-    const float3 origin,
-    const float3 invDir,
-    const float tMin,
-    const float tMax,
-    const float3 boxMin,
-    const float3 boxMax,
-    const float padding
-){
+bool nwbBvhRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, const float padding){
     float unusedTEntry;
     return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, unusedTEntry);
 }
 
-bool nwbBvhRayAabbT(
-    const float3 origin,
-    const float3 invDir,
-    const float tMin,
-    const float tMax,
-    const float3 boxMin,
-    const float3 boxMax,
-    const float padding,
-    out float tEntry
-){
+bool nwbBvhRayAabbT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, const float padding, out float tEntry){
     return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, tEntry);
 }
 

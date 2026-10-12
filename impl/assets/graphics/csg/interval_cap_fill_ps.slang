@@ -22,10 +22,7 @@ struct NwbCsgIntervalCapFillPixelOutput{
 
 half3 nwbCsgCapFillEncodeNormal(const float3 normal){
     const float lengthSquared = dot(normal, normal);
-    const float3 normalVector = lengthSquared > NWB_CSG_CAP_NORMALIZATION_LENGTH_SQUARED_EPSILON
-        ? normal * rsqrt(lengthSquared)
-        : float3(0.0, 0.0, 1.0)
-    ;
+    const float3 normalVector = lengthSquared > NWB_CSG_CAP_NORMALIZATION_LENGTH_SQUARED_EPSILON ? normal * rsqrt(lengthSquared) : float3(0.0, 0.0, 1.0);
     return half3(normalVector * 0.5 + 0.5);
 }
 

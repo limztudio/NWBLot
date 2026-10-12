@@ -40,14 +40,7 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
     if(!region.name || region.name == Name(""))
         return false;
     const UiSkinRect& rectangle = region.rectangle;
-    if(
-        rectangle.width == 0u
-        || rectangle.height == 0u
-        || rectangle.x > atlasWidth
-        || rectangle.y > atlasHeight
-        || rectangle.width > atlasWidth - rectangle.x
-        || rectangle.height > atlasHeight - rectangle.y
-    )
+    if(rectangle.width == 0u || rectangle.height == 0u || rectangle.x > atlasWidth || rectangle.y > atlasHeight || rectangle.width > atlasWidth - rectangle.x || rectangle.height > atlasHeight - rectangle.y)
         return false;
 
     const UiSkinSliceInsets& slice = region.sliceInsets;
@@ -87,13 +80,7 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
 
 bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(
-        binary,
-        cursor,
-        UiSkinBinaryPayload::s_UiSkinMagic,
-        NWB_TEXT("UiSkin::loadBinary"),
-        NWB_TEXT("UI skin")
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, cursor, UiSkinBinaryPayload::s_UiSkinMagic, NWB_TEXT("UiSkin::loadBinary"), NWB_TEXT("UI skin"));
     if(!headerResult)
         return false;
     const UiSkinBinaryPayload::HeaderBinary& header = *headerResult;
@@ -194,10 +181,7 @@ bool UiSkin::validatePayload()const{
     for(usize index = 0u; index < m_regions.size(); ++index){
         const UiSkinRegion& region = m_regions[index];
         if(!__hidden_ui_skin_runtime::IsValidRegion(region, m_atlasWidth, m_atlasHeight)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics")
-                , index
-                , StringConvert(region.name.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics"), index, StringConvert(region.name.resolvedText()));
             return false;
         }
     }
@@ -210,18 +194,12 @@ bool UiSkin::validatePayload()const{
     }
     for(usize index = 0u; index < m_palette.colors.size(); ++index){
         const UiSkinColor& color = m_palette.colors[index];
-        if(
-            !IsFinite(color.r) || color.r < 0.0f || color.r > 16.0f
-            || !IsFinite(color.g) || color.g < 0.0f || color.g > 16.0f
-            || !IsFinite(color.b) || color.b < 0.0f || color.b > 16.0f
-            || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f
-        ){
+        if(!IsFinite(color.r) || color.r < 0.0f || color.r > 16.0f || !IsFinite(color.g) || color.g < 0.0f || color.g > 16.0f || !IsFinite(color.b) || color.b < 0.0f || color.b > 16.0f || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
             return false;
         }
     }
-    if(!IsFinite(m_typography.defaultFontSize)
-        || m_typography.defaultFontSize < 1.0f / 64.0f || m_typography.defaultFontSize > 2048.0f){
+    if(!IsFinite(m_typography.defaultFontSize) || m_typography.defaultFontSize < 1.0f / 64.0f || m_typography.defaultFontSize > 2048.0f){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]"));
         return false;
     }
@@ -231,11 +209,7 @@ bool UiSkin::validatePayload()const{
 bool UiSkin::validateTexture(const Texture& texture)const{
     if(!validatePayload())
         return false;
-    if(
-        texture.virtualPath() != m_texture.name()
-        || texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u
-        || texture.width() != m_atlasWidth || texture.height() != m_atlasHeight
-    ){
+    if(texture.virtualPath() != m_texture.name() || texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u || texture.width() != m_atlasWidth || texture.height() != m_atlasHeight){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validateTexture failed: texture identity, 2D dimension, or extent does not match the atlas"));
         return false;
     }

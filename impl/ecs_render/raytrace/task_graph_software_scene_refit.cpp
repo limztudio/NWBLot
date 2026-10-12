@@ -53,9 +53,7 @@ struct RefitTask{
         state.setPipeline(snapshot.pipeline.get());
         commandList.setComputeState(state);
         snapshot.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *snapshot.pipeline);
-        const PushConstants push{
-            snapshot.nodeCount, snapshot.sceneDescriptor.slot(), snapshot.inputDescriptor.slot(), static_cast<u32>(snapshot.inputs.size()),
-        };
+        const PushConstants push{ snapshot.nodeCount, snapshot.sceneDescriptor.slot(), snapshot.inputDescriptor.slot(), static_cast<u32>(snapshot.inputs.size()), };
         commandList.setPushConstants(&push, sizeof(push));
         commandList.dispatch(1u, 1u, 1u);
         return true;
@@ -72,10 +70,7 @@ struct RefitTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(
-    Core::GpuTaskGraph& graph, const SoftwareSceneRefitHandle& snapshot,
-    const Core::GpuGraphResourceId sceneNodes, const Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena
-){
+SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(Core::GpuTaskGraph& graph, const SoftwareSceneRefitHandle& snapshot, const Core::GpuGraphResourceId sceneNodes, const Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena){
     if(!snapshot || !sceneNodes.valid() || !dependency.valid() || snapshot->inputs.empty())
         return {};
     {
@@ -117,12 +112,7 @@ SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc uploadDesc;
-    uploadDesc
-        .setIdentity(Name("render.shadow_prepare.scene_refit_inputs_upload"))
-        .setMarkerLabel("Software Scene Refit Inputs Upload")
-        .setScheduling(scheduling)
-        .setDependencies(&dependency, 1u)
-    ;
+    uploadDesc.setIdentity(Name("render.shadow_prepare.scene_refit_inputs_upload")).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(scheduling).setDependencies(&dependency, 1u);
     SoftwareSceneRefitGraphTasks result;
     result.inputUpload = graph.addUploadBufferTask(
         uploadDesc,
@@ -130,22 +120,12 @@ SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(
             .source = upload,
             .destination = input,
             // Retained storage restores Common; the refit read owns the following SRV transition.
-            .finalState = Core::ResourceStates::Common,
-        }
-    );
+            .finalState = Core::ResourceStates::Common, });
     if(!result.inputUpload.valid())
         return {};
     Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.shadow_prepare.scene_refit"))
-        .setMarkerLabel("Software Scene BVH Refit")
-        .setScheduling(scheduling)
-        .setDependencies(&result.inputUpload, 1u)
-        .setResourceUses(uses.data(), uses.size())
-    ;
-    result.refit = graph.addTask<__hidden_task_graph_software_scene_refit::RefitTask>(
-        desc, __hidden_task_graph_software_scene_refit::RefitTask::Payload{ snapshot }
-    );
+    desc.setIdentity(Name("render.shadow_prepare.scene_refit")).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependencies(&result.inputUpload, 1u).setResourceUses(uses.data(), uses.size());
+    result.refit = graph.addTask<__hidden_task_graph_software_scene_refit::RefitTask>(desc, __hidden_task_graph_software_scene_refit::RefitTask::Payload{ snapshot });
     return result.refit.valid() ? result : SoftwareSceneRefitGraphTasks{};
 }
 

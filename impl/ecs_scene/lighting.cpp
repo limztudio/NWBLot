@@ -33,49 +33,25 @@ inline constexpr f32 s_ConeCosineMax = 1.0f;
 
 
 static SIMDVectorSingle BuildDirectionalLightDirectionVector(const SIMDVectorSingle forward)noexcept{
-    return Vector3NormalizeOr(
-        VectorNegate(forward),
-        VectorSet(0.0f, 0.0f, -1.0f, 0.0f),
-        s_NormalizeLengthSquaredEpsilon
-    );
+    return Vector3NormalizeOr(VectorNegate(forward), VectorSet(0.0f, 0.0f, -1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
 }
 
 static SIMDVectorSingle BuildLightEmissionVector(const SIMDVectorSingle forward)noexcept{
-    return Vector3NormalizeOr(
-        forward,
-        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
-        s_NormalizeLengthSquaredEpsilon
-    );
+    return Vector3NormalizeOr(forward, VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
 }
 
 static bool IsValidLightRotation(const SIMDVectorSingle rotation)noexcept{
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
-    return
-        !QuaternionIsNaN(rotation)
-        && !QuaternionIsInfinite(rotation)
-        && IsFinite(rotationLengthSquared)
-        && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon
-    ;
+    return !QuaternionIsNaN(rotation) && !QuaternionIsInfinite(rotation) && IsFinite(rotationLengthSquared) && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon;
 }
 
 static bool IsValidLightColorIntensity(const SIMDVectorSingle colorIntensity)noexcept{
     const f32 intensity = VectorGetW(colorIntensity);
-    return
-        !Vector3IsNaN(colorIntensity)
-        && !Vector3IsInfinite(colorIntensity)
-        && IsFinite(intensity)
-        && intensity > 0.0f
-    ;
+    return !Vector3IsNaN(colorIntensity) && !Vector3IsInfinite(colorIntensity) && IsFinite(intensity) && intensity > 0.0f;
 }
 
 static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos)noexcept{
-    return
-        IsFinite(innerConeCos)
-        && IsFinite(outerConeCos)
-        && outerConeCos >= s_ConeCosineMin
-        && outerConeCos <= innerConeCos
-        && innerConeCos <= s_ConeCosineMax
-    ;
+    return IsFinite(innerConeCos) && IsFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
 }
 
 
@@ -88,20 +64,10 @@ static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos)noex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::ECS::EntityID CreateDirectionalLightEntity(
-    Core::ECS::World& world,
-    const f32 pitchRadians,
-    const f32 yawRadians,
-    const f32 rollRadians,
-    const Float4& color,
-    const f32 intensity
-){
+Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, const f32 pitchRadians, const f32 yawRadians, const f32 rollRadians, const Float4& color, const f32 intensity){
     auto lightEntity = world.createEntity();
     auto& transform = lightEntity.addComponent<TransformComponent>();
-    StoreFloat(
-        QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians),
-        transform.rotation
-    );
+    StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
 
     auto& light = lightEntity.addComponent<LightComponent>();
     light.type = LightType::Directional;
@@ -110,13 +76,7 @@ Core::ECS::EntityID CreateDirectionalLightEntity(
     return lightEntity.id();
 }
 
-Core::ECS::EntityID CreatePointLightEntity(
-    Core::ECS::World& world,
-    const Float4& position,
-    const Float4& color,
-    const f32 intensity,
-    const f32 range
-){
+Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, const f32 intensity, const f32 range){
     auto lightEntity = world.createEntity();
     auto& transform = lightEntity.addComponent<TransformComponent>();
     transform.position = position;
@@ -144,10 +104,7 @@ Core::ECS::EntityID CreateSpotLightEntity(
     auto lightEntity = world.createEntity();
     auto& transform = lightEntity.addComponent<TransformComponent>();
     transform.position = position;
-    StoreFloat(
-        QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians),
-        transform.rotation
-    );
+    StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
 
     auto& light = lightEntity.addComponent<LightComponent>();
     light.type = LightType::Spot;
@@ -194,10 +151,7 @@ Expected<SceneLight> TryBuildSceneLight(
         if(!__hidden_lighting::IsValidLightRotation(rotation))
             return MakeUnexpected(Failure{});
 
-        StoreFloat(
-            __hidden_lighting::BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)),
-            light.direction
-        );
+        StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)), light.direction);
         return light;
     }
     case LightType::Point:{
@@ -222,13 +176,7 @@ Expected<SceneLight> TryBuildSceneLight(
             return MakeUnexpected(Failure{});
 
         StoreFloat(VectorSetW(position, innerConeCos), light.position);
-        StoreFloat(
-            VectorSetW(
-                __hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)),
-                outerConeCos
-            ),
-            light.direction
-        );
+        StoreFloat(VectorSetW(__hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)), outerConeCos), light.direction);
         light.range = range;
         return light;
     }
@@ -254,46 +202,13 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultF
         Expected<SceneLight> resolvedLight = MakeUnexpected(Failure{});
         switch(light.type){
         case LightType::Directional:
-            resolvedLight = TryBuildSceneLight(
-                s_SIMDZero,
-                LoadFloat(transform.rotation),
-                colorIntensity,
-                light.range,
-                light.innerConeCos,
-                light.outerConeCos,
-                light.angularRadius,
-                light.sourceRadius,
-                light.type,
-                light.enableCaustics
-            );
+            resolvedLight = TryBuildSceneLight(s_SIMDZero, LoadFloat(transform.rotation), colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.angularRadius, light.sourceRadius, light.type, light.enableCaustics);
             break;
         case LightType::Point:
-            resolvedLight = TryBuildSceneLight(
-                LoadFloat(transform.position),
-                s_SIMDIdentityR3,
-                colorIntensity,
-                light.range,
-                light.innerConeCos,
-                light.outerConeCos,
-                light.angularRadius,
-                light.sourceRadius,
-                light.type,
-                light.enableCaustics
-            );
+            resolvedLight = TryBuildSceneLight(LoadFloat(transform.position), s_SIMDIdentityR3, colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.angularRadius, light.sourceRadius, light.type, light.enableCaustics);
             break;
         case LightType::Spot:
-            resolvedLight = TryBuildSceneLight(
-                LoadFloat(transform.position),
-                LoadFloat(transform.rotation),
-                colorIntensity,
-                light.range,
-                light.innerConeCos,
-                light.outerConeCos,
-                light.angularRadius,
-                light.sourceRadius,
-                light.type,
-                light.enableCaustics
-            );
+            resolvedLight = TryBuildSceneLight(LoadFloat(transform.position), LoadFloat(transform.rotation), colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.angularRadius, light.sourceRadius, light.type, light.enableCaustics);
             break;
         default:
             break;

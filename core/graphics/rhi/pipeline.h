@@ -41,11 +41,7 @@ struct SinglePassStereoState{
     constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value)noexcept{ renderTargetIndexOffset = static_cast<u8>(value); return *this; }
 };
 inline bool operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs)noexcept{
-    return
-        lhs.enabled == rhs.enabled
-        && lhs.independentViewportMask == rhs.independentViewportMask
-        && lhs.renderTargetIndexOffset == rhs.renderTargetIndexOffset
-    ;
+    return lhs.enabled == rhs.enabled && lhs.independentViewportMask == rhs.independentViewportMask && lhs.renderTargetIndexOffset == rhs.renderTargetIndexOffset;
 }
 inline bool operator!=(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -95,12 +91,7 @@ struct VariableRateShadingState{
     constexpr VariableRateShadingState& setImageCombiner(ShadingRateCombiner::Enum value)noexcept{ imageCombiner = value; return *this; }
 };
 inline bool operator==(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs)noexcept{
-    return
-        lhs.enabled == rhs.enabled
-        && lhs.shadingRate == rhs.shadingRate
-        && lhs.pipelinePrimitiveCombiner == rhs.pipelinePrimitiveCombiner
-        && lhs.imageCombiner == rhs.imageCombiner
-    ;
+    return lhs.enabled == rhs.enabled && lhs.shadingRate == rhs.shadingRate && lhs.pipelinePrimitiveCombiner == rhs.pipelinePrimitiveCombiner && lhs.imageCombiner == rhs.imageCombiner;
 }
 inline bool operator!=(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs)noexcept{ return !(lhs == rhs); }
 

@@ -25,10 +25,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def run(executable: pathlib.Path, arguments: list[str], root: pathlib.Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [str(executable.resolve()), *arguments], cwd=root, capture_output=True, text=True,
-        encoding=LIT_UTF_8, errors="replace", timeout=30.0, check=False,
-    )
+    return subprocess.run([str(executable.resolve()), *arguments], cwd=root, capture_output=True, text=True, encoding=LIT_UTF_8, errors="replace", timeout=30.0, check=False,)
 
 
 def verify_pipeline(executable: pathlib.Path, root: pathlib.Path) -> None:

@@ -53,12 +53,7 @@ struct PhysicalDeviceFeatureSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline RequiredQueueFamilySelection SelectRequiredQueueFamilies(
-    const VkQueueFamilyProperties* const queueFamilies,
-    const u32 queueFamilyCount,
-    const bool enableAsyncComputeLane,
-    const bool enableDedicatedTransferQueue
-)noexcept{
+[[nodiscard]] inline RequiredQueueFamilySelection SelectRequiredQueueFamilies(const VkQueueFamilyProperties* const queueFamilies, const u32 queueFamilyCount, const bool enableAsyncComputeLane, const bool enableDedicatedTransferQueue)noexcept{
     RequiredQueueFamilySelection result;
     i32 firstGraphicsFamily = s_InvalidQueueFamilyIndex;
     i32 firstComputeFamily = s_InvalidQueueFamilyIndex;
@@ -80,13 +75,7 @@ struct PhysicalDeviceFeatureSupport{
             firstGraphicsComputeFamily = static_cast<i32>(familyIndex);
         if(firstDedicatedComputeFamily == s_InvalidQueueFamilyIndex && supportsCompute && !supportsGraphics)
             firstDedicatedComputeFamily = static_cast<i32>(familyIndex);
-        if(
-            enableDedicatedTransferQueue
-            && result.dedicatedTransferFamily == s_InvalidQueueFamilyIndex
-            && (family.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0u
-            && !supportsGraphics
-            && !supportsCompute
-        )
+        if(enableDedicatedTransferQueue && result.dedicatedTransferFamily == s_InvalidQueueFamilyIndex && (family.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0u && !supportsGraphics && !supportsCompute)
             result.dedicatedTransferFamily = static_cast<i32>(familyIndex);
     }
 
@@ -104,11 +93,7 @@ struct PhysicalDeviceFeatureSupport{
     return result;
 }
 
-[[nodiscard]] inline bool HasDeviceExtension(
-    const VkExtensionProperties* const extensions,
-    const u32 extensionCount,
-    const AStringView extensionName
-)noexcept{
+[[nodiscard]] inline bool HasDeviceExtension(const VkExtensionProperties* const extensions, const u32 extensionCount, const AStringView extensionName)noexcept{
     if(extensionName.size() >= VK_MAX_EXTENSION_NAME_SIZE || extensionName.find('\0') != AStringView::npos)
         return false;
 
@@ -120,12 +105,7 @@ struct PhysicalDeviceFeatureSupport{
     return false;
 }
 
-inline void QueryPhysicalDeviceFeatureSupport(
-    const VolkInstanceTable& instanceDispatch,
-    const VkPhysicalDevice physicalDevice,
-    const PhysicalDeviceFeatureQueryOptions& options,
-    PhysicalDeviceFeatureSupport& outSupport
-)noexcept{
+inline void QueryPhysicalDeviceFeatureSupport(const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const PhysicalDeviceFeatureQueryOptions& options, PhysicalDeviceFeatureSupport& outSupport)noexcept{
     outSupport = {};
     outSupport.features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     outSupport.vulkan11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
@@ -177,9 +157,7 @@ inline void QueryPhysicalDeviceFeatureSupport(
     outSupport.maintenance4.pNext = nullptr;
 }
 
-[[nodiscard]] inline AStringView FindMissingMandatoryPhysicalDeviceFeature(
-    const PhysicalDeviceFeatureSupport& support
-)noexcept{
+[[nodiscard]] inline AStringView FindMissingMandatoryPhysicalDeviceFeature(const PhysicalDeviceFeatureSupport& support)noexcept{
     const VkPhysicalDeviceFeatures& core = support.features.features;
     if(core.shaderImageGatherExtended != VK_TRUE)
         return "shaderImageGatherExtended";

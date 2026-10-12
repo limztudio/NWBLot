@@ -125,13 +125,8 @@ public:
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool prepareMeshComputeBindingLayout();
     [[nodiscard]] bool createComputeEmulationResources();
-    [[nodiscard]] bool createObjectGeometryPipelineResources(
-        const Name& meshShaderName,
-        AStringView variantName,
-        MaterialPipelineResources& resources
-    );
-    // Graph-owned draw streams are already gathered, patched, and uploaded before native recording. This consumer
-    // deliberately performs no mutable mesh-view or material/CSG buffer updates.
+    [[nodiscard]] bool createObjectGeometryPipelineResources(const Name& meshShaderName, AStringView variantName, MaterialPipelineResources& resources);
+    // Graph-owned draw streams are already gathered, patched, and uploaded before native recording. This consumer deliberately performs no mutable mesh-view or material/CSG buffer updates.
     void renderPreparedMaterialPass(
         Core::CommandList& commandList,
         Core::Framebuffer* framebuffer,
@@ -147,25 +142,16 @@ public:
         bool materialFrameStatesGraphOwned = false,
         // The graph can also retain the per-mesh source buffer batch selected by the prepared draw stream.
         bool materialGeometryStatesGraphOwned = false,
-        // An immediately preceding graph task generated every regular emulation output. Consume those buffers as
-        // Combined vertex/index inputs instead of replaying the local UAV-to-vertex/index bridge.
+        // An immediately preceding graph task generated every regular emulation output. Consume those buffers as Combined vertex/index inputs instead of replaying the local UAV-to-vertex/index bridge.
         bool emulationOutputEntryStateGraphOwned = false,
         // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
         // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
         Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr,
-        // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so
-        // a mixed CSG stream cannot accidentally suppress its required local dispatch/raster interleaving.
+        // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so a mixed CSG stream cannot accidentally suppress its required local dispatch/raster interleaving.
         bool csgEmulationOutputEntryStateGraphOwned = false,
         // A matching earlier producer permits raster timing independent of this pass.
-        bool emulationOutputReused = false
-    );
-    [[nodiscard]] bool prepareMaterialPassResources(
-        Core::Framebuffer* framebuffer,
-        MaterialPipelinePass::Enum pass,
-        bool transparent,
-        const CsgFrameState& csgFrameState,
-        const AvboitFrameTargets* avboitTargets
-    );
+        bool emulationOutputReused = false);
+    [[nodiscard]] bool prepareMaterialPassResources(Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass, bool transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets);
     void gatherMaterialPassDrawItems(
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
@@ -180,30 +166,12 @@ public:
         MaterialTypedByteDataVector& materialTypedBytes,
         RendererResourceLookupMode::Enum lookupMode,
         // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
-    );
-    [[nodiscard]] static Expected<MaterialInstanceOverrideField> FindMaterialInstanceOverrideField(
-        Core::ECS::EntityID entity,
-        const MaterialSurfaceInfo& materialInfo,
-        const MaterialInstanceParameter& parameter
-    );
-    [[nodiscard]] static bool ApplyMaterialInstanceOverrides(
-        Core::ECS::EntityID entity,
-        const MaterialSurfaceInfo& materialInfo,
-        const MaterialInstanceComponent& materialInstance,
-        MaterialTypedByteDataVector& inOutMutableTypedBytes
-    );
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState);
+    [[nodiscard]] static Expected<MaterialInstanceOverrideField> FindMaterialInstanceOverrideField(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter);
+    [[nodiscard]] static bool ApplyMaterialInstanceOverrides(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, MaterialTypedByteDataVector& inOutMutableTypedBytes);
     // Creation and override application belong to preparation; render paths only use the prepared lookup below.
-    [[nodiscard]] Expected<const MaterialTypedByteVector*> prepareMaterialInstanceMutableTypedBytes(
-        Core::ECS::EntityID entity,
-        const MaterialSurfaceInfo& materialInfo,
-        const MaterialInstanceComponent* materialInstance
-    );
-    [[nodiscard]] Expected<const MaterialTypedByteVector*> findPreparedMaterialInstanceMutableTypedBytes(
-        Core::ECS::EntityID entity,
-        const MaterialSurfaceInfo& materialInfo,
-        const MaterialInstanceComponent* materialInstance
-    )const;
+    [[nodiscard]] Expected<const MaterialTypedByteVector*> prepareMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance);
+    [[nodiscard]] Expected<const MaterialTypedByteVector*> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const;
     // Shadow-owned copy of one occluder's constants context (draw-pass buffers hold one transparency class at trace time).
     // Mirrors gatherMaterialPassDrawItems packing so the trace hook reads rasterizer-identical bytes.
     [[nodiscard]] Expected<ShadowOccluderMaterialContext> appendShadowOccluderMaterialContext(
@@ -214,37 +182,15 @@ public:
         ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges
     );
     void pruneMaterialInstanceMutableCache();
-    [[nodiscard]] bool materialPassDrawResourcesReady(
-        const MaterialPassMeshResourceSnapshot& mesh,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-    )const;
-    [[nodiscard]] bool materialPassDrawResourcesReady(
-        const MaterialPassDrawItems& drawItems,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-    );
-    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(
-        const MaterialPassDrawItemVector& drawItems,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-    );
-    [[nodiscard]] bool indexedMaterialPassDrawResourcesReady(
-        const MaterialPassDrawItemVector& drawItems,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-    );
-    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(
-        const MaterialPassDrawItemVector& drawItems,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-    );
-    // Resolves persistent sampled textures selected by frozen draws. Missing cached resources reject collection;
-    // asset and descriptor creation belong to preparation.
-    [[nodiscard]] bool appendPreparedMaterialSurfaceSampledTextures(
-        const MaterialSurfaceInfo& materialInfo,
-        MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
-    );
-    [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> gatherPreparedMaterialPassSampledTextures(
-        const MaterialPassDrawItems* const* drawItemSets,
-        usize drawItemSetCount,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const;
+    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings);
+    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings);
+    [[nodiscard]] bool indexedMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings);
+    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings);
+    // Resolves persistent sampled textures selected by frozen draws.
+    // Missing cached resources reject collection; asset and descriptor creation belong to preparation.
+    [[nodiscard]] bool appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector);
+    [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> gatherPreparedMaterialPassSampledTextures(const MaterialPassDrawItems* const* drawItemSets, usize drawItemSetCount, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareIndexedMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
@@ -253,18 +199,8 @@ public:
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const;
     void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh);
     [[nodiscard]] bool setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
-    void dispatchComputeMaterialPassDrawItem(
-        const MaterialPassDrawContext& context,
-        const MaterialPassDrawItem& drawItem,
-        const MaterialPassMeshResourceSnapshot& mesh,
-        const MaterialPassPipelineResourceSnapshot& pipelineResources
-    );
-    void drawComputeMaterialPassDrawItem(
-        const MaterialPassDrawContext& context,
-        const MaterialPassDrawItem& drawItem,
-        const MaterialPassMeshResourceSnapshot& mesh,
-        const MaterialPassPipelineResourceSnapshot& pipelineResources
-    );
+    void dispatchComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources);
+    void drawComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources);
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
@@ -272,44 +208,23 @@ public:
     [[nodiscard]] bool recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
     // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this
-    // method records the graphics state, descriptor heap, push constants, and draws without an output transition.
+    // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this method records the graphics state, descriptor heap, push constants, and draws without an output transition.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);
-    [[nodiscard]] bool prepareMaterialPassDrawBuffers(
-        const InstanceGpuDataVector& instanceData,
-        const MaterialTypedByteDataVector& materialTypedBytes
-    );
-    [[nodiscard]] bool materialPassDrawBuffersReady(
-        const InstanceGpuDataVector& instanceData,
-        const MaterialTypedByteDataVector& materialTypedBytes
-    )const;
-    [[nodiscard]] bool materialPassDrawBuffersReady(
-        usize instanceCount,
-        usize materialTypedByteCount
-    )const;
+    [[nodiscard]] bool prepareMaterialPassDrawBuffers(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes);
+    [[nodiscard]] bool materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const;
+    [[nodiscard]] bool materialPassDrawBuffersReady(usize instanceCount, usize materialTypedByteCount)const;
     [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
-    // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration
-    // patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
-    void prepareMaterialPassInstanceUploadData(
-        InstanceGpuDataVector& instanceData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-    );
-    [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(
-        const MaterialPassDrawItemVector& drawItems,
-        bool computeEmulation
-    );
+    // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
+    void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
+    [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, bool computeEmulation);
 
 private:
     void releaseMaterialResourceReferences();
-    static void SplitMaterialTypedBytesByClass(
-        const Material& material,
-        MaterialTypedByteVector& outConstantTypedBytes,
-        MaterialTypedByteVector& outMutableDefaultTypedBytes
-    );
+    static void SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes);
 
 
 private:

@@ -50,11 +50,7 @@ void PaintUiLayerSmokeScene(Impl::UiPaintContext& context){
         return;
     }
 
-    if(
-        !paint.drawRegion(Name("panel.normal"), rectangle(0.36f, 0.40f, 0.26f, 0.24f))
-        || !paint.drawRegion(Name("button.normal"), rectangle(0.66f, 0.40f, 0.13f, 0.14f))
-        || !paint.drawRegion(Name("button.hover"), rectangle(0.82f, 0.40f, 0.14f, 0.14f))
-    ){
+    if(!paint.drawRegion(Name("panel.normal"), rectangle(0.36f, 0.40f, 0.26f, 0.24f)) || !paint.drawRegion(Name("button.normal"), rectangle(0.66f, 0.40f, 0.13f, 0.14f)) || !paint.drawRegion(Name("button.hover"), rectangle(0.82f, 0.40f, 0.14f, 0.14f))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: named nine-slice regions are absent from the default atlas"));
         return;
     }

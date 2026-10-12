@@ -21,8 +21,7 @@ struct NwbUiOutputPushConstants{
 #undef NWB_UI_OUTPUT_SHADER_UINT_FIELD
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbUiOutputPushConstants> g_NwbUiOutputPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbUiOutputPushConstants> g_NwbUiOutputPushConstants;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

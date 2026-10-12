@@ -103,18 +103,7 @@ protected:
         payload.ascenderUnits = 800.0f;
         payload.descenderUnits = -200.0f;
         payload.glyphs.resize(2u);
-        payload.glyphs[0u] = {
-            .glyphId = 0u,
-            .x = 1u,
-            .y = 1u,
-            .width = 2u,
-            .height = 4u,
-            .planeLeft = -125.0f,
-            .planeTop = -500.0f,
-            .planeRight = -62.5f,
-            .planeBottom = -375.0f,
-            .drawable = 1u,
-        };
+        payload.glyphs[0u] = { .glyphId = 0u, .x = 1u, .y = 1u, .width = 2u, .height = 4u, .planeLeft = -125.0f, .planeTop = -500.0f, .planeRight = -62.5f, .planeBottom = -375.0f, .drawable = 1u, };
         payload.glyphs[1u].glyphId = 1u;
         payload.groups.emplace_back(m_arena);
         FontAtlasGroup& group = payload.groups.back();
@@ -223,10 +212,7 @@ TEST(TextGlyphVisibilityTests, InvalidPhysicalPixelScalesRejectNativeCoverage){
     };
     for(const Point& pixelScale : invalidScales){
         EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}, pixelScale));
-        EXPECT_EQ(
-            TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 10.0f, 10.0f }, pixelScale),
-            TextGlyphIntersection::Invalid
-        );
+        EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 10.0f, 10.0f }, pixelScale), TextGlyphIntersection::Invalid);
     }
 }
 
@@ -306,10 +292,7 @@ TEST(TextGlyphVisibilityTests, AnisotropicPhysicalScaleRetainsSnappedNativeFring
     ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, {}, pixelScale));
     UiWidgetTests::ExpectRect(*rectangle, { 8.0f, 20.0f, 2.0f, 2.0f });
     EXPECT_EQ(TextGlyphVisibility::Intersect(*rectangle, clip), TextGlyphIntersection::Visible);
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 24.0f, {}, clip, pixelScale),
-        TextGlyphIntersection::Visible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 24.0f, {}, clip, pixelScale), TextGlyphIntersection::Visible);
 }
 
 TEST(TextGlyphVisibilityTests, CandidateRejectsInvalidParametersAndKnownBounds){
@@ -332,10 +315,7 @@ TEST(TextGlyphVisibilityTests, CandidateRejectsFiniteUnrepresentableNativePlacem
     glyph.position.x = Limit<f32>::s_Max;
     glyph.coverage = { { 1.0f, 2.0f, 3.0f, 4.0f }, true };
     const Rect clip{ 0.0f, 0.0f, 100.0f, 100.0f };
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, { Limit<f32>::s_Max, 0.0f }, clip),
-        TextGlyphIntersection::Invalid
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, { Limit<f32>::s_Max, 0.0f }, clip), TextGlyphIntersection::Invalid);
 }
 
 TEST(TextGlyphVisibilityTests, EmptyClipSkipsValidCandidatesAfterParameterValidation){
@@ -353,10 +333,7 @@ TEST_F(TextGlyphVisibilityFontTests, ReliableShapingInkSkipsDistantGlyphsWithout
     glyph.face = m_face;
     glyph.position = { 1000.0f, 1000.0f };
     glyph.ink = { -2.0f, -10.0f, 12.0f, 12.0f };
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }),
-        TextGlyphIntersection::Invisible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }), TextGlyphIntersection::Invisible);
 }
 
 TEST_F(TextGlyphVisibilityFontTests, NegativeBearingsAndMarksCanReachTheClipOutsideTheirOrigin){
@@ -364,35 +341,20 @@ TEST_F(TextGlyphVisibilityFontTests, NegativeBearingsAndMarksCanReachTheClipOuts
     glyph.face = m_face;
     glyph.position = { 20.0f, 20.0f };
     glyph.ink = { -25.0f, -10.0f, 8.0f, 20.0f };
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { -5.0f, 11.0f, 2.0f, 2.0f }),
-        TextGlyphIntersection::Visible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { -5.0f, 11.0f, 2.0f, 2.0f }), TextGlyphIntersection::Visible);
     glyph.position.x = 10.0f;
     glyph.ink = { -1.0f, -30.0f, 2.0f, 2.0f };
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 8.0f, -11.0f, 5.0f, 4.0f }),
-        TextGlyphIntersection::Visible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 8.0f, -11.0f, 5.0f, 4.0f }), TextGlyphIntersection::Visible);
 }
 
 TEST_F(TextGlyphVisibilityFontTests, HarfBuzzScaleCorrectionRetainsScaledAndOriginalInk){
     PlacedGlyph glyph;
     glyph.face = m_face;
     glyph.ink = { 1000.0f, -1.0f, 1.0f, 1.0f };
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 1.004f, 1.0f, {}, { 1006.5f, -1.0f, 0.25f, 0.25f }),
-        TextGlyphIntersection::Visible
-    );
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 1.011f, 1.0f, {}, { 1000.5f, -1.0f, 0.25f, 0.25f }),
-        TextGlyphIntersection::Visible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 1.004f, 1.0f, {}, { 1006.5f, -1.0f, 0.25f, 0.25f }), TextGlyphIntersection::Visible);
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 1.011f, 1.0f, {}, { 1000.5f, -1.0f, 0.25f, 0.25f }), TextGlyphIntersection::Visible);
     glyph.coverage = { glyph.ink, true };
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 1.004f, 1.0f, {}, { 1006.5f, -1.0f, 0.25f, 0.25f }),
-        TextGlyphIntersection::Invisible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 1.004f, 1.0f, {}, { 1006.5f, -1.0f, 0.25f, 0.25f }), TextGlyphIntersection::Invisible);
 }
 
 TEST_F(TextGlyphVisibilityFontTests, UntrustedUnknownInkRetainsAConservativeCandidate){
@@ -422,10 +384,7 @@ TEST_F(TextGlyphVisibilityFontTests, NativeCffOutlineBoundsAreAvailableForRealCo
     glyph.position = { 1000.0f, 1000.0f };
     glyph.ink = shaped[0u].ink;
     glyph.coverage = shaped[0u].coverage;
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, nullptr, 24.0f, 24.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }),
-        TextGlyphIntersection::Invisible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 24.0f, 24.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }), TextGlyphIntersection::Invisible);
 }
 
 
@@ -436,18 +395,8 @@ TEST_F(TextGlyphVisibilityAtlasTests, SdfCandidateUsesExactPlanesRatherThanShapi
     PlacedGlyph glyph;
     glyph.position = { 10.0f, 20.0f };
     glyph.ink = { 1000.0f, 1000.0f, 1.0f, 1.0f };
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(
-            glyph, m_atlas.get(), 32.0f, 32.0f, { 100.0f, 200.0f }, { 106.25f, 204.25f, 0.25f, 0.25f }
-        ),
-        TextGlyphIntersection::Visible
-    );
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(
-            glyph, m_atlas.get(), 32.0f, 32.0f, { 100.0f, 200.0f }, { 108.0f, 204.0f, 1.0f, 4.0f }
-        ),
-        TextGlyphIntersection::Invisible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, m_atlas.get(), 32.0f, 32.0f, { 100.0f, 200.0f }, { 106.25f, 204.25f, 0.25f, 0.25f }), TextGlyphIntersection::Visible);
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, m_atlas.get(), 32.0f, 32.0f, { 100.0f, 200.0f }, { 108.0f, 204.0f, 1.0f, 4.0f }), TextGlyphIntersection::Invisible);
 }
 
 TEST_F(TextGlyphVisibilityAtlasTests, NondrawableAtlasGlyphHasNoCandidateImage){
@@ -456,10 +405,7 @@ TEST_F(TextGlyphVisibilityAtlasTests, NondrawableAtlasGlyphHasNoCandidateImage){
     const auto rectangle = TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, {});
     ASSERT_TRUE(rectangle);
     UiWidgetTests::ExpectRect(*rectangle, {});
-    EXPECT_EQ(
-        TextGlyphVisibility::Candidate(glyph, m_atlas.get(), 32.0f, 32.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }),
-        TextGlyphIntersection::Invisible
-    );
+    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, m_atlas.get(), 32.0f, 32.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }), TextGlyphIntersection::Invisible);
 }
 
 TEST_F(TextGlyphVisibilityAtlasTests, RejectedAtlasRectanglesRejectTheResult){

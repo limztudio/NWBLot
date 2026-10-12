@@ -58,11 +58,7 @@ static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_
         if(existing.valid())
             return existing;
     }
-    return graph.importTexture(
-        texture,
-        TextureResourceDesc(texture->getCreationDescription().name, "Reflection History Image")
-            .setInitialState(firstWrite ? Core::ResourceStates::Unknown : Core::ResourceStates::Common)
-    );
+    return graph.importTexture(texture, TextureResourceDesc(texture->getCreationDescription().name, "Reflection History Image").setInitialState(firstWrite ? Core::ResourceStates::Unknown : Core::ResourceStates::Common));
 }
 
 [[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name name, const AStringView label, const Core::GpuTaskId& dependency){
@@ -72,12 +68,7 @@ static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(name)
-        .setMarkerLabel(label)
-        .setScheduling(scheduling)
-        .setDependencies(&dependency, 1u)
-    ;
+    desc.setIdentity(name).setMarkerLabel(label).setScheduling(scheduling).setDependencies(&dependency, 1u);
     return desc;
 }
 
@@ -116,11 +107,7 @@ struct TemporalTask{
         commandList.setPushConstants(&parameters, sizeof(parameters));
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_Temporal, payload.graphics.getDevice(), commandList);
 
-        commandList.dispatch(
-            (payload.width + NWB_REFLECTION_TEMPORAL_GROUP_SIZE - 1u) / NWB_REFLECTION_TEMPORAL_GROUP_SIZE,
-            (payload.height + NWB_REFLECTION_TEMPORAL_GROUP_SIZE - 1u) / NWB_REFLECTION_TEMPORAL_GROUP_SIZE,
-            1u
-        );
+        commandList.dispatch((payload.width + NWB_REFLECTION_TEMPORAL_GROUP_SIZE - 1u) / NWB_REFLECTION_TEMPORAL_GROUP_SIZE, (payload.height + NWB_REFLECTION_TEMPORAL_GROUP_SIZE - 1u) / NWB_REFLECTION_TEMPORAL_GROUP_SIZE, 1u);
         return !commandList.commandRecordingFailed();
     }
 
@@ -151,11 +138,7 @@ struct SpatialTask{
         commandList.setPushConstants(&payload.parameters, sizeof(payload.parameters));
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_Spatial, payload.graphics.getDevice(), commandList);
 
-        commandList.dispatch(
-            (payload.parameters.width + NWB_REFLECTION_SPATIAL_GROUP_SIZE - 1u) / NWB_REFLECTION_SPATIAL_GROUP_SIZE,
-            (payload.parameters.height + NWB_REFLECTION_SPATIAL_GROUP_SIZE - 1u) / NWB_REFLECTION_SPATIAL_GROUP_SIZE,
-            1u
-        );
+        commandList.dispatch((payload.parameters.width + NWB_REFLECTION_SPATIAL_GROUP_SIZE - 1u) / NWB_REFLECTION_SPATIAL_GROUP_SIZE, (payload.parameters.height + NWB_REFLECTION_SPATIAL_GROUP_SIZE - 1u) / NWB_REFLECTION_SPATIAL_GROUP_SIZE, 1u);
         return !commandList.commandRecordingFailed();
     }
 };
@@ -200,13 +183,7 @@ Core::GpuTaskId DeclareReflectionPostprocessTasks(
     desc.setResourceUses(uses.data(), uses.size());
     if(snapshot.history.eligible)
         desc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
-    dependency = graph.addTask<TemporalTask>(
-        desc,
-        TemporalTask::Payload{
-            graphics, snapshot, Move(reservation), resources.parameters.width, resources.parameters.height,
-            inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u,
-        }
-    );
+    dependency = graph.addTask<TemporalTask>(desc, TemporalTask::Payload{ graphics, snapshot, Move(reservation), resources.parameters.width, resources.parameters.height, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u, });
     if(!dependency.valid() || !snapshot.spatialEnabled)
         return dependency;
     if(!snapshot.spatialPipeline || !snapshot.spatial.texture)

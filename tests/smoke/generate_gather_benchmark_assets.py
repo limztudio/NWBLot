@@ -60,10 +60,9 @@ def main(argv=None):
     if output == Path(output.anchor) or source_root.is_relative_to(output) or output.is_relative_to(source_root) \
         or any(path.is_relative_to(output) for path in sources):
         parser.error("generated root must be separate from its authored templates")
-    # Material dispatch resolves one physical root per virtual project. Keep its existing bind/BXDF sources
-    # and the generated surface in that same private root; two project roots would resolve the wrong include.
-    contents = {path.relative_to(source_root).as_posix(): path.read_bytes()
-        for path in sorted(source_root.rglob("*")) if path.is_file()}
+    # Material dispatch resolves one physical root per virtual project.
+    # Keep its existing bind/BXDF sources and the generated surface in that same private root; two project roots would resolve the wrong include.
+    contents = {path.relative_to(source_root).as_posix(): path.read_bytes() for path in sorted(source_root.rglob("*")) if path.is_file()}
     generated = generated_contents(sources[0].read_text(encoding=LIT_UTF_8), sources[1].read_text(encoding=LIT_UTF_8))
     if contents.keys() & generated.keys():
         parser.error("generated benchmark identities collide with source assets")
@@ -71,8 +70,7 @@ def main(argv=None):
     if LIT_GENERATION_IDENTITY_JSON in contents:
         parser.error("source assets collide with the reserved generation identity")
     expected = dict(contents)
-    expected[LIT_GENERATION_IDENTITY_JSON] = (json.dumps({"schema": 1, "objects": 64,
-        "templates": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources},
+    expected[LIT_GENERATION_IDENTITY_JSON] = (json.dumps({"schema": 1, "objects": 64, "templates": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources},
         "files": {relative: hashlib.sha256(payload).hexdigest() for relative, payload in contents.items()}}, indent=2) + LIT_N).encode(LIT_UTF_8)
     existing = {path.relative_to(output).as_posix() for path in output.rglob("*") if path.is_file()}
     unexpected = sorted(existing - expected.keys())
@@ -85,8 +83,7 @@ def main(argv=None):
     actual = {path.relative_to(output).as_posix() for path in output.rglob("*") if path.is_file()}
     if actual != expected.keys():
         parser.error("generated output file identity changed while writing")
-    mismatched = [relative for relative, payload in expected.items()
-        if hashlib.sha256((output / relative).read_bytes()).digest() != hashlib.sha256(payload).digest()]
+    mismatched = [relative for relative, payload in expected.items() if hashlib.sha256((output / relative).read_bytes()).digest() != hashlib.sha256(payload).digest()]
     if mismatched:
         parser.error("generated output payload verification failed: " + LIT_EMPTY.join(mismatched))
     return 0

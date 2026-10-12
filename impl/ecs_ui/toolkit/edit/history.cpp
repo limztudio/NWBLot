@@ -55,9 +55,7 @@ bool EditModel::redo(){
     return true;
 }
 
-void EditModel::recordHistory(const AStringView before, const usize beforeAnchor, const usize beforeCaret,
-    const AStringView after, const usize afterAnchor, const usize afterCaret
-){
+void EditModel::recordHistory(const AStringView before, const usize beforeAnchor, const usize beforeCaret, const AStringView after, const usize afterAnchor, const usize afterCaret){
     const usize cost = before.size() + after.size();
     if(m_limits.maxHistoryRecords == 0u || cost > m_limits.maxHistoryBytes){
         clearHistory();
@@ -77,10 +75,7 @@ void EditModel::recordHistory(const AStringView before, const usize beforeAnchor
         m_historyBytes -= discarded.before.size() + discarded.after.size();
         m_history.pop_back();
     }
-    while(
-        !m_history.empty() && (m_history.size() >= m_limits.maxHistoryRecords
-            || m_historyBytes > m_limits.maxHistoryBytes - cost)
-    ){
+    while(!m_history.empty() && (m_history.size() >= m_limits.maxHistoryRecords || m_historyBytes > m_limits.maxHistoryBytes - cost)){
         const HistoryRecord& discarded = m_history.front();
         m_historyBytes -= discarded.before.size() + discarded.after.size();
         m_history.erase(m_history.begin());

@@ -83,10 +83,7 @@ struct FrameGraphTransparentCsgTaskResult{
 
 class FrameGraphTransparentCsgTasks final : NoCopy{
 public:
-    FrameGraphTransparentCsgTasks(
-        Core::GpuTaskGraph& graph,
-        RendererAvboitSystem& avboitSystem
-    );
+    FrameGraphTransparentCsgTasks(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem);
 
 
 public:

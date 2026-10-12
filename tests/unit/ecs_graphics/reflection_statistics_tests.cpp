@@ -50,12 +50,7 @@ struct StatisticsContext{
 }
 
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u){
-    return Core::QueueSubmissionToken{
-        .value = value,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 7u,
-        .queue = Core::CommandQueue::Graphics,
-    };
+    return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 7u, .queue = Core::CommandQueue::Graphics, };
 }
 
 struct LeaseTask{
@@ -74,10 +69,7 @@ struct DestructorLeaseTask{
 
 [[nodiscard]] Core::GpuTaskDesc TaskDesc(){
     Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests.reflection.statistics.lease"))
-        .setMarkerLabel("Statistics lease")
-    ;
+    desc.setIdentity(Name("tests.reflection.statistics.lease")).setMarkerLabel("Statistics lease");
     return desc;
 }
 
@@ -129,10 +121,7 @@ TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtComple
         context.control->discard(key);
         Expected<ReflectionStatistics> statistics;
         EXPECT_FALSE(context.control->tryGetLatestStatistics());
-        const u32 counters[] = {
-            100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, s_ExpectedDualCount, 1u, 3u, 4u, 5u,
-            123u, 25u, 70u, s_ExpectedDualCount, 17u, 3u, 6u, 19u, 31u,
-        };
+        const u32 counters[] = { 100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, s_ExpectedDualCount, 1u, 3u, 4u, 5u, 123u, 25u, 70u, s_ExpectedDualCount, 17u, 3u, 6u, 19u, 31u, };
         static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
         context.control->complete(key, Token(), counters);
         statistics = context.control->tryGetLatestStatistics();
@@ -300,9 +289,7 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
 TEST(ReflectionStatistics, RejectedGraphRegistrationReleasesLease){
     StatisticsContext context;
     Core::GpuTaskGraph graph(context.arena);
-    const Core::GpuTaskId task = graph.addTask<LeaseTask>(
-        Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}
-    );
+    const Core::GpuTaskId task = graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
     EXPECT_FALSE(task.valid());
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
 }
@@ -310,9 +297,7 @@ TEST(ReflectionStatistics, RejectedGraphRegistrationReleasesLease){
 TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
     StatisticsContext context;
     Core::GpuTaskGraph graph(context.arena);
-    ASSERT_TRUE(graph.addTask<LeaseTask>(
-        TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}
-    ).valid());
+    ASSERT_TRUE(graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}).valid());
     graph.reset();
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
 }
@@ -320,9 +305,7 @@ TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
 TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback){
     StatisticsContext context;
     Core::GpuTaskGraph graph(context.arena);
-    ASSERT_TRUE(graph.addTask<DestructorLeaseTask>(
-        TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}
-    ).valid());
+    ASSERT_TRUE(graph.addTask<DestructorLeaseTask>(TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}).valid());
     graph.reset();
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
 }

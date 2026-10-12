@@ -12,8 +12,7 @@ OUTPUT = Path(__file__).resolve().parent / "assets" / "characters" / "skinned_ca
 
 def build_prism():
     mesh = Mesh()
-    mesh.positions = [(-.32, -.65, -.18), (.32, -.65, -.18), (.32, .65, -.18), (-.32, .65, -.18),
-        (-.32, -.65, .18), (.32, -.65, .18), (.32, .65, .18), (-.32, .65, .18)]
+    mesh.positions = [(-.32, -.65, -.18), (.32, -.65, -.18), (.32, .65, -.18), (-.32, .65, -.18), (-.32, -.65, .18), (.32, -.65, .18), (.32, .65, .18), (-.32, .65, .18)]
     for face in ([0, 1, 2, 3], [4, 5, 6, 7], [0, 4, 5, 1], [3, 2, 6, 7], [0, 3, 7, 4], [1, 5, 6, 2]):
         mesh.flat_polygon(face, [(0., 0.), (1., 0.), (1., 1.), (0., 1.)])
     validate(mesh, 1, 2, ((-.32, -.65, -.18), (.32, .65, .18)))
@@ -25,18 +24,14 @@ def asset_text():
     content = serialize(mesh).replace("generate_refraction_gallery_meshes.py", "generate_skinned_caustic_prism.py")
     content = content.replace("mesh asset;", "mesh mesh;").replace("asset.", "mesh.")
     identity = "[\n        [1, 0, 0, 0],\n        [0, 1, 0, 0],\n        [0, 0, 1, 0],\n    ]"
-    lines = [content, "skeleton skeleton;", "", "skeleton.joints = [", "    {", '        "name": "root",',
-        '        "local_bind_pose": ' + identity + ",", "    },", "    {", '        "name": "bend",',
-        '        "parent": "root",', '        "local_bind_pose": ' + identity + ",", "    },", "];", "",
-        "skin skin;", "", "skin.mesh = mesh;", "skin.skeleton = skeleton;", "", "skin.influences = ["]
+    lines = [content, "skeleton skeleton;", "", "skeleton.joints = [", "    {", '        "name": "root",', '        "local_bind_pose": ' + identity + ",", "    },", "    {", '        "name": "bend",',
+        '        "parent": "root",', '        "local_bind_pose": ' + identity + ",", "    },", "];", "", "skin skin;", "", "skin.mesh = mesh;", "skin.skeleton = skeleton;", "", "skin.influences = ["]
     for _, y, _ in mesh.positions:
         # The lower four positions remain on root; the upper four follow the bending child.
         weights = (1, 0, 0, 0) if y < 0 else (0, 1, 0, 0)
         lines.append('    { "joints": [0, 1, 0, 0], "weights": [' + ", ".join(map(str, weights)) + "] },")
-    lines += ["];", "", "skin.inverse_bind_matrices = [", "    " + identity + ",", "    " + identity + ",",
-        "];", "", "model model;", "", "model.skeletons = {", '    "skeleton": { "skeleton": skeleton, },',
-        "};", "", "model.skinned_meshes = {", '    "mesh": { "skin": skin, "skeleton": "skeleton", },',
-        "};", "", "asset_bunch bunch = [mesh, skeleton, skin, model];", ""]
+    lines += ["];", "", "skin.inverse_bind_matrices = [", "    " + identity + ",", "    " + identity + ",", "];", "", "model model;", "", "model.skeletons = {", '    "skeleton": { "skeleton": skeleton, },',
+        "};", "", "model.skinned_meshes = {", '    "mesh": { "skin": skin, "skeleton": "skeleton", },', "};", "", "asset_bunch bunch = [mesh, skeleton, skin, model];", ""]
     return "\n".join(lines).replace("\n", "\r\n").encode("utf-8")
 
 

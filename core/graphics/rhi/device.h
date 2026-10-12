@@ -59,18 +59,10 @@ struct QueueSubmissionNativeSignal{
 };
 
 // Prepares a submission-local binary signal atomically; exceptions unwind to the application boundary.
-using QueueSubmissionPreSubmitCallback = Expected<QueueSubmissionNativeSignal>(*) (
-    void* context,
-    u64 identity,
-    const GpuPhysicalQueueId& executionQueue
-);
+using QueueSubmissionPreSubmitCallback = Expected<QueueSubmissionNativeSignal>(*) (void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
 
 // Called exactly once after successful hook preparation, with the accepted physical-queue timeline token or an invalid token when native submission was rejected. Callbacks must resolve one-shot state without throwing or synchronously draining Device.
-using QueueSubmissionResolvedCallback = bool(*) (
-    void* context,
-    u64 identity,
-    const QueueSubmissionToken& submissionToken
-)noexcept;
+using QueueSubmissionResolvedCallback = bool(*) (void* context, u64 identity, const QueueSubmissionToken& submissionToken)noexcept;
 
 struct QueueSubmissionPreSubmitHook{
 private:
@@ -126,7 +118,8 @@ struct CommandListParameters{
     CommandQueue::Enum queueType = CommandQueue::Graphics;
     // Device resolves queueType to its primary physical queue unless an exact queue is supplied. Explicit graph packets set the exact queue directly, so command pools, uploads, and ownership handoffs never collapse same-class queues.
     GpuPhysicalQueueId physicalQueue;
-    // Worker zero is the ordinary serial/direct lease. Ready-frontier graph recording combines a stable nonzero CpuTaskScheduler domain with its local nonzero worker index so different pools cannot alias one native arena shard.
+    // Worker zero is the ordinary serial/direct lease.
+    // Ready-frontier graph recording combines a stable nonzero CpuTaskScheduler domain with its local nonzero worker index so different pools cannot alias one native arena shard.
     // Manual nonzero worker indices may leave the domain at zero when the caller deliberately owns that namespace.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
@@ -343,7 +336,8 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool enableAsyncComputeLane = true;
     // Best-effort optional transfer transport. Only a distinct transfer-only Vulkan family is exposed as a CommandQueue::Transfer; task-graph copy work otherwise falls back to the existing Compute/Graphics queues.
     bool enableTransferQueue = true;
-    // Opt-in same-class transports. The backend registers every safe additional queue from each active primary family and, with cross-family routing enabled, one deterministic alternate family for each supported class.
+    // Opt-in same-class transports.
+    // The backend registers every safe additional queue from each active primary family and, with cross-family routing enabled, one deterministic alternate family for each supported class.
     // Graph tasks must explicitly allow same-class routing before any ordinary work leaves the primary transport.
     bool enableSameClassMultiQueue = false;
     // Permits an auxiliary same-class transport to come from a different compatible Vulkan family. Tasks must separately opt in before the compiler can route across that ownership boundary.

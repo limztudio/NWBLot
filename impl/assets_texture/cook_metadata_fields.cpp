@@ -40,10 +40,7 @@ using TextureFormat::s_TextureDataExtension;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<TextureDimension::Enum> ReadTextureDimension(
-    const Path& nwbFilePath,
-    const Value& asset
-){
+[[nodiscard]] Expected<TextureDimension::Enum> ReadTextureDimension(const Path& nwbFilePath, const Value& asset){
     AStringView text;
     auto textResult = ::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_DimensionField, true);
     if(!textResult)
@@ -68,43 +65,22 @@ using TextureFormat::s_TextureDataExtension;
     }
 }
 
-[[nodiscard]] bool ValidateTextureDataFileName(
-    const Path& nwbFilePath,
-    const AStringView dataFileName,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(
-        dataFileName.empty()
-        || dataFileName == "."
-        || dataFileName == ".."
-        || dataFileName.find_first_of("/\\:") != AStringView::npos
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a sidecar filename without path components")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_DataField)
-        );
+[[nodiscard]] bool ValidateTextureDataFileName(const Path& nwbFilePath, const AStringView dataFileName, Core::Alloc::ScratchArena& scratchArena){
+    if(dataFileName.empty() || dataFileName == "." || dataFileName == ".." || dataFileName.find_first_of("/\\:") != AStringView::npos){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a sidecar filename without path components"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_DataField));
         return false;
     }
 
     const Path dataPath(nwbFilePath.arena(), dataFileName);
     if(dataPath.isAbsolute() || dataPath.filename().native() != dataPath.native()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a relative sidecar filename")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_DataField)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a relative sidecar filename"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_DataField));
         return false;
     }
 
     AString<Core::Alloc::ScratchArena> extension = PathToString(scratchArena, dataPath.extension());
     CanonicalizeTextInPlace(extension);
     if(extension != s_TextureDataExtension){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must reference a .tex sidecar")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_DataField)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must reference a .tex sidecar"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_DataField));
         return false;
     }
     return true;

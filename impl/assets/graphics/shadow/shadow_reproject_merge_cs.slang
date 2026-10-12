@@ -38,8 +38,7 @@ struct NwbShadowReprojectMergePushConstants{
     uint receiverFactor;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbShadowReprojectMergePushConstants> g_NwbShadowMergePush;
+[[vk::push_constant]] ConstantBuffer<NwbShadowReprojectMergePushConstants> g_NwbShadowMergePush;
 
 #define g_NwbShadowMergeHistoryOut nwbHeapStorageImage2DArrayFloat4(g_NwbShadowMergePush.historyOutputStorageSlot)
 #define g_NwbShadowMergeMomentsOut nwbHeapStorageImage2DArrayFloat4(g_NwbShadowMergePush.momentsOutputStorageSlot)
@@ -68,27 +67,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 Nc = nwbOctDecodeNormal(float2(gc.xy));
     const float currentCameraDistance = float(gc.z);
 
-    const int2 full = int2(
-        min((int)h.x * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.width - 1),
-        min((int)h.y * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.height - 1)
-    );
+    const int2 full = int2(min((int)h.x * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.width - 1), min((int)h.y * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.height - 1));
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 Wc = float3(worldPositionSample);
 
-    const NwbShadowMergeReprojection reprojection = nwbShadowReprojectHistory(
-        Wc,
-        g_NwbShadowMergePush.prevWorldToClip,
-        g_NwbShadowMergePush.historyValid,
-        halfWidth,
-        halfHeight
-    );
-    const bool historyAccepted = nwbShadowMergeHistoryAccepted(
-        reprojection,
-        valid,
-        g_NwbShadowMergePush.geometryPrevSlot,
-        Nc,
-        currentCameraDistance
-    );
+    const NwbShadowMergeReprojection reprojection = nwbShadowReprojectHistory(Wc, g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid, halfWidth, halfHeight);
+    const bool historyAccepted = nwbShadowMergeHistoryAccepted(reprojection, valid, g_NwbShadowMergePush.geometryPrevSlot, Nc, currentCameraDistance);
 
     for(uint slot = slotStart; slot < slotEnd; ++slot){
         const NwbShadowMergeResult result = nwbShadowMergeChannel<false>(

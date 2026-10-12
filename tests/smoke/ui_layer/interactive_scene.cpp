@@ -85,22 +85,15 @@ bool UiInteractiveSmokeScene::paint(Impl::UiPaintContext& context){
 }
 
 void UiInteractiveSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiInteractiveSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiInteractiveSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 void UiInteractiveSmokeScene::logAction(const TStringView action){
     ++m_actions;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiInteractiveSmoke: action={} count={} enabled={} actions={}")
-        , action, m_count, static_cast<u32>(m_enabled), m_actions
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiInteractiveSmoke: action={} count={} enabled={} actions={}"), action, m_count, static_cast<u32>(m_enabled), m_actions);
 }
 
 void UiInteractiveSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -124,11 +117,7 @@ bool IsUiLayerInteractionSmokeEnabled(){
 }
 
 SharedUiInteractiveSmokeScene CreateUiInteractiveSmokeScene(Core::Alloc::GlobalArena& arena){
-    return SharedUiInteractiveSmokeScene(
-        NewArenaObject<RefCounter<UiInteractiveSmokeScene>>(arena),
-        ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiInteractiveSmokeScene(NewArenaObject<RefCounter<UiInteractiveSmokeScene>>(arena), ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

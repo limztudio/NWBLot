@@ -206,8 +206,7 @@ protected:
     [[nodiscard]] bool declareLists(const u64 generation){
         if(!beginParent(generation) || !m_builder.virtualList("list", m_parentSource, m_parentList, ListOptions()).valid)
             return false;
-        if(!m_builder.beginPopup("child", m_child, ChildOptions())
-            || !m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid)
+        if(!m_builder.beginPopup("child", m_child, ChildOptions()) || !m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid)
             return false;
         return m_builder.endPopup();
     }
@@ -219,8 +218,7 @@ protected:
     [[nodiscard]] bool declareChildCompounds(const u64 generation){
         if(!beginParent(generation) || !m_builder.beginPopup("child", m_child, ChildOptions()))
             return false;
-        if(!m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid
-            || !m_builder.comboBox("combo", m_comboSource, m_combo, Options()).valid)
+        if(!m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid || !m_builder.comboBox("combo", m_comboSource, m_combo, Options()).valid)
             return false;
         SearchComboOptions searchOptions;
         searchOptions.combo = Options();

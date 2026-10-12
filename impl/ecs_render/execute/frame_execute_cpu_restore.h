@@ -30,8 +30,7 @@ struct DeferredFrameTargets;
 
 
 // CPU-side packet-state restore for rejected frame recordings.
-// Separated from RendererFramePipeline::render(): prefix/shadow/effects restores are
-// per-stage functionality, composed here so render() keeps only the call sites.
+// Separated from RendererFramePipeline::render(): prefix/shadow/effects restores are per-stage functionality, composed here so render() keeps only the call sites.
 class FrameExecuteCpuRestore final{
 public:
     FrameExecuteCpuRestore() = delete;
@@ -44,32 +43,12 @@ public:
     };
 
 
-    static void RestorePrefixCpuState(
-        RendererMeshSystem& meshSystem,
-        RendererDeferredSystem& deferredSystem
-    );
-    static void RestoreShadowCpuState(
-        RendererRayTracingState& rayTracingState,
-        const RayTracingFrameCpuStateSnapshot& snapshot
-    );
-    static void RestoreCausticsCpuState(
-        RendererRayTracingState& rayTracingState,
-        const RayTracingFrameCpuStateSnapshot& snapshot
-    );
-    static void RestoreSurfelGiCpuState(
-        RendererRayTracingState& rayTracingState,
-        const RayTracingFrameCpuStateSnapshot& snapshot
-    );
-    static void RestoreAvboitCpuState(
-        RendererAvboitSystem& avboitSystem,
-        bool targetsNeedClear
-    );
-    static void RestorePostGbufferEffectsCpuState(
-        RendererRayTracingState& rayTracingState,
-        RendererAvboitSystem& avboitSystem,
-        const RayTracingFrameCpuStateSnapshot& snapshot,
-        bool avboitTargetsNeedClear
-    );
+    static void RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem);
+    static void RestoreShadowCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot);
+    static void RestoreCausticsCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot);
+    static void RestoreSurfelGiCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot);
+    static void RestoreAvboitCpuState(RendererAvboitSystem& avboitSystem, bool targetsNeedClear);
+    static void RestorePostGbufferEffectsCpuState(RendererRayTracingState& rayTracingState, RendererAvboitSystem& avboitSystem, const RayTracingFrameCpuStateSnapshot& snapshot, bool avboitTargetsNeedClear);
     static void RestorePostGbufferPacketCpuState(
         RendererMeshSystem& meshSystem,
         RendererDeferredSystem& deferredSystem,

@@ -20,9 +20,7 @@ namespace __hidden_frame_graph_runtime_statistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Core::Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(
-    const Core::CommandQueue::Enum queueClass
-)noexcept{
+[[nodiscard]] static Expected<Core::Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const Core::CommandQueue::Enum queueClass)noexcept{
     switch(queueClass){
     case Core::CommandQueue::Graphics:
         return Core::Telemetry::FrameGraphQueueClass::Graphics;
@@ -45,11 +43,7 @@ namespace __hidden_frame_graph_runtime_statistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
-    const Core::GpuTaskGraphRuntimeStatistics& statistics,
-    const u64 captureFrameIndex,
-    const u64 sourceFrameIndex
-)noexcept{
+Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRuntimeStatistics(const Core::GpuTaskGraphRuntimeStatistics& statistics, const u64 captureFrameIndex, const u64 sourceFrameIndex)noexcept{
     if(captureFrameIndex != sourceFrameIndex || !statistics.valid())
         return {};
 
@@ -77,38 +71,18 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
             .ownershipAcquireBarrierCount = static_cast<u64>(compileStatistics.ownershipAcquireBarrierCount),
             .stateExportBarrierCount = static_cast<u64>(compileStatistics.stateExportBarrierCount),
             .logicalOwnershipTransferCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCount),
-            .logicalOwnershipTransferSignatureCount = static_cast<u64>(
-                compileStatistics.logicalOwnershipTransferSignatureCount
-            ),
-            .repeatedOwnershipTransferSignatureCount = static_cast<u64>(
-                compileStatistics.repeatedOwnershipTransferSignatureCount
-            ),
-            .concurrentSharingCouldAvoidTransferCount = static_cast<u64>(
-                compileStatistics.concurrentSharingCouldAvoidTransferCount
-            ),
-            .concurrentSharingAdviceResourceCount = static_cast<u64>(
-                compileStatistics.concurrentSharingAdviceResourceCount
-            ),
-            .logicalOwnershipTransferInternalCount = static_cast<u64>(
-                compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal]
-            ),
-            .logicalOwnershipTransferExternalImportCount = static_cast<u64>(
-                compileStatistics.logicalOwnershipTransferCountByRoute[
-                    Core::GpuOwnershipTransferRoute::ExternalImport
-                ]
-            ),
-            .logicalOwnershipTransferExternalExportCount = static_cast<u64>(
-                compileStatistics.logicalOwnershipTransferCountByRoute[
-                    Core::GpuOwnershipTransferRoute::ExternalExport
-                ]
-            ),
+            .logicalOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferSignatureCount),
+            .repeatedOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.repeatedOwnershipTransferSignatureCount),
+            .concurrentSharingCouldAvoidTransferCount = static_cast<u64>(compileStatistics.concurrentSharingCouldAvoidTransferCount),
+            .concurrentSharingAdviceResourceCount = static_cast<u64>(compileStatistics.concurrentSharingAdviceResourceCount),
+            .logicalOwnershipTransferInternalCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal]),
+            .logicalOwnershipTransferExternalImportCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalImport]),
+            .logicalOwnershipTransferExternalExportCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalExport]),
             .resourceSetCount = static_cast<u64>(compileStatistics.resourceSetCount),
             .resourceSetMemberCount = static_cast<u64>(compileStatistics.resourceSetMemberCount),
             .directResourceUseCount = static_cast<u64>(compileStatistics.directResourceUseCount),
             .declaredResourceSetUseCount = static_cast<u64>(compileStatistics.declaredResourceSetUseCount),
-            .expandedResourceSetMemberUseCount = static_cast<u64>(
-                compileStatistics.expandedResourceSetMemberUseCount
-            ),
+            .expandedResourceSetMemberUseCount = static_cast<u64>(compileStatistics.expandedResourceSetMemberUseCount),
             .payloadObjectCount = static_cast<u64>(compileStatistics.payloadObjectCount),
             .payloadObjectBytes = static_cast<u64>(compileStatistics.payloadObjectBytes),
             .uploadBlobCount = static_cast<u64>(compileStatistics.uploadBlobCount),
@@ -155,9 +129,7 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
             .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
             .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
             .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
-            .acceptedFrontierSubmissionCount = static_cast<u64>(
-                submissionStatistics.acceptedFrontierSubmissionCount
-            ),
+            .acceptedFrontierSubmissionCount = static_cast<u64>(submissionStatistics.acceptedFrontierSubmissionCount),
             .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
             .submissionSeconds = submissionStatistics.submissionSeconds,
         },
@@ -169,11 +141,7 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
     return result;
 }
 
-Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord
-ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
-    const Core::GpuTaskGraphPacketSubmissionStatistics& statistics,
-    const u32 ownerNodeIndex
-)noexcept{
+Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(const Core::GpuTaskGraphPacketSubmissionStatistics& statistics, const u32 ownerNodeIndex)noexcept{
     if(!statistics.valid() || ownerNodeIndex == Limit<u32>::s_Max)
         return {};
 
@@ -187,10 +155,7 @@ ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
         .commandListCount = static_cast<u64>(statistics.nativeCommandListCount),
         .ownerNodeIndex = ownerNodeIndex,
         .packetIndex = statistics.packet.index,
-        .queue = {
-            .index = statistics.queue.index,
-            .deviceGeneration = statistics.queue.deviceGeneration,
-        },
+        .queue = { .index = statistics.queue.index, .deviceGeneration = statistics.queue.deviceGeneration, },
         .queueClass = *queueClass,
         .joinsAcceptedQueueFrontier = statistics.joinsAcceptedQueueFrontier,
         .recoverySubmission = statistics.isRecoverySubmission,
@@ -238,10 +203,7 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
         .graphGeneration = compileStatistics.graphGeneration,
         .planGeneration = compileStatistics.planGeneration,
         .recordingAttemptGeneration = recordingStatistics.recordingAttemptGeneration,
-        .queue = {
-            .index = compileStatistics.queue.index,
-            .deviceGeneration = compileStatistics.queue.deviceGeneration,
-        },
+        .queue = { .index = compileStatistics.queue.index, .deviceGeneration = compileStatistics.queue.deviceGeneration, },
         .deviceGeneration = compileStatistics.deviceGeneration,
         .queueClass = *queueClass,
         .compile = {
@@ -252,27 +214,13 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             .epilogueBarrierCount = static_cast<u64>(compileStatistics.epilogueBarrierCount),
             .ownershipReleaseBarrierCount = static_cast<u64>(compileStatistics.ownershipReleaseBarrierCount),
             .ownershipAcquireBarrierCount = static_cast<u64>(compileStatistics.ownershipAcquireBarrierCount),
-            .incomingLogicalOwnershipTransferCount = static_cast<u64>(
-                compileStatistics.incomingLogicalOwnershipTransferCount
-            ),
-            .outgoingLogicalOwnershipTransferCount = static_cast<u64>(
-                compileStatistics.outgoingLogicalOwnershipTransferCount
-            ),
-            .incomingLogicalOwnershipTransferSignatureCount = static_cast<u64>(
-                compileStatistics.incomingLogicalOwnershipTransferSignatureCount
-            ),
-            .outgoingLogicalOwnershipTransferSignatureCount = static_cast<u64>(
-                compileStatistics.outgoingLogicalOwnershipTransferSignatureCount
-            ),
-            .incomingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(
-                compileStatistics.incomingRepeatedOwnershipTransferSignatureCount
-            ),
-            .outgoingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(
-                compileStatistics.outgoingRepeatedOwnershipTransferSignatureCount
-            ),
-            .concurrentSharingAdviceResourceCount = static_cast<u64>(
-                compileStatistics.concurrentSharingAdviceResourceCount
-            ),
+            .incomingLogicalOwnershipTransferCount = static_cast<u64>(compileStatistics.incomingLogicalOwnershipTransferCount),
+            .outgoingLogicalOwnershipTransferCount = static_cast<u64>(compileStatistics.outgoingLogicalOwnershipTransferCount),
+            .incomingLogicalOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.incomingLogicalOwnershipTransferSignatureCount),
+            .outgoingLogicalOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.outgoingLogicalOwnershipTransferSignatureCount),
+            .incomingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.incomingRepeatedOwnershipTransferSignatureCount),
+            .outgoingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.outgoingRepeatedOwnershipTransferSignatureCount),
+            .concurrentSharingAdviceResourceCount = static_cast<u64>(compileStatistics.concurrentSharingAdviceResourceCount),
         },
         .recording = {
             .packetCount = static_cast<u64>(recordingStatistics.packetCount),
@@ -299,9 +247,7 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
             .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
             .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
-            .acceptedFrontierSubmissionCount = static_cast<u64>(
-                submissionStatistics.acceptedFrontierSubmissionCount
-            ),
+            .acceptedFrontierSubmissionCount = static_cast<u64>(submissionStatistics.acceptedFrontierSubmissionCount),
             .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
             .submissionSeconds = submissionStatistics.submissionSeconds,
         },

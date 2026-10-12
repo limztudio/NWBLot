@@ -21,11 +21,10 @@ namespace EditTextStatus{
     enum Enum : u8{ Accepted, InvalidText, TooLarge };
 };
 
-// CRLF becomes one space. Other line breaks and tabs become spaces; NUL and other ASCII controls are rejected.
+// CRLF becomes one space.
+// Other line breaks and tabs become spaces; NUL and other ASCII controls are rejected.
 // UTF8 and normalized byte length are checked before allocation.
-[[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingleLineText(
-    Core::Alloc::GlobalArena& arena, AStringView source, usize maxBytes
-);
+[[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingleLineText(Core::Alloc::GlobalArena& arena, AStringView source, usize maxBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

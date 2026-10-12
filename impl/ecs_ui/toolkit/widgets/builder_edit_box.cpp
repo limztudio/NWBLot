@@ -21,19 +21,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditBoxResult Builder::editBox(
-    const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options
-){
+EditBoxResult Builder::editBox(const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options){
     return declareEditBox(stableKey, model, state, options);
 }
 
-EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& model, EditBoxState& state,
-    const EditBoxOptions& options, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame
-){
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
-        || model.textMode() != EditTextMode::SingleLine || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
-    ){
+EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
+    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || model.textMode() != EditTextMode::SingleLine || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return {};
     }
@@ -57,8 +50,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == widget->id;
     if(m_editHost){
-        result = actions ? m_editHost->editActions(*widget, model, options, m_context.popupToken(), *actions)
-            : m_editHost->edit(*widget, model, options);
+        result = actions ? m_editHost->editActions(*widget, model, options, m_context.popupToken(), *actions) : m_editHost->edit(*widget, model, options);
     }
     if(!result.valid || m_context.failed()){
         result.valid = false;
@@ -124,10 +116,8 @@ Point Builder::editMinimumSize()const noexcept{
         const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
         if(skinRegion){
             const SIMDVectorSingle minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-            const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
-                skinRegion->minimumWidth, skinRegion->minimumHeight);
-            const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
-                VectorGreater(minimumCurrent, minimumCandidate));
+            const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
+            const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent, VectorGreater(minimumCurrent, minimumCandidate));
             minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
         }
     }
@@ -135,11 +125,7 @@ Point Builder::editMinimumSize()const noexcept{
 }
 
 bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result){
-    if(
-        state.modelGeneration != model.instanceGeneration() || state.revision != model.revision()
-        || state.selectionGeneration != model.selectionGeneration()
-        || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused
-    )
+    if(state.modelGeneration != model.instanceGeneration() || state.revision != model.revision() || state.selectionGeneration != model.selectionGeneration() || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused)
         state.caretElapsed = 0.0;
     else
         state.caretElapsed = AdvanceCaretPhase(state.caretElapsed, static_cast<f64>(m_deltaSeconds));
@@ -152,11 +138,9 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
     state.caret = model.caret();
     state.focused = result.focused;
 
-    item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly,
-        state.caretElapsed < 0.5 };
+    item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly, state.caretElapsed < 0.5 };
     item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
-    if(!item.editView.snapshot(model)
-        || item.editView.shape(m_text, textShapeRequest({}, m_style.fontSize)) != TextLayoutStatus::Success){
+    if(!item.editView.snapshot(model) || item.editView.shape(m_text, textShapeRequest({}, m_style.fontSize)) != TextLayoutStatus::Success){
         m_context.fail();
         return false;
     }
@@ -172,8 +156,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
             continue;
         const SIMDVectorSingle itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
         const SIMDVectorSingle itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent,
-            VectorGreater(itempaddingCurrent, itempaddingCandidate));
+        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent, VectorGreater(itempaddingCurrent, itempaddingCandidate));
         item.padding = { VectorGetX(itempaddingMaximum), VectorGetY(itempaddingMaximum), VectorGetZ(itempaddingMaximum), VectorGetW(itempaddingMaximum) };
     }
     return true;

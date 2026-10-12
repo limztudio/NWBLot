@@ -18,11 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-WaylandTextInputService::WaylandTextInputService(
-    Alloc::GlobalArena& arena,
-    wl_display& display,
-    wl_surface& surface
-)
+WaylandTextInputService::WaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface)
     : QueuedTextInputService(arena)
     , m_display(display)
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
@@ -135,10 +131,7 @@ TextInputCapabilities WaylandTextInputService::capabilities()const noexcept{
 #endif
 }
 
-TextInputAdmission::Enum WaylandTextInputService::startNativeSession(
-    const TextInputSessionToken token,
-    const TextInputSessionDesc& desc
-){
+TextInputAdmission::Enum WaylandTextInputService::startNativeSession(const TextInputSessionToken token, const TextInputSessionDesc& desc){
     if(!m_keyboardFocused || !m_seat)
         return TextInputAdmission::Unavailable;
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
@@ -207,13 +200,7 @@ TextInputAdmission::Enum WaylandTextInputService::updateNativeCaret(const TextIn
     return TextInputAdmission::Accepted;
 }
 
-void WaylandTextInputService::updateNativeSurrounding(
-    const AStringView text,
-    const usize anchorByte,
-    const usize caretByte,
-    const u64 revision,
-    const TextInputChangeCause::Enum cause
-){
+void WaylandTextInputService::updateNativeSurrounding(const AStringView text, const usize anchorByte, const usize caretByte, const u64 revision, const TextInputChangeCause::Enum cause){
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     if(m_enabled && m_input && m_entered){
         if(m_waitingForCurrentSerial){
@@ -221,8 +208,7 @@ void WaylandTextInputService::updateNativeSurrounding(
             return;
         }
         sendSurrounding(text, anchorByte, caretByte, revision);
-        const u32 nativeCause = cause == TextInputChangeCause::InputMethod
-            ? ZWP_TEXT_INPUT_V3_CHANGE_CAUSE_INPUT_METHOD : ZWP_TEXT_INPUT_V3_CHANGE_CAUSE_OTHER;
+        const u32 nativeCause = cause == TextInputChangeCause::InputMethod ? ZWP_TEXT_INPUT_V3_CHANGE_CAUSE_INPUT_METHOD : ZWP_TEXT_INPUT_V3_CHANGE_CAUSE_OTHER;
         zwp_text_input_v3_set_text_change_cause(m_input, nativeCause);
         commitState(m_nativeToken, m_wireState.revision());
         if(!flush())
@@ -282,11 +268,7 @@ bool WaylandTextInputService::flush(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<ITextInputService> CreateWaylandTextInputService(
-    Alloc::GlobalArena& arena,
-    wl_display& display,
-    wl_surface& surface
-){
+GlobalUniquePtr<ITextInputService> CreateWaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface){
     auto service = MakeGlobalUnique<WaylandTextInputService>(arena, arena, display, surface);
     if(!service->initialize())
         return nullptr;

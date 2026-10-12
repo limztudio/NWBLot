@@ -128,76 +128,36 @@ bool BackendContext::createDevice(){
     uint32_t physicalQueueFamilyCount = 0u;
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
-    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(
-        m_vulkanPhysicalDevice,
-        &physicalQueueFamilyCount,
-        physicalQueueFamilies.data()
-    );
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, physicalQueueFamilies.data());
     const auto queueCapabilitiesForFamily = [&physicalQueueFamilies](const i32 queueFamily){
-        if(
-            queueFamily == s_InvalidQueueFamilyIndex
-            || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()
-        )
+        if(queueFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size())
             return GpuQueueCapability::None;
-        return VulkanDetail::QueueCapabilitiesForQueueFlags(
-            physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
-        );
+        return VulkanDetail::QueueCapabilitiesForQueueFlags(physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags);
     };
     const auto timestampValidBitsForFamily = [&physicalQueueFamilies](const i32 queueFamily){
-        if(
-            queueFamily == s_InvalidQueueFamilyIndex
-            || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()
-        )
+        if(queueFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size())
             return 0u;
         return physicalQueueFamilies[static_cast<usize>(queueFamily)].timestampValidBits;
     };
     const GpuQueueCapability::Mask graphicsQueueCapabilities = queueCapabilitiesForFamily(m_graphicsQueueFamily);
-    const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex
-        ? m_asyncComputeQueueFamily
-        : m_computeQueueFamily
-    ;
+    const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily;
     const GpuQueueCapability::Mask requiredComputeQueueCapabilities = queueCapabilitiesForFamily(m_computeQueueFamily);
     const GpuQueueCapability::Mask computeQueueCapabilities = queueCapabilitiesForFamily(schedulerComputeQueueFamily);
     const GpuQueueCapability::Mask transferQueueCapabilities = queueCapabilitiesForFamily(m_transferQueueFamily);
-    const GpuQueueCapability::Mask requiredGraphicsQueueCapabilities = static_cast<GpuQueueCapability::Mask>(
-        static_cast<u8>(GpuQueueCapability::Graphics)
-        | static_cast<u8>(GpuQueueCapability::Transfer)
-    );
-    const GpuQueueCapability::Mask requiredComputeQueueCapabilitiesMask = static_cast<GpuQueueCapability::Mask>(
-        static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Transfer)
-    );
-    if(
-        (static_cast<u8>(graphicsQueueCapabilities) & static_cast<u8>(requiredGraphicsQueueCapabilities))
-        != static_cast<u8>(requiredGraphicsQueueCapabilities)
-    ){
+    const GpuQueueCapability::Mask requiredGraphicsQueueCapabilities = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Transfer));
+    const GpuQueueCapability::Mask requiredComputeQueueCapabilitiesMask = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer));
+    if((static_cast<u8>(graphicsQueueCapabilities) & static_cast<u8>(requiredGraphicsQueueCapabilities)) != static_cast<u8>(requiredGraphicsQueueCapabilities)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Graphics queue family does not support Graphics and Transfer."));
         return false;
     }
-    if(
-        (static_cast<u8>(requiredComputeQueueCapabilities) & static_cast<u8>(requiredComputeQueueCapabilitiesMask))
-        != static_cast<u8>(requiredComputeQueueCapabilitiesMask)
-    ){
+    if((static_cast<u8>(requiredComputeQueueCapabilities) & static_cast<u8>(requiredComputeQueueCapabilitiesMask)) != static_cast<u8>(requiredComputeQueueCapabilitiesMask)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Compute queue family does not support Compute and Transfer."));
         return false;
     }
-    const u32 graphicsNativeQueueIndex = findNativeQueueIndex(
-        static_cast<u32>(m_graphicsQueueFamily),
-        s_GraphicsQueueIndex
-    );
-    const u32 computeNativeQueueIndex = findNativeQueueIndex(
-        static_cast<u32>(schedulerComputeQueueFamily),
-        s_ComputeQueueIndex
-    );
-    const u32 transferNativeQueueIndex = findNativeQueueIndex(
-        static_cast<u32>(m_transferQueueFamily),
-        s_TransferQueueIndex
-    );
-    if(
-        graphicsNativeQueueIndex == Limit<u32>::s_Max
-        || (m_computeQueueEnabled && computeNativeQueueIndex == Limit<u32>::s_Max)
-        || (m_transferQueueEnabled && transferNativeQueueIndex == Limit<u32>::s_Max)
-    ){
+    const u32 graphicsNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(m_graphicsQueueFamily), s_GraphicsQueueIndex);
+    const u32 computeNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex);
+    const u32 transferNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex);
+    if(graphicsNativeQueueIndex == Limit<u32>::s_Max || (m_computeQueueEnabled && computeNativeQueueIndex == Limit<u32>::s_Max) || (m_transferQueueEnabled && transferNativeQueueIndex == Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
         return false;
     }
@@ -371,11 +331,7 @@ bool BackendContext::createSwapChainResources(){
 
 bool BackendContext::createSwapChain(){
     ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
-    if(
-        m_swapChainLifecycleState != SwapChainLifecycleState::Ready
-        || m_swapChain
-        || !m_swapChainImages.empty()
-    ){
+    if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_swapChain || !m_swapChainImages.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swapchain creation requires an empty ready lifecycle."));
         return false;
     }
@@ -396,25 +352,12 @@ bool BackendContext::createSwapChain(){
     return false;
 }
 
-bool BackendContext::validPreparedTicket(
-    const SwapChainTransitionTicket& ticket,
-    const SwapChainTransitionKind::Enum kind
-)const noexcept{
-    const SwapChainLifecycleState requiredState = kind == SwapChainTransitionKind::Resize
-        ? SwapChainLifecycleState::PreparedResize
-        : SwapChainLifecycleState::PreparedDestroy
-    ;
-    return ticket.valid()
-        && ticket.owner == this
-        && ticket.kind == kind
-        && ticket.epoch == m_swapChainLifecycleEpoch
-        && m_swapChainLifecycleState == requiredState
-    ;
+bool BackendContext::validPreparedTicket(const SwapChainTransitionTicket& ticket, const SwapChainTransitionKind::Enum kind)const noexcept{
+    const SwapChainLifecycleState requiredState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
+    return ticket.valid() && ticket.owner == this && ticket.kind == kind && ticket.epoch == m_swapChainLifecycleEpoch && m_swapChainLifecycleState == requiredState;
 }
 
-Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(
-    const SwapChainTransitionKind::Enum kind
-){
+Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(const SwapChainTransitionKind::Enum kind){
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     SwapChainTransitionTicket ticket;
     if(kind >= SwapChainTransitionKind::kCount)
@@ -427,10 +370,7 @@ Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(
         ticket.kind = kind;
         return ticket;
     }
-    if(
-        m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize
-        || m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy
-    ){
+    if(m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize || m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy){
         const bool preparedForRequestedKind =
             (m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize && kind == SwapChainTransitionKind::Resize)
             || (m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy && kind == SwapChainTransitionKind::Destroy)
@@ -543,10 +483,7 @@ Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(
     ++m_swapChainLifecycleEpoch;
     if(m_swapChainLifecycleEpoch == 0u)
         ++m_swapChainLifecycleEpoch;
-    m_swapChainLifecycleState = kind == SwapChainTransitionKind::Resize
-        ? SwapChainLifecycleState::PreparedResize
-        : SwapChainLifecycleState::PreparedDestroy
-    ;
+    m_swapChainLifecycleState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
     ticket.epoch = m_swapChainLifecycleEpoch;
     ticket.owner = this;
     ticket.kind = kind;
@@ -585,11 +522,7 @@ bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
 bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
     NothrowScopedLock lifecycleLock(m_swapChainLifecycleMutex);
     if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
-        const bool validNoOpTicket = ticket.valid()
-            && ticket.owner == this
-            && ticket.kind == SwapChainTransitionKind::Destroy
-            && ticket.epoch == m_swapChainLifecycleEpoch
-        ;
+        const bool validNoOpTicket = ticket.valid() && ticket.owner == this && ticket.kind == SwapChainTransitionKind::Destroy && ticket.epoch == m_swapChainLifecycleEpoch;
         ticket = {};
         return validNoOpTicket;
     }

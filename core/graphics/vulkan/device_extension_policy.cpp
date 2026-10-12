@@ -14,9 +14,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(
-    const HardwareRayTracingPolicy::Enum policy, const AStringView extensionName, const bool required
-)noexcept{
+DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(const HardwareRayTracingPolicy::Enum policy, const AStringView extensionName, const bool required)noexcept{
     if(!IsValidHardwareRayTracingPolicy(policy))
         return DeviceExtensionRequestAction::Reject;
     if(policy == HardwareRayTracingPolicy::Automatic)

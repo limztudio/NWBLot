@@ -133,11 +133,7 @@ struct Viewport{
     [[nodiscard]] constexpr f32 height()const noexcept{ return maxY - minY; }
 };
 inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
-    return
-        (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
-        && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
-        && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ)
-    ;
+    return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);
 }
 inline bool operator!=(const Viewport& lhs, const Viewport& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -229,11 +225,7 @@ struct Box{
     [[nodiscard]] constexpr i32 depth()const noexcept{ return maxZ - minZ; }
 };
 inline bool operator==(const Box& lhs, const Box& rhs)noexcept{
-    return
-        (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
-        && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
-        && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ)
-    ;
+    return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);
 }
 inline bool operator!=(const Box& lhs, const Box& rhs)noexcept{ return !(lhs == rhs); }
 

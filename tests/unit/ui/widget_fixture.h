@@ -62,8 +62,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-            / "latin.font";
+        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
         auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
         ASSERT_TRUE(bytesResult);
@@ -81,8 +80,7 @@ protected:
 
     void configureSkin(const AStringView omitted = {}){
         UiSkin::RegionVector regions(m_arena);
-        const AStringView names[]{ "window.normal", "window.title", "window.collapse", "white", "separator",
-            "panel.normal", "button.normal", "button.hover", "button.pressed", "button.disabled", "focus.overlay" };
+        const AStringView names[]{ "window.normal", "window.title", "window.collapse", "white", "separator", "panel.normal", "button.normal", "button.hover", "button.pressed", "button.disabled", "focus.overlay" };
         for(u32 index = 0u; index < sizeof(names) / sizeof(names[0u]); ++index){
             if(names[index] == omitted)
                 continue;
@@ -163,8 +161,7 @@ protected:
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
                 if(first.texCoord.x == left && opposite.texCoord.x == right){
-                    return Rect{ first.position.x, first.position.y,
-                        opposite.position.x - first.position.x, opposite.position.y - first.position.y };
+                    return Rect{ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y };
                 }
             }
         }

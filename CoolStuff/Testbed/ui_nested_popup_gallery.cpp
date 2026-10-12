@@ -25,8 +25,7 @@ UiNestedPopupGallery::UiNestedPopupGallery(NWB::Core::Alloc::GlobalArena& arena)
     , m_afterText(arena)
     , m_childText(arena)
 {
-    const bool initialized = m_beforeText.setText("Before child") && m_afterText.setText("After child")
-        && m_childText.setText("Inside child");
+    const bool initialized = m_beforeText.setText("Before child") && m_afterText.setText("After child") && m_childText.setText("Inside child");
     NWB_FATAL_ASSERT(initialized);
     m_combo.select(1u);
     m_search.combo().select(1u);
@@ -119,10 +118,7 @@ bool UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
     using namespace NWB::Impl::Ui;
     const Rect& parent = m_parent.placement().bounds;
     PopupOptions options;
-    const SIMDVectorSingle parentEnd = VectorAdd(
-        VectorSet(parent.x, parent.y, 0.0f, 0.0f),
-        VectorSet(parent.width, 124.0f, 0.0f, 0.0f)
-    );
+    const SIMDVectorSingle parentEnd = VectorAdd(VectorSet(parent.x, parent.y, 0.0f, 0.0f), VectorSet(parent.width, 124.0f, 0.0f, 0.0f));
     const SIMDVectorSingle childOrigin = VectorSubtract(parentEnd, VectorSet(8.0f, 0.0f, 0.0f, 0.0f));
     options.anchor = { VectorGetX(childOrigin), VectorGetY(parentEnd), 8.0f, 32.0f };
     options.side = PopupPlacementSide::Right;

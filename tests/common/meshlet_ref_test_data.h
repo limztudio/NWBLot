@@ -28,27 +28,11 @@ template<
     typename AttributeRefVectorT,
     typename LocalVertexRefVectorT
 >
-inline void AppendSequentialMeshletRefs(
-    const usize vertexCount,
-    PositionRefVectorT& outPositionStreamRefs,
-    AttributeRefVectorT& outAttributeStreamRefs,
-    LocalVertexRefVectorT& outLocalVertexRefs
-){
+inline void AppendSequentialMeshletRefs(const usize vertexCount, PositionRefVectorT& outPositionStreamRefs, AttributeRefVectorT& outAttributeStreamRefs, LocalVertexRefVectorT& outLocalVertexRefs){
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        outPositionStreamRefs.push_back(Impl::MeshletPositionStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        outAttributeStreamRefs.push_back(Impl::MeshletAttributeStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        outLocalVertexRefs.push_back(Impl::MeshletLocalVertexRef{
-            static_cast<u16>(vertexIndex),
-            static_cast<u16>(vertexIndex),
-        });
+        outPositionStreamRefs.push_back(Impl::MeshletPositionStreamRef{ static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), });
+        outAttributeStreamRefs.push_back(Impl::MeshletAttributeStreamRef{ static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), });
+        outLocalVertexRefs.push_back(Impl::MeshletLocalVertexRef{ static_cast<u16>(vertexIndex), static_cast<u16>(vertexIndex), });
     }
 }
 

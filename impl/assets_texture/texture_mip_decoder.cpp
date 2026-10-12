@@ -50,17 +50,8 @@ struct PrimaryUastcSlice{
     u64 blockCount = 0u;
 };
 
-[[nodiscard]] static Expected<UastcSliceLayout> GetUastcSliceLayout(
-    const TextureMipLevel& mip,
-    const u32 sliceIndex
-){
-    if(
-        mip.sliceCount == 0u
-        || sliceIndex >= mip.sliceCount
-        || (mip.sizeBytes % mip.sliceCount) != 0u
-        || mip.blockCountX == 0u
-        || mip.blockCountY == 0u
-    ){
+[[nodiscard]] static Expected<UastcSliceLayout> GetUastcSliceLayout(const TextureMipLevel& mip, const u32 sliceIndex){
+    if(mip.sliceCount == 0u || sliceIndex >= mip.sliceCount || (mip.sizeBytes % mip.sliceCount) != 0u || mip.blockCountX == 0u || mip.blockCountY == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: invalid UASTC slice layout"));
         return MakeUnexpected(Failure{});
     }
@@ -90,11 +81,7 @@ struct PrimaryUastcSlice{
     return UastcSliceLayout{ sliceByteCount * sliceIndex, sliceByteCount, blockCount };
 }
 
-[[nodiscard]] static Expected<PrimaryUastcSlice> GetPrimaryUastcSlice(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 sliceIndex
-){
+[[nodiscard]] static Expected<PrimaryUastcSlice> GetPrimaryUastcSlice(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex){
     const auto layout = GetUastcSliceLayout(mip, sliceIndex);
     if(!layout)
         return MakeUnexpected(layout.error());
@@ -105,26 +92,15 @@ struct PrimaryUastcSlice{
 
     const u64 sourceOffsetBytes = mip.offsetBytes + layout->offsetBytes;
     const u64 primaryPayloadByteCount = textureAsset.primaryPayloadByteCount();
-    if(
-        primaryPayloadByteCount > textureAsset.payloadBytes().size()
-        || sourceOffsetBytes > primaryPayloadByteCount
-        || layout->byteCount > primaryPayloadByteCount - sourceOffsetBytes
-    ){
+    if(primaryPayloadByteCount > textureAsset.payloadBytes().size() || sourceOffsetBytes > primaryPayloadByteCount || layout->byteCount > primaryPayloadByteCount - sourceOffsetBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC primary slice is outside the texture payload"));
         return MakeUnexpected(Failure{});
     }
 
-    return PrimaryUastcSlice{
-        { textureAsset.payloadBytes().data() + static_cast<usize>(sourceOffsetBytes), static_cast<usize>(layout->byteCount) },
-        layout->blockCount
-    };
+    return PrimaryUastcSlice{ { textureAsset.payloadBytes().data() + static_cast<usize>(sourceOffsetBytes), static_cast<usize>(layout->byteCount) }, layout->blockCount };
 }
 
-[[nodiscard]] static Expected<BinaryByteView> GetSeparateAlphaUastcSlice(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 sliceIndex
-){
+[[nodiscard]] static Expected<BinaryByteView> GetSeparateAlphaUastcSlice(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex){
     if(textureAsset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: texture does not have a separate UASTC alpha stream"));
         return MakeUnexpected(Failure{});
@@ -154,35 +130,16 @@ struct PrimaryUastcSlice{
     return BinaryByteView{ alphaBlocks + static_cast<usize>(alphaSliceOffsetBytes), static_cast<usize>(layout->byteCount) };
 }
 
-[[nodiscard]] static bool DecodeTextureSliceAsAstc(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 sliceIndex,
-    u8* const outUploadBytes,
-    const usize uploadByteCount
-){
-    const auto source = outUploadBytes
-        ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex)
-        : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) }
-    ;
-    if(
-        !outUploadBytes
-        || !source
-        || source->bytes.size() != uploadByteCount
-        || source->blockCount * s_UastcBytesPerBlock != uploadByteCount
-    ){
+[[nodiscard]] static bool DecodeTextureSliceAsAstc(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, u8* const outUploadBytes, const usize uploadByteCount){
+    const auto source = outUploadBytes ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex) : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) };
+    if(!outUploadBytes || !source || source->bytes.size() != uploadByteCount || source->blockCount * s_UastcBytesPerBlock != uploadByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: ASTC UASTC slice size is invalid"));
         return false;
     }
 
     for(u64 blockOffset = 0u; blockOffset < source->bytes.size(); blockOffset += s_UastcBytesPerBlock){
         basist::uastc_block sourceBlock;
-        NWB_MEMCPY(
-            &sourceBlock,
-            sizeof(sourceBlock),
-            source->bytes.data() + static_cast<usize>(blockOffset),
-            sizeof(sourceBlock)
-        );
+        NWB_MEMCPY(&sourceBlock, sizeof(sourceBlock), source->bytes.data() + static_cast<usize>(blockOffset), sizeof(sourceBlock));
         if(!basist::transcode_uastc_to_astc(sourceBlock, outUploadBytes + static_cast<usize>(blockOffset))){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-ASTC transcoding failed"));
             return false;
@@ -191,26 +148,9 @@ struct PrimaryUastcSlice{
     return true;
 }
 
-[[nodiscard]] static bool DecodeTextureSliceAsBc7(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 mipLevel,
-    const u32 sliceIndex,
-    u8* const outUploadBytes,
-    const usize uploadByteCount
-){
-    const auto source = outUploadBytes
-        ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex)
-        : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) }
-    ;
-    if(
-        !outUploadBytes
-        || !source
-        || source->bytes.size() > Limit<u32>::s_Max
-        || source->blockCount > Limit<u32>::s_Max
-        || source->blockCount > Limit<u64>::s_Max / s_UastcBytesPerBlock
-        || source->blockCount * s_UastcBytesPerBlock != uploadByteCount
-    ){
+[[nodiscard]] static bool DecodeTextureSliceAsBc7(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const u32 sliceIndex, u8* const outUploadBytes, const usize uploadByteCount){
+    const auto source = outUploadBytes ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex) : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) };
+    if(!outUploadBytes || !source || source->bytes.size() > Limit<u32>::s_Max || source->blockCount > Limit<u32>::s_Max || source->blockCount > Limit<u64>::s_Max / s_UastcBytesPerBlock || source->blockCount * s_UastcBytesPerBlock != uploadByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: BC7 UASTC slice size is invalid"));
         return false;
     }
@@ -243,23 +183,13 @@ struct PrimaryUastcSlice{
 }
 
 template<typename StoreTexelT>
-[[nodiscard]] static bool VisitDecodedUastcTexels(
-    const TextureMipLevel& mip,
-    const u8* const sourceData,
-    const bool srgb,
-    StoreTexelT&& storeTexel
-){
+[[nodiscard]] static bool VisitDecodedUastcTexels(const TextureMipLevel& mip, const u8* const sourceData, const bool srgb, StoreTexelT&& storeTexel){
     for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
         for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
             const u64 blockIndex = static_cast<u64>(blockY) * static_cast<u64>(mip.blockCountX) + blockX;
             const u64 blockOffset = blockIndex * s_UastcBytesPerBlock;
             basist::uastc_block sourceBlock;
-            NWB_MEMCPY(
-                &sourceBlock,
-                sizeof(sourceBlock),
-                sourceData + static_cast<usize>(blockOffset),
-                sizeof(sourceBlock)
-            );
+            NWB_MEMCPY(&sourceBlock, sizeof(sourceBlock), sourceData + static_cast<usize>(blockOffset), sizeof(sourceBlock));
 
             basist::color32 decodedTexels[s_UastcBlockWidth * s_UastcBlockHeight];
             if(!basist::unpack_uastc(sourceBlock, decodedTexels, srgb))
@@ -285,29 +215,15 @@ template<typename StoreTexelT>
     return true;
 }
 
-[[nodiscard]] static bool DecodeTextureSliceAsRgba(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 sliceIndex,
-    u8* const outUploadBytes,
-    const usize uploadByteCount
-){
+[[nodiscard]] static bool DecodeTextureSliceAsRgba(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, u8* const outUploadBytes, const usize uploadByteCount){
     const u64 texelCount = static_cast<u64>(mip.width) * static_cast<u64>(mip.height);
     if(texelCount > Limit<usize>::s_Max / s_RgbaBytesPerTexel){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: RGBA8 fallback mip size exceeds addressable memory"));
         return false;
     }
     const u64 expectedUploadByteCount = texelCount * s_RgbaBytesPerTexel;
-    const auto source = outUploadBytes && expectedUploadByteCount == uploadByteCount
-        ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex)
-        : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) }
-    ;
-    if(
-        !outUploadBytes
-        || expectedUploadByteCount != uploadByteCount
-        || !source
-        || source->bytes.size() != source->blockCount * s_UastcBytesPerBlock
-    ){
+    const auto source = outUploadBytes && expectedUploadByteCount == uploadByteCount ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex) : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) };
+    if(!outUploadBytes || expectedUploadByteCount != uploadByteCount || !source || source->bytes.size() != source->blockCount * s_UastcBytesPerBlock){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: invalid RGBA8 UASTC slice layout"));
         return false;
     }
@@ -326,19 +242,8 @@ template<typename StoreTexelT>
     return true;
 }
 
-[[nodiscard]] static bool DecodeHdrTextureSlice(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 mipLevel,
-    const u32 sliceIndex,
-    const Core::Format::Enum format,
-    u8* const outUploadBytes,
-    const usize uploadByteCount
-){
-    const auto source = outUploadBytes
-        ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex)
-        : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) }
-    ;
+[[nodiscard]] static bool DecodeHdrTextureSlice(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const u32 sliceIndex, const Core::Format::Enum format, u8* const outUploadBytes, const usize uploadByteCount){
+    const auto source = outUploadBytes ? GetPrimaryUastcSlice(textureAsset, mip, sliceIndex) : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) };
     if(!outUploadBytes || !source)
         return false;
 
@@ -363,12 +268,7 @@ template<typename StoreTexelT>
     const u64 texelCount = static_cast<u64>(mip.width) * static_cast<u64>(mip.height);
     const u64 outputElementCount = compressedOutput ? source->blockCount : texelCount;
     const u64 bytesPerElement = compressedOutput ? s_UastcBytesPerBlock : s_Rgba16FloatBytesPerTexel;
-    if(
-        source->bytes.size() > Limit<u32>::s_Max
-        || outputElementCount > Limit<u32>::s_Max
-        || outputElementCount > Limit<u64>::s_Max / bytesPerElement
-        || outputElementCount * bytesPerElement != uploadByteCount
-    ){
+    if(source->bytes.size() > Limit<u32>::s_Max || outputElementCount > Limit<u32>::s_Max || outputElementCount > Limit<u64>::s_Max / bytesPerElement || outputElementCount * bytesPerElement != uploadByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR UASTC slice exceeds Basis transcoder limits"));
         return false;
     }
@@ -400,43 +300,21 @@ template<typename StoreTexelT>
     return true;
 }
 
-static void StoreHdrAlpha(
-    u8* const outRgba16FloatBytes,
-    const usize texelIndex,
-    const u8 alphaUnorm8
-){
-    const basist::half_float alphaHalf = basist::float_to_half(
-        NumericSimd::Divide(static_cast<f32>(alphaUnorm8), static_cast<f32>(Limit<u8>::s_Max))
-    );
-    u8* const destination = outRgba16FloatBytes
-        + texelIndex * s_Rgba16FloatBytesPerTexel
-        + s_Rgba16FloatAlphaByteOffset
-    ;
+static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex, const u8 alphaUnorm8){
+    const basist::half_float alphaHalf = basist::float_to_half(NumericSimd::Divide(static_cast<f32>(alphaUnorm8), static_cast<f32>(Limit<u8>::s_Max)));
+    u8* const destination = outRgba16FloatBytes + texelIndex * s_Rgba16FloatBytesPerTexel + s_Rgba16FloatAlphaByteOffset;
     NWB_MEMCPY(destination, sizeof(alphaHalf), &alphaHalf, sizeof(alphaHalf));
 }
 
-[[nodiscard]] static bool MergeHdrAlpha(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 sliceIndex,
-    u8* const outRgba16FloatBytes,
-    const usize uploadByteCount
-){
+[[nodiscard]] static bool MergeHdrAlpha(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, u8* const outRgba16FloatBytes, const usize uploadByteCount){
     const u64 texelCount = static_cast<u64>(mip.width) * static_cast<u64>(mip.height);
-    if(
-        !outRgba16FloatBytes
-        || texelCount > Limit<usize>::s_Max / s_Rgba16FloatBytesPerTexel
-        || texelCount * s_Rgba16FloatBytesPerTexel != uploadByteCount
-    ){
+    if(!outRgba16FloatBytes || texelCount > Limit<usize>::s_Max / s_Rgba16FloatBytesPerTexel || texelCount * s_Rgba16FloatBytesPerTexel != uploadByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR RGBA16_FLOAT alpha merge layout is invalid"));
         return false;
     }
 
     if(textureAsset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
-        const u8 alphaUnorm8 = textureAsset.alphaMode() == TextureAlphaMode::ConstantUnorm8
-            ? textureAsset.alphaConstantUnorm8()
-            : static_cast<u8>(Limit<u8>::s_Max)
-        ;
+        const u8 alphaUnorm8 = textureAsset.alphaMode() == TextureAlphaMode::ConstantUnorm8 ? textureAsset.alphaConstantUnorm8() : static_cast<u8>(Limit<u8>::s_Max);
         for(usize texelIndex = 0u; texelIndex < static_cast<usize>(texelCount); ++texelIndex)
             StoreHdrAlpha(outRgba16FloatBytes, texelIndex, alphaUnorm8);
         return true;
@@ -471,17 +349,10 @@ static void StoreHdrAlpha(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextureMipDecoder::TextureMipDecoder()noexcept
-{}
+TextureMipDecoder::TextureMipDecoder()noexcept {}
 
 
-Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 mipLevel,
-    const Core::Format::Enum format,
-    Core::Alloc::ScratchArena& arena
-){
+Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4)
         return decodeLdr(textureAsset, mip, mipLevel, format, arena);
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4)
@@ -492,13 +363,7 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(
 }
 
 
-Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 mipLevel,
-    const Core::Format::Enum format,
-    Core::Alloc::ScratchArena& arena
-){
+Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
     if(Core::Format::IsLdrCompressedFormat(format)){
@@ -543,34 +408,21 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(
     return upload;
 }
 
-Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(
-    const Texture& textureAsset,
-    const TextureMipLevel& mip,
-    const u32 mipLevel,
-    const Core::Format::Enum format,
-    Core::Alloc::ScratchArena& arena
-){
+Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
     const bool compressedOutput = Core::Format::IsHdrCompressedFormat(format);
     if(!compressedOutput && format != Core::Format::RGBA16_FLOAT){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: unsupported HDR texture upload format"));
         return MakeUnexpected(Failure{});
     }
 
-    const u64 rowPitch64 = compressedOutput
-        ? static_cast<u64>(mip.blockCountX) * TextureFormat::s_UastcBytesPerBlock
-        : static_cast<u64>(mip.width) * __hidden_texture_mip_decoder::s_Rgba16FloatBytesPerTexel
-    ;
+    const u64 rowPitch64 = compressedOutput ? static_cast<u64>(mip.blockCountX) * TextureFormat::s_UastcBytesPerBlock : static_cast<u64>(mip.width) * __hidden_texture_mip_decoder::s_Rgba16FloatBytesPerTexel;
     const u32 rowCount = compressedOutput ? mip.blockCountY : mip.height;
     if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / rowCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR mip row pitch exceeds addressable memory"));
         return MakeUnexpected(Failure{});
     }
     const u64 sliceUploadByteCount64 = rowPitch64 * rowCount;
-    if(
-        mip.sliceCount == 0u
-        || sliceUploadByteCount64 > Limit<usize>::s_Max
-        || sliceUploadByteCount64 > Limit<usize>::s_Max / mip.sliceCount
-    ){
+    if(mip.sliceCount == 0u || sliceUploadByteCount64 > Limit<usize>::s_Max || sliceUploadByteCount64 > Limit<usize>::s_Max / mip.sliceCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR mip upload size exceeds addressable memory"));
         return MakeUnexpected(Failure{});
     }
@@ -583,10 +435,7 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(
         u8* const destination = upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
         if(!__hidden_texture_mip_decoder::DecodeHdrTextureSlice(textureAsset, mip, mipLevel, sliceIndex, format, destination, sliceUploadByteCount))
             return MakeUnexpected(Failure{});
-        if(
-            format == Core::Format::RGBA16_FLOAT
-            && !__hidden_texture_mip_decoder::MergeHdrAlpha(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount)
-        )
+        if(format == Core::Format::RGBA16_FLOAT && !__hidden_texture_mip_decoder::MergeHdrAlpha(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount))
             return MakeUnexpected(Failure{});
     }
     upload.rowPitch = rowPitch;

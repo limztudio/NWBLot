@@ -34,14 +34,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AppendMeshObjectShaderEntries(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
-    const ResolvedCookPaths& resolvedPaths,
-    const PreparedShaderEntry& meshEntry,
-    PreparedShaderPlan& plan,
-    ScratchArena& scratchArena
-){
+bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook& shaderCook, const ResolvedCookPaths& resolvedPaths, const PreparedShaderEntry& meshEntry, PreparedShaderPlan& plan, ScratchArena& scratchArena){
     const ShaderCook::ShaderEntry& mesh = meshEntry.entry;
     // The fixed decoder and this raster stage share an engine ABI, independent of authored material defines.
     static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
@@ -71,8 +64,7 @@ bool AppendMeshObjectShaderEntries(
 
     PreparedShaderEntry prepared(cookArena);
     prepared.entry.name = mesh.name;
-    if(!prepared.entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage))
-        || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::s_MeshObjectVertexArchiveStageText))
+    if(!prepared.entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage)) || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::s_MeshObjectVertexArchiveStageText))
         return false;
     prepared.entry.emitMeshComputeShadow = false;
     prepared.sourcePath = meshEntry.sourcePath.parentPath() / s_ObjectVertexSourceName;
@@ -87,11 +79,7 @@ bool AppendMeshObjectShaderEntries(
     }
     if(!shaderCook.gatherShaderDependencies(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, prepared.dependencies, scratchArena))
         return false;
-    const auto dependency = shaderCook.computeDependencyChecksum(
-        prepared.dependencies,
-        { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } },
-        scratchArena
-    );
+    const auto dependency = shaderCook.computeDependencyChecksum(prepared.dependencies, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
     if(!dependency)
         return false;
     prepared.dependencyChecksum = dependency->checksum;

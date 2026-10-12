@@ -20,10 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererRayTracingSystem& raytracingSystem
-)
+HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)
     : m_graph(graph)
     , m_raytracingSystem(raytracingSystem){
 }
@@ -32,10 +29,7 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<HardwareCausticsResolveChainResult> HardwareCausticsResolveChainBuilder::declare(
-    const HardwareCausticsResolveChainInputs& inputs,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] Expected<HardwareCausticsResolveChainResult> HardwareCausticsResolveChainBuilder::declare(const HardwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     HardwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs;
     sharedInputs.targets = inputs.targets;

@@ -91,13 +91,8 @@ protected:
         return m_model.setText(AStringView(m_dense)) && m_model.setSelection(0u, 0u) && m_state.scrollTo({});
     }
 
-    [[nodiscard]] bool prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = SmallOptions(),
-        const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }
-    ){
-        return
-            seedModel() && frameArea(generation, options, bounds)
-            && m_state.scrollbars().horizontal.visible && m_state.scrollbars().vertical.visible
-        ;
+    [[nodiscard]] bool prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = SmallOptions(), const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+        return seedModel() && frameArea(generation, options, bounds) && m_state.scrollbars().horizontal.visible && m_state.scrollbars().vertical.visible;
     }
 
     [[nodiscard]] WidgetId popupArea()const{
@@ -106,16 +101,10 @@ protected:
     }
 
     [[nodiscard]] bool popupFrame(const u64 generation){
-        if(
-            !begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions())
-            || !m_builder.beginPopup("child", m_child, ChildOptions())
-        )
+        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions()) || !m_builder.beginPopup("child", m_child, ChildOptions()))
             return false;
         m_result = m_builder.textArea("area", m_model, m_state, SmallOptions());
-        return
-            m_result.valid && m_builder.endPopup() && m_builder.endPopup()
-            && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation)
-        ;
+        return m_result.valid && m_builder.endPopup() && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
     [[nodiscard]] bool wheel(const f64 delta = -1.0){
@@ -133,9 +122,7 @@ protected:
             return false;
         const Point origin = UiComboTests::Center(thumb->rectangle);
         const Point destination{ origin.x, origin.y + 24.0f };
-        return
-            send({ InputEventType::PrimaryDown, origin }).pointerConsumed
-            && send({ InputEventType::PointerMove, destination }).pointerConsumed
+        return send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed
             && m_context.input().capture() == thumbId
         ;
     }

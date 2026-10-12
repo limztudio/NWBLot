@@ -19,9 +19,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyReflectionQualitySmokeSettings(
-    Impl::RendererSystem& renderer, const Impl::ReflectionSettings& baseSettings, Core::Alloc::GlobalArena& arena
-){
+bool ApplyReflectionQualitySmokeSettings(Impl::RendererSystem& renderer, const Impl::ReflectionSettings& baseSettings, Core::Alloc::GlobalArena& arena){
     Impl::ReflectionSettings settings = baseSettings;
     const auto value = ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SCREEN_STEPS");
     if(value){

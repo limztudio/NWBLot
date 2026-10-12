@@ -44,10 +44,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
         placements = QueryCpuWorkerPlacements();
         if(!placements)
             ExitProcess(3u);
-        if(
-            placements->size() != 1u || placements->front().processorGroup != original.Group
-            || placements->front().logicalProcessorIndex != processorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u
-        )
+        if(placements->size() != 1u || placements->front().processorGroup != original.Group || placements->front().logicalProcessorIndex != processorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
             ExitProcess(4u);
         ExitProcess(0u);
     }, testing::ExitedWithCode(0), "");
@@ -61,10 +58,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
             ExitProcess(1u);
         const CpuWorkerPlacement selected = placements->back();
         ULONG byteCount = 0u;
-        if(
-            !GetSystemCpuSetInformation(nullptr, 0u, &byteCount, GetCurrentProcess(), 0u)
-            && GetLastError() != ERROR_INSUFFICIENT_BUFFER
-        )
+        if(!GetSystemCpuSetInformation(nullptr, 0u, &byteCount, GetCurrentProcess(), 0u) && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
             ExitProcess(2u);
         if(byteCount == 0u)
             ExitProcess(3u);
@@ -75,10 +69,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
         ULONG selectedId = Limit<ULONG>::s_Max;
         for(usize offset = 0u; offset < byteCount; offset += information->Size){
             information = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(reinterpret_cast<u8*>(storage.data()) + offset);
-            if(
-                information->Type == CpuSetInformation && information->CpuSet.Group == selected.processorGroup
-                && information->CpuSet.LogicalProcessorIndex == selected.logicalProcessorIndex
-            ){
+            if(information->Type == CpuSetInformation && information->CpuSet.Group == selected.processorGroup && information->CpuSet.LogicalProcessorIndex == selected.logicalProcessorIndex){
                 selectedId = information->CpuSet.Id;
                 break;
             }
@@ -86,12 +77,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
         if(selectedId == Limit<ULONG>::s_Max || !SetProcessDefaultCpuSets(GetCurrentProcess(), &selectedId, 1u))
             ExitProcess(5u);
         placements = QueryCpuWorkerPlacements();
-        if(
-            !placements || placements->size() != 1u
-            || placements->front().processorGroup != selected.processorGroup
-            || placements->front().logicalProcessorIndex != selected.logicalProcessorIndex
-            || QueryCpuCoreCount(CpuAffinity::Any) != 1u
-        )
+        if(!placements || placements->size() != 1u || placements->front().processorGroup != selected.processorGroup || placements->front().logicalProcessorIndex != selected.logicalProcessorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
             ExitProcess(6u);
         ExitProcess(0u);
     }, testing::ExitedWithCode(0), "");

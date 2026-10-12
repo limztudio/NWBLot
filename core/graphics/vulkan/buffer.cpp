@@ -57,10 +57,7 @@ namespace __hidden_buffer{
 
 using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 
-[[nodiscard]] static BufferQueueFamilyVector CopyBufferQueueFamilyIndices(
-    const VulkanContext& context,
-    const VkBufferCreateInfo& bufferInfo
-){
+[[nodiscard]] static BufferQueueFamilyVector CopyBufferQueueFamilyIndices(const VulkanContext& context, const VkBufferCreateInfo& bufferInfo){
     BufferQueueFamilyVector result(context.objectArena);
     if(bufferInfo.queueFamilyIndexCount == 0u)
         return result;
@@ -68,17 +65,11 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     NWB_ASSERT(bufferInfo.pQueueFamilyIndices != nullptr);
     if(!bufferInfo.pQueueFamilyIndices)
         return result;
-    result.assign(
-        bufferInfo.pQueueFamilyIndices,
-        bufferInfo.pQueueFamilyIndices + bufferInfo.queueFamilyIndexCount
-    );
+    result.assign(bufferInfo.pQueueFamilyIndices, bufferInfo.pQueueFamilyIndices + bufferInfo.queueFamilyIndexCount);
     return result;
 }
 
-[[nodiscard]] static VkBufferCreateInfo RetainBufferCreateInfo(
-    const VkBufferCreateInfo& bufferInfo,
-    const BufferQueueFamilyVector& queueFamilyIndices
-){
+[[nodiscard]] static VkBufferCreateInfo RetainBufferCreateInfo(const VkBufferCreateInfo& bufferInfo, const BufferQueueFamilyVector& queueFamilyIndices){
     NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkBufferCreateInfo result = bufferInfo;
     result.pNext = nullptr;
@@ -97,13 +88,7 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Buffer::Buffer(
-    const VulkanContext& context,
-    VulkanAllocator& allocator,
-    const BufferDesc& creationDesc,
-    const VkBufferCreateInfo& bufferInfo,
-    const bool initialStateKnown
-)
+Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, const bool initialStateKnown)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
@@ -166,10 +151,7 @@ bool Buffer::descriptionMatchesCreation()const noexcept{
 
 ResourceStates::Mask Buffer::resolveTaskGraphImportInitialState()const noexcept{
     if(!m_creationDesc.keepInitialState){
-        return m_managed || m_creationInitialStateKnown
-            ? m_creationDesc.initialState
-            : ResourceStates::Unknown
-        ;
+        return m_managed || m_creationInitialStateKnown ? m_creationDesc.initialState : ResourceStates::Unknown;
     }
     return isRetainedStateKnown() ? m_creationDesc.initialState : ResourceStates::Unknown;
 }
@@ -375,22 +357,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-Expected<BufferSuballocation> CommandList::prepareUploadStaging(
-    const usize dataSize,
-    TStringView operationName,
-    const u32 alignment
-){
+Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize dataSize, TStringView operationName, const u32 alignment){
     UploadManager& uploadMgr = m_device.m_uploadManager;
 
     const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_creationDesc.physicalQueue);
-    const auto staging = uploadMgr.suballocateBuffer(
-        static_cast<u64>(dataSize),
-        m_currentCmdBuf.get(),
-        m_nativeRecordingID,
-        m_creationDesc.physicalQueue,
-        completedUploadVersion,
-        alignment
-    );
+    const auto staging = uploadMgr.suballocateBuffer(static_cast<u64>(dataSize), m_currentCmdBuf.get(), m_nativeRecordingID, m_creationDesc.physicalQueue, completedUploadVersion, alignment);
     if(!staging){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
@@ -400,12 +371,7 @@ Expected<BufferSuballocation> CommandList::prepareUploadStaging(
     return staging;
 }
 
-Expected<BufferSuballocation> CommandList::prepareUploadStaging(
-    const void* data,
-    const usize dataSize,
-    TStringView operationName,
-    const u32 alignment
-){
+Expected<BufferSuballocation> CommandList::prepareUploadStaging(const void* data, const usize dataSize, TStringView operationName, const u32 alignment){
     const auto staging = prepareUploadStaging(dataSize, operationName, alignment);
     if(!staging)
         return MakeUnexpected(staging.error());
@@ -434,12 +400,7 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
         rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
     }
-    if(!validateBufferForGpuState(
-        &buffer,
-        ResourceStates::CopyDest,
-        VulkanArenaScope::s_WriteBufferCommandLabel,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT
-    ))
+    if(!validateBufferForGpuState(&buffer, ResourceStates::CopyDest, VulkanArenaScope::s_WriteBufferCommandLabel, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
         return false;
 
     const auto staging = prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"));
@@ -477,12 +438,7 @@ void CommandList::clearBufferUInt(Buffer& buffer, u32 clearValue){
         rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer size is not 4-byte aligned"));
         return;
     }
-    if(!validateBufferForGpuState(
-        &buffer,
-        ResourceStates::CopyDest,
-        NWB_TEXT("clear buffer"),
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT
-    ))
+    if(!validateBufferForGpuState(&buffer, ResourceStates::CopyDest, NWB_TEXT("clear buffer"), VK_BUFFER_USAGE_TRANSFER_DST_BIT))
         return;
 
     endActiveRenderPass();
@@ -517,42 +473,18 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
         rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("source and destination ranges overlap in the same buffer"));
         return;
     }
-    if(
-        &dest != &src
-        && dest.m_buffer != VK_NULL_HANDLE
-        && dest.m_buffer == src.m_buffer
-    ){
-        rejectCommandRecording(
-            s_CopyBufferOperation,
-            NWB_TEXT("distinct buffer objects alias the same native buffer")
-        );
+    if(&dest != &src && dest.m_buffer != VK_NULL_HANDLE && dest.m_buffer == src.m_buffer){
+        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("distinct buffer objects alias the same native buffer"));
         return;
     }
 
     const bool sameNativeBuffer = dest.m_buffer == src.m_buffer;
-    const ResourceStates::Mask sourceState = sameNativeBuffer
-        ? ResourceStates::CopySource | ResourceStates::CopyDest
-        : ResourceStates::CopySource
-    ;
-    const ResourceStates::Mask destinationState = sameNativeBuffer
-        ? ResourceStates::CopySource | ResourceStates::CopyDest
-        : ResourceStates::CopyDest
-    ;
-    const VkBufferUsageFlags sourceUsage = sameNativeBuffer
-        ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        : VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-    ;
+    const ResourceStates::Mask sourceState = sameNativeBuffer ? ResourceStates::CopySource | ResourceStates::CopyDest : ResourceStates::CopySource;
+    const ResourceStates::Mask destinationState = sameNativeBuffer ? ResourceStates::CopySource | ResourceStates::CopyDest : ResourceStates::CopyDest;
+    const VkBufferUsageFlags sourceUsage = sameNativeBuffer ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT : VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     if(!validateBufferForGpuState(&src, sourceState, s_CopyBufferOperation, sourceUsage))
         return;
-    if(
-        &dest != &src
-        && !validateBufferForGpuState(
-            &dest,
-            destinationState,
-            s_CopyBufferOperation,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        )
-    )
+    if(&dest != &src && !validateBufferForGpuState(&dest, destinationState, s_CopyBufferOperation, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
         return;
 
     endActiveRenderPass();

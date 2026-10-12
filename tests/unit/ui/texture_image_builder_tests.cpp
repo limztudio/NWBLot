@@ -35,10 +35,7 @@ struct TextureImagePaintSample{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static SharedImageSource MakeImage(
-    Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image",
-    const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u
-){
+[[nodiscard]] static SharedImageSource MakeImage(Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image", const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u){
     const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u);
     if(!mipCount)
         return {};
@@ -63,11 +60,7 @@ struct TextureImagePaintSample{
     for(usize index = 0u; index < bytes.size(); ++index)
         bytes[index] = static_cast<u8>(static_cast<u32>(seed) + index * 17u);
     Texture texture(arena, Name(path));
-    texture.setPayload(
-        TextureColorSpace::Srgb, true, width, height, Move(mips), Move(bytes),
-        TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4,
-        TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8
-    );
+    texture.setPayload(TextureColorSpace::Srgb, true, width, height, Move(mips), Move(bytes), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
     return MakeImageSource(arena, texture);
 }
 
@@ -87,8 +80,7 @@ struct TextureImagePaintSample{
             if(candidate.quads == 0u){
                 candidate.bounds.x = first.position.x;
                 candidate.bounds.y = first.position.y;
-                candidate.uv = { first.texCoord.x, first.texCoord.y,
-                    opposite.texCoord.x - first.texCoord.x, opposite.texCoord.y - first.texCoord.y };
+                candidate.uv = { first.texCoord.x, first.texCoord.y, opposite.texCoord.x - first.texCoord.x, opposite.texCoord.y - first.texCoord.y };
                 candidate.color = first.color;
                 candidate.layer = command.layer;
                 right = opposite.position.x;

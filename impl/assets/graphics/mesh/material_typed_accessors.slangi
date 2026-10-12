@@ -49,12 +49,7 @@ uint nwbMaterialLoadRawUIntAtBase(const uint storageByteOffset, const uint byteO
     return word | (g_NwbMaterialTypedWords[wordIndex + 1u] << ((NWB_MATERIAL_TYPED_WORD_BYTES * NWB_MATERIAL_TYPED_BYTE_BITS) - byteShift));
 }
 
-uint nwbMaterialLoadRawSubwordAtBase(
-    const uint storageByteOffset,
-    const uint byteOffset,
-    const uint byteLaneMask,
-    const uint valueMask
-){
+uint nwbMaterialLoadRawSubwordAtBase(const uint storageByteOffset, const uint byteOffset, const uint byteLaneMask, const uint valueMask){
     const uint absoluteByteOffset = storageByteOffset + byteOffset;
     const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT];
     return (word >> ((absoluteByteOffset & byteLaneMask) * NWB_MATERIAL_TYPED_BYTE_BITS)) & valueMask;

@@ -339,18 +339,7 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData)noexcept{
     frameData.setActive(false);
 }
 
-static void OnOutputGeometry(
-    void* data,
-    wl_output* output,
-    i32 x,
-    i32 y,
-    i32 physicalWidth,
-    i32 physicalHeight,
-    i32 subpixel,
-    const char* make,
-    const char* model,
-    i32 transform
-){
+static void OnOutputGeometry(void* data, wl_output* output, i32 x, i32 y, i32 physicalWidth, i32 physicalHeight, i32 subpixel, const char* make, const char* model, i32 transform){
     static_cast<void>(data);
     static_cast<void>(output);
     static_cast<void>(x);
@@ -384,12 +373,7 @@ static void OnOutputScale(void* data, wl_output* output, i32 factor){
     ApplyBufferScale(context, factor);
 }
 
-static const wl_output_listener s_OutputListener = {
-    &OnOutputGeometry,
-    &OnOutputMode,
-    &OnOutputDone,
-    &OnOutputScale,
-};
+static const wl_output_listener s_OutputListener = { &OnOutputGeometry, &OnOutputMode, &OnOutputDone, &OnOutputScale, };
 
 static void AttachSeatListener(WaylandContext& context);
 
@@ -544,10 +528,7 @@ static void OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surfa
     static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().mousePosUpdate(
-        SurfaceCoordinateToPixels(sx, context.bufferScale),
-        SurfaceCoordinateToPixels(sy, context.bufferScale)
-    );
+    context.frame->input().mousePosUpdate(SurfaceCoordinateToPixels(sx, context.bufferScale), SurfaceCoordinateToPixels(sy, context.bufferScale));
 }
 
 static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
@@ -566,10 +547,7 @@ static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_
     static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().mousePosUpdate(
-        SurfaceCoordinateToPixels(sx, context.bufferScale),
-        SurfaceCoordinateToPixels(sy, context.bufferScale)
-    );
+    context.frame->input().mousePosUpdate(SurfaceCoordinateToPixels(sx, context.bufferScale), SurfaceCoordinateToPixels(sy, context.bufferScale));
 }
 
 static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
@@ -582,11 +560,7 @@ static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 tim
         ObserveWaylandClipboardInputSerial(*clipboard, serial);
     const i32 translatedButton = TranslatePointerButton(button);
     if(translatedButton != -1){
-        context.frame->input().mouseButtonUpdate(
-            translatedButton,
-            state == WL_POINTER_BUTTON_STATE_PRESSED ? InputAction::Press : InputAction::Release,
-            TranslateModifiers(context)
-        );
+        context.frame->input().mouseButtonUpdate(translatedButton, state == WL_POINTER_BUTTON_STATE_PRESSED ? InputAction::Press : InputAction::Release, TranslateModifiers(context));
     }
 }
 
@@ -758,11 +732,7 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
         context.frame->input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
         DispatchTextInput(context.frame->input(), context, keycode, static_cast<i32>(key), mods);
 
-        if(
-            context.repeatRate > 0
-            && context.xkbKeymap
-            && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0
-        ){
+        if(context.repeatRate > 0 && context.xkbKeymap && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0){
             context.repeatPending = true;
             context.repeatKeycode = keycode;
             context.repeatKey = translatedKey;
@@ -801,18 +771,11 @@ static void OnKeyboardRepeatInfo(void* data, wl_keyboard* keyboard, i32 rate, i3
         StopKeyRepeat(context);
 }
 
-static const wl_registry_listener s_RegistryListener = {
-    &OnRegistryGlobal,
-    &OnRegistryGlobalRemove,
-};
+static const wl_registry_listener s_RegistryListener = { &OnRegistryGlobal, &OnRegistryGlobalRemove, };
 
-static const xdg_wm_base_listener s_WmBaseListener = {
-    &OnWmBasePing,
-};
+static const xdg_wm_base_listener s_WmBaseListener = { &OnWmBasePing, };
 
-static const xdg_surface_listener s_XdgSurfaceListener = {
-    &OnXdgSurfaceConfigure,
-};
+static const xdg_surface_listener s_XdgSurfaceListener = { &OnXdgSurfaceConfigure, };
 
 static const xdg_toplevel_listener s_ToplevelListener = {
     &OnToplevelConfigure,
@@ -825,10 +788,7 @@ static const xdg_toplevel_listener s_ToplevelListener = {
 #endif
 };
 
-static const wl_seat_listener s_SeatListener = {
-    &OnSeatCapabilities,
-    &OnSeatName,
-};
+static const wl_seat_listener s_SeatListener = { &OnSeatCapabilities, &OnSeatName, };
 
 static void AttachSeatListener(WaylandContext& context){
     if(wl_seat_add_listener(context.seat, &s_SeatListener, &context) != 0)
@@ -853,14 +813,7 @@ static const wl_pointer_listener s_PointerListener = {
 #endif
 };
 
-static const wl_keyboard_listener s_KeyboardListener = {
-    &OnKeyboardKeymap,
-    &OnKeyboardEnter,
-    &OnKeyboardLeave,
-    &OnKeyboardKey,
-    &OnKeyboardModifiers,
-    &OnKeyboardRepeatInfo,
-};
+static const wl_keyboard_listener s_KeyboardListener = { &OnKeyboardKeymap, &OnKeyboardEnter, &OnKeyboardLeave, &OnKeyboardKey, &OnKeyboardModifiers, &OnKeyboardRepeatInfo, };
 
 static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     auto& context = *static_cast<WaylandContext*>(data);
@@ -979,10 +932,7 @@ static void ProcessKeyRepeat(WaylandContext& context){
         return;
 
     const i32 candidateStepMs = context.repeatRate > 0 ? (s_MillisecondsPerSecond / context.repeatRate) : 0;
-    const i32 stepMs = context.repeatRate > 0
-        ? (candidateStepMs > 0 ? candidateStepMs : s_MinKeyRepeatStepMs)
-        : 0
-    ;
+    const i32 stepMs = context.repeatRate > 0 ? (candidateStepMs > 0 ? candidateStepMs : s_MinKeyRepeatStepMs) : 0;
     do{
         const i32 mods = TranslateModifiers(context);
         context.frame->input().keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
@@ -1074,16 +1024,8 @@ bool InitWaylandFrame(Frame& frame){
     xdg_toplevel_add_listener(context->toplevel, &s_ToplevelListener, context);
     xdg_toplevel_set_title(context->toplevel, windowTitle.data());
     xdg_toplevel_set_app_id(context->toplevel, windowTitle.data());
-    xdg_toplevel_set_min_size(
-        context->toplevel,
-        LogicalDimensionForPixels(frameData.width(), context->bufferScale),
-        LogicalDimensionForPixels(frameData.height(), context->bufferScale)
-    );
-    xdg_toplevel_set_max_size(
-        context->toplevel,
-        LogicalDimensionForPixels(frameData.width(), context->bufferScale),
-        LogicalDimensionForPixels(frameData.height(), context->bufferScale)
-    );
+    xdg_toplevel_set_min_size(context->toplevel, LogicalDimensionForPixels(frameData.width(), context->bufferScale), LogicalDimensionForPixels(frameData.height(), context->bufferScale));
+    xdg_toplevel_set_max_size(context->toplevel, LogicalDimensionForPixels(frameData.width(), context->bufferScale), LogicalDimensionForPixels(frameData.height(), context->bufferScale));
     context->initialSizeConstrained = true;
 
     wl_surface_commit(context->surface);

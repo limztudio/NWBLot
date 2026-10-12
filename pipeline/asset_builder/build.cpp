@@ -54,12 +54,7 @@ bool BuildAssets(const AssetBuildOptions& options){
         return false;
     const Assets::ResolvedCookPaths& resolvedPaths = *paths;
 
-    auto discoveredFiles = Assets::DiscoverFilesWithExtension(
-        arena,
-        resolvedPaths.assetRoots,
-        Assets::s_NwbExtension,
-        scratchArena
-    );
+    auto discoveredFiles = Assets::DiscoverFilesWithExtension(arena, resolvedPaths.assetRoots, Assets::s_NwbExtension, scratchArena);
     if(!discoveredFiles)
         return false;
 
@@ -71,13 +66,7 @@ bool BuildAssets(const AssetBuildOptions& options){
     Assets::ParsedAssetMetadata parsedMetadata(arena);
     if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry))
         return false;
-    if(!Assets::ParseAssetMetadata(
-        arena,
-        nwbFiles,
-        parsedMetadata,
-        options.services.cpuScheduler,
-        scratchArena
-    ))
+    if(!Assets::ParseAssetMetadata(arena, nwbFiles, parsedMetadata, options.services.cpuScheduler, scratchArena))
         return false;
 
     Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
@@ -86,15 +75,7 @@ bool BuildAssets(const AssetBuildOptions& options){
 
     u64 plannedFileCount = 0u;
     Assets::AssetsVolumeCookDetail::AssetVolumeManifestCookerVector manifestCookers(arena);
-    Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext prepareContext{
-        arena,
-        resolvedPaths,
-        configurationSafeName,
-        parsedMetadata,
-        plannedFileCount,
-        manifestCookers,
-        scratchArena
-    };
+    Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext prepareContext{ arena, resolvedPaths, configurationSafeName, parsedMetadata, plannedFileCount, manifestCookers, scratchArena };
     if(!Assets::AssetsVolumeCookDetail::RegisterAutoCollectedAssetVolumePreparers(prepareContext))
         return false;
     if(!Assets::AddPlannedFileCount(parsedMetadata.entryRegistry.entryCount(), plannedFileCount))
@@ -112,15 +93,7 @@ bool BuildAssets(const AssetBuildOptions& options){
         if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
             return false;
     }
-    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(
-        arena,
-        options.services.cpuScheduler,
-        resolvedPaths,
-        configurationSafeName,
-        parsedMetadata,
-        manifest,
-        seenVirtualPathHashes
-    ))
+    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, resolvedPaths, configurationSafeName, parsedMetadata, manifest, seenVirtualPathHashes))
         return false;
 
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest))

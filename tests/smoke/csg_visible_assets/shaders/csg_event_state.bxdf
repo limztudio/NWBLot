@@ -24,8 +24,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const uint count = min(eventCount, min(layers, NWB_CSG_RECEIVER_EVENT_LAYER_COUNT));
     uint frontCount = 0u;
     uint backCount = 0u;
-    [unroll]
-    for(uint index = 0u; index < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++index){
+    [unroll] for(uint index = 0u; index < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++index){
         if(index >= count)
             break;
         const uint faceSign = nwbHeapStorageImage2DArrayUint4(eventDataSlot).Load(int3(pixel, int(index))).y;

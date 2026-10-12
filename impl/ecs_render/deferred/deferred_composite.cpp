@@ -61,10 +61,8 @@ static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 6u);
 struct DeferredCompositeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The deferred system, the frame targets, and the timing ticket are required: the pass always
-    // records against this frame's targets. References (not nullable pointers) carry those bindings
-    // so a missing binding fails at declaration time instead of silently returning `false` from
-    // the shared record helper.
+    // The deferred system, the frame targets, and the timing ticket are required: the pass always records against this frame's targets.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` from the shared record helper.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         DeferredFrameTargets& targets;
@@ -72,21 +70,10 @@ struct DeferredCompositeGraphTask{
         ReflectionCompositeInputs reflectionInputs;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
-        return ECSRenderDetail::RecordDeferredGraphTask(
-            payload,
-            commandList,
-            [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
-                return deferredSystem.renderDeferredComposite(
-                    taskCommandList,
-                    targets,
-                    payload.reflectionInputs
-                );
+        return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
+                return deferredSystem.renderDeferredComposite(taskCommandList, targets, payload.reflectionInputs);
             }
         );
     }
@@ -112,9 +99,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
 
     if(!m_deferredState.m_compositeComputeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc
-            .setVisibility(Core::ShaderType::Compute)
-        ;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::CompositePushConstants)));
 
         m_deferredState.m_compositeComputeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
@@ -126,9 +111,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
 
     if(!m_deferredState.m_presentBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc
-            .setVisibility(Core::ShaderType::Pixel)
-        ;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PresentPushConstants)));
 
         m_deferredState.m_presentBindingLayout = device.createBindingLayout(bindingLayoutDesc);
@@ -143,23 +126,13 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_deferredState.m_compositeComputeShader,
-        AssetsGraphicsDeferred::s_CompositeComputeShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_DeferredCompositeCS"
-    ))
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_deferredState.m_compositeComputeShader, AssetsGraphicsDeferred::s_CompositeComputeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeCS"))
         return false;
 
     if(!m_shaderSystem.loadDeferredCompositeVertexShader())
         return false;
 
-    if(!m_shaderSystem.loadShader<PixelShader>(
-        m_deferredState.m_presentPixelShader,
-        AssetsGraphicsDeferred::s_PresentPixelShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_DeferredPresentPS"
-    ))
+    if(!m_shaderSystem.loadShader<PixelShader>(m_deferredState.m_presentPixelShader, AssetsGraphicsDeferred::s_PresentPixelShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredPresentPS"))
         return false;
 
     return true;
@@ -175,12 +148,7 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_deferredState.m_compositeComputeShader)
-        .addBindingLayout(m_deferredState.m_compositeComputeBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_deferredState.m_compositeComputeShader).addBindingLayout(m_deferredState.m_compositeComputeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
     m_deferredState.m_compositeComputePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_deferredState.m_compositeComputePipeline){
@@ -223,30 +191,15 @@ bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer* pr
     return true;
 }
 
-Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    const ReflectionCompositeInputs& reflectionInputs
-){
+Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, const ReflectionCompositeInputs& reflectionInputs){
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
         desc,
-        __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{
-            .deferredSystem = *this,
-            .targets = targets,
-            .timingTicket = timingTicket,
-            .reflectionInputs = reflectionInputs,
-        }
+        __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .reflectionInputs = reflectionInputs, }
     );
 }
 
 
-bool RendererDeferredSystem::renderDeferredComposite(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const ReflectionCompositeInputs& reflectionInputs
-){
+bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs){
     NWB_ASSERT(m_deferredState.m_compositeComputePipeline);
 
     // Boundary states are graph-owned; this thunk holds only composite commands.
@@ -271,12 +224,7 @@ bool RendererDeferredSystem::renderDeferredComposite(
     return true;
 }
 
-bool RendererDeferredSystem::renderDeferredPresent(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const Core::AcquiredPresentationFrame& presentationFrame,
-    const Core::GpuDescriptorHandle outputLayerImage
-){
+bool RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, const Core::GpuDescriptorHandle outputLayerImage){
     NWB_ASSERT(presentationFrame.valid());
     NWB_ASSERT(m_deferredState.m_presentPipeline);
     if(!presentationFrame.valid() || !m_deferredState.m_presentPipeline)
@@ -319,9 +267,7 @@ bool RendererDeferredSystem::renderDeferredPresent(
     m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, *m_deferredState.m_presentPipeline);
     const __hidden_deferred_composite::PresentPushConstants pushConstants{
         .resourceSlots = targets.bindless.slotsBufferDescriptor.slot(),
-        .presentationMode = m_graphics.isHDR10OutputActive()
-            ? NWB_DEFERRED_PRESENTATION_HDR10
-            : NWB_DEFERRED_PRESENTATION_SDR,
+        .presentationMode = m_graphics.isHDR10OutputActive() ? NWB_DEFERRED_PRESENTATION_HDR10 : NWB_DEFERRED_PRESENTATION_SDR,
         .toneMap = m_deferredState.m_presentationSettings.toneMap,
         .exposure = m_deferredState.m_presentationSettings.exposure,
         .shoulder = m_deferredState.m_presentationSettings.shoulder,

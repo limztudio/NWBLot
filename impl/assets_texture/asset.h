@@ -40,8 +40,7 @@ struct TextureMipLevel{
     u32 blockCountY = 0u;
     u64 offsetBytes = 0u;
     u64 sizeBytes = 0u;
-    // The number of independently-addressed 2D payload planes in this mip: one for Texture2D, six for a cubemap,
-    // and the mip-reduced Z extent for Texture3D.
+    // The number of independently-addressed 2D payload planes in this mip: one for Texture2D, six for a cubemap, and the mip-reduced Z extent for Texture3D.
     u32 sliceCount = 1u;
 };
 static_assert(IsStandardLayout_V<TextureMipLevel>, "Texture mip level must stay binary-serializable");

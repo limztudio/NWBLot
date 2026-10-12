@@ -13,37 +13,9 @@ from pathlib import Path
 from typing import Dict, Optional, Sequence
 from launcher.models import LaunchSettings, ProfileSession
 from launcher import repository_windows_process
-from launcher.constants import (
-    APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
-    APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS,
-    COMMAND_RUN,
-    CWD_PREFIX,
-    GPUDBG_FLAG,
-    LOGSERVER_LABEL,
-    LOG_PREFIX,
-    MSG_KILLING,
-    MSG_LAUNCHED_APP,
-    MSG_LEAVING_APP,
-    MSG_LEAVING_BOTH,
-    MSG_MISSING_EXECUTABLE,
-    MSG_MISSING_WORKDIR,
-    MSG_NO_EXIT_STATUS,
-    MSG_NO_PKILL,
-    MSG_PKILL_FAILED,
-    MSG_RUN_FORCED,
-    MSG_RUN_GRACEFUL,
-    MSG_RUN_REQUEST,
-    MSG_STOPPED_APP,
-    MSG_STOPPING,
-    PKILL_COMMAND,
-    PKILL_FOLLOW_FLAG,
-    PKILL_STDERR_MAX_BYTES,
-    PLATFORM_WINDOWS,
-    PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS,
-    PROFILE_LOG_READY_POLL_SECONDS,
-    STOP_KIND_FORCED,
-    STOP_KIND_GRACEFUL,
-)
+from launcher.constants import (APPLICATION_FORCED_STOP_TIMEOUT_SECONDS, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, COMMAND_RUN, CWD_PREFIX, GPUDBG_FLAG, LOGSERVER_LABEL, LOG_PREFIX, MSG_KILLING, MSG_LAUNCHED_APP, MSG_LEAVING_APP, MSG_LEAVING_BOTH,
+    MSG_MISSING_EXECUTABLE, MSG_MISSING_WORKDIR, MSG_NO_EXIT_STATUS, MSG_NO_PKILL, MSG_PKILL_FAILED, MSG_RUN_FORCED, MSG_RUN_GRACEFUL, MSG_RUN_REQUEST, MSG_STOPPED_APP, MSG_STOPPING, PKILL_COMMAND, PKILL_FOLLOW_FLAG, PKILL_STDERR_MAX_BYTES, PLATFORM_WINDOWS,
+    PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS, PROFILE_LOG_READY_POLL_SECONDS, STOP_KIND_FORCED, STOP_KIND_GRACEFUL,)
 
 
 class ProcessLauncher:
@@ -52,11 +24,7 @@ class ProcessLauncher:
     @staticmethod
     def stop_existing_process(executable: Path, platform_name: str) -> None:
         if platform_name == PLATFORM_WINDOWS:
-            results = repository_windows_process.stop_processes_by_image_path(
-                executable,
-                APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS,
-                APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
-            )
+            results = repository_windows_process.stop_processes_by_image_path(executable, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,)
             for result in results:
                 stop_kind = STOP_KIND_FORCED if result.forced else STOP_KIND_GRACEFUL
                 print(MSG_STOPPED_APP.format(executable=executable, result=result, stop_kind=stop_kind), flush=True)
@@ -67,12 +35,7 @@ class ProcessLauncher:
 
         pattern = re.escape(str(executable.resolve()))
         with tempfile.TemporaryFile() as diagnostic:
-            completed = subprocess.run(
-                [PKILL_COMMAND, PKILL_FOLLOW_FLAG, pattern],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=diagnostic,
-            )
+            completed = subprocess.run([PKILL_COMMAND, PKILL_FOLLOW_FLAG, pattern], check=False, stdout=subprocess.DEVNULL, stderr=diagnostic,)
             diagnostic.seek(0)
             detail = diagnostic.read(PKILL_STDERR_MAX_BYTES).decode("utf-8", errors="replace").strip()
             if completed.returncode not in (0, 1) or detail:
@@ -116,15 +79,7 @@ class ProcessLauncher:
             time.sleep(min(PROFILE_LOG_READY_POLL_SECONDS, remaining_seconds))
 
     @staticmethod
-    def launch_process(
-        args,
-        executable: Path,
-        working_directory: Path,
-        env: Dict[str, str],
-        application_args: Sequence[str],
-        profile_session: Optional[ProfileSession] = None,
-        paths_validated: bool = False,
-    ) -> int:
+    def launch_process(args, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str], profile_session: Optional[ProfileSession] = None, paths_validated: bool = False,) -> int:
         import launcher as _facade
         process: Optional[subprocess.Popen] = None
         try:
@@ -153,12 +108,7 @@ class ProcessLauncher:
             run_seconds = args.run_seconds
             if run_seconds is not None and run_seconds > 0.0:
                 if _facade.host_platform_name() == PLATFORM_WINDOWS:
-                    run_result = repository_windows_process.run_bounded_process(
-                        process,
-                        run_seconds,
-                        APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS,
-                        APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
-                    )
+                    run_result = repository_windows_process.run_bounded_process(process, run_seconds, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,)
                     if run_result.deadline_reached:
                         print(MSG_RUN_GRACEFUL.format(run_seconds=run_seconds), flush=True)
                     if run_result.forced:
@@ -183,22 +133,11 @@ class ProcessLauncher:
                 print(MSG_LEAVING_APP, flush=True)
             return 0
         finally:
-            if (
-                profile_session is not None
-                and profile_session.process is not None
-                and (process is None or (not args.detach and process.poll() is not None))
-            ):
+            if (profile_session is not None and profile_session.process is not None and (process is None or (not args.detach and process.poll() is not None))):
                 _facade.terminate_process(profile_session.process, LOGSERVER_LABEL)
 
     @staticmethod
-    def launch_with_optional_profile(
-        args,
-        settings: LaunchSettings,
-        executable: Path,
-        working_directory: Path,
-        env: Dict[str, str],
-        application_args: Sequence[str],
-    ) -> int:
+    def launch_with_optional_profile(args, settings: LaunchSettings, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str],) -> int:
         import launcher as _facade
         _facade.validate_launch_paths(executable, working_directory, args.dry_run)
         profile_session = _facade.start_profile_session(args, settings, working_directory, env)

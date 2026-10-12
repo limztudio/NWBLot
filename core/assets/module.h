@@ -90,10 +90,7 @@ private:
 
 template<typename ArenaT>
 [[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
-    return asset.virtualPath()
-        ? StringConvert(arena, asset.virtualPath().resolvedText())
-        : TString<ArenaT>(NWB_TEXT("<unnamed>"), arena)
-    ;
+    return asset.virtualPath() ? StringConvert(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(NWB_TEXT("<unnamed>"), arena);
 }
 
 template<typename AssetT>
@@ -138,18 +135,11 @@ public:
     virtual bool serialize(const IAsset& asset, AssetBytes& outBinary)const = 0;
 
 public:
-    [[nodiscard]] bool checkSerializeAssetType(
-        const IAsset& asset,
-        const TStringView failureContext
-    )const{
+    [[nodiscard]] bool checkSerializeAssetType(const IAsset& asset, const TStringView failureContext)const{
         if(asset.assetType() == assetType())
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'")
-            , failureContext
-            , StringConvert(asset.assetType().resolvedText())
-            , StringConvert(assetType().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, StringConvert(asset.assetType().resolvedText()), StringConvert(assetType().resolvedText()));
         return false;
     }
 #endif

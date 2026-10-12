@@ -69,16 +69,11 @@ float3 nwbHwShadowScaleGeometryVector(const float3 value){
 }
 
 float3 nwbHwShadowGeometricNormal(const NwbRtInstanceMaterial material, const uint primitive){
-    const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(
-        primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES
-    );
+    const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const float3 p0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 p1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 p2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    return nwbHwShadowScaleGeometryVector(cross(
-        nwbHwShadowScaleGeometryVector(p1 - p0),
-        nwbHwShadowScaleGeometryVector(p2 - p0)
-    ));
+    return nwbHwShadowScaleGeometryVector(cross(nwbHwShadowScaleGeometryVector(p1 - p0), nwbHwShadowScaleGeometryVector(p2 - p0)));
 }
 
 float3 nwbHwShadowObjectDirection(const NwbMeshInstanceData instance, const float3 direction){
@@ -120,11 +115,7 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(const RayDesc ray,
     const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
     const half smoothWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
     const float3 worldGeometricNormal = nwbRotateVectorByQuaternion(geometricNormal / instance.scale.xyz, instance.rotation);
-    const half cosine = lerp(
-        nwbShadowCosineToRay(worldGeometricNormal, ray.Direction),
-        nwbShadowCosineToRay(hit.worldNormal, ray.Direction),
-        smoothWeight
-    );
+    const half cosine = lerp(nwbShadowCosineToRay(worldGeometricNormal, ray.Direction), nwbShadowCosineToRay(hit.worldNormal, ray.Direction), smoothWeight);
     NwbHardwareTransparentCrossingOptics optics;
     // Bounded (0, 1) optics factors stay half; geometry chord/distances below remain float for precision.
     optics.absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
@@ -136,9 +127,7 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(const RayDesc ray,
 uint nwbHwShadowBoundaryMode(const uint instance){
     if(instance >= g_NwbHardwareTransparentContext.materialSlots.z)
         return NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
-    return nwbHeapRawBuffer(g_NwbHardwareTransparentContext.materialSlots.y).Load(
-        NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET
-    );
+    return nwbHeapRawBuffer(g_NwbHardwareTransparentContext.materialSlots.y).Load(NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
 }
 
 NwbHardwareTransparentStream nwbHwShadowStreamBegin(){

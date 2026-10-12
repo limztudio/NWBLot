@@ -42,7 +42,8 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() + missing <= s_PaintMaxImages)
         return;
     // Retain requested logical keys even when their immutable metadata conflicts; preparation must reject that conflict.
-    // Live frames retain evicted versions. Removing only cache ownership never changes sampled pixels or live descriptors.
+    // Live frames retain evicted versions.
+    // Removing only cache ownership never changes sampled pixels or live descriptors.
     for(usize index = 0u; index < m_glyphCache.size();){
         const auto& cached = m_glyphCache[index];
         const auto found = FindIf(snapshot.glyphPages().begin(), snapshot.glyphPages().end(), [&cached](const SharedGlyphPage& page)noexcept{
@@ -65,9 +66,12 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     }
     for(usize index = 0u; index < m_textureCache.size();){
         const auto& cached = m_textureCache[index];
-        const auto found = FindIf(snapshot.textureImages().begin(), snapshot.textureImages().end(), [&cached](const auto& source)noexcept(noexcept(Decay_T<decltype(cached->m_source->generation() == source->generation())>(cached->m_source->generation() == source->generation()))){
-            return cached->m_source->generation() == source->generation();
-        });
+        const auto found = FindIf(
+            snapshot.textureImages().begin(), snapshot.textureImages().end(),
+            [&cached](const auto& source)noexcept(noexcept(Decay_T<decltype(cached->m_source->generation() == source->generation())>(cached->m_source->generation() == source->generation()))){
+                return cached->m_source->generation() == source->generation();
+            }
+        );
         if(found == snapshot.textureImages().end())
             m_textureCache.erase(m_textureCache.begin() + static_cast<isize>(index));
         else

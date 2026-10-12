@@ -23,14 +23,7 @@ import text_area_probe  # noqa: E402
 import text_area_smoke  # noqa: E402
 from probe_reference import encoded_marker  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
-    ensure_process_running,
-    launch_captured_process,
-    read_process_tail,
-    require_normal_process_exit,
-    shutdown_logserver_and_collect,
-    terminate_process,
-    validate_expected_log_messages,
-)
+    ensure_process_running, launch_captured_process, read_process_tail, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_messages,)
 
 LIT_UNIT = "unit"
 LIT_CAPTURE = "capture"
@@ -148,19 +141,8 @@ class ProcessOutputCaptureTests(unittest.TestCase):
     def test_large_output_does_not_block_and_tail_is_preserved(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             working_directory = Path(temp_dir)
-            script = (
-                "import sys\n"
-                "sys.stdout.buffer.write(b'x' * (512 * 1024))\n"
-                "sys.stdout.flush()\n"
-                "sys.stderr.write('\\nwindow-capture-output-sentinel\\n')\n"
-                "sys.stderr.flush()\n"
-            )
-            process = launch_captured_process(
-                [sys.executable, "-c", script],
-                working_directory,
-                os.environ.copy(),
-                LIT_UNIT,
-            )
+            script = ("import sys\n" "sys.stdout.buffer.write(b'x' * (512 * 1024))\n" "sys.stdout.flush()\n" "sys.stderr.write('\\nwindow-capture-output-sentinel\\n')\n" "sys.stderr.flush()\n")
+            process = launch_captured_process([sys.executable, "-c", script], working_directory, os.environ.copy(), LIT_UNIT,)
             capture = process._nwb_output_capture
             try:
                 self.assertEqual(process.wait(timeout=5.0), 0)
@@ -209,30 +191,15 @@ class ApplicationCaptureConfigurationTests(unittest.TestCase):
 
     def test_application_capture_rejects_zero_frame_count(self):
         with self.assertRaises(SystemExit):
-            window_capture_smoke.parse_args(
-                [
-                    LIT_APPLICATION_CAPTURE,
-                    "--application-capture-frame-count",
-                    "0",
-                    LIT_EXECUTABLE,
-                    sys.executable,
-                    LIT_OUTPUT,
-                    LIT_CAPTURE_BMP,
-                ]
-            )
+            window_capture_smoke.parse_args([LIT_APPLICATION_CAPTURE, "--application-capture-frame-count", "0", LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP,])
 
     def test_application_capture_skip_reaches_process_exit_code_77_without_desktop_capture(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / LIT_CAPTURE_BMP
-            with mock.patch.object(
-                window_capture_smoke,
-                LIT_LAUNCH_AND_CAPTURE_APPLICATION,
-                side_effect=window_capture_smoke.SmokeSkip(window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE),
+            with mock.patch.object(window_capture_smoke, LIT_LAUNCH_AND_CAPTURE_APPLICATION, side_effect=window_capture_smoke.SmokeSkip(window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE),
             ), mock.patch.object(window_capture_smoke, LIT_CREATE_CAPTURE_BACKEND) as create_backend, \
                  mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS):
-                exit_code = window_capture_smoke.main(
-                    [LIT_APPLICATION_CAPTURE, LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, str(output)]
-                )
+                exit_code = window_capture_smoke.main([LIT_APPLICATION_CAPTURE, LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, str(output)])
 
         self.assertEqual(exit_code, window_capture_smoke.SKIP_EXIT_CODE)
         create_backend.assert_not_called()
@@ -242,22 +209,15 @@ class TemporalLaggedCapabilityTests(unittest.TestCase):
     CAPABILITY_MARKER = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation 1)"
     BOOTSTRAP_MARKER = "RendererSystem: frame-lagged async lighting bootstrap accepted"
     HISTORY_MARKER = "RendererSystem: frame-lagged async lighting active history accepted"
-    CAPTURE_LOG = "\n".join((
-        "CsgVisibleSmokeProject: temporal scene animated=0 view=full minimum_frame=360 warmup_seconds=30 interval=8 samples=32",
-        "CsgVisibleSmokeProject: temporal warmup started graphics frame 360",
-        "CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=30",
-        "CsgVisibleSmokeProject: temporal series complete samples=32",
-        "CsgVisibleSmokeProject: shutdown",
-        "RendererSystem: dispatched surfel GI resolve",
+    CAPTURE_LOG = "\n".join(("CsgVisibleSmokeProject: temporal scene animated=0 view=full minimum_frame=360 warmup_seconds=30 interval=8 samples=32", "CsgVisibleSmokeProject: temporal warmup started graphics frame 360",
+        "CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=30", "CsgVisibleSmokeProject: temporal series complete samples=32", "CsgVisibleSmokeProject: shutdown", "RendererSystem: dispatched surfel GI resolve",
         window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE))
 
     def capture_with_log(self, log_text, *, lagged=True, application_exit=0):
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
-            args = SimpleNamespace(output_directory=directory, overwrite=False, gpu_timing_output=None,
-                view="full", motion="static", frame_interval=8, lagged_lighting=lagged, overlapping=False,
-                executable=Path(sys.executable), working_directory=directory, timeout=1.0,
-                gpu_validation=True, route="natural", logserver_executable=None)
+            args = SimpleNamespace(output_directory=directory, overwrite=False, gpu_timing_output=None, view="full", motion="static", frame_interval=8, lagged_lighting=lagged, overlapping=False,
+                executable=Path(sys.executable), working_directory=directory, timeout=1.0, gpu_validation=True, route="natural", logserver_executable=None)
 
             def run_capture(command, **_kwargs):
                 capture_args = window_capture_smoke.parse_args(command[2:])
@@ -321,11 +281,7 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
         self.assertEqual(analysis.receiver_red_pixels, 3 * 5)
 
     def test_texture_smoke_validation_requires_dense_receiver_only_red_coverage(self):
-        result = SimpleNamespace(
-            width=1280,
-            height=900,
-            texture_smoke=window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 256, 1024),
-        )
+        result = SimpleNamespace(width=1280, height=900, texture_smoke=window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 256, 1024),)
 
         window_capture_smoke.validate_texture_smoke_result(result)
 
@@ -346,9 +302,9 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
 
     @classmethod
     def receiver_hull(cls, pose, clipped):
-        # Independent fixture projection: authored six-axis octahedron (.6), receiver scale .78, camera distance2.2,
-        # vertical FOV60. Euler application is roll, pitch, then the combined local/parent yaw. Clipping local y>0
-        # removes only the upper axis vertex; the equator and lower vertex form the retained convex pyramid.
+        # Independent fixture projection: authored six-axis octahedron (.6), receiver scale .78, camera distance2.2, vertical FOV60.
+        # Euler application is roll, pitch, then the combined local/parent yaw.
+        # Clipping local y>0 removes only the upper axis vertex; the equator and lower vertex form the retained convex pyramid.
         yaw = {LIT_EARLY: 0.0, LIT_MID: 1.0, "late": 2.0}[pose]
         pitch, roll = .32 * yaw, .16 * yaw
         points = []
@@ -377,10 +333,7 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
 
     @classmethod
     def signed_margin(cls, hull, point):
-        return min(
-            cls.cross(left, right, point) / math.hypot(right[0] - left[0], right[1] - left[1])
-            for left, right in zip(hull, hull[1:] + hull[:1])
-        )
+        return min(cls.cross(left, right, point) / math.hypot(right[0] - left[0], right[1] - left[1]) for left, right in zip(hull, hull[1:] + hull[:1]))
 
     @classmethod
     def synthetic_scene(cls, pose, clipped=True, receiver=True, receiver_color=None):
@@ -394,11 +347,9 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
             for x in range(x0, x1):
                 point = ((x + .5 - cls.WIDTH / 2) / cls.HEIGHT, (y + .5 - cls.HEIGHT / 2) / cls.HEIGHT)
                 if cls.signed_margin(hull, point) >= 0:
-                    # A missing green receiver may expose dense red/blue neighboring meshes. Generic foreground
-                    # coverage is deliberately preserved, so only receiver identity can reject this negative control.
-                    rows[y][x] = (receiver_color or cls.RECEIVER) if receiver else (
-                        (180, 50, 30) if x % 2 == 0 else (40, 90, 180)
-                    )
+                    # A missing green receiver may expose dense red/blue neighboring meshes.
+                    # Generic foreground coverage is deliberately preserved, so only receiver identity can reject this negative control.
+                    rows[y][x] = (receiver_color or cls.RECEIVER) if receiver else ((180, 50, 30) if x % 2 == 0 else (40, 90, 180))
         return rows
 
     @staticmethod
@@ -438,20 +389,13 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
     def test_original_density_thresholds_remain_required(self):
         accepted = window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000)
         window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, accepted), LIT_EARLY)
-        for rejected in (
-            window_capture_smoke.TransparentCsgAnalysis(199, 600, 200, 1000),
-            window_capture_smoke.TransparentCsgAnalysis(200, 600, 199, 1000),
-            window_capture_smoke.TransparentCsgAnalysis(159, 300, 160, 500),
-            window_capture_smoke.TransparentCsgAnalysis(160, 300, 159, 500),
-        ):
+        for rejected in (window_capture_smoke.TransparentCsgAnalysis(199, 600, 200, 1000), window_capture_smoke.TransparentCsgAnalysis(200, 600, 199, 1000), window_capture_smoke.TransparentCsgAnalysis(159, 300, 160, 500),
+            window_capture_smoke.TransparentCsgAnalysis(160, 300, 159, 500),):
             with self.subTest(analysis=rejected), self.assertRaises(window_capture_smoke.SmokeFailure):
                 window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, rejected), LIT_EARLY)
 
     def test_validation_never_substitutes_a_different_pose(self):
-        result = SimpleNamespace(transparent_csg={
-            LIT_EARLY: window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000),
-            LIT_MID: window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000),
-        })
+        result = SimpleNamespace(transparent_csg={ LIT_EARLY: window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000), LIT_MID: window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000), })
         window_capture_smoke.validate_transparent_csg_result(result, LIT_MID)
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "early pose"):
             window_capture_smoke.validate_transparent_csg_result(result, LIT_EARLY)
@@ -477,17 +421,7 @@ class RuntimeLogValidationTests(unittest.TestCase):
             marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
             (log_directory / LIT_TEST_LOG).write_text(marker, encoding=LIT_UTF_8)
 
-            self.assertEqual(
-                validate_expected_log_messages(
-                    log_directory,
-                    {},
-                    LIT_LOG,
-                    [LIT_REQUIRED_ROUTE_MARKER],
-                    [],
-                    [marker],
-                ),
-                marker,
-            )
+            self.assertEqual(validate_expected_log_messages(log_directory, {}, LIT_LOG, [LIT_REQUIRED_ROUTE_MARKER], [], [marker],), marker,)
 
     def test_missing_required_marker_is_not_a_capability_skip(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -495,36 +429,15 @@ class RuntimeLogValidationTests(unittest.TestCase):
             (log_directory / LIT_TEST_LOG).write_text(LIT_ORDINARY_STARTUP, encoding=LIT_UTF_8)
 
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_MISSING_LOG_MESSAGE):
-                validate_expected_log_messages(
-                    log_directory,
-                    {},
-                    LIT_LOG,
-                    [LIT_REQUIRED_ROUTE_MARKER],
-                    [],
-                    ["benchmark skipped"],
-                )
+                validate_expected_log_messages(log_directory, {}, LIT_LOG, [LIT_REQUIRED_ROUTE_MARKER], [], ["benchmark skipped"],)
 
     def test_capability_marker_preempts_supported_route_rejection(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
             marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
-            (log_directory / LIT_TEST_LOG).write_text(
-                f"{marker}\nsoftware traversal route",
-                encoding=LIT_UTF_8,
-            )
+            (log_directory / LIT_TEST_LOG).write_text(f"{marker}\nsoftware traversal route", encoding=LIT_UTF_8,)
 
-            self.assertEqual(
-                validate_expected_log_messages(
-                    log_directory,
-                    {},
-                    LIT_LOG,
-                    ["required hardware route"],
-                    ["software traversal route"],
-                    [marker],
-                    [LIT_ERROR],
-                ),
-                marker,
-            )
+            self.assertEqual(validate_expected_log_messages(log_directory, {}, LIT_LOG, ["required hardware route"], ["software traversal route"], [marker], [LIT_ERROR],), marker,)
 
     def test_rejected_error_takes_precedence_over_capability_skip(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -533,43 +446,23 @@ class RuntimeLogValidationTests(unittest.TestCase):
             (log_directory / LIT_TEST_LOG).write_text(f"{marker}\n[ERROR] device failure", encoding=LIT_UTF_8)
 
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_BLOCKING_LOG_MESSAGE):
-                validate_expected_log_messages(
-                    log_directory,
-                    {},
-                    LIT_LOG,
-                    [LIT_REQUIRED_ROUTE_MARKER],
-                    [LIT_ERROR],
-                    [marker],
-                    [LIT_ERROR],
-                )
+                validate_expected_log_messages(log_directory, {}, LIT_LOG, [LIT_REQUIRED_ROUTE_MARKER], [LIT_ERROR], [marker], [LIT_ERROR],)
 
     def test_reject_only_validation_requires_runtime_log_evidence(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "captured no output"):
-                validate_expected_log_messages(
-                    Path(temp_dir),
-                    {},
-                    LIT_LOG,
-                    [],
-                    [LIT_ERROR],
-                )
+                validate_expected_log_messages(Path(temp_dir), {}, LIT_LOG, [], [LIT_ERROR],)
 
 
 class ProcessLivenessTests(unittest.TestCase):
     def test_named_process_exit_before_validation_fails(self):
         process = SimpleNamespace(poll=lambda: 7, returncode=7)
 
-        with self.assertRaisesRegex(
-            window_capture_smoke.SmokeFailure,
-            r"logserver exited before log validation \(exit 7\)",
-        ):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, r"logserver exited before log validation \(exit 7\)",):
             ensure_process_running(process, "before log validation", LIT_LOGSERVER)
 
     def test_named_process_abnormal_graceful_exit_fails(self):
-        with self.assertRaisesRegex(
-            window_capture_smoke.SmokeFailure,
-            r"logserver exited during graceful shutdown \(exit 7\)",
-        ):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, r"logserver exited during graceful shutdown \(exit 7\)",):
             require_normal_process_exit(7, "", LIT_LOGSERVER)
 
 
@@ -613,27 +506,9 @@ class ShutdownLogValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
             log_path = log_directory / LIT_TEST_LOG
-            args = SimpleNamespace(
-                application_arg=[],
-                executable=sys.executable,
-                expect_log_message=list(required),
-                expect_texture_smoke=False,
-                expect_transparent_csg=False,
-                expect_transparent_multi=False,
-                log_port=0,
-                logserver_executable=None,
-                no_logserver=False,
-                output=log_directory / LIT_CAPTURE_BMP,
-                reject_log_message=list(rejected),
-                render_ready_timeout=1.0,
-                settle_seconds=0.0,
-                skip_blocking_log_message=[],
-                skip_log_message=[],
-                software_vulkan=LIT_OFF,
-                timeout=1.0,
-                window_title="NWB Test",
-                working_directory=log_directory,
-            )
+            args = SimpleNamespace(application_arg=[], executable=sys.executable, expect_log_message=list(required), expect_texture_smoke=False, expect_transparent_csg=False, expect_transparent_multi=False, log_port=0, logserver_executable=None,
+                no_logserver=False, output=log_directory / LIT_CAPTURE_BMP, reject_log_message=list(rejected), render_ready_timeout=1.0, settle_seconds=0.0, skip_blocking_log_message=[], skip_log_message=[], software_vulkan=LIT_OFF, timeout=1.0,
+                window_title="NWB Test", working_directory=log_directory,)
             backend = mock.Mock()
             backend.wait_for_window.return_value = 0x4A
             testbed_process = SimpleNamespace(pid=4321, poll=lambda: None)
@@ -652,11 +527,7 @@ class ShutdownLogValidationTests(unittest.TestCase):
                 events.append(LIT_LOG_DRAIN)
 
             with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_LAUNCH_LOGSERVER,
-                     return_value=(logserver_process, 49152, log_directory, {}, LIT_LOG),
-                 ), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, return_value=(logserver_process, 49152, log_directory, {}, LIT_LOG),), \
                  mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=testbed_process), \
                  mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=LIT_CAPTURE), \
                  mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, side_effect=terminate), \
@@ -676,27 +547,14 @@ class ShutdownLogValidationTests(unittest.TestCase):
 class RenderReadyCaptureTests(unittest.TestCase):
     @staticmethod
     def make_args(directory, timeout=1.0):
-        return SimpleNamespace(
-            expect_texture_smoke=False,
-            expect_transparent_csg=False,
-            expect_transparent_multi=False,
-            output=directory / LIT_CAPTURE_BMP,
-            render_ready_timeout=timeout,
-        )
+        return SimpleNamespace(expect_texture_smoke=False, expect_transparent_csg=False, expect_transparent_multi=False, output=directory / LIT_CAPTURE_BMP, render_ready_timeout=timeout,)
 
     @staticmethod
     def make_capture(appears_empty_or_white, has_pixel_variation):
-        return SimpleNamespace(
-            appears_empty_or_white=appears_empty_or_white,
-            handle=0x4A,
-            has_pixel_variation=has_pixel_variation,
-        )
+        return SimpleNamespace(appears_empty_or_white=appears_empty_or_white, handle=0x4A, has_pixel_variation=has_pixel_variation,)
 
     def test_uniform_gray_is_flat_but_not_a_readiness_placeholder(self):
-        analysis = window_capture_smoke.analyze_rgb_rows([
-            [(128, 128, 128), (128, 128, 128)],
-            [(128, 128, 128), (128, 128, 128)],
-        ])
+        analysis = window_capture_smoke.analyze_rgb_rows([[(128, 128, 128), (128, 128, 128)], [(128, 128, 128), (128, 128, 128)],])
 
         self.assertFalse(analysis.appears_empty_or_white)
         self.assertFalse(analysis.has_pixel_variation)
@@ -756,10 +614,7 @@ class RenderReadyCaptureTests(unittest.TestCase):
 
             with mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=(10.0, 10.25)), \
                  mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep:
-                with self.assertRaisesRegex(
-                    window_capture_smoke.SmokeFailure,
-                    r"testbed exited while waiting for rendered window content \(exit 7\)",
-                ):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, r"testbed exited while waiting for rendered window content \(exit 7\)",):
                     window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
 
             backend.capture_window.assert_called_once()
@@ -802,19 +657,8 @@ class RenderReadyCaptureTests(unittest.TestCase):
 class ApplicationCaptureLifecycleTests(unittest.TestCase):
     @staticmethod
     def make_args(directory):
-        return SimpleNamespace(
-            application_capture_frame_count=12,
-            executable=sys.executable,
-            expect_log_message=[],
-            expect_texture_smoke=False,
-            expect_transparent_csg=False,
-            expect_transparent_multi=False,
-            output=directory / LIT_CAPTURE_BMP,
-            reject_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES),
-            skip_blocking_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES),
-            skip_log_message=[],
-            timeout=1.0,
-        )
+        return SimpleNamespace(application_capture_frame_count=12, executable=sys.executable, expect_log_message=[], expect_texture_smoke=False, expect_transparent_csg=False, expect_transparent_multi=False, output=directory / LIT_CAPTURE_BMP,
+            reject_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES), skip_blocking_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES), skip_log_message=[], timeout=1.0,)
 
     def test_normal_capture_collects_shutdown_logs_before_marker_and_pixel_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -865,52 +709,24 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
                  mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, side_effect=launch_testbed), \
                  mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, side_effect=wait_for_exit), \
                  mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, side_effect=terminate), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
-                     side_effect=shutdown_and_collect,
-                 ), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     "validate_application_capture_log_text",
-                     side_effect=validate_logs,
-                 ), \
+                 mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=shutdown_and_collect,), \
+                 mock.patch.object(window_capture_smoke, "validate_application_capture_log_text", side_effect=validate_logs,), \
                  mock.patch.object(window_capture_smoke, LIT_READ_BMP_24, side_effect=read_bmp), \
                  mock.patch.object(window_capture_smoke, "validate_capture_for_args", side_effect=validate_pixels):
                 window_capture_smoke.launch_and_capture_application(args)
 
-        self.assertEqual(
-            events,
-            [
-                LIT_LOGSERVER_LAUNCH,
-                LIT_APPLICATION_LAUNCH,
-                LIT_APPLICATION_WAIT,
-                LIT_APPLICATION_OUTPUT_COLLECT,
-                LIT_LOGSERVER_SHUTDOWN_AND_LOG_COLLECT,
-                LIT_LOG_VALIDATION,
-                LIT_BMP_PARSE,
-                LIT_PIXEL_VALIDATION,
-            ],
-        )
+        self.assertEqual(events, [LIT_LOGSERVER_LAUNCH, LIT_APPLICATION_LAUNCH, LIT_APPLICATION_WAIT, LIT_APPLICATION_OUTPUT_COLLECT, LIT_LOGSERVER_SHUTDOWN_AND_LOG_COLLECT, LIT_LOG_VALIDATION, LIT_BMP_PARSE, LIT_PIXEL_VALIDATION,],)
 
     def test_nonzero_application_exit_fails_after_shutdown_log_collection(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(Path(temp_dir))
             events = []
             with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_LAUNCH_LOGSERVER,
-                     return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),
-                 ), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),), \
                  mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
                  mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, return_value=(9, False)), \
                  mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(9, "application tail")), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
-                     side_effect=lambda *_args: events.append(LIT_LOGS_COLLECTED) or window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,
-                 ), \
+                 mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=lambda *_args: events.append(LIT_LOGS_COLLECTED) or window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,), \
                  mock.patch.object(window_capture_smoke, LIT_READ_BMP_24) as read_bmp:
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, r"self-exited.*exit 9"):
                     window_capture_smoke.launch_and_capture_application(args)
@@ -933,23 +749,11 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
                 return LIT_ORDINARY_STARTUP
 
             with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_LAUNCH_LOGSERVER,
-                     return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),
-                 ), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),), \
                  mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT,
-                     side_effect=window_capture_smoke.SmokeFailure(LIT_TIMED_OUT_WAITING_FOR_SELF_EXIT),
-                 ), \
+                 mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, side_effect=window_capture_smoke.SmokeFailure(LIT_TIMED_OUT_WAITING_FOR_SELF_EXIT),), \
                  mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, side_effect=terminate), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
-                     side_effect=shutdown_and_collect,
-                 ):
+                 mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=shutdown_and_collect,):
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_TIMED_OUT_WAITING_FOR_SELF_EXIT):
                     window_capture_smoke.launch_and_capture_application(args)
             self.assertEqual(args.log_output.read_bytes(), LIT_ORDINARY_STARTUP.encode(LIT_UTF_8))
@@ -958,12 +762,7 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
 
     def test_capture_ready_marker_is_required_after_normal_exit(self):
         args = self.make_args(Path(LIT_CAPTURE_ROOT))
-        self.assertIsNone(
-            window_capture_smoke.validate_application_capture_log_text(
-                window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,
-                args,
-            )
-        )
+        self.assertIsNone(window_capture_smoke.validate_application_capture_log_text(window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE, args,))
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_MISSING_LOG_MESSAGE):
             window_capture_smoke.validate_application_capture_log_text("ordinary shutdown", args)
 
@@ -978,19 +777,11 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(Path(temp_dir))
             with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_LAUNCH_LOGSERVER,
-                     return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),
-                 ), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),), \
                  mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
                  mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, return_value=(0, False)), \
                  mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
-                 mock.patch.object(
-                     window_capture_smoke,
-                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
-                     return_value=window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE,
-                 ):
+                 mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE,):
                 with self.assertRaisesRegex(window_capture_smoke.SmokeSkip, "transfer-source usage is unavailable"):
                     window_capture_smoke.launch_and_capture_application(args)
 
@@ -1020,14 +811,7 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
         capture._capture_screen_rect = screen_bitblt
 
         capture.capture_window(hwnd, output_path)
-        self.assertEqual(
-            calls,
-            [
-                (LIT_PREPARE, hwnd),
-                (LIT_POST_PREPARE_CLIENT_RECT, hwnd),
-                (LIT_BITBLT, hwnd, expected_rect, output_path),
-            ],
-        )
+        self.assertEqual(calls, [(LIT_PREPARE, hwnd), (LIT_POST_PREPARE_CLIENT_RECT, hwnd), (LIT_BITBLT, hwnd, expected_rect, output_path),],)
 
     def test_visible_normal_capture_does_not_restart_restore_or_show_on_repeated_preparation(self):
         hwnd = 0xF234567887654321
@@ -1070,8 +854,7 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
                     capture.prepare_window(hwnd)
                     capture.prepare_window(hwnd)
                 capture.user32.ShowWindow.assert_called_once()
-                self.assertTrue(all(not call.args[6] & capture.SWP_SHOWWINDOW
-                    for call in capture.user32.SetWindowPos.call_args_list))
+                self.assertTrue(all(not call.args[6] & capture.SWP_SHOWWINDOW for call in capture.user32.SetWindowPos.call_args_list))
 
     def test_hidden_preparation_shows_current_geometry_once_without_restore(self):
         hwnd = 0xF234567887654321
@@ -1089,8 +872,7 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
             capture.prepare_window(hwnd)
             capture.prepare_window(hwnd)
         capture.user32.ShowWindow.assert_called_once()
-        self.assertTrue(all(not call.args[6] & capture.SWP_SHOWWINDOW
-            for call in capture.user32.SetWindowPos.call_args_list))
+        self.assertTrue(all(not call.args[6] & capture.SWP_SHOWWINDOW for call in capture.user32.SetWindowPos.call_args_list))
 
 
 class LinuxCaptureFallbackTests(unittest.TestCase):
@@ -1136,9 +918,7 @@ class LinuxCaptureFallbackTests(unittest.TestCase):
             result = backend.capture_client_window(42, Path(LIT_CAPTURE_BMP))
         self.assertIs(result, rendered)
         self.assertEqual(events, ["raise", "flush", ("settle", 0.2), "sync", "client", "root"])
-        self.assertEqual(backend._capture_drawable_region.call_args_list, [
-            mock.call(42, 42, 0, 0, 100, 80, Path(LIT_CAPTURE_BMP)),
-            mock.call(1, 42, 10, 20, 100, 80, Path(LIT_CAPTURE_BMP))])
+        self.assertEqual(backend._capture_drawable_region.call_args_list, [mock.call(42, 42, 0, 0, 100, 80, Path(LIT_CAPTURE_BMP)), mock.call(1, 42, 10, 20, 100, 80, Path(LIT_CAPTURE_BMP))])
 
 
 class LinuxPreparedCaptureTests(unittest.TestCase):
@@ -1192,13 +972,10 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         values = dict.fromkeys(text_area_probe.FIELDS, 0)
         values.update(text_area_probe.document_fields("", 0, 0), focus=1, enabled=1, coherent=1)
         rectangles = dict.fromkeys(text_area_probe.RECTANGLES, (0.0, 0.0, 0.0, 0.0))
-        rectangles.update(bounds=(32.0, 140.0, 380.0, 160.0), content=(40.0, 148.0, 364.0, 144.0),
-            clip=(40.0, 148.0, 364.0, 144.0), caret=(40.0, 148.0, 1.0, 21.796875))
-        lines = ["UiTextAreaSmoke: display logical=640x440 scale=1x1", "UiTextAreaSmoke: skin=default",
-            f"UiTextAreaSmoke: state sequence={sequence} values=" + ",".join(str(values[name]) for name in text_area_probe.FIELDS),
+        rectangles.update(bounds=(32.0, 140.0, 380.0, 160.0), content=(40.0, 148.0, 364.0, 144.0), clip=(40.0, 148.0, 364.0, 144.0), caret=(40.0, 148.0, 1.0, 21.796875))
+        lines = ["UiTextAreaSmoke: display logical=640x440 scale=1x1", "UiTextAreaSmoke: skin=default", f"UiTextAreaSmoke: state sequence={sequence} values=" + ",".join(str(values[name]) for name in text_area_probe.FIELDS),
             f"UiTextAreaSmoke: metrics sequence={sequence} scroll=0,0 measure=0,21.796875 line_height=21.796875 selections=0 maximum=0,0"]
-        lines.extend(f"UiTextAreaSmoke: geometry sequence={sequence} {name}=" + ",".join(map(str, rectangle))
-            for name, rectangle in rectangles.items())
+        lines.extend(f"UiTextAreaSmoke: geometry sequence={sequence} {name}=" + ",".join(map(str, rectangle)) for name, rectangle in rectangles.items())
         text = "\n".join(lines)
         snapshot = text_area_probe.snapshot_from_logs(text)
         rows = [[(24, 29, 37)] * 640 for _ in range(440)]
@@ -1397,18 +1174,11 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
         return [LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
 
     def test_resize_rejects_incompatible_modes_and_invalid_limits(self):
-        for extra in (
-            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_APPLICATION_CAPTURE],
-            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_WINDOW_HANDLE, "1"],
-            [LIT_RESIZE_CLIENT, "0", LIT_N_701],
-            [LIT_RESIZE_CLIENT, "16385", LIT_N_701],
+        for extra in ([LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_APPLICATION_CAPTURE], [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_WINDOW_HANDLE, "1"], [LIT_RESIZE_CLIENT, "0", LIT_N_701], [LIT_RESIZE_CLIENT, "16385", LIT_N_701],
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_SETTLE_SECONDS, "0"],
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_SETTLE_SECONDS, LIT_NAN],
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, "0.5"],
-            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, LIT_INF],
-            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, "--render-ready-timeout", LIT_INF],
-            [LIT_RESIZE_SETTLE_SECONDS, "2"],
-        ):
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, LIT_INF], [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, "--render-ready-timeout", LIT_INF], [LIT_RESIZE_SETTLE_SECONDS, "2"],):
             with self.subTest(extra=extra), mock.patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
                 window_capture_smoke.parse_args(self.base_args() + extra)
 
@@ -1434,8 +1204,7 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
 class ResizeCaptureLifecycleTests(unittest.TestCase):
     @staticmethod
     def make_args():
-        return SimpleNamespace(output=Path(LIT_CAPTURE_BMP), resize_client=[1001, 701], settle_seconds=2.0,
-            resize_settle_seconds=3.0, render_ready_timeout=1.0)
+        return SimpleNamespace(output=Path(LIT_CAPTURE_BMP), resize_client=[1001, 701], settle_seconds=2.0, resize_settle_seconds=3.0, render_ready_timeout=1.0)
 
     def test_resize_recaptures_settled_original_before_request_then_waits_for_runtime_ack(self):
         args = self.make_args()
@@ -1456,8 +1225,7 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
              mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=[10.0, 10.1]), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda seconds: events.append((LIT_SLEEP, seconds))):
             window_capture_smoke.capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
-        self.assertEqual(events, [LIT_PREPARE, (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_SLEEP, 2.0),
-            (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1),
+        self.assertEqual(events, [LIT_PREPARE, (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_SLEEP, 2.0), (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1),
             (LIT_SLEEP, 3.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BMP))])
 
     def test_resize_requires_both_client_extent_and_renderer_acknowledgement(self):
@@ -1501,8 +1269,7 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
                      mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
                      mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
                      self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "settled original client/capture extent"):
-                    window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None),
-                        Path(LIT_LOGS), {}, LIT_LOG)
+                    window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
                 backend.resize_client.assert_not_called()
 
     def test_noop_resize_is_rejected_before_sleep_or_window_mutation(self):

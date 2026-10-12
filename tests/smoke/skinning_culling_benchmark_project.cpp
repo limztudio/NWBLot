@@ -76,8 +76,7 @@ static constexpr u32 s_BenchmarkRepeatCount = 4u;
 static constexpr u32 s_WarmupFrameCount = 8u;
 static constexpr u32 s_SampleFrameCount = 16u;
 static constexpr u32 s_FinishDrainFrameCount = 30u;
-// Keeps the full benchmark as the default while letting functional smoke runs exercise a live animated skinning
-// upload without spending several minutes on every performance case on a software or low-throughput adapter.
+// Keeps the full benchmark as the default while letting functional smoke runs exercise a live animated skinning upload without spending several minutes on every performance case on a software or low-throughput adapter.
 static constexpr u32 s_FastSmokeCharacterCount = 1u;
 static constexpr u32 s_FastSmokeWarmupFrameCount = 1u;
 static constexpr u32 s_FastSmokeSampleFrameCount = 3u;
@@ -166,14 +165,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return EnvironmentFlagEnabled(s_FastSmokeEnv);
 }
 
-static void BuildAnimatedJointMatrix(
-    const SIMDMatrix& bindJoint,
-    const u32 jointIndex,
-    const u32 characterIndex,
-    const f32 timeSeconds,
-    const bool staticPreview,
-    SIMDMatrix& outMatrix
-){
+static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const u32 characterIndex, const f32 timeSeconds, const bool staticPreview, SIMDMatrix& outMatrix){
     outMatrix = bindJoint;
     if(!ShouldAnimateJoint(jointIndex, characterIndex, staticPreview))
         return;
@@ -187,16 +179,10 @@ static void BuildAnimatedJointMatrix(
     const f32 angleJitter = staticPreview ? 0.025f : 0.0025f;
     const f32 rollBase = staticPreview ? 0.045f : 0.006f;
     const f32 rollJitter = staticPreview ? 0.008f : 0.0015f;
-    SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(
-        VectorSet(timeSeconds, timeSeconds, 0.0f, 0.0f), VectorSet(primarySpeed, secondarySpeed, 0.0f, 0.0f),
-        VectorSet(phase, phase, 0.0f, 0.0f)
-    );
+    SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(VectorSet(timeSeconds, timeSeconds, 0.0f, 0.0f), VectorSet(primarySpeed, secondarySpeed, 0.0f, 0.0f), VectorSet(phase, phase, 0.0f, 0.0f));
     wavePhases = VectorAdd(wavePhases, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
     const SIMDVectorSingle waves = VectorSin(wavePhases);
-    const SIMDVectorSingle angle = VectorScale(
-        VectorSplatX(waves),
-        baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter
-    );
+    const SIMDVectorSingle angle = VectorScale(VectorSplatX(waves), baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter);
     const SIMDVectorSingle rotationAngles = VectorMergeX(
         VectorScale(angle, 0.18f + static_cast<f32>((seed >> 3u) & 3u) * 0.035f),
         VectorScale(angle, 0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
@@ -206,11 +192,7 @@ static void BuildAnimatedJointMatrix(
 
     SIMDMatrix matrix = MatrixRotationRollPitchYawFromVector(rotationAngles);
     matrix = MatrixMultiply(bindJoint, matrix);
-    if(!MatrixIsInvertibleAffine(
-        matrix,
-        NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
-        NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon
-    ))
+    if(!MatrixIsInvertibleAffine(matrix, NWB::Impl::SkeletonRuntime::s_AffineEpsilon, NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon))
         return;
 
     outMatrix = matrix;
@@ -371,11 +353,7 @@ private:
         m_bindJoints.clear();
         m_bindJoints.reserve(skeleton->joints().size());
         for(const NWB::Impl::SkeletonJoint& joint : skeleton->joints()){
-            if(!MatrixIsInvertibleAffine(
-                LoadFloat(joint.localBindPose),
-                NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
-                NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon
-            )){
+            if(!MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), NWB::Impl::SkeletonRuntime::s_AffineEpsilon, NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon)){
                 NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton contains an invalid bind pose"));
                 return false;
             }
@@ -435,12 +413,7 @@ private:
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         m_runtimeMeshProvider.setMode(benchmarkCase.mode);
         configureCamera(benchmarkCase.view);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}")
-            , m_repeatIndex + 1u
-            , repeatCount()
-            , StringConvert(BenchmarkModeName(benchmarkCase.mode))
-            , StringConvert(BenchmarkViewName(benchmarkCase.view))
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}"), m_repeatIndex + 1u, repeatCount(), StringConvert(BenchmarkModeName(benchmarkCase.mode)), StringConvert(BenchmarkViewName(benchmarkCase.view)));
     }
 
     void finishCase(){
@@ -455,12 +428,7 @@ private:
     }
 
     void finishBenchmark(){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: completed repeats={} cases={} warmup_frames={} sample_frames={}")
-            , repeatCount()
-            , static_cast<u32>(caseCount())
-            , warmupFrameCount()
-            , sampleFrameCount()
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: completed repeats={} cases={} warmup_frames={} sample_frames={}"), repeatCount(), static_cast<u32>(caseCount()), warmupFrameCount(), sampleFrameCount());
     }
 
     void advanceCaseOrFinish(){
@@ -495,14 +463,7 @@ private:
 
             for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size(); ++jointIndex){
                 SIMDMatrix animatedJoint;
-                BuildAnimatedJointMatrix(
-                    LoadFloat(m_bindJoints[jointIndex]),
-                    jointIndex,
-                    static_cast<u32>(entityIndex),
-                    timeSeconds,
-                    m_staticPreview,
-                    animatedJoint
-                );
+                BuildAnimatedJointMatrix(LoadFloat(m_bindJoints[jointIndex]), jointIndex, static_cast<u32>(entityIndex), timeSeconds, m_staticPreview, animatedJoint);
                 StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
             }
         }
@@ -547,14 +508,7 @@ public:
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
         m_cameraEntity = activeCamera.camera;
-        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
-            *m_world,
-            s_DefaultDirectionalLightPitch,
-            s_DefaultDirectionalLightYaw,
-            0.0f,
-            Float4(1.0f, 0.96f, 0.88f),
-            s_DefaultDirectionalLightIntensity
-        );
+        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
 
         if(!activeCamera.camera.valid() || !directionalLight.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
@@ -585,12 +539,7 @@ public:
 
         SyncSmokeModelRuntimes(*m_world);
         for(const NWB::Core::ECS::EntityID owner : modelOwners){
-            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(
-                *m_world,
-                owner,
-                s_ModelSkeletonObject,
-                NWB::Impl::ModelObjectKind::Skeleton
-            );
+            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(*m_world, owner, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
             if(!skeletonEntity.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
                 requestQuit();

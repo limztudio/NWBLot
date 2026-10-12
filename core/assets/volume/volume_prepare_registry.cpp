@@ -33,9 +33,7 @@ namespace __hidden_asset_volume_prepare_registry{
 
 
 ::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena>& QueryAutoPrepareQueue(){
-    static ::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena> queue(
-        AssetsVolumeArenaScope::s_PrepareQueueArena
-    );
+    static ::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena> queue(AssetsVolumeArenaScope::s_PrepareQueueArena);
     return queue;
 }
 
@@ -62,11 +60,7 @@ AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolu
 bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){
     Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_RegisterPreparersArena);
     Vector<AssetVolumePrepareFunction, Core::Alloc::ScratchArena> functions{scratchArena};
-    return RunAutoCollectedFunctions(
-        __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(),
-        context,
-        functions,
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: collected null volume prepare function")); },
+    return RunAutoCollectedFunctions(__hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(), context, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: collected null volume prepare function")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to run auto-collected volume prepare step")); }
     );
 }

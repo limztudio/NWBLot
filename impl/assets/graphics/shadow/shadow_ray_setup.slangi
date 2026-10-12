@@ -17,15 +17,7 @@
 
 
 // Builds the shared direct-light shadow segment. Both the hardware RayQuery path and the software BVH traversal use this exact direction, finite extent, receiver-side bias, and back-face early-out so their soft-shadow coverage stays in lockstep. Callers include scene/buffer.slangi and shadow_sampling.slangi before this helper.
-bool nwbShadowBuildLightRay(
-    const float3 worldPosition,
-    const float3 normal,
-    const NwbSceneLight light,
-    const float2 jitter,
-    out float3 outDirection,
-    out float outTMin,
-    out float outTEnd
-){
+bool nwbShadowBuildLightRay(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter, out float3 outDirection, out float outTMin, out float outTEnd){
     outDirection = float3(0.0, 1.0, 0.0);
     outTMin = NWB_SHADOW_RAY_MIN_DISTANCE;
     outTEnd = 0.0;
@@ -42,10 +34,7 @@ bool nwbShadowBuildLightRay(
         const float3 centerDir = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
         // A punctual source sphere subtends asin(radius / distance); the center distance remains the trace extent.
         // Punctual-source sine half-angle is a (0, 1) bounded factor; half math is sufficient here; widen only at asin.
-        const half sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON)
-            ? half(min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX))
-            : half(0.0h)
-        ;
+        const half sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? half(min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX)) : half(0.0h);
         outDirection = nwbShadowJitterCone(centerDir, asin(float(sinHalf)), jitter);
     }
 

@@ -164,18 +164,12 @@ struct formatter<TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>, Format
 
 template<typename CharT>
 inline constexpr CharT ToAsciiLower(CharT c)noexcept(IsArithmetic_V<CharT>){
-    return (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
-        ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
-        : c
-    ;
+    return (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z')) ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A'))) : c;
 }
 
 template<typename CharT>
 inline constexpr CharT ToAsciiUpper(CharT c)noexcept(IsArithmetic_V<CharT>){
-    return (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z'))
-        ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A')))
-        : c
-    ;
+    return (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z')) ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A'))) : c;
 }
 
 template<typename StringT>
@@ -201,10 +195,7 @@ template<typename StringT>
     if(text.size() >= 2u){
         const auto first = text.front();
         const auto last = text.back();
-        if(
-            (first == static_cast<decltype(first)>('"') && last == static_cast<decltype(last)>('"'))
-            || (first == static_cast<decltype(first)>('\'') && last == static_cast<decltype(last)>('\''))
-        ){
+        if((first == static_cast<decltype(first)>('"') && last == static_cast<decltype(last)>('"')) || (first == static_cast<decltype(first)>('\'') && last == static_cast<decltype(last)>('\''))){
             text.erase(text.size() - 1u);
             text.erase(0u, 1u);
         }
@@ -221,21 +212,12 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline constexpr bool IsAsciiAlphaNumeric(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return
-        (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
-        || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z'))
-        || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'))
-    ;
+    return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'));
 }
 
 template<typename CharT>
 [[nodiscard]] inline constexpr bool IsAsciiIdentifierChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return
-        (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'))
-        || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z'))
-        || (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
-        || ch == static_cast<CharT>('_')
-    ;
+    return (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z')) || (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || ch == static_cast<CharT>('_');
 }
 
 template<typename CharT>
@@ -306,8 +288,7 @@ namespace TextUtilsDetail{
 
 template<typename CharT>
 inline constexpr bool IsSafeCacheNameChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z'))
-        || (ch >= CharT('0') && ch <= CharT('9'));
+    const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z')) || (ch >= CharT('0') && ch <= CharT('9'));
     const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
     return alphaNum || safePunctuation;
 }
@@ -479,11 +460,7 @@ struct NamedEnumCase{
 };
 
 template<typename EnumT, typename ViewT = AStringView>
-[[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(
-    const ViewT value,
-    const NamedEnumCase<EnumT>* cases,
-    const usize caseCount
-){
+[[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(const ViewT value, const NamedEnumCase<EnumT>* cases, const usize caseCount){
     for(usize i = 0u; i < caseCount; ++i){
         if(value == ViewT(cases[i].text.data(), cases[i].text.size()))
             return cases[i].value;
@@ -492,12 +469,7 @@ template<typename EnumT, typename ViewT = AStringView>
 }
 
 template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
-[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(
-    const ViewT value,
-    TextFunction textFunction,
-    const EnumT* values,
-    const usize valueCount
-){
+[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(const ViewT value, TextFunction textFunction, const EnumT* values, const usize valueCount){
     for(usize i = 0u; i < valueCount; ++i){
         if(value == textFunction(values[i]))
             return values[i];

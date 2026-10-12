@@ -29,8 +29,7 @@ bool RendererRayTracingSystem::ensureCsgTraceContextResources(){
         if(!token.valid())
             continue;
         const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
-        if(!device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)
-            || device.queueGetCompletedInstance(queue) >= token.value)
+        if(!device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || device.queueGetCompletedInstance(queue) >= token.value)
             token = {};
         else
             readersPending = true;
@@ -66,11 +65,7 @@ bool RendererRayTracingSystem::ensureCsgTraceContextResources(){
         capacity = Max<u64>(capacity, previousCapacity + growth);
     }
     Core::BufferDesc desc;
-    desc
-        .setByteSize(capacity).setStructStride(sizeof(u32)).setCanHaveRawViews(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("raytrace_csg_context")).enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
+    desc.setByteSize(capacity).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name("raytrace_csg_context")).enableAutomaticStateTracking(Core::ResourceStates::Common);
     Core::BufferHandle replacement = m_graphics.createBuffer(desc);
     if(!replacement)
         return false;

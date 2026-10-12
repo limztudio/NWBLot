@@ -42,9 +42,7 @@ protected:
         return m_context.beginFrame(generation) && m_context.beginRoot({ 1401u, 1u });
     }
 
-    [[nodiscard]] PopupDeclaration reserve(const AStringView key,
-        const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }
-    ){
+    [[nodiscard]] PopupDeclaration reserve(const AStringView key, const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }){
         PopupDeclaration result;
         const WidgetState* owner = m_context.declare(key, WidgetKind::Popup);
         EXPECT_NE(owner, nullptr);

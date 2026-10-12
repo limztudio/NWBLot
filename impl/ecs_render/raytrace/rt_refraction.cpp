@@ -59,15 +59,9 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
 
     const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto ensurePipeline = [&](const bool hardware) -> bool{
-        Core::ComputePipelineHandle& pipeline = hardware
-            ? (csg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline)
-            : m_rayTracingState.m_refractionScreenPipeline;
-        Core::ShaderHandle& shader = hardware
-            ? (csg ? m_rayTracingState.m_refractionCsgHwShader : m_rayTracingState.m_refractionHwShader)
-            : m_rayTracingState.m_refractionScreenShader;
-        bool& failed = hardware
-            ? (csg ? m_rayTracingState.m_refractionCsgHwPipelineFailed : m_rayTracingState.m_refractionHwPipelineFailed)
-            : m_rayTracingState.m_refractionScreenPipelineFailed;
+        Core::ComputePipelineHandle& pipeline = hardware ? (csg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline) : m_rayTracingState.m_refractionScreenPipeline;
+        Core::ShaderHandle& shader = hardware ? (csg ? m_rayTracingState.m_refractionCsgHwShader : m_rayTracingState.m_refractionHwShader) : m_rayTracingState.m_refractionScreenShader;
+        bool& failed = hardware ? (csg ? m_rayTracingState.m_refractionCsgHwPipelineFailed : m_rayTracingState.m_refractionHwPipelineFailed) : m_rayTracingState.m_refractionScreenPipelineFailed;
         if(pipeline)
             return true;
         if(failed)
@@ -82,10 +76,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             return false;
         }
         Core::ComputePipelineDesc desc;
-        desc.setComputeShader(shader)
-            .addBindingLayout(m_rayTracingState.m_refractionBindingLayout)
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout());
+        desc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         if(hardware)
             desc.addBindingLayout(heap.getAccelStructLayout());
         pipeline = device.createComputePipeline(desc);
@@ -93,8 +84,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             failed = true;
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created refraction resolve pipeline ({})"),
-            hardware ? NWB_TEXT("hardware ray query") : NWB_TEXT("screen space"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created refraction resolve pipeline ({})"), hardware ? NWB_TEXT("hardware ray query") : NWB_TEXT("screen space"));
         return true;
     };
 
@@ -125,9 +115,7 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
     resources.screenFallbackPipeline = m_rayTracingState.m_refractionScreenPipeline;
     resources.viewHeapSlot = view.heapHandle.slot();
     resources.usesHardwareTrace = m_rayTracingState.m_refractionUseHardwareTrace;
-    resources.pipeline = resources.usesHardwareTrace
-        ? (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline)
-        : m_rayTracingState.m_refractionScreenPipeline;
+    resources.pipeline = resources.usesHardwareTrace ? (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline) : m_rayTracingState.m_refractionScreenPipeline;
     if(resources.usesHardwareTrace){
         resources.sceneTlas = m_rayTracingState.m_tlas;
         resources.tlasHeapHandle = m_rayTracingState.m_tlasHeapHandle;
@@ -137,11 +125,7 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
     return resources;
 }
 
-bool RendererRayTracingSystem::recordRefractionResolve(
-    Core::CommandList& commandList,
-    const DeferredFrameTargets& targets,
-    const RayTracingRefractionGraphResources& resources
-)const{
+bool RendererRayTracingSystem::recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
     if(!resources.valid() || !targets.bindless.valid() || targets.width == 0u || targets.height == 0u)
         return false;
 
@@ -162,11 +146,7 @@ bool RendererRayTracingSystem::recordRefractionResolve(
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionResolve, m_graphics.getDevice(), commandList);
 
-        commandList.dispatch(
-            (targets.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE,
-            (targets.height + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE,
-            1u
-        );
+        commandList.dispatch((targets.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, (targets.height + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, 1u);
     }
     return true;
 }

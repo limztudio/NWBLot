@@ -38,15 +38,11 @@ bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
         return false;
     }
-    if(!AddBinaryRepeatedReserveBytes(
-        reserveBytes, UiSkinColorRole::Count, sizeof(UiSkinBinaryPayload::ColorBinary)
-    )){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, UiSkinColorRole::Count, sizeof(UiSkinBinaryPayload::ColorBinary))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
         return false;
     }
-    if(!AddBinaryRepeatedReserveBytes(
-        reserveBytes, 1u, sizeof(UiSkinBinaryPayload::TypographyBinary)
-    )){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, sizeof(UiSkinBinaryPayload::TypographyBinary))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: typography payload size overflows"));
         return false;
     }

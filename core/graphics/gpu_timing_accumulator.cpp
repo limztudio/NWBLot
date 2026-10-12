@@ -15,10 +15,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTimingAccumulator::setCaptureEnabled(
-    const bool enabled,
-    const u64 subscriptionIdentityLimit
-)noexcept{
+bool GpuTimingAccumulator::setCaptureEnabled(const bool enabled, const u64 subscriptionIdentityLimit)noexcept{
     if(enabled == m_captureEnabled)
         return false;
 
@@ -48,10 +45,7 @@ void GpuTimingAccumulator::collect(
         return;
 
     for(QueryRecord& record : m_queries){
-        if(
-            (record.state != QueryState::PendingAccepted && record.state != QueryState::PendingRetirementAccepted)
-            || !record.query
-        )
+        if((record.state != QueryState::PendingAccepted && record.state != QueryState::PendingRetirementAccepted) || !record.query)
             continue;
         if(record.retirementNotificationPending)
             continue;
@@ -59,26 +53,13 @@ void GpuTimingAccumulator::collect(
             !record.acceptedSubmission.valid()
             || !record.acceptedSubmission.hasPhysicalQueueIdentity()
             || record.acceptedSubmission.queue != record.queueClass
-            || !record.acceptedSubmission.matchesPhysicalQueue(
-                record.physicalQueue.index,
-                record.physicalQueue.deviceGeneration
-            )
-            || !device.matchesPhysicalQueueIdentity(
-                record.acceptedSubmission.queue,
-                record.acceptedSubmission.physicalQueueIndex,
-                record.acceptedSubmission.deviceGeneration
-            )
+            || !record.acceptedSubmission.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration)
+            || !device.matchesPhysicalQueueIdentity(record.acceptedSubmission.queue, record.acceptedSubmission.physicalQueueIndex, record.acceptedSubmission.deviceGeneration)
         ){
             const bool retirementPending = quarantineRecord(record, subscriptionIdentityLimit);
             if(retirementPending){
                 completedSamples.push_back(SampleDispatch{
-                    .sample = GpuTimingSample{
-                        .sourceFrameIndex = record.frameIndex,
-                        .scopeName = m_scopeName,
-                        .attribution = record.attribution,
-                        .comparableRange = {},
-                        .physicalQueue = record.physicalQueue,
-                    },
+                    .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
                     .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
                 });
                 record.attribution = s_NoGpuTimingSampleAttribution;
@@ -94,14 +75,7 @@ void GpuTimingAccumulator::collect(
         if(record.state == QueryState::PendingRetirementAccepted){
             if(record.attribution != s_NoGpuTimingSampleAttribution){
                 completedSamples.push_back(SampleDispatch{
-                    .sample = GpuTimingSample{
-                        .sourceFrameIndex = record.frameIndex,
-                        .scopeName = m_scopeName,
-                        .attribution = record.attribution,
-                        .comparableRange = {},
-                        .physicalQueue = record.physicalQueue,
-                        .published = false,
-                    },
+                    .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, .published = false, },
                     .subscriptionIdentityLimit = subscriptionIdentityLimit,
                 });
             }
@@ -114,25 +88,14 @@ void GpuTimingAccumulator::collect(
         if(!result)
             continue;
 
-        const bool publishSample = record.epoch == epoch
-            && record.publicationGeneration == m_publicationGeneration
-            && record.publishSample
-        ;
-        const bool publishPerformanceSample = publishSample
-            && publishPerformanceSamples
-            && record.performanceCaptureEpoch == performanceCaptureEpoch
-        ;
+        const bool publishSample = record.epoch == epoch && record.publicationGeneration == m_publicationGeneration && record.publishSample;
+        const bool publishPerformanceSample = publishSample && publishPerformanceSamples && record.performanceCaptureEpoch == performanceCaptureEpoch;
         const u64 sourceFrameIndex = record.frameIndex;
         const f64 durationSeconds = result->durationSeconds();
         GpuComparableTimestampRange comparableRange;
         if(publishSample){
             if(result->hasComparableRange()){
-                comparableRange = GpuComparableTimestampRange{
-                    result->beginTicks,
-                    result->endTicks,
-                    result->secondsPerTick,
-                    result->physicalQueue,
-                };
+                comparableRange = GpuComparableTimestampRange{ result->beginTicks, result->endTicks, result->secondsPerTick, result->physicalQueue, };
             }
         }
         if(record.attribution != s_NoGpuTimingSampleAttribution){
@@ -150,20 +113,10 @@ void GpuTimingAccumulator::collect(
             });
         }
         if(publishPerformanceSample){
-            performanceSamples.push_back(GpuTimingSinkSample{
-                .scope = m_timingScope,
-                .durationSeconds = durationSeconds,
-                .sourceFrameIndex = sourceFrameIndex,
-            });
+            performanceSamples.push_back(GpuTimingSinkSample{ .scope = m_timingScope, .durationSeconds = durationSeconds, .sourceFrameIndex = sourceFrameIndex, });
         }
         if(publishPerformanceSample && comparableRange.valid()){
-            recorder.m_metricCorrelator.recordTimestampRange(
-                m_scopeName,
-                sourceFrameIndex,
-                comparableRange,
-                performanceSamples,
-                scratchArena
-            );
+            recorder.m_metricCorrelator.recordTimestampRange(m_scopeName, sourceFrameIndex, comparableRange, performanceSamples, scratchArena);
         }
         releaseQuery(record);
 
@@ -180,19 +133,17 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
 
     const bool canReset = commandList.canResetTimerQueryHere();
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
-    // Retain pending pools until their result is observable instead of erasing a late GPU sample. Pools that are
-    // already available this frame are reset on the device timeline, but do not become usable by dynamic-rendering
-    // scopes until the caller confirms this command list submitted successfully.
+    // Retain pending pools until their result is observable instead of erasing a late GPU sample.
+    // Pools that are already available this frame are reset on the device timeline, but do not become usable by dynamic-rendering scopes until the caller confirms this command list submitted successfully.
     for(QueryRecord& record : m_queries){
         record.frameResetRecorded = false;
         record.frameResetRecordingQueue = {};
-        // A newly recorded frame preamble supersedes any dependency retained from a rejected scope in an older
-        // frame. Inline-reset-capable positions do not need that stale dependency if this preamble fails;
-        // external-reset-required positions remain unavailable until the new reset submission is accepted below.
+        // A newly recorded frame preamble supersedes any dependency retained from a rejected scope in an older frame.
+        // Inline-reset-capable positions do not need that stale dependency if this preamble fails; external-reset-required positions remain unavailable until the new reset submission is accepted below.
         if(record.state == QueryState::Available)
             record.frameResetSubmission = {};
-        // An external-reset-required scope must observe this frame's reset, not merely a reset that happened during
-        // an earlier frame. Leave the pool unavailable until confirmFrameReset() observes a successful preamble.
+        // An external-reset-required scope must observe this frame's reset, not merely a reset that happened during an earlier frame.
+        // Leave the pool unavailable until confirmFrameReset() observes a successful preamble.
         record.deviceReady = false;
         if(!canReset || !record.query || record.state != QueryState::Available)
             continue;
@@ -210,13 +161,7 @@ void GpuTimingAccumulator::confirmFrameReset(const QueueSubmissionToken& token){
             continue;
 
         record.frameResetRecorded = false;
-        const bool matchesResetQueue = token.valid()
-            && token.hasPhysicalQueueIdentity()
-            && token.matchesPhysicalQueue(
-                record.frameResetRecordingQueue.index,
-                record.frameResetRecordingQueue.deviceGeneration
-            )
-        ;
+        const bool matchesResetQueue = token.valid() && token.hasPhysicalQueueIdentity() && token.matchesPhysicalQueue(record.frameResetRecordingQueue.index, record.frameResetRecordingQueue.deviceGeneration);
         record.frameResetRecordingQueue = {};
         if(m_captureEnabled && record.state == QueryState::Available && matchesResetQueue){
             record.frameResetSubmission = token;
@@ -231,8 +176,8 @@ void GpuTimingAccumulator::discardFrameReset()noexcept{
     for(QueryRecord& record : m_queries){
         record.frameResetRecorded = false;
         record.frameResetRecordingQueue = {};
-        // A failed (or not-yet-recorded) preamble must not let an external-reset-required position reuse a previous
-        // frame's reset. An inline-reset-capable position still performs its own device-timeline reset.
+        // A failed (or not-yet-recorded) preamble must not let an external-reset-required position reuse a previous frame's reset.
+        // An inline-reset-capable position still performs its own device-timeline reset.
         record.deviceReady = false;
     }
 }
@@ -245,13 +190,7 @@ bool GpuTimingAccumulator::materializeRequestedQueries(Device& device){
     return !m_captureEnabled || m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
 }
 
-Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(
-    CommandList& commandList,
-    const u64 frameIndex,
-    const u32 epoch,
-    const u64 performanceCaptureEpoch,
-    const GpuTimingSampleAttribution attribution
-){
+Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(CommandList& commandList, const u64 frameIndex, const u32 epoch, const u64 performanceCaptureEpoch, const GpuTimingSampleAttribution attribution){
     if(!m_captureEnabled){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::CollectionInactive];
         return QueryBegin{};
@@ -264,8 +203,8 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(
     }
 
     QueryRecord& record = m_queries[index];
-    // beginTimerQuery self-resets an already prepared pool only when this exact recording position supports a native
-    // reset. Render-pass and transfer-only timestamp scopes consume a reset accepted from recordFrameReset().
+    // beginTimerQuery self-resets an already prepared pool only when this exact recording position supports a native reset.
+    // Render-pass and transfer-only timestamp scopes consume a reset accepted from recordFrameReset().
     // Under-reserved or undeclared scopes skip instead of allocating persistent query pools from a recording path.
     if(!commandList.isRecording() || !commandList.hasCommandBuffer() || commandList.commandRecordingFailed())
         return MakeUnexpected(Failure{});
@@ -278,8 +217,8 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(
         return QueryBegin{};
     }
 
-    // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records
-    // its begin endpoint, even if that command buffer is later discarded before submission.
+    // A device-timeline reset authorizes exactly one timestamp pair.
+    // Consume it as soon as the reservation records its begin endpoint, even if that command buffer is later discarded before submission.
     const auto timerQueryRecording = commandList.beginTimerQuery(*record.query);
     if(!timerQueryRecording)
         return MakeUnexpected(Failure{});
@@ -302,33 +241,17 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(
     if(m_nextReservation == 0u)
         ++m_nextReservation;
     record.reservation = m_nextReservation;
-    const QueryBegin result{
-        .scope = GpuTimingScope{
-            .scopeName = m_scopeName,
-            .reservation = record.reservation,
-            .timerQueryRecording = *timerQueryRecording,
-            .index = index,
-            .epoch = epoch,
-        },
-        .resetSubmission = record.frameResetSubmission,
-    };
+    const QueryBegin result{ .scope = GpuTimingScope{ .scopeName = m_scopeName, .reservation = record.reservation, .timerQueryRecording = *timerQueryRecording, .index = index, .epoch = epoch, }, .resetSubmission = record.frameResetSubmission, };
     ++m_recordedScopeCount;
     return result;
 }
 
-GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(
-    CommandList& commandList,
-    const GpuTimingScope& scope
-){
+GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return QueryEndResult::Invalid;
 
     QueryRecord& record = m_queries[scope.index];
-    if(
-        record.epoch != scope.epoch
-        || record.reservation != scope.reservation
-        || record.state != QueryState::Recording
-    )
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation || record.state != QueryState::Recording)
         return QueryEndResult::Invalid;
     if(!commandList.endTimerQuery(*record.query, scope.timerQueryRecording)){
         record.state = QueryState::EndFailedUnaccepted;
@@ -340,19 +263,12 @@ GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(
     return QueryEndResult::Ended;
 }
 
-GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQueryFromExistingClaim(
-    CommandList& commandList,
-    const GpuTimingScope& scope
-)noexcept{
+GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return QueryEndResult::Invalid;
 
     QueryRecord& record = m_queries[scope.index];
-    if(
-        record.epoch != scope.epoch
-        || record.reservation != scope.reservation
-        || record.state != QueryState::Recording
-    )
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation || record.state != QueryState::Recording)
         return QueryEndResult::Invalid;
     if(!commandList.endTimerQueryFromExistingClaim(*record.query, scope.timerQueryRecording)){
         record.state = QueryState::EndFailedUnaccepted;
@@ -368,11 +284,7 @@ bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTim
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(
-        record.epoch != scope.epoch
-        || record.reservation != scope.reservation
-        || record.state != QueryState::Recording
-    )
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation || record.state != QueryState::Recording)
         return false;
 
     if(!commandList.endTimerQuery(*record.query, scope.timerQueryRecording))
@@ -382,35 +294,20 @@ bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTim
     return true;
 }
 
-bool GpuTimingAccumulator::validateQuerySubmission(
-    const GpuTimingScope& scope,
-    const QueueSubmissionToken& token
-)const noexcept{
+bool GpuTimingAccumulator::validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
     const QueryRecord& record = m_queries[scope.index];
     if(record.epoch != scope.epoch || record.reservation != scope.reservation)
         return false;
-    if(
-        record.state != QueryState::Recording
-        && record.state != QueryState::EndedUnaccepted
-        && record.state != QueryState::EndFailedUnaccepted
-    )
+    if(record.state != QueryState::Recording && record.state != QueryState::EndedUnaccepted && record.state != QueryState::EndFailedUnaccepted)
         return false;
 
-    return token.valid()
-        && token.hasPhysicalQueueIdentity()
-        && token.queue == record.queueClass
-        && token.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration)
-    ;
+    return token.valid() && token.hasPhysicalQueueIdentity() && token.queue == record.queueClass && token.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration);
 }
 
-bool GpuTimingAccumulator::confirmQuery(
-    const GpuTimingScope& scope,
-    const QueueSubmissionToken& token,
-    const bool publishSample
-)noexcept{
+bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, const bool publishSample)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -443,21 +340,14 @@ bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope){
     QueryRecord& record = m_queries[scope.index];
     if(record.epoch != scope.epoch || record.reservation != scope.reservation)
         return false;
-    if(
-        record.state != QueryState::EndedUnaccepted
-        || !record.query
-        || !record.query->releaseUnacceptedEndForRecovery(scope.timerQueryRecording)
-    )
+    if(record.state != QueryState::EndedUnaccepted || !record.query || !record.query->releaseUnacceptedEndForRecovery(scope.timerQueryRecording))
         return false;
 
     record.state = QueryState::Recording;
     return true;
 }
 
-bool GpuTimingAccumulator::discardQuery(
-    const GpuTimingScope& scope,
-    const u64 subscriptionIdentityLimit
-){
+bool GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -484,23 +374,14 @@ bool GpuTimingAccumulator::discardQuery(
     return false;
 }
 
-bool GpuTimingAccumulator::abandonQuery(
-    const GpuTimingScope& scope,
-    const u64 subscriptionIdentityLimit
-)noexcept{
+bool GpuTimingAccumulator::abandonQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
     QueryRecord& record = m_queries[scope.index];
     if(record.epoch != scope.epoch || record.reservation != scope.reservation)
         return false;
-    if(
-        record.state == QueryState::PendingAccepted
-        || record.state == QueryState::PendingRetirementAccepted
-        || record.state == QueryState::Quarantined
-        || !record.query
-        || !record.query->discardUnacceptedRecording(scope.timerQueryRecording)
-    )
+    if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted || record.state == QueryState::Quarantined || !record.query || !record.query->discardUnacceptedRecording(scope.timerQueryRecording))
         return quarantineRecord(record, subscriptionIdentityLimit);
 
     releaseUnacceptedQuery(record);
@@ -508,10 +389,7 @@ bool GpuTimingAccumulator::abandonQuery(
     return false;
 }
 
-bool GpuTimingAccumulator::quarantineQuery(
-    const GpuTimingScope& scope,
-    const u64 subscriptionIdentityLimit
-)noexcept{
+bool GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -521,10 +399,7 @@ bool GpuTimingAccumulator::quarantineQuery(
     return quarantineRecord(record, subscriptionIdentityLimit);
 }
 
-bool GpuTimingAccumulator::quarantineRecord(
-    QueryRecord& record,
-    const u64 subscriptionIdentityLimit
-)noexcept{
+bool GpuTimingAccumulator::quarantineRecord(QueryRecord& record, const u64 subscriptionIdentityLimit)noexcept{
     if(record.state != QueryState::Quarantined){
         if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
             if(m_pendingAcceptedQueryCount > 0u)
@@ -551,8 +426,8 @@ bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
             ++usableQueryCount;
     }
 
-    // Quarantine never makes an accepted begin-only native query available again. Preserve that object until every
-    // command buffer retaining it is gone, and materialize replacement capacity for the next frame preamble instead.
+    // Quarantine never makes an accepted begin-only native query available again.
+    // Preserve that object until every command buffer retaining it is gone, and materialize replacement capacity for the next frame preamble instead.
     while(usableQueryCount < queryCount){
         if(appendQuery(device) == Limit<u32>::s_Max)
             return false;
@@ -581,8 +456,8 @@ u32 GpuTimingAccumulator::appendQuery(Device& device){
 }
 
 void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
-    // A discarded command buffer may already contain timestamp writes. Require another accepted preamble before an
-    // external-reset-required position reuses this pool; an inline-reset-capable position resets it itself.
+    // A discarded command buffer may already contain timestamp writes.
+    // Require another accepted preamble before an external-reset-required position reuses this pool; an inline-reset-capable position resets it itself.
     const GpuPhysicalQueueId retirementPhysicalQueue = record.physicalQueue;
     const u64 retirementFrameIndex = record.frameIndex;
     const GpuTimingSampleAttribution retirementAttribution = record.attribution;
@@ -624,9 +499,8 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
 }
 
 void GpuTimingAccumulator::releaseUnacceptedQuery(QueryRecord& record)noexcept{
-    // Never restore deviceReady: even though the timing ticket rejected this submission, the recorded command
-    // buffer still contains query writes and must not authorize an external-reset-required retry without a fresh
-    // preamble. Keep the accepted reset token only so an inline-reset-capable retry remains ordered after it.
+    // Never restore deviceReady: even though the timing ticket rejected this submission, the recorded command buffer still contains query writes and must not authorize an external-reset-required retry without a fresh preamble.
+    // Keep the accepted reset token only so an inline-reset-capable retry remains ordered after it.
     const QueueSubmissionToken frameResetSubmission = record.frameResetSubmission;
     releaseQuery(record);
     record.frameResetSubmission = frameResetSubmission;
@@ -659,13 +533,7 @@ Expected<GpuTimingAccumulator::SampleDispatch> GpuTimingAccumulator::retireMarke
             continue;
 
         const SampleDispatch dispatch{
-            .sample = GpuTimingSample{
-                .sourceFrameIndex = record.frameIndex,
-                .scopeName = m_scopeName,
-                .attribution = record.attribution,
-                .comparableRange = {},
-                .physicalQueue = record.physicalQueue,
-            },
+            .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
             .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
         };
         record.attribution = s_NoGpuTimingSampleAttribution;
@@ -695,25 +563,14 @@ void GpuTimingAccumulator::discardMarkedAttributions()noexcept{
     }
 }
 
-void GpuTimingAccumulator::retireAttributions(
-    SampleDispatchVector& outSamples,
-    const u64 subscriptionIdentityLimit
-){
+void GpuTimingAccumulator::retireAttributions(SampleDispatchVector& outSamples, const u64 subscriptionIdentityLimit){
     for(QueryRecord& record : m_queries){
         if(record.attribution == s_NoGpuTimingSampleAttribution)
             continue;
 
         outSamples.push_back(SampleDispatch{
-            .sample = GpuTimingSample{
-                .sourceFrameIndex = record.frameIndex,
-                .scopeName = m_scopeName,
-                .attribution = record.attribution,
-                .comparableRange = {},
-                .physicalQueue = record.physicalQueue,
-            },
-            .subscriptionIdentityLimit = record.retirementNotificationPending
-                ? record.retirementSubscriptionIdentityLimit
-                : subscriptionIdentityLimit
+            .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
+            .subscriptionIdentityLimit = record.retirementNotificationPending ? record.retirementSubscriptionIdentityLimit : subscriptionIdentityLimit
             ,
         });
         record.attribution = s_NoGpuTimingSampleAttribution;

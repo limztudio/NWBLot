@@ -81,34 +81,15 @@ public:
     static constexpr AStringView s_TangentsFieldNameView = "tangents";
     static constexpr AStringView s_Uv0FieldNameView = "uv0";
     static constexpr AStringView s_ColorsFieldNameView = "colors";
-    static Expected<DiscoveredNwbFile> BuildDiscoveredNwbFile(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath
-    );
+    static Expected<DiscoveredNwbFile> BuildDiscoveredNwbFile(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath);
     static bool AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount);
     static Expected<usize> CountFlattenedValueLeaves(const Core::Metascript::Value& value);
     static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index);
-    static const Core::Metascript::Value* FindRequiredMetadataListField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& map,
-    const TStringView metaKind,
-    const AStringView fieldName);
+    static const Core::Metascript::Value* FindRequiredMetadataListField(const Path& nwbFilePath, const Core::Metascript::Value& map, const TStringView metaKind, const AStringView fieldName);
     [[nodiscard]] static Expected<f32, MetadataF32ValueFailure::Enum> ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value);
-    static void LogMetadataFiniteF32ValueFailure(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const AStringView label,
-    const MetadataF32ValueFailure::Enum failure
-    );
+    static void LogMetadataFiniteF32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataF32ValueFailure::Enum failure);
     template<usize ComponentCount>
-    static Expected<Array<f32, ComponentCount>> ParseMetadataF32TupleWithLabel(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const TStringView metaKind,
-    const AStringView label,
-    Core::Alloc::ScratchArena& scratchArena
-    );
+    static Expected<Array<f32, ComponentCount>> ParseMetadataF32TupleWithLabel(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena);
     template<usize ComponentCount>
     static Expected<Array<f32, ComponentCount>> ParseMetadataF32TupleListElement(
     const Path& nwbFilePath,
@@ -119,42 +100,13 @@ public:
     Core::Alloc::ScratchArena& scratchArena
     );
     template<typename ElementT, usize ComponentCount>
-    static Expected<ScratchVector<ElementT>> ParseMetadataFloatListField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    const AStringView fieldName,
-    Core::Alloc::ScratchArena& scratchArena
-    );
+    static Expected<ScratchVector<ElementT>> ParseMetadataFloatListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const AStringView fieldName, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value);
-    static void LogMetadataU32ValueFailure(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const AStringView label,
-    const MetadataU32ValueFailure::Enum failure
-    );
-    [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ParseMetadataU32Value(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const TStringView metaKind,
-    const AStringView label
-    );
+    static void LogMetadataU32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure);
+    [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ParseMetadataU32Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label);
     template<typename IndexVectorT>
-    static bool FillMetadataIndexRecursive(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const TStringView metaKind,
-    const AStringView label,
-    IndexVectorT& outIndices,
-    Core::Alloc::ScratchArena& scratchArena
-    );
-    static Expected<Core::Assets::AssetVector<u32>> ParseMetadataIndexField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-    );
+    static bool FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, IndexVectorT& outIndices, Core::Alloc::ScratchArena& scratchArena);
+    static Expected<Core::Assets::AssetVector<u32>> ParseMetadataIndexField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 public:
@@ -166,20 +118,9 @@ public:
 
 
 template<usize ComponentCount>
-Expected<Array<f32, ComponentCount>> MeshCookMetadata::ParseMetadataF32TupleWithLabel(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const TStringView metaKind,
-    const AStringView label,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<Array<f32, ComponentCount>> MeshCookMetadata::ParseMetadataF32TupleWithLabel(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena){
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-            , ComponentCount
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label), ComponentCount);
         return MakeUnexpected(Failure{});
     }
 
@@ -215,13 +156,7 @@ Expected<Array<f32, ComponentCount>> MeshCookMetadata::ParseMetadataF32TupleList
 
 
 template<typename ElementT, usize ComponentCount>
-Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    const AStringView fieldName,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const AStringView fieldName, Core::Alloc::ScratchArena& scratchArena){
     ScratchVector<ElementT> values(scratchArena);
 
     const Core::Metascript::Value* field = FindRequiredMetadataListField(nwbFilePath, asset, metaKind, fieldName);
@@ -247,11 +182,7 @@ Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
     }
 
     if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
 
@@ -260,14 +191,7 @@ Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
 
 
 template<typename IndexVectorT>
-bool MeshCookMetadata::FillMetadataIndexRecursive(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const TStringView metaKind,
-    const AStringView label,
-    IndexVectorT& outIndices,
-    Core::Alloc::ScratchArena& scratchArena
-){
+bool MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, IndexVectorT& outIndices, Core::Alloc::ScratchArena& scratchArena){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0u; i < list.size(); ++i){
@@ -288,13 +212,7 @@ bool MeshCookMetadata::FillMetadataIndexRecursive(
 }
 
 
-inline Expected<Core::Assets::AssetVector<u32>> MeshCookMetadata::ParseMetadataIndexField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+inline Expected<Core::Assets::AssetVector<u32>> MeshCookMetadata::ParseMetadataIndexField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Core::Assets::AssetVector<u32> indices(arena);
 
     const Core::Metascript::Value* field = FindRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_IndicesFieldNameView);
@@ -303,10 +221,7 @@ inline Expected<Core::Assets::AssetVector<u32>> MeshCookMetadata::ParseMetadataI
 
     const auto indexCount = CountFlattenedValueLeaves(*field);
     if(!indexCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' scalar count overflows")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' scalar count overflows"), metaKind, PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -316,11 +231,7 @@ inline Expected<Core::Assets::AssetVector<u32>> MeshCookMetadata::ParseMetadataI
     }
     NWB_ASSERT(indices.size() == *indexCount);
     if(indices.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': 'indices' must not be empty"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     return indices;

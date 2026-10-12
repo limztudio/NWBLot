@@ -136,8 +136,7 @@ def box(name, center_z, thickness, ior=1.5, transmission=TINTED, mode=LIT_NESTED
     cosine, sine = math.cos(yaw), math.sin(yaw)
     axes = ((cosine, 0.0, -sine), (0.0, 1.0, 0.0), (sine, 0.0, cosine))
     center = (0.0, 1.4, center_z)
-    planes = tuple((scale(axis, sign), extent + dot(scale(axis, sign), center))
-        for axis, extent in zip(axes, (12.0 * xy_scale, 9.0 * xy_scale, thickness * 0.5)) for sign in (-1.0, 1.0))
+    planes = tuple((scale(axis, sign), extent + dot(scale(axis, sign), center)) for axis, extent in zip(axes, (12.0 * xy_scale, 9.0 * xy_scale, thickness * 0.5)) for sign in (-1.0, 1.0))
     return Boundary(name, half(ior), tuple(map(half, transmission)), planes, mode=mode, priority=priority, tie_order=tie_order)
 
 
@@ -168,9 +167,7 @@ def boundaries(case):
         return (box("retained", -9.5, 1),)
     if case == LIT_OPTICAL_TIR:
         inverse_root_two = math.sqrt(0.5)
-        planes = (((1.0, 0.0, 0.0), 20.0), ((0.0, 0.0, 1.0), 2.0),
-            ((-inverse_root_two, 0.0, -inverse_root_two), 8 * inverse_root_two),
-            ((0.0, 1.0, 0.0), 11.4), ((0.0, -1.0, 0.0), 8.6))
+        planes = (((1.0, 0.0, 0.0), 20.0), ((0.0, 0.0, 1.0), 2.0), ((-inverse_root_two, 0.0, -inverse_root_two), 8 * inverse_root_two), ((0.0, 1.0, 0.0), 11.4), ((0.0, -1.0, 0.0), 8.6))
         return (Boundary("prism", half(1.5), CLEAR, planes),)
     if case.startswith("optical_inside"):
         outer = box("outer", -3, 14, 1.5, CLEAR)
@@ -188,20 +185,14 @@ def boundaries(case):
         return (Boundary("torus", half(1.5), TINTED, triangles=authored_torus_triangles()),)
     if case in ("optical_priority_tie_a", LIT_OPTICAL_PRIORITY_TIE_B):
         reverse = case == LIT_OPTICAL_PRIORITY_TIE_B
-        return (box(LIT_FIRST, -8.5, 2, mode=LIT_PRIORITY, priority=10, tie_order=int(reverse)),
-            box(LIT_SECOND, -9.5, 2, 1.33, WARM, LIT_PRIORITY, 10, tie_order=int(not reverse)))
+        return (box(LIT_FIRST, -8.5, 2, mode=LIT_PRIORITY, priority=10, tie_order=int(reverse)), box(LIT_SECOND, -9.5, 2, 1.33, WARM, LIT_PRIORITY, 10, tie_order=int(not reverse)))
     if case in (LIT_OPTICAL_PRIORITY_A, "optical_priority_b", LIT_OPTICAL_MIXED):
         first_wins = case == LIT_OPTICAL_PRIORITY_A
-        return (box(LIT_FIRST, -8.5, 2, mode=LIT_PRIORITY, priority=20 if first_wins else 10),
-            box(LIT_SECOND, -9.5, 2, 1.33, WARM, LIT_NESTED if case == LIT_OPTICAL_MIXED else LIT_PRIORITY, 10 if first_wins else 20))
+        return (box(LIT_FIRST, -8.5, 2, mode=LIT_PRIORITY, priority=20 if first_wins else 10), box(LIT_SECOND, -9.5, 2, 1.33, WARM, LIT_NESTED if case == LIT_OPTICAL_MIXED else LIT_PRIORITY, 10 if first_wins else 20))
     if case in ("optical_nested2", LIT_OPTICAL_NESTED3, LIT_OPTICAL_OVERFLOW):
         count = 5 if case == LIT_OPTICAL_OVERFLOW else 3 if case == LIT_OPTICAL_NESTED3 else 2
-        return tuple(box(str(index), -9, 4 - 0.6 * index if count == 5 else 3 / (1 << index),
-            1.5 if index == 0 else 1.33 if index == 1 else 1.1 + 0.02 * (index - 2), TINTED if index == 0 else WARM,
-            xy_scale=1.0 - 0.1 * index)
-            for index in range(count))
-    return (box(LIT_SINGLE, -9, 2, transmission=CLEAR if case == "optical_clear" else TINTED,
-        mode=LIT_UNSPECIFIED if case == "optical_unspecified" else LIT_NESTED, yaw=0.2 if case == "optical_tilted" else 0.0),)
+        return tuple(box(str(index), -9, 4 - 0.6 * index if count == 5 else 3 / (1 << index), 1.5 if index == 0 else 1.33 if index == 1 else 1.1 + 0.02 * (index - 2), TINTED if index == 0 else WARM, xy_scale=1.0 - 0.1 * index) for index in range(count))
+    return (box(LIT_SINGLE, -9, 2, transmission=CLEAR if case == "optical_clear" else TINTED, mode=LIT_UNSPECIFIED if case == "optical_unspecified" else LIT_NESTED, yaw=0.2 if case == "optical_tilted" else 0.0),)
 
 
 def effective_medium(active):
@@ -258,12 +249,9 @@ def trace_transmission(case, origin, direction, max_queries=16):
         intersections = dense_receiver_intersections(origin, direction)
         if not intersections:
             return (0., 0., 0.), {"queries": 1, "reason": "environment", "crossings": 0, "tir_events": 0}
-        return DENSE_RADIANCE, {"queries": 2 if case == "optical_csg_dense" else 1, "reason": "opaque_dense",
-            "crossings": len(intersections), "tir_events": 0, "nearest_distance": intersections[0]}
+        return DENSE_RADIANCE, {"queries": 2 if case == "optical_csg_dense" else 1, "reason": "opaque_dense", "crossings": len(intersections), "tir_events": 0, "nearest_distance": intersections[0]}
 
-    if case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp",
-        "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
-        "optical_group_entry", "optical_csg_group_entry"):
+    if case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
         # Unresolved thin spans or gaps retain conservative rejection even when grouped endpoints leave the same nonzero membership.
         return (0.0, 0.0, 0.0), {"queries": 0, "reason": LIT_AMBIGUOUS, "crossings": 0, "tir_events": 0}
     objects = boundaries(case)

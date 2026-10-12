@@ -40,16 +40,8 @@ struct SoftShadowCombinedWaveletInputs{
     [[nodiscard]] bool valid()const noexcept;
 };
 
-[[nodiscard]] inline bool CanCombineSoftShadowWavelets(
-    const bool combinedUpsample,
-    const bool pipelineReady,
-    const bool opaqueTemporalReady,
-    const bool transparentTemporalReady,
-    const u32 opaquePassCount,
-    const u32 transparentPassCount
-)noexcept{
-    return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady
-        && opaquePassCount == 1u && transparentPassCount == 1u;
+[[nodiscard]] inline bool CanCombineSoftShadowWavelets(const bool combinedUpsample, const bool pipelineReady, const bool opaqueTemporalReady, const bool transparentTemporalReady, const u32 opaquePassCount, const u32 transparentPassCount)noexcept{
+    return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
 }
 
 

@@ -40,5 +40,4 @@ def file_identity(path):
 
 def authored_volume_hashes(directory):
     mutable = set(runtime_pipeline_cache_paths(directory))
-    return {path.relative_to(directory).as_posix(): file_identity(path)[LIT_SHA256]
-        for path in sorted((directory / LIT_RES).rglob("*.vol")) if path.is_file() and path not in mutable}
+    return {path.relative_to(directory).as_posix(): file_identity(path)[LIT_SHA256] for path in sorted((directory / LIT_RES).rglob("*.vol")) if path.is_file() and path not in mutable}

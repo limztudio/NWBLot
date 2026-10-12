@@ -27,10 +27,7 @@ namespace TextureDimension{
 };
 
 [[nodiscard]] constexpr bool IsValidTextureDimension(const TextureDimension::Enum dimension)noexcept{
-    return dimension == TextureDimension::Texture2D
-        || dimension == TextureDimension::TextureCube
-        || dimension == TextureDimension::Texture3D
-    ;
+    return dimension == TextureDimension::Texture2D || dimension == TextureDimension::TextureCube || dimension == TextureDimension::Texture3D;
 }
 
 
@@ -47,9 +44,7 @@ namespace TexturePayloadFormat{
 };
 
 [[nodiscard]] constexpr bool IsValidTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
-    return format == TexturePayloadFormat::UastcLdr4x4
-        || format == TexturePayloadFormat::UastcHdr4x4
-    ;
+    return format == TexturePayloadFormat::UastcLdr4x4 || format == TexturePayloadFormat::UastcHdr4x4;
 }
 
 [[nodiscard]] constexpr bool IsHdrTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
@@ -75,11 +70,7 @@ namespace TextureAlphaMode{
 };
 
 [[nodiscard]] constexpr bool IsValidTextureAlphaMode(const TextureAlphaMode::Enum mode)noexcept{
-    return mode == TextureAlphaMode::Opaque
-        || mode == TextureAlphaMode::EmbeddedLdr
-        || mode == TextureAlphaMode::ConstantUnorm8
-        || mode == TextureAlphaMode::SeparateUastcLdr4x4
-    ;
+    return mode == TextureAlphaMode::Opaque || mode == TextureAlphaMode::EmbeddedLdr || mode == TextureAlphaMode::ConstantUnorm8 || mode == TextureAlphaMode::SeparateUastcLdr4x4;
 }
 
 
@@ -127,12 +118,7 @@ struct TextureMipPlaneBlockLayout{
     u64 planeByteCount;
 };
 
-[[nodiscard]] inline Expected<u32> ComputeCompleteMipCount(
-    const TextureDimension::Enum dimension,
-    const u32 width,
-    const u32 height,
-    const u32 depth
-)noexcept{
+[[nodiscard]] inline Expected<u32> ComputeCompleteMipCount(const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth)noexcept{
     if(!IsValidTextureDimension(dimension) || width == 0u || height == 0u || depth == 0u)
         return MakeUnexpected(Failure{});
 
@@ -181,11 +167,7 @@ struct TextureMipPlaneBlockLayout{
     }
 }
 
-[[nodiscard]] inline Expected<TextureMipPlaneBlockLayout> ComputeMipPlaneBlockLayout(
-    const TexturePayloadFormat::Enum format,
-    const u32 width,
-    const u32 height
-)noexcept{
+[[nodiscard]] inline Expected<TextureMipPlaneBlockLayout> ComputeMipPlaneBlockLayout(const TexturePayloadFormat::Enum format, const u32 width, const u32 height)noexcept{
     if(width == 0u || height == 0u)
         return MakeUnexpected(Failure{});
     const auto layout = GetTexturePayloadBlockLayout(format);
@@ -201,11 +183,7 @@ struct TextureMipPlaneBlockLayout{
     if(blockCount > Limit<u64>::s_Max / layout->bytesPerBlock)
         return MakeUnexpected(Failure{});
 
-    return TextureMipPlaneBlockLayout{
-        .blocksX = static_cast<u32>(blocksX64),
-        .blocksY = static_cast<u32>(blocksY64),
-        .planeByteCount = blockCount * layout->bytesPerBlock,
-    };
+    return TextureMipPlaneBlockLayout{ .blocksX = static_cast<u32>(blocksX64), .blocksY = static_cast<u32>(blocksY64), .planeByteCount = blockCount * layout->bytesPerBlock, };
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -204,31 +204,15 @@ public:
 
 private:
     [[nodiscard]] TaskHandle reserveTaskLocked();
-    TaskHandle submitTask(
-        TaskFunction&& function,
-        CpuTaskScope* scope,
-        CpuTaskOptions options,
-        const TaskHandle* dependencies,
-        usize dependencyCount
-    );
+    TaskHandle submitTask(TaskFunction&& function, CpuTaskScope* scope, CpuTaskOptions options, const TaskHandle* dependencies, usize dependencyCount);
     void parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, const void* context, RangeFunction invoke);
     void releaseReservation(TaskHandle handle)noexcept;
     [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)noexcept;
     [[nodiscard]] const TaskNode* resolveLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] bool wasCanceledLocked(TaskHandle handle)const noexcept;
     void enqueueLocked(u32 index)noexcept;
-    [[nodiscard]] TaskHandle claimLocked(
-        CpuAffinity::Enum affinity,
-        bool mainThread,
-        bool cooperative,
-        ScopeWait* preferredScope = nullptr
-    )noexcept;
-    [[nodiscard]] bool hasReadyLocked(
-        CpuAffinity::Enum affinity,
-        bool mainThread,
-        bool cooperative,
-        ScopeWait* preferredScope = nullptr
-    )noexcept;
+    [[nodiscard]] TaskHandle claimLocked(CpuAffinity::Enum affinity, bool mainThread, bool cooperative, ScopeWait* preferredScope = nullptr)noexcept;
+    [[nodiscard]] bool hasReadyLocked(CpuAffinity::Enum affinity, bool mainThread, bool cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] u32 findScopeReadyLocked(usize queue, ScopeWait& wait, u32& previous)noexcept;
     void invalidateScopeSearchLocked(bool publication)noexcept;
     [[nodiscard]] bool contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
@@ -247,13 +231,7 @@ private:
     void notifyProgress(u32 wakeMask, bool wakeJoiners)noexcept;
     void notifyProgress()noexcept;
     void profileReadyLocked(u32 index)noexcept;
-    [[nodiscard]] ProfileSample prepareProfileLocked(
-        CpuTaskProfileKind::Enum kind,
-        TaskHandle task,
-        CpuTaskProfileLabel label,
-        usize workerIndex,
-        CpuAffinity::Enum affinity
-    )const noexcept;
+    [[nodiscard]] ProfileSample prepareProfileLocked(CpuTaskProfileKind::Enum kind, TaskHandle task, CpuTaskProfileLabel label, usize workerIndex, CpuAffinity::Enum affinity)const noexcept;
     void finishProfileLocked(const ProfileSample& sample, Timer end)noexcept;
     // Callers provide roots and visit filters after starting the locked search.
     void beginLockedSearch()noexcept{

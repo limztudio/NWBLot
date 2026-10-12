@@ -98,12 +98,9 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure([this](const Core::Assets::AssetRef<UiSkin>& ref){
         if(ref == m_skinSelection.selected() && m_skinAsset){
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-            return skin && ValidateUiSkinToolkitContract(*skin)
-                && m_renderer.setSkin(ref, *skin, m_skinSelection.generation());
+            return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(ref, *skin, m_skinSelection.generation());
         }
-        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(
-            ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin"
-        );
+        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin");
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
             return false;
@@ -113,9 +110,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default")
-            , StringConvert(m_skinSelection.requested().name().resolvedText())
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), StringConvert(m_skinSelection.requested().name().resolvedText()));
     }
 
     f32 scaleX = 1.0f;
@@ -166,10 +161,7 @@ void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     m_context.abandonFrame();
     m_editHost.reset();
     m_ui.reset();
-    const SIMDVectorSingle logicalSize = VectorDivide(
-        VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height)),
-        VectorSet(scaleX, scaleY, scaleX, scaleY)
-    );
+    const SIMDVectorSingle logicalSize = VectorDivide(VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height)), VectorSet(scaleX, scaleY, scaleX, scaleY));
     m_display = { VectorGetX(logicalSize), VectorGetY(logicalSize), scaleX, scaleY };
 }
 

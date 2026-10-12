@@ -51,26 +51,15 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        shader,
-        AssetsGraphicsCaustic::s_SwPhotonShaderName,
-        csg ? "NWB_RT_CSG_ENABLED=1" : "NWB_RT_CSG_ENABLED=0",
-        "ECSRender_SwCausticPhotons"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsCaustic::s_SwPhotonShaderName, csg ? "NWB_RT_CSG_ENABLED=1" : "NWB_RT_CSG_ENABLED=0", "ECSRender_SwCausticPhotons")){
         failed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(shader)
-        .addBindingLayout(m_rayTracingState.m_swCausticBindingLayout)
-    ;
+    pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_swCausticBindingLayout);
     // Global heap layouts occupy their fixed sets.
-    pipelineDesc
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     pipeline = device.createComputePipeline(pipelineDesc);
     if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic compute pipeline"));
@@ -82,11 +71,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
 
 bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
-    if(
-        resolve.m_prepare.m_pipeline && resolve.m_wavelet.m_pipeline
-        && resolve.m_waveletStepOne.m_pipeline && resolve.m_waveletStepTwo.m_pipeline
-        && resolve.m_waveletDirect.m_pipeline && resolve.m_upsample.m_pipeline
-    )
+    if(resolve.m_prepare.m_pipeline && resolve.m_wavelet.m_pipeline && resolve.m_waveletStepOne.m_pipeline && resolve.m_waveletStepTwo.m_pipeline && resolve.m_waveletDirect.m_pipeline && resolve.m_upsample.m_pipeline)
         return true;
     if(resolve.m_failed)
         return false;
@@ -133,23 +118,13 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     for(const StageRequest& stage : stages){
         if(stage.m_state.m_pipeline)
             continue;
-        if(!m_shaderSystem.loadShader<ComputeShader>(
-            stage.m_state.m_shader,
-            AssetsGraphicsCaustic::s_ResolveShaderName,
-            stage.m_variant,
-            "ECSRender_CausticResolve"
-        )){
+        if(!m_shaderSystem.loadShader<ComputeShader>(stage.m_state.m_shader, AssetsGraphicsCaustic::s_ResolveShaderName, stage.m_variant, "ECSRender_CausticResolve")){
             resolve.m_failed = true;
             return false;
         }
 
         Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc
-            .setComputeShader(stage.m_state.m_shader)
-            .addBindingLayout(resolve.m_bindingLayout)
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
+        pipelineDesc.setComputeShader(stage.m_state.m_shader).addBindingLayout(resolve.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         stage.m_state.m_pipeline = device.createComputePipeline(pipelineDesc);
         if(!stage.m_state.m_pipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized caustic resolve pipeline"));
@@ -187,25 +162,14 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_causticGeometryDownsampleShader,
-        AssetsGraphicsCaustic::s_GeometryDownsampleShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_CausticGeometryDownsample"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_causticGeometryDownsampleShader, AssetsGraphicsCaustic::s_GeometryDownsampleShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticGeometryDownsample")){
         m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_causticGeometryDownsampleShader)
-        .addBindingLayout(m_rayTracingState.m_causticGeometryDownsampleBindingLayout)
-    ;
-    pipelineDesc
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_causticGeometryDownsampleShader).addBindingLayout(m_rayTracingState.m_causticGeometryDownsampleBindingLayout);
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_rayTracingState.m_causticGeometryDownsamplePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_causticGeometryDownsamplePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample compute pipeline"));
@@ -223,10 +187,7 @@ u32 RendererRayTracingSystem::causticTemporalPhaseCount(){
     // Reuse phases only after temporal history warms up.
     if(causticTemporalDecay() <= 0.f)
         return NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT;
-    return m_rayTracingState.m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount
-        ? s_CausticTemporalBootstrapPhaseCount
-        : s_CausticTemporalConvergedPhaseCount
-    ;
+    return m_rayTracingState.m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount ? s_CausticTemporalBootstrapPhaseCount : s_CausticTemporalConvergedPhaseCount;
 }
 
 void RendererRayTracingSystem::advanceCausticTemporalReuse(){
@@ -266,25 +227,14 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_causticAccumulatorDecayShader,
-        AssetsGraphicsCaustic::s_AccumulatorDecayShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_CausticAccumulatorDecay"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_causticAccumulatorDecayShader, AssetsGraphicsCaustic::s_AccumulatorDecayShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticAccumulatorDecay")){
         m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_causticAccumulatorDecayShader)
-        .addBindingLayout(m_rayTracingState.m_causticAccumulatorDecayBindingLayout)
-    ;
-    pipelineDesc
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_causticAccumulatorDecayShader).addBindingLayout(m_rayTracingState.m_causticAccumulatorDecayBindingLayout);
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_rayTracingState.m_causticAccumulatorDecayPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_causticAccumulatorDecayPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay compute pipeline"));
@@ -426,23 +376,13 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
     // Prepare hardware resources once geometry and emission targets exist.
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return true;
-    if(
-        m_rayTracingState.m_causticRefractiveInstanceCount == 0u
-        || !m_rayTracingState.m_tlas
-        || m_rayTracingState.m_shadowMeshCount == 0u
-        || !m_rayTracingState.m_causticEmissionTargetBuffer
-    )
+    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || !m_rayTracingState.m_tlas || m_rayTracingState.m_shadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargetBuffer)
         return true;
     const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return prepareCausticResources(meshView, targets, true);
 }
 
-bool RendererRayTracingSystem::renderHwCaustics(
-    Core::CommandList& commandList,
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
-    DeferredFrameTargets& targets,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
-){
+bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork(meshView))
         return false;
@@ -459,27 +399,14 @@ bool RendererRayTracingSystem::renderHwCaustics(
     const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
     const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
-    if(
-        !pipeline
-        || !shaderTable
-        || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-        || !causticResolveResourcesReady(targets, temporalDecay)
-    )
+    if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets, temporalDecay))
         return false;
     const u32 temporalPhaseCount = causticTemporalPhaseCount();
     const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
     const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
-        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(
-            targets,
-            meshView,
-            m_rayTracingState,
-            photonBudget,
-            m_rayTracingState.m_tlasInstanceCount,
-            static_cast<u32>(m_graphics.getFrameIndex()),
-            temporalPhaseCount
-        );
+        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(targets, meshView, m_rayTracingState, photonBudget, m_rayTracingState.m_tlasInstanceCount, static_cast<u32>(m_graphics.getFrameIndex()), temporalPhaseCount);
 
         Core::RayTracingState rayTracingPassState;
         rayTracingPassState.setShaderTable(shaderTable.get());
@@ -500,12 +427,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         causticPhotonTiming->reset();
     }
     else{
-        Core::GpuTimingMeasure timing(
-            m_graphics.gpuTiming(),
-            RendererGpuTimingScope::s_CausticPhotons,
-            m_graphics.getDevice(),
-            commandList
-        );
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
         recordPhotons();
     }
 
@@ -552,11 +474,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         return true;
     }
 
-    const usize capacity = ::NextGrowingCapacity(
-        m_rayTracingState.m_causticEmissionTargetCapacity,
-        targetCount,
-        s_CausticEmissionTargetInitialCapacity
-    );
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_causticEmissionTargetCapacity, targetCount, s_CausticEmissionTargetInitialCapacity);
 
     Core::BufferDesc targetBufferDesc;
     targetBufferDesc
@@ -564,9 +482,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         .setStructStride(sizeof(NwbCausticEmissionTargetGpu))
         .setDebugName(Name("caustic_emission_targets"))
         // The upload and asynchronous photon reads share this immutable per-frame input.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common);
     Core::BufferHandle targetBuffer = m_graphics.createBuffer(targetBufferDesc);
     if(!targetBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic emission-target buffer"));
@@ -582,9 +498,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
     m_rayTracingState.m_causticEmissionTargetBuffer = Move(targetBuffer);
     m_rayTracingState.m_causticEmissionTargetHeapHandle = *targetHeapHandle;
     m_rayTracingState.m_causticEmissionTargetCapacity = capacity;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)")
-        , static_cast<u64>(capacity)
-    );
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)"), static_cast<u64>(capacity));
     return true;
 }
 

@@ -56,9 +56,7 @@ static constexpr AStringView s_SamplerTestMetadata =
 
 TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor){
     CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-        logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-    );
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     TestArena testArena;
     NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/binary_admission"));
@@ -78,12 +76,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     }){
         binary = validBinary;
         const u32 reductionValue = static_cast<u32>(reduction);
-        NWB_MEMCPY(
-            binary.data() + offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType),
-            sizeof(reductionValue),
-            &reductionValue,
-            sizeof(reductionValue)
-        );
+        NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
         EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
 
         description.reductionType = reduction;
@@ -122,17 +115,11 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
 
 
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
-    static constexpr AStringView s_UnsupportedAssignments[] = {
-        "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n",
-        "asset.reduction = \"minimum\";\n",
-        "asset.reduction = \"maximum\";\n",
-    };
+    static constexpr AStringView s_UnsupportedAssignments[] = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n", };
 
     for(const AStringView assignment : s_UnsupportedAssignments){
         CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
-            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
-        );
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
         TestArena testArena;
         AString metadata(s_SamplerTestMetadata);
         const AStringView reductionAssignment = "asset.reduction = \"standard\";\n";
@@ -151,10 +138,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
         NWB::Impl::SamplerCookEntry entry(testArena.arena);
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
         EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, *entry.arena, scratchArena)) << assignment;
-        const TStringView expectedDiagnostic = assignment.starts_with("asset.reduction")
-            ? NWB_TEXT("unsupported reduction type")
-            : NWB_TEXT("unsupported asset field 'border_color'")
-        ;
+        const TStringView expectedDiagnostic = assignment.starts_with("asset.reduction") ? NWB_TEXT("unsupported reduction type") : NWB_TEXT("unsupported asset field 'border_color'");
         EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
     }
 }

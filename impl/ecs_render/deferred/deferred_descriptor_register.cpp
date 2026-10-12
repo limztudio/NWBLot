@@ -44,24 +44,13 @@ namespace DeferredDescriptorRegisterDetail{
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterStorageTexture(
-    Core::GpuDescriptorHeap& heap,
-    Core::Texture* texture,
-    Core::Format::Enum format,
-    Core::TextureDimension::Enum dimension
-){
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterStorageTexture(Core::GpuDescriptorHeap& heap, Core::Texture* texture, Core::Format::Enum format, Core::TextureDimension::Enum dimension){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
     ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
 
-    if(heap.write(handle, Core::DescriptorWriteItem::TextureUav(
-        0u,
-        texture,
-        format,
-        Core::s_AllSubresources,
-        dimension
-    ))){
+    if(heap.write(handle, Core::DescriptorWriteItem::TextureUav(0u, texture, format, Core::s_AllSubresources, dimension))){
         retireUnpublished.release();
         return handle;
     }

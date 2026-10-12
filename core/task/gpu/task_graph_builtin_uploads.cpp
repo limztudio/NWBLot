@@ -36,38 +36,17 @@ struct UploadBufferPayload{
 };
 
 struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadBufferPayload>{
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
-        if(
-            !payload.destination
-            || !bytes
-            || bytes->empty()
-            || payload.finalState == ResourceStates::Unknown
-        )
+        if(!payload.destination || !bytes || bytes->empty() || payload.finalState == ResourceStates::Unknown)
             return false;
 
-        if(
-            context.commandIrCapture
-            && !context.commandIrCapture->captureUploadBuffer(
-                context.task,
-                context.packet,
-                context.queue,
-                payload.source,
-                payload.destinationResource,
-                payload.destinationOffsetBytes,
-                *bytes,
-                payload.finalState
-            )
-        )
+        if(context.commandIrCapture && !context.commandIrCapture->captureUploadBuffer(context.task, context.packet, context.queue, payload.source, payload.destinationResource, payload.destinationOffsetBytes, *bytes, payload.finalState))
             return false;
 
         commandList.endRenderPass();
-        // The compiler tracks `finalState` for later tasks, but the native write itself requires CopyDest. Make the
-        // internal transition explicit and commit it before vkCmdCopyBuffer; writeBuffer only queues its own state.
+        // The compiler tracks `finalState` for later tasks, but the native write itself requires CopyDest.
+        // Make the internal transition explicit and commit it before vkCmdCopyBuffer; writeBuffer only queues its own state.
         const BufferRange uploadRange(payload.destinationOffsetBytes, bytes->size());
         commandList.setBufferState(payload.destination.get(), ResourceStates::CopyDest, false, uploadRange);
         commandList.commitBarriers();
@@ -97,19 +76,9 @@ struct UploadTexturePayload{
 };
 
 struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
-        if(
-            !payload.destination
-            || !bytes
-            || payload.requiredBytes == 0u
-            || bytes->size() < payload.requiredBytes
-            || payload.finalState == ResourceStates::Unknown
-        )
+        if(!payload.destination || !bytes || payload.requiredBytes == 0u || bytes->size() < payload.requiredBytes || payload.finalState == ResourceStates::Unknown)
             return false;
 
         if(
@@ -135,22 +104,10 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
         // See UploadBufferTask: native writes need CopyDest even though graph analysis publishes finalState.
         commandList.setTextureState(payload.destination.get(), subresources, ResourceStates::CopyDest);
         commandList.commitBarriers();
-        if(!commandList.tryWriteTexture(
-            *payload.destination,
-            payload.arraySlice,
-            payload.mipLevel,
-            bytes->data(),
-            payload.rowPitch,
-            payload.depthPitch,
-            payload.aspect
-        ))
+        if(!commandList.tryWriteTexture(*payload.destination, payload.arraySlice, payload.mipLevel, bytes->data(), payload.rowPitch, payload.depthPitch, payload.aspect))
             return false;
         if(payload.finalState != ResourceStates::CopyDest){
-            commandList.setTextureState(
-                payload.destination.get(),
-                subresources,
-                payload.finalState
-            );
+            commandList.setTextureState(payload.destination.get(), subresources, payload.finalState);
             commandList.commitBarriers();
         }
         return true;
@@ -168,22 +125,12 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuUploadBlobId GpuTaskGraph::copyUploadData(
-    const void* const data,
-    const usize byteSize,
-    const usize alignment
-){
+GpuUploadBlobId GpuTaskGraph::copyUploadData(const void* const data, const usize byteSize, const usize alignment){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
 
-    if(
-        !data
-        || byteSize == 0u
-        || alignment == 0u
-        || (alignment & (alignment - 1u)) != 0u
-        || m_uploadBlobs.size() >= Limit<u32>::s_Max
-    )
+    if(!data || byteSize == 0u || alignment == 0u || (alignment & (alignment - 1u)) != 0u || m_uploadBlobs.size() >= Limit<u32>::s_Max)
         return {};
 
     GpuUploadBlobNode blob(m_arena);
@@ -199,10 +146,7 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
     return GpuUploadBlobId{ .generation = m_generation, .index = index };
 }
 
-GpuTaskId GpuTaskGraph::addUploadBufferTask(
-    const GpuTaskDesc& desc,
-    const GpuUploadBufferTaskDesc& uploadDesc
-){
+GpuTaskId GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc){
     if(uploadDesc.acceptedToken)
         *uploadDesc.acceptedToken = {};
 
@@ -210,39 +154,24 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     if(!mutation.valid())
         return {};
 
-    if(
-        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
-        || !validUploadBlob(uploadDesc.source)
-        || !validResource(uploadDesc.destination)
-        || uploadDesc.finalState == ResourceStates::Unknown
-    )
+    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validUploadBlob(uploadDesc.source) || !validResource(uploadDesc.destination) || uploadDesc.finalState == ResourceStates::Unknown)
         return {};
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    if(
-        !source
-        || source->bytes.empty()
-        || destinationResource.type != GpuGraphResourceType::Buffer
-        || !destinationResource.buffer
-    )
+    if(!source || source->bytes.empty() || destinationResource.type != GpuGraphResourceType::Buffer || !destinationResource.buffer)
         return {};
 
     const BufferDesc& destinationDesc = destinationResource.buffer->getCreationDescription();
     if(
         uploadDesc.destinationOffsetBytes > destinationDesc.byteSize
         || source->bytes.size() > destinationDesc.byteSize - uploadDesc.destinationOffsetBytes
-        // Keep declaration acceptance aligned with CommandList::tryWriteBuffer so a built-in upload cannot fail
-        // only during late packet recording.
+        // Keep declaration acceptance aligned with CommandList::tryWriteBuffer so a built-in upload cannot fail only during late packet recording.
         || (uploadDesc.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (source->bytes.size() & (sizeof(u32) - 1u)) != 0u
-        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-            destinationDesc,
-            destinationResource.initialState,
-            destinationResource.externalFinalState
-        )
-        // Upload bodies perform their own CopyDest -> final-state transition. A retained descriptor restores its
-        // descriptor state at packet close, so the primitive's graph-visible final state must match that restore.
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState)
+        // Upload bodies perform their own CopyDest -> final-state transition.
+        // A retained descriptor restores its descriptor state at packet close, so the primitive's graph-visible final state must match that restore.
         || (destinationDesc.keepInitialState && uploadDesc.finalState != destinationDesc.initialState)
     )
         return {};
@@ -279,10 +208,7 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation);
 }
 
-GpuTaskId GpuTaskGraph::addUploadTextureTask(
-    const GpuTaskDesc& desc,
-    const GpuUploadTextureTaskDesc& uploadDesc
-){
+GpuTaskId GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc){
     if(uploadDesc.acceptedToken)
         *uploadDesc.acceptedToken = {};
 
@@ -290,22 +216,12 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     if(!mutation.valid())
         return {};
 
-    if(
-        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
-        || !validUploadBlob(uploadDesc.source)
-        || !validResource(uploadDesc.destination)
-        || uploadDesc.finalState == ResourceStates::Unknown
-    )
+    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validUploadBlob(uploadDesc.source) || !validResource(uploadDesc.destination) || uploadDesc.finalState == ResourceStates::Unknown)
         return {};
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    if(
-        !source
-        || source->bytes.empty()
-        || destinationResource.type != GpuGraphResourceType::Texture
-        || !destinationResource.texture
-    )
+    if(!source || source->bytes.empty() || destinationResource.type != GpuGraphResourceType::Texture || !destinationResource.texture)
         return {};
 
     Expected<usize> requiredBytes = MakeUnexpected(Failure{});
@@ -315,21 +231,9 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     if(!resolvedAspect)
         return {};
     if(
-        !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(
-            destinationDesc,
-            destinationResource.initialState,
-            destinationResource.externalFinalState,
-            uploadDesc.finalState
-        )
+        !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState, uploadDesc.finalState)
         ||
-        !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(
-            destinationDesc,
-            uploadDesc.arraySlice,
-            uploadDesc.mipLevel,
-            uploadDesc.rowPitch,
-            uploadDesc.depthPitch,
-            uploadDesc.aspect
-        ))
+        !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(destinationDesc, uploadDesc.arraySlice, uploadDesc.mipLevel, uploadDesc.rowPitch, uploadDesc.depthPitch, uploadDesc.aspect))
         || source->bytes.size() < *requiredBytes
     )
         return {};
@@ -355,22 +259,10 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     payload->acceptedToken = uploadDesc.acceptedToken;
     payload->aspect = uploadDesc.aspect;
 
-    const GpuTaskResourceRange uploadRange{
-        .textureSubresources = TextureSubresourceSet(uploadDesc.mipLevel, 1u, uploadDesc.arraySlice, 1u),
-    };
+    const GpuTaskResourceRange uploadRange{ .textureSubresources = TextureSubresourceSet(uploadDesc.mipLevel, 1u, uploadDesc.arraySlice, 1u), };
     const GpuTaskResourceUse resourceUses[] = {
-        GpuTaskResourceUse{
-            .resource = uploadDesc.destination,
-            .range = uploadRange,
-            .requiredState = ResourceStates::CopyDest,
-            .access = GpuTaskResourceAccess::Write,
-        },
-        GpuTaskResourceUse{
-            .resource = uploadDesc.destination,
-            .range = uploadRange,
-            .requiredState = uploadDesc.finalState,
-            .access = GpuTaskResourceAccess::Write,
-        },
+        GpuTaskResourceUse{ .resource = uploadDesc.destination, .range = uploadRange, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, },
+        GpuTaskResourceUse{ .resource = uploadDesc.destination, .range = uploadRange, .requiredState = uploadDesc.finalState, .access = GpuTaskResourceAccess::Write, },
     };
     const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;

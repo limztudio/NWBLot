@@ -82,10 +82,7 @@ protected:
             for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-                if(
-                    first.texCoord.x < leftU || opposite.texCoord.x > rightU
-                    || first.texCoord.y < topV || opposite.texCoord.y > bottomV
-                )
+                if(first.texCoord.x < leftU || opposite.texCoord.x > rightU || first.texCoord.y < topV || opposite.texCoord.y > bottomV)
                     continue;
                 if(candidate.quads == 0u){
                     candidate.bounds.x = first.position.x;

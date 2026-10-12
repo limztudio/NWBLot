@@ -26,12 +26,10 @@ namespace __hidden_builder_slider{
 
 
 [[nodiscard]] static Expected<Point> MinimumSize(const UiSkinRegion& region, const f32 density)noexcept{
-    if(
-        !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f
-        || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f
-    )
+    if(!IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble horizontalVerticalValue = (SIMDVectorDouble{ static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) } / VectorDoubleReplicate(density));
+    const SIMDVectorDouble horizontalVerticalValue =
+        (SIMDVectorDouble{ static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) } / VectorDoubleReplicate(density));
     const f64 horizontal = horizontalVerticalValue.x;
     const f64 vertical = horizontalVerticalValue.y;
     const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
@@ -55,10 +53,7 @@ namespace __hidden_builder_slider{
 
 
 bool Builder::slider(const AStringView stableKey, SliderState& state, const SliderOptions& options){
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed()
-        || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes
-    ){
+    if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return false;
     }
@@ -119,16 +114,14 @@ bool Builder::prepareSlider(SliderFrame& frame){
     if(!trackMinimum)
         return false;
     frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum->y);
-    const UiSkinRegion* thumbs[]{ normal, m_skin->findRegion(frame.m_style.hover),
-        m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
+    const UiSkinRegion* thumbs[]{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
             continue;
         const auto minimum = __hidden_builder_slider::MinimumSize(*thumb, m_skin->referenceDensity());
         if(!minimum)
             return false;
-        const SIMDVectorSingle currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y,
-            frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
+        const SIMDVectorSingle currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y, frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
         const SIMDVectorSingle minimumSize = VectorSet(minimum->x, minimum->y, minimum->x, minimum->y);
         const SIMDVectorSingle maximumSize = VectorSelect(minimumSize, currentSize, VectorGreater(currentSize, minimumSize));
         frame.m_style.thumbExtent = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
@@ -137,8 +130,7 @@ bool Builder::prepareSlider(SliderFrame& frame){
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + frame.m_metrics.padding.right
-        + frame.m_metrics.thumbExtent.x + trackMinimum->x;
+    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + frame.m_metrics.padding.right + frame.m_metrics.thumbExtent.x + trackMinimum->x;
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;
     frame.m_metrics.contentSize.x = Max(frame.m_metrics.contentSize.x, static_cast<f32>(width));

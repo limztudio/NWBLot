@@ -30,14 +30,7 @@ class GpuTimingParseTests(unittest.TestCase):
     def test_unsupported_name_symbol_document_cannot_import_rows_then_current_input_recovers(self):
         row = "sidecar_hash\t0\tsidecar.scope\n"
         current = NAME_SYMBOLS_HEADER + "\tproducer\truntime\n" + row
-        unsupported = (
-            "", row, "\n" + current,
-            "nwb_namesym_v0\n" + row,
-            "nwb_namesym_v2\n" + row,
-            "nwb_namesym_v10\n" + row,
-            NAME_SYMBOLS_HEADER + "_suffix\n" + row,
-            "unknown\n" + current,
-        )
+        unsupported = ("", row, "\n" + current, "nwb_namesym_v0\n" + row, "nwb_namesym_v2\n" + row, "nwb_namesym_v10\n" + row, NAME_SYMBOLS_HEADER + "_suffix\n" + row, "unknown\n" + current,)
         for text in unsupported:
             with self.subTest(document=text):
                 self.path.write_text(text, encoding="utf-8")
@@ -51,24 +44,16 @@ class GpuTimingParseTests(unittest.TestCase):
 
     def test_retired_or_partial_rows_fail_alone_and_among_current_intervals_then_recover(self):
         partial = CURRENT_ROW.split(" total_ms=")[0] + "\n"
-        retired_labels = tuple(CURRENT_ROW.replace(current, old) for current, old in (
-            ("window_avg_ms=", "avg="), ("window_min_ms=", "min="),
-            ("window_max_ms=", "max="), ("published_windows=", "samples="),
-        ))
-        for row in (RETIRED_ROW, partial, *retired_labels,
-            CURRENT_ROW.replace(" gpu_samples=40", ""), CURRENT_ROW.replace(" sample_avg_ms=2", "")):
+        retired_labels = tuple(CURRENT_ROW.replace(current, old) for current, old in (("window_avg_ms=", "avg="), ("window_min_ms=", "min="), ("window_max_ms=", "max="), ("published_windows=", "samples="),))
+        for row in (RETIRED_ROW, partial, *retired_labels, CURRENT_ROW.replace(" gpu_samples=40", ""), CURRENT_ROW.replace(" sample_avg_ms=2", "")):
             for text in (INTERVAL + row, INTERVAL + CURRENT_ROW + INTERVAL + row):
                 with self.subTest(text=text), self.assertRaises(SmokeFailure):
                     self.parse(text)
                 self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{"render.frame": 4.0}])
 
     def test_invalid_values_and_duplicate_scope_evidence_fail_then_recover(self):
-        rows = [CURRENT_ROW.replace(old, new) for old, new in (
-            ("window_avg_ms=4", "window_avg_ms=1e999"), ("window_avg_ms=4", "window_avg_ms=..."), ("window_avg_ms=4", "window_avg_ms=1e"),
-            ("total_ms=80", "total_ms=-1"),
-            ("sample_avg_ms=2", "sample_avg_ms=nan"), ("gpu_samples=40", "gpu_samples=0"),
-            ("published_windows=20", "published_windows=0"), ("window_min_ms=3", "window_min_ms=6"), ("window_max_ms=5", "window_max_ms=2"),
-        )]
+        rows = [CURRENT_ROW.replace(old, new) for old, new in (("window_avg_ms=4", "window_avg_ms=1e999"), ("window_avg_ms=4", "window_avg_ms=..."), ("window_avg_ms=4", "window_avg_ms=1e"), ("total_ms=80", "total_ms=-1"),
+            ("sample_avg_ms=2", "sample_avg_ms=nan"), ("gpu_samples=40", "gpu_samples=0"), ("published_windows=20", "published_windows=0"), ("window_min_ms=3", "window_min_ms=6"), ("window_max_ms=5", "window_max_ms=2"),)]
         rows.append(CURRENT_ROW + CURRENT_ROW)
         for row in rows:
             with self.subTest(row=row), self.assertRaises(SmokeFailure):
@@ -85,9 +70,7 @@ class GpuTimingParseTests(unittest.TestCase):
             self.parse(CURRENT_ROW)
 
     def test_malformed_intervals_and_native_counter_overflows_fail_then_recover(self):
-        for header in (INTERVAL.replace("0.5s", "...s"), INTERVAL.replace("0.5s", "1e999s"),
-            INTERVAL.replace("0.5s", "0s"), INTERVAL.replace("0.5s", "-1s"),
-            INTERVAL.replace("20 frames", "0 frames"), INTERVAL.replace("20 frames", "4294967296 frames")):
+        for header in (INTERVAL.replace("0.5s", "...s"), INTERVAL.replace("0.5s", "1e999s"), INTERVAL.replace("0.5s", "0s"), INTERVAL.replace("0.5s", "-1s"), INTERVAL.replace("20 frames", "0 frames"), INTERVAL.replace("20 frames", "4294967296 frames")):
             with self.subTest(header=header), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + CURRENT_ROW + header + CURRENT_ROW)
         for old, new in (("published_windows=20", "published_windows=4294967296"), ("gpu_samples=40", "gpu_samples=18446744073709551616")):

@@ -34,9 +34,7 @@ int Run(const int argc, char** argv){
     app.add_option("--max-groups", options.maxGroups, "Maximum four-plane packing groups (1..8, default8)");
     app.add_option("--renderer", rendererArgument, "bitmap (default) or outline; errors never switch algorithms");
     app.add_flag("--overwrite", options.overwrite, "Replace an existing complete .nwb/.font pair");
-    return
-        InvokeTerminalEntry<CLI::ParseError>(
-            [&](){
+    return InvokeTerminalEntry<CLI::ParseError>([&](){
                 app.parse(argc, argv);
                 if(rendererArgument != "bitmap" && rendererArgument != "outline"){
                     NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unknown renderer; choose bitmap or outline"));
@@ -56,17 +54,12 @@ int Run(const int argc, char** argv){
                 auto payload = Bake(options, UtilityDetail::Arena(), scratch);
                 if(!payload || !WriteOutputs(options, *payload))
                     return 1;
-                NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups")
-                    , PathToString<tchar>(options.output)
-                    , payload->glyphs.size()
-                    , payload->groups.size()
-                );
+                NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups"), PathToString<tchar>(options.output), payload->glyphs.size(), payload->groups.size());
                 return 0;
             },
             [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); },
             [](){ return -1; }
-        )
-    ;
+        );
 }
 
 

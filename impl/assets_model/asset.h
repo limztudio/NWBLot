@@ -36,7 +36,8 @@ struct ModelStaticMeshObject{
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Material> material;
     // Static attachment order: model owner * parent_object skeleton transform * parent_joint pose * transform.
-    // If parent_joint is empty, the joint pose term is omitted. If parent_object is empty, the model owner is used.
+    // If parent_joint is empty, the joint pose term is omitted.
+    // If parent_object is empty, the model owner is used.
     Name parentObject = s_NameNone;
     Name parentJoint = s_NameNone;
     SkeletonJointMatrix transform = ::MatrixIdentity<Float34>();
@@ -84,11 +85,7 @@ public:
     [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
 
 public:
-    void setObjects(
-        SkeletonObjectVector&& skeletonObjects,
-        StaticMeshObjectVector&& staticMeshObjects,
-        SkinnedMeshObjectVector&& skinnedMeshObjects
-    )noexcept{
+    void setObjects(SkeletonObjectVector&& skeletonObjects, StaticMeshObjectVector&& staticMeshObjects, SkinnedMeshObjectVector&& skinnedMeshObjects)noexcept{
         m_skeletonObjects = Move(skeletonObjects);
         m_staticMeshObjects = Move(staticMeshObjects);
         m_skinnedMeshObjects = Move(skinnedMeshObjects);

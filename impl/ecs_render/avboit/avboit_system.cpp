@@ -16,14 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererAvboitSystem::RendererAvboitSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics,
-    RendererAvboitState& avboitState,
-    RendererShaderSystem& shaderSystem,
-    RendererMaterialSystem& materialSystem,
-    RendererCsgSystem& csgSystem
-)
+RendererAvboitSystem::RendererAvboitSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererAvboitState& avboitState, RendererShaderSystem& shaderSystem, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
     : m_arena(arena)
     , m_graphics(graphics)
     , m_avboitState(avboitState)

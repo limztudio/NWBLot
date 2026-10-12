@@ -43,10 +43,7 @@ static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultKore
 
 static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
     NWB::Core::GraphicsRuntime& graphics = context.graphics;
-    return
-        graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
-        && graphics.setHDR10OutputEnabled(true)
-    ;
+    return graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && graphics.setHDR10OutputEnabled(true);
 }
 
 static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorld(NWB::ProjectRuntimeContext& context){
@@ -62,28 +59,10 @@ static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorl
     }
 
     auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
-    auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(
-        *world,
-        context.graphics,
-        context.assetManager,
-        context.shaderPathResolver
-    );
-    world->addSystem<NWB::Impl::ModelSystem>(
-        *world,
-        context.assetManager,
-        NWB::Impl::CreateModelObjectRendererHooks()
-    );
-    auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(
-        *world,
-        context.graphics,
-        context.assetManager,
-        meshSystem,
-        context.shaderPathResolver
-    );
-    const NWB::Impl::UiLayerSystem::FontReferences fonts{
-        { { s_DefaultLatin, s_DefaultLatinAtlas },
-            { s_DefaultKorean, s_DefaultKoreanAtlas } }, context.objectArena
-    };
+    auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(*world, context.graphics, context.assetManager, context.shaderPathResolver);
+    world->addSystem<NWB::Impl::ModelSystem>(*world, context.assetManager, NWB::Impl::CreateModelObjectRendererHooks());
+    auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(*world, context.graphics, context.assetManager, meshSystem, context.shaderPathResolver);
+    const NWB::Impl::UiLayerSystem::FontReferences fonts{ { { s_DefaultLatin, s_DefaultLatinAtlas }, { s_DefaultKorean, s_DefaultKoreanAtlas } }, context.objectArena };
     auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -125,10 +104,7 @@ static void DestroyInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<N
     context.graphics.removeRenderPass(uiLayerSystem);
 
     const bool deviceIdle = context.graphics.waitForIdle();
-    NWB_FATAL_ASSERT_MSG(
-        deviceIdle || context.graphics.isDeviceLost(),
-        s_DestroyRequiresIdleOrLoss
-    );
+    NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), s_DestroyRequiresIdleOrLoss);
 
     world->clear();
     world.reset();

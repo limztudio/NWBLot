@@ -48,13 +48,7 @@ static constexpr f32 s_RowDepth[] = { -0.55f, 0.55f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool StressCsgScene::initialize(
-    Core::ECS::World& world,
-    Core::Alloc::GlobalArena& arena,
-    const Core::ECS::EntityID* const owners,
-    const usize ownerCount,
-    const bool opaqueOnly
-){
+bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const Core::ECS::EntityID* const owners, const usize ownerCount, const bool opaqueOnly){
     const auto value = ReadSmokeEnvironmentText(arena, "NWB_STRESS_CSG_PROFILE");
     if(!value || AStringView(value->data(), value->size()) == "none")
         return true;
@@ -68,9 +62,7 @@ bool StressCsgScene::initialize(
     }
     Core::ECS::EntityID meshes[__hidden_stress_csg_scene::s_BodyCount] = {};
     for(usize index = 0u; index < ownerCount; ++index){
-        meshes[index] = FindSpawnedModelObject(
-            world, owners[index], __hidden_stress_csg_scene::s_MeshObject, Impl::ModelObjectKind::SkinnedMesh
-        );
+        meshes[index] = FindSpawnedModelObject(world, owners[index], __hidden_stress_csg_scene::s_MeshObject, Impl::ModelObjectKind::SkinnedMesh);
         if(!meshes[index].valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG receiver mesh child missing for body {}"), index);
             return false;

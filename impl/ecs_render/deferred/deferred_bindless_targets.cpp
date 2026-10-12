@@ -23,10 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererDeferredSystem::createDeferredBindlessFrameResources(
-    DeferredFrameTargets& targets,
-    Core::Sampler& avboitLinearSampler
-){
+bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -106,12 +103,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowVisibility = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowVisibility.get(),
-            targets.shadowVisibilityFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowVisibility.get(), targets.shadowVisibilityFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowVisibilityStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -126,12 +118,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.causticIrradiance = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.causticIrradiance.get(),
-            targets.causticIrradianceFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.causticIrradiance.get(), targets.causticIrradianceFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.causticIrradianceStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -146,12 +133,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.surfelIrradiance = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.surfelIrradiance.get(),
-            targets.surfelIrradianceFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.surfelIrradiance.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.surfelIrradianceStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -166,19 +148,11 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.surfelIrradianceHalf = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.surfelIrradianceHalf.get(),
-            targets.surfelIrradianceFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.surfelIrradianceHalfStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampler(
-            heap,
-            m_deferredState.m_sampler.get()
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampler(heap, m_deferredState.m_sampler.get()); descriptor)
             bindless.sampler = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -193,12 +167,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.opaqueColor = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.opaqueColor.get(),
-            targets.opaqueColorFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.opaqueColor.get(), targets.opaqueColorFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.opaqueColorStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -213,12 +182,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.compositeColor = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.compositeColor.get(),
-            targets.compositeColorFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.compositeColor.get(), targets.compositeColorFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.compositeColorStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -332,12 +296,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.avboitForegroundExtinction = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.avboit.refractionResolve.get(),
-            Core::Format::RGBA16_FLOAT,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.avboit.refractionResolve.get(), Core::Format::RGBA16_FLOAT, Core::TextureDimension::Texture2D); descriptor)
             bindless.refractionResolveStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -356,116 +315,55 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.avboitLinearSampler = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterConstantBuffer(
-            heap,
-            m_deferredState.m_sceneShadingBuffer.get()
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterConstantBuffer(heap, m_deferredState.m_sceneShadingBuffer.get()); descriptor)
             bindless.sceneShading = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStructuredBuffer(
-            heap,
-            m_deferredState.m_lightBuffer.get()
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStructuredBuffer(heap, m_deferredState.m_lightBuffer.get()); descriptor)
             bindless.lightList = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgCapBackNormal.get(),
-            targets.csgCapNormalFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgCapBackNormal.get(), targets.csgCapNormalFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgCapBackNormal = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgIntervalDepth.get(),
-            targets.csgIntervalDepthFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgIntervalDepth.get(), targets.csgIntervalDepthFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgIntervalDepth = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgIntervalId.get(),
-            targets.csgIntervalIdFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgIntervalId.get(), targets.csgIntervalIdFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgIntervalId = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgReceiverEventData.get(),
-            targets.csgReceiverEventDataFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgReceiverEventData.get(), targets.csgReceiverEventDataFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgReceiverEventData = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgReceiverEventCount.get(),
-            targets.csgReceiverEventCountFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgReceiverEventCount.get(), targets.csgReceiverEventCountFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgReceiverEventCount = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgReceiverSpanData.get(),
-            targets.csgReceiverSpanDataFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgReceiverSpanData.get(), targets.csgReceiverSpanDataFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgReceiverSpanData = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgReceiverSpanCount.get(),
-            targets.csgReceiverSpanCountFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgReceiverSpanCount.get(), targets.csgReceiverSpanCountFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgReceiverSpanCount = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgRemovedIntervalDepth.get(),
-            targets.csgRemovedIntervalDepthFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgRemovedIntervalDepth.get(), targets.csgRemovedIntervalDepthFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgRemovedIntervalDepth = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgRemovedIntervalCapNormal.get(),
-            targets.csgRemovedIntervalCapNormalFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgRemovedIntervalCapNormal.get(), targets.csgRemovedIntervalCapNormalFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgRemovedIntervalCapNormal = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgRemovedIntervalData.get(),
-            targets.csgRemovedIntervalDataFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgRemovedIntervalData.get(), targets.csgRemovedIntervalDataFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgRemovedIntervalData = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.csgRemovedIntervalCount.get(),
-            targets.csgRemovedIntervalCountFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.csgRemovedIntervalCount.get(), targets.csgRemovedIntervalCountFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.csgRemovedIntervalCount = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -480,12 +378,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.causticAccumulator = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.causticAccumulator.get(),
-            targets.causticAccumulatorFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.causticAccumulatorStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -500,12 +393,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.causticHistory = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.causticHistory.get(),
-            targets.causticHistoryFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.causticHistory.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.causticHistoryStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -520,12 +408,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.causticResolveHalf = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.causticResolveHalf.get(),
-            targets.causticHistoryFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.causticResolveHalf.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.causticResolveHalfStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -540,21 +423,11 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.causticResolveGeometry = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.causticResolveGeometry.get(),
-            targets.causticHistoryFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.causticResolveGeometry.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.causticResolveGeometryStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowCoarseTransmittance.get(),
-            targets.shadowCoarseTransmittanceFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowCoarseTransmittance.get(), targets.shadowCoarseTransmittanceFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowCoarseTransmittanceStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -569,12 +442,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowSoftGeometry = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowSoftGeometry.get(),
-            targets.shadowSoftGeometryFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowSoftGeometry.get(), targets.shadowSoftGeometryFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.shadowSoftGeometryStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -589,12 +457,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowSoftGeometryPrev = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowSoftGeometryPrev.get(),
-            targets.shadowSoftGeometryFormat,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowSoftGeometryPrev.get(), targets.shadowSoftGeometryFormat, Core::TextureDimension::Texture2D); descriptor)
             bindless.shadowSoftGeometryPrevStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -609,12 +472,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowSoftHalfA = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowSoftHalfA.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowSoftHalfA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowSoftHalfAStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -629,12 +487,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowSoftHalfB = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowSoftHalfB.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowSoftHalfB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowSoftHalfBStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -649,12 +502,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowHistA = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowHistA.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowHistA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowHistAStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -669,12 +517,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowHistB = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowHistB.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowHistB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowHistBStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -689,12 +532,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowMomentsA = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowMomentsA.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowMomentsA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowMomentsAStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -709,12 +547,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.shadowMomentsB = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.shadowMomentsB.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.shadowMomentsB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.shadowMomentsBStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -729,12 +562,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.transparentSoftHalf = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.transparentSoftHalf.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.transparentSoftHalf.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.transparentSoftHalfStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -749,12 +577,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.transparentHistA = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.transparentHistA.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.transparentHistA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.transparentHistAStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -769,12 +592,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.transparentHistB = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.transparentHistB.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.transparentHistB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.transparentHistBStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -789,12 +607,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.transparentMomentsA = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.transparentMomentsA.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.transparentMomentsA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.transparentMomentsAStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -809,12 +622,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             bindless.transparentMomentsB = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(
-            heap,
-            targets.transparentMomentsB.get(),
-            targets.shadowSoftFormat,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, targets.transparentMomentsB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
             bindless.transparentMomentsBStorage = *descriptor;
         else
             return MakeUnexpected(Failure{});
@@ -871,8 +679,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         .setDebugName("ECSRender_DeferredBindlessResourceSlots")
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         // Selector spans packets; retain descriptor-visible state at every native close.
-        .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer)
-    ;
+        .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
     bindless.slotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
     if(!bindless.slotsBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred bindless slot buffer"));
@@ -880,17 +687,10 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         return false;
     }
 
-    // The indirection payload is itself heap-addressable.  Every consumer receives this one UniformBuffer slot in
-    // push constants instead of binding a local selector CBV, keeping the descriptor heap as the only resource
-    // binding surface for ordinary renderer passes.
+    // The indirection payload is itself heap-addressable.
+    // Every consumer receives this one UniformBuffer slot in push constants instead of binding a local selector CBV, keeping the descriptor heap as the only resource binding surface for ordinary renderer passes.
     bindless.slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(
-        !bindless.slotsBufferDescriptor.valid()
-        || !heap.write(
-            bindless.slotsBufferDescriptor,
-            Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get())
-        )
-    ){
+    if(!bindless.slotsBufferDescriptor.valid() || !heap.write(bindless.slotsBufferDescriptor, Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get()))){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap"));
         resetDeferredBindlessFrameResources(targets);
         return false;

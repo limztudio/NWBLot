@@ -16,7 +16,11 @@ NWB_IMPL_UI_BEGIN
 
 bool Builder::comboStateMatches(const ComboFrame& frame)const{
     return
-        popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration && frame.search->query().revision() == frame.queryRevision && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration && frame.search->query().selectionGeneration() == frame.querySelectionGeneration && frame.search->query().externalRevision() == frame.queryExternalRevision && frame.search->query().anchor() == frame.queryAnchor && frame.search->query().caret() == frame.queryCaret))
+        popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->isOpen() == frame.open
+        && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken
+        && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration && frame.search->query().revision() == frame.queryRevision && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration
+        && frame.search->query().selectionGeneration() == frame.querySelectionGeneration && frame.search->query().externalRevision() == frame.queryExternalRevision && frame.search->query().anchor() == frame.queryAnchor
+        && frame.search->query().caret() == frame.queryCaret))
     ;
 }
 
@@ -56,9 +60,7 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
     while(auto action = m_context.takeControlAction(field, true, frame.token)){
         if(state.isOpen())
             continue;
-        if(
-            action->kind != ControlActionKind::Submit && action->kind != ControlActionKind::Up && action->kind != ControlActionKind::Down
-        )
+        if(action->kind != ControlActionKind::Submit && action->kind != ControlActionKind::Up && action->kind != ControlActionKind::Down)
             continue;
         ComboBehavior::Open(state);
         if(!ListBehavior::Reconcile(state.m_list, *frame.results))
@@ -111,10 +113,7 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
         }
         else{
             const bool fromEditor = frame.editor != s_LayoutNoParent && action->source == m_scope->m_comboEditors[frame.editor].state.id;
-            if(
-                fromEditor && (frame.search->query().composition().active
-                    || (action->kind == ControlActionKind::Submit && !frame.editorSubmitted))
-            ){
+            if(fromEditor && (frame.search->query().composition().active || (action->kind == ControlActionKind::Submit && !frame.editorSubmitted))){
                 action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
                 haveAction = action && action->popup == frame.popupToken;
                 continue;

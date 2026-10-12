@@ -43,14 +43,8 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
 
     u32 discardedCount = 0u;
     Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests/task_graph/non_recordable"))
-        .setMarkerLabel("Non-recordable Task")
-    ;
-    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
-        desc,
-        PacketLifecycleTask::Payload{ .discardedCount = &discardedCount }
-    );
+    desc.setIdentity(Name("tests/task_graph/non_recordable")).setMarkerLabel("Non-recordable Task");
+    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .discardedCount = &discardedCount });
     ASSERT_TRUE(task.valid());
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -59,10 +53,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -84,15 +75,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     metadataOptions.allowMetadataOnlyTasks = true;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        EXPECT_TRUE(compiler.compile(
-            declarations,
-            analysis,
-            topology,
-            assignments,
-            compiledGraph,
-            scratchArena,
-            metadataOptions
-        ));
+        EXPECT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
         EXPECT_TRUE(analysis.valid());
         EXPECT_TRUE(assignments.valid());
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
@@ -110,18 +93,8 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     u32 acceptedCount = 0u;
     u32 discardedCount = 0u;
     Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests/task_graph/malformed_lifecycle_signatures"))
-        .setMarkerLabel("Malformed Lifecycle Signatures")
-    ;
-    const Graphics::GpuTaskId task = graph.addTask<MalformedLifecycleTask>(
-        desc,
-        MalformedLifecycleTask::Payload{
-            .recordCount = &recordCount,
-            .acceptedCount = &acceptedCount,
-            .discardedCount = &discardedCount,
-        }
-    );
+    desc.setIdentity(Name("tests/task_graph/malformed_lifecycle_signatures")).setMarkerLabel("Malformed Lifecycle Signatures");
+    const Graphics::GpuTaskId task = graph.addTask<MalformedLifecycleTask>(desc, MalformedLifecycleTask::Payload{ .recordCount = &recordCount, .acceptedCount = &acceptedCount, .discardedCount = &discardedCount, });
     ASSERT_TRUE(task.valid());
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -130,10 +103,7 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -149,45 +119,19 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
 TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     const Graphics::GpuTaskGraphCompiler compiler;
 
-    const auto expectMissingTypedImport = [&](
-        const Name& identity,
-        const AStringView label,
-        const Graphics::GpuGraphResourceType::Enum type,
-        const Graphics::ResourceStates::Mask requiredState
-    ){
+    const auto expectMissingTypedImport = [&](const Name& identity, const AStringView label, const Graphics::GpuGraphResourceType::Enum type, const Graphics::ResourceStates::Mask requiredState){
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(identity)
-                .setMarkerLabel(label)
-                .setType(type)
-                .setInitialState(Graphics::ResourceStates::Common)
-        );
+        const Graphics::GpuGraphResourceId resource = graph.importResource(Graphics::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel(label).setType(type).setInitialState(Graphics::ResourceStates::Common));
         ASSERT_TRUE(resource.valid());
 
-        const Graphics::GpuTaskResourceUse use{
-            .resource = resource,
-            .range = {},
-            .requiredState = requiredState,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        };
+        const Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = requiredState, .access = Graphics::GpuTaskResourceAccess::Read, };
         Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(identity)
-            .setMarkerLabel(label)
-            .setResourceUses(&use, 1u)
-        ;
+        desc.setIdentity(identity).setMarkerLabel(label).setResourceUses(&use, 1u);
         u32 recordCount = 0u;
-        const Graphics::GpuTaskId task = graph.addTask<NativeRecordProbeTask>(
-            desc,
-            NativeRecordProbeTask::Payload{ .recordCount = &recordCount }
-        );
+        const Graphics::GpuTaskId task = graph.addTask<NativeRecordProbeTask>(desc, NativeRecordProbeTask::Payload{ .recordCount = &recordCount });
         ASSERT_TRUE(task.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -211,15 +155,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
 
         Graphics::GpuTaskGraphCompileOptions metadataOptions;
         metadataOptions.allowMetadataOnlyTasks = true;
-        EXPECT_TRUE(compiler.compile(
-            declarations,
-            analysis,
-            topology,
-            assignments,
-            compiledGraph,
-            scratchArena,
-            metadataOptions
-        ));
+        EXPECT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
         EXPECT_TRUE(analysis.valid());
         EXPECT_TRUE(assignments.valid());
         {
@@ -229,57 +165,22 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         EXPECT_EQ(recordCount, 0u);
     };
 
-    expectMissingTypedImport(
-        Name("tests/task_graph/native_metadata_texture"),
-        "Native Metadata Texture",
-        Graphics::GpuGraphResourceType::Texture,
-        Graphics::ResourceStates::ShaderResource
-    );
-    expectMissingTypedImport(
-        Name("tests/task_graph/native_metadata_buffer"),
-        "Native Metadata Buffer",
-        Graphics::GpuGraphResourceType::Buffer,
-        Graphics::ResourceStates::ShaderResource
-    );
-    expectMissingTypedImport(
-        Name("tests/task_graph/native_metadata_accel_struct"),
-        "Native Metadata Accel Struct",
-        Graphics::GpuGraphResourceType::AccelStruct,
-        Graphics::ResourceStates::AccelStructRead
-    );
+    expectMissingTypedImport(Name("tests/task_graph/native_metadata_texture"), "Native Metadata Texture", Graphics::GpuGraphResourceType::Texture, Graphics::ResourceStates::ShaderResource);
+    expectMissingTypedImport(Name("tests/task_graph/native_metadata_buffer"), "Native Metadata Buffer", Graphics::GpuGraphResourceType::Buffer, Graphics::ResourceStates::ShaderResource);
+    expectMissingTypedImport(Name("tests/task_graph/native_metadata_accel_struct"), "Native Metadata Accel Struct", Graphics::GpuGraphResourceType::AccelStruct, Graphics::ResourceStates::AccelStructRead);
 
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId unusedTexture = AddTextureMetadata(
-            graph,
-            Name("tests/task_graph/native_unused_metadata_texture"),
-            "Native Unused Metadata Texture"
-        );
-        const Graphics::GpuGraphResourceId hazardDomain = AddHazardDomain(
-            graph,
-            Name("tests/task_graph/native_hazard_domain"),
-            "Native Hazard Domain"
-        );
+        const Graphics::GpuGraphResourceId unusedTexture = AddTextureMetadata(graph, Name("tests/task_graph/native_unused_metadata_texture"), "Native Unused Metadata Texture");
+        const Graphics::GpuGraphResourceId hazardDomain = AddHazardDomain(graph, Name("tests/task_graph/native_hazard_domain"), "Native Hazard Domain");
         ASSERT_TRUE(unusedTexture.valid());
         ASSERT_TRUE(hazardDomain.valid());
 
-        const Graphics::GpuTaskResourceUse use{
-            .resource = hazardDomain,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::Common,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        };
+        const Graphics::GpuTaskResourceUse use{ .resource = hazardDomain, .range = {}, .requiredState = Graphics::ResourceStates::Common, .access = Graphics::GpuTaskResourceAccess::Write, };
         Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(Name("tests/task_graph/native_hazard_domain_task"))
-            .setMarkerLabel("Native Hazard Domain Task")
-            .setResourceUses(&use, 1u)
-        ;
+        desc.setIdentity(Name("tests/task_graph/native_hazard_domain_task")).setMarkerLabel("Native Hazard Domain Task").setResourceUses(&use, 1u);
         u32 recordCount = 0u;
-        const Graphics::GpuTaskId task = graph.addTask<NativeRecordProbeTask>(
-            desc,
-            NativeRecordProbeTask::Payload{ .recordCount = &recordCount }
-        );
+        const Graphics::GpuTaskId task = graph.addTask<NativeRecordProbeTask>(desc, NativeRecordProbeTask::Payload{ .recordCount = &recordCount });
         ASSERT_TRUE(task.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -296,37 +197,17 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
             EXPECT_EQ(recordCount, 0u);
         }
 
-        const Graphics::GpuTaskResourceUse invalidTypedUse{
-            .resource = unusedTexture,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::Unknown,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        };
+        const Graphics::GpuTaskResourceUse invalidTypedUse{ .resource = unusedTexture, .range = {}, .requiredState = Graphics::ResourceStates::Unknown, .access = Graphics::GpuTaskResourceAccess::Read, };
         Graphics::GpuTaskDesc invalidTypedDesc;
-        invalidTypedDesc
-            .setIdentity(Name("tests/task_graph/native_unknown_typed_state_task"))
-            .setMarkerLabel("Native Unknown Typed State Task")
-            .setResourceUses(&invalidTypedUse, 1u)
-        ;
-        const Graphics::GpuTaskId invalidTypedTask = graph.addTask<NativeRecordProbeTask>(
-            invalidTypedDesc,
-            NativeRecordProbeTask::Payload{ .recordCount = &recordCount }
-        );
+        invalidTypedDesc.setIdentity(Name("tests/task_graph/native_unknown_typed_state_task")).setMarkerLabel("Native Unknown Typed State Task").setResourceUses(&invalidTypedUse, 1u);
+        const Graphics::GpuTaskId invalidTypedTask = graph.addTask<NativeRecordProbeTask>(invalidTypedDesc, NativeRecordProbeTask::Payload{ .recordCount = &recordCount });
         ASSERT_TRUE(invalidTypedTask.valid());
 
         Graphics::GpuTaskGraphCompileOptions metadataOptions;
         metadataOptions.allowMetadataOnlyTasks = true;
         {
             const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_FALSE(compiler.compile(
-                declarations,
-                analysis,
-                topology,
-                assignments,
-                compiledGraph,
-                scratchArena,
-                metadataOptions
-            ));
+            EXPECT_FALSE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
             EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
             EXPECT_EQ(analysis.diagnostic().task, invalidTypedTask);
             EXPECT_EQ(analysis.diagnostic().resource, unusedTexture);
@@ -343,17 +224,8 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
         Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(Name("tests/task_graph/lifecycle_discarded"))
-            .setMarkerLabel("Discarded Lifecycle Task")
-        ;
-        const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
-            desc,
-            PacketLifecycleTask::Payload{
-                .acceptedCount = &acceptedCount,
-                .discardedCount = &discardedCount,
-            }
-        );
+        desc.setIdentity(Name("tests/task_graph/lifecycle_discarded")).setMarkerLabel("Discarded Lifecycle Task");
+        const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .acceptedCount = &acceptedCount, .discardedCount = &discardedCount, });
         ASSERT_TRUE(task.valid());
 
         graph.reset();
@@ -367,17 +239,8 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
         Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(Name("tests/task_graph/lifecycle_unresolved"))
-            .setMarkerLabel("Unresolved Lifecycle Task")
-        ;
-        const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
-            desc,
-            PacketLifecycleTask::Payload{
-                .acceptedCount = &acceptedCount,
-                .discardedCount = &discardedCount,
-            }
-        );
+        desc.setIdentity(Name("tests/task_graph/lifecycle_unresolved")).setMarkerLabel("Unresolved Lifecycle Task");
+        const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .acceptedCount = &acceptedCount, .discardedCount = &discardedCount, });
         ASSERT_TRUE(task.valid());
     }
 
@@ -391,10 +254,7 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadWhenDeclarationIsRejected){
 
     u32 discardedCount = 0u;
     Graphics::GpuTaskDesc invalidDesc;
-    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
-        invalidDesc,
-        PacketLifecycleTask::Payload{ .discardedCount = &discardedCount }
-    );
+    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(invalidDesc, PacketLifecycleTask::Payload{ .discardedCount = &discardedCount });
 
     EXPECT_FALSE(task.valid());
     EXPECT_EQ(discardedCount, 1u);
@@ -407,68 +267,38 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskDesc desc;
-    Graphics::QueueSubmissionToken token{
-        .value = 1u,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
-    };
+    Graphics::QueueSubmissionToken token{ .value = 1u, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Graphics::CommandQueue::Graphics, };
 
     Graphics::GpuCopyBufferTaskDesc copyBuffer;
     copyBuffer.acceptedToken = &token;
     EXPECT_FALSE(graph.addCopyBufferTask(desc, copyBuffer).valid());
     EXPECT_FALSE(token.valid());
 
-    token = Graphics::QueueSubmissionToken{
-        .value = 1u,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
-    };
+    token = Graphics::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Graphics::CommandQueue::Graphics, };
     Graphics::GpuCopyTextureTaskDesc copyTexture;
     copyTexture.acceptedToken = &token;
     EXPECT_FALSE(graph.addCopyTextureTask(desc, copyTexture).valid());
     EXPECT_FALSE(token.valid());
 
-    token = Graphics::QueueSubmissionToken{
-        .value = 1u,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
-    };
+    token = Graphics::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Graphics::CommandQueue::Graphics, };
     Graphics::GpuResolveTextureTaskDesc resolveTexture;
     resolveTexture.acceptedToken = &token;
     EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveTexture).valid());
     EXPECT_FALSE(token.valid());
 
-    token = Graphics::QueueSubmissionToken{
-        .value = 1u,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
-    };
+    token = Graphics::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Graphics::CommandQueue::Graphics, };
     Graphics::GpuClearBufferTaskDesc clearBuffer;
     clearBuffer.acceptedToken = &token;
     EXPECT_FALSE(graph.addClearBufferTask(desc, clearBuffer).valid());
     EXPECT_FALSE(token.valid());
 
-    token = Graphics::QueueSubmissionToken{
-        .value = 1u,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
-    };
+    token = Graphics::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Graphics::CommandQueue::Graphics, };
     Graphics::GpuClearTextureTaskDesc clearTexture;
     clearTexture.acceptedToken = &token;
     EXPECT_FALSE(graph.addClearTextureTask(desc, clearTexture).valid());
     EXPECT_FALSE(token.valid());
 
-    token = Graphics::QueueSubmissionToken{
-        .value = 1u,
-        .physicalQueueIndex = 0u,
-        .deviceGeneration = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
-    };
+    token = Graphics::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Graphics::CommandQueue::Graphics, };
     Graphics::GpuClearTextureRectUIntTaskDesc clearTextureRect;
     clearTextureRect.acceptedToken = &token;
     EXPECT_FALSE(graph.addClearTextureRectUIntTask(desc, clearTextureRect).valid());

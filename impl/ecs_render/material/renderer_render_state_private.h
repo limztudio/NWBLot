@@ -28,11 +28,7 @@ namespace ECSRenderDetail{
 
 inline Core::RenderState BuildMeshRenderState(){
     Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .enableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
+    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip();
     return renderState;
 }
@@ -49,11 +45,7 @@ inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
         return applyTwoSided(BuildMeshRenderState());
     case MaterialPipelinePass::CsgReceiverSurface:{
         Core::RenderState renderState;
-        renderState.depthStencilState
-            .enableDepthTest()
-            .disableDepthWrite()
-            .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-        ;
+        renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
         Core::BlendState::RenderTarget target;
         target.setColorWriteMask(Core::ColorMask::None);
         for(u32 index = 0u; index < Core::s_MaxRenderTargets; ++index)
@@ -75,11 +67,7 @@ inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
 
 inline Core::RenderState BuildCompositeRenderState(){
     Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .enableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
+    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullNone();
     return renderState;
 }

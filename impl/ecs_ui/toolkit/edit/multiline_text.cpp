@@ -80,9 +80,7 @@ bool ValidateMultilineText(const AStringView text)noexcept{
     return true;
 }
 
-Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(
-    Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes
-){
+Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes){
     if(!GraphemeSegmentation::Validate(source))
         return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;

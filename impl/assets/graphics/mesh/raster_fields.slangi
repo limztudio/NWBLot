@@ -33,14 +33,7 @@ struct NwbMeshRasterVertex{
     NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
 
-NwbMeshRasterVertex nwbMeshBuildRasterVertex(
-    const float4 position,
-    const half4 color,
-    const half3 normal,
-    const half4 tangent,
-    const float2 uv0,
-    const float4 worldPosition
-){
+NwbMeshRasterVertex nwbMeshBuildRasterVertex(const float4 position, const half4 color, const half3 normal, const half4 tangent, const float2 uv0, const float4 worldPosition){
     NwbMeshRasterVertex vertex;
     vertex.position = position;
     vertex.color = color;

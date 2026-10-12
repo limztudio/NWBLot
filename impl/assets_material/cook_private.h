@@ -90,11 +90,7 @@ void AppendMaterialBindGeneratedPascalIdentifier(const AStringView text, StringT
 }
 
 template<typename ArenaT>
-[[nodiscard]] AString<ArenaT> BuildMaterialBindGeneratedSymbol(
-    ArenaT& arena,
-    const InitializerList<AStringView> nameSegments,
-    const AStringView suffix
-){
+[[nodiscard]] AString<ArenaT> BuildMaterialBindGeneratedSymbol(ArenaT& arena, const InitializerList<AStringView> nameSegments, const AStringView suffix){
     AString<ArenaT> symbol("NWB_MATERIAL_BIND_", arena);
     bool firstSegment = true;
     for(const AStringView nameSegment : nameSegments){
@@ -108,10 +104,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] AString<ArenaT> BuildMaterialBindAccessorName(
-    ArenaT& arena,
-    const InitializerList<AStringView> nameSegments
-){
+[[nodiscard]] AString<ArenaT> BuildMaterialBindAccessorName(ArenaT& arena, const InitializerList<AStringView> nameSegments){
     AString<ArenaT> functionName("nwbMaterialBindLoad", arena);
     for(const AStringView nameSegment : nameSegments)
         AppendMaterialBindGeneratedPascalIdentifier(nameSegment, functionName);
@@ -122,62 +115,21 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
-    CookArena& arena,
-    const AStringView shaderName,
-    const Path& materialBindIncludeRoot,
-    const CookVector<Path>& dependencies,
-    ScratchArena& scratchArena
-);
+Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(CookArena& arena, const AStringView shaderName, const Path& materialBindIncludeRoot, const CookVector<Path>& dependencies, ScratchArena& scratchArena);
 
-Expected<CookString> BuildMaterialBindIncludeSourceImpl(
-    CookArena& arena,
-    const MaterialBindEntry& entry,
-    ScratchArena& scratchArena
-);
+Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const MaterialBindEntry& entry, ScratchArena& scratchArena);
 
-Expected<Path> EmitMaterialBindIncludes(
-    CookArena& arena,
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    ScratchArena& scratchArena
-);
+Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena);
 
-bool ValidateMaterialCookInterfaces(
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-);
+bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materialBindEntries, CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena);
 
-Expected<MaterialCookEntry> ParseMaterialMeta(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    ScratchArena& scratchArena
-);
+Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, ScratchArena& scratchArena);
 
-bool AssignMaterialShadingModelIdsImpl(
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-);
+bool AssignMaterialShadingModelIdsImpl(CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena);
 
-Expected<Path> EmitDeferredBxdfDispatchModuleImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-);
+Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena);
 
-Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    const CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-);
+Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena);
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     CookArena& arena,

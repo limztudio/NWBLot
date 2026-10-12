@@ -52,9 +52,7 @@ TEST(GpuPassTimingProbe, ReportsEveryRegisteredScopeBeyondSixtyFour){
     probe.recordFrame(0.25f, view);
 
     EXPECT_EQ(logger.messageCount(), s_ScopeCount + 1u);
-    const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(
-        testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(lastScope.resolvedText())
-    );
+    const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(lastScope.resolvedText()));
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
     EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
 }
@@ -95,9 +93,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     probe.recordFrame(0.25f, view);
     probe.recordFrame(0.25f, view);
     EXPECT_EQ(logger.messageCount(), 6u);
-    const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(
-        testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(recorder.scopeNameAt(s_AddedScopes).resolvedText())
-    );
+    const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(recorder.scopeNameAt(s_AddedScopes).resolvedText()));
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
     EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
 }

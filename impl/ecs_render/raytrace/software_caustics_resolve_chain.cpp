@@ -20,10 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererRayTracingSystem& raytracingSystem
-)
+SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)
     : m_graph(graph)
     , m_raytracingSystem(raytracingSystem){
 }
@@ -32,10 +29,7 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<SoftwareCausticsResolveChainResult> SoftwareCausticsResolveChainBuilder::declare(
-    const SoftwareCausticsResolveChainInputs& inputs,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] Expected<SoftwareCausticsResolveChainResult> SoftwareCausticsResolveChainBuilder::declare(const SoftwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     SoftwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs;
     sharedInputs.targets = inputs.targets;

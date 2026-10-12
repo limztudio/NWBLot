@@ -41,10 +41,7 @@ bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
 
     usize reserveBytes = sizeof(SkinBinaryPayload::HeaderBinary);
-    const bool canReserve =
-        AddBinaryVectorReserveBytes(reserveBytes, skin.influences())
-        && AddBinaryVectorReserveBytes(reserveBytes, skin.inverseBindMatrices())
-    ;
+    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, skin.influences()) && AddBinaryVectorReserveBytes(reserveBytes, skin.inverseBindMatrices());
 
     outBinary.clear();
     if(canReserve)
@@ -57,18 +54,8 @@ bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     header.inverseBindMatrixCount = static_cast<u64>(skin.inverseBindMatrices().size());
     AppendPOD(outBinary, header);
 
-    return Core::Assets::AppendVectorPayload(
-        outBinary,
-        skin.influences(),
-        NWB_TEXT("SkinAssetCodec::serialize"),
-        NWB_TEXT("influences")
-    )
-        && Core::Assets::AppendVectorPayload(
-            outBinary,
-            skin.inverseBindMatrices(),
-            NWB_TEXT("SkinAssetCodec::serialize"),
-            NWB_TEXT("inverse bind matrices")
-        )
+    return Core::Assets::AppendVectorPayload(outBinary, skin.influences(), NWB_TEXT("SkinAssetCodec::serialize"), NWB_TEXT("influences"))
+        && Core::Assets::AppendVectorPayload(outBinary, skin.inverseBindMatrices(), NWB_TEXT("SkinAssetCodec::serialize"), NWB_TEXT("inverse bind matrices"))
     ;
 }
 
@@ -98,38 +85,18 @@ static constexpr AStringView s_SkinMetaDiagnosticPrefix = "Skin meta";
 
 
 [[nodiscard]] bool ValidateSkinAssetFields(const Path& nwbFilePath, const Value& asset){
-    return Core::Assets::ValidateMetadataAssetFields(
-        nwbFilePath,
-        asset,
-        s_SkinMetaDiagnosticPrefix,
-        { s_MeshField, s_SkeletonField, s_InfluencesField, s_InverseBindMatricesField }
-    );
+    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, { s_MeshField, s_SkeletonField, s_InfluencesField, s_InverseBindMatricesField });
 }
 
 [[nodiscard]] bool ValidateSkinInfluenceFields(const Path& nwbFilePath, const Value& influence){
-    return Core::Assets::ValidateMetadataAssetFields(
-        nwbFilePath,
-        influence,
-        "Skin influence",
-        { s_JointsField, s_WeightsField }
-    );
+    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, influence, "Skin influence", { s_JointsField, s_WeightsField });
 }
 
 template<usize ComponentCount>
-[[nodiscard]] Expected<Array<f64, ComponentCount>> ReadNumericTuple(
-    const Path& nwbFilePath,
-    const Value& value,
-    const AStringView label,
-    const AStringView listValueKind
-){
+[[nodiscard]] Expected<Array<f64, ComponentCount>> ReadNumericTuple(const Path& nwbFilePath, const Value& value, const AStringView label, const AStringView listValueKind){
     Array<f64, ComponentCount> values{};
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-            , ComponentCount
-            , StringConvert(listValueKind)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list"), PathToString<tchar>(nwbFilePath), StringConvert(label), ComponentCount, StringConvert(listValueKind));
         return MakeUnexpected(Failure{});
     }
 
@@ -137,11 +104,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const Value& component = list[componentIndex];
         if(!component.isNumeric()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be numeric")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(label)
-                , componentIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be numeric"), PathToString<tchar>(nwbFilePath), StringConvert(label), componentIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -151,11 +114,7 @@ template<usize ComponentCount>
 }
 
 template<usize ComponentCount>
-[[nodiscard]] Expected<Array<u16, ComponentCount>> ParseU16Tuple(
-    const Path& nwbFilePath,
-    const Value& value,
-    const AStringView label
-){
+[[nodiscard]] Expected<Array<u16, ComponentCount>> ParseU16Tuple(const Path& nwbFilePath, const Value& value, const AStringView label){
     Array<u16, ComponentCount> values{};
     const auto numericValues = ReadNumericTuple<ComponentCount>(nwbFilePath, value, label, "integer");
     if(!numericValues)
@@ -164,11 +123,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const f64 numericValue = (*numericValues)[componentIndex];
         if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleFloor(SIMDVectorDouble{ numericValue, numericValue }).x || numericValue > static_cast<f64>(Limit<u16>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(label)
-                , componentIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer"), PathToString<tchar>(nwbFilePath), StringConvert(label), componentIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -178,11 +133,7 @@ template<usize ComponentCount>
 }
 
 template<usize ComponentCount>
-[[nodiscard]] Expected<Array<f32, ComponentCount>> ParseF32Tuple(
-    const Path& nwbFilePath,
-    const Value& value,
-    const AStringView label
-){
+[[nodiscard]] Expected<Array<f32, ComponentCount>> ParseF32Tuple(const Path& nwbFilePath, const Value& value, const AStringView label){
     Array<f32, ComponentCount> values{};
     const auto numericValues = ReadNumericTuple<ComponentCount>(nwbFilePath, value, label, "numeric");
     if(!numericValues)
@@ -191,11 +142,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const f64 numericValue = (*numericValues)[componentIndex];
         if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(label)
-                , componentIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range"), PathToString<tchar>(nwbFilePath), StringConvert(label), componentIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -204,25 +151,15 @@ template<usize ComponentCount>
     return values;
 }
 
-[[nodiscard]] Expected<SIMDVectorSingle> NormalizeSkinInfluenceWeights(
-    const Path& nwbFilePath,
-    const usize influenceIndex,
-    const SIMDVectorSingle weights
-){
+[[nodiscard]] Expected<SIMDVectorSingle> NormalizeSkinInfluenceWeights(const Path& nwbFilePath, const usize influenceIndex, const SIMDVectorSingle weights){
     if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
-            , PathToString<tchar>(nwbFilePath)
-            , influenceIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative"), PathToString<tchar>(nwbFilePath), influenceIndex);
         return MakeUnexpected(Failure{});
     }
 
     const SIMDVectorSingle weightSum = Vector4Dot(weights, s_SIMDOne);
     if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(SkinValidation::s_Epsilon))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total")
-            , PathToString<tchar>(nwbFilePath)
-            , influenceIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total"), PathToString<tchar>(nwbFilePath), influenceIndex);
         return MakeUnexpected(Failure{});
     }
 
@@ -232,11 +169,7 @@ template<usize ComponentCount>
     return normalizedWeights;
 }
 
-[[nodiscard]] Expected<SkinInfluence4> ParseSkinInfluence(
-    const Path& nwbFilePath,
-    const Value& influenceValue,
-    const usize influenceIndex
-){
+[[nodiscard]] Expected<SkinInfluence4> ParseSkinInfluence(const Path& nwbFilePath, const Value& influenceValue, const usize influenceIndex){
     SkinInfluence4 influence{};
 
     if(!ValidateSkinInfluenceFields(nwbFilePath, influenceValue))
@@ -245,10 +178,7 @@ template<usize ComponentCount>
     const Value* joints = FindField(influenceValue, s_JointsField);
     const Value* weights = FindField(influenceValue, s_WeightsField);
     if(!joints || !weights){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] requires 'joints' and 'weights'")
-            , PathToString<tchar>(nwbFilePath)
-            , influenceIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] requires 'joints' and 'weights'"), PathToString<tchar>(nwbFilePath), influenceIndex);
         return MakeUnexpected(Failure{});
     }
 
@@ -271,11 +201,7 @@ template<usize ComponentCount>
     return influence;
 }
 
-[[nodiscard]] Expected<Core::Assets::AssetVector<SkinInfluence4>> ParseSkinInfluences(
-    const Path& nwbFilePath,
-    const Value& asset,
-    Core::Assets::AssetArena& arena
-){
+[[nodiscard]] Expected<Core::Assets::AssetVector<SkinInfluence4>> ParseSkinInfluences(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkinInfluence4> values(arena);
 
     const Value* influences = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skin meta", s_InfluencesField);
@@ -287,10 +213,7 @@ template<usize ComponentCount>
     for(usize influenceIndex = 0u; influenceIndex < influenceList.size(); ++influenceIndex){
         const Value& influenceValue = influenceList[influenceIndex];
         if(!influenceValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] must be a map")
-                , PathToString<tchar>(nwbFilePath)
-                , influenceIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] must be a map"), PathToString<tchar>(nwbFilePath), influenceIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -301,20 +224,13 @@ template<usize ComponentCount>
     }
 
     if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_InfluencesField)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), StringConvert(s_InfluencesField));
         return MakeUnexpected(Failure{});
     }
     return values;
 }
 
-[[nodiscard]] Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(
-    const Path& nwbFilePath,
-    const Value& asset,
-    Core::Assets::AssetArena& arena
-){
+[[nodiscard]] Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
 
     const Value* matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skin meta", s_InverseBindMatricesField);
@@ -324,30 +240,19 @@ template<usize ComponentCount>
     const auto& matrixList = matrices->asList();
     values.reserve(matrixList.size());
     for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
-        const auto matrix = AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(
-            nwbFilePath,
-            matrixList[matrixIndex],
-            s_SkinMetaKind,
-            s_InverseBindMatricesField
-        );
+        const auto matrix = AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, matrixList[matrixIndex], s_SkinMetaKind, s_InverseBindMatricesField);
         if(!matrix)
             return MakeUnexpected(Failure{});
 
         if(!MatrixIsInvertibleAffine(LoadFloat(*matrix), SkinValidation::s_Epsilon, SkinValidation::s_Epsilon)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
-                , PathToString<tchar>(nwbFilePath)
-                , matrixIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"), PathToString<tchar>(nwbFilePath), matrixIndex);
             return MakeUnexpected(Failure{});
         }
         values.push_back(*matrix);
     }
 
     if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_InverseBindMatricesField)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), StringConvert(s_InverseBindMatricesField));
         return MakeUnexpected(Failure{});
     }
     return values;
@@ -355,9 +260,7 @@ template<usize ComponentCount>
 
 [[nodiscard]] bool ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry){
     if(entry.inverseBindMatrices.size() > static_cast<usize>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices count exceeds u16 joint index range")
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices count exceeds u16 joint index range"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -368,11 +271,7 @@ template<usize ComponentCount>
             if(static_cast<u32>(influence.joint[componentIndex]) < jointCount)
                 continue;
 
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range")
-                , PathToString<tchar>(nwbFilePath)
-                , influenceIndex
-                , componentIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range"), PathToString<tchar>(nwbFilePath), influenceIndex, componentIndex);
             return false;
         }
     }
@@ -389,12 +288,7 @@ template<usize ComponentCount>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SkinCookEntry> ParseSkinCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena
-){
+Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
     using namespace __hidden_skin_cook;
 
     SkinCookEntry entry(arena);
@@ -434,14 +328,7 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(
     return entry;
 }
 
-Expected<SkinCookEntry> ParseSkinCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Name virtualPath = s_NameNone;
     auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)

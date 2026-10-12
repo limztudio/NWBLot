@@ -85,11 +85,7 @@ void ReflectionHistoryState::reset(const u16 deviceGeneration)noexcept{
     m_resourcesChanged = true;
 }
 
-ReflectionHistoryPlan ReflectionHistoryState::plan(
-    const ReflectionSceneContentStamp& stamp,
-    const ReflectionSettings& settings,
-    const u64 graphicsFrameIndex
-)noexcept{
+ReflectionHistoryPlan ReflectionHistoryState::plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const u64 graphicsFrameIndex)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     ReflectionHistoryPlan result;
@@ -105,10 +101,7 @@ ReflectionHistoryPlan ReflectionHistoryState::plan(
         result.resetReason = m_resourcesChanged ? ReflectionHistoryResetReason::ResourcesChanged : ReflectionHistoryResetReason::FirstSample;
     else if(!__hidden_reflection_history::SameEstimatorSettings(settings, m_settings))
         result.resetReason = ReflectionHistoryResetReason::SettingsChanged;
-    else if(
-        stamp.geometry != m_stamp.geometry || stamp.material != m_stamp.material
-        || stamp.lighting != m_stamp.lighting || stamp.trusted != m_stamp.trusted
-    )
+    else if(stamp.geometry != m_stamp.geometry || stamp.material != m_stamp.material || stamp.lighting != m_stamp.lighting || stamp.trusted != m_stamp.trusted)
         result.resetReason = ReflectionHistoryResetReason::SceneChanged;
     else if(stamp.view != m_stamp.view)
         result.resetReason = ReflectionHistoryResetReason::ViewChanged;
@@ -131,10 +124,7 @@ ReflectionHistoryPlan ReflectionHistoryState::plan(
 bool ReflectionHistoryState::reserve(const ReflectionHistoryPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    if(
-        m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation
-        || plan.sequence == 0u || plan.acceptedSequence != m_acceptedSequence
-    )
+    if(m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation || plan.sequence == 0u || plan.acceptedSequence != m_acceptedSequence)
         return false;
     m_reservedSequence = plan.sequence;
     return true;
@@ -147,11 +137,7 @@ void ReflectionHistoryState::discard(const ReflectionHistoryPlan& plan)noexcept{
         m_reservedSequence = 0u;
 }
 
-void ReflectionHistoryState::accept(
-    const ReflectionHistoryPlan& plan,
-    const Core::QueueSubmissionToken& token,
-    const bool hardwareReady
-)noexcept{
+void ReflectionHistoryState::accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(plan.generation != m_generation || plan.sequence != m_reservedSequence)
@@ -178,11 +164,7 @@ void ReflectionHistoryState::accept(
 
 
 ReflectionHistoryControlHandle CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration){
-    return ReflectionHistoryControlHandle(
-        NewArenaObject<ReflectionHistoryControl>(arena, deviceGeneration),
-        ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return ReflectionHistoryControlHandle(NewArenaObject<ReflectionHistoryControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

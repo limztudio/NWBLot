@@ -66,11 +66,7 @@ float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float
     float3 bitangent;
     nwbShadowBuildBasis(axis, tangent, bitangent);
 
-    return normalize(
-        cos(phi) * sinTheta * tangent +
-        sin(phi) * sinTheta * bitangent +
-        cosTheta * axis
-    );
+    return normalize(cos(phi) * sinTheta * tangent + sin(phi) * sinTheta * bitangent + cosTheta * axis);
 }
 
 

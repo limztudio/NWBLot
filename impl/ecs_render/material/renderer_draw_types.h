@@ -51,22 +51,14 @@ struct MaterialPassMeshResourceSnapshot{
         };
         for(const u32 bindingSlot : s_SourceBindingSlots){
             const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
-            if(
-                !handle.valid()
-                || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-            )
+            if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
                 return false;
         }
         return true;
     }
 
     [[nodiscard]] bool valid()const noexcept{
-        return
-            sourceBuffers.buffersValid()
-            && geometryHeapHandlesReady()
-            && meshletCount > 0u
-            && meshletPrimitiveIndexCount > 0u
-        ;
+        return sourceBuffers.buffersValid() && geometryHeapHandlesReady() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u;
     }
 };
 
@@ -81,10 +73,7 @@ struct MaterialPassPipelineResourceSnapshot{
 };
 
 template<typename BufferHandler>
-void ForEachMaterialPassMeshSourceBuffer(
-    const MaterialPassMeshResourceSnapshot& mesh,
-    BufferHandler&& handler
-)noexcept(noexcept(handler(mesh.sourceBuffers.positionBuffer))){
+void ForEachMaterialPassMeshSourceBuffer(const MaterialPassMeshResourceSnapshot& mesh, BufferHandler&& handler)noexcept(noexcept(handler(mesh.sourceBuffers.positionBuffer))){
     handler(mesh.sourceBuffers.positionBuffer);
     handler(mesh.sourceBuffers.normalBuffer);
     handler(mesh.sourceBuffers.tangentBuffer);

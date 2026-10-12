@@ -56,7 +56,8 @@ struct RayTracingOpacityMicromapDesc{
     // OMM counts for each subdivision level and format combination in the inputs.
     GraphicsVector<RayTracingOpacityMicromapUsageCount> counts;
 
-    // Base pointer for raw OMM input data. The device address at inputBufferOffset must be 256-byte aligned.
+    // Base pointer for raw OMM input data.
+    // The device address at inputBufferOffset must be 256-byte aligned.
     // It's also recommended to try to organize OMMs together that are expected to be used spatially close together.
     Buffer* inputBuffer = nullptr;
     u64 inputBufferOffset = 0;
@@ -415,12 +416,7 @@ namespace RayTracingClusterOperationMode{
         GetSizes,                   // Require only the size result array
     };
 
-    [[nodiscard]] constexpr bool IsDestinationTopologyValid(
-        const Enum mode,
-        const bool hasAddresses,
-        const bool hasSizes,
-        const bool hasImplicitDestination
-    )noexcept{
+    [[nodiscard]] constexpr bool IsDestinationTopologyValid(const Enum mode, const bool hasAddresses, const bool hasSizes, const bool hasImplicitDestination)noexcept{
         switch(mode){
         case ImplicitDestinations: return hasImplicitDestination;
         case ExplicitDestinations: return hasAddresses && hasSizes && !hasImplicitDestination;
@@ -523,13 +519,11 @@ struct RayTracingClusterOperationDesc{
     Buffer* inIndirectArgsBuffer = nullptr;                // Source-record array for the selected operation; cluster BLAS builds use IndirectArgs.
     u64 inIndirectArgsOffsetInBytes = 0;                   // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
 
-    // In/Out Resources
-    // Required by ExplicitDestinations; optional result array for ImplicitDestinations.
+    // In/Out Resources Required by ExplicitDestinations; optional result array for ImplicitDestinations.
     Buffer* inOutAddressesBuffer = nullptr;
     u64 inOutAddressesOffsetInBytes = 0;                   // Used only when inOutAddressesBuffer is provided
 
-    // Output Resources
-    // Required by ExplicitDestinations and GetSizes; independently optional as a result array for ImplicitDestinations.
+    // Output Resources Required by ExplicitDestinations and GetSizes; independently optional as a result array for ImplicitDestinations.
     Buffer* outSizesBuffer = nullptr;
     u64 outSizesOffsetInBytes = 0;                         // Used only when outSizesBuffer is provided
     // Required only by ImplicitDestinations. Size with getClusterOperationSizeInfo() or a prior GetSizes operation.

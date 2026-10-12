@@ -22,11 +22,7 @@ NWB_CORE_BEGIN
 class GpuTaskGraphCompiler final : NoCopy{
 public:
     // Graph validation and hazards remain independent from physical queue policy, so later packet, barrier, recording, and submission stages can consume one validated, immutable analysis result.
-    [[nodiscard]] bool analyze(
-        const GpuTaskGraph::DeclarationReadView& graph,
-        GpuTaskGraphAnalysis& outAnalysis,
-        Alloc::ScratchArena& scratchArena
-    )const;
+    [[nodiscard]] bool analyze(const GpuTaskGraph::DeclarationReadView& graph, GpuTaskGraphAnalysis& outAnalysis, Alloc::ScratchArena& scratchArena)const;
 
     // This produces only a physical-queue decision. It never creates a command list or changes submission; the scheduler supplies the concrete topology discovered from its current device.
     [[nodiscard]] bool assignQueues(
@@ -38,8 +34,8 @@ public:
         const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 
-    // The packet compiler reuses the independently exposed analysis and queue-assignment results
-    // scheduler admission, telemetry, and packet creation consume exactly the same immutable decisions. Tasks retain one packet by default
+    // The packet compiler reuses the independently exposed analysis and queue-assignment results scheduler admission, telemetry, and packet creation consume exactly the same immutable decisions.
+    // Tasks retain one packet by default
     [[nodiscard]] bool compile(
         const GpuTaskGraph::DeclarationReadView& graph,
         GpuTaskGraphAnalysis& outAnalysis,
@@ -115,15 +111,9 @@ struct GpuTaskGraphResourceStatePlan{
 
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept;
 
-[[nodiscard]] bool HasCapabilities(
-    GpuQueueCapability::Mask available,
-    GpuQueueCapability::Mask required
-)noexcept;
+[[nodiscard]] bool HasCapabilities(GpuQueueCapability::Mask available, GpuQueueCapability::Mask required)noexcept;
 
-[[nodiscard]] inline bool IsBetterQueue(
-    const GpuPhysicalQueueInfo& candidate,
-    const GpuPhysicalQueueInfo* const current
-)noexcept{
+[[nodiscard]] inline bool IsBetterQueue(const GpuPhysicalQueueInfo& candidate, const GpuPhysicalQueueInfo* const current)noexcept{
     if(!current)
         return true;
     if(candidate.id.index != current->id.index)
@@ -131,23 +121,11 @@ struct GpuTaskGraphResourceStatePlan{
     return candidate.queueClass < current->queueClass;
 }
 
-[[nodiscard]] bool ResourceSharingAdmitsQueue(
-    const GpuTaskGraphResourceView& resource,
-    const GpuPhysicalQueueTopology& topology,
-    const GpuPhysicalQueueInfo& queue
-)noexcept;
+[[nodiscard]] bool ResourceSharingAdmitsQueue(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& queue)noexcept;
 
-[[nodiscard]] bool ResourceUsesConcurrentQueueSharing(
-    const GpuTaskGraphResourceView& resource,
-    const GpuPhysicalQueueTopology& topology
-)noexcept;
+[[nodiscard]] bool ResourceUsesConcurrentQueueSharing(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology)noexcept;
 
-[[nodiscard]] bool ResourceSharesQueuePairConcurrently(
-    const GpuTaskGraphResourceView& resource,
-    const GpuPhysicalQueueTopology& topology,
-    const GpuPhysicalQueueInfo& sourceQueue,
-    const GpuPhysicalQueueInfo& destinationQueue
-)noexcept;
+[[nodiscard]] bool ResourceSharesQueuePairConcurrently(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& sourceQueue, const GpuPhysicalQueueInfo& destinationQueue)noexcept;
 
 [[nodiscard]] bool IsValidQueueTopology(const GpuPhysicalQueueTopology& topology)noexcept;
 
@@ -157,25 +135,13 @@ struct GpuTaskGraphResourceStatePlan{
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept;
 [[nodiscard]] u64 QueueCostWeight(GpuTaskCostHint::Enum cost)noexcept;
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(
-    const GpuPhysicalQueueTopology& topology,
-    const GpuPhysicalQueueId& queue
-)noexcept;
+[[nodiscard]] const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueId& queue)noexcept;
 
-[[nodiscard]] bool IsLegalQueueAssignmentCandidate(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuPhysicalQueueTopology& topology,
-    const GpuTaskGraphTaskView& task,
-    const GpuPhysicalQueueInfo& candidate
-)noexcept;
+[[nodiscard]] bool IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& candidate)noexcept;
 
 class GpuTaskSchedulingReachability final : NoCopy{
     friend struct GpuTaskQueueScoringData;
-    friend bool BuildGpuTaskSchedulingReachability(
-        const GpuTaskGraph::DeclarationReadView& graph,
-        const GpuTaskGraphAnalysis& analysis,
-        GpuTaskSchedulingReachability& outReachability
-    );
+    friend bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability);
 
 private:
     struct WordRange{
@@ -209,17 +175,9 @@ private:
     bool m_valid = false;
 };
 
-[[nodiscard]] bool BuildGpuTaskSchedulingReachability(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    GpuTaskSchedulingReachability& outReachability
-);
+[[nodiscard]] bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability);
 
-[[nodiscard]] const GpuTaskQueueAssignment* FindQueueAssignment(
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
-    const GpuTaskId& task
-)noexcept;
+[[nodiscard]] const GpuTaskQueueAssignment* FindQueueAssignment(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GraphicsVector<u32>& assignmentIndicesByTask, const GpuTaskId& task)noexcept;
 
 
 struct GpuTaskQueueScoringData{
@@ -237,25 +195,14 @@ struct GpuTaskQueueScoringData{
     usize m_externalQueueLoadCount = 0u;
 
 
-    GpuTaskQueueScoringData(
-        const GpuTaskGraph::DeclarationReadView& graph,
-        const GpuTaskGraphAnalysis& analysis,
-        const GpuTaskSchedulingReachability& reachability,
-        const GpuTaskGraphQueueAssignmentOptions& options,
-        Alloc::ScratchArena& scratchArena
-    );
+    GpuTaskQueueScoringData(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, const GpuTaskSchedulingReachability& reachability, const GpuTaskGraphQueueAssignmentOptions& options, Alloc::ScratchArena& scratchArena);
 
 
     [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] u64 independentQueueCost(
-        const GpuTaskSchedulingReachability& reachability,
-        const GpuPhysicalQueueId& queue,
-        NotNull<const GpuTaskQueueAssignment*> members,
-        usize memberCount
-    )const noexcept;
+    [[nodiscard]] u64 independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, NotNull<const GpuTaskQueueAssignment*> members, usize memberCount)const noexcept;
 };
 
 struct GpuTaskQueueScoreExclusions{
@@ -317,23 +264,11 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] bool AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept;
 
-[[nodiscard]] bool IsLegalTimingFeedbackRoute(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuPhysicalQueueTopology& topology,
-    const GpuTaskGraphTaskView& task,
-    const GpuPhysicalQueueInfo& incumbent,
-    const GpuPhysicalQueueInfo& candidate
-)noexcept;
+[[nodiscard]] bool IsLegalTimingFeedbackRoute(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& incumbent, const GpuPhysicalQueueInfo& candidate)noexcept;
 
-[[nodiscard]] GpuTaskTimingKey TimingHistoryKeyForQueue(
-    const GpuTaskTimingAssignmentKey& assignmentKey,
-    const CommandQueue::Enum queueClass
-)noexcept;
+[[nodiscard]] GpuTaskTimingKey TimingHistoryKeyForQueue(const GpuTaskTimingAssignmentKey& assignmentKey, const CommandQueue::Enum queueClass)noexcept;
 
-[[nodiscard]] bool HasUsableTimingFeedback(
-    const GpuTaskGraphQueueAssignmentOptions& options,
-    const u16 deviceGeneration
-)noexcept;
+[[nodiscard]] bool HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept;
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -408,31 +343,12 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] bool IsReadAccess(GpuTaskResourceAccess::Enum access)noexcept;
 [[nodiscard]] bool IsWriteAccess(GpuTaskResourceAccess::Enum access)noexcept;
-[[nodiscard]] Expected<GpuTaskResourceRange> ResolveTextureRangeForPlanning(
-    const Texture* texture,
-    const GpuTaskResourceRange& range
-)noexcept;
-[[nodiscard]] Expected<GpuTaskResourceRange> ResolveResourceRangeForPlanning(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range
-)noexcept;
-[[nodiscard]] bool RangesOverlap(
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& lhs,
-    const GpuTaskResourceRange& rhs
-)noexcept;
-[[nodiscard]] bool RangeContains(
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& outer,
-    const GpuTaskResourceRange& inner
-)noexcept;
+[[nodiscard]] Expected<GpuTaskResourceRange> ResolveTextureRangeForPlanning(const Texture* texture, const GpuTaskResourceRange& range)noexcept;
+[[nodiscard]] Expected<GpuTaskResourceRange> ResolveResourceRangeForPlanning(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range)noexcept;
+[[nodiscard]] bool RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept;
+[[nodiscard]] bool RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept;
 
-[[nodiscard]] Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
-    Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(const GpuTaskGraph::DeclarationReadView& graph, Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges, Alloc::ScratchArena& scratchArena);
 
 [[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -466,30 +382,15 @@ struct GpuTaskQueuePlacementGroup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] u32 FindCompiledTaskIndex(
-    const GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    const GpuTaskId& task
-)noexcept;
+[[nodiscard]] u32 FindCompiledTaskIndex(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
 
-[[nodiscard]] const GpuCompiledTask* FindCompiledTask(
-    const GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    const GpuTaskId& task
-)noexcept;
+[[nodiscard]] const GpuCompiledTask* FindCompiledTask(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
 
-[[nodiscard]] GpuCompiledTask* FindCompiledTask(
-    GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    const GpuTaskId& task
-)noexcept;
+[[nodiscard]] GpuCompiledTask* FindCompiledTask(GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
 
-[[nodiscard]] GpuSubmissionPacketId FindCompiledPacketForTask(
-    const GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    const GpuTaskId& task
-)noexcept;
+[[nodiscard]] GpuSubmissionPacketId FindCompiledPacketForTask(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindCompiledQueueInfo(
-    const GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    const GpuPhysicalQueueId& queue
-)noexcept;
+[[nodiscard]] const GpuPhysicalQueueInfo* FindCompiledQueueInfo(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuPhysicalQueueId& queue)noexcept;
 
 [[nodiscard]] bool AppendCompiledOwnershipTransfer(
     GpuTaskGraphResourceStatePlan& plan,
@@ -515,25 +416,15 @@ struct GpuTaskQueuePlacementGroup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GpuCompiledBarrierType::Enum TransitionBarrierType(
-    GpuGraphResourceType::Enum resourceType
-)noexcept;
+[[nodiscard]] GpuCompiledBarrierType::Enum TransitionBarrierType(GpuGraphResourceType::Enum resourceType)noexcept;
 
-[[nodiscard]] GpuCompiledBarrierType::Enum UavBarrierType(
-    GpuGraphResourceType::Enum resourceType
-)noexcept;
+[[nodiscard]] GpuCompiledBarrierType::Enum UavBarrierType(GpuGraphResourceType::Enum resourceType)noexcept;
 
-[[nodiscard]] GpuCompiledBarrierType::Enum StateExportBarrierType(
-    GpuGraphResourceType::Enum resourceType
-)noexcept;
+[[nodiscard]] GpuCompiledBarrierType::Enum StateExportBarrierType(GpuGraphResourceType::Enum resourceType)noexcept;
 
-[[nodiscard]] GpuCompiledBarrierType::Enum OwnershipReleaseBarrierType(
-    GpuGraphResourceType::Enum resourceType
-)noexcept;
+[[nodiscard]] GpuCompiledBarrierType::Enum OwnershipReleaseBarrierType(GpuGraphResourceType::Enum resourceType)noexcept;
 
-[[nodiscard]] GpuCompiledBarrierType::Enum OwnershipAcquireBarrierType(
-    GpuGraphResourceType::Enum resourceType
-)noexcept;
+[[nodiscard]] GpuCompiledBarrierType::Enum OwnershipAcquireBarrierType(GpuGraphResourceType::Enum resourceType)noexcept;
 
 [[nodiscard]] bool PlanTaskResourceStates(GpuTaskGraphResourceStatePlan& plan);
 [[nodiscard]] bool PlanExternalResourceExports(GpuTaskGraphResourceStatePlan& plan);

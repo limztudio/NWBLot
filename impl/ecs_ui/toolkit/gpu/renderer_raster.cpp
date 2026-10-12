@@ -20,11 +20,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRasterTask::Record(
-    const Payload& payload,
-    Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context
-){
+bool GpuRasterTask::Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     const GpuFrame& frame = payload.frame;
     if(
         !frame || !frame->m_prepared || !frame->m_target || !frame->m_resources
@@ -47,10 +43,7 @@ bool GpuRasterTask::Record(
     if(payload.textureImages.size() != frame->m_textureImages.size())
         return false;
     for(usize index = 0u; index < payload.textureImages.size(); ++index){
-        if(
-            context.declarations.textureForResource(payload.textureImages[index])
-            != frame->m_textureImages[index]->m_texture.texture.get()
-        )
+        if(context.declarations.textureForResource(payload.textureImages[index]) != frame->m_textureImages[index]->m_texture.texture.get())
             return false;
     }
     if(frame->m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
@@ -60,8 +53,7 @@ bool GpuRasterTask::Record(
     GpuPaintPushConstants push;
     const SIMDVectorSingle pixelScale = VectorSet(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
     const SIMDVectorSingle projection = VectorMultiply(VectorSet(2.0f, -2.0f, 2.0f, -2.0f), pixelScale);
-    const SIMDVectorSingle targetSize = VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height),
-        static_cast<f32>(target.width), static_cast<f32>(target.height));
+    const SIMDVectorSingle targetSize = VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height), static_cast<f32>(target.width), static_cast<f32>(target.height));
     const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
     push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
     push.translate = { -1.0f, 1.0f };
@@ -88,9 +80,7 @@ bool GpuRasterTask::Record(
         const f32 maxY = VectorGetY(maximum);
         if(maxX <= minX || maxY <= minY)
             continue;
-        const Core::Rect scissor(
-            static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY)
-        );
+        const Core::Rect scissor(static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY));
         if(!heapBound || scissor != boundScissor){
             Core::ViewportState view;
             view.addViewport(viewport).addScissorRect(scissor);
@@ -99,9 +89,7 @@ bool GpuRasterTask::Record(
                 .setPipeline(frame->m_resources->m_pipeline.get())
                 .setFramebuffer(frame->m_target->m_framebuffer.get())
                 .setViewport(view)
-                .addVertexBuffer(
-                    Core::VertexBufferBinding().setBuffer(frame->m_vertices.get()).setSlot(NWB_UI_VERTEX_BUFFER_INDEX)
-                )
+                .addVertexBuffer(Core::VertexBufferBinding().setBuffer(frame->m_vertices.get()).setSlot(NWB_UI_VERTEX_BUFFER_INDEX))
                 .setIndexBuffer(Core::IndexBufferBinding().setBuffer(frame->m_indices.get()).setFormat(Core::Format::R32_UINT))
             ;
             commands.setGraphicsState(state);
@@ -130,11 +118,7 @@ void GpuRasterTask::Accepted(Payload& payload, const Core::QueueSubmissionToken&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuOutputTask::Record(
-    const Payload& payload,
-    Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context
-){
+bool GpuOutputTask::Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     const GpuFrame& frame = payload.frame;
     if(
         !frame || !payload.pipeline || !payload.acquired.valid()

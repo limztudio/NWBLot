@@ -28,10 +28,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const NwbBxdfSurface surface = nwbBxdfLoadSurface(int2(pixel));
-    const half3 resolvedColor = surface.isBackground
-        ? surface.baseColor
-        : nwbDeferredDispatchBxdf(surface.shadingModel, surface, int2(pixel))
-    ;
+    const half3 resolvedColor = surface.isBackground ? surface.baseColor : nwbDeferredDispatchBxdf(surface.shadingModel, surface, int2(pixel));
     // Scene color is linear transport for both SDR and HDR10. Apply display mapping only after composition.
     const half3 shadedColor = max(resolvedColor, half3(0.0h));
     g_NwbDeferredLightingOutput[pixel] = float4(float3(shadedColor), 1.0);

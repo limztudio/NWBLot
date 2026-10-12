@@ -21,10 +21,7 @@ NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     nwbLoadMeshPixelInput(input, nwbMeshCameraToSurfaceDirection(input.worldPosition.xyz));
 
     const NwbMeshSurface surface = nwbMaterialSurface();
-    nwbWriteMeshGBufferParams(
-        surface.baseColor, surface.normal, inWorldPosition, surface.param0, surface.param1,
-        nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness)
-    );
+    nwbWriteMeshGBufferParams(surface.baseColor, surface.normal, inWorldPosition, surface.param0, surface.param1, nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness));
 
     return nwbBuildMeshGBufferOutput();
 }

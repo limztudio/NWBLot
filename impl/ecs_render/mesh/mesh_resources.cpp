@@ -79,41 +79,25 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     mesh.csgLocalBounds.maxBounds.w = 0;
 }
 
-static void ReportMeshBufferSetupFailure(
-    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure,
-    const Name& meshName,
-    const TStringView label
-){
+static void ReportMeshBufferSetupFailure(const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure, const Name& meshName, const TStringView label){
     switch(failure){
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
-            , StringConvert(meshName.resolvedText())
-            , label
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload"), StringConvert(meshName.resolvedText()), label);
         return;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
-            , StringConvert(meshName.resolvedText())
-            , label
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows"), StringConvert(meshName.resolvedText()), label);
         return;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
-        , label
-        , StringConvert(meshName.resolvedText())
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'"), label, StringConvert(meshName.resolvedText()));
     return;
 }
 
 [[nodiscard]] static Name DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const TStringView label){
     const Name bufferName = DeriveName(meshName, suffix);
     if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
-            , label
-            , StringConvert(meshName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'"), label, StringConvert(meshName.resolvedText()));
     }
     return bufferName;
 }
@@ -132,17 +116,7 @@ template<typename PayloadT, typename PayloadVector>
     if(!bufferName)
         return {};
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(
-        graphics,
-        bufferName,
-        payload,
-        {
-            false,
-            canHaveRawViews,
-            accelStructBuildInput,
-            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-        }
-    );
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, bufferName, payload, { false, canHaveRawViews, accelStructBuildInput, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
     if(!buffer){
         ReportMeshBufferSetupFailure(buffer.error(), meshName, label);
         return {};
@@ -161,46 +135,19 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false
 ){
-    outBuffer = SetupMeshBuffer<PayloadT>(
-        graphics,
-        meshName,
-        suffix,
-        payload,
-        label,
-        canHaveRawViews,
-        accelStructBuildInput
-    );
+    outBuffer = SetupMeshBuffer<PayloadT>(graphics, meshName, suffix, payload, label, canHaveRawViews, accelStructBuildInput);
     return outBuffer != nullptr;
 }
 
 template<typename PayloadVector>
-[[nodiscard]] static bool AssignPaddedRawMeshBuffer(
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::GlobalArena& arena,
-    const Name& meshName,
-    Core::BufferHandle& outBuffer,
-    const AStringView suffix,
-    const PayloadVector& payload,
-    const TStringView label
-){
+[[nodiscard]] static bool AssignPaddedRawMeshBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena, const Name& meshName, Core::BufferHandle& outBuffer, const AStringView suffix, const PayloadVector& payload, const TStringView label){
     outBuffer = nullptr;
 
     const Name bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
         return false;
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(
-        graphics,
-        arena,
-        bufferName,
-        payload,
-        {
-            false,
-            true,
-            false,
-            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-        }
-    );
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, arena, bufferName, payload, { false, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
     if(!buffer){
         ReportMeshBufferSetupFailure(buffer.error(), meshName, label);
         return false;
@@ -209,30 +156,15 @@ template<typename PayloadVector>
     return true;
 }
 
-[[nodiscard]] static bool ValidateRawBufferLogicalByteCount(
-    const Core::BufferHandle& buffer,
-    const u32 logicalByteCount,
-    const Name& meshName,
-    const TStringView label
-){
+[[nodiscard]] static bool ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const TStringView label){
     if(!buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer")
-            , StringConvert(meshName.resolvedText())
-            , label
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer"), StringConvert(meshName.resolvedText()), label);
         return false;
     }
 
     const Core::BufferDesc& desc = buffer->getCreationDescription();
-    if(
-        desc.structStride != sizeof(u8)
-        || desc.byteSize < static_cast<u64>(logicalByteCount)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes")
-            , StringConvert(meshName.resolvedText())
-            , label
-            , logicalByteCount
-        );
+    if(desc.structStride != sizeof(u8) || desc.byteSize < static_cast<u64>(logicalByteCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes"), StringConvert(meshName.resolvedText()), label, logicalByteCount);
         return false;
     }
     return true;
@@ -285,11 +217,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
         return &foundMesh.value();
     }
 
-    auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(
-        meshPath,
-        NWB_TEXT("RendererSystem"),
-        Mesh::s_AssetTypeText
-    );
+    auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(meshPath, NWB_TEXT("RendererSystem"), Mesh::s_AssetTypeText);
     const Mesh* loadedMesh = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedMesh)
         return MakeUnexpected(Failure{});
@@ -311,9 +239,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     NWB_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, mesh.solidTriangleWords().data(), solidByteCount);
     const auto positionBounds = __hidden_mesh::BuildPositionStreamBounds(mesh.positionStream());
     if(!positionBounds){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds")
-            , StringConvert(meshPath.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds"), StringConvert(meshPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     createdMesh.csgLocalBounds = *positionBounds;
@@ -323,65 +249,13 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     const bool swShadow = !rtSupported;
 
     bool uploaded = true;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(
-        m_graphics,
-        meshPath,
-        createdMesh.positionBuffer,
-        RendererArenaScope::s_PositionsBufferName,
-        mesh.positionStream(),
-        RendererArenaScope::s_PositionBufferLabel,
-        true,
-        rtSupported
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        m_graphics,
-        meshPath,
-        createdMesh.normalBuffer,
-        RendererArenaScope::s_NormalsBufferName,
-        mesh.normalStream(),
-        RendererArenaScope::s_NormalBufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        m_graphics,
-        meshPath,
-        createdMesh.tangentBuffer,
-        RendererArenaScope::s_TangentsBufferName,
-        mesh.tangentStream(),
-        RendererArenaScope::s_TangentBufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Float2U>(
-        m_graphics,
-        meshPath,
-        createdMesh.uv0Buffer,
-        RendererArenaScope::s_Uv0BufferName,
-        mesh.uv0Stream(),
-        RendererArenaScope::s_Uv0BufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        m_graphics,
-        meshPath,
-        createdMesh.colorBuffer,
-        RendererArenaScope::s_ColorsBufferName,
-        mesh.colorStream(),
-        RendererArenaScope::s_ColorBufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(
-        m_graphics,
-        meshPath,
-        createdMesh.meshletDescBuffer,
-        RendererArenaScope::s_MeshletsBufferName,
-        mesh.meshlets(),
-        RendererArenaScope::s_MeshletDescriptorBufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(
-        m_graphics,
-        meshPath,
-        createdMesh.meshletBoundsBuffer,
-        RendererArenaScope::s_MeshletBoundsBufferName,
-        mesh.meshletBounds(),
-        RendererArenaScope::s_MeshletBoundsBufferLabel,
-        true
-    ) && uploaded;
+    uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(m_graphics, meshPath, createdMesh.positionBuffer, RendererArenaScope::s_PositionsBufferName, mesh.positionStream(), RendererArenaScope::s_PositionBufferLabel, true, rtSupported) && uploaded;
+    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(m_graphics, meshPath, createdMesh.normalBuffer, RendererArenaScope::s_NormalsBufferName, mesh.normalStream(), RendererArenaScope::s_NormalBufferLabel) && uploaded;
+    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(m_graphics, meshPath, createdMesh.tangentBuffer, RendererArenaScope::s_TangentsBufferName, mesh.tangentStream(), RendererArenaScope::s_TangentBufferLabel) && uploaded;
+    uploaded = __hidden_mesh::AssignMeshBuffer<Float2U>(m_graphics, meshPath, createdMesh.uv0Buffer, RendererArenaScope::s_Uv0BufferName, mesh.uv0Stream(), RendererArenaScope::s_Uv0BufferLabel) && uploaded;
+    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(m_graphics, meshPath, createdMesh.colorBuffer, RendererArenaScope::s_ColorsBufferName, mesh.colorStream(), RendererArenaScope::s_ColorBufferLabel) && uploaded;
+    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(m_graphics, meshPath, createdMesh.meshletDescBuffer, RendererArenaScope::s_MeshletsBufferName, mesh.meshlets(), RendererArenaScope::s_MeshletDescriptorBufferLabel) && uploaded;
+    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(m_graphics, meshPath, createdMesh.meshletBoundsBuffer, RendererArenaScope::s_MeshletBoundsBufferName, mesh.meshletBounds(), RendererArenaScope::s_MeshletBoundsBufferLabel, true) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
         m_arena,
@@ -423,23 +297,16 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     // Both shadow backends trace triangles; always create the reconstructed index buffer.
     {
         const usize indexCount = static_cast<usize>(createdMesh.meshletPrimitiveIndexCount);
-        Core::Alloc::ScratchArena scratchArena(
-            RendererArenaScope::s_RayTracingBuildArena,
-            indexCount * sizeof(u32) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes
-        );
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingBuildArena, indexCount * sizeof(u32) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes);
         const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, mesh);
         if(!triangleIndices){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'")
-                , StringConvert(meshPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
         const Name indexBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleIndicesBufferName);
         if(!indexBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'")
-                , StringConvert(meshPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
@@ -449,16 +316,9 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
         indexFlags.accelStructBuildInput = rtSupported;
         // Async shadow packet shares this stream; keep sharing consistent to avoid ownership transfer.
         indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
-        auto indexBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
-            m_graphics,
-            indexBufferName,
-            *triangleIndices,
-            indexFlags
-        );
+        auto indexBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(m_graphics, indexBufferName, *triangleIndices, indexFlags);
         if(!indexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'")
-                , StringConvert(meshPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
@@ -478,23 +338,16 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     // Flat per-corner trace attributes in lockstep with the index buffer; always carries a raw view.
     {
         const usize attributeCount = mesh.meshletPrimitiveIndices().size();
-        Core::Alloc::ScratchArena scratchArena(
-            RendererArenaScope::s_RayTracingAttributeArena,
-            attributeCount * sizeof(AttribGpu) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes
-        );
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingAttributeArena, attributeCount * sizeof(AttribGpu) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes);
         const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, mesh);
         if(!triangleAttributes){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'")
-                , StringConvert(meshPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
         const Name attributeBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleAttributesBufferName);
         if(!attributeBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'")
-                , StringConvert(meshPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
@@ -502,16 +355,9 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
         attributeFlags.canHaveRawViews = true;
         // Tracing shares these attributes on AsyncCompute; keep shared-read input.
         attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
-        auto attributeBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
-            m_graphics,
-            attributeBufferName,
-            *triangleAttributes,
-            attributeFlags
-        );
+        auto attributeBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(m_graphics, attributeBufferName, *triangleAttributes, attributeFlags);
         if(!attributeBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace triangle attribute buffer for mesh '{}'")
-                , StringConvert(meshPath.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace triangle attribute buffer for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         createdMesh.attributeBuffer = Move(*attributeBuffer);
@@ -560,9 +406,7 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
     const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
     if(foundMesh != m_meshState.m_meshes.end()){
         if(!foundMesh.value().runtimeMesh){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource")
-                , StringConvert(desc.meshKey.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource"), StringConvert(desc.meshKey.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         if(!__hidden_mesh::RuntimeMeshSourceMatches(foundMesh.value(), desc)){
@@ -610,18 +454,10 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
     NWB_ASSERT(desc.localBounds.valid());
     __hidden_mesh::RefreshRuntimeMeshContent(createdMesh, desc);
     if((createdMesh.meshletPrimitiveIndexCount % s_MeshletTriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles")
-            , StringConvert(createdMesh.meshName.resolvedText())
-            , createdMesh.meshletPrimitiveIndexCount
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles"), StringConvert(createdMesh.meshName.resolvedText()), createdMesh.meshletPrimitiveIndexCount);
         return MakeUnexpected(Failure{});
     }
-    if(!__hidden_mesh::ValidateRawBufferLogicalByteCount(
-        createdMesh.meshletPrimitiveIndexBuffer,
-        createdMesh.meshletPrimitiveIndexCount,
-        createdMesh.meshName,
-        RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
-    ))
+    if(!__hidden_mesh::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel))
         return MakeUnexpected(Failure{});
     NWB_ASSERT(createdMesh.valid());
     if(!createMeshRenderBindings(createdMesh))
@@ -662,18 +498,12 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
     Core::Alloc::ScratchArena scratchArena(__hidden_mesh::s_RuntimeMeshPruningArena);
     if(meshSystemPtr){
         const NWB::Impl::MeshSystem& meshSystem = *meshSystemPtr;
-        ECSRenderDetail::PruneRuntimeMeshResources(
-            m_meshState.m_meshes,
-            meshSystem,
-            [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
+        ECSRenderDetail::PruneRuntimeMeshResources(m_meshState.m_meshes, meshSystem, [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
             scratchArena
         );
         return;
     }
-    ECSRenderDetail::PruneRuntimeMeshResources(
-        m_meshState.m_meshes,
-        meshSystemPtr,
-        [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
+    ECSRenderDetail::PruneRuntimeMeshResources(m_meshState.m_meshes, meshSystemPtr, [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
         scratchArena
     );
 }

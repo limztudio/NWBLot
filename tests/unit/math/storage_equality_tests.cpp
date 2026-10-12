@@ -170,8 +170,7 @@ template<typename Value, usize Count>
 void CheckPageBoundary(){
     const long pageSize = sysconf(_SC_PAGESIZE);
     ASSERT_GT(pageSize, 0);
-    void* const mapping = mmap(nullptr, static_cast<usize>(pageSize) * 2u, PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* const mapping = mmap(nullptr, static_cast<usize>(pageSize) * 2u, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     ASSERT_NE(mapping, MAP_FAILED);
     const int protection = mprotect(static_cast<char*>(mapping) + pageSize, static_cast<usize>(pageSize), PROT_NONE);
     if(protection != 0){
@@ -239,8 +238,7 @@ TEST(Math, StorageEqualityUsesNumericFloatsAndIntegerMixedPayloads){
     const Float3UInt mixedUnsigned(0.0f, -0.0f, 2.0f, 0x7F800001u);
     EXPECT_TRUE(mixedUnsigned == Float3UInt(-0.0f, 0.0f, 2.0f, 0x7F800001u));
     EXPECT_FALSE(mixedUnsigned == Float3UInt(0.0f, -0.0f, 2.0f, 0x7F800002u));
-    EXPECT_FALSE(Float3UInt(1.0f, 2.0f, Limit<f32>::s_QuietNaN, 0u)
-        == Float3UInt(1.0f, 2.0f, Limit<f32>::s_QuietNaN, 0u));
+    EXPECT_FALSE(Float3UInt(1.0f, 2.0f, Limit<f32>::s_QuietNaN, 0u) == Float3UInt(1.0f, 2.0f, Limit<f32>::s_QuietNaN, 0u));
 }
 
 TEST(Math, StorageEqualityPreservesNaNShortCircuitExceptionFlags){

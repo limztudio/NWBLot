@@ -93,9 +93,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiSkinPreview::UiSkinPreview(
-    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets
-)
+UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
     : m_normal(arena)
     , m_hover(arena)
     , m_pressed(arena)
@@ -109,12 +107,7 @@ UiSkinPreview::UiSkinPreview(
     const bool configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")
         && ConfigureLabel(m_pressed, "Pressed") && ConfigureLabel(m_disabled, "Disabled")
         && ConfigureLabel(m_edit, "UTF-8 labels", 14.0f) && ConfigureLabel(m_caption, "FreeType + HarfBuzz", 14.0f)
-        && m_korean.setText(ShapeRequest{
-            .text = s_KoreanText,
-            .fontSize = 13.0f,
-            .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'),
-            .language = "ko"
-        }) == NWB::Impl::Ui::TextLayoutStatus::Success;
+        && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .fontSize = 13.0f, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == NWB::Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
 }
 
@@ -142,20 +135,13 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(154.0f, 55.0f, 0.0f, 0.0f));
     const SIMDVectorSingle editOrigin = VectorAdd(origin, VectorSet(20.0f, 94.0f, 0.0f, 0.0f));
     context.paint.pushClip({ VectorGetX(clipOrigin), VectorGetY(clipOrigin), 256.0f, 42.0f });
-    context.paint.fillRect(
-        { VectorGetX(firstFillOrigin), VectorGetY(firstFillOrigin), 184.0f, 34.0f },
+    context.paint.fillRect({ VectorGetX(firstFillOrigin), VectorGetY(firstFillOrigin), 184.0f, 34.0f },
         { 0.12f, 0.48f, 1.0f, 0.65f }
     );
-    context.paint.fillRect(
-        { VectorGetX(secondFillOrigin), VectorGetY(secondFillOrigin), 184.0f, 34.0f },
+    context.paint.fillRect({ VectorGetX(secondFillOrigin), VectorGetY(secondFillOrigin), 184.0f, 34.0f },
         { 1.0f, 0.18f, 0.08f, 0.6f }
     );
-    const bool captionPainted = m_caption.paint(
-        context.text,
-        context.paint,
-        { VectorGetX(captionOrigin), VectorGetY(captionOrigin) }
-    )
-        && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin) });
+    const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin) }) && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin) });
     const bool clipRestored = context.paint.popClip();
     NWB_FATAL_ASSERT(clipRestored);
     if(!captionPainted){
@@ -167,12 +153,7 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         !m_normal.paint(context.text, context.paint, { VectorGetX(normalOrigin), VectorGetY(normalOrigin) }, textColor)
         || !m_hover.paint(context.text, context.paint, { VectorGetX(hoverOrigin), VectorGetY(hoverOrigin) }, textColor)
         || !m_pressed.paint(context.text, context.paint, { VectorGetX(pressedOrigin), VectorGetY(pressedOrigin) }, textColor)
-        || !m_disabled.paint(
-            context.text,
-            context.paint,
-            { VectorGetX(disabledOrigin), VectorGetY(disabledOrigin) },
-            { 0.38f, 0.42f, 0.48f, 1.0f }
-        )
+        || !m_disabled.paint(context.text, context.paint, { VectorGetX(disabledOrigin), VectorGetY(disabledOrigin) }, { 0.38f, 0.42f, 0.48f, 1.0f })
         || !m_edit.paint(context.text, context.paint, { VectorGetX(editOrigin), VectorGetY(editOrigin) }, textColor)
     )
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label shaping or rasterization failed"));

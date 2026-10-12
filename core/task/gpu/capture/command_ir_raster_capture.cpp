@@ -49,22 +49,12 @@ private:
     Atomic<u32> m_references{ 1u };
 };
 
-[[nodiscard]] static GpuCommandIrRecordContext EncodeContext(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue
-)noexcept{
+[[nodiscard]] static GpuCommandIrRecordContext EncodeContext(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept{
     return { task.index, packet.index, queue.index, queue.deviceGeneration };
 }
 
 template<typename RecordT>
-static void InitializeRecord(
-    RecordT& record,
-    const GpuCommandIrWireOpcode::Enum opcode,
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue
-)noexcept{
+static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode, const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept{
     static_assert(IsStandardLayout_V<RecordT> && IsTriviallyCopyable_V<RecordT>);
     NWB_MEMSET(&record, 0, sizeof(record));
     record.header.opcode = opcode;
@@ -182,11 +172,7 @@ bool GpuCommandIrCapture::appendRasterBytes(
         return false;
 
     const usize nextCount = m_recordEndOffsets.size() + 1u;
-    if(
-        !BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextCount)
-        || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextCount)
-        || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextCount)
-    )
+    if(!BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextCount))
         return false;
     if((stateOwner || heapOwner) && !m_rasterOwners)
         m_rasterOwners = NewArenaObject<GpuCommandIrRasterOwnerTable>(m_arena, m_arena);
@@ -235,12 +221,7 @@ bool GpuCommandIrCapture::appendRasterBytes(
     return true;
 }
 
-bool GpuCommandIrCapture::captureSetGraphicsState(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue,
-    const GpuCommandIrRasterStateDesc& state
-){
+bool GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state){
     if(
         !state.pipeline.valid() || state.pipeline.generation != task.generation
         || !state.colorAttachment.valid() || state.colorAttachment.generation != task.generation
@@ -299,12 +280,7 @@ bool GpuCommandIrCapture::captureSetGraphicsState(
     record.hasScissor = state.hasScissor ? 1u : 0u;
     record.indexFormat = static_cast<u8>(state.indexFormat);
     record.stencilRef = state.dynamicStencilRefValue;
-    return appendRasterBytes(
-        task, packet, queue,
-        BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) },
-        BinaryByteView{ reinterpret_cast<const u8*>(wires), static_cast<usize>(record.blobSizeBytes) },
-        &owner, nullptr
-    );
+    return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, BinaryByteView{ reinterpret_cast<const u8*>(wires), static_cast<usize>(record.blobSizeBytes) }, &owner, nullptr);
 }
 
 bool GpuCommandIrCapture::captureBindGraphicsHeap(
@@ -337,12 +313,7 @@ bool GpuCommandIrCapture::captureBindGraphicsHeap(
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, &owner);
 }
 
-bool GpuCommandIrCapture::capturePushConstants(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue,
-    const BinaryByteView bytes
-){
+bool GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const BinaryByteView bytes){
     if(bytes.empty() || !bytes.data() || bytes.size() > Limit<u32>::s_Max || (bytes.size() & 3u) != 0u)
         return false;
     GpuCommandIrSetPushConstantsRecord record;
@@ -352,17 +323,9 @@ bool GpuCommandIrCapture::capturePushConstants(
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, bytes, nullptr, nullptr);
 }
 
-bool GpuCommandIrCapture::captureDraw(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue,
-    const DrawArguments& arguments,
-    const bool indexed
-){
+bool GpuCommandIrCapture::captureDraw(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const DrawArguments& arguments, const bool indexed){
     GpuCommandIrDrawRecord record;
-    __hidden_gpu_command_ir_raster_capture::InitializeRecord(
-        record, indexed ? GpuCommandIrWireOpcode::DrawIndexed : GpuCommandIrWireOpcode::Draw, task, packet, queue
-    );
+    __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, indexed ? GpuCommandIrWireOpcode::DrawIndexed : GpuCommandIrWireOpcode::Draw, task, packet, queue);
     record.vertexCount = arguments.vertexCount;
     record.instanceCount = arguments.instanceCount;
     record.startIndexLocation = arguments.startIndexLocation;
@@ -371,11 +334,7 @@ bool GpuCommandIrCapture::captureDraw(
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, nullptr);
 }
 
-bool GpuCommandIrCapture::captureEndRenderPass(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue
-){
+bool GpuCommandIrCapture::captureEndRenderPass(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue){
     GpuCommandIrEndRenderPassRecord record;
     __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::EndRenderPass, task, packet, queue);
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, nullptr);

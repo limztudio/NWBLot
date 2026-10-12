@@ -33,10 +33,7 @@ struct PopupToken{
 };
 
 [[nodiscard]] inline bool operator==(const PopupToken& lhs, const PopupToken& rhs)noexcept{
-    return
-        lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration
-        && lhs.instanceGeneration == rhs.instanceGeneration && lhs.openGeneration == rhs.openGeneration
-    ;
+    return lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration && lhs.instanceGeneration == rhs.instanceGeneration && lhs.openGeneration == rhs.openGeneration;
 }
 
 namespace PopupDismissReason{

@@ -36,8 +36,7 @@ namespace __hidden_ui_scroll_layout{
     const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
     const f64 right = rightBottomValue.x;
     const f64 bottom = rightBottomValue.y;
-    return { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(Max(0.0, right - x)),
-        static_cast<f32>(Max(0.0, bottom - y)) };
+    return { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(Max(0.0, right - x)), static_cast<f32>(Max(0.0, bottom - y)) };
 }
 
 [[nodiscard]] static u64 RowIndex(const f64 position, const f64 rowHeight, const u64 rowCount, const bool exclusive)noexcept{
@@ -60,16 +59,7 @@ namespace __hidden_ui_scroll_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ScrollPlacement> ScrollLayout::Calculate(
-    const Rect& bounds,
-    const Rect& inheritedClip,
-    const Insets& padding,
-    const f32 scrollbarWidth,
-    const f32 minimumThumb,
-    const u64 rowCount,
-    const f32 rowHeight,
-    const f64 offset
-)noexcept{
+Expected<ScrollPlacement> ScrollLayout::Calculate(const Rect& bounds, const Rect& inheritedClip, const Insets& padding, const f32 scrollbarWidth, const f32 minimumThumb, const u64 rowCount, const f32 rowHeight, const f64 offset)noexcept{
     using namespace __hidden_ui_scroll_layout;
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(inheritedClip) || !IsValidUiPadding(padding)
@@ -99,15 +89,13 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(
         return MakeUnexpected(Failure{});
     candidate.offset = Min(offset, candidate.maxOffset);
     const f64 barWidth = candidate.maxOffset > 0.0 ? Min(static_cast<f64>(scrollbarWidth), availableWidth) : 0.0;
-    candidate.viewport = { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(availableWidth - barWidth),
-        static_cast<f32>(availableHeight) };
+    candidate.viewport = { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(availableWidth - barWidth), static_cast<f32>(availableHeight) };
     if(!IsValidUiRect(candidate.viewport))
         return MakeUnexpected(Failure{});
     candidate.contentClip = Intersect(candidate.viewport, inheritedClip);
     candidate.scrollbarVisible = barWidth > 0.0 && availableHeight > 0.0;
     if(candidate.scrollbarVisible){
-        candidate.track = { static_cast<f32>(x + availableWidth - barWidth), static_cast<f32>(y),
-            static_cast<f32>(barWidth), static_cast<f32>(availableHeight) };
+        candidate.track = { static_cast<f32>(x + availableWidth - barWidth), static_cast<f32>(y), static_cast<f32>(barWidth), static_cast<f32>(availableHeight) };
         const f64 proportionalHeight = availableHeight * (availableHeight / candidate.contentHeight);
         const f64 thumbHeight = Clamp(proportionalHeight, Min(static_cast<f64>(minimumThumb), availableHeight), availableHeight);
         const f64 thumbY = y + (availableHeight - thumbHeight) * (candidate.offset / candidate.maxOffset);
@@ -127,11 +115,7 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(
 
 Expected<Rect> ScrollLayout::RowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight)noexcept{
     using namespace __hidden_ui_scroll_layout;
-    if(
-        index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount
-        || !IsValidUiRect(placement.viewport) || !IsFinite(placement.offset) || placement.offset < 0.0
-        || !IsFinite(rowHeight) || rowHeight <= 0.0f
-    )
+    if(index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount || !IsValidUiRect(placement.viewport) || !IsFinite(placement.offset) || placement.offset < 0.0 || !IsFinite(rowHeight) || rowHeight <= 0.0f)
         return MakeUnexpected(Failure{});
     const f64 y = static_cast<f64>(index) * rowHeight - placement.offset + placement.viewport.y;
     if(!IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max)

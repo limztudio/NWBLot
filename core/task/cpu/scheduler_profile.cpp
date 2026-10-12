@@ -16,12 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CpuTaskScheduler::ProfileMeasure::ProfileMeasure(
-    CpuTaskScheduler& scheduler,
-    const CpuTaskProfileKind::Enum kind,
-    const TaskHandle task,
-    const CpuTaskProfileLabel label
-)
+CpuTaskScheduler::ProfileMeasure::ProfileMeasure(CpuTaskScheduler& scheduler, const CpuTaskProfileKind::Enum kind, const TaskHandle task, const CpuTaskProfileLabel label)
     : m_scheduler(scheduler)
 {
     if(!m_scheduler.m_profileEnabled.load(MemoryOrder::relaxed))
@@ -29,13 +24,7 @@ CpuTaskScheduler::ProfileMeasure::ProfileMeasure(
     ScopedLock lock(m_scheduler.m_mutex);
 
     if(m_scheduler.m_profileEnabled.load(MemoryOrder::relaxed)){
-        m_sample = m_scheduler.prepareProfileLocked(
-            kind,
-            task,
-            label,
-            scheduler.currentWorkerIndex(),
-            scheduler.currentWorkerAffinity()
-        );
+        m_sample = m_scheduler.prepareProfileLocked(kind, task, label, scheduler.currentWorkerIndex(), scheduler.currentWorkerAffinity());
         m_sample->begin = TimerNow();
     }
 }
@@ -124,13 +113,7 @@ void CpuTaskScheduler::profileReadyLocked(const u32 index)noexcept{
     ready.captureEpoch = m_profileEpoch;
 }
 
-CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(
-    const CpuTaskProfileKind::Enum kind,
-    const TaskHandle task,
-    CpuTaskProfileLabel label,
-    const usize workerIndex,
-    const CpuAffinity::Enum affinity
-)const noexcept{
+CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(const CpuTaskProfileKind::Enum kind, const TaskHandle task, CpuTaskProfileLabel label, const usize workerIndex, const CpuAffinity::Enum affinity)const noexcept{
     TaskHandle ancestor = task;
     while(!label.valid()){
         const TaskNode* const node = resolveLocked(ancestor);
@@ -141,16 +124,7 @@ CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(
             label = node->scope->m_profileLabel;
         ancestor = node->parent;
     }
-    return {
-        .begin = Timer{},
-        .task = task,
-        .frameIndex = m_profileFrameIndex,
-        .captureEpoch = m_profileEpoch,
-        .workerIndex = workerIndex,
-        .label = label,
-        .affinity = affinity,
-        .kind = kind,
-    };
+    return { .begin = Timer{}, .task = task, .frameIndex = m_profileFrameIndex, .captureEpoch = m_profileEpoch, .workerIndex = workerIndex, .label = label, .affinity = affinity, .kind = kind, };
 }
 
 void CpuTaskScheduler::finishProfileLocked(const ProfileSample& sample, const Timer end)noexcept{
@@ -165,11 +139,7 @@ void CpuTaskScheduler::finishProfileLocked(const ProfileSample& sample, const Ti
     event.task = sample.task;
     event.label = s_NameNone;
     if(sample.label.valid()){
-        const auto found = LowerBound(
-            m_profileLabels.begin(),
-            m_profileLabels.end(),
-            sample.label.value,
-            [](const ProfileLabelRecord& record, const u64 identity)noexcept{ return record.label.value < identity; }
+        const auto found = LowerBound(m_profileLabels.begin(), m_profileLabels.end(), sample.label.value, [](const ProfileLabelRecord& record, const u64 identity)noexcept{ return record.label.value < identity; }
         );
         if(found != m_profileLabels.end() && found->label.value == sample.label.value)
             event.label = found->name;

@@ -1,25 +1,9 @@
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_volume_cook)
-    target_sources(nwb_assets_volume_cook PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
-        "${CMAKE_CURRENT_LIST_DIR}/asset_volume_writer.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/asset_volume_writer.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cooked_object_cache.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cooked_object_cache.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_paths.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_types.h"
-        "${CMAKE_CURRENT_LIST_DIR}/built_asset.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/built_asset.h"
-        "${CMAKE_CURRENT_LIST_DIR}/pack_manifest.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/pack_manifest.h"
-        "${CMAKE_CURRENT_LIST_DIR}/volume_prepare_registry.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/volume_prepare_registry.h"
-    )
+    target_sources(nwb_assets_volume_cook PRIVATE "${CMAKE_CURRENT_LIST_DIR}/arena_names.h" "${CMAKE_CURRENT_LIST_DIR}/asset_volume_writer.cpp" "${CMAKE_CURRENT_LIST_DIR}/asset_volume_writer.h" "${CMAKE_CURRENT_LIST_DIR}/cooked_object_cache.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cooked_object_cache.h" "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp" "${CMAKE_CURRENT_LIST_DIR}/cook_paths.h" "${CMAKE_CURRENT_LIST_DIR}/cook_types.h" "${CMAKE_CURRENT_LIST_DIR}/built_asset.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/built_asset.h" "${CMAKE_CURRENT_LIST_DIR}/pack_manifest.cpp" "${CMAKE_CURRENT_LIST_DIR}/pack_manifest.h" "${CMAKE_CURRENT_LIST_DIR}/volume_prepare_registry.cpp" "${CMAKE_CURRENT_LIST_DIR}/volume_prepare_registry.h")
     target_link_libraries(nwb_assets_volume_cook PUBLIC nwb_assets nwb_assets_cook nwb_cpu_task)
-    target_link_libraries(nwb_assets_volume_cook PRIVATE
-        nwb_metascript
-        nwb_filesystem
-    )
+    target_link_libraries(nwb_assets_volume_cook PRIVATE nwb_metascript nwb_filesystem)
     target_compile_definitions(nwb_assets_volume_cook PRIVATE NWB_COOK=1)
 endif()

@@ -169,11 +169,7 @@ TEST(UiMultilineText, RejectsMalformedUtf8AndNonScalarSequencesWithoutPublishing
 }
 
 TEST(UiMultilineText, RejectedControlsAfterNormalizedPrefixesLeaveOutputUnchanged){
-    const AStringView cases[]{
-        "prefix\r\n\t\x01", "prefix\r\n\v", "prefix\r\n\f", "prefix\xC2\x85\x7F",
-        "prefix\xE2\x80\xA8\xC2\x80", "prefix\xE2\x80\xA9\xC2\x9F",
-        AStringView("prefix\r\n\0tail", 13u)
-    };
+    const AStringView cases[]{ "prefix\r\n\t\x01", "prefix\r\n\v", "prefix\r\n\f", "prefix\xC2\x85\x7F", "prefix\xE2\x80\xA8\xC2\x80", "prefix\xE2\x80\xA9\xC2\x9F", AStringView("prefix\r\n\0tail", 13u) };
     Tests::TestArena arena;
     AString<Core::Alloc::GlobalArena> output("before", arena.arena);
     for(const AStringView text : cases){

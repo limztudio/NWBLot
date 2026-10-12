@@ -84,8 +84,8 @@ static constexpr TransparentMeshRef s_TransparentLeftMesh{"project/meshes/cylind
 static constexpr TransparentMeshRef s_TransparentCenterMesh{"project/meshes/octahedron"};
 static constexpr TransparentMeshRef s_TransparentRightMesh{"project/meshes/cone"};
 #endif
-// Scene rotation. The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so
-// its focused photon result is easy to inspect.
+// Scene rotation.
+// The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so its focused photon result is easy to inspect.
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
 #else
@@ -101,8 +101,8 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-// The target-hardware runner sends F1 only after it observes an accepted history. Keeping the toggle in the smoke
-// project makes the current-frame -> re-bootstrap transition deterministic without adding a renderer test control.
+// The target-hardware runner sends F1 only after it observes an accepted history.
+// Keeping the toggle in the smoke project makes the current-frame -> re-bootstrap transition deterministic without adding a renderer test control.
 class FrameLaggedAsyncLightingToggleInputHandler final : public NWB::Core::IInputEventHandler{
 public:
     bool keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)override{
@@ -126,9 +126,8 @@ private:
     bool m_toggleRequested = false;
 };
 
-// Windows may deny a harness process foreground ownership even after SetForegroundWindow succeeds locally. The
-// target-hardware lifecycle needs actual post-bootstrap submissions, so use Graphics' existing render-pass opt-in
-// only in this dedicated smoke executable; production projects retain their normal focus throttling policy.
+// Windows may deny a harness process foreground ownership even after SetForegroundWindow succeeds locally.
+// The target-hardware lifecycle needs actual post-bootstrap submissions, so use Graphics' existing render-pass opt-in only in this dedicated smoke executable; production projects retain their normal focus throttling policy.
 class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass{
 public:
     explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::GraphicsRuntime& graphics)
@@ -216,13 +215,7 @@ public:
     return Vector3Rotate(basePosition, sceneRotation);
 }
 
-static void ApplyTransparentSceneTransform(
-    NWB::Core::ECS::World& world,
-    const NWB::Core::ECS::EntityID entity,
-    const SIMDVectorSingle basePosition,
-    const SIMDVectorSingle sceneRotation,
-    const SIMDVectorSingle localRotation
-){
+static void ApplyTransparentSceneTransform(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle basePosition, const SIMDVectorSingle sceneRotation, const SIMDVectorSingle localRotation){
     auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
     if(!transform)
         return;
@@ -258,10 +251,7 @@ static void ApplyTransparentCsgSceneTransform(
         AssignCsgCutterTransform(*cutter, receiverPosition, receiverRotation);
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentCsgPlaneCutter(
-    NWB::Core::ECS::World& world,
-    NWB::Core::Alloc::GlobalArena& arena
-){
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentCsgPlaneCutter(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena){
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
     cutter.receiverGroup = s_TransparentCsgReceiverGroup;
@@ -288,16 +278,7 @@ static void ApplyTransparentCsgSceneTransform(
     const Float4& scale,
     const Name csgReceiverGroup = s_NameNone
 ){
-    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
-        world,
-        arena,
-        mesh,
-        material,
-        s_SmokeSurfaceMaterialInterface,
-        colorTint,
-        position,
-        scale
-    );
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, arena, mesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
     if(!entity.valid())
         return NWB::Core::ECS::s_InvalidEntityId;
 
@@ -326,26 +307,17 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TransparentMultiSmokeProject"));
 
-        const bool rayQueryHardwareAvailable =
-            context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
-            && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
-        ;
+        const bool rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
         if(rayQueryHardwareAvailable){
-            NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware")
-            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware"));
         }else{
-            NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable")
-            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"));
         }
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
         rendererSystem.setFrameLaggedAsyncLightingEnabled(true);
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path"));
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
         const auto refractionSetting = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
@@ -388,19 +360,14 @@ private:
         }
         NWB_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), NWB_TEXT("CausticSphereSmokeProject: invalid reflection settings"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}")
-            , refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         // This clipping/coverage oracle measures the authored AVBOIT surface appearance.
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
         rendererSystem.setRefractionEnabled(false);
         NWB::Impl::ReflectionSettings reflectionSettings;
         reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
-        NWB_FATAL_ASSERT_MSG(
-            rendererSystem.setReflectionSettings(reflectionSettings),
-            NWB_TEXT("TransparentCsgSmokeProject: invalid reflection settings")
-        );
+        NWB_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), NWB_TEXT("TransparentCsgSmokeProject: invalid reflection settings"));
 #else
         AddSmokeRenderSystems(*world, context);
 #endif
@@ -465,10 +432,7 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         causticTiming = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_TIMING");
 #endif
-        if(
-            (causticTiming || NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_AVBOIT_SMOKE_TIMING"))
-            && !m_timingRenderPass.start(causticTiming)
-        )
+        if((causticTiming || NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_AVBOIT_SMOKE_TIMING")) && !m_timingRenderPass.start(causticTiming))
             return false;
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
@@ -476,14 +440,14 @@ public:
             return false;
 #endif
 
-        // Arrows scrub yaw (title shows the angle; NWB_TRANSPARENT_MULTI_SPIN_ANGLE pins it). addHandlerToBack takes
-        // first crack; consumes Left/Right only.
+        // Arrows scrub yaw (title shows the angle; NWB_TRANSPARENT_MULTI_SPIN_ANGLE pins it).
+        // addHandlerToBack takes first crack; consumes Left/Right only.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.graphics.addRenderPassToBack(m_frameLaggedAsyncLightingUnfocusedPass);
         m_frameLaggedAsyncLightingUnfocusedPassRegistered = true;
-        // The target-hardware harness presses F1 only after an accepted history is observed. It then proves the
-        // normal current-frame path and the following bootstrap without exposing a renderer-only test switch.
+        // The target-hardware harness presses F1 only after an accepted history is observed.
+        // It then proves the normal current-frame path and the following bootstrap without exposing a renderer-only test switch.
         m_context.input.addHandlerToBack(m_frameLaggedAsyncLightingToggleInput);
 #endif
 
@@ -502,44 +466,19 @@ public:
                 return false;
             }
             cameraDistance *= preset == "sparse" ? 2.0f : 1.0f;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}")
-                , preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated")
-                , cameraDistance
-                , s_CameraTargetY
-            );
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}")
-                , RendererBaselineFixedDelta()
-                , EffectiveFrozenAngle()
-                , s_CausticSphereScale
-            );
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases bootstrap {} converged {} warmup {}")
-                , NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT
-                , NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT
-                , NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT
-            );
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}")
-                , s_DefaultDirectionalLightPitch
-                , s_DefaultDirectionalLightYaw
-                , s_DefaultDirectionalLightIntensity
-            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}"), preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated"), cameraDistance, s_CameraTargetY);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"), RendererBaselineFixedDelta(), EffectiveFrozenAngle(), s_CausticSphereScale);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases bootstrap {} converged {} warmup {}"), NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT, NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT, NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}"), s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, s_DefaultDirectionalLightIntensity);
         }
 #endif
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraTargetY, cameraDistance, 0.0f);
-        const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(
-            *m_world,
-            s_DefaultDirectionalLightPitch,
-            s_DefaultDirectionalLightYaw,
-            0.0f,
-            Float4(1.0f, 0.96f, 0.88f),
-            s_DefaultDirectionalLightIntensity
-        );
+        const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         const auto causticSetting = ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED");
         const bool causticsEnabled = !causticSetting || *causticSetting != 0.f;
         m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}")
-            , causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}"), causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
@@ -558,15 +497,7 @@ public:
         if(shapesValid)
             m_world->entity(centerShapeEntity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 #else
-        const auto shapeEntity = CreateTransparentStaticMeshEntity(
-            *m_world,
-            m_context.objectArena,
-            s_TransparentLeftMesh,
-            s_TransparentSharedMaterial,
-            Float4(1.0f, 0.42f, 0.20f, 0.42f),
-            TransparentLeftShapeBasePosition(),
-            Float4(0.62f, 0.62f, 0.62f)
-        );
+        const auto shapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentLeftMesh, s_TransparentSharedMaterial, Float4(1.0f, 0.42f, 0.20f, 0.42f), TransparentLeftShapeBasePosition(), Float4(0.62f, 0.62f, 0.62f));
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -579,25 +510,13 @@ public:
             s_TransparentSharedMaterial,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
 #endif
-            TransparentCenterShapeBasePosition(),
-            Float4(0.78f, 0.78f, 0.78f),
-            TransparentCenterCsgReceiverGroup()
-        );
-        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(
-            *m_world,
-            m_context.objectArena,
-            s_TransparentRightMesh,
-            s_TransparentSharedMaterial,
-            Float4(0.12f, 0.44f, 1.0f, 0.42f),
-            TransparentRightShapeBasePosition(),
-            Float4(0.68f, 0.68f, 0.68f)
-        );
+            TransparentCenterShapeBasePosition(), Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup());
+        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), TransparentRightShapeBasePosition(), Float4(0.68f, 0.68f, 0.68f));
         m_leftShape = shapeEntity;
         m_centerShape = centerShapeEntity;
         m_rightShape = rightShapeEntity;
 
-        // Two static opaque occluders between the transparent shapes: fixed hard shadows overlap sweeping colored ones,
-        // verifying the multiplicative combine (opaque blocks even under tint).
+        // Two static opaque occluders between the transparent shapes: fixed hard shadows overlap sweeping colored ones, verifying the multiplicative combine (opaque blocks even under tint).
         const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -621,9 +540,7 @@ public:
         m_opaqueLeftShape = opaqueLeftEntity;
         m_opaqueRightShape = opaqueRightEntity;
 
-        const bool shapesValid =
-            shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid()
-            && opaqueLeftEntity.valid() && opaqueRightEntity.valid();
+        const bool shapesValid = shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid() && opaqueLeftEntity.valid() && opaqueRightEntity.valid();
 #endif
 
         // The ground receives tinted shadows and, in caustic builds, additive photon irradiance.
@@ -638,14 +555,9 @@ public:
 #else
             Float4(0.08f, 0.08f, 0.08f, 1.0f), // dark ground keeps the overlapping colored transparent shadows readable
 #endif
-            Float4(0.0f, -0.08f, 0.08f),
-            Float4(1.75f, 1.0f, 1.55f)
-        );
+            Float4(0.0f, -0.08f, 0.08f), Float4(1.75f, 1.0f, 1.55f));
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-        if(
-            NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP")
-            && !CreateCausticRefractionBackdrop(*m_world, m_context.objectArena)
-        )
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP") && !CreateCausticRefractionBackdrop(*m_world, m_context.objectArena))
             return false;
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
@@ -657,10 +569,7 @@ public:
         const bool csgEntitiesValid = true;
 #endif
         updateTransparentSceneTransforms();
-        NWB_FATAL_ASSERT_MSG(
-            activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
-            NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
-        );
+        NWB_FATAL_ASSERT_MSG(activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid, NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities"));
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(causticTiming){
@@ -696,15 +605,11 @@ public:
 #endif
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // The harness captures only after the last requested render submission has completed. Keeping the
-                // event loop alive while submissions are suspended pins AVBOIT's temporal phase for a later image
-                // comparison without adding a renderer/runtime test feature.
+                // The harness captures only after the last requested render submission has completed.
+                // Keeping the event loop alive while submissions are suspended pins AVBOIT's temporal phase for a later image comparison without adding a renderer/runtime test feature.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
-                    m_rendererBaselineRenderedFrameCount
-                );
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
             }
             return true;
         }
@@ -765,14 +670,7 @@ private:
         const SIMDVectorSingle sceneRotation = BuildTransparentSceneRotation(sceneYaw);
         ApplyTransparentSceneTransform(*m_world, m_leftShape, LoadFloat(TransparentLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-        ApplyTransparentCsgSceneTransform(
-            *m_world,
-            m_csgReceiver,
-            m_csgCutter,
-            LoadFloat(TransparentCenterShapeBasePosition()),
-            sceneRotation,
-            BuildTransparentCsgRotation(sceneYaw)
-        );
+        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, BuildTransparentCsgRotation(sceneYaw));
 #else
         ApplyTransparentSceneTransform(*m_world, m_centerShape, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, QuaternionIdentity());
 #endif

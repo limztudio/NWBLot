@@ -35,12 +35,7 @@ static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcep
     sigset_t blocked;
     sigset_t previous;
     sigset_t pending;
-    if(
-        sigemptyset(&blocked) != 0
-        || sigaddset(&blocked, SIGPIPE) != 0
-        || pthread_sigmask(SIG_BLOCK, &blocked, &previous) != 0
-        || sigpending(&pending) != 0
-    )
+    if(sigemptyset(&blocked) != 0 || sigaddset(&blocked, SIGPIPE) != 0 || pthread_sigmask(SIG_BLOCK, &blocked, &previous) != 0 || sigpending(&pending) != 0)
         TerminateInvariant();
     const bool alreadyPending = sigismember(&pending, SIGPIPE) == 1;
     const ssize_t count = write(fd, bytes.data(), bytes.size());
@@ -82,10 +77,7 @@ Expected<ClipboardPipe> OpenClipboardPipe()noexcept{
 bool ConfigureClipboardPipe(const int fd)noexcept{
     const int flags = fcntl(fd, F_GETFL);
     const int descriptorFlags = fcntl(fd, F_GETFD);
-    return
-        flags >= 0 && descriptorFlags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0
-        && fcntl(fd, F_SETFD, descriptorFlags | FD_CLOEXEC) == 0
-    ;
+    return flags >= 0 && descriptorFlags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 && fcntl(fd, F_SETFD, descriptorFlags | FD_CLOEXEC) == 0;
 }
 
 void CloseClipboardPipe(int& fd)noexcept{
@@ -160,11 +152,7 @@ ClipboardStatus::Enum ClipboardPipeWriter::advance()noexcept{
     }
     usize consumed = 0u;
     usize calls = 0u;
-    while(
-        m_offset < m_text.size()
-        && consumed < __hidden_clipboard_pipe::s_PumpByteBudget
-        && calls < __hidden_clipboard_pipe::s_PumpCallBudget
-    ){
+    while(m_offset < m_text.size() && consumed < __hidden_clipboard_pipe::s_PumpByteBudget && calls < __hidden_clipboard_pipe::s_PumpCallBudget){
         ++calls;
         const usize size = Min(m_text.size() - m_offset, __hidden_clipboard_pipe::s_PumpByteBudget - consumed);
         const ssize_t count = __hidden_clipboard_pipe::WriteWithoutSigpipe(m_fd, AStringView(m_text).substr(m_offset, size));

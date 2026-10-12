@@ -41,31 +41,13 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decode(
-        const Texture& textureAsset,
-        const TextureMipLevel& mip,
-        u32 mipLevel,
-        Core::Format::Enum format,
-        Core::Alloc::ScratchArena& arena
-    );
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decode(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
 
 
 private:
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeLdr(
-        const Texture& textureAsset,
-        const TextureMipLevel& mip,
-        u32 mipLevel,
-        Core::Format::Enum format,
-        Core::Alloc::ScratchArena& arena
-    );
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
 
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeHdr(
-        const Texture& textureAsset,
-        const TextureMipLevel& mip,
-        u32 mipLevel,
-        Core::Format::Enum format,
-        Core::Alloc::ScratchArena& arena
-    );
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeHdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
 };
 
 

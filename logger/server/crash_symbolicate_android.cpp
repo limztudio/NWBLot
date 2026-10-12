@@ -35,12 +35,8 @@ inline constexpr AStringView s_AndroidTombstoneParsedStatus = "status=tombstone_
 inline constexpr AStringView s_AndroidTombstoneUndecodedStatus = "status=not_decoded\n";
 inline constexpr AStringView s_AndroidTombstoneResolverLine = "resolver=android_tombstone_native_symbols\n";
 inline constexpr AStringView s_AndroidTombstonePresentLine = "android_tombstone=present\n";
-inline constexpr AStringView s_AndroidTombstoneNoFramesDetail =
-    "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n"
-;
-inline constexpr AStringView s_AndroidTombstoneFramesDetail =
-    "detail=tombstone native frame lines copied; native symbol store is required for offline address resolution\n"
-;
+inline constexpr AStringView s_AndroidTombstoneNoFramesDetail = "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n";
+inline constexpr AStringView s_AndroidTombstoneFramesDetail = "detail=tombstone native frame lines copied; native symbol store is required for offline address resolution\n";
 inline constexpr AStringView s_TombstoneCallstackSectionHeader = "\n[tombstone_callstack]\n";
 
 
@@ -67,16 +63,10 @@ void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory
         frames += '\n';
     }
 
-    outReport += frames.empty()
-        ? s_AndroidTombstoneUndecodedStatus
-        : s_AndroidTombstoneParsedStatus
-    ;
+    outReport += frames.empty() ? s_AndroidTombstoneUndecodedStatus : s_AndroidTombstoneParsedStatus;
     outReport += s_AndroidTombstoneResolverLine;
     outReport += s_AndroidTombstonePresentLine;
-    outReport += frames.empty()
-        ? s_AndroidTombstoneNoFramesDetail
-        : s_AndroidTombstoneFramesDetail
-    ;
+    outReport += frames.empty() ? s_AndroidTombstoneNoFramesDetail : s_AndroidTombstoneFramesDetail;
 
     if(!frames.empty()){
         outReport += s_TombstoneCallstackSectionHeader;

@@ -41,12 +41,7 @@ struct TextureCopyContract{
     TextureCopyQueueRequirement::Enum queueRequirement = TextureCopyQueueRequirement::Transfer;
 };
 
-[[nodiscard]] inline Expected<TextureCopyContract> ResolveTextureCopyContract(
-    const TextureDesc& sourceDesc,
-    const TextureSlice& sourceSlice,
-    const TextureDesc& destinationDesc,
-    const TextureSlice& destinationSlice
-)noexcept{
+[[nodiscard]] inline Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDesc, const TextureSlice& sourceSlice, const TextureDesc& destinationDesc, const TextureSlice& destinationSlice)noexcept{
     TextureCopyContract contract{};
     if(!IsTextureDescShapeValid(sourceDesc) || !IsTextureDescShapeValid(destinationDesc))
         return MakeUnexpected(Failure{});
@@ -100,14 +95,8 @@ struct TextureCopyContract{
     )
         return MakeUnexpected(Failure{});
 
-    const VkExtent3D sourceMipExtent = VulkanDetail::GetTextureMipExtent(
-        sourceDesc,
-        contract.sourceSlice.mipLevel
-    );
-    const VkExtent3D destinationMipExtent = VulkanDetail::GetTextureMipExtent(
-        destinationDesc,
-        contract.destinationSlice.mipLevel
-    );
+    const VkExtent3D sourceMipExtent = VulkanDetail::GetTextureMipExtent(sourceDesc, contract.sourceSlice.mipLevel);
+    const VkExtent3D destinationMipExtent = VulkanDetail::GetTextureMipExtent(destinationDesc, contract.destinationSlice.mipLevel);
     const bool sourceWholeMip = contract.sourceSlice.x == 0u
         && contract.sourceSlice.y == 0u
         && contract.sourceSlice.z == 0u
@@ -128,10 +117,7 @@ struct TextureCopyContract{
     contract.aspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(sourceDesc.format));
     if(contract.aspectMask == 0u)
         return MakeUnexpected(Failure{});
-    if(
-        sourceDesc.sampleCount > 1u
-        && (contract.aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
-    )
+    if(sourceDesc.sampleCount > 1u && (contract.aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u)
         contract.queueRequirement = static_cast<decltype(contract.queueRequirement)>(TextureCopyQueueRequirement::Graphics);
     else if(!sourceWholeMip || !destinationWholeMip)
         contract.queueRequirement = static_cast<decltype(contract.queueRequirement)>(TextureCopyQueueRequirement::ComputeOrGraphics);

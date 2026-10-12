@@ -40,14 +40,12 @@ NwbCsgRemovedCapSample nwbCsgSampleRemovedCapAtPixel(const uint2 pixel, const ui
         return result;
     const uint rawCount = nwbHeapStorageImage2DArrayUint2(slots.z).Load(int3(pixel, 0)).x;
     const uint count = min(rawCount, min(layers, NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT));
-    [unroll]
-    for(uint index = 0u; index < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++index){
+    [unroll] for(uint index = 0u; index < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++index){
         if(index >= count)
             break;
         const int3 texel = int3(pixel, index);
         const uint4 data = nwbHeapStorageImage2DArrayUint4(slots.y).Load(texel);
-        if((receiverIndex != NWB_CSG_INVALID_RECEIVER_INDEX && data.x != receiverIndex)
-            || (data.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
+        if((receiverIndex != NWB_CSG_INVALID_RECEIVER_INDEX && data.x != receiverIndex) || (data.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
             continue;
         const float4 depth = nwbHeapStorageImage2DArrayFloat4(slots.x).Load(texel);
         if(!isfinite(depth.y) || depth.y >= result.depth)
@@ -75,10 +73,8 @@ NwbCsgRemovedCapSample nwbCsgSampleNearestRemovedCap(const uint2 pixel, const ui
     NwbCsgRemovedCapSample result = nwbCsgSampleRemovedCapAtPixel(pixel, workRect, slots, receiverIndex);
     if(result.visible)
         return result;
-    [unroll]
-    for(int y = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; y <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; ++y){
-        [unroll]
-        for(int x = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; x <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; ++x){
+    [unroll] for(int y = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; y <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; ++y){
+        [unroll] for(int x = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; x <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; ++x){
             if(x == 0 && y == 0)
                 continue;
             const int2 neighbor = int2(pixel) + int2(x, y);

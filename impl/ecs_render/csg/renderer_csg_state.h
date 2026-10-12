@@ -33,8 +33,7 @@ struct CsgFrameStateCacheSignature{
     u64 shapeRegistryRevision = 0u;
 
     friend bool operator==(const CsgFrameStateCacheSignature& lhs, const CsgFrameStateCacheSignature& rhs)noexcept{
-        return lhs.contentHash == rhs.contentHash
-            && lhs.shapeRegistryRevision == rhs.shapeRegistryRevision;
+        return lhs.contentHash == rhs.contentHash && lhs.shapeRegistryRevision == rhs.shapeRegistryRevision;
     }
 };
 

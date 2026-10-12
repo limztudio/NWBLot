@@ -28,13 +28,7 @@ namespace __hidden_ui_skin_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<UiSkinCookEntry> ParseUiSkinDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
+static Expected<UiSkinCookEntry> ParseUiSkinDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
     return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 

@@ -27,8 +27,7 @@ def validate_open_sheets(mesh, count):
     if len(mesh.positions) != 4 * count or len(mesh.indices) != 2 * count:
         raise AssertionError("open-sheet primitive or position count changed")
     for sheet in range(count):
-        indices = [tuple(mesh.vertex_refs[index][0] for index in triangle)
-            for triangle in mesh.indices[2 * sheet:2 * sheet + 2]]
+        indices = [tuple(mesh.vertex_refs[index][0] for index in triangle) for triangle in mesh.indices[2 * sheet:2 * sheet + 2]]
         if set(index for triangle in indices for index in triangle) != set(range(4 * sheet, 4 * sheet + 4)):
             raise AssertionError("open sheets became connected or lost a corner")
         edges = Counter(tuple(sorted((a, b))) for triangle in indices for a, b in zip(triangle, triangle[1:] + triangle[:1]))

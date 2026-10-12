@@ -44,8 +44,7 @@ static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes
     AppendHexU64(g_TemporarySequence.fetch_add(s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
     temporaryName += s_TemporaryNameExtension;
     const Path temporary = path.parentPath() / temporaryName;
-    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing)
-        || existing != bytes || !RenamePath(temporary, path)){
+    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || existing != bytes || !RenamePath(temporary, path)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to publish built asset '{}'"), PathToString<tchar>(path));
         if(!RemoveFile(temporary))
             NWB_LOGGER_WARNING(NWB_TEXT("AssetBuilder: failed to remove temporary output '{}'"), PathToString<tchar>(temporary));
@@ -140,13 +139,7 @@ Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBy
     const NameHash virtualPathHash = *ReadPOD<NameHash>(inOutBytes, cursor);
     const u64 payloadSize = *ReadPOD<u64>(inOutBytes, cursor);
     const u64 payloadHash = *ReadPOD<u64>(inOutBytes, cursor);
-    if(
-        magic != __hidden_built_asset::s_Magic
-        || version != __hidden_built_asset::s_Version
-        || payloadSize != inOutBytes.size() - cursor
-        || payloadHash != ComputeFnv64Bytes(inOutBytes.data() + cursor, inOutBytes.size() - cursor)
-        || !Name(virtualPathHash)
-    ){
+    if(magic != __hidden_built_asset::s_Magic || version != __hidden_built_asset::s_Version || payloadSize != inOutBytes.size() - cursor || payloadHash != ComputeFnv64Bytes(inOutBytes.data() + cursor, inOutBytes.size() - cursor) || !Name(virtualPathHash)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: invalid built asset '{}'"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }

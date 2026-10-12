@@ -31,12 +31,8 @@ class RefractionGalleryTests(unittest.TestCase):
                 parse_selection(value, CASES, LIT_CASES)
 
     def test_capture_environment_overrides_case_and_removes_stale_capture_controls(self):
-        inherited = {
-            LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFRACTION_SMOKE_GEOMETRY: "1",
-            LIT_NWB_REFRACTION_SMOKE_ENABLED: "0", LIT_NWB_REFRACTION_SMOKE_HARDWARE: "1",
-            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: "old.bmp",
-            LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO: "1", LIT_PATH: LIT_PRESERVED,
-        }
+        inherited = { LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFRACTION_SMOKE_GEOMETRY: "1", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0", LIT_NWB_REFRACTION_SMOKE_HARDWARE: "1",
+            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: "old.bmp", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO: "1", LIT_PATH: LIT_PRESERVED, }
         env = capture_environment(LIT_PRISM, "screen", inherited)
         self.assertEqual(env[LIT_NWB_REFRACTION_SMOKE_CASE], LIT_PRISM)
         self.assertEqual(env[LIT_NWB_REFRACTION_SMOKE_GEOMETRY], "0")

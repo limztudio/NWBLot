@@ -41,19 +41,9 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuPhysicalQueueInfo& destinationQueue
 )noexcept;
 
-[[nodiscard]] ResourceStates::Mask ReadStateSourceSnapshotState(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    ResourceStates::Mask state
-)noexcept;
+[[nodiscard]] ResourceStates::Mask ReadStateSourceSnapshotState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, ResourceStates::Mask state)noexcept;
 
-[[nodiscard]] bool AppendOverlappingReaderDependencies(
-    GpuTaskGraphResourceStatePlan& plan,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    const TrackedCompiledResourceState& previousState,
-    const GpuSubmissionPacketId& consumer
-);
+[[nodiscard]] bool AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& previousState, const GpuSubmissionPacketId& consumer);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

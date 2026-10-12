@@ -34,86 +34,31 @@ endif()
 
 nwb_toolchain_find_vs_installation(_nwb_vs_installation)
 
-nwb_toolchain_append_existing_roots(_nwb_llvm_roots
-    "$ENV{NWB_LLVM_ROOT}"
-    "$ENV{LLVM_ROOT}"
-    "$ENV{VCINSTALLDIR}/Tools/Llvm/${_nwb_host_tool_arch}"
-    "$ENV{VCINSTALLDIR}/Tools/Llvm/x64"
-    "$ENV{VCINSTALLDIR}/Tools/Llvm/ARM64"
-    "$ENV{VCINSTALLDIR}/Tools/Llvm"
-    "${_nwb_vs_installation}/VC/Tools/Llvm/${_nwb_host_tool_arch}"
-    "${_nwb_vs_installation}/VC/Tools/Llvm/x64"
-    "${_nwb_vs_installation}/VC/Tools/Llvm/ARM64"
-    "${_nwb_vs_installation}/VC/Tools/Llvm"
-    "$ENV{ProgramFiles}/LLVM"
-)
+nwb_toolchain_append_existing_roots(_nwb_llvm_roots "$ENV{NWB_LLVM_ROOT}" "$ENV{LLVM_ROOT}" "$ENV{VCINSTALLDIR}/Tools/Llvm/${_nwb_host_tool_arch}" "$ENV{VCINSTALLDIR}/Tools/Llvm/x64" "$ENV{VCINSTALLDIR}/Tools/Llvm/ARM64" "$ENV{VCINSTALLDIR}/Tools/Llvm"
+    "${_nwb_vs_installation}/VC/Tools/Llvm/${_nwb_host_tool_arch}" "${_nwb_vs_installation}/VC/Tools/Llvm/x64" "${_nwb_vs_installation}/VC/Tools/Llvm/ARM64" "${_nwb_vs_installation}/VC/Tools/Llvm" "$ENV{ProgramFiles}/LLVM")
 nwb_toolchain_make_hints(_nwb_llvm_hints ${_nwb_llvm_roots})
 
-nwb_toolchain_find_required_program(_nwb_clang
-    DESCRIPTION "clang"
-    NAMES clang clang.exe
-    HINTS ${_nwb_llvm_hints}
-)
-nwb_toolchain_find_required_program(_nwb_clangxx
-    DESCRIPTION "clang++"
-    NAMES clang++ clang++.exe
-    HINTS ${_nwb_llvm_hints}
-)
-nwb_toolchain_find_required_program(_nwb_lld_link
-    DESCRIPTION "lld-link"
-    NAMES lld-link lld-link.exe
-    HINTS ${_nwb_llvm_hints}
-)
-nwb_toolchain_find_required_program(_nwb_llvm_ar
-    DESCRIPTION "llvm-ar"
-    NAMES llvm-ar llvm-ar.exe
-    HINTS ${_nwb_llvm_hints}
-)
-nwb_toolchain_find_required_program(_nwb_llvm_ranlib
-    DESCRIPTION "llvm-ranlib"
-    NAMES llvm-ranlib llvm-ranlib.exe
-    HINTS ${_nwb_llvm_hints}
-)
+nwb_toolchain_find_required_program(_nwb_clang DESCRIPTION "clang" NAMES clang clang.exe HINTS ${_nwb_llvm_hints})
+nwb_toolchain_find_required_program(_nwb_clangxx DESCRIPTION "clang++" NAMES clang++ clang++.exe HINTS ${_nwb_llvm_hints})
+nwb_toolchain_find_required_program(_nwb_lld_link DESCRIPTION "lld-link" NAMES lld-link lld-link.exe HINTS ${_nwb_llvm_hints})
+nwb_toolchain_find_required_program(_nwb_llvm_ar DESCRIPTION "llvm-ar" NAMES llvm-ar llvm-ar.exe HINTS ${_nwb_llvm_hints})
+nwb_toolchain_find_required_program(_nwb_llvm_ranlib DESCRIPTION "llvm-ranlib" NAMES llvm-ranlib llvm-ranlib.exe HINTS ${_nwb_llvm_hints})
 
-set(_nwb_windows_sdk_bin_roots
-    "$ENV{WindowsSdkVerBinPath}"
-    "$ENV{WindowsSdkVerBinPath}/${_nwb_host_sdk_arch}"
-    "$ENV{WindowsSdkVerBinPath}/x64"
-    "$ENV{WindowsSdkVerBinPath}/arm64"
-    "$ENV{WindowsSdkBinPath}"
-    "$ENV{WindowsSdkBinPath}/${_nwb_host_sdk_arch}"
-    "$ENV{WindowsSdkBinPath}/x64"
-    "$ENV{WindowsSdkBinPath}/arm64"
-)
+set(_nwb_windows_sdk_bin_roots "$ENV{WindowsSdkVerBinPath}" "$ENV{WindowsSdkVerBinPath}/${_nwb_host_sdk_arch}" "$ENV{WindowsSdkVerBinPath}/x64" "$ENV{WindowsSdkVerBinPath}/arm64" "$ENV{WindowsSdkBinPath}" "$ENV{WindowsSdkBinPath}/${_nwb_host_sdk_arch}"
+    "$ENV{WindowsSdkBinPath}/x64" "$ENV{WindowsSdkBinPath}/arm64")
 file(GLOB _nwb_windows_sdk_version_dirs LIST_DIRECTORIES true "C:/Program Files (x86)/Windows Kits/10/bin/*")
 foreach(_nwb_sdk_dir IN LISTS _nwb_windows_sdk_version_dirs)
     if(IS_DIRECTORY "${_nwb_sdk_dir}")
-        list(APPEND _nwb_windows_sdk_bin_roots
-            "${_nwb_sdk_dir}"
-            "${_nwb_sdk_dir}/${_nwb_host_sdk_arch}"
-            "${_nwb_sdk_dir}/x64"
-            "${_nwb_sdk_dir}/arm64"
-        )
+        list(APPEND _nwb_windows_sdk_bin_roots "${_nwb_sdk_dir}" "${_nwb_sdk_dir}/${_nwb_host_sdk_arch}" "${_nwb_sdk_dir}/x64" "${_nwb_sdk_dir}/arm64")
     endif()
 endforeach()
 nwb_toolchain_append_existing_roots(_nwb_windows_sdk_roots ${_nwb_windows_sdk_bin_roots})
 nwb_toolchain_make_hints(_nwb_windows_sdk_hints ${_nwb_windows_sdk_roots})
 
-nwb_toolchain_find_required_program(_nwb_rc
-    DESCRIPTION "Windows rc.exe"
-    NAMES rc rc.exe
-    HINTS ${_nwb_windows_sdk_hints}
-)
-nwb_toolchain_find_required_program(_nwb_mt
-    DESCRIPTION "Windows mt.exe"
-    NAMES mt mt.exe
-    HINTS ${_nwb_windows_sdk_hints}
-)
+nwb_toolchain_find_required_program(_nwb_rc DESCRIPTION "Windows rc.exe" NAMES rc rc.exe HINTS ${_nwb_windows_sdk_hints})
+nwb_toolchain_find_required_program(_nwb_mt DESCRIPTION "Windows mt.exe" NAMES mt mt.exe HINTS ${_nwb_windows_sdk_hints})
 
-nwb_toolchain_find_ninja(_nwb_ninja
-    ROOTS "${_nwb_vs_installation}/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja"
-    NAMES ninja ninja.exe
-)
+nwb_toolchain_find_ninja(_nwb_ninja ROOTS "${_nwb_vs_installation}/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja" NAMES ninja ninja.exe)
 
 set(CMAKE_MAKE_PROGRAM "${_nwb_ninja}" CACHE FILEPATH "" FORCE)
 set(CMAKE_C_COMPILER "${_nwb_clang}" CACHE FILEPATH "" FORCE)

@@ -49,8 +49,7 @@ TEST_F(MultilineCompositionTests, PreeditAndCommitRejectNoncanonicalBytesWithout
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("x\ny", 2u, 3u));
     const MultilineSnapshot before(m_arena, m_model);
-    const AStringView invalid[]{ "x\r\ny", "x\ty", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9",
-        "\xED\xA0\x80", AStringView("x\0y", 3u) };
+    const AStringView invalid[]{ "x\r\ny", "x\ty", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9", "\xED\xA0\x80", AStringView("x\0y", 3u) };
     for(const AStringView text : invalid){
         EXPECT_FALSE(m_model.updateComposition(text, 0u, text.size()));
         EXPECT_FALSE(m_model.commitComposition(text));

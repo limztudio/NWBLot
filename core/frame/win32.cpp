@@ -238,13 +238,7 @@ static void ReleaseMouseIfNoButtonIsDown(HWND hwnd){
     if(GetCapture() != hwnd)
         return;
 
-    if(
-        (GetKeyState(VK_LBUTTON) & s_Win32KeyDownMask)
-        || (GetKeyState(VK_RBUTTON) & s_Win32KeyDownMask)
-        || (GetKeyState(VK_MBUTTON) & s_Win32KeyDownMask)
-        || (GetKeyState(VK_XBUTTON1) & s_Win32KeyDownMask)
-        || (GetKeyState(VK_XBUTTON2) & s_Win32KeyDownMask)
-    )
+    if((GetKeyState(VK_LBUTTON) & s_Win32KeyDownMask) || (GetKeyState(VK_RBUTTON) & s_Win32KeyDownMask) || (GetKeyState(VK_MBUTTON) & s_Win32KeyDownMask) || (GetKeyState(VK_XBUTTON1) & s_Win32KeyDownMask) || (GetKeyState(VK_XBUTTON2) & s_Win32KeyDownMask))
         return;
 
     ReleaseCapture();
@@ -303,10 +297,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         LRESULT lifecycleResult = 0;
         if(
             ::HandleWin32FrameLifecycleMessage(
-                hwnd,
-                uMsg,
-                wParam,
-                []()noexcept{},
+                hwnd, uMsg, wParam, []()noexcept{},
                 [&](const bool isActive){
                     frame->data<Common::WinFrame>().setActive(isActive);
                     DispatchTextInputFocus(*frame, isActive && GetFocus() == hwnd);
@@ -351,19 +342,13 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         return 0;
 
         case WM_KEYDOWN: {
-            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32PreviousKeyStateBit))
-                ? InputAction::Repeat
-                : InputAction::Press
-            ;
+            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32PreviousKeyStateBit)) ? InputAction::Repeat : InputAction::Press;
             DispatchKeyEvent(*frame, wParam, lParam, action);
         }
         return 0;
 
         case WM_SYSKEYDOWN: {
-            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32PreviousKeyStateBit))
-                ? InputAction::Repeat
-                : InputAction::Press
-            ;
+            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32PreviousKeyStateBit)) ? InputAction::Repeat : InputAction::Press;
             DispatchKeyEvent(*frame, wParam, lParam, action);
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -536,15 +521,7 @@ bool Frame::init(){
         return false;
     }
     if(windowWidth != requestedWidth || windowHeight != requestedHeight){
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("Frame Win32 client size clamped from {}x{} to {}x{} for work area {}x{}"),
-            requestedWidth,
-            requestedHeight,
-            windowWidth,
-            windowHeight,
-            workAreaWidth,
-            workAreaHeight
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame Win32 client size clamped from {}x{} to {}x{} for work area {}x{}"), requestedWidth, requestedHeight, windowWidth, windowHeight, workAreaWidth, workAreaHeight);
     }
     frameData.width() = windowWidth;
     frameData.height() = windowHeight;
@@ -560,20 +537,7 @@ bool Frame::init(){
     const auto x = workArea.left + (workAreaWidth > actualWidth ? ((workAreaWidth - actualWidth) >> 1) : 0);
     const auto y = workArea.top + (workAreaHeight > actualHeight ? ((workAreaHeight - actualHeight) >> 1) : 0);
 
-    HWND hwnd = CreateWindowEx(
-        s_WindowExtendedStyle,
-        wc.lpszClassName,
-        windowTitle.data(),
-        s_WindowStyle,
-        x,
-        y,
-        actualWidth,
-        actualHeight,
-        nullptr,
-        nullptr,
-        wc.hInstance,
-        nullptr
-    );
+    HWND hwnd = CreateWindowEx(s_WindowExtendedStyle, wc.lpszClassName, windowTitle.data(), s_WindowStyle, x, y, actualWidth, actualHeight, nullptr, nullptr, wc.hInstance, nullptr);
     frameData.setHwnd(hwnd);
     if(!frameData.hwnd()){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
@@ -595,8 +559,7 @@ bool Frame::mainLoop(){
         return true;
 
     bool gracefulQuit = false;
-    const bool loopResult = ::RunWin32TimedFrameLoop(
-        [&](){ return data<Common::WinFrame>().isActive(); },
+    const bool loopResult = ::RunWin32TimedFrameLoop([&](){ return data<Common::WinFrame>().isActive(); },
         [&](){
             RECT rect = {};
             const bool hasRect = GetClientRect(data<Common::WinFrame>().hwnd(), &rect) != FALSE;

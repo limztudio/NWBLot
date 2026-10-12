@@ -25,10 +25,8 @@
 // A StorageBuffer descriptor carries no fixed structured stride or read/write qualifier. These typed views share the global StorageBuffer table declared by bindless_heap.slangi, while making AVBOIT's uint work-buffer accesses explicit at each call site.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed read/write aliases of the global StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<uint, Std430DataLayout> g_NwbHeapAvboitReadBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapAvboitWriteBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbHeapAvboitReadBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapAvboitWriteBuffers[];
 #pragma warning(pop)
 
 StructuredBuffer<uint, Std430DataLayout> nwbAvboitCoverageWords(){

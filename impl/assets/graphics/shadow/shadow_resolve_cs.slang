@@ -53,8 +53,7 @@ struct NwbShadowResolveSceneShading{
 };
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed UniformBuffer heap view.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbShadowResolveSceneShading, Std140DataLayout> g_NwbHeapShadowResolveSceneShadings[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbShadowResolveSceneShading, Std140DataLayout> g_NwbHeapShadowResolveSceneShadings[];
 #pragma warning(pop)
 
 struct NwbShadowResolvePushConstants{
@@ -83,8 +82,7 @@ struct NwbShadowResolvePushConstants{
     uint receiverFactor;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbShadowResolvePushConstants> g_NwbShadowResolvePushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbShadowResolvePushConstants> g_NwbShadowResolvePushConstants;
 
 #define g_NwbShadowResolveOutput nwbHeapStorageImage2DArrayFloat4(g_NwbShadowResolvePushConstants.outputStorageSlot)
 #define g_NwbShadowResolveVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbShadowResolvePushConstants.visibilityStorageSlot)
@@ -199,10 +197,8 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
     half mean = half(0.0h);
     half mean2 = half(0.0h);
     int cnt = 0;
-    [unroll]
-    for(int dy = -1; dy <= 1; ++dy){
-        [unroll]
-        for(int dx = -1; dx <= 1; ++dx){
+    [unroll] for(int dy = -1; dy <= 1; ++dy){
+        [unroll] for(int dx = -1; dx <= 1; ++dx){
             const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
             if(nwbShadowResolveGeomAtHalf(t).w <= half(0.5h))
                 continue;
@@ -281,15 +277,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         float sumG2 = 0.0;
         float guidedWeightSum = 0.0;
         float validWeightSum = 0.0;
-        [unroll]
-        for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-            [unroll]
-            for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+        [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+            [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 const uint tapBit = 1u << tapIndex;
                 // Widen the (0, 1) bounded half product at the float regression-accumulator boundary.
-                const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]
-                    * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
+                const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS] * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
                 if(spatialWeight <= 0.0)
                     continue;
                 const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
@@ -317,15 +310,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float regressionScale = hasGuidedTaps ? guidedMeanG / (guidedVarG + guidedEpsSq) : 0.0;
         // mean(P) - mean(G) * cov(G,P) / (var(G) + epsilon) is linear in each visibility tap.
         // Fold its scalar coefficients once, preserving the geometry gates and support for every light layer.
-        [unroll]
-        for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-            [unroll]
-            for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+        [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+            [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 if((tapMask & (1u << tapIndex)) == 0u)
                     continue;
-                const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]
-                    * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
+                const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS] * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
                 const float regressionWeight = hasGuidedTaps ? 1.0 - regressionScale * (tapCoefficients[tapIndex] - guidedMeanG) : 1.0;
                 tapCoefficients[tapIndex] = spatialWeight * invWeightSum * regressionWeight;
             }
@@ -335,16 +325,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             NwbShadowResolveVisFVec result = (NwbShadowResolveVisFVec)1.0;
             if(tapMask != 0u){
                 const uint anchorTap = firstbitlow(tapMask);
-                const int2 anchorOffset = int2(int(anchorTap % NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE),
-                    int(anchorTap / NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)) - int2(NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
+                const int2 anchorOffset = int2(int(anchorTap % NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE), int(anchorTap / NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)) - int2(NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 const int2 anchorTexel = clamp(baseTexel + anchorOffset, int2(0), int2(hw - 1, hh - 1));
                 const NwbShadowResolveVisFVec anchor = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(anchorTexel, slot);
                 // The coefficient sum is one analytically. Anchor the affine sum so constant visibility stays exact.
                 result = anchor;
-                [unroll]
-                for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-                    [unroll]
-                    for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+                    [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                         const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                         if(tapIndex == anchorTap || (tapMask & (1u << tapIndex)) == 0u)
                             continue;
@@ -430,10 +417,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
                     // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
                     half weightSum = half(0.0h);
-                    [unroll]
-                    for(int ky = -2; ky <= 2; ++ky){
-                        [unroll]
-                        for(int kx = -2; kx <= 2; ++kx){
+                    [unroll] for(int ky = -2; ky <= 2; ++ky){
+                        [unroll] for(int kx = -2; kx <= 2; ++kx){
                             const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                             if(g_NwbShadowResolveTileValid[idx] == 0u)
                                 continue;
@@ -470,10 +455,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
         // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
         half weightSum = half(0.0h);
-        [unroll]
-        for(int ky = -2; ky <= 2; ++ky){
-            [unroll]
-            for(int kx = -2; kx <= 2; ++kx){
+        [unroll] for(int ky = -2; ky <= 2; ++ky){
+            [unroll] for(int kx = -2; kx <= 2; ++kx){
                 const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
                 if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                     continue;

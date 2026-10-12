@@ -36,19 +36,12 @@ namespace ResourceQueueSharing{
     }
 }
 
-[[nodiscard]] constexpr bool IncludesQueueClass(
-    const Mask sharing,
-    const CommandQueue::Enum queueClass
-)noexcept{
+[[nodiscard]] constexpr bool IncludesQueueClass(const Mask sharing, const CommandQueue::Enum queueClass)noexcept{
     const Mask queueBit = ForQueueClass(queueClass);
     return queueBit != Exclusive && (sharing & queueBit) != Exclusive;
 }
 
-[[nodiscard]] constexpr bool QueueFamilyIndexListContains(
-    const u32* const familyIndices,
-    const u32 familyIndexCount,
-    const u32 expectedFamilyIndex
-)noexcept{
+[[nodiscard]] constexpr bool QueueFamilyIndexListContains(const u32* const familyIndices, const u32 familyIndexCount, const u32 expectedFamilyIndex)noexcept{
     if(!familyIndices)
         return false;
     for(u32 familyIndex = 0u; familyIndex < familyIndexCount; ++familyIndex){
@@ -68,10 +61,7 @@ namespace ResourceQueueSharing{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool ResourceQueueAdmissionAdmitsQueue(
-    const ResourceQueueAdmissionSnapshot& admission,
-    const GpuPhysicalQueueInfo& queue
-)noexcept{
+[[nodiscard]] constexpr bool ResourceQueueAdmissionAdmitsQueue(const ResourceQueueAdmissionSnapshot& admission, const GpuPhysicalQueueInfo& queue)noexcept{
     if(!admission.valid())
         return false;
     if(!admission.usesConcurrentSharing)
@@ -79,11 +69,7 @@ namespace ResourceQueueSharing{
     if(!ResourceQueueSharing::IncludesQueueClass(admission.admittedQueueClasses, queue.queueClass))
         return false;
 
-    return ResourceQueueSharing::QueueFamilyIndexListContains(
-        admission.queueFamilyIndices,
-        admission.queueFamilyIndexCount,
-        queue.familyIndex
-    );
+    return ResourceQueueSharing::QueueFamilyIndexListContains(admission.queueFamilyIndices, admission.queueFamilyIndexCount, queue.familyIndex);
 }
 
 

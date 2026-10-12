@@ -22,13 +22,8 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import SCOPE_RE, load_name_symbols
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip,
-    build_launch_environment, create_capture_backend, ensure_process_running,
-    launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,
-    write_status,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
 LIT_ROUGH = "rough"
 LIT_DISABLED = "disabled"
@@ -124,12 +119,8 @@ class ScopeSample:
 
 def variants_for(family, include_screen=False, include_feedback=False):
     if family == LIT_ROUGH:
-        variants = (Variant(LIT_DISABLED, LIT_DISABLED), Variant(LIT_HARDWARE_RAW, LIT_HARDWARE),
-            Variant("hardware_temporal", LIT_HARDWARE, True),
-            Variant("hardware_spatial", LIT_HARDWARE, False, True),
-            Variant("hardware_filtered", LIT_HARDWARE, True, True))
-        return variants + ((Variant(LIT_HYBRID_RAW, LIT_HYBRID), Variant(LIT_HYBRID_FEEDBACK, LIT_HYBRID, feedback=True))
-            if include_feedback else ())
+        variants = (Variant(LIT_DISABLED, LIT_DISABLED), Variant(LIT_HARDWARE_RAW, LIT_HARDWARE), Variant("hardware_temporal", LIT_HARDWARE, True), Variant("hardware_spatial", LIT_HARDWARE, False, True), Variant("hardware_filtered", LIT_HARDWARE, True, True))
+        return variants + ((Variant(LIT_HYBRID_RAW, LIT_HYBRID), Variant(LIT_HYBRID_FEEDBACK, LIT_HYBRID, feedback=True)) if include_feedback else ())
     variants = (Variant(LIT_DISABLED, LIT_DISABLED), Variant(LIT_HARDWARE, LIT_HARDWARE), Variant(LIT_HYBRID, LIT_HYBRID))
     if include_screen:
         variants += (Variant(LIT_SCREEN, LIT_SCREEN),)
@@ -179,9 +170,7 @@ def parse_intervals(text, symbols=None, finalized=False):
             values = tuple(float(parsed.group(field)) for field in ("average", "minimum", "maximum", "total", "sample_average"))
             gpu_samples = int(parsed.group("gpu_samples"))
             published_windows = int(parsed.group("published_windows"))
-            if (any(not math.isfinite(value) or value < 0.0 for value in values)
-                or not 0 < published_windows < 2 ** 32 or not 0 < gpu_samples < 2 ** 64
-                or values[1] > values[0] or values[0] > values[2]):
+            if (any(not math.isfinite(value) or value < 0.0 for value in values) or not 0 < published_windows < 2 ** 32 or not 0 < gpu_samples < 2 ** 64 or values[1] > values[0] or values[0] > values[2]):
                 raise SmokeFailure(f"invalid current GPU timing values: {line}")
             total = values[3]
             if scope in samples:
@@ -252,8 +241,7 @@ def validate_coverage(summaries, variant, report_count, minimum_frames, mip_coun
 
 
 def kernel_work_ms(summaries, variant, mip_count, history_samples=16):
-    return sum(summaries[scope][LIT_MEAN_MS] * (mip_count if scope == DEPTH else 1)
-        for scope in required_scopes(variant, history_samples) if scope in KERNELS)
+    return sum(summaries[scope][LIT_MEAN_MS] * (mip_count if scope == DEPTH else 1) for scope in required_scopes(variant, history_samples) if scope in KERNELS)
 
 
 def percentile(sorted_values, fraction):
@@ -268,9 +256,7 @@ def paired_statistics(differences, seed=0, draws=10000):
         raise SmokeFailure("paired inference needs at least five finite independent block differences")
     rng = random.Random(seed)
     means = sorted(statistics.fmean(rng.choices(differences, k=len(differences))) for _ in range(draws))
-    return {LIT_BLOCKS: len(differences), LIT_MEAN_MS: statistics.fmean(differences),
-        "median_ms": statistics.median(differences), LIT_CI95_MEAN_MS: [percentile(means, .025), percentile(means, .975)],
-        "block_differences_ms": differences}
+    return {LIT_BLOCKS: len(differences), LIT_MEAN_MS: statistics.fmean(differences), "median_ms": statistics.median(differences), LIT_CI95_MEAN_MS: [percentile(means, .025), percentile(means, .975)], "block_differences_ms": differences}
 
 
 def compare_trials(trials, variants, practical_ms=.02, practical_fraction=.03, control_floor_ms=.015, seed=0):
@@ -303,9 +289,7 @@ def compare_trials(trials, variants, practical_ms=.02, practical_fraction=.03, c
         dispatch_scopes = {}
         for scope in KERNELS:
             if all(scope in block[baseline][LIT_SCOPES] and scope in block[candidate][LIT_SCOPES] for block in blocks):
-                dispatch_scopes[scope] = paired_statistics([
-                    block[candidate][LIT_SCOPES][scope][LIT_MEAN_MS] - block[baseline][LIT_SCOPES][scope][LIT_MEAN_MS]
-                    for block in blocks], seed)
+                dispatch_scopes[scope] = paired_statistics([block[candidate][LIT_SCOPES][scope][LIT_MEAN_MS] - block[baseline][LIT_SCOPES][scope][LIT_MEAN_MS] for block in blocks], seed)
         controls = {}
         unstable = False
         uncertain_controls = False
@@ -333,10 +317,8 @@ def compare_trials(trials, variants, practical_ms=.02, practical_fraction=.03, c
             status = "resolved_gpu_time_reduction"
         elif low > threshold:
             status = "resolved_gpu_time_increase"
-        comparisons.append({"baseline": baseline, "candidate": candidate, "status": status,
-            "practical_threshold_ms": threshold, "frame": frame, "kernel_work": kernels,
-            "dispatch_scopes": dispatch_scopes, "dispatch_scope_units": "milliseconds per dispatch; depth is per mip",
-            "controls": controls})
+        comparisons.append({"baseline": baseline, "candidate": candidate, "status": status, "practical_threshold_ms": threshold, "frame": frame, "kernel_work": kernels,
+            "dispatch_scopes": dispatch_scopes, "dispatch_scope_units": "milliseconds per dispatch; depth is per mip", "controls": controls})
     return comparisons
 
 
@@ -349,29 +331,19 @@ def timed_environment(base, args, variant, timing_file):
         env.pop(name, None)
     if env.get("VK_INSTANCE_LAYERS"):
         raise SmokeFailure("explicit Vulkan layers must be disabled for the timing benchmark")
-    controls = {"NWB_REFLECTION_SMOKE_CASE": args.family, "NWB_REFLECTION_SMOKE_MODE": variant.mode,
-        "NWB_REFLECTION_SMOKE_TIMING": "1", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "0",
-        "NWB_REFLECTION_SMOKE_RAY_BUDGET": str(args.ray_budget),
-        "NWB_REFLECTION_SMOKE_TEMPORAL": str(int(variant.temporal)),
-        "NWB_REFLECTION_SMOKE_SPATIAL": str(int(variant.spatial)),
-        "NWB_REFLECTION_SMOKE_FEEDBACK": str(int(variant.feedback)),
-        "NWB_REFLECTION_SMOKE_SCREEN_STEPS": str(args.screen_steps),
-        "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": str(args.history_samples),
-        "NWB_REFLECTION_SMOKE_ROUGHNESS": str(args.roughness if args.family == LIT_ROUGH else 0.0),
-        "NWB_REFLECTION_SMOKE_SEED": str(args.sampling_seed), "NWB_REFLECTION_SMOKE_DEBUG": "none",
-        "NWB_REFLECTION_SMOKE_FINAL_STATE": "0", "NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": str(args.optical_queries),
-        "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "0.016666667", LIT_NWB_GPU_TIMING_FILE: str(timing_file)}
+    controls = {"NWB_REFLECTION_SMOKE_CASE": args.family, "NWB_REFLECTION_SMOKE_MODE": variant.mode, "NWB_REFLECTION_SMOKE_TIMING": "1", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "0", "NWB_REFLECTION_SMOKE_RAY_BUDGET": str(args.ray_budget),
+        "NWB_REFLECTION_SMOKE_TEMPORAL": str(int(variant.temporal)), "NWB_REFLECTION_SMOKE_SPATIAL": str(int(variant.spatial)), "NWB_REFLECTION_SMOKE_FEEDBACK": str(int(variant.feedback)), "NWB_REFLECTION_SMOKE_SCREEN_STEPS": str(args.screen_steps),
+        "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": str(args.history_samples), "NWB_REFLECTION_SMOKE_ROUGHNESS": str(args.roughness if args.family == LIT_ROUGH else 0.0), "NWB_REFLECTION_SMOKE_SEED": str(args.sampling_seed), "NWB_REFLECTION_SMOKE_DEBUG": "none",
+        "NWB_REFLECTION_SMOKE_FINAL_STATE": "0", "NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": str(args.optical_queries), "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "0.016666667", LIT_NWB_GPU_TIMING_FILE: str(timing_file)}
     env.update(controls)
     return env, controls
 
 
 def validate_trial_log(text, args, variant):
-    # Startup values occupy their own logger message lines. Match their complete
-    # values, including any contradictory later message, rather than substrings.
+    # Startup values occupy their own logger message lines.
+    # Match their complete values, including any contradictory later message, rather than substrings.
     lines = text.replace("\r\n", "\n").splitlines()
-    expected_fields = {LIT_CASE: f"{args.family} created", "reflection mode": variant.mode,
-        "hardware ray budget": str(args.ray_budget), "screen feedback": str(int(variant.feedback)),
-        "screen steps": str(args.screen_steps), "timing render unfocused": "1",
+    expected_fields = {LIT_CASE: f"{args.family} created", "reflection mode": variant.mode, "hardware ray budget": str(args.ray_budget), "screen feedback": str(int(variant.feedback)), "screen steps": str(args.screen_steps), "timing render unfocused": "1",
         "timing in-flight ranges": str(TIMING_IN_FLIGHT_RANGES), "timing depth mip count": str(args.mip_count)}
     if args.family in (LIT_OPTICAL_CLEAR, LIT_OPTICAL_CSG_CAP):
         expected_fields["optical query limit"] = str(args.optical_queries)
@@ -386,8 +358,7 @@ def validate_trial_log(text, args, variant):
     routes = {line.removeprefix(LIT_REFLECTION_RESOLVE) for line in lines if line.startswith(LIT_REFLECTION_RESOLVE)}
     if routes != {route}:
         raise SmokeFailure(f"reflection execution route changed or differs from {route}: {sorted(routes)}")
-    rejected = list(STRICT_LOG_FAILURE_MESSAGES) + ["ReflectionSmokeStatistics:", "ReflectionSmokeHistory:",
-        "ReflectionSmokeMutation:", "ReflectionSmokeOptics:", "ReflectionSmokeFeedback:"]
+    rejected = list(STRICT_LOG_FAILURE_MESSAGES) + ["ReflectionSmokeStatistics:", "ReflectionSmokeHistory:", "ReflectionSmokeMutation:", "ReflectionSmokeOptics:", "ReflectionSmokeFeedback:"]
     validate_expected_log_text(text, [], rejected)
     if "ReflectionSmokeProject: hardware unavailable" in text and variant.mode in (LIT_HARDWARE, LIT_HYBRID):
         raise SmokeFailure("hardware was unavailable for a hardware benchmark route")
@@ -408,12 +379,8 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
     timing_file = directory / "gpu_timing.txt"
     env, controls = timed_environment(build_launch_environment(args), args, variant, timing_file)
     cache_before = runtime_pipeline_cache_identity(args.working_directory)
-    write_json(directory / "launch.json", {LIT_EXECUTABLE: str(args.executable), LIT_WORKING_DIRECTORY: str(args.working_directory),
-        "application_args": args.application_arg, "environment_overrides": controls,
-        LIT_EXECUTABLE_IDENTITY: executable_identity,
-        "runtime_pipeline_cache_before": cache_before,
-        "gpu_environment": {key: value for key, value in env.items() if key.startswith("VK_") or key == "NWB_LINUX_BACKEND"},
-        LIT_BLOCK: block, LIT_POSITION: position, LIT_VARIANT: asdict(variant)})
+    write_json(directory / "launch.json", {LIT_EXECUTABLE: str(args.executable), LIT_WORKING_DIRECTORY: str(args.working_directory), "application_args": args.application_arg, "environment_overrides": controls, LIT_EXECUTABLE_IDENTITY: executable_identity,
+        "runtime_pipeline_cache_before": cache_before, "gpu_environment": {key: value for key, value in env.items() if key.startswith("VK_") or key == "NWB_LINUX_BACKEND"}, LIT_BLOCK: block, LIT_POSITION: position, LIT_VARIANT: asdict(variant)})
     runtime_identity = runtime_asset_identity(args.working_directory)
     backend = None
     logserver = None
@@ -447,8 +414,7 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
                 if reports:
                     last_problem = "waiting for required warm-up and measured timing reports" if any(FRAME in report for report in reports) \
                         else "timing reports contain no completed GPU frame samples"
-                retained_start, retained = retain_after_warmup(reports, args.warmup_intervals,
-                    2 * FEEDBACK_PROBE_PERIOD if args.include_feedback else 0)
+                retained_start, retained = retain_after_warmup(reports, args.warmup_intervals, 2 * FEEDBACK_PROBE_PERIOD if args.include_feedback else 0)
                 if len(retained) >= args.sample_intervals:
                     summaries = summarize_intervals(retained)
                     try:
@@ -474,10 +440,8 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         if file_identity(args.executable) != executable_identity:
             raise SmokeFailure("executable changed during benchmark")
         scopes = summarize_intervals(selected)
-        result = {LIT_BLOCK: block, LIT_POSITION: position, LIT_VARIANT: asdict(variant), LIT_REPORTS: len(selected),
-            "retained_report_range": [retained_start, retained_start + len(selected)],
-            LIT_SCOPES: scopes, LIT_KERNEL_WORK_MS: kernel_work_ms(scopes, variant, args.mip_count, args.history_samples),
-            LIT_MIP_COUNT: args.mip_count, LIT_RUNTIME_ASSET_IDENTITY: runtime_identity, "artifacts": str(directory)}
+        result = {LIT_BLOCK: block, LIT_POSITION: position, LIT_VARIANT: asdict(variant), LIT_REPORTS: len(selected), "retained_report_range": [retained_start, retained_start + len(selected)],
+            LIT_SCOPES: scopes, LIT_KERNEL_WORK_MS: kernel_work_ms(scopes, variant, args.mip_count, args.history_samples), LIT_MIP_COUNT: args.mip_count, LIT_RUNTIME_ASSET_IDENTITY: runtime_identity, "artifacts": str(directory)}
         result["runtime_pipeline_cache_after"] = runtime_pipeline_cache_identity(args.working_directory)
         write_json(directory / "summary.json", result)
         return result
@@ -569,8 +533,7 @@ def validate_long_miss_qualification(args, executable_identity):
         if len(matched) != 1:
             raise SmokeFailure("costly-miss qualification needs exactly one matching off/on capture pair")
         capture = matched[0]
-        expected = {LIT_CASE: LIT_FEEDBACK_LONG_MISS, "mode": LIT_HYBRID, "enabled": enabled,
-            "hardware_budget": args.ray_budget, LIT_SCREEN_STEPS: args.screen_steps, "seed": args.sampling_seed,
+        expected = {LIT_CASE: LIT_FEEDBACK_LONG_MISS, "mode": LIT_HYBRID, "enabled": enabled, "hardware_budget": args.ray_budget, LIT_SCREEN_STEPS: args.screen_steps, "seed": args.sampling_seed,
             LIT_ROUGHNESS: 0.0, "final_state": False, "mutation": False, "extent": "native"}
         if any(capture.get(key) != value for key, value in expected.items()) or (args.width, args.height) != (960, 720):
             raise SmokeFailure("costly-miss qualification scene, extent, seed or tracing settings differ from timing")
@@ -591,9 +554,7 @@ def validate_long_miss_qualification(args, executable_identity):
         value = qualified.get(key)
         if not isinstance(value, (float, int)) or not math.isfinite(value) or not math.isclose(value, actual, rel_tol=1e-9):
             raise SmokeFailure("costly-miss qualification aggregate ratios contradict its work totals")
-    return {LIT_PATH: str(args.qualification), **file_identity(args.qualification), LIT_METRICS: qualified,
-        LIT_BUILD_IDENTITY: build, "settings_match": True,
-        "scope": "separate diagnostics-on workload qualification; no GPU timing or speed claim"}
+    return {LIT_PATH: str(args.qualification), **file_identity(args.qualification), LIT_METRICS: qualified, LIT_BUILD_IDENTITY: build, "settings_match": True, "scope": "separate diagnostics-on workload qualification; no GPU timing or speed claim"}
 
 
 def parse_args(argv):
@@ -603,12 +564,9 @@ def parse_args(argv):
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--family", choices=(LIT_FLOOR, LIT_OFFSCREEN, LIT_ROUGH, LIT_FEEDBACK_LONG_MISS, LIT_OPTICAL_CLEAR, LIT_OPTICAL_CSG_CAP), default=LIT_FLOOR)
     parser.add_argument("--include-screen", action=LIT_STORE_TRUE)
-    parser.add_argument("--include-feedback", action=LIT_STORE_TRUE,
-        help="Add a matched Hybrid feedback-on trial; every ordinary route explicitly keeps feedback off.")
-    parser.add_argument("--screen-steps", type=int,
-        help="Exact matched SSR limit; default 16 for the qualified long-miss fixture, 96 otherwise.")
-    parser.add_argument("--qualification", type=Path,
-        help="Matching reflection_feedback_manifest.json; required for feedback_long_miss.")
+    parser.add_argument("--include-feedback", action=LIT_STORE_TRUE, help="Add a matched Hybrid feedback-on trial; every ordinary route explicitly keeps feedback off.")
+    parser.add_argument("--screen-steps", type=int, help="Exact matched SSR limit; default 16 for the qualified long-miss fixture, 96 otherwise.")
+    parser.add_argument("--qualification", type=Path, help="Matching reflection_feedback_manifest.json; required for feedback_long_miss.")
     parser.add_argument("--blocks", type=int)
     parser.add_argument("--warmup-intervals", type=int, default=6)
     parser.add_argument("--sample-intervals", type=int, default=16)
@@ -684,38 +642,19 @@ def run(args):
     runtime_identity = runtime_asset_identity(args.working_directory)
     symbols = load_name_symbols(args.namesym, KNOWN_SCOPES)
     namesym_identity = {LIT_PATH: str(args.namesym), **file_identity(args.namesym)} if args.namesym else None
-    plan = {"family": args.family, "dimensions": [args.width, args.height], LIT_BLOCKS: args.blocks,
-        "workload_role": {LIT_FLOOR: "productive screen reflection", LIT_OFFSCREEN: "offscreen screen-miss control",
-            LIT_FEEDBACK_LONG_MISS: "separately qualified costly screen misses", LIT_ROUGH: "rough estimator and filter route costs",
-            LIT_OPTICAL_CLEAR: "bounded secondary transmission through an authored closed clear volume",
-            LIT_OPTICAL_CSG_CAP: "retained CSG transmission through an analytic glass wall"}[args.family],
-        "qualification": qualification,
-        "orders": [[variant.name for variant in row] for row in orders], LIT_EXECUTABLE_IDENTITY: identity,
-        LIT_RUNTIME_ASSET_IDENTITY: runtime_identity, "namesym_identity": namesym_identity,
-        "authored_volume_hashes": authored_volume_hashes(args.working_directory),
-        "runtime_pipeline_cache_initial": runtime_pipeline_cache_identity(args.working_directory),
-        "runtime_resource_policy": "authored files immutable; only canonical runtime_pipeline_cache volume segments may change",
-        "scope_decoding": "supplied namesym plus known scope hashes" if args.namesym else "known scope hashes only",
-        "settings": {"ray_budget": args.ray_budget, LIT_OPTICAL_QUERIES: args.optical_queries,
-            "history_samples": args.history_samples, LIT_ROUGHNESS: args.roughness if args.family == LIT_ROUGH else 0.0,
-            "sampling_seed": args.sampling_seed, LIT_SCREEN_STEPS: args.screen_steps,
-            "feedback_default": False, "feedback_pairs": args.include_feedback, "diagnostics": False, LIT_CAPTURE: False},
-        "variants": [asdict(variant) for variant in variants],
-        "order_seed": args.order_seed, "analysis_seed": args.analysis_seed,
-        "warmup_intervals": args.warmup_intervals, LIT_SAMPLE_INTERVALS: args.sample_intervals,
-        "minimum_warmup_gpu_frames": 2 * FEEDBACK_PROBE_PERIOD if args.include_feedback else 0,
-        LIT_MINIMUM_FRAME_SAMPLES: args.minimum_frame_samples, LIT_MIP_COUNT: args.mip_count,
-        "timing_in_flight_ranges": TIMING_IN_FLIGHT_RANGES,
-        "inference": "paired independent blocks; percentile bootstrap 95% CI of mean; no FPS inference",
-        "multiplicity": "per-comparison intervals; no family-wide confidence claim",
-        "correctness": "separate diagnostics-on reflection suites must pass for this build",
-        "external_controls": "same physical GPU, power state and mesh route; no concurrent GPU jobs or builds",
-        "feature_cost": "increment above current Disabled route, which retains shared infrastructure/classification",
-        "primary_scope": FRAME, "control_scopes": CONTROLS, "observed_control_scopes": OBSERVED_CONTROLS,
-        "depth_scope": "per-mip dispatch; kernel estimate multiplies by native mip count",
-        "temporal_scope": "one dispatch per stable reused frame when history_samples > 1; zero at cap 1",
-        LIT_PRACTICAL_MS: args.practical_ms, LIT_PRACTICAL_FRACTION: args.practical_fraction,
-        LIT_CONTROL_FLOOR_MS: args.control_floor_ms}
+    plan = {"family": args.family, "dimensions": [args.width, args.height], LIT_BLOCKS: args.blocks, "workload_role": {LIT_FLOOR: "productive screen reflection", LIT_OFFSCREEN: "offscreen screen-miss control",
+            LIT_FEEDBACK_LONG_MISS: "separately qualified costly screen misses", LIT_ROUGH: "rough estimator and filter route costs", LIT_OPTICAL_CLEAR: "bounded secondary transmission through an authored closed clear volume",
+            LIT_OPTICAL_CSG_CAP: "retained CSG transmission through an analytic glass wall"}[args.family], "qualification": qualification, "orders": [[variant.name for variant in row] for row in orders], LIT_EXECUTABLE_IDENTITY: identity,
+        LIT_RUNTIME_ASSET_IDENTITY: runtime_identity, "namesym_identity": namesym_identity, "authored_volume_hashes": authored_volume_hashes(args.working_directory), "runtime_pipeline_cache_initial": runtime_pipeline_cache_identity(args.working_directory),
+        "runtime_resource_policy": "authored files immutable; only canonical runtime_pipeline_cache volume segments may change", "scope_decoding": "supplied namesym plus known scope hashes" if args.namesym else "known scope hashes only",
+        "settings": {"ray_budget": args.ray_budget, LIT_OPTICAL_QUERIES: args.optical_queries, "history_samples": args.history_samples, LIT_ROUGHNESS: args.roughness if args.family == LIT_ROUGH else 0.0,
+            "sampling_seed": args.sampling_seed, LIT_SCREEN_STEPS: args.screen_steps, "feedback_default": False, "feedback_pairs": args.include_feedback, "diagnostics": False, LIT_CAPTURE: False}, "variants": [asdict(variant) for variant in variants],
+        "order_seed": args.order_seed, "analysis_seed": args.analysis_seed, "warmup_intervals": args.warmup_intervals, LIT_SAMPLE_INTERVALS: args.sample_intervals, "minimum_warmup_gpu_frames": 2 * FEEDBACK_PROBE_PERIOD if args.include_feedback else 0,
+        LIT_MINIMUM_FRAME_SAMPLES: args.minimum_frame_samples, LIT_MIP_COUNT: args.mip_count, "timing_in_flight_ranges": TIMING_IN_FLIGHT_RANGES, "inference": "paired independent blocks; percentile bootstrap 95% CI of mean; no FPS inference",
+        "multiplicity": "per-comparison intervals; no family-wide confidence claim", "correctness": "separate diagnostics-on reflection suites must pass for this build",
+        "external_controls": "same physical GPU, power state and mesh route; no concurrent GPU jobs or builds", "feature_cost": "increment above current Disabled route, which retains shared infrastructure/classification",
+        "primary_scope": FRAME, "control_scopes": CONTROLS, "observed_control_scopes": OBSERVED_CONTROLS, "depth_scope": "per-mip dispatch; kernel estimate multiplies by native mip count",
+        "temporal_scope": "one dispatch per stable reused frame when history_samples > 1; zero at cap 1", LIT_PRACTICAL_MS: args.practical_ms, LIT_PRACTICAL_FRACTION: args.practical_fraction, LIT_CONTROL_FLOOR_MS: args.control_floor_ms}
     write_json(args.output_directory / "plan.json", plan)
     trials = []
     try:
@@ -726,8 +665,7 @@ def run(args):
                 write_status(f"benchmark block {block + 1}/{args.blocks}: {variant.name}")
                 trials.append(run_trial(args, variant, block, position, symbols, identity))
                 write_json(args.output_directory / "trials.json", trials)
-        comparisons = compare_trials(trials, variants, args.practical_ms, args.practical_fraction,
-            args.control_floor_ms, args.analysis_seed)
+        comparisons = compare_trials(trials, variants, args.practical_ms, args.practical_fraction, args.control_floor_ms, args.analysis_seed)
         write_json(args.output_directory / "report.json", {"plan": plan, "trials": trials, "comparisons": comparisons})
         write_status(f"GPU benchmark complete: {args.output_directory / 'report.json'}")
         return 0

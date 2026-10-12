@@ -53,28 +53,13 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
         resource = AddBufferMetadata(graph, Name("tests/telemetry_scaling/resource"), "Telemetry Buffer");
         ASSERT_TRUE(resource.valid());
     }
-    const Graphics::GpuTaskResourceUse resourceUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
+    const Graphics::GpuTaskResourceUse resourceUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
     Graphics::GpuTaskId preceding;
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         char identityText[32u] = {};
         const Name identity = DeriveName(Name("tests/telemetry_scaling/task/"), FormatDecimal(taskIndex, identityText));
-        const bool explicitDependency = preceding.valid()
-            && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u))
-        ;
-        preceding = AddTask(
-            graph,
-            identity,
-            "Telemetry Task",
-            explicitDependency ? &preceding : nullptr,
-            explicitDependency ? 1u : 0u,
-            resource.valid() ? &resourceUse : nullptr,
-            resource.valid() ? 1u : 0u
-        );
+        const bool explicitDependency = preceding.valid() && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u));
+        preceding = AddTask(graph, identity, "Telemetry Task", explicitDependency ? &preceding : nullptr, explicitDependency ? 1u : 0u, resource.valid() ? &resourceUse : nullptr, resource.valid() ? 1u : 0u);
         ASSERT_TRUE(preceding.valid());
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);

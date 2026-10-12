@@ -52,14 +52,7 @@ struct TextureCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<TextureCookEntry> ParseTextureCookMetadata(
-    const Path& assetRoot,
-    AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<Texture> BuildTextureAsset(TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena);
 
 

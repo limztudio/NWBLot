@@ -22,10 +22,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Impl::Ui::Rect CaptureEditSelection(
-    Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model,
-    const Impl::Ui::EditBoxPlacement& placement, const f32 fontSize
-){
+Impl::Ui::Rect CaptureEditSelection(Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxPlacement& placement, const f32 fontSize){
     using namespace Impl::Ui;
     NWB_FATAL_ASSERT(model.textMode() == EditTextMode::SingleLine);
     EditBoxView view(arena);

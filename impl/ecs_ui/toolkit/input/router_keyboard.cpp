@@ -79,14 +79,9 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
             || event.command == InputCommand::Accept || event.command == InputCommand::Submit;
         const HitTarget* keyboardOwner = focused != nullptr && delegatedCommand ? keyboardHost(*focused) : nullptr;
         const HitTarget* control = keyboardOwner != nullptr ? keyboardOwner : focused;
-        const bool controlHandled = control != nullptr && focused != nullptr && control->navigable
-            && routeControlKey(event, *control, *focused, source->controlOwner, alreadyPressed, result);
+        const bool controlHandled = control != nullptr && focused != nullptr && control->navigable && routeControlKey(event, *control, *focused, source->controlOwner, alreadyPressed, result);
         source->delegated |= controlHandled && keyboardOwner != nullptr;
-        if(
-            !controlHandled && focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed
-            && (event.command == InputCommand::Accept || event.command == InputCommand::Submit
-                || event.command == InputCommand::Activate)
-        )
+        if(!controlHandled && focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed && (event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate))
             appendActivation(*focused, event.source.device == 0u ? InputActionSource::Keyboard : InputActionSource::Command, result);
     }
     if(consumed){
@@ -162,8 +157,7 @@ bool InputRouter::moveFocusForTraversal(const bool reverse){
     usize anchor = m_targets.size();
     for(usize index = 0u; index < m_targets.size(); ++index){
         const HitTarget& target = m_targets[index];
-        if(target.id == top.scope.focusAnchor && target.declarationGeneration == top.scope.focusAnchorDeclarationGeneration
-            && target.popup == parent){
+        if(target.id == top.scope.focusAnchor && target.declarationGeneration == top.scope.focusAnchorDeclarationGeneration && target.popup == parent){
             anchor = index;
             break;
         }
@@ -171,16 +165,11 @@ bool InputRouter::moveFocusForTraversal(const bool reverse){
     WidgetId nextFocus;
     u64 nextDeclaration = 0u;
     for(usize offset = 1u; offset <= m_targets.size(); ++offset){
-        const usize index = anchor == m_targets.size()
-            ? (reverse ? m_targets.size() - offset : offset - 1u)
-            : (reverse ? (anchor + m_targets.size() - offset) % m_targets.size()
-                : (anchor + offset) % m_targets.size());
+        const usize index = anchor == m_targets.size() ? (reverse ? m_targets.size() - offset : offset - 1u) : (reverse ? (anchor + m_targets.size() - offset) % m_targets.size() : (anchor + offset) % m_targets.size());
         const HitTarget& target = m_targets[index];
         if(target.popup != parent || !target.enabled || !target.focusable || target.owner.valid())
             continue;
-        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
-            VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height)
-        );
+        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height));
         if((VectorMoveMask(VectorLessOrEqual(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) != 0u)
             continue;
         nextFocus = target.id;

@@ -29,12 +29,7 @@ namespace __hidden_gpu_compiled_graph{
 
     u64 identity = s_NextObjectIdentity.load(MemoryOrder::relaxed);
     while(identity != 0u && identity != Limit<u64>::s_Max){
-        if(s_NextObjectIdentity.compare_exchange_weak(
-            identity,
-            identity + 1u,
-            MemoryOrder::relaxed,
-            MemoryOrder::relaxed
-        ))
+        if(s_NextObjectIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return identity;
     }
     NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph object identity space is exhausted");
@@ -54,19 +49,11 @@ namespace __hidden_gpu_compiled_graph{
 GpuCompiledGraph::CompilationScope::CompilationScope(GpuCompiledGraph& graph)noexcept{
     {
         NothrowScopedLock lock(graph.m_attemptBindingMutex);
-        if(
-            graph.m_attemptBindingState == AttemptBindingState::Recording
-            || graph.m_attemptBindingState == AttemptBindingState::Submitting
-        )
+        if(graph.m_attemptBindingState == AttemptBindingState::Recording || graph.m_attemptBindingState == AttemptBindingState::Submitting)
             return;
 
         u32 expectedPlanAccessState = 0u;
-        if(!graph.m_planAccessState.compare_exchange_strong(
-            expectedPlanAccessState,
-            GpuCompiledGraph::s_PlanAccessWriterBit,
-            MemoryOrder::acq_rel,
-            MemoryOrder::acquire
-        ))
+        if(!graph.m_planAccessState.compare_exchange_strong(expectedPlanAccessState, GpuCompiledGraph::s_PlanAccessWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
             return;
         graph.clearAttemptBindingWithinLock();
     }
@@ -89,9 +76,7 @@ GpuCompiledGraph::CompilationScope::~CompilationScope()noexcept{
 
 
 void GpuCompiledGraph::CompilationScope::publish()noexcept{
-    const bool publicationValid = m_graph
-        && m_graph->m_planAccessState.load(MemoryOrder::relaxed) == GpuCompiledGraph::s_PlanAccessWriterBit
-    ;
+    const bool publicationValid = m_graph && m_graph->m_planAccessState.load(MemoryOrder::relaxed) == GpuCompiledGraph::s_PlanAccessWriterBit;
     NWB_FATAL_ASSERT_MSG(publicationValid, "Compiled-plan publication requires exact compile-writer ownership");
     if(!publicationValid)
         TerminateInvariant();
@@ -180,21 +165,13 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
 
 GpuCompiledGraph::~GpuCompiledGraph(){
     u32 expectedPlanAccessState = 0u;
-    if(!m_planAccessState.compare_exchange_strong(
-        expectedPlanAccessState,
-        s_PlanAccessWriterBit,
-        MemoryOrder::acq_rel,
-        MemoryOrder::acquire
-    )){
+    if(!m_planAccessState.compare_exchange_strong(expectedPlanAccessState, s_PlanAccessWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire)){
         NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires all plan readers to resolve first");
         TerminateInvariant();
     }
 
     NothrowScopedLock lock(m_attemptBindingMutex);
-    if(
-        m_attemptBindingState == AttemptBindingState::Recording
-        || m_attemptBindingState == AttemptBindingState::Submitting
-    ){
+    if(m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting){
         NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires plan readers and its active graph attempt to resolve first");
         TerminateInvariant();
     }
@@ -204,19 +181,11 @@ GpuCompiledGraph::~GpuCompiledGraph(){
 bool GpuCompiledGraph::tryReset(){
     {
         NothrowScopedLock lock(m_attemptBindingMutex);
-        if(
-            m_attemptBindingState == AttemptBindingState::Recording
-            || m_attemptBindingState == AttemptBindingState::Submitting
-        )
+        if(m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting)
             return false;
 
         u32 expectedPlanAccessState = 0u;
-        if(!m_planAccessState.compare_exchange_strong(
-            expectedPlanAccessState,
-            s_PlanAccessWriterBit,
-            MemoryOrder::acq_rel,
-            MemoryOrder::acquire
-        ))
+        if(!m_planAccessState.compare_exchange_strong(expectedPlanAccessState, s_PlanAccessWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
             return false;
         clearAttemptBindingWithinLock();
     }
@@ -239,53 +208,31 @@ bool GpuCompiledGraph::validPacket(const GpuSubmissionPacketId& packetID)const n
 }
 
 bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
-    return range.valid()
-        && validPacket(range.first)
-        && range.packetCount <= m_packets.size() - range.first.index
-    ;
+    return range.valid() && validPacket(range.first) && range.packetCount <= m_packets.size() - range.first.index;
 }
 
 GpuSubmissionPacketId GpuCompiledGraph::packetIdAt(const usize index)const noexcept{
-    return index < m_packets.size()
-        ? GpuSubmissionPacketId{ .generation = m_planGeneration, .index = static_cast<u32>(index) }
-        : GpuSubmissionPacketId{}
-    ;
+    return index < m_packets.size() ? GpuSubmissionPacketId{ .generation = m_planGeneration, .index = static_cast<u32>(index) } : GpuSubmissionPacketId{};
 }
 
-GpuSubmissionPacketRange GpuCompiledGraph::packetRange(
-    const GpuSubmissionPacketId& first,
-    const GpuSubmissionPacketId& last
-)const noexcept{
+GpuSubmissionPacketRange GpuCompiledGraph::packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept{
     if(!validPacket(first) || !validPacket(last) || last.index < first.index)
         return {};
-    return GpuSubmissionPacketRange{
-        .first = first,
-        .packetCount = static_cast<usize>(last.index) - static_cast<usize>(first.index) + 1u,
-    };
+    return GpuSubmissionPacketRange{ .first = first, .packetCount = static_cast<usize>(last.index) - static_cast<usize>(first.index) + 1u, };
 }
 
-GpuSubmissionPacketRange GpuCompiledGraph::packetRangeForTasks(
-    const GpuTaskId& first,
-    const GpuTaskId& last
-)const noexcept{
+GpuSubmissionPacketRange GpuCompiledGraph::packetRangeForTasks(const GpuTaskId& first, const GpuTaskId& last)const noexcept{
     const GpuSubmissionPacketId firstPacket = packetForTask(first);
     const GpuSubmissionPacketId lastPacket = packetForTask(last);
     return packetRange(firstPacket, lastPacket);
 }
 
 GpuSubmissionPacketRange GpuCompiledGraph::allPacketRange()const noexcept{
-    return m_packets.empty()
-        ? GpuSubmissionPacketRange{}
-        : packetRange(packetIdAt(0u), packetIdAt(m_packets.size() - 1u))
-    ;
+    return m_packets.empty() ? GpuSubmissionPacketRange{} : packetRange(packetIdAt(0u), packetIdAt(m_packets.size() - 1u));
 }
 
 const GpuCompiledTask* GpuCompiledGraph::findTask(const GpuTaskId& task)const noexcept{
-    if(
-        !task.valid()
-        || task.generation != m_generation
-        || task.index >= m_compiledTaskIndexByTask.size()
-    )
+    if(!task.valid() || task.generation != m_generation || task.index >= m_compiledTaskIndexByTask.size())
         return nullptr;
     const u32 compiledTaskIndex = m_compiledTaskIndexByTask[task.index];
     if(compiledTaskIndex >= m_tasks.size())
@@ -304,51 +251,28 @@ GpuTaskPacketizationDecision::Enum GpuCompiledGraph::packetizationDecisionForTas
     return compiledTask ? compiledTask->packetizationDecision : GpuTaskPacketizationDecision::Unknown;
 }
 
-bool GpuCompiledGraph::tasksSharePacket(
-    const GpuTaskId& first,
-    const GpuTaskId& second
-)const noexcept{
+bool GpuCompiledGraph::tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     const GpuCompiledTask* const firstTask = findTask(first);
     const GpuCompiledTask* const secondTask = findTask(second);
     return firstTask && secondTask && firstTask->packet == secondTask->packet;
 }
 
-bool GpuCompiledGraph::taskPrecedesOrSharesPacket(
-    const GpuTaskId& first,
-    const GpuTaskId& second
-)const noexcept{
+bool GpuCompiledGraph::taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     const GpuCompiledTask* const firstTask = findTask(first);
     const GpuCompiledTask* const secondTask = findTask(second);
-    return firstTask
-        && secondTask
-        && firstTask->packet.valid()
-        && secondTask->packet.valid()
-        && firstTask->packet.index <= secondTask->packet.index
-    ;
+    return firstTask && secondTask && firstTask->packet.valid() && secondTask->packet.valid() && firstTask->packet.index <= secondTask->packet.index;
 }
 
-bool GpuCompiledGraph::taskPrecedesInSamePacket(
-    const GpuTaskId& first,
-    const GpuTaskId& second
-)const noexcept{
+bool GpuCompiledGraph::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     if(first == second)
         return false;
     const GpuCompiledTask* const firstTask = findTask(first);
     const GpuCompiledTask* const secondTask = findTask(second);
-    if(
-        !firstTask
-        || !secondTask
-        || firstTask->packet != secondTask->packet
-        || !validPacket(firstTask->packet)
-    )
+    if(!firstTask || !secondTask || firstTask->packet != secondTask->packet || !validPacket(firstTask->packet))
         return false;
 
     const GpuSubmissionPacket& packetPlan = m_packets[firstTask->packet.index];
-    if(
-        packetPlan.taskCount == 0u
-        || packetPlan.taskOffset > m_packetTasks.size()
-        || packetPlan.taskCount > m_packetTasks.size() - packetPlan.taskOffset
-    )
+    if(packetPlan.taskCount == 0u || packetPlan.taskOffset > m_packetTasks.size() || packetPlan.taskCount > m_packetTasks.size() - packetPlan.taskOffset)
         return false;
 
     // Packetization appends compiled tasks and packet task IDs together in execution order.
@@ -359,10 +283,7 @@ bool GpuCompiledGraph::taskPrecedesInSamePacket(
     return firstTaskIndex < secondTaskIndex;
 }
 
-bool GpuCompiledGraph::tasksFormContiguousPacketSequence(
-    const GpuTaskId* const tasks,
-    const usize taskCount
-)const noexcept{
+bool GpuCompiledGraph::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
     if(!tasks || taskCount == 0u)
         return false;
     const GpuCompiledTask* const firstTask = findTask(tasks[0u]);
@@ -370,11 +291,7 @@ bool GpuCompiledGraph::tasksFormContiguousPacketSequence(
         return false;
 
     const GpuSubmissionPacket& packetPlan = m_packets[firstTask->packet.index];
-    if(
-        taskCount > packetPlan.taskCount
-        || packetPlan.taskOffset > m_packetTasks.size()
-        || packetPlan.taskCount > m_packetTasks.size() - packetPlan.taskOffset
-    )
+    if(taskCount > packetPlan.taskCount || packetPlan.taskOffset > m_packetTasks.size() || packetPlan.taskCount > m_packetTasks.size() - packetPlan.taskOffset)
         return false;
 
     const usize firstTaskIndex = m_compiledTaskIndexByTask[tasks[0u].index];
@@ -391,10 +308,7 @@ bool GpuCompiledGraph::tasksFormContiguousPacketSequence(
 
 bool GpuCompiledGraph::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
     const GpuCompiledTask* const compiledTask = findTask(task);
-    return compiledTask
-        && validPacket(compiledTask->packet)
-        && m_packets[compiledTask->packet.index].joinsAcceptedQueueFrontier
-    ;
+    return compiledTask && validPacket(compiledTask->packet) && m_packets[compiledTask->packet.index].joinsAcceptedQueueFrontier;
 }
 
 const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfoForTask(const GpuTaskId& task)const noexcept{
@@ -410,9 +324,7 @@ const GpuCompiledOwnershipTransfer* GpuCompiledGraph::logicalOwnershipTransferAt
     return valid() && index < m_ownershipTransfers.size() ? &m_ownershipTransfers[index] : nullptr;
 }
 
-const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExport(
-    const GpuGraphResourceId& resource
-)const noexcept{
+const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExport(const GpuGraphResourceId& resource)const noexcept{
     if(!resource.valid() || resource.generation != m_generation)
         return nullptr;
     for(const GpuCompiledExternalResourceExport& exportInfo : m_externalResourceExports){
@@ -422,27 +334,17 @@ const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExpor
     return nullptr;
 }
 
-const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExportAt(
-    const usize index
-)const noexcept{
+const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExportAt(const usize index)const noexcept{
     return index < m_externalResourceExports.size() ? &m_externalResourceExports[index] : nullptr;
 }
 
-const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourceExportSources(
-    const GpuCompiledExternalResourceExport& exportInfo
-)const noexcept{
-    if(
-        exportInfo.sourceCount == 0u
-        || exportInfo.sourceOffset > m_externalResourceExportSources.size()
-        || exportInfo.sourceCount > m_externalResourceExportSources.size() - exportInfo.sourceOffset
-    )
+const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourceExportSources(const GpuCompiledExternalResourceExport& exportInfo)const noexcept{
+    if(exportInfo.sourceCount == 0u || exportInfo.sourceOffset > m_externalResourceExportSources.size() || exportInfo.sourceCount > m_externalResourceExportSources.size() - exportInfo.sourceOffset)
         return nullptr;
     return m_externalResourceExportSources.data() + exportInfo.sourceOffset;
 }
 
-GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompileStatistics(
-    const GpuPhysicalQueueId& queue
-)const noexcept{
+GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept{
     if(!valid() || !queue.valid() || queue.deviceGeneration != m_deviceGeneration)
         return {};
 
@@ -466,10 +368,7 @@ const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId
 GpuPhysicalQueueTopology GpuCompiledGraph::queueTopology()const noexcept{
     if(!valid())
         return {};
-    return GpuPhysicalQueueTopology{
-        .queues = m_queueTopology.empty() ? nullptr : m_queueTopology.data(),
-        .queueCount = m_queueTopology.size(),
-    };
+    return GpuPhysicalQueueTopology{ .queues = m_queueTopology.empty() ? nullptr : m_queueTopology.data(), .queueCount = m_queueTopology.size(), };
 }
 
 

@@ -68,10 +68,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
                 return false;
             }
             const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-            ){
+            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()){
                 reset();
                 return false;
             }
@@ -88,11 +85,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
     }
 
     [[nodiscard]] bool matches(const MaterialPassDrawItemVector& currentDrawItems)const{
-        if(
-            !captured
-            || currentDrawItems.size() != drawItems.size()
-            || outputBuffers.size() != drawItems.size()
-        )
+        if(!captured || currentDrawItems.size() != drawItems.size() || outputBuffers.size() != drawItems.size())
             return false;
 
         for(usize drawIndex = 0u; drawIndex < currentDrawItems.size(); ++drawIndex){
@@ -110,11 +103,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
                 return false;
 
             const MaterialPassMeshResourceSnapshot& mesh = current.meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-                || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
-            )
+            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid() || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get())
                 return false;
         }
         return true;

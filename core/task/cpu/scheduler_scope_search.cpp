@@ -30,8 +30,8 @@ u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u
         if(node->state == TaskState::Ready && QueueIndex(node->options) == queue)
             previous = anchor.index;
     }
-    // Publication can add paths to the joined scope. Retirement only removes paths, so a
-    // still-queued unrelated anchor stays safe until publication, even across other joins.
+    // Publication can add paths to the joined scope.
+    // Retirement only removes paths, so a still-queued unrelated anchor stays safe until publication, even across other joins.
     u32 index = previous == TaskHandle::s_InvalidIndex ? m_ready[queue].head : m_nodes[previous].next;
     while(index != TaskHandle::s_InvalidIndex && !contributesToScopeLocked(index, wait)){
         previous = index;
@@ -100,10 +100,7 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait
             return true;
         }
         const auto visit = [this](const TaskHandle handle){
-            if(
-                resolveLocked(handle) && m_searchVisits[handle.index] != m_searchGeneration
-                && m_scopeContributionVisits[handle.index] != m_scopeSearchGeneration
-            ){
+            if(resolveLocked(handle) && m_searchVisits[handle.index] != m_searchGeneration && m_scopeContributionVisits[handle.index] != m_scopeSearchGeneration){
                 m_searchVisits[handle.index] = m_searchGeneration;
                 m_searchStack.push_back(handle.index);
             }

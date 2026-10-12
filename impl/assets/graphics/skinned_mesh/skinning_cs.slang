@@ -17,8 +17,7 @@ struct NwbSkinnedMeshPushConstants{
     uint bindlessResourceSlots;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 
 // Persistent mesh streams use global heap entries; the runtime selector is uniform for the dispatch.
 #define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshPushConstants.bindlessResourceSlots)
@@ -45,12 +44,7 @@ uint nwbSkinnedMeshSkinningMode(){
 
 float4x4 nwbSkinnedMeshLoadJointMatrix(const uint jointId){
     const NwbSkinnedMeshJointMatrix jointMatrix = nwbSkinnedMeshHeapJointPalette(g_NwbSkinnedMeshBindlessResources.streamSlots2.w)[jointId];
-    return float4x4(
-        jointMatrix.row0,
-        jointMatrix.row1,
-        jointMatrix.row2,
-        float4(0.0, 0.0, 0.0, 1.0)
-    );
+    return float4x4(jointMatrix.row0, jointMatrix.row1, jointMatrix.row2, float4(0.0, 0.0, 0.0, 1.0));
 }
 
 bool nwbSkinnedMeshTransformJointNormal(const float3x3 jointMatrix, const float3 normal, out float3 transformedNormal){
@@ -64,11 +58,7 @@ bool nwbSkinnedMeshTransformJointNormal(const float3x3 jointMatrix, const float3
         return false;
 
     const float inverseDeterminant = 1.0 / determinant;
-    const float3x3 normalMatrix = float3x3(
-        cross(row1, row2) * inverseDeterminant,
-        cross(row2, row0) * inverseDeterminant,
-        cross(row0, row1) * inverseDeterminant
-    );
+    const float3x3 normalMatrix = float3x3(cross(row1, row2) * inverseDeterminant, cross(row2, row0) * inverseDeterminant, cross(row0, row1) * inverseDeterminant);
     transformedNormal = mul(normalMatrix, normal);
     return nwbFiniteFloat3(transformedNormal);
 }
@@ -87,10 +77,7 @@ bool nwbSkinnedMeshNormalizeDualQuaternion(inout float4 real, inout float4 dual)
 
 float3 nwbSkinnedMeshTransformDualQuaternionPosition(const float4 real, const float4 dual, const float3 position){
     const float3 rotatedPosition = nwbRotateVectorByQuaternion(position, real);
-    const float3 translation = 2.0 * nwbQuaternionMultiply(
-        dual,
-        float4(-real.xyz, real.w)
-    ).xyz;
+    const float3 translation = 2.0 * nwbQuaternionMultiply(dual, float4(-real.xyz, real.w)).xyz;
     return rotatedPosition + translation;
 }
 
@@ -171,12 +158,7 @@ bool nwbSkinnedMeshApplyLinearSkinFrame(const uint skinIndex, inout float3 norma
     return true;
 }
 
-bool nwbSkinnedMeshBuildDualQuaternionSkin(
-    const uint skinIndex,
-    out bool hasSkin,
-    out float4 blendedReal,
-    out float4 blendedDual
-){
+bool nwbSkinnedMeshBuildDualQuaternionSkin(const uint skinIndex, out bool hasSkin, out float4 blendedReal, out float4 blendedDual){
     hasSkin = false;
     blendedReal = float4(0.0);
     blendedDual = float4(0.0);
@@ -256,19 +238,13 @@ bool nwbSkinnedMeshApplyDualQuaternionSkinFrame(const uint skinIndex, inout floa
 }
 
 void nwbSkinnedMeshApplySkinPosition(const uint skinIndex, inout float3 position){
-    const bool skinApplied = nwbSkinnedMeshSkinningMode() == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
-        ? nwbSkinnedMeshApplyDualQuaternionSkinPosition(skinIndex, position)
-        : nwbSkinnedMeshApplyLinearSkinPosition(skinIndex, position)
-    ;
+    const bool skinApplied = nwbSkinnedMeshSkinningMode() == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION ? nwbSkinnedMeshApplyDualQuaternionSkinPosition(skinIndex, position) : nwbSkinnedMeshApplyLinearSkinPosition(skinIndex, position);
     if(!skinApplied)
         return;
 }
 
 void nwbSkinnedMeshApplySkinFrame(const uint skinIndex, inout float3 normal, inout float4 tangent){
-    const bool skinApplied = nwbSkinnedMeshSkinningMode() == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
-        ? nwbSkinnedMeshApplyDualQuaternionSkinFrame(skinIndex, normal, tangent)
-        : nwbSkinnedMeshApplyLinearSkinFrame(skinIndex, normal, tangent)
-    ;
+    const bool skinApplied = nwbSkinnedMeshSkinningMode() == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION ? nwbSkinnedMeshApplyDualQuaternionSkinFrame(skinIndex, normal, tangent) : nwbSkinnedMeshApplyLinearSkinFrame(skinIndex, normal, tangent);
     if(!skinApplied)
         return;
 }
@@ -277,18 +253,8 @@ void nwbSkinnedMeshApplySkinFrame(const uint skinIndex, inout float3 normal, ino
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbSkinnedMeshSkinPosition(
-    const NwbMeshletDesc meshlet,
-    const NwbMeshletRefDecodeInfo decodeInfo,
-    const uint localPositionIndex
-){
-    const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
-        nwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots1.w),
-        meshlet,
-        decodeInfo,
-        localPositionIndex,
-        true
-    );
+void nwbSkinnedMeshSkinPosition(const NwbMeshletDesc meshlet, const NwbMeshletRefDecodeInfo decodeInfo, const uint localPositionIndex){
+    const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(nwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots1.w), meshlet, decodeInfo, localPositionIndex, true);
     float3 position = nwbMeshLoadPosition(nwbSkinnedMeshHeapPositions(g_NwbSkinnedMeshBindlessResources.streamSlots0.x)[positionRef.position]);
     const float3 preSkinPosition = position;
     nwbSkinnedMeshApplySkinPosition(positionRef.skin, position);
@@ -298,17 +264,8 @@ void nwbSkinnedMeshSkinPosition(
     nwbSkinnedMeshHeapWritablePositions(g_NwbSkinnedMeshBindlessResources.streamSlots0.y)[positionRef.position] = nwbMeshStorePosition(position);
 }
 
-void nwbSkinnedMeshSkinAttribute(
-    const NwbMeshletDesc meshlet,
-    const NwbMeshletRefDecodeInfo decodeInfo,
-    const uint localAttributeIndex
-){
-    const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(
-        nwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots2.x),
-        meshlet,
-        decodeInfo,
-        localAttributeIndex
-    );
+void nwbSkinnedMeshSkinAttribute(const NwbMeshletDesc meshlet, const NwbMeshletRefDecodeInfo decodeInfo, const uint localAttributeIndex){
+    const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(nwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots2.x), meshlet, decodeInfo, localAttributeIndex);
     const uint attributeId = attributeRef.normal;
 
     float3 normal = nwbMeshLoadHalf4(nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshBindlessResources.streamSlots0.z)[attributeId]).xyz;

@@ -93,9 +93,7 @@ TEST(UiNumericParseTests, SignedZeroDraftSpellingsPreserveTheSignBit){
         AStringView text;
         f64 value = 0.0;
     };
-    const CompleteCase cases[]{
-        { "-0", -0.0 }, { "-0.0", -0.0 }, { "-0e100", -0.0 }
-    };
+    const CompleteCase cases[]{ { "-0", -0.0 }, { "-0.0", -0.0 }, { "-0e100", -0.0 } };
     for(const CompleteCase& test : cases){
         SCOPED_TRACE(test.text);
         const auto parsed = ParseFloatDraft(test.text);

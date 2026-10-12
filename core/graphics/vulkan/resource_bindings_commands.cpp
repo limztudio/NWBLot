@@ -23,20 +23,12 @@ namespace __hidden_vulkan_descriptor_buffer_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool HasExactLayoutAtSet(
-    const PipelineBindingState& pipelineBindings,
-    const BindingLayout* const expectedLayout,
-    const u32 expectedSetIndex,
-    const u32 expectedCount
-){
+[[nodiscard]] bool HasExactLayoutAtSet(const PipelineBindingState& pipelineBindings, const BindingLayout* const expectedLayout, const u32 expectedSetIndex, const u32 expectedCount){
     if(!expectedLayout)
         return expectedCount == 0u;
 
     u32 foundCount = 0u;
-    for(u32 layoutIndex = 0u;
-        layoutIndex < static_cast<u32>(pipelineBindings.m_bindingLayoutsAtCreation.size());
-        ++layoutIndex
-    ){
+    for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(pipelineBindings.m_bindingLayoutsAtCreation.size()); ++layoutIndex){
         if(pipelineBindings.m_bindingLayoutsAtCreation[layoutIndex].get() != expectedLayout)
             continue;
         if(pipelineBindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] != expectedSetIndex)
@@ -56,12 +48,7 @@ namespace __hidden_vulkan_descriptor_buffer_commands{
 ){
     return HasExactLayoutAtSet(pipelineBindings, resourceLayout, abi.resourceSetIndex, 1u)
         && HasExactLayoutAtSet(pipelineBindings, samplerLayout, abi.samplerSetIndex, 1u)
-        && HasExactLayoutAtSet(
-            pipelineBindings,
-            accelStructLayout,
-            abi.accelStructSetIndex,
-            bindAccelStruct ? 1u : 0u
-        )
+        && HasExactLayoutAtSet(pipelineBindings, accelStructLayout, abi.accelStructSetIndex, bindAccelStruct ? 1u : 0u)
     ;
 }
 
@@ -75,19 +62,11 @@ namespace __hidden_vulkan_descriptor_buffer_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::bindDescriptorBufferHeap(
-    GpuDescriptorHeap& heap,
-    const ComputePipeline& pipeline,
-    const GpuDescriptorHandle accelStructHandle
-){
+void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const ComputePipeline& pipeline, const GpuDescriptorHandle accelStructHandle){
     constexpr TStringView s_OperationName = NWB_TEXT("bind compute descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
-    if(
-        &pipeline.m_context != &m_context
-        || pipeline.m_pipeline == VK_NULL_HANDLE
-        || pipeline.m_pipelineLayout == VK_NULL_HANDLE
-    ){
+    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("compute pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -100,24 +79,14 @@ void CommandList::bindDescriptorBufferHeap(
         return;
     }
 
-    bindDescriptorBufferHeapNative(
-        heap,
-        VK_PIPELINE_BIND_POINT_COMPUTE,
-        pipeline,
-        accelStructHandle,
-        s_OperationName
-    );
+    bindDescriptorBufferHeapNative(heap, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline, accelStructHandle, s_OperationName);
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const GraphicsPipeline& pipeline){
     constexpr TStringView s_OperationName = NWB_TEXT("bind graphics descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(
-        &pipeline.m_context != &m_context
-        || pipeline.m_pipeline == VK_NULL_HANDLE
-        || pipeline.m_pipelineLayout == VK_NULL_HANDLE
-    ){
+    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -125,34 +94,19 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Graphi
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline is not the current command-list pipeline"));
         return;
     }
-    if(
-        !m_renderPassActive
-        || !m_renderPassFramebuffer
-        || m_renderPassFramebuffer != m_currentGraphicsState.framebuffer
-        || pipeline.m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo
-    ){
+    if(!m_renderPassActive || !m_renderPassFramebuffer || m_renderPassFramebuffer != m_currentGraphicsState.framebuffer || pipeline.m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics heap binding requires the matching active render scope"));
         return;
     }
 
-    bindDescriptorBufferHeapNative(
-        heap,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline,
-        GpuDescriptorHandle::Invalid(),
-        s_OperationName
-    );
+    bindDescriptorBufferHeapNative(heap, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline, GpuDescriptorHandle::Invalid(), s_OperationName);
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const MeshletPipeline& pipeline){
     constexpr TStringView s_OperationName = NWB_TEXT("bind meshlet descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(
-        &pipeline.m_context != &m_context
-        || pipeline.m_pipeline == VK_NULL_HANDLE
-        || pipeline.m_pipelineLayout == VK_NULL_HANDLE
-    ){
+    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -160,39 +114,19 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Meshle
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline is not the current command-list pipeline"));
         return;
     }
-    if(
-        !m_renderPassActive
-        || !m_renderPassFramebuffer
-        || m_renderPassFramebuffer != m_currentMeshletState.framebuffer
-        || pipeline.m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo
-    ){
+    if(!m_renderPassActive || !m_renderPassFramebuffer || m_renderPassFramebuffer != m_currentMeshletState.framebuffer || pipeline.m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet heap binding requires the matching active render scope"));
         return;
     }
 
-    bindDescriptorBufferHeapNative(
-        heap,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline,
-        GpuDescriptorHandle::Invalid(),
-        s_OperationName
-    );
+    bindDescriptorBufferHeapNative(heap, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline, GpuDescriptorHandle::Invalid(), s_OperationName);
 }
 
-void CommandList::bindDescriptorBufferHeap(
-    GpuDescriptorHeap& heap,
-    const RayTracingPipeline& pipeline,
-    const GpuDescriptorHandle accelStructHandle
-){
+void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const RayTracingPipeline& pipeline, const GpuDescriptorHandle accelStructHandle){
     constexpr TStringView s_OperationName = NWB_TEXT("bind ray-tracing descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
-    if(
-        &pipeline.m_context != &m_context
-        || &pipeline.m_device != &m_device
-        || pipeline.m_pipeline == VK_NULL_HANDLE
-        || pipeline.m_pipelineLayout == VK_NULL_HANDLE
-    ){
+    if(&pipeline.m_context != &m_context || &pipeline.m_device != &m_device || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("ray-tracing pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -206,22 +140,10 @@ void CommandList::bindDescriptorBufferHeap(
         return;
     }
 
-    bindDescriptorBufferHeapNative(
-        heap,
-        VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-        pipeline,
-        accelStructHandle,
-        s_OperationName
-    );
+    bindDescriptorBufferHeapNative(heap, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline, accelStructHandle, s_OperationName);
 }
 
-void CommandList::bindDescriptorBufferHeapNative(
-    GpuDescriptorHeap& heap,
-    const VkPipelineBindPoint bindPoint,
-    const PipelineBindingState& pipelineBindings,
-    const GpuDescriptorHandle accelStructHandle,
-    const TStringView operationName
-){
+void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const VkPipelineBindPoint bindPoint, const PipelineBindingState& pipelineBindings, const GpuDescriptorHandle accelStructHandle, const TStringView operationName){
     if(!validateCommandRecordingScope(operationName))
         return;
 
@@ -268,10 +190,7 @@ void CommandList::bindDescriptorBufferHeapNative(
         || abi.samplerSetIndex >= maxBoundDescriptorSets
         || abi.accelStructSetIndex >= maxBoundDescriptorSets
     ){
-        rejectCommandRecording(
-            operationName,
-            NWB_TEXT("heap descriptor-set ABI is not the dense set-0/1/2 contract or exceeds device limits")
-        );
+        rejectCommandRecording(operationName, NWB_TEXT("heap descriptor-set ABI is not the dense set-0/1/2 contract or exceeds device limits"));
         return;
     }
 
@@ -291,18 +210,14 @@ void CommandList::bindDescriptorBufferHeapNative(
         || (accelStructLayout && !accelStructLayout->m_descriptorBufferCompatible)
         || resourceLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource
         || samplerLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Sampler
-        || (accelStructLayout
-            && accelStructLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource)
+        || (accelStructLayout && accelStructLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource)
     ){
         rejectCommandRecording(operationName, NWB_TEXT("heap layouts are unavailable, foreign, or incompatible"));
         return;
     }
     const BindlessLayoutDesc* const resourceDesc = resourceLayout->getBindlessDesc();
     const BindlessLayoutDesc* const samplerDesc = samplerLayout->getBindlessDesc();
-    const BindlessLayoutDesc* const accelStructDesc = accelStructLayout
-        ? accelStructLayout->getBindlessDesc()
-        : nullptr
-    ;
+    const BindlessLayoutDesc* const accelStructDesc = accelStructLayout ? accelStructLayout->getBindlessDesc() : nullptr;
     if(
         !resourceDesc
         || !samplerDesc
@@ -313,14 +228,7 @@ void CommandList::bindDescriptorBufferHeapNative(
         || (bindAccelStruct && !accelStructDesc)
         || (accelStructDesc && accelStructDesc->descriptorSetIndex != abi.accelStructSetIndex)
         || (accelStructDesc && accelStructDesc->maxCapacity != 1u)
-        || !__hidden_vulkan_descriptor_buffer_commands::PipelineMatchesHeapLayouts(
-            pipelineBindings,
-            resourceLayout,
-            samplerLayout,
-            accelStructLayout,
-            abi,
-            bindAccelStruct
-        )
+        || !__hidden_vulkan_descriptor_buffer_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
     ){
         rejectCommandRecording(operationName, NWB_TEXT("pipeline creation layouts do not exactly match the heap ABI"));
         return;
@@ -343,10 +251,7 @@ void CommandList::bindDescriptorBufferHeapNative(
     ScopedLock resourceStorageLock(manager->m_resourceSegment.mutex);
     ScopedLock samplerStorageLock(manager->m_samplerSegment.mutex);
     const auto managerSnapshot = manager->captureBindingSnapshotLocked();
-    if(
-        !managerSnapshot
-        || managerSnapshot->generation != heap.m_descriptorBufferGeneration
-    ){
+    if(!managerSnapshot || managerSnapshot->generation != heap.m_descriptorBufferGeneration){
         rejectCommandRecording(operationName, NWB_TEXT("descriptor-buffer manager generation is unavailable or stale"));
         return;
     }
@@ -354,16 +259,8 @@ void CommandList::bindDescriptorBufferHeapNative(
     const DescriptorBufferSegment resourceBlock = heap.m_resourceBufferBlock;
     const DescriptorBufferSegment samplerBlock = heap.m_samplerBufferBlock;
     if(
-        !manager->isLiveSegmentLocked(
-            manager->m_resourceSegment,
-            resourceBlock,
-            DescriptorBufferSegmentKind::Resource
-        )
-        || !manager->isLiveSegmentLocked(
-            manager->m_samplerSegment,
-            samplerBlock,
-            DescriptorBufferSegmentKind::Sampler
-        )
+        !manager->isLiveSegmentLocked(manager->m_resourceSegment, resourceBlock, DescriptorBufferSegmentKind::Resource)
+        || !manager->isLiveSegmentLocked(manager->m_samplerSegment, samplerBlock, DescriptorBufferSegmentKind::Sampler)
         || resourceBlock.storageIdentity != managerSnapshot->resourceStorageIdentity
         || samplerBlock.storageIdentity != managerSnapshot->samplerStorageIdentity
         || resourceBlock.sizeBytes != resourceLayout->m_descriptorBufferSetSizeBytes
@@ -376,20 +273,14 @@ void CommandList::bindDescriptorBufferHeapNative(
     DescriptorBufferSegment accelStructBlock{};
     if(bindAccelStruct){
         const u32 slot = accelStructHandle.slot();
-        const GpuDescriptorHeap::SlotState slotState = slot < heap.m_accelStructSlots.slotStates.size()
-            ? heap.m_accelStructSlots.slotStates[slot]
-            : GpuDescriptorHeap::SlotState::Free
-        ;
+        const GpuDescriptorHeap::SlotState slotState = slot < heap.m_accelStructSlots.slotStates.size() ? heap.m_accelStructSlots.slotStates[slot] : GpuDescriptorHeap::SlotState::Free;
         if(
             accelStructHandle.descriptorClass() != GpuDescriptorClass::AccelStruct
             || slot >= heap.m_accelStructSlots.slotStates.size()
             || slot >= heap.m_accelStructSlots.allocatedClasses.size()
             || slot >= heap.m_accelStructBufferBlocks.size()
             || slot >= heap.m_accelStructResources.size()
-            || (
-                slotState != GpuDescriptorHeap::SlotState::Live
-                && slotState != GpuDescriptorHeap::SlotState::PendingRecording
-            )
+            || (slotState != GpuDescriptorHeap::SlotState::Live && slotState != GpuDescriptorHeap::SlotState::PendingRecording)
             || heap.m_accelStructSlots.allocatedClasses[slot] != static_cast<u8>(GpuDescriptorClass::AccelStruct)
         ){
             rejectCommandRecording(operationName, NWB_TEXT("TLAS handle is stale, retagged, or outside the recordable heap"));
@@ -400,11 +291,7 @@ void CommandList::bindDescriptorBufferHeapNative(
         AccelStruct* const accelStruct = heap.m_accelStructResources[slot].get();
         Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
         if(
-            !manager->isLiveSegmentLocked(
-                manager->m_resourceSegment,
-                accelStructBlock,
-                DescriptorBufferSegmentKind::Resource
-            )
+            !manager->isLiveSegmentLocked(manager->m_resourceSegment, accelStructBlock, DescriptorBufferSegmentKind::Resource)
             || accelStructBlock.storageIdentity != managerSnapshot->resourceStorageIdentity
             || accelStructBlock.sizeBytes != accelStructLayout->m_descriptorBufferSetSizeBytes
             || !m_device.isAccelStructReadyForGpuUse(accelStruct)
@@ -413,34 +300,21 @@ void CommandList::bindDescriptorBufferHeapNative(
             || !accelStruct->m_isTopLevelAtCreation
             || accelStruct->m_deviceAddress == 0u
         ){
-            rejectCommandRecording(
-                operationName,
-                NWB_TEXT("TLAS block or retained top-level acceleration structure is not live")
-            );
+            rejectCommandRecording(operationName, NWB_TEXT("TLAS block or retained top-level acceleration structure is not live"));
             return;
         }
     }
 
-    if(
-        (resourceBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u
-        || (samplerBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u
-        || (bindAccelStruct && (accelStructBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u)
-    ){
+    if((resourceBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u || (samplerBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u || (bindAccelStruct && (accelStructBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u)){
         rejectCommandRecording(operationName, NWB_TEXT("a descriptor-buffer set block offset is misaligned"));
         return;
     }
 
     TrackedCommandBuffer& trackedCommandBuffer = *m_currentCmdBuf;
     if(
-        (trackedCommandBuffer.m_descriptorBufferManager
-            && trackedCommandBuffer.m_descriptorBufferManager != manager)
-        || (trackedCommandBuffer.m_descriptorBufferGeneration != 0u
-            && trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation)
-        || (m_descriptorBuffersBound
-            && (
-                trackedCommandBuffer.m_descriptorBufferManager != manager
-                || trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation
-            ))
+        (trackedCommandBuffer.m_descriptorBufferManager && trackedCommandBuffer.m_descriptorBufferManager != manager)
+        || (trackedCommandBuffer.m_descriptorBufferGeneration != 0u && trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation)
+        || (m_descriptorBuffersBound && (trackedCommandBuffer.m_descriptorBufferManager != manager || trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation))
     ){
         rejectCommandRecording(operationName, NWB_TEXT("command buffer already references another descriptor generation"));
         return;
@@ -468,37 +342,24 @@ void CommandList::bindDescriptorBufferHeapNative(
         DescriptorBufferManager::s_SamplerDescriptorBufferIndex,
         DescriptorBufferManager::s_ResourceDescriptorBufferIndex,
     };
-    const VkDeviceSize offsets[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = {
-        resourceBlock.offsetBytes,
-        samplerBlock.offsetBytes,
-        accelStructBlock.offsetBytes
-    };
+    const VkDeviceSize offsets[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = { resourceBlock.offsetBytes, samplerBlock.offsetBytes, accelStructBlock.offsetBytes };
 
     m_context.deviceDispatch.vkCmdSetDescriptorBufferOffsetsEXT(
         m_currentCmdBuf->m_cmdBuf,
         bindPoint,
         pipelineBindings.m_pipelineLayout,
         abi.resourceSetIndex,
-        bindAccelStruct
-            ? DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct
-            : DescriptorBufferManager::s_PersistentDescriptorBufferCount,
+        bindAccelStruct ? DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct : DescriptorBufferManager::s_PersistentDescriptorBufferCount,
         bufferIndices,
         offsets
     );
 }
 
-void CommandList::ensureDescriptorBuffersBound(
-    DescriptorBufferManager& manager,
-    const DescriptorBufferManager::BindingSnapshot& snapshot
-){
+void CommandList::ensureDescriptorBuffersBound(DescriptorBufferManager& manager, const DescriptorBufferManager::BindingSnapshot& snapshot){
     if(m_descriptorBuffersBound)
         return;
 
-    m_context.deviceDispatch.vkCmdBindDescriptorBuffersEXT(
-        m_currentCmdBuf->m_cmdBuf,
-        DescriptorBufferManager::s_PersistentDescriptorBufferCount,
-        snapshot.bindingInfos.data()
-    );
+    m_context.deviceDispatch.vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, DescriptorBufferManager::s_PersistentDescriptorBufferCount, snapshot.bindingInfos.data());
     m_currentCmdBuf->m_descriptorBufferManager = &manager;
     m_currentCmdBuf->m_descriptorBufferGeneration = snapshot.generation;
     m_descriptorBuffersBound = true;

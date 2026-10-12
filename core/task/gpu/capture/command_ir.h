@@ -383,11 +383,7 @@ public:
 
 
 private:
-    void fail(
-        GpuCommandIrStreamValidationError::Enum error,
-        usize byteOffset,
-        u64 recordIndex
-    )noexcept;
+    void fail(GpuCommandIrStreamValidationError::Enum error, usize byteOffset, u64 recordIndex)noexcept;
 
 
 private:
@@ -499,8 +495,8 @@ namespace GpuCommandIrReplayError{
 
 struct GpuCommandIrReplayResult{
     GpuCommandIrReplayError::Enum error = GpuCommandIrReplayError::None;
-    // Syntax failures preserve the reader's exact byte diagnostic. Semantic failures identify the decoded record
-    // that failed graph-aware preflight and use Limit<u64>::s_Max when no record was reached.
+    // Syntax failures preserve the reader's exact byte diagnostic.
+    // Semantic failures identify the decoded record that failed graph-aware preflight and use Limit<u64>::s_Max when no record was reached.
     GpuCommandIrStreamValidationResult streamValidation;
     u64 recordIndex = Limit<u64>::s_Max;
 
@@ -509,30 +505,14 @@ struct GpuCommandIrReplayResult{
     }
 };
 
-// Graph-only validation for `packet`'s commands (no native list): whole stream syntax-checked, other packets
-// ignored for one-at-a-time replay. Ownership/readiness need a replay list (checked at replay).
-[[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
-    BinaryByteView bytes,
-    const GpuTaskGraphDeclarationReadView& graph,
-    const GpuCompiledGraph::ReadView& compiledGraph,
-    GpuSubmissionPacketId packet
-)noexcept;
-[[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
-    const GpuCommandIrOwnedStream& stream,
-    const GpuTaskGraphDeclarationReadView& graph,
-    const GpuCompiledGraph::ReadView& compiledGraph,
-    GpuSubmissionPacketId packet
-)noexcept;
+// Graph-only validation for `packet`'s commands (no native list): whole stream syntax-checked, other packets ignored for one-at-a-time replay.
+// Ownership/readiness need a replay list (checked at replay).
+[[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet)noexcept;
+[[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet)noexcept;
 
-// Preflight then lowers only `packet`'s commands: list open on the packet's exact queue/class, no render pass,
-// bytes+graph stable. No seeds/barriers/submit; caller keeps the packet contract.
-[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
-    BinaryByteView bytes,
-    const GpuTaskGraphDeclarationReadView& graph,
-    const GpuCompiledGraph::ReadView& compiledGraph,
-    GpuSubmissionPacketId packet,
-    CommandList& commandList
-)noexcept;
+// Preflight then lowers only `packet`'s commands: list open on the packet's exact queue/class, no render pass, bytes+graph stable.
+// No seeds/barriers/submit; caller keeps the packet contract.
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList)noexcept;
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     const GpuCommandIrOwnedStream& stream,
     const GpuTaskGraphDeclarationReadView& graph,
@@ -556,19 +536,13 @@ public:
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
-    // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan
-    // remain unchanged across a rejected retry.
+    // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan remain unchanged across a rejected retry.
     [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const;
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;
     [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
     [[nodiscard]] bool rollback(const GpuCommandIrCaptureCheckpoint& checkpoint)noexcept;
-    [[nodiscard]] bool captureSetGraphicsState(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        const GpuCommandIrRasterStateDesc& state
-    );
+    [[nodiscard]] bool captureSetGraphicsState(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state);
     // ownerArena and the descriptor owner's arena must outlive every exported stream that retains this heap binding.
     // The Device and its heap must outlive the last retained lease/artifact.
     [[nodiscard]] bool captureBindGraphicsHeap(
@@ -581,26 +555,11 @@ public:
         GraphicsArena& ownerArena,
         const GpuCommandIrOwnerAnchor& descriptorOwner
     );
-    [[nodiscard]] bool capturePushConstants(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        BinaryByteView bytes
-    );
-    [[nodiscard]] bool captureDraw(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        const DrawArguments& arguments,
-        bool indexed
-    );
-    [[nodiscard]] bool captureEndRenderPass(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue
-    );
-    // Packet recording checkpoints before invoking task payloads and rolls back an incomplete task-recording
-    // attempt. This is a recording trace; a later reader may separately correlate it with submission acceptance.
+    [[nodiscard]] bool capturePushConstants(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView bytes);
+    [[nodiscard]] bool captureDraw(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const DrawArguments& arguments, bool indexed);
+    [[nodiscard]] bool captureEndRenderPass(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue);
+    // Packet recording checkpoints before invoking task payloads and rolls back an incomplete task-recording attempt.
+    // This is a recording trace; a later reader may separately correlate it with submission acceptance.
     void rollback(usize recordCount)noexcept;
 
     [[nodiscard]] bool captureUploadBuffer(
@@ -627,61 +586,18 @@ public:
         ResourceStates::Mask finalState
     );
 
-    [[nodiscard]] bool captureCopyBuffer(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        GpuGraphResourceId source,
-        u64 sourceOffsetBytes,
-        GpuGraphResourceId destination,
-        u64 destinationOffsetBytes,
-        u64 dataSizeBytes
-    );
-    [[nodiscard]] bool captureCopyTexture(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        GpuGraphResourceId source,
-        TextureSlice sourceSlice,
-        GpuGraphResourceId destination,
-        TextureSlice destinationSlice
-    );
-    [[nodiscard]] bool captureClearBuffer(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        GpuGraphResourceId destination,
-        u32 clearValue
-    );
-    [[nodiscard]] bool captureClearTexture(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        GpuGraphResourceId destination,
-        const GpuClearTextureTaskDesc& clearDesc
-    );
-    [[nodiscard]] bool captureClearTextureRectUInt(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        GpuGraphResourceId destination,
-        const GpuClearTextureRectUIntTaskDesc& clearDesc
-    );
+    [[nodiscard]] bool captureCopyBuffer(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId source, u64 sourceOffsetBytes, GpuGraphResourceId destination, u64 destinationOffsetBytes, u64 dataSizeBytes);
+    [[nodiscard]] bool captureCopyTexture(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId source, TextureSlice sourceSlice, GpuGraphResourceId destination, TextureSlice destinationSlice);
+    [[nodiscard]] bool captureClearBuffer(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, u32 clearValue);
+    [[nodiscard]] bool captureClearTexture(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, const GpuClearTextureTaskDesc& clearDesc);
+    [[nodiscard]] bool captureClearTextureRectUInt(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, const GpuClearTextureRectUIntTaskDesc& clearDesc);
 
 
 private:
     [[nodiscard]] bool append(const GpuCommandIrBuiltinTaskRecord& record);
     [[nodiscard]] bool appendUpload(GpuCommandIrBuiltinTaskRecord record, BinaryByteView bytes);
     [[nodiscard]] bool appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record);
-    [[nodiscard]] bool appendRasterBytes(
-        GpuTaskId task,
-        GpuSubmissionPacketId packet,
-        GpuPhysicalQueueId queue,
-        BinaryByteView encoded,
-        BinaryByteView blob,
-        const GpuCommandIrRasterStateOwner* stateOwner,
-        const GpuCommandIrRasterHeapOwner* heapOwner
-    );
+    [[nodiscard]] bool appendRasterBytes(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView encoded, BinaryByteView blob, const GpuCommandIrRasterStateOwner* stateOwner, const GpuCommandIrRasterHeapOwner* heapOwner);
     void writeStreamHeader()noexcept;
     void rollbackPrefix(usize recordCount, u64 graphGeneration, u64 planGeneration, u64 attemptGeneration)noexcept;
 

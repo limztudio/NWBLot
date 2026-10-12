@@ -45,19 +45,13 @@ Expected<UniquePtr<IAsset>> AssetManager::loadSync(const Name& assetType, const 
 
     AssetBytes binary{m_arena};
     if(!m_binarySource.readAssetBinary(virtualPath, binary)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'")
-            , StringConvert(virtualPath.resolvedText())
-            , StringConvert(assetType.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'"), StringConvert(virtualPath.resolvedText()), StringConvert(assetType.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 
     auto asset = m_registry.deserializeAsset(assetType, virtualPath, binary);
     if(!asset){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'")
-            , StringConvert(virtualPath.resolvedText())
-            , StringConvert(assetType.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'"), StringConvert(virtualPath.resolvedText()), StringConvert(assetType.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 

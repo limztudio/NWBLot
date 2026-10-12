@@ -8,11 +8,7 @@ from typing import Callable, Optional, Tuple
 
 
 WIN_FUNC_IS_WOW64 = "WINFUNCTYPE"
-WINDOWS_ENUM_CALLBACK = getattr(ctypes, WIN_FUNC_IS_WOW64, ctypes.CFUNCTYPE)(
-    ctypes.c_int,
-    ctypes.c_void_p,
-    ctypes.c_ssize_t,
-)
+WINDOWS_ENUM_CALLBACK = getattr(ctypes, WIN_FUNC_IS_WOW64, ctypes.CFUNCTYPE)(ctypes.c_int, ctypes.c_void_p, ctypes.c_ssize_t,)
 PROCESS_TERMINATE = 0x0001
 SYNCHRONIZE = 0x00100000
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -150,20 +146,11 @@ class WindowsProcessApi:
         self._kernel32.CloseHandle(handle.native_handle)
 
     def _bind_functions(self) -> None:
-        self._psapi.EnumProcesses.argtypes = [
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
+        self._psapi.EnumProcesses.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32),]
         self._psapi.EnumProcesses.restype = ctypes.c_int
         self._kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
         self._kernel32.OpenProcess.restype = ctypes.c_void_p
-        self._kernel32.QueryFullProcessImageNameW.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_wchar_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
+        self._kernel32.QueryFullProcessImageNameW.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_uint32),]
         self._kernel32.QueryFullProcessImageNameW.restype = ctypes.c_int
         self._kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
         self._kernel32.WaitForSingleObject.restype = ctypes.c_uint32
@@ -191,14 +178,7 @@ def normalize_windows_image_path(path, resolve_path: Optional[Callable[[str], st
     return resolved
 
 
-def stop_processes_by_image_path(
-    executable,
-    grace_timeout_seconds: float,
-    hard_timeout_seconds: float,
-    api=None,
-    resolve_path: Optional[Callable[[str], str]] = None,
-    current_process_id: Optional[int] = None,
-) -> Tuple[WindowsProcessStopResult, ...]:
+def stop_processes_by_image_path(executable, grace_timeout_seconds: float, hard_timeout_seconds: float, api=None, resolve_path: Optional[Callable[[str], str]] = None, current_process_id: Optional[int] = None,) -> Tuple[WindowsProcessStopResult, ...]:
     process_api = api or WindowsProcessApi()
     target_image_path = normalize_windows_image_path(executable, resolve_path)
     own_pid = os.getpid() if current_process_id is None else current_process_id
@@ -226,27 +206,14 @@ def stop_processes_by_image_path(
                 if not process_api.wait_for_exit(handle, hard_timeout_seconds):
                     raise WindowsProcessError(MSG_NO_EXIT_AFTER_TERMINATE.format(pid=pid))
 
-            results.append(
-                WindowsProcessStopResult(
-                    pid,
-                    process_api.exit_code(handle),
-                    graceful_close_requested,
-                    forced,
-                )
-            )
+            results.append(WindowsProcessStopResult(pid, process_api.exit_code(handle), graceful_close_requested, forced,))
         finally:
             process_api.close_process(handle)
 
     return tuple(results)
 
 
-def run_bounded_process(
-    process,
-    run_seconds: float,
-    grace_timeout_seconds: float,
-    hard_timeout_seconds: float,
-    api=None,
-) -> WindowsBoundedRunResult:
+def run_bounded_process(process, run_seconds: float, grace_timeout_seconds: float, hard_timeout_seconds: float, api=None,) -> WindowsBoundedRunResult:
     process_api = api or WindowsProcessApi()
     handle = process_api.open_process(process.pid)
     if handle is None:
@@ -265,9 +232,7 @@ def run_bounded_process(
 
         forced = process_api.force_terminate(handle)
         if not forced and not process_api.wait_for_exit(handle, 0.0):
-            raise WindowsProcessError(
-                MSG_LAUNCHED_NO_TERMINATE.format(process=process)
-            )
+            raise WindowsProcessError(MSG_LAUNCHED_NO_TERMINATE.format(process=process))
         if not process_api.wait_for_exit(handle, hard_timeout_seconds):
             raise WindowsProcessError(MSG_LAUNCHED_NO_EXIT.format(process=process))
         exit_code = process.wait()

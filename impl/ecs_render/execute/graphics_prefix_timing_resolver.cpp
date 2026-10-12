@@ -40,15 +40,9 @@ void GraphicsPrefixTimingResolver::resolve(
         pipeline.m_graphicsPrefixSceneShadingSetupTask,
         pipeline.m_graphicsPrefixDeferredClearTask,
         pipeline.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixCsgReceiverSpanTask.valid()
-            ? pipeline.m_graphicsPrefixCsgReceiverSpanTask
-            : pipeline.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixCsgIntervalCombineTask.valid()
-            ? pipeline.m_graphicsPrefixCsgIntervalCombineTask
-            : pipeline.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixCsgIntervalSampleTask.valid()
-            ? pipeline.m_graphicsPrefixCsgIntervalSampleTask
-            : pipeline.m_graphicsPrefixGbufferTask,
+        pipeline.m_graphicsPrefixCsgReceiverSpanTask.valid() ? pipeline.m_graphicsPrefixCsgReceiverSpanTask : pipeline.m_graphicsPrefixGbufferTask,
+        pipeline.m_graphicsPrefixCsgIntervalCombineTask.valid() ? pipeline.m_graphicsPrefixCsgIntervalCombineTask : pipeline.m_graphicsPrefixGbufferTask,
+        pipeline.m_graphicsPrefixCsgIntervalSampleTask.valid() ? pipeline.m_graphicsPrefixCsgIntervalSampleTask : pipeline.m_graphicsPrefixGbufferTask,
         pipeline.m_graphicsPrefixTask,
     };
     static_assert(LengthOf(resolvedTasks) == s_TimingTaskCount);
@@ -58,25 +52,13 @@ void GraphicsPrefixTimingResolver::resolve(
         timingTasks[taskIndex] = resolvedTasks[taskIndex];
     for(usize prefixTaskIndex = 0u; prefixTaskIndex < ticketCount; ++prefixTaskIndex){
         const Core::GpuTaskId task = timingTasks[prefixTaskIndex];
-        if(
-            !compiledPlan.findTask(task).valid()
-            || (
-                prefixTaskIndex != 0u
-                && !compiledPlan.taskPrecedesOrSharesPacket(
-                    timingTasks[prefixTaskIndex - 1u],
-                    task
-                )
-            )
-        ){
+        if(!compiledPlan.findTask(task).valid() || (prefixTaskIndex != 0u && !compiledPlan.taskPrecedesOrSharesPacket(timingTasks[prefixTaskIndex - 1u], task))){
             outResult.bindingsValid = false;
             break;
         }
         bool sharesPacketWithEarlierTask = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
-            if(!compiledPlan.tasksSharePacket(
-                task,
-                timingTasks[earlierTaskIndex]
-            ))
+            if(!compiledPlan.tasksSharePacket(task, timingTasks[earlierTaskIndex]))
                 continue;
             timingTickets[prefixTaskIndex] = timingTickets[earlierTaskIndex];
             sharesPacketWithEarlierTask = true;
@@ -88,12 +70,7 @@ void GraphicsPrefixTimingResolver::resolve(
         }
     }
     // Measures are submission-local; skip the scope across a frontier.
-    asyncSpansOnePacket = outResult.bindingsValid
-        && compiledPlan.tasksSharePacket(
-            pipeline.m_graphicsPrefixMeshViewSetupTask,
-            pipeline.m_graphicsPrefixTask
-        )
-    ;
+    asyncSpansOnePacket = outResult.bindingsValid && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixMeshViewSetupTask, pipeline.m_graphicsPrefixTask);
     outResult.asyncSpansOnePacket = asyncSpansOnePacket;
 }
 

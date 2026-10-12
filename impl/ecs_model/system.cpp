@@ -34,13 +34,7 @@ namespace __hidden_model_system{
 
 using AttachmentJointQuery = ModelAttachmentJointQuery;
 
-static void ResolveAttachmentJointQueries(
-    Core::ECS::World& world,
-    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette,
-    AttachmentJointQuery* const queries,
-    const usize queryCount,
-    const usize* const parentOrder
-){
+static void ResolveAttachmentJointQueries(Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, AttachmentJointQuery* const queries, const usize queryCount, const usize* const parentOrder){
     const auto queryAt = [&](const usize index) -> AttachmentJointQuery&{
         return queries[parentOrder ? parentOrder[index] : index];
     };
@@ -67,22 +61,9 @@ static void ResolveAttachmentJointQueries(
 
 static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 
-void StoreObjectWorldTransform(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID owner,
-    const SkeletonJointMatrix& localTransform,
-    Scene::TransformComponent& transform
-){
+void StoreObjectWorldTransform(Core::ECS::World& world, const Core::ECS::EntityID owner, const SkeletonJointMatrix& localTransform, Scene::TransformComponent& transform){
     const Scene::TransformComponent* ownerTransform = world.tryGetComponent<Scene::TransformComponent>(owner);
-    const SIMDMatrix ownerMatrix = ownerTransform
-        ? MatrixAffineTransformation(
-            LoadFloat(ownerTransform->scale),
-            VectorZero(),
-            LoadFloat(ownerTransform->rotation),
-            LoadFloat(ownerTransform->position)
-        )
-        : MatrixIdentity()
-    ;
+    const SIMDMatrix ownerMatrix = ownerTransform ? MatrixAffineTransformation(LoadFloat(ownerTransform->scale), VectorZero(), LoadFloat(ownerTransform->rotation), LoadFloat(ownerTransform->position)) : MatrixIdentity();
 
     const auto decomposition = MatrixDecompose(MatrixMultiply(ownerMatrix, LoadFloat(localTransform)));
     if(!decomposition)
@@ -93,14 +74,7 @@ void StoreObjectWorldTransform(
     StoreFloat(VectorSetW(decomposition->scale, 0.0f), transform.scale);
 }
 
-void TagObject(
-    Core::ECS::Entity& entity,
-    const Core::ECS::EntityID owner,
-    const Name model,
-    const Name object,
-    const SkeletonJointMatrix& localTransform,
-    const ModelObjectKind::Enum kind
-){
+void TagObject(Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const Name model, const Name object, const SkeletonJointMatrix& localTransform, const ModelObjectKind::Enum kind){
     auto& objectComponent = entity.addComponent<ModelObjectComponent>();
     objectComponent.owner = owner;
     objectComponent.model = model;
@@ -121,12 +95,7 @@ void TagObject(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ModelSystem::ModelSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::Assets::AssetManager& assetManager,
-    ModelObjectRendererHooks rendererHooks
-)
+ModelSystem::ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::Assets::AssetManager& assetManager, ModelObjectRendererHooks rendererHooks)
     : Core::ECS::ISystem(arena)
     , m_arena(arena)
     , m_world(world)
@@ -162,8 +131,7 @@ void ModelSystem::syncModelRuntimes(){
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_model/sync_runtime"));
     clearInactiveModelRuntimes(scratchArena);
 
-    m_world.view<ModelComponent>().each(
-        [&](const Core::ECS::EntityID entity, ModelComponent& component){
+    m_world.view<ModelComponent>().each([&](const Core::ECS::EntityID entity, ModelComponent& component){
             ensureModelRuntime(entity, component, scratchArena);
         }
     );
@@ -181,20 +149,17 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     const auto objects = m_world.view<ModelObjectComponent>();
     const auto runtimes = m_world.view<ModelRuntimeComponent>();
     const auto objectIsInactive = [&](const ModelObjectComponent& object){
-        return !m_world.tryGetComponent<ModelRuntimeComponent>(object.owner)
-            || !m_world.tryGetComponent<ModelComponent>(object.owner);
+        return !m_world.tryGetComponent<ModelRuntimeComponent>(object.owner) || !m_world.tryGetComponent<ModelComponent>(object.owner);
     };
     usize inactiveObjectCount = 0u;
-    objects.each(
-        [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
+    objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
             static_cast<void>(entity);
             if(objectIsInactive(object))
                 ++inactiveObjectCount;
         }
     );
     usize inactiveRuntimeCount = 0u;
-    runtimes.each(
-        [&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
+    runtimes.each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
             static_cast<void>(runtime);
             if(!m_world.tryGetComponent<ModelComponent>(entity))
                 ++inactiveRuntimeCount;
@@ -206,8 +171,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> inactiveEntities(scratchArena);
     inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
     if(inactiveObjectCount != 0u){
-        objects.each(
-            [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
+        objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
                 if(objectIsInactive(object))
                     inactiveEntities.push_back(entity);
             }
@@ -219,8 +183,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     if(inactiveRuntimeCount != 0u){
         // Destroying objects can also remove runtime components, so take a fresh view after that batch completes.
         inactiveEntities.clear();
-        m_world.view<ModelRuntimeComponent>().each(
-            [&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
+        m_world.view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
                 static_cast<void>(runtime);
                 if(!m_world.tryGetComponent<ModelComponent>(entity))
                     inactiveEntities.push_back(entity);
@@ -231,11 +194,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     }
 }
 
-void ModelSystem::ensureModelRuntime(
-    const Core::ECS::EntityID entity,
-    const ModelComponent& component,
-    Core::Alloc::ScratchArena& scratchArena
-){
+void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const ModelComponent& component, Core::Alloc::ScratchArena& scratchArena){
     if(!component.model.valid()){
         clearModelRuntime(entity, scratchArena);
         m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
@@ -263,8 +222,7 @@ void ModelSystem::ensureModelRuntime(
 void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena){
     const auto objects = m_world.view<ModelObjectComponent>();
     usize ownedCount = 0u;
-    objects.each(
-        [&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
+    objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
             static_cast<void>(objectEntity);
             if(object.owner == entity)
                 ++ownedCount;
@@ -273,8 +231,7 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
     if(ownedCount != 0u){
         Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> ownedEntities(scratchArena);
         ownedEntities.reserve(ownedCount);
-        objects.each(
-            [&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
+        objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
                 if(object.owner == entity)
                     ownedEntities.push_back(objectEntity);
             }
@@ -287,11 +244,7 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
         *runtime = ModelRuntimeComponent{};
 }
 
-bool ModelSystem::expandModel(
-    const Core::ECS::EntityID owner,
-    const Model& model,
-    ModelRuntimeComponent& runtime
-){
+bool ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime){
     runtime.model = model.virtualPath();
     runtime.objectCount = 0u;
 
@@ -328,14 +281,7 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
     const Skeleton* skeleton = skeletonAsset->get();
 
     Core::ECS::Entity entity = m_world.createEntity();
-    __hidden_model_system::TagObject(
-        entity,
-        owner,
-        m_world.entity(owner).getComponent<ModelRuntimeComponent>().model,
-        object.name,
-        object.transform,
-        ModelObjectKind::Skeleton
-    );
+    __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::Skeleton);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
     __hidden_model_system::StoreObjectWorldTransform(m_world, owner, object.transform, transform);
 
@@ -357,14 +303,7 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
 
 bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
     Core::ECS::Entity entity = m_world.createEntity();
-    __hidden_model_system::TagObject(
-        entity,
-        owner,
-        m_world.entity(owner).getComponent<ModelRuntimeComponent>().model,
-        object.name,
-        object.transform,
-        ModelObjectKind::StaticMesh
-    );
+    __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::StaticMesh);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
     __hidden_model_system::StoreObjectWorldTransform(m_world, owner, object.transform, transform);
     if(m_applyRenderer)
@@ -379,29 +318,20 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     attachment.localTransform = object.transform;
 
     if(!object.parentObject && object.parentJoint){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' uses parent_joint '{}' without parent_object")
-            , StringConvert(object.name.resolvedText())
-            , StringConvert(object.parentJoint.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' uses parent_joint '{}' without parent_object"), StringConvert(object.name.resolvedText()), StringConvert(object.parentJoint.resolvedText()));
         return false;
     }
 
     if(object.parentObject){
         attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
         if(!attachment.parentEntity.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing parent object '{}'")
-                , StringConvert(object.name.resolvedText())
-                , StringConvert(object.parentObject.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing parent object '{}'"), StringConvert(object.name.resolvedText()), StringConvert(object.parentObject.resolvedText()));
             return false;
         }
 
         const ModelSkeletonComponent* skeletonComponent = m_world.tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity);
         if(!skeletonComponent){
-            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' parent_object '{}' is not a skeleton object")
-                , StringConvert(object.name.resolvedText())
-                , StringConvert(object.parentObject.resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' parent_object '{}' is not a skeleton object"), StringConvert(object.name.resolvedText()), StringConvert(object.parentObject.resolvedText()));
             return false;
         }
 
@@ -432,21 +362,12 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
 bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object){
     const Core::ECS::EntityID skeletonEntity = findSpawnedObject(owner, object.skeletonObject);
     if(!skeletonEntity.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: skinned mesh object '{}' targets missing skeleton object")
-            , StringConvert(object.name.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: skinned mesh object '{}' targets missing skeleton object"), StringConvert(object.name.resolvedText()));
         return false;
     }
 
     Core::ECS::Entity entity = m_world.createEntity();
-    __hidden_model_system::TagObject(
-        entity,
-        owner,
-        m_world.entity(owner).getComponent<ModelRuntimeComponent>().model,
-        object.name,
-        object.transform,
-        ModelObjectKind::SkinnedMesh
-    );
+    __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::SkinnedMesh);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
     __hidden_model_system::StoreObjectWorldTransform(m_world, owner, object.transform, transform);
     if(m_applyRenderer)
@@ -476,10 +397,7 @@ void ModelSystem::updateStaticMeshAttachments(){
     const auto attachments = m_world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>();
     usize queryCount = 0u;
     if(attachments.candidateCount() > 1u){
-        attachments.each(
-            [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object,
-                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform
-            ){
+        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
                 static_cast<void>(entity);
                 static_cast<void>(object);
                 static_cast<void>(transform);
@@ -496,10 +414,7 @@ void ModelSystem::updateStaticMeshAttachments(){
     if(queryCount > 1u){
         jointQueries.reserve(queryCount);
         bool sharedParent = true;
-        attachments.each(
-            [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object,
-                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform
-            ){
+        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
                 static_cast<void>(entity);
                 static_cast<void>(object);
                 static_cast<void>(transform);
@@ -507,10 +422,7 @@ void ModelSystem::updateStaticMeshAttachments(){
                     return;
                 if(!jointQueries.empty() && jointQueries.front().parentEntity != attachment.parentEntity)
                     sharedParent = false;
-                jointQueries.push_back(ModelAttachmentJointQuery{
-                    .parentEntity = attachment.parentEntity,
-                    .parentJointIndex = attachment.parentJointIndex,
-                });
+                jointQueries.push_back(ModelAttachmentJointQuery{ .parentEntity = attachment.parentEntity, .parentJointIndex = attachment.parentJointIndex, });
             }
         );
         auto* const queries = jointQueries.data();
@@ -526,31 +438,18 @@ void ModelSystem::updateStaticMeshAttachments(){
             Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs){
                 return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
             });
-            __hidden_model_system::ResolveAttachmentJointQueries(
-                m_world, m_scratchJoints, queries, queryCount, parentOrder.data()
-            );
+            __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, parentOrder.data());
         }
     }
 
     usize nextQuery = 0u;
-    attachments.each(
-        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
+    attachments.each([&](const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
             static_cast<void>(entity);
 
             const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(object.owner);
-            const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid()
-                ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity)
-                : ownerTransform;
+            const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid() ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity) : ownerTransform;
             const Scene::TransformComponent* basisTransform = parentTransform ? parentTransform : ownerTransform;
-            const SIMDMatrix parentMatrix = basisTransform
-                ? MatrixAffineTransformation(
-                    LoadFloat(basisTransform->scale),
-                    VectorZero(),
-                    LoadFloat(basisTransform->rotation),
-                    LoadFloat(basisTransform->position)
-                )
-                : MatrixIdentity()
-            ;
+            const SIMDMatrix parentMatrix = basisTransform ? MatrixAffineTransformation(LoadFloat(basisTransform->scale), VectorZero(), LoadFloat(basisTransform->rotation), LoadFloat(basisTransform->position)) : MatrixIdentity();
             const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
 
             SIMDMatrix worldTransform{};
@@ -567,11 +466,7 @@ void ModelSystem::updateStaticMeshAttachments(){
                 }
                 else{
                     const SkeletonPoseComponent* const pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
-                    if(
-                        !pose
-                        || !SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints)
-                        || attachment.parentJointIndex >= m_scratchJoints.size()
-                    )
+                    if(!pose || !SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints) || attachment.parentJointIndex >= m_scratchJoints.size())
                         return;
                     jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
                 }
@@ -591,8 +486,7 @@ void ModelSystem::updateStaticMeshAttachments(){
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const{
     Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
-    m_world.view<ModelObjectComponent>().each(
-        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object){
+    m_world.view<ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, ModelObjectComponent& object){
             if(result.valid())
                 return;
             if(object.owner == owner && object.object == objectName)

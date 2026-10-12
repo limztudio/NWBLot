@@ -74,8 +74,8 @@ static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == s
 
 inline constexpr u32 s_MaxGeometryIndex = 16777215;
 
-// CLAS construction and template construction share this ABI prefix exactly. Keep it macro-defined rather than using
-// a C++ base type: this header is also consumed as a shader ABI and both structs must remain plain contiguous records.
+// CLAS construction and template construction share this ABI prefix exactly.
+// Keep it macro-defined rather than using a C++ base type: this header is also consumed as a shader ABI and both structs must remain plain contiguous records.
 #define NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS \
     u32               clusterId; \
     u32               clusterFlags; \
@@ -100,8 +100,7 @@ struct IndirectTriangleClasArgs{
 };
 
 struct IndirectTriangleTemplateArgs{
-    NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS
-    GpuVirtualAddress instantiationBoundingBoxLimit;     // Optional six-float position limit for template instantiations.
+    NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS GpuVirtualAddress instantiationBoundingBoxLimit;     // Optional six-float position limit for template instantiations.
 };
 
 #undef NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS

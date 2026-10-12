@@ -21,12 +21,7 @@ NWB_CORE_BEGIN
 
 
 Expected<GpuTaskGraph::MarkerLabelRange> GpuTaskGraph::appendMarkerLabel(const AStringView text){
-    if(
-        text.empty()
-        || !text.data()
-        || text.size() > Limit<u32>::s_Max
-        || text.size() > Limit<u32>::s_Max - m_markerText.size()
-    )
+    if(text.empty() || !text.data() || text.size() > Limit<u32>::s_Max || text.size() > Limit<u32>::s_Max - m_markerText.size())
         return MakeUnexpected(Failure{});
 
     const MarkerLabelRange range{ static_cast<u32>(m_markerText.size()), static_cast<u32>(text.size()) };
@@ -48,28 +43,16 @@ bool GpuTaskGraph::destroyTaskPayloads(){
     u64 notificationGeneration = 0u;
     {
         ScopedLock lock(m_lifecycleMutex);
-        if(
-            !m_teardownInProgress
-            || m_activeDeclarationAccessCount != 0u
-            || m_activeDiscardNotificationCount != 0u
-            || m_submissionBindingState == SubmissionBindingState::Active
-        )
+        if(!m_teardownInProgress || m_activeDeclarationAccessCount != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
             return false;
         for(const GpuTaskNode& task : m_tasks){
-            if(
-                task.lifecycleState == TaskLifecycleState::Submitting
-                || task.lifecycleState == TaskLifecycleState::Accepting
-                || task.lifecycleState == TaskLifecycleState::Recording
-            ){
+            if(task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting || task.lifecycleState == TaskLifecycleState::Recording){
                 return false;
             }
         }
         bool hasUnacceptedTask = false;
         for(const GpuTaskNode& task : m_tasks){
-            if(
-                task.lifecycleState == TaskLifecycleState::Declared
-                || task.lifecycleState == TaskLifecycleState::Recorded
-            )
+            if(task.lifecycleState == TaskLifecycleState::Declared || task.lifecycleState == TaskLifecycleState::Recorded)
                 hasUnacceptedTask = true;
         }
         if(hasUnacceptedTask){
@@ -77,10 +60,7 @@ bool GpuTaskGraph::destroyTaskPayloads(){
             notification.activateWithinLock();
         }
         for(GpuTaskNode& task : m_tasks){
-            if(
-                task.lifecycleState == TaskLifecycleState::Declared
-                || task.lifecycleState == TaskLifecycleState::Recorded
-            ){
+            if(task.lifecycleState == TaskLifecycleState::Declared || task.lifecycleState == TaskLifecycleState::Recorded){
                 task.lifecycleState = TaskLifecycleState::Discarded;
                 task.recordingClaimGeneration = 0u;
                 task.submissionClaimGeneration = 0u;
@@ -93,12 +73,7 @@ bool GpuTaskGraph::destroyTaskPayloads(){
     }
 
     for(GpuTaskNode& task : m_tasks){
-        if(
-            notificationGeneration != 0u
-            && task.discardNotificationGeneration == notificationGeneration
-            && task.payload
-            && task.discardPayload
-        )
+        if(notificationGeneration != 0u && task.discardNotificationGeneration == notificationGeneration && task.payload && task.discardPayload)
             task.discardPayload(task.payload);
     }
     return true;
@@ -107,26 +82,14 @@ bool GpuTaskGraph::destroyTaskPayloads(){
 bool GpuTaskGraph::destroyTaskPayloadsWithoutCallbacks()noexcept{
     {
         NothrowScopedLock lock(m_lifecycleMutex);
-        if(
-            !m_teardownInProgress
-            || m_activeDeclarationAccessCount != 0u
-            || m_activeDiscardNotificationCount != 0u
-            || m_submissionBindingState == SubmissionBindingState::Active
-        )
+        if(!m_teardownInProgress || m_activeDeclarationAccessCount != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
             return false;
         for(const GpuTaskNode& task : m_tasks){
-            if(
-                task.lifecycleState == TaskLifecycleState::Submitting
-                || task.lifecycleState == TaskLifecycleState::Accepting
-                || task.lifecycleState == TaskLifecycleState::Recording
-            )
+            if(task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting || task.lifecycleState == TaskLifecycleState::Recording)
                 return false;
         }
         for(GpuTaskNode& task : m_tasks){
-            if(
-                task.lifecycleState == TaskLifecycleState::Declared
-                || task.lifecycleState == TaskLifecycleState::Recorded
-            )
+            if(task.lifecycleState == TaskLifecycleState::Declared || task.lifecycleState == TaskLifecycleState::Recorded)
                 task.lifecycleState = TaskLifecycleState::Discarded;
             task.recordingClaimGeneration = 0u;
             task.submissionClaimGeneration = 0u;

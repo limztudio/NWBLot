@@ -25,22 +25,12 @@ namespace RayTracingDetail{
 
 void InflateSwShadowSceneBounds(SIMDVectorSingle& boundsMin, SIMDVectorSingle& boundsMax)noexcept{
     const SIMDVectorSingle extent = VectorSubtract(boundsMax, boundsMin);
-    const SIMDVectorSingle paddingVector = VectorSetW(
-        VectorMax(
-            VectorReplicate(s_SwShadowSceneBoundsMinPadding),
-            VectorScale(Vector3MaxComponent(extent), s_SwShadowSceneBoundsRelativePadding)
-        ),
-        0.0f
-    );
+    const SIMDVectorSingle paddingVector = VectorSetW(VectorMax(VectorReplicate(s_SwShadowSceneBoundsMinPadding), VectorScale(Vector3MaxComponent(extent), s_SwShadowSceneBoundsRelativePadding)), 0.0f);
     boundsMin = VectorSubtract(boundsMin, paddingVector);
     boundsMax = VectorAdd(boundsMax, paddingVector);
 }
 
-Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(
-    MeshSystem& meshSystem,
-    RendererMeshSystem& rendererMeshSystem,
-    const Core::ECS::EntityID entity
-){
+Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, const Core::ECS::EntityID entity){
     auto resolvedMesh = meshSystem.resolveRenderableMeshStatus(entity);
     if(!resolvedMesh)
         return MakeUnexpected(resolvedMesh.error());
@@ -54,12 +44,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return handle.valid() && handle.descriptorClass() == descriptorClass;
 }
 
-[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer,
-    const Core::GpuDescriptorClass::Enum descriptorClass,
-    const bool writable
-){
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const bool writable){
     const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
@@ -68,10 +53,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
 
     const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
         ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
-        : (writable
-            ? Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer)
-            : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer)
-        )
+        : (writable ? Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer))
     ;
     if(!heap.write(handle, item)){
         return MakeUnexpected(Failure{});
@@ -80,13 +62,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return handle;
 }
 
-[[nodiscard]] bool EnsureHeapBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer,
-    const Core::GpuDescriptorClass::Enum descriptorClass,
-    const bool writable,
-    Core::GpuDescriptorHandle& inOutHandle
-){
+[[nodiscard]] bool EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const bool writable, Core::GpuDescriptorHandle& inOutHandle){
     if(inOutHandle.valid())
         return IsHeapHandle(inOutHandle, descriptorClass);
 
@@ -97,13 +73,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return true;
 }
 
-[[nodiscard]] bool ReplaceHeapBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer,
-    const Core::GpuDescriptorClass::Enum descriptorClass,
-    const bool writable,
-    Core::GpuDescriptorHandle& inOutHandle
-){
+[[nodiscard]] bool ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const bool writable, Core::GpuDescriptorHandle& inOutHandle){
     const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
     if(!acquired)
         return false;
@@ -119,16 +89,8 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
     handle = Core::GpuDescriptorHandle::Invalid();
 }
 
-// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback
-// on coincident centroids (never an empty split). Node layout matches the per-mesh build so GPU traversal is uniform.
-u32 BuildSceneBvhNode(
-    u32* indices,
-    const u32 lo,
-    const u32 hi,
-    const SceneBvhPrimitiveCalculation* primitiveBounds,
-    Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes,
-    const NotNull<const u32*> instanceLeafCost
-){
+// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids (never an empty split). Node layout matches the per-mesh build so GPU traversal is uniform.
+u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPrimitiveCalculation* primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const NotNull<const u32*> instanceLeafCost){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation{});
 
@@ -145,8 +107,7 @@ u32 BuildSceneBvhNode(
 
     // Primitive counts weight scene-level SAH so high-cost instances influence partitioning.
 
-    // Bounding centroid extent over the slice: the per-axis extent picks which axes are binable (a zero extent
-    // axis cannot separate any instances and is skipped).
+    // Bounding centroid extent over the slice: the per-axis extent picks which axes are binable (a zero extent axis cannot separate any instances and is skipped).
     SIMDVectorSingle centroidMin = VectorReplicate(s_RayTracingFiniteInfinity);
     SIMDVectorSingle centroidMax = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 i = lo; i < hi; ++i){
@@ -155,8 +116,7 @@ u32 BuildSceneBvhNode(
         centroidMax = VectorMax(centroidMax, centroid);
     }
 
-    // Per-bin accumulators for a single axis: AABB min/max, instance count, summed leaf cost. s_SceneBvhSahBinCount
-    // bins is the standard binned-BVH granularity and keeps the bin grid cache-resident.
+    // Per-bin accumulators for a single axis: AABB min/max, instance count, summed leaf cost. s_SceneBvhSahBinCount bins is the standard binned-BVH granularity and keeps the bin grid cache-resident.
     SIMDVectorSingle binMin[s_SceneBvhSahBinCount];
     SIMDVectorSingle binMax[s_SceneBvhSahBinCount];
     f32 binCost[s_SceneBvhSahBinCount];
@@ -194,8 +154,7 @@ u32 BuildSceneBvhNode(
             ++binCount[b];
         }
 
-        // Right-to-left suffix AABB / count / cost so every boundary's right partition is exact, then sweep
-        // boundaries left-to-right building the matching left prefix and evaluate the SAH at each one.
+        // Right-to-left suffix AABB / count / cost so every boundary's right partition is exact, then sweep boundaries left-to-right building the matching left prefix and evaluate the SAH at each one.
         SIMDVectorSingle suffixMin[s_SceneBvhSahBinCount];
         SIMDVectorSingle suffixMax[s_SceneBvhSahBinCount];
         f32 suffixCost[s_SceneBvhSahBinCount];
@@ -218,9 +177,8 @@ u32 BuildSceneBvhNode(
             }
         }
 
-        // Boundary k splits at bin k: left = bins [0, k), right = bins [k, end). The parent AABB is the union of
-        // every bin (suffix at index 0); the SAH parent-area divisor is folded out by comparing costs on the same
-        // slice, so the un-normalized cost ct*SA + SA_L*cost_L + SA_R*cost_R is minimized directly.
+        // Boundary k splits at bin k: left = bins [0, k), right = bins [k, end).
+        // The parent AABB is the union of every bin (suffix at index 0); the SAH parent-area divisor is folded out by comparing costs on the same slice, so the un-normalized cost ct*SA + SA_L*cost_L + SA_R*cost_R is minimized directly.
         const SIMDVectorSingle parentMin = suffixMin[0u];
         const SIMDVectorSingle parentMax = suffixMax[0u];
         const f32 parentArea = AabbTests::SurfaceArea(parentMin, parentMax);
@@ -246,11 +204,7 @@ u32 BuildSceneBvhNode(
             const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(
                 VectorReplicate(leftArea),
                 VectorReplicate(leftCost),
-                VectorMultiplyAdd(
-                    VectorReplicate(rightArea),
-                    VectorReplicate(suffixCost[k]),
-                    VectorMultiply(VectorReplicate(parentArea), VectorReplicate(s_SceneBvhSahTraversalCost))
-                )
+                VectorMultiplyAdd(VectorReplicate(rightArea), VectorReplicate(suffixCost[k]), VectorMultiply(VectorReplicate(parentArea), VectorReplicate(s_SceneBvhSahTraversalCost)))
             );
             const f32 cost = VectorGetX(sahCostLanes);
             if(cost < bestCost){
@@ -301,17 +255,11 @@ u32 BuildSceneBvhNode(
 
 // Per-instance shadow-occluder record (transmittance id + transparent flag), appended in push order for by-id index.
 // Caller supplies the constants context; builders fill geometry slots after.
-[[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(
-    const MaterialSurfaceInfo& materialInfo,
-    const u32 materialConstantByteOffset,
-    const u32 meshInstanceIndex
-)noexcept{
+[[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(const MaterialSurfaceInfo& materialInfo, const u32 materialConstantByteOffset, const u32 meshInstanceIndex)noexcept{
     NwbRtInstanceMaterialGpu material;
     material.surfaceDispatchId = materialInfo.surfaceDispatchId;
     material.shadingModelId = materialInfo.shadingModelId;
-    material.flags =
-        (materialInfo.transparent ? RtInstanceMaterialFlag::Transparent : RtInstanceMaterialFlag::None)
-        | (materialInfo.refractive ? RtInstanceMaterialFlag::Refractive : RtInstanceMaterialFlag::None);
+    material.flags = (materialInfo.transparent ? RtInstanceMaterialFlag::Transparent : RtInstanceMaterialFlag::None) | (materialInfo.refractive ? RtInstanceMaterialFlag::Refractive : RtInstanceMaterialFlag::None);
     material.materialConstantByteOffset = materialConstantByteOffset;
     material.meshInstanceIndex = meshInstanceIndex;
     return material;

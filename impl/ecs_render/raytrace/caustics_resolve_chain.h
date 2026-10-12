@@ -95,18 +95,11 @@ struct CausticsResolveChainNaming{
 
 class CausticsResolveChainBuilder final : NoCopy{
 public:
-    CausticsResolveChainBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererRayTracingSystem& raytracingSystem
-    );
+    CausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
 
 
 public:
-    [[nodiscard]] Expected<CausticsResolveChainResult> declare(
-        const CausticsResolveChainInputs& inputs,
-        const CausticsResolveChainNaming& naming,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] Expected<CausticsResolveChainResult> declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

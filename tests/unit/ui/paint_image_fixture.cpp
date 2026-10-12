@@ -142,15 +142,7 @@ SharedGlyphPage PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 
     pixels[0u] = 64u;
     if(generation > 1u)
         pixels[32u] = 192u;
-    const GlyphPageBinding binding{
-        .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
-        .fontGeneration = 9u,
-        .atlasIdentity = atlasIdentity,
-        .generation = generation,
-        .index = 0u,
-        .width = 8u,
-        .height = 8u,
-    };
+    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = 0u, .width = 8u, .height = 8u, };
     return CreateGlyphPage(m_arena, binding, Move(pixels));
 }
 
@@ -203,11 +195,7 @@ SharedImageSource PaintImageFixture::makeImage(const StringView path, const u8 s
     for(usize index = 0u; index < bytes.size(); ++index)
         bytes[index] = static_cast<u8>(static_cast<u32>(seed) + index * 17u);
     Texture texture(m_arena, Name(path));
-    texture.setPayload(
-        TextureColorSpace::Srgb, true, width, height, Move(mips), Move(bytes),
-        TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4,
-        TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8
-    );
+    texture.setPayload(TextureColorSpace::Srgb, true, width, height, Move(mips), Move(bytes), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
     return MakeImageSource(m_arena, texture);
 }
 

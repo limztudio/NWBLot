@@ -54,8 +54,7 @@ protected:
         payload.font = source.identity;
         payload.fontSha256 = ComputeSha256({ m_font.fontBytes().data(), m_font.fontBytes().size() });
         const Core::Assets::AssetBytes& bytes = m_font.fontBytes();
-        hb_blob_t* blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()),
-            HB_MEMORY_MODE_READONLY, nullptr, nullptr);
+        hb_blob_t* blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
         hb_face_t* face = hb_face_create(blob, 0u);
         payload.unitsPerEm = hb_face_get_upem(face);
         payload.sourceGlyphCount = hb_face_get_glyph_count(face);

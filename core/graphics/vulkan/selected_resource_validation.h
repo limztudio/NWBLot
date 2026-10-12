@@ -33,10 +33,7 @@ inline constexpr u32 s_InvalidQueueOwnershipDomain = Limit<u32>::s_Max;
 [[nodiscard]] constexpr bool IsTextureResourceStateMaskValid(const ResourceStates::Mask state)noexcept{ return VulkanTextureDetail::IsTextureResourceStateMaskValid(state); }
 
 // These read-only image states share native residency; callers still synchronize data and queue ownership.
-[[nodiscard]] constexpr bool AreTextureReadStatesCompatible(
-    const ResourceStates::Mask lhs,
-    const ResourceStates::Mask rhs
-)noexcept{
+[[nodiscard]] constexpr bool AreTextureReadStatesCompatible(const ResourceStates::Mask lhs, const ResourceStates::Mask rhs)noexcept{
     constexpr ResourceStates::Mask s_ReadStates = ResourceStates::ShaderResource | ResourceStates::DepthRead;
     return lhs != ResourceStates::Unknown && rhs != ResourceStates::Unknown && ((lhs | rhs) & ~s_ReadStates) == ResourceStates::Unknown;
 }
@@ -44,7 +41,9 @@ inline constexpr u32 s_InvalidQueueOwnershipDomain = Limit<u32>::s_Max;
 [[nodiscard]] inline bool IsBufferDescriptionCompatibleWithResourceStates(const BufferDesc& description, const ResourceStates::Mask state)noexcept{ return VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(description, state); }
 
 // These checks preserve native readiness semantics; callers separately validate declarations when required.
-[[nodiscard]] inline bool IsBufferReadyForState(const Device& device, Buffer* buffer, const ResourceStates::Mask state)noexcept{ return device.isBufferReadyForGpuUse(buffer, buffer ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->getCreationDescription(), state) : 0u); }
+[[nodiscard]] inline bool IsBufferReadyForState(const Device& device, Buffer* buffer, const ResourceStates::Mask state)noexcept{
+    return device.isBufferReadyForGpuUse(buffer, buffer ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->getCreationDescription(), state) : 0u);
+}
 
 [[nodiscard]] inline bool IsTextureReadyForState(const Device& device, Texture* texture, const ResourceStates::Mask state)noexcept{ return device.isTextureReadyForGpuUse(texture, VulkanTextureDetail::RequiredImageUsageForResourceStates(state)); }
 

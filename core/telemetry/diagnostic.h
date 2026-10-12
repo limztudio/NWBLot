@@ -77,12 +77,7 @@ struct DiagnosticPayload{
 
 [[nodiscard]] bool BuildDiagnosticPayload(TelemetryArena& arena, const DiagnosticEventRecord& record, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordDiagnostic(
-    Recorder& recorder,
-    const DiagnosticEventRecord& record,
-    u64 frameIndex = 0u,
-    u32 streamId = 0u
-);
+[[nodiscard]] bool RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class DiagnosticCaptureGuard final : NoCopy{
 public:

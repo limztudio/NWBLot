@@ -17,8 +17,8 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Immutable facts from the owner of an imported VkImage; values must match creation. A concurrent queue-family
-// list is borrowed for the call and copied by Texture.
+// Immutable facts from the owner of an imported VkImage; values must match creation.
+// A concurrent queue-family list is borrowed for the call and copied by Texture.
 using NativeTextureProvenance = NativeResourceProvenance<VkImageUsageFlags, VkImageCreateFlags>;
 
 

@@ -21,8 +21,7 @@ struct NwbSkinnedMeshBoundsPushConstants{
     uint2 payload0;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbSkinnedMeshBoundsPushConstants> g_NwbSkinnedMeshBoundsPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbSkinnedMeshBoundsPushConstants> g_NwbSkinnedMeshBoundsPushConstants;
 
 // The persistent stream-slot payload is selected from the global UniformBuffer heap by payload0.y.
 #define g_NwbSkinnedMeshBoundsBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshBoundsPushConstants.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT])
@@ -56,46 +55,21 @@ uint nwbSkinnedMeshBoundsLoadPrimitiveIndex(const uint primitiveIndex){
 
 uint3 nwbSkinnedMeshBoundsLoadPrimitive(const NwbMeshletDesc meshlet, const uint localPrimitiveIndex){
     const uint primitiveBase = meshlet.primitiveOffset + localPrimitiveIndex * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
-    return uint3(
-        nwbSkinnedMeshBoundsLoadPrimitiveIndex(primitiveBase + 0u),
-        nwbSkinnedMeshBoundsLoadPrimitiveIndex(primitiveBase + 1u),
-        nwbSkinnedMeshBoundsLoadPrimitiveIndex(primitiveBase + 2u)
-    );
+    return uint3(nwbSkinnedMeshBoundsLoadPrimitiveIndex(primitiveBase + 0u), nwbSkinnedMeshBoundsLoadPrimitiveIndex(primitiveBase + 1u), nwbSkinnedMeshBoundsLoadPrimitiveIndex(primitiveBase + 2u));
 }
 
-bool nwbSkinnedMeshBoundsLoadLocalPosition(
-    const NwbMeshletDesc meshlet,
-    const NwbMeshletRefDecodeInfo decodeInfo,
-    const uint localPositionIndex,
-    out float3 outPosition
-){
-    const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
-        nwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots1.w),
-        meshlet,
-        decodeInfo,
-        localPositionIndex,
-        true
-    );
+bool nwbSkinnedMeshBoundsLoadLocalPosition(const NwbMeshletDesc meshlet, const NwbMeshletRefDecodeInfo decodeInfo, const uint localPositionIndex, out float3 outPosition){
+    const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(nwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots1.w), meshlet, decodeInfo, localPositionIndex, true);
     outPosition = nwbMeshLoadPosition(nwbSkinnedMeshHeapPositions(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots0.y)[positionRef.position]);
     return nwbFiniteFloat3(outPosition);
 }
 
-bool nwbSkinnedMeshBoundsLoadLocalVertexPosition(
-    const NwbMeshletDesc meshlet,
-    const NwbMeshletRefDecodeInfo decodeInfo,
-    const uint localVertexIndex,
-    out float3 outPosition
-){
+bool nwbSkinnedMeshBoundsLoadLocalVertexPosition(const NwbMeshletDesc meshlet, const NwbMeshletRefDecodeInfo decodeInfo, const uint localVertexIndex, out float3 outPosition){
     const NwbMeshletLocalVertexRef localVertexRef = nwbSkinnedMeshHeapLocalVertexRefs(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.x)[meshlet.localVertexOffset + localVertexIndex];
     return nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, decodeInfo, nwbMeshletLocalDeformedPosition(localVertexRef), outPosition);
 }
 
-bool nwbSkinnedMeshBoundsFaceNormal(
-    const NwbMeshletDesc meshlet,
-    const NwbMeshletRefDecodeInfo decodeInfo,
-    const uint localPrimitiveIndex,
-    out float3 outFaceNormal
-){
+bool nwbSkinnedMeshBoundsFaceNormal(const NwbMeshletDesc meshlet, const NwbMeshletRefDecodeInfo decodeInfo, const uint localPrimitiveIndex, out float3 outFaceNormal){
     const uint3 localVertices = nwbSkinnedMeshBoundsLoadPrimitive(meshlet, localPrimitiveIndex);
     float3 p0 = float3(0.0);
     float3 p1 = float3(0.0);
@@ -381,14 +355,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     const float radius = sqrt(g_NwbSkinnedMeshBoundsRadiusSq[0u]) * NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION;
     const float coneCutoff = g_NwbSkinnedMeshBoundsConeCutoff[0u];
-    const bool coneValid = g_NwbSkinnedMeshBoundsValidFaceNormalCount[0u] == primitiveCount
-        && nwbValidFrameDirection(g_NwbSkinnedMeshBoundsConeAxis)
-        && coneCutoff > 0.0
-    ;
-    const uint conePacked = coneValid
-        ? nwbMeshPackCone(g_NwbSkinnedMeshBoundsConeAxis, coneCutoff)
-        : 0u
-    ;
+    const bool coneValid = g_NwbSkinnedMeshBoundsValidFaceNormalCount[0u] == primitiveCount && nwbValidFrameDirection(g_NwbSkinnedMeshBoundsConeAxis) && coneCutoff > 0.0;
+    const uint conePacked = coneValid ? nwbMeshPackCone(g_NwbSkinnedMeshBoundsConeAxis, coneCutoff) : 0u;
     nwbSkinnedMeshBoundsStore(meshletIndex, float4(g_NwbSkinnedMeshBoundsCenter, radius), conePacked);
 }
 

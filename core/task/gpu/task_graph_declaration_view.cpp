@@ -94,17 +94,11 @@ GpuTaskGraphResourceView GpuTaskGraphDeclarationReadView::resourceAt(const usize
 }
 
 GpuTaskGraphResourceVersionView GpuTaskGraphDeclarationReadView::resourceVersionAt(const usize index)const noexcept{
-    return m_graph && index < m_graph->m_resourceVersions.size()
-        ? m_graph->resourceVersionAt(index)
-        : GpuTaskGraphResourceVersionView{}
-    ;
+    return m_graph && index < m_graph->m_resourceVersions.size() ? m_graph->resourceVersionAt(index) : GpuTaskGraphResourceVersionView{};
 }
 
 GpuTaskGraphResourceSetView GpuTaskGraphDeclarationReadView::resourceSetAt(const usize index)const & noexcept{
-    return m_graph && index < m_graph->m_resourceSets.size()
-        ? m_graph->resourceSetAt(index)
-        : GpuTaskGraphResourceSetView{}
-    ;
+    return m_graph && index < m_graph->m_resourceSets.size() ? m_graph->resourceSetAt(index) : GpuTaskGraphResourceSetView{};
 }
 
 GpuTaskGraphPipelineView GpuTaskGraphDeclarationReadView::pipelineAt(const usize index)const & noexcept{
@@ -112,15 +106,10 @@ GpuTaskGraphPipelineView GpuTaskGraphDeclarationReadView::pipelineAt(const usize
 }
 
 GpuTaskGraphExternalCompletionView GpuTaskGraphDeclarationReadView::externalCompletionAt(const usize index)const & noexcept{
-    return m_graph && index < m_graph->m_externalCompletions.size()
-        ? m_graph->externalCompletionAt(index)
-        : GpuTaskGraphExternalCompletionView{}
-    ;
+    return m_graph && index < m_graph->m_externalCompletions.size() ? m_graph->externalCompletionAt(index) : GpuTaskGraphExternalCompletionView{};
 }
 
-const QueueSubmissionToken* GpuTaskGraphDeclarationReadView::externalCompletionToken(
-    const GpuExternalCompletionId& completion
-)const & noexcept{
+const QueueSubmissionToken* GpuTaskGraphDeclarationReadView::externalCompletionToken(const GpuExternalCompletionId& completion)const & noexcept{
     return m_graph ? m_graph->externalCompletionToken(completion) : nullptr;
 }
 
@@ -132,9 +121,7 @@ Buffer* GpuTaskGraphDeclarationReadView::bufferForResource(const GpuGraphResourc
     return m_graph ? m_graph->bufferForResource(resource) : nullptr;
 }
 
-RayTracingAccelStruct* GpuTaskGraphDeclarationReadView::accelStructForResource(
-    const GpuGraphResourceId& resource
-)const & noexcept{
+RayTracingAccelStruct* GpuTaskGraphDeclarationReadView::accelStructForResource(const GpuGraphResourceId& resource)const & noexcept{
     return m_graph ? m_graph->accelStructForResource(resource) : nullptr;
 }
 
@@ -144,9 +131,7 @@ Expected<BinaryByteView> GpuTaskGraphDeclarationReadView::uploadBlobData(const G
     return MakeUnexpected(Failure{});
 }
 
-GraphicsPipeline* GpuTaskGraphDeclarationReadView::graphicsPipelineFor(
-    const GpuGraphPipelineId& pipeline
-)const & noexcept{
+GraphicsPipeline* GpuTaskGraphDeclarationReadView::graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept{
     return m_graph ? m_graph->graphicsPipelineFor(pipeline) : nullptr;
 }
 
@@ -158,9 +143,7 @@ MeshletPipeline* GpuTaskGraphDeclarationReadView::meshletPipelineFor(const GpuGr
     return m_graph ? m_graph->meshletPipelineFor(pipeline) : nullptr;
 }
 
-RayTracingPipeline* GpuTaskGraphDeclarationReadView::rayTracingPipelineFor(
-    const GpuGraphPipelineId& pipeline
-)const & noexcept{
+RayTracingPipeline* GpuTaskGraphDeclarationReadView::rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept{
     return m_graph ? m_graph->rayTracingPipelineFor(pipeline) : nullptr;
 }
 

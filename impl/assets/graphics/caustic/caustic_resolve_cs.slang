@@ -47,8 +47,7 @@ struct NwbCausticResolvePushConstants{
     uint activityOutputSlot;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
 #define g_NwbCausticResolveOutput nwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
 
@@ -230,10 +229,8 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
         // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
         half3 sum = half3(0.0h, 0.0h, 0.0h);
         half weightSum = half(0.0h);
-        [unroll]
-        for(int ky = -2; ky <= 2; ++ky){
-            [unroll]
-            for(int kx = -2; kx <= 2; ++kx){
+        [unroll] for(int ky = -2; ky <= 2; ++ky){
+            [unroll] for(int kx = -2; kx <= 2; ++kx){
                 const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                 if(g_NwbCausticResolveTileValid[idx] == 0u)
                     continue;
@@ -262,10 +259,8 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
     // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
     half3 sum = half3(0.0h, 0.0h, 0.0h);
     half weightSum = half(0.0h);
-    [unroll]
-    for(int ky = -2; ky <= 2; ++ky){
-        [unroll]
-        for(int kx = -2; kx <= 2; ++kx){
+    [unroll] for(int ky = -2; ky <= 2; ++ky){
+        [unroll] for(int kx = -2; kx <= 2; ++kx){
             const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
             if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                 continue;
@@ -331,10 +326,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         // Bilinear and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
         half3 sum = half3(0.0h, 0.0h, 0.0h);
         half weightSum = half(0.0h);
-        [unroll]
-        for(int j = 0; j < 2; ++j){
-            [unroll]
-            for(int i = 0; i < 2; ++i){
+        [unroll] for(int j = 0; j < 2; ++j){
+            [unroll] for(int i = 0; i < 2; ++i){
                 const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
                 if(!nwbCausticResolveValidAtHalf(tap))
                     continue;
@@ -366,10 +359,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const int2 base = int2(texel.x * 2, texel.y * 2);
                 // The uint32 accumulator holds fixed-point photon counts; keep its sum at full precision and convert to half only for the final irradiance divide, preserving small-flux accuracy.
                 float3 flux = float3(0.0, 0.0, 0.0);
-                [unroll]
-                for(int oy = 0; oy < 2; ++oy){
-                    [unroll]
-                    for(int ox = 0; ox < 2; ++ox){
+                [unroll] for(int oy = 0; oy < 2; ++oy){
+                    [unroll] for(int ox = 0; ox < 2; ++ox){
                         const int2 fpx = int2(min(base.x + ox, fw - 1), min(base.y + oy, fh - 1));
                         flux += float3(
                             (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED, 0)).r,

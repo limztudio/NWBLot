@@ -27,20 +27,14 @@ struct MaterialInstanceParameterNames{
     Name fieldName = s_NameNone;
 };
 
-[[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(
-    const AStringView parameterName
-){
+[[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(const AStringView parameterName){
     const usize dotIndex = parameterName.find('.');
     if(parameterName.empty() || dotIndex == AStringView::npos || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form")
-            , StringConvert(parameterName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form"), StringConvert(parameterName));
         return MakeUnexpected(Failure{});
     }
     if(parameterName.find('.', dotIndex + 1u) != AStringView::npos){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator")
-            , StringConvert(parameterName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator"), StringConvert(parameterName));
         return MakeUnexpected(Failure{});
     }
 
@@ -84,21 +78,13 @@ struct MaterialInstanceValueTraits<Half4U>{
     }
 };
 
-[[nodiscard]] inline bool ValidateMaterialInstanceInterface(
-    const MaterialInstanceComponent& component,
-    const Name& materialInterface,
-    const AStringView parameterNameText
-){
+[[nodiscard]] inline bool ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText){
     if(!materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface")
-            , StringConvert(parameterNameText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface"), StringConvert(parameterNameText));
         return false;
     }
     if(!component.materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface")
-            , StringConvert(parameterNameText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface"), StringConvert(parameterNameText));
         return false;
     }
     if(component.materialInterface == materialInterface)
@@ -112,19 +98,13 @@ struct MaterialInstanceValueTraits<Half4U>{
     return false;
 }
 
-[[nodiscard]] inline bool StoreMaterialMutableParameter(
-    MaterialInstanceComponent& component,
-    MaterialInstanceParameter parameter,
-    const AStringView parameterNameText
-){
+[[nodiscard]] inline bool StoreMaterialMutableParameter(MaterialInstanceComponent& component, MaterialInstanceParameter parameter, const AStringView parameterNameText){
     for(MaterialInstanceParameter& existingParameter : component.overrides){
         if(existingParameter.parameterName != parameter.parameterName)
             continue;
 
         if(existingParameter.fieldType != parameter.fieldType){
-            NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type")
-                , StringConvert(parameterNameText)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type"), StringConvert(parameterNameText));
             return false;
         }
 
@@ -138,17 +118,9 @@ struct MaterialInstanceValueTraits<Half4U>{
     return true;
 }
 
-[[nodiscard]] inline bool SetMaterialMutableParameter(
-    MaterialInstanceComponent& component,
-    const Name& materialInterface,
-    const AStringView parameterNameText,
-    const MaterialLayoutFieldType::Enum fieldType,
-    const UInt4U value
-){
+[[nodiscard]] inline bool SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
     if(!IsMaterialLayoutNumericFieldType(fieldType)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type")
-            , StringConvert(parameterNameText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type"), StringConvert(parameterNameText));
         return false;
     }
     if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))
@@ -167,10 +139,7 @@ struct MaterialInstanceValueTraits<Half4U>{
     return StoreMaterialMutableParameter(component, parameter, parameterNameText);
 }
 
-[[nodiscard]] inline MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity
-){
+[[nodiscard]] inline MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
     MaterialInstanceComponent* component = world.tryGetComponent<MaterialInstanceComponent>(entity);
     if(component)
         return component;
@@ -179,14 +148,7 @@ struct MaterialInstanceValueTraits<Half4U>{
     return nullptr;
 }
 
-[[nodiscard]] inline bool SetMaterialMutableParameter(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const AStringView parameterName,
-    const MaterialLayoutFieldType::Enum fieldType,
-    const UInt4U value
-){
+[[nodiscard]] inline bool SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
     MaterialInstanceComponent* component = ResolveMaterialInstanceComponentForSet(world, entity);
     if(!component)
         return false;
@@ -195,30 +157,11 @@ struct MaterialInstanceValueTraits<Half4U>{
 }
 
 template<typename TValue>
-[[nodiscard]] inline bool SetMaterialMutableValue(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const AStringView parameterName,
-    const TValue& value
-){
-    return SetMaterialMutableParameter(
-        world,
-        entity,
-        materialInterface,
-        parameterName,
-        MaterialInstanceValueTraits<TValue>::s_FieldType,
-        MaterialInstanceValueTraits<TValue>::Pack(value)
-    );
+[[nodiscard]] inline bool SetMaterialMutableValue(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const TValue& value){
+    return SetMaterialMutableParameter(world, entity, materialInterface, parameterName, MaterialInstanceValueTraits<TValue>::s_FieldType, MaterialInstanceValueTraits<TValue>::Pack(value));
 }
 
-[[nodiscard]] inline bool SetMaterialMutableHalf4(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const AStringView parameterName,
-    const Float4& value
-){
+[[nodiscard]] inline bool SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
     const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
     return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
 }

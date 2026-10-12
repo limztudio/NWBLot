@@ -14,9 +14,9 @@
 
 
 // HW caustic closest-hit: world hit + distance, REFRACTIVE flag, and for refractive crossings the interpolated shading normal (smooth caustic; vertex normals only) + optical params from the shared surface dispatch.
-// Un-oriented here; nwbCausticOrientNormal orients it. Same a0*w+a1*u+a2*v interpolation as the SW trace (~ULP intersector difference).
-[shader("closesthit")]
-void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttributes attributes){
+// Un-oriented here; nwbCausticOrientNormal orients it.
+// Same a0*w+a1*u+a2*v interpolation as the SW trace (~ULP intersector difference).
+[shader("closesthit")] void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttributes attributes){
     const NwbRtInstanceMaterial material = nwbCausticHwInstanceMaterials()[InstanceID()];
 
     payload.hit = 1u;

@@ -63,14 +63,10 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(
-        TextInputSessionToken token, const TextInputSessionDesc& desc
-    )override;
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken token, const TextInputSessionDesc& desc)override;
     virtual void endNativeSession(TextInputSessionToken token)override;
     [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(TextInputRect caret)override;
-    virtual void updateNativeSurrounding(
-        AStringView text, usize anchorByte, usize caretByte, u64 revision, TextInputChangeCause::Enum cause
-    )override;
+    virtual void updateNativeSurrounding(AStringView text, usize anchorByte, usize caretByte, u64 revision, TextInputChangeCause::Enum cause)override;
 
 
 private:

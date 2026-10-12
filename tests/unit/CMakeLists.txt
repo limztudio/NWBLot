@@ -16,12 +16,7 @@ add_subdirectory(task)
 add_subdirectory(telemetry)
 add_subdirectory(ui)
 
-add_test(
-    NAME nwb_build_configuration_contract_unit
-    COMMAND "${CMAKE_COMMAND}"
-        "-DNWB_TEST_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        -P "${CMAKE_CURRENT_LIST_DIR}/build_configuration_tests.cmake"
-)
+add_test(NAME nwb_build_configuration_contract_unit COMMAND "${CMAKE_COMMAND}" "-DNWB_TEST_SOURCE_DIR=${PROJECT_SOURCE_DIR}" -P "${CMAKE_CURRENT_LIST_DIR}/build_configuration_tests.cmake")
 set_tests_properties(nwb_build_configuration_contract_unit PROPERTIES TIMEOUT 30)
 
 if(NWB_OBFUSCATE_STRING_LITERALS)
@@ -29,49 +24,18 @@ if(NWB_OBFUSCATE_STRING_LITERALS)
     if(CMAKE_CXX_COMPILER_TARGET)
         list(APPEND _nwb_literal_test_target_arguments --target "${CMAKE_CXX_COMPILER_TARGET}")
     endif()
-    add_test(
-        NAME nwb_string_literal_compiler_tests
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/string_literal_compiler_tests.py"
-            --compiler "${CMAKE_CXX_COMPILER}"
-            --c-compiler "${CMAKE_C_COMPILER}"
-            --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime>
-            --llvm-library "${NWB_LLVM_C_LIBRARY}"
-            --llvm-version "${NWB_STRING_LITERAL_LLVM_VERSION}"
-            --configuration "$<CONFIG>"
-            --source-dir "${PROJECT_SOURCE_DIR}"
-            ${_nwb_literal_test_target_arguments}
-    )
+    add_test(NAME nwb_string_literal_compiler_tests COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/string_literal_compiler_tests.py" --compiler "${CMAKE_CXX_COMPILER}" --c-compiler "${CMAKE_C_COMPILER}"
+            --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime> --llvm-library "${NWB_LLVM_C_LIBRARY}" --llvm-version "${NWB_STRING_LITERAL_LLVM_VERSION}" --configuration "$<CONFIG>" --source-dir "${PROJECT_SOURCE_DIR}"
+            ${_nwb_literal_test_target_arguments})
     set_tests_properties(nwb_string_literal_compiler_tests PROPERTIES TIMEOUT 120)
 endif()
 
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
-    add_test(
-        NAME nwb_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py"
-    )
+    add_test(NAME nwb_launcher_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py")
     # GPU measurements remain opt-in; M4 and lagged lighting need distinct Compute queues and window capture.
-    set(_nwb_ab_self_test_harnesses
-        renderer_baseline
-        async_shadow_m4
-        hardware_shadow_boundary
-        frame_lagged_async_lighting
-    )
+    set(_nwb_ab_self_test_harnesses renderer_baseline async_shadow_m4 hardware_shadow_boundary frame_lagged_async_lighting)
     foreach(_nwb_ab_harness IN LISTS _nwb_ab_self_test_harnesses)
-        add_test(
-            NAME nwb_${_nwb_ab_harness}_harness_unit
-            COMMAND
-                "${Python3_EXECUTABLE}"
-                "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/run.py"
-                "--self-test"
-        )
+        add_test(NAME nwb_${_nwb_ab_harness}_harness_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/run.py" "--self-test")
     endforeach()
-    add_test(
-        NAME nwb_hardware_shadow_boundary_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/hardware_shadow_boundary/launch.py"
-            "--self-test"
-    )
+    add_test(NAME nwb_hardware_shadow_boundary_launcher_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/ab/hardware_shadow_boundary/launch.py" "--self-test")
 endif()

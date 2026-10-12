@@ -55,12 +55,7 @@ namespace VulkanDetail{
 
 
 inline void DestroyPipelineResource(const VulkanContext& context, PipelineBindingState& state, VkPipeline& pipeline){
-    DestroyPipelineAndOwnedLayout(
-        context,
-        pipeline,
-        state.m_pipelineLayout,
-        state.m_ownsPipelineLayout
-    );
+    DestroyPipelineAndOwnedLayout(context, pipeline, state.m_pipelineLayout, state.m_ownsPipelineLayout);
 }
 
 inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectType objectType)noexcept{
@@ -69,21 +64,13 @@ inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectTyp
     return Object(nullptr);
 }
 
-inline void AttachPipelineBindingState(
-    VkComputePipelineCreateInfo& pipelineInfo,
-    const PipelineBindingState& bindingState,
-    const void* next = nullptr
-)noexcept{
+inline void AttachPipelineBindingState(VkComputePipelineCreateInfo& pipelineInfo, const PipelineBindingState& bindingState, const void* next = nullptr)noexcept{
     pipelineInfo.pNext = next;
     pipelineInfo.layout = bindingState.m_pipelineLayout;
     pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
 
-inline void AttachPipelineBindingState(
-    VkGraphicsPipelineCreateInfo& pipelineInfo,
-    const PipelineBindingState& bindingState,
-    const void* next = nullptr
-)noexcept{
+inline void AttachPipelineBindingState(VkGraphicsPipelineCreateInfo& pipelineInfo, const PipelineBindingState& bindingState, const void* next = nullptr)noexcept{
     pipelineInfo.pNext = next;
     pipelineInfo.layout = bindingState.m_pipelineLayout;
     pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
@@ -120,11 +107,7 @@ struct DescriptorBufferSegment{
     DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
 
     [[nodiscard]] bool valid()const noexcept{
-        return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler)
-            && sizeBytes > 0
-            && storageIdentity != 0u
-            && allocationSerial != 0u
-        ;
+        return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler) && sizeBytes > 0 && storageIdentity != 0u && allocationSerial != 0u;
     }
 };
 
@@ -136,8 +119,8 @@ class DescriptorBufferManager final : NoCopy{
 
 
 public:
-    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource
-    // descriptor buffer, so the optional third offset extends this fixed topology.
+    // Resource and sampler descriptor buffers are always bound in this order.
+    // A TLAS set reuses the resource descriptor buffer, so the optional third offset extends this fixed topology.
     static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
     static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
     static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
@@ -212,12 +195,7 @@ public:
 
 
 private:
-    [[nodiscard]] DescriptorBufferSegment allocateForBindingGeneration(
-        DescriptorBufferSegmentKind::Enum kind,
-        u32 sizeBytes,
-        u32 alignmentBytes,
-        u64 requiredGeneration
-    );
+    [[nodiscard]] DescriptorBufferSegment allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
 
 
 public:
@@ -235,11 +213,7 @@ public:
 
 private:
     [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const;
-    [[nodiscard]] bool isLiveSegmentLocked(
-        const SegmentStorage& storage,
-        const DescriptorBufferSegment& segment,
-        DescriptorBufferSegmentKind::Enum expectedKind
-    )const noexcept;
+    [[nodiscard]] bool isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
     bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment)noexcept;
 
@@ -271,8 +245,8 @@ class GpuDescriptorHeap final : NoCopy{
 
 
 private:
-    // Capacities are fixed per initialized generation. The shared pool outlives
-    // these typed allocations, including partially initialized tables.
+    // Capacities are fixed per initialized generation.
+    // The shared pool outlives these typed allocations, including partially initialized tables.
     template<typename T>
     class FixedTable final : NoCopy{
     public:
@@ -373,8 +347,8 @@ public:
 
 
 public:
-    // Prevents slot reuse while CPU snapshots may still record. The final overlapping release establishes the
-    // native heap-use boundary for every slot freed under the leases.
+    // Prevents slot reuse while CPU snapshots may still record.
+    // The final overlapping release establishes the native heap-use boundary for every slot freed under the leases.
     [[nodiscard]] PendingRecordingLease acquirePendingRecordingLease();
 
     bool initialize(const GpuDescriptorHeapDesc& desc);
@@ -397,22 +371,14 @@ public:
     bool write(GpuDescriptorHandle handle, const DescriptorWriteItem& item);
 
     // Bind after state setup; optionally includes a per-generation TLAS block at set 2.
-    void bindCompute(
-        CommandList& commandList,
-        const ComputePipeline& pipeline,
-        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid()
-    );
+    void bindCompute(CommandList& commandList, const ComputePipeline& pipeline, GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid());
 
     // Graphics equivalents of bindCompute.
     void bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline);
     void bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline);
 
     // Ray-tracing equivalent of bindCompute; optionally binds a TLAS block at set 2.
-    void bindRayTracing(
-        CommandList& commandList,
-        const RayTracingPipeline& pipeline,
-        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid()
-    );
+    void bindRayTracing(CommandList& commandList, const RayTracingPipeline& pipeline, GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid());
 
     // Resource and sampler layouts at sets 0 and 1.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const noexcept{ return m_resourceLayout; }
@@ -433,19 +399,9 @@ private:
     [[nodiscard]] bool isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept;
     [[nodiscard]] bool retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept;
     [[nodiscard]] bool retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] bool trackCommandBufferUseLocked(
-        TrackedCommandBuffer& commandBuffer,
-        const GpuPhysicalQueueId& physicalQueue
-    );
-    [[nodiscard]] Expected<usize> validateCommandBufferUseSubmissionLocked(
-        TrackedCommandBuffer& commandBuffer,
-        const QueueSubmissionToken& submissionToken
-    );
-    void commitCommandBufferUseSubmissionLocked(
-        TrackedCommandBuffer& commandBuffer,
-        const QueueSubmissionToken& submissionToken,
-        usize heapUseIndex
-    )noexcept;
+    [[nodiscard]] bool trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer, const GpuPhysicalQueueId& physicalQueue);
+    [[nodiscard]] Expected<usize> validateCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken);
+    void commitCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken, usize heapUseIndex)noexcept;
     void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer)noexcept;
     void releasePendingRecordingLease(u64 descriptorBufferGeneration)noexcept;
     void shutdownForDeviceTeardown()noexcept;
@@ -703,24 +659,9 @@ public:
 
 private:
     [[nodiscard]] DispatchSnapshot captureDispatchSnapshot()const;
-    [[nodiscard]] Expected<u32> findGroupIndex(
-        AStringView exportName,
-        ShaderTableRecordKind::Enum expectedKind,
-        TStringView operationName,
-        TStringView exportKind
-    )const;
-    [[nodiscard]] Expected<ShaderRecordPreflight> preflightShaderRecord(
-        AStringView exportName,
-        ShaderTableRecordKind::Enum expectedKind,
-        u32 recordCount,
-        TStringView operationName,
-        TStringView exportKind
-    )const;
-    [[nodiscard]] Expected<ShaderTableAllocation> allocateSBTBuffer(
-        const ShaderRecordPreflight& preflight,
-        TStringView operationName,
-        TStringView recordName
-    );
+    [[nodiscard]] Expected<u32> findGroupIndex(AStringView exportName, ShaderTableRecordKind::Enum expectedKind, TStringView operationName, TStringView exportKind)const;
+    [[nodiscard]] Expected<ShaderRecordPreflight> preflightShaderRecord(AStringView exportName, ShaderTableRecordKind::Enum expectedKind, u32 recordCount, TStringView operationName, TStringView exportKind)const;
+    [[nodiscard]] Expected<ShaderTableAllocation> allocateSBTBuffer(const ShaderRecordPreflight& preflight, TStringView operationName, TStringView recordName);
     [[nodiscard]] u32 appendShaderRecord(
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,

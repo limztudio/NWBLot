@@ -10,8 +10,7 @@ import re
 import subprocess
 import sys
 
-from reflection_smoke import (capture_environment, parse_statistics,
-    validate_frame, validate_statistics)
+from reflection_smoke import (capture_environment, parse_statistics, validate_frame, validate_statistics)
 from reflection_roughness_reference import analyze_furnace, analyze_roughness, frame_grid
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
@@ -68,8 +67,7 @@ LIT_NORMALIZED_REFERENCE_ERROR = "normalized_reference_error"
 LIT_LIMITATIONS = "limitations"
 
 
-HISTORY_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_EPOCH, LIT_START_GRAPHICS_FRAME,
-    LIT_COUNT, LIT_SAMPLE_INDEX, LIT_SEED, LIT_ELIGIBLE, LIT_REUSED, LIT_RESET, LIT_REASON)
+HISTORY_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_EPOCH, LIT_START_GRAPHICS_FRAME, LIT_COUNT, LIT_SAMPLE_INDEX, LIT_SEED, LIT_ELIGIBLE, LIT_REUSED, LIT_RESET, LIT_REASON)
 
 
 @dataclass(frozen=True)
@@ -85,24 +83,12 @@ class CaptureSpec:
     seed: int = 0
 
 
-ROUGH_CAPTURES = (
-    CaptureSpec(LIT_MIRROR, roughness=0), CaptureSpec(LIT_ROUGH_02, roughness=0.2),
-    CaptureSpec(LIT_ROUGH_04), CaptureSpec(LIT_ROUGH_04_SEED1, seed=1), CaptureSpec(LIT_ROUGH_06, roughness=0.6),
-    CaptureSpec(LIT_ROUGH_04_N8, samples=8), CaptureSpec(LIT_ROUGH_04_N256, samples=256),
-    CaptureSpec(LIT_MIRROR_RAW, roughness=0, temporal=False),
-    CaptureSpec(LIT_ROUGH_04_SPATIAL_N8, samples=8, spatial=True),
-    CaptureSpec(LIT_FURNACE_MIRROR, case=LIT_ROUGH_FURNACE, roughness=0),
-    CaptureSpec(LIT_FURNACE_ROUGH, case=LIT_ROUGH_FURNACE, roughness=1, samples=256),
-    CaptureSpec(LIT_FURNACE_ROUGH_RAW, case=LIT_ROUGH_FURNACE, roughness=1, temporal=False),
-    CaptureSpec(LIT_GLASS_SMOOTH, case=LIT_ROUGH_GLASS, roughness=0),
-    CaptureSpec(LIT_GLASS_AUTHORED_ROUGH, case=LIT_ROUGH_GLASS, roughness=0.6),
-)
-TEMPORAL_CAPTURES = tuple(CaptureSpec(kind + suffix, case=LIT_TEMPORAL + kind,
-    roughness=0 if kind == LIT_DEFORM else 0.4, final_state=fresh)
-    for kind in (LIT_CAMERA, LIT_TRANSFORM, LIT_MATERIAL, LIT_LIGHT, LIT_DEFORM)
-    for suffix, fresh in ((LIT_RESET_2, False), (LIT_FRESH, True))) + (
-    CaptureSpec(LIT_CAMERA_SETTLED, case="temporal_camera", post_reset_samples=64),
-    CaptureSpec(LIT_DEFORM_BIND, case=LIT_ROUGH_DEFORM, roughness=0),)
+ROUGH_CAPTURES = (CaptureSpec(LIT_MIRROR, roughness=0), CaptureSpec(LIT_ROUGH_02, roughness=0.2), CaptureSpec(LIT_ROUGH_04), CaptureSpec(LIT_ROUGH_04_SEED1, seed=1), CaptureSpec(LIT_ROUGH_06, roughness=0.6),
+    CaptureSpec(LIT_ROUGH_04_N8, samples=8), CaptureSpec(LIT_ROUGH_04_N256, samples=256), CaptureSpec(LIT_MIRROR_RAW, roughness=0, temporal=False), CaptureSpec(LIT_ROUGH_04_SPATIAL_N8, samples=8, spatial=True),
+    CaptureSpec(LIT_FURNACE_MIRROR, case=LIT_ROUGH_FURNACE, roughness=0), CaptureSpec(LIT_FURNACE_ROUGH, case=LIT_ROUGH_FURNACE, roughness=1, samples=256), CaptureSpec(LIT_FURNACE_ROUGH_RAW, case=LIT_ROUGH_FURNACE, roughness=1, temporal=False),
+    CaptureSpec(LIT_GLASS_SMOOTH, case=LIT_ROUGH_GLASS, roughness=0), CaptureSpec(LIT_GLASS_AUTHORED_ROUGH, case=LIT_ROUGH_GLASS, roughness=0.6),)
+TEMPORAL_CAPTURES = tuple(CaptureSpec(kind + suffix, case=LIT_TEMPORAL + kind, roughness=0 if kind == LIT_DEFORM else 0.4, final_state=fresh) for kind in (LIT_CAMERA, LIT_TRANSFORM, LIT_MATERIAL, LIT_LIGHT, LIT_DEFORM)
+    for suffix, fresh in ((LIT_RESET_2, False), (LIT_FRESH, True))) + (CaptureSpec(LIT_CAMERA_SETTLED, case="temporal_camera", post_reset_samples=64), CaptureSpec(LIT_DEFORM_BIND, case=LIT_ROUGH_DEFORM, roughness=0),)
 
 
 def parse_history(log_text):
@@ -143,8 +129,7 @@ def validate_history(log_text, statistics, spec):
         wide = (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_EPOCH, LIT_START_GRAPHICS_FRAME)
         if any(value > (0xffffffffffffffff if name in wide else 0xffffffff) for name, value in sample.items()):
             raise SmokeFailure("completed history metadata exceeds its integer field width")
-        if previous and (sample[LIT_SEQUENCE] <= previous[LIT_SEQUENCE]
-            or sample[LIT_GRAPHICS_FRAME] <= previous[LIT_GRAPHICS_FRAME] or sample[LIT_EPOCH] < previous[LIT_EPOCH]):
+        if previous and (sample[LIT_SEQUENCE] <= previous[LIT_SEQUENCE] or sample[LIT_GRAPHICS_FRAME] <= previous[LIT_GRAPHICS_FRAME] or sample[LIT_EPOCH] < previous[LIT_EPOCH]):
             raise SmokeFailure("completed history source frames or epochs moved backwards")
         if sample[LIT_REUSED] and (not sample[LIT_ELIGIBLE] or sample[LIT_RESET] or sample[LIT_COUNT] < 2):
             raise SmokeFailure("history reported reuse without an eligible prior sample")
@@ -185,15 +170,12 @@ def validate_history(log_text, statistics, spec):
             raise SmokeFailure("static image was captured before its accepted sample-count plateau")
         if not any(sample[LIT_COUNT] == spec.samples and sample[LIT_GRAPHICS_FRAME] < source for sample in history):
             raise SmokeFailure("capture requested convergence without prior completed cap evidence")
-    return {"captured_graphics_frame": source, "covering_completed_history": captured,
-        "completed_samples": len(history), "history": history}
+    return {"captured_graphics_frame": source, "covering_completed_history": captured, "completed_samples": len(history), "history": history}
 
 
 def spec_environment(spec):
     env = capture_environment(spec.case, LIT_HARDWARE)
-    for key, value in (("ROUGHNESS", spec.roughness), ("HISTORY_SAMPLES", spec.samples),
-        ("TEMPORAL", int(spec.temporal)), ("SPATIAL", int(spec.spatial)),
-        ("FINAL_STATE", int(spec.final_state)), ("POST_RESET_SAMPLES", spec.post_reset_samples),
+    for key, value in (("ROUGHNESS", spec.roughness), ("HISTORY_SAMPLES", spec.samples), ("TEMPORAL", int(spec.temporal)), ("SPATIAL", int(spec.spatial)), ("FINAL_STATE", int(spec.final_state)), ("POST_RESET_SAMPLES", spec.post_reset_samples),
         ("SEED", spec.seed), ("DIAGNOSTICS", 1)):
         env["NWB_REFLECTION_SMOKE_" + key] = str(value)
     return env
@@ -202,15 +184,10 @@ def spec_environment(spec):
 def capture(args, spec):
     output = args.output_directory / (spec.name + LIT_BMP)
     log_output = output.with_suffix(".log")
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1",
-        "--timeout", str(args.timeout), LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created",
-        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: reflection mode hardware",
-        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown",
-        LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: hardware",
-        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEHISTORY, "--log-output", str(log_output),
-        LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", "--timeout", str(args.timeout), LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created",
+        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: reflection mode hardware", LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown", LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: hardware",
+        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEHISTORY, "--log-output", str(log_output), LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
         "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
     if args.logserver_executable:
         command += ["--logserver-executable", str(args.logserver_executable)]
@@ -241,8 +218,7 @@ def compare_exact_scene(left, right, maximum_mean_error=0.15):
     if left[:2] != right[:2]:
         raise SmokeFailure(LIT_MATCHED_SCENE_CAPTURES_HAVE_DIFFERENT_)
     width, height, rows = validate_frame(left)
-    differences = [abs(a - b) for y in range(height) for x in range(width)
-        for a, b in zip(rows[y][x], right[2][y][x])]
+    differences = [abs(a - b) for y in range(height) for x in range(width) for a, b in zip(rows[y][x], right[2][y][x])]
     mean = sum(differences) / len(differences)
     changed = sum(value > 2 for value in differences)
     if mean > maximum_mean_error or changed > width * height * 3 * 0.005:
@@ -251,24 +227,17 @@ def compare_exact_scene(left, right, maximum_mean_error=0.15):
 
 
 def compare_smooth_glass_scene(left, right, maximum_mean_error=0.30):
-    # Rough glass keeps the complementary smooth interface: the authored roughness parameter only affects
-    # non-glass receivers, so both glass captures must show the same stripe geometry with bounded stochastic
-    # GGX sampling noise instead of byte-identical pixels.
+    # Rough glass keeps the complementary smooth interface: the authored roughness parameter only affects non-glass receivers, so both glass captures must show the same stripe geometry with bounded stochastic GGX sampling noise instead of byte-identical pixels.
     if left[:2] != right[:2]:
         raise SmokeFailure(LIT_MATCHED_SCENE_CAPTURES_HAVE_DIFFERENT_)
     width, height, rows = validate_frame(left)
-    differences = [abs(a - b) for y in range(height) for x in range(width)
-        for a, b in zip(rows[y][x], right[2][y][x])]
+    differences = [abs(a - b) for y in range(height) for x in range(width) for a, b in zip(rows[y][x], right[2][y][x])]
     mean = sum(differences) / len(differences)
     changed = sum(value > 2 for value in differences)
-    changed_pixels = sum(
-        1 for y in range(height) for x in range(width)
-        if max(abs(a - b) for a, b in zip(rows[y][x], right[2][y][x])) > 2
-    )
+    changed_pixels = sum(1 for y in range(height) for x in range(width) if max(abs(a - b) for a, b in zip(rows[y][x], right[2][y][x])) > 2)
     if mean > maximum_mean_error or changed_pixels > width * height * 0.05:
         raise SmokeFailure(f"matched smooth-glass scenes diverged ({mean:.4f} byte MAE; {changed_pixels} pixels)")
-    return {LIT_MEAN_CHANNEL_BYTE_ERROR: mean, LIT_CHANNELS_DIFFERING_BY_MORE_THAN_TWO: changed,
-        "pixels_differing_by_more_than_two": changed_pixels}
+    return {LIT_MEAN_CHANNEL_BYTE_ERROR: mean, LIT_CHANNELS_DIFFERING_BY_MORE_THAN_TWO: changed, "pixels_differing_by_more_than_two": changed_pixels}
 
 
 def high_frequency_energy(frame):
@@ -282,8 +251,7 @@ def high_frequency_energy(frame):
         for x in range(left + 1, right - 1):
             for channel in (0, 1):
                 center = DECODED_RADIANCE[rows[y][x][channel]]
-                neighbors = sum(DECODED_RADIANCE[rows[yy][xx][channel]]
-                    for xx, yy in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))) * 0.25
+                neighbors = sum(DECODED_RADIANCE[rows[yy][xx][channel]] for xx, yy in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))) * 0.25
                 total += (center - neighbors) ** 2
     return total
 
@@ -292,8 +260,7 @@ def compare_deformation(bind, deformed):
     if bind[:2] != deformed[:2]:
         raise SmokeFailure("deformation captures have different dimensions")
     def mask(frame, channel):
-        return {(x, y) for y, row in enumerate(frame[2]) for x, pixel in enumerate(row)
-            if pixel[channel] >= 40 and all(pixel[channel] >= pixel[other] + 25 for other in range(3) if other != channel)}
+        return {(x, y) for y, row in enumerate(frame[2]) for x, pixel in enumerate(row) if pixel[channel] >= 40 and all(pixel[channel] >= pixel[other] + 25 for other in range(3) if other != channel)}
     before, after = mask(bind, 0), mask(deformed, 0)
     if min(len(before), len(after)) < 30:
         raise SmokeFailure("deformation comparison is missing a visible reflected red model")
@@ -303,8 +270,7 @@ def compare_deformation(bind, deformed):
     green_before, green_after = mask(bind, 1), mask(deformed, 1)
     if min(len(green_before), len(green_after)) < 100 or len(green_before ^ green_after) > max(4, len(green_before) * 0.01):
         raise SmokeFailure("skeletal mutation lost or changed the unrelated green reflection")
-    return {"bind_red_pixels": len(before), "posed_red_pixels": len(after),
-        "changed_red_footprint_pixels": changed, "retained_green_pixels": len(green_before & green_after)}
+    return {"bind_red_pixels": len(before), "posed_red_pixels": len(after), "changed_red_footprint_pixels": changed, "retained_green_pixels": len(green_before & green_after)}
 
 
 def compare_sampling_seeds(first, second):
@@ -321,8 +287,7 @@ def compare_sampling_seeds(first, second):
                 total += 1
     if changed < max(64, total * 0.005):
         raise SmokeFailure("independent sampling seeds did not change unresolved rough-reflection samples")
-    return {"changed_receiver_pixels": changed, "receiver_pixels": total,
-        "mean_receiver_channel_byte_difference": absolute_error / (total * 3)}
+    return {"changed_receiver_pixels": changed, "receiver_pixels": total, "mean_receiver_channel_byte_difference": absolute_error / (total * 3)}
 
 
 def compare_convergence(error8, error64, error256):
@@ -336,8 +301,7 @@ def analyze_suite(args):
         return read_bmp_24_rows(args.output_directory / (name + LIT_BMP))
     metrics = {}
     if args.suite == LIT_ROUGH:
-        for name, roughness in ((LIT_MIRROR, 0), (LIT_ROUGH_02, 0.2), (LIT_ROUGH_04, 0.4), (LIT_ROUGH_04_SEED1, 0.4), (LIT_ROUGH_06, 0.6),
-            (LIT_ROUGH_04_N8, 0.4), (LIT_ROUGH_04_N256, 0.4), (LIT_ROUGH_04_SPATIAL_N8, 0.4)):
+        for name, roughness in ((LIT_MIRROR, 0), (LIT_ROUGH_02, 0.2), (LIT_ROUGH_04, 0.4), (LIT_ROUGH_04_SEED1, 0.4), (LIT_ROUGH_06, 0.6), (LIT_ROUGH_04_N8, 0.4), (LIT_ROUGH_04_N256, 0.4), (LIT_ROUGH_04_SPATIAL_N8, 0.4)):
             metrics[name] = analyze_roughness(frame(name), roughness)
         metrics["independent_seeds"] = compare_sampling_seeds(frame(LIT_ROUGH_04), frame(LIT_ROUGH_04_SEED1))
         error8 = metrics[LIT_ROUGH_04_N8][LIT_NORMALIZED_REFERENCE_ERROR]
@@ -369,8 +333,7 @@ def analyze_suite(args):
 
 
 def write_report(args, completed, evidence, metrics=None):
-    metadata = {"suite": args.suite, "frame_source": "actual application framebuffer readback",
-        "captures": [asdict(spec) for spec in completed], "evidence": evidence, "metrics": metrics,
+    metadata = {"suite": args.suite, "frame_source": "actual application framebuffer readback", "captures": [asdict(spec) for spec in completed], "evidence": evidence, "metrics": metrics,
         "reference": "Independent rectangular-emitter area quadrature of correlated Smith GGX; no production VNDF sampler.",
         LIT_LIMITATIONS: "Single-bounce opaque GGX with strict static history. Runtime deformation disables history. Clear glass stays smooth. Spatial output is separate from history. Counters and sample counts are completion evidence, not GPU timing."}
     (args.output_directory / "reflection_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
@@ -380,8 +343,7 @@ def write_report(args, completed, evidence, metrics=None):
         png = png_rgb_bytes(read_bmp_24_rows(bmp))
         bmp.with_suffix(".png").write_bytes(png)
         name = html.escape(spec.name)
-        cards.append(f'<article><h2>{name}</h2><a href="{name}.bmp">Raw BMP</a> / <a href="{name}.log">Completed-frame log</a>'
-            f'<img alt="Actual {name} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
+        cards.append(f'<article><h2>{name}</h2><a href="{name}.bmp">Raw BMP</a> / <a href="{name}.log">Completed-frame log</a>' f'<img alt="Actual {name} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
     document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection roughness and history evidence</title>'
     document += '<style>body{background:#141922;color:#eee;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#88c9ff}pre{white-space:pre-wrap}</style>'
     document += '<h1>Actual reflection framebuffer captures</h1><p>' + html.escape(metadata[LIT_LIMITATIONS]) + '</p><main>'

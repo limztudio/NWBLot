@@ -96,8 +96,7 @@ void TextVisibleFixture::SetUp(){
 }
 
 bool TextVisibleFixture::loadFont(Font& font, const StringView filename){
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-        / filename;
+    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
     Core::Assets::AssetBytes bytes(m_arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
     if(!bytesResult)
@@ -122,15 +121,7 @@ void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& 
 SharedGlyphPage TextVisibleFixture::makePage(const u64 atlasIdentity){
     GlyphPage::Pixels pixels(m_arena);
     pixels.resize(64u, 128u);
-    const GlyphPageBinding binding{
-        .font = Core::Assets::AssetRef<Font>("tests/ui/independent_font"),
-        .fontGeneration = 1u,
-        .atlasIdentity = atlasIdentity,
-        .generation = 1u,
-        .index = 0u,
-        .width = 8u,
-        .height = 8u,
-    };
+    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/independent_font"), .fontGeneration = 1u, .atlasIdentity = atlasIdentity, .generation = 1u, .index = 0u, .width = 8u, .height = 8u, };
     return CreateGlyphPage(m_arena, binding, Move(pixels));
 }
 

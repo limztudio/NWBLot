@@ -22,32 +22,24 @@ NWB_CORE_BEGIN
 class GpuTaskGraph;
 
 
-// A presentation contributor records the final graphics work that must remain ordered after a renderer's scene
-// output and before the swap-chain submission is signalled. The contributor owns its payload and CPU-side
-// acceptance lifecycle; Graphics only keeps this non-owning registration seam so renderer and UI modules stay
-// independent.
+// A presentation contributor records the final graphics work that must remain ordered after a renderer's scene output and before the swap-chain submission is signalled.
+// The contributor owns its payload and CPU-side acceptance lifecycle; Graphics only keeps this non-owning registration seam so renderer and UI modules stay independent.
 interface IGpuTaskGraphPresentationContributor{
 public:
     virtual ~IGpuTaskGraphPresentationContributor() = default;
 
 
 public:
-    // Called during ordinary renderer preparation, before graph compilation and native recording. A false return
-    // leaves this frame's scene presentation usable without the optional contributor.
+    // Called during ordinary renderer preparation, before graph compilation and native recording.
+    // A false return leaves this frame's scene presentation usable without the optional contributor.
     [[nodiscard]] virtual bool prepareTaskGraphPresentation(const AcquiredPresentationFrame& frame) = 0;
     // Preparation may succeed while there is no visible overlay work (for example, an empty overlay snapshot).
     // Such a frame deliberately skips declaration instead of manufacturing an empty presentation packet.
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const = 0;
-    // `previousTask` is the scene-output endpoint and `backbuffer` is the exact typed acquired texture imported by
-    // the renderer. The returned task must be Graphics-capable and ordered after that endpoint. A task that writes
-    // the backbuffer must declare that same resource; an upload-only contributor may instead return a terminal
-    // completion packet.
-    [[nodiscard]] virtual GpuTaskId declareTaskGraphPresentation(
-        GpuTaskGraph& graph,
-        const AcquiredPresentationFrame& frame,
-        GpuGraphResourceId backbuffer,
-        GpuTaskId previousTask
-    ) = 0;
+    // `previousTask` is the scene-output endpoint and `backbuffer` is the exact typed acquired texture imported by the renderer.
+    // The returned task must be Graphics-capable and ordered after that endpoint.
+    // A task that writes the backbuffer must declare that same resource; an upload-only contributor may instead return a terminal completion packet.
+    [[nodiscard]] virtual GpuTaskId declareTaskGraphPresentation(GpuTaskGraph& graph, const AcquiredPresentationFrame& frame, GpuGraphResourceId backbuffer, GpuTaskId previousTask) = 0;
 };
 
 

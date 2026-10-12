@@ -32,23 +32,8 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from profiles import BaselineProfile, corpus_profile_names, get_profile, profile_names  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
-    SKIP_EXIT_CODE,
-    STRICT_LOG_FAILURE_MESSAGES,
-    SmokeFailure,
-    SmokeSkip,
-    WindowsCapture,
-    build_launch_environment,
-    make_runtime_launch_args,
-    create_capture_backend,
-    ensure_process_running,
-    launch_logserver,
-    launch_testbed,
-    require_normal_process_exit,
-    shutdown_logserver_and_collect,
-    terminate_process,
-    validate_capture_result,
-    wait_for_log_message,
-)
+    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    shutdown_logserver_and_collect, terminate_process, validate_capture_result, wait_for_log_message,)
 
 LIT_GIT = "git"
 LIT_UNAVAILABLE = "unavailable"
@@ -133,10 +118,7 @@ SCHEMA = "nwb.renderer-baseline.v1"
 CORPUS_SCHEMA = "nwb.renderer-baseline-corpus.v1"
 CURRENT_CORPUS_ID = "current-renderer-v1"
 CURRENT_CORPUS_FILE = Path(__file__).with_name("current_renderer_corpus.json")
-FORBIDDEN_LOG_MESSAGES = (
-    *STRICT_LOG_FAILURE_MESSAGES,
-    "cannot safely continue after an unresolved frame recovery submission",
-)
+FORBIDDEN_LOG_MESSAGES = (*STRICT_LOG_FAILURE_MESSAGES, "cannot safely continue after an unresolved frame recovery submission",)
 
 
 @dataclass(frozen=True)
@@ -189,13 +171,7 @@ def sha256_file(path: Path) -> str:
 
 def source_revision() -> str:
     try:
-        result = subprocess.run(
-            [LIT_GIT, "rev-parse", "HEAD"],
-            cwd=REPO,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        result = subprocess.run([LIT_GIT, "rev-parse", "HEAD"], cwd=REPO, check=False, capture_output=True, text=True,)
     except OSError:
         return LIT_UNAVAILABLE
     return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else LIT_UNAVAILABLE
@@ -203,23 +179,14 @@ def source_revision() -> str:
 
 def source_worktree_clean() -> bool:
     try:
-        result = subprocess.run(
-            [LIT_GIT, "status", "--porcelain"],
-            cwd=REPO,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        result = subprocess.run([LIT_GIT, "status", "--porcelain"], cwd=REPO, check=False, capture_output=True, text=True,)
     except OSError:
         return False
     return result.returncode == 0 and not result.stdout.strip()
 
 
 def effective_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
-    return {
-        name: os.environ.get(name, default_value)
-        for name, default_value in sorted(profile.frozen_environment.items())
-    }
+    return { name: os.environ.get(name, default_value) for name, default_value in sorted(profile.frozen_environment.items()) }
 
 
 def canonical_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
@@ -293,10 +260,7 @@ def compare_bmp_rgb(reference_path: Path, candidate_path: Path, difference_path:
     reference_width, reference_height, reference_rgb = read_bmp_rgb(reference_path)
     candidate_width, candidate_height, candidate_rgb = read_bmp_rgb(candidate_path)
     if (reference_width, reference_height) != (candidate_width, candidate_height):
-        raise SmokeFailure(
-            "reference and candidate captures have different dimensions: "
-            f"{reference_width}x{reference_height} vs {candidate_width}x{candidate_height}"
-        )
+        raise SmokeFailure("reference and candidate captures have different dimensions: " f"{reference_width}x{reference_height} vs {candidate_width}x{candidate_height}")
 
     total_abs = 0
     max_abs = 0
@@ -315,14 +279,7 @@ def compare_bmp_rgb(reference_path: Path, candidate_path: Path, difference_path:
 
     write_bmp_rgb(difference_path, reference_width, reference_height, bytes(difference_rgb))
     total_pixels = reference_width * reference_height
-    return PixelDifference(
-        width=reference_width,
-        height=reference_height,
-        max_abs=max_abs,
-        mean_abs=total_abs / len(reference_rgb),
-        changed_pixels=changed_pixels,
-        total_pixels=total_pixels,
-    )
+    return PixelDifference(width=reference_width, height=reference_height, max_abs=max_abs, mean_abs=total_abs / len(reference_rgb), changed_pixels=changed_pixels, total_pixels=total_pixels,)
 
 
 def difference_failures(args: argparse.Namespace, difference: PixelDifference) -> List[str]:
@@ -335,9 +292,7 @@ def difference_failures(args: argparse.Namespace, difference: PixelDifference) -
     if maximum_mean_abs is not None and difference.mean_abs > maximum_mean_abs:
         failures.append(f"mean abs {difference.mean_abs:.6f} exceeds {maximum_mean_abs:.6f}")
     if maximum_changed_fraction is not None and difference.changed_fraction > maximum_changed_fraction:
-        failures.append(
-            f"changed fraction {difference.changed_fraction:.6f} exceeds {maximum_changed_fraction:.6f}"
-        )
+        failures.append(f"changed fraction {difference.changed_fraction:.6f} exceeds {maximum_changed_fraction:.6f}")
     return failures
 
 
@@ -351,13 +306,7 @@ def validate_runtime_log(log_text: str, rejected_messages: Sequence[str]) -> Tup
     return forbidden
 
 
-def capture_scene(
-    args: argparse.Namespace,
-    profile: BaselineProfile,
-    capture_path: Path,
-    log_path: Path,
-    frozen_environment: Mapping[str, str],
-) -> CaptureResult:
+def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_path: Path, log_path: Path, frozen_environment: Mapping[str, str],) -> CaptureResult:
     if not args.executable.is_file():
         raise SmokeFailure(f"renderer baseline executable does not exist: {args.executable}")
     if not args.runtime_dir.is_dir():
@@ -382,9 +331,7 @@ def capture_scene(
     log_text = ""
     try:
         backend = create_capture_backend()
-        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
-            launch_args, args.executable, environment
-        )
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(launch_args, args.executable, environment)
         app_process = launch_testbed(launch_args, args.executable, environment, log_port)
         window = backend.wait_for_window(app_process.pid, args.startup_timeout, profile.window_title)
         if not window:
@@ -399,15 +346,9 @@ def capture_scene(
                 raise SmokeFailure(f"frame-locked profile '{args.profile}' has no capture-ready log marker")
             if not log_directory:
                 raise SmokeFailure("frame-locked renderer baseline requires a readable runtime-log directory")
-            wait_for_log_message(
-                log_directory,
-                log_baseline,
-                log_pattern,
-                profile.capture_ready_log,
-                args.startup_timeout,
-            )
-            # The marker identifies the fixture's held update phase. This delay precedes client capture;
-            # it does not identify or wait on an accepted GPU source-frame fence.
+            wait_for_log_message(log_directory, log_baseline, log_pattern, profile.capture_ready_log, args.startup_timeout,)
+            # The marker identifies the fixture's held update phase.
+            # This delay precedes client capture; it does not identify or wait on an accepted GPU source-frame fence.
             time.sleep(args.settle_seconds)
         else:
             time.sleep(args.settle_seconds)
@@ -419,13 +360,7 @@ def capture_scene(
         validate_capture_result(capture)
         app_exit_code, app_exit_tail = terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
         app_process = None
-        log_text = shutdown_logserver_and_collect(
-            logserver_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            LIT_RENDERER_BASELINE_LOGSERVER,
-        )
+        log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, LIT_RENDERER_BASELINE_LOGSERVER,)
         logserver_process = None
     finally:
         terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
@@ -438,50 +373,15 @@ def capture_scene(
         raise SmokeFailure(f"renderer baseline did not create capture: {capture_path}")
     forbidden = validate_runtime_log(log_text, args.reject_log)
     log_path.write_text(log_text, encoding=LIT_UTF_8)
-    return CaptureResult(
-        capture_file=capture_path.name,
-        log_file=log_path.name,
-        capture_sha256=sha256_file(capture_path),
-        executable_sha256=sha256_file(args.executable),
-        source_revision=source_revision(),
-        source_worktree_clean=source_worktree_clean(),
-        frozen_environment=dict(frozen_environment),
-        forbidden_log_messages=forbidden,
-    )
+    return CaptureResult(capture_file=capture_path.name, log_file=log_path.name, capture_sha256=sha256_file(capture_path), executable_sha256=sha256_file(args.executable), source_revision=source_revision(), source_worktree_clean=source_worktree_clean(),
+        frozen_environment=dict(frozen_environment), forbidden_log_messages=forbidden,)
 
 
-def manifest_payload(
-    capture_kind: str,
-    profile_name: str,
-    profile: BaselineProfile,
-    args: argparse.Namespace,
-    capture: CaptureResult,
-    reference_manifest: Optional[Mapping[str, object]] = None,
-) -> Dict[str, object]:
-    payload: Dict[str, object] = {
-        LIT_SCHEMA: SCHEMA,
-        LIT_CAPTURE_KIND: capture_kind,
-        "captured_utc": datetime.now(timezone.utc).isoformat(),
-        LIT_PROFILE: profile_name,
-        "profile_description": profile.description,
-        "target": profile.target,
-        "window_title": profile.window_title,
-        LIT_CAPTURE_MODE: capture_mode(profile),
-        LIT_CAPTURE_FREEZE_FRAME: profile.capture_freeze_frame,
-        LIT_FIXED_DELTA_SECONDS: profile.fixed_delta_seconds,
-        LIT_SETTLE_SECONDS: args.settle_seconds,
-        LIT_GPU_VALIDATION: args.gpu_validation,
-        "runtime_directory": str(args.runtime_dir),
-        LIT_SOURCE_REVISION: capture.source_revision,
-        LIT_SOURCE_WORKTREE_CLEAN: capture.source_worktree_clean,
-        "executable_sha256": capture.executable_sha256,
-        LIT_CAPTURE_FILE: capture.capture_file,
-        LIT_CAPTURE_SHA256: capture.capture_sha256,
-        "log_file": capture.log_file,
-        LIT_FROZEN_ENVIRONMENT: dict(capture.frozen_environment),
-        "platform": platform.platform(),
-        "python_version": platform.python_version(),
-    }
+def manifest_payload(capture_kind: str, profile_name: str, profile: BaselineProfile, args: argparse.Namespace, capture: CaptureResult, reference_manifest: Optional[Mapping[str, object]] = None,) -> Dict[str, object]:
+    payload: Dict[str, object] = { LIT_SCHEMA: SCHEMA, LIT_CAPTURE_KIND: capture_kind, "captured_utc": datetime.now(timezone.utc).isoformat(), LIT_PROFILE: profile_name, "profile_description": profile.description, "target": profile.target,
+        "window_title": profile.window_title, LIT_CAPTURE_MODE: capture_mode(profile), LIT_CAPTURE_FREEZE_FRAME: profile.capture_freeze_frame, LIT_FIXED_DELTA_SECONDS: profile.fixed_delta_seconds, LIT_SETTLE_SECONDS: args.settle_seconds,
+        LIT_GPU_VALIDATION: args.gpu_validation, "runtime_directory": str(args.runtime_dir), LIT_SOURCE_REVISION: capture.source_revision, LIT_SOURCE_WORKTREE_CLEAN: capture.source_worktree_clean, "executable_sha256": capture.executable_sha256,
+        LIT_CAPTURE_FILE: capture.capture_file, LIT_CAPTURE_SHA256: capture.capture_sha256, "log_file": capture.log_file, LIT_FROZEN_ENVIRONMENT: dict(capture.frozen_environment), "platform": platform.platform(), "python_version": platform.python_version(), }
     if reference_manifest is not None:
         payload[LIT_REFERENCE_SOURCE_REVISION] = reference_manifest.get(LIT_SOURCE_REVISION)
         payload["reference_capture_sha256"] = reference_manifest.get(LIT_CAPTURE_SHA256)
@@ -492,15 +392,7 @@ def write_json(path: Path, payload: Mapping[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding=LIT_UTF_8)
 
 
-def load_reference(
-    reference_directory: Path,
-    profile_name: str,
-    frozen_environment: Mapping[str, str],
-    settle_seconds: float,
-    gpu_validation: bool,
-    capture_freeze_frame: int,
-    fixed_delta_seconds: float,
-) -> Tuple[Mapping[str, object], Path]:
+def load_reference(reference_directory: Path, profile_name: str, frozen_environment: Mapping[str, str], settle_seconds: float, gpu_validation: bool, capture_freeze_frame: int, fixed_delta_seconds: float,) -> Tuple[Mapping[str, object], Path]:
     manifest_path = reference_directory / LIT_MANIFEST_JSON
     try:
         manifest = json.loads(manifest_path.read_text(encoding=LIT_UTF_8))
@@ -513,9 +405,7 @@ def load_reference(
     if manifest.get(LIT_CAPTURE_KIND) != LIT_BASELINE:
         raise SmokeFailure(f"reference manifest is not an immutable baseline: {manifest_path}")
     if manifest.get(LIT_PROFILE) != profile_name:
-        raise SmokeFailure(
-            f"baseline profile mismatch: reference is {manifest.get('profile')!r}, candidate is {profile_name!r}"
-        )
+        raise SmokeFailure(f"baseline profile mismatch: reference is {manifest.get('profile')!r}, candidate is {profile_name!r}")
     if manifest.get(LIT_FROZEN_ENVIRONMENT) != dict(frozen_environment):
         raise SmokeFailure("baseline frozen environment differs from the candidate capture")
     if manifest.get(LIT_GPU_VALIDATION) != gpu_validation:
@@ -594,14 +484,7 @@ def corpus_number(entry: Mapping[str, object], key: str, profile_name: str) -> f
     return float(value)
 
 
-def load_corpus_reference(
-    corpus_id: str,
-    supplied_root: Optional[Path],
-    profile_name: str,
-    profile: BaselineProfile,
-    gpu_validation: bool,
-    frozen_environment: Optional[Mapping[str, str]] = None,
-    corpus_path: Path = CURRENT_CORPUS_FILE,
+def load_corpus_reference(corpus_id: str, supplied_root: Optional[Path], profile_name: str, profile: BaselineProfile, gpu_validation: bool, frozen_environment: Optional[Mapping[str, str]] = None, corpus_path: Path = CURRENT_CORPUS_FILE,
 ) -> Tuple[Mapping[str, object], Path, CorpusReference]:
     corpus = load_corpus(corpus_id, corpus_path)
     capture_environment = corpus.get(LIT_CAPTURE_ENVIRONMENT)
@@ -611,10 +494,7 @@ def load_corpus_reference(
     if not isinstance(expected_gpu_validation, bool):
         raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' has no GPU-validation mode")
     if gpu_validation != expected_gpu_validation:
-        raise SmokeFailure(
-            f"renderer baseline corpus '{corpus_id}' requires gpu_validation={expected_gpu_validation}, "
-            f"got {gpu_validation}"
-        )
+        raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' requires gpu_validation={expected_gpu_validation}, " f"got {gpu_validation}")
 
     profiles = corpus.get(LIT_PROFILES)
     assert isinstance(profiles, dict)
@@ -625,11 +505,7 @@ def load_corpus_reference(
     if not isinstance(reference, dict):
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no reference")
     artifact_root = corpus_artifact_root(corpus, supplied_root)
-    reference_directory = corpus_child(
-        artifact_root,
-        corpus_string(reference, LIT_DIRECTORY, profile_name),
-        f"reference directory for '{profile_name}'",
-    )
+    reference_directory = corpus_child(artifact_root, corpus_string(reference, LIT_DIRECTORY, profile_name), f"reference directory for '{profile_name}'",)
     manifest_path = reference_directory / LIT_MANIFEST_JSON
     log_path = reference_directory / LIT_RUNTIME_LOG
     if sha256_file(manifest_path) != corpus_string(reference, LIT_MANIFEST_SHA256, profile_name):
@@ -637,15 +513,8 @@ def load_corpus_reference(
     if sha256_file(log_path) != corpus_string(reference, LIT_RUNTIME_LOG_SHA256, profile_name):
         raise SmokeFailure(f"renderer baseline corpus runtime-log checksum does not match for '{profile_name}'")
 
-    manifest, capture = load_reference(
-        reference_directory,
-        profile_name,
-        effective_frozen_environment(profile) if frozen_environment is None else frozen_environment,
-        profile.settle_seconds,
-        gpu_validation,
-        profile.capture_freeze_frame,
-        profile.fixed_delta_seconds,
-    )
+    manifest, capture = load_reference(reference_directory, profile_name, effective_frozen_environment(profile) if frozen_environment is None else frozen_environment, profile.settle_seconds, gpu_validation, profile.capture_freeze_frame,
+        profile.fixed_delta_seconds,)
     if manifest.get(LIT_SOURCE_REVISION) != corpus_string(reference, LIT_SOURCE_REVISION, profile_name):
         raise SmokeFailure(f"renderer baseline corpus source revision does not match for '{profile_name}'")
     if manifest.get(LIT_CAPTURE_SHA256) != corpus_string(reference, LIT_CAPTURE_SHA256, profile_name):
@@ -656,11 +525,8 @@ def load_corpus_reference(
     limits_entry = entry.get(LIT_LIMITS)
     if not isinstance(limits_entry, dict):
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no comparison limits")
-    limits = {
-        LIT_MAXIMUM_MAX_ABS: corpus_number(limits_entry, LIT_MAXIMUM_MAX_ABS, profile_name),
-        LIT_MAXIMUM_MEAN_ABS: corpus_number(limits_entry, LIT_MAXIMUM_MEAN_ABS, profile_name),
-        LIT_MAXIMUM_CHANGED_FRACTION: corpus_number(limits_entry, LIT_MAXIMUM_CHANGED_FRACTION, profile_name),
-    }
+    limits = { LIT_MAXIMUM_MAX_ABS: corpus_number(limits_entry, LIT_MAXIMUM_MAX_ABS, profile_name), LIT_MAXIMUM_MEAN_ABS: corpus_number(limits_entry, LIT_MAXIMUM_MEAN_ABS, profile_name),
+        LIT_MAXIMUM_CHANGED_FRACTION: corpus_number(limits_entry, LIT_MAXIMUM_CHANGED_FRACTION, profile_name), }
     if limits[LIT_MAXIMUM_MAX_ABS] < 0.0 or limits[LIT_MAXIMUM_MEAN_ABS] < 0.0:
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has negative comparison limits")
     if not 0.0 <= limits[LIT_MAXIMUM_CHANGED_FRACTION] <= 1.0:
@@ -668,11 +534,7 @@ def load_corpus_reference(
     recapture = entry.get(LIT_SAME_REVISION_RECAPTURE)
     if not isinstance(recapture, dict):
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no same-revision re-capture")
-    recapture_directory = corpus_child(
-        artifact_root,
-        corpus_string(recapture, LIT_DIRECTORY, profile_name),
-        f"same-revision re-capture directory for '{profile_name}'",
-    )
+    recapture_directory = corpus_child(artifact_root, corpus_string(recapture, LIT_DIRECTORY, profile_name), f"same-revision re-capture directory for '{profile_name}'",)
     comparison_path = recapture_directory / LIT_COMPARISON_JSON
     if sha256_file(comparison_path) != corpus_string(recapture, LIT_COMPARISON_SHA256, profile_name):
         raise SmokeFailure(f"renderer baseline corpus re-capture checksum does not match for '{profile_name}'")
@@ -694,11 +556,7 @@ def load_corpus_reference(
     difference = comparison.get(LIT_DIFFERENCE)
     if not isinstance(difference, dict):
         raise SmokeFailure(f"renderer baseline corpus re-capture has no difference metrics for '{profile_name}'")
-    for corpus_key, comparison_key, limit_key in (
-        (LIT_MAX_ABS, LIT_MAX_ABS, LIT_MAXIMUM_MAX_ABS),
-        (LIT_MEAN_ABS, LIT_MEAN_ABS, LIT_MAXIMUM_MEAN_ABS),
-        (LIT_CHANGED_FRACTION, LIT_CHANGED_FRACTION, LIT_MAXIMUM_CHANGED_FRACTION),
-    ):
+    for corpus_key, comparison_key, limit_key in ((LIT_MAX_ABS, LIT_MAX_ABS, LIT_MAXIMUM_MAX_ABS), (LIT_MEAN_ABS, LIT_MEAN_ABS, LIT_MAXIMUM_MEAN_ABS), (LIT_CHANGED_FRACTION, LIT_CHANGED_FRACTION, LIT_MAXIMUM_CHANGED_FRACTION),):
         recorded_value = corpus_number(recapture, corpus_key, profile_name)
         observed_value = corpus_number(difference, comparison_key, profile_name)
         if observed_value != recorded_value:
@@ -709,20 +567,13 @@ def load_corpus_reference(
 
 
 def apply_corpus_limits(args: argparse.Namespace, reference: CorpusReference) -> None:
-    for argument_name, corpus_key in (
-        (LIT_MAXIMUM_MAX_ABS, LIT_MAXIMUM_MAX_ABS),
-        (LIT_MAXIMUM_MEAN_ABS, LIT_MAXIMUM_MEAN_ABS),
-        (LIT_MAXIMUM_CHANGED_FRACTION, LIT_MAXIMUM_CHANGED_FRACTION),
-    ):
+    for argument_name, corpus_key in ((LIT_MAXIMUM_MAX_ABS, LIT_MAXIMUM_MAX_ABS), (LIT_MAXIMUM_MEAN_ABS, LIT_MAXIMUM_MEAN_ABS), (LIT_MAXIMUM_CHANGED_FRACTION, LIT_MAXIMUM_CHANGED_FRACTION),):
         approved_limit = reference.limits[corpus_key]
         requested_limit = getattr(args, argument_name)
         if requested_limit is None:
             setattr(args, argument_name, approved_limit)
         elif requested_limit > approved_limit:
-            raise SmokeFailure(
-                f"--{argument_name.replace('_', '-')}={requested_limit} relaxes the immutable corpus limit "
-                f"{approved_limit}; omit it or choose a stricter value"
-            )
+            raise SmokeFailure(f"--{argument_name.replace('_', '-')}={requested_limit} relaxes the immutable corpus limit " f"{approved_limit}; omit it or choose a stricter value")
 
 
 def verify_corpus(corpus_id: str, supplied_root: Optional[Path]) -> int:
@@ -734,23 +585,14 @@ def verify_corpus(corpus_id: str, supplied_root: Optional[Path]) -> int:
     if actual_profiles != expected_profiles:
         missing = sorted(expected_profiles - actual_profiles)
         unexpected = sorted(actual_profiles - expected_profiles)
-        raise SmokeFailure(
-            f"renderer baseline corpus '{corpus_id}' profile set mismatch: missing={missing}, unexpected={unexpected}"
-        )
+        raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' profile set mismatch: missing={missing}, unexpected={unexpected}")
     capture_environment = corpus.get(LIT_CAPTURE_ENVIRONMENT)
     assert isinstance(capture_environment, dict)
     gpu_validation = capture_environment.get(LIT_GPU_VALIDATION)
     assert isinstance(gpu_validation, bool)
     for profile_name in sorted(expected_profiles):
         profile = get_profile(profile_name)
-        load_corpus_reference(
-            corpus_id,
-            supplied_root,
-            profile_name,
-            profile,
-            gpu_validation,
-            canonical_frozen_environment(profile),
-        )
+        load_corpus_reference(corpus_id, supplied_root, profile_name, profile, gpu_validation, canonical_frozen_environment(profile),)
     print(f"renderer baseline corpus verified: {corpus_id}")
     return 0
 
@@ -775,26 +617,11 @@ def run(args: argparse.Namespace) -> int:
     corpus_reference: Optional[CorpusReference] = None
     reference_directory: Optional[Path] = None
     if args.reference_corpus is not None:
-        reference_manifest, reference_capture, corpus_reference = load_corpus_reference(
-            args.reference_corpus,
-            args.corpus_root,
-            args.profile,
-            profile,
-            args.gpu_validation,
-            frozen_environment,
-        )
+        reference_manifest, reference_capture, corpus_reference = load_corpus_reference(args.reference_corpus, args.corpus_root, args.profile, profile, args.gpu_validation, frozen_environment,)
         reference_directory = corpus_reference.reference_directory
         apply_corpus_limits(args, corpus_reference)
     elif args.reference_dir is not None:
-        reference_manifest, reference_capture = load_reference(
-            args.reference_dir,
-            args.profile,
-            frozen_environment,
-            args.settle_seconds,
-            args.gpu_validation,
-            profile.capture_freeze_frame,
-            profile.fixed_delta_seconds,
-        )
+        reference_manifest, reference_capture = load_reference(args.reference_dir, args.profile, frozen_environment, args.settle_seconds, args.gpu_validation, profile.capture_freeze_frame, profile.fixed_delta_seconds,)
         reference_directory = args.reference_dir
 
     if reference_capture is None and not source_worktree_clean():
@@ -814,27 +641,11 @@ def run(args: argparse.Namespace) -> int:
 
     difference = compare_bmp_rgb(reference_capture, capture_path, args.output_dir / LIT_DIFFERENCE_BMP)
     failures = difference_failures(args, difference)
-    comparison = {
-        LIT_SCHEMA: LIT_NWB_RENDERER_BASELINE_COMPARISON_V1,
-        LIT_PROFILE: args.profile,
-        "reference_directory": str(reference_directory),
-        "candidate_directory": str(args.output_dir),
-        LIT_REFERENCE_SOURCE_REVISION: reference_manifest.get(LIT_SOURCE_REVISION),
-        LIT_CANDIDATE_SOURCE_REVISION: capture.source_revision,
-        "reference_capture": str(reference_capture),
-        "candidate_capture": str(capture_path),
-        "difference_capture": str(args.output_dir / LIT_DIFFERENCE_BMP),
-        LIT_DIFFERENCE: asdict(difference) | {LIT_CHANGED_FRACTION: difference.changed_fraction},
-        "reference_corpus": corpus_reference.corpus_id if corpus_reference is not None else None,
-        "effective_limits": {
-            LIT_MAXIMUM_MAX_ABS: args.maximum_max_abs,
-            LIT_MAXIMUM_MEAN_ABS: args.maximum_mean_abs,
-            LIT_MAXIMUM_CHANGED_FRACTION: args.maximum_changed_fraction,
-            "require_exact": args.require_exact,
-        },
-        "threshold_failures": failures,
-        "verdict": "fail" if failures else ("pass" if corpus_reference is not None else "report-only"),
-    }
+    comparison = { LIT_SCHEMA: LIT_NWB_RENDERER_BASELINE_COMPARISON_V1, LIT_PROFILE: args.profile, "reference_directory": str(reference_directory), "candidate_directory": str(args.output_dir),
+        LIT_REFERENCE_SOURCE_REVISION: reference_manifest.get(LIT_SOURCE_REVISION), LIT_CANDIDATE_SOURCE_REVISION: capture.source_revision, "reference_capture": str(reference_capture), "candidate_capture": str(capture_path),
+        "difference_capture": str(args.output_dir / LIT_DIFFERENCE_BMP), LIT_DIFFERENCE: asdict(difference) | {LIT_CHANGED_FRACTION: difference.changed_fraction}, "reference_corpus": corpus_reference.corpus_id if corpus_reference is not None else None,
+        "effective_limits": { LIT_MAXIMUM_MAX_ABS: args.maximum_max_abs, LIT_MAXIMUM_MEAN_ABS: args.maximum_mean_abs, LIT_MAXIMUM_CHANGED_FRACTION: args.maximum_changed_fraction, "require_exact": args.require_exact, }, "threshold_failures": failures,
+        "verdict": "fail" if failures else ("pass" if corpus_reference is not None else "report-only"), }
     write_json(args.output_dir / LIT_COMPARISON_JSON, comparison)
     print(f"renderer baseline comparison artifacts: {args.output_dir}")
     if failures:
@@ -851,21 +662,9 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="New, empty artifact directory.")
     reference_group = parser.add_mutually_exclusive_group()
     reference_group.add_argument(LIT_REFERENCE_DIR, type=Path, help="Immutable baseline directory to compare against.")
-    reference_group.add_argument(
-        LIT_REFERENCE_CORPUS,
-        choices=(CURRENT_CORPUS_ID,),
-        help="Compare against the checked-in formal current-renderer corpus and enforce its limits.",
-    )
-    parser.add_argument(
-        "--corpus-root",
-        type=Path,
-        help="Restored artifact root for --reference-corpus or --verify-corpus (defaults to the corpus artifact root).",
-    )
-    parser.add_argument(
-        "--verify-corpus",
-        choices=(CURRENT_CORPUS_ID,),
-        help="Verify every restored current-renderer corpus artifact without starting a graphics application.",
-    )
+    reference_group.add_argument(LIT_REFERENCE_CORPUS, choices=(CURRENT_CORPUS_ID,), help="Compare against the checked-in formal current-renderer corpus and enforce its limits.",)
+    parser.add_argument("--corpus-root", type=Path, help="Restored artifact root for --reference-corpus or --verify-corpus (defaults to the corpus artifact root).",)
+    parser.add_argument("--verify-corpus", choices=(CURRENT_CORPUS_ID,), help="Verify every restored current-renderer corpus artifact without starting a graphics application.",)
     parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
@@ -887,28 +686,14 @@ def validate_args(args: argparse.Namespace) -> None:
     if args.self_test:
         return
     if args.verify_corpus is not None:
-        conflicting = [
-            name
-            for name, value in (
-                (LIT_PROFILE_2, args.profile),
-                (LIT_EXECUTABLE, args.executable),
-                (LIT_RUNTIME_DIR, args.runtime_dir),
-                (LIT_OUTPUT_DIR, args.output_dir),
-                (LIT_REFERENCE_DIR, args.reference_dir),
-                (LIT_REFERENCE_CORPUS, args.reference_corpus),
-            )
-            if value is not None
-        ]
+        conflicting = [name for name, value in ((LIT_PROFILE_2, args.profile), (LIT_EXECUTABLE, args.executable), (LIT_RUNTIME_DIR, args.runtime_dir), (LIT_OUTPUT_DIR, args.output_dir), (LIT_REFERENCE_DIR, args.reference_dir),
+                (LIT_REFERENCE_CORPUS, args.reference_corpus),) if value is not None]
         if conflicting:
             raise SmokeFailure("--verify-corpus cannot be combined with " + ", ".join(conflicting))
         return
     if args.corpus_root is not None and args.reference_corpus is None:
         raise SmokeFailure("--corpus-root requires --reference-corpus or --verify-corpus")
-    missing = [
-        flag
-        for flag, value in ((LIT_PROFILE_2, args.profile), (LIT_EXECUTABLE, args.executable), (LIT_RUNTIME_DIR, args.runtime_dir), (LIT_OUTPUT_DIR, args.output_dir))
-        if value is None
-    ]
+    missing = [flag for flag, value in ((LIT_PROFILE_2, args.profile), (LIT_EXECUTABLE, args.executable), (LIT_RUNTIME_DIR, args.runtime_dir), (LIT_OUTPUT_DIR, args.output_dir)) if value is None]
     if missing:
         raise SmokeFailure("renderer baseline runner requires " + ", ".join(missing))
     if args.startup_timeout <= 0.0:
@@ -946,17 +731,7 @@ def run_self_test() -> int:
             return SimpleNamespace(appears_empty_or_white=False, has_pixel_variation=True)
 
         backend.capture_window.side_effect = capture
-        orchestration_args = SimpleNamespace(
-            executable=executable,
-            runtime_dir=root,
-            no_logserver=False,
-            logserver_executable=None,
-            startup_timeout=1.0,
-            gpu_validation=False,
-            settle_seconds=0.0,
-            profile=LIT_OPAQUE_TEXTURE,
-            reject_log=[],
-        )
+        orchestration_args = SimpleNamespace(executable=executable, runtime_dir=root, no_logserver=False, logserver_executable=None, startup_timeout=1.0, gpu_validation=False, settle_seconds=0.0, profile=LIT_OPAQUE_TEXTURE, reject_log=[],)
         events = []
 
         def terminate(process, name, window_handle=None):
@@ -986,17 +761,8 @@ def run_self_test() -> int:
             else:
                 raise AssertionError("renderer orchestration accepted an abnormal Testbed exit")
 
-        assert events == [
-            (LIT_APP_STOP, LIT_RENDERER_BASELINE_CAPTURE, 17),
-            (LIT_LOGSERVER_HELPER, LIT_RENDERER_BASELINE_LOGSERVER),
-            (LIT_CLEANUP_NONE, LIT_RENDERER_BASELINE_CAPTURE, 17),
-            (LIT_CLEANUP_NONE, LIT_RENDERER_BASELINE_LOGSERVER, None),
-        ]
-        assert terminate_mock.mock_calls == [
-            mock.call(app, LIT_RENDERER_BASELINE_CAPTURE, 17),
-            mock.call(None, LIT_RENDERER_BASELINE_CAPTURE, 17),
-            mock.call(None, LIT_RENDERER_BASELINE_LOGSERVER),
-        ]
+        assert events == [(LIT_APP_STOP, LIT_RENDERER_BASELINE_CAPTURE, 17), (LIT_LOGSERVER_HELPER, LIT_RENDERER_BASELINE_LOGSERVER), (LIT_CLEANUP_NONE, LIT_RENDERER_BASELINE_CAPTURE, 17), (LIT_CLEANUP_NONE, LIT_RENDERER_BASELINE_LOGSERVER, None),]
+        assert terminate_mock.mock_calls == [mock.call(app, LIT_RENDERER_BASELINE_CAPTURE, 17), mock.call(None, LIT_RENDERER_BASELINE_CAPTURE, 17), mock.call(None, LIT_RENDERER_BASELINE_LOGSERVER),]
         backend.close.assert_called_once_with()
 
         raw_backend = object.__new__(WindowsCapture)
@@ -1036,99 +802,32 @@ def run_self_test() -> int:
         candidate_image = root / LIT_CANDIDATE_BMP
         write_bmp_rgb(reference_image, 2, 1, bytes((8, 16, 24, 32, 40, 48)))
         write_bmp_rgb(candidate_image, 2, 1, bytes((8, 16, 24, 35, 40, 50)))
-        manifest = {
-            LIT_SCHEMA: SCHEMA,
-            LIT_CAPTURE_KIND: LIT_BASELINE,
-            LIT_PROFILE: LIT_OPAQUE_TEXTURE,
-            LIT_CAPTURE_FILE: LIT_BASELINE_BMP,
-            LIT_CAPTURE_SHA256: sha256_file(reference_image),
-            LIT_FROZEN_ENVIRONMENT: {},
-            LIT_GPU_VALIDATION: False,
-            LIT_SETTLE_SECONDS: 4.0,
-            LIT_CAPTURE_MODE: LIT_SETTLED,
-            LIT_CAPTURE_FREEZE_FRAME: 0,
-            LIT_FIXED_DELTA_SECONDS: 0.0,
-            LIT_SOURCE_REVISION: LIT_TEST_REFERENCE,
-        }
+        manifest = { LIT_SCHEMA: SCHEMA, LIT_CAPTURE_KIND: LIT_BASELINE, LIT_PROFILE: LIT_OPAQUE_TEXTURE, LIT_CAPTURE_FILE: LIT_BASELINE_BMP, LIT_CAPTURE_SHA256: sha256_file(reference_image), LIT_FROZEN_ENVIRONMENT: {}, LIT_GPU_VALIDATION: False,
+            LIT_SETTLE_SECONDS: 4.0, LIT_CAPTURE_MODE: LIT_SETTLED, LIT_CAPTURE_FREEZE_FRAME: 0, LIT_FIXED_DELTA_SECONDS: 0.0, LIT_SOURCE_REVISION: LIT_TEST_REFERENCE, }
         write_json(reference_directory / LIT_MANIFEST_JSON, manifest)
         (reference_directory / LIT_RUNTIME_LOG).write_text("test runtime log\n", encoding=LIT_UTF_8)
         recapture_directory = root / LIT_OPAQUE_TEXTURE / "recapture"
         recapture_directory.mkdir(parents=True)
         comparison_path = recapture_directory / LIT_COMPARISON_JSON
-        write_json(
-            comparison_path,
-            {
-                LIT_SCHEMA: LIT_NWB_RENDERER_BASELINE_COMPARISON_V1,
-                LIT_PROFILE: LIT_OPAQUE_TEXTURE,
-                LIT_REFERENCE_SOURCE_REVISION: LIT_TEST_REFERENCE,
-                LIT_CANDIDATE_SOURCE_REVISION: LIT_TEST_REFERENCE,
-                LIT_DIFFERENCE: {
-                    LIT_MAX_ABS: 2,
-                    LIT_MEAN_ABS: 0.5,
-                    LIT_CHANGED_FRACTION: 0.25,
-                },
-            },
-        )
+        write_json(comparison_path, { LIT_SCHEMA: LIT_NWB_RENDERER_BASELINE_COMPARISON_V1, LIT_PROFILE: LIT_OPAQUE_TEXTURE, LIT_REFERENCE_SOURCE_REVISION: LIT_TEST_REFERENCE, LIT_CANDIDATE_SOURCE_REVISION: LIT_TEST_REFERENCE, LIT_DIFFERENCE: { LIT_MAX_ABS: 2,
+                    LIT_MEAN_ABS: 0.5, LIT_CHANGED_FRACTION: 0.25, }, },)
         corpus_path = root / "corpus.json"
-        corpus = {
-            LIT_SCHEMA: CORPUS_SCHEMA,
-            LIT_CORPUS_ID: CURRENT_CORPUS_ID,
-            LIT_ARTIFACT_ROOT: ".",
-            LIT_CAPTURE_ENVIRONMENT: {LIT_GPU_VALIDATION: False},
-            LIT_PROFILES: {
-                LIT_OPAQUE_TEXTURE: {
-                    LIT_REFERENCE: {
-                        LIT_DIRECTORY: "opaque-texture/reference",
-                        LIT_SOURCE_REVISION: LIT_TEST_REFERENCE,
-                        LIT_CAPTURE_SHA256: sha256_file(reference_image),
-                        LIT_MANIFEST_SHA256: sha256_file(reference_directory / LIT_MANIFEST_JSON),
-                        LIT_RUNTIME_LOG_SHA256: sha256_file(reference_directory / LIT_RUNTIME_LOG),
-                    },
-                    LIT_SAME_REVISION_RECAPTURE: {
-                        LIT_DIRECTORY: "opaque-texture/recapture",
-                        LIT_COMPARISON_SHA256: sha256_file(comparison_path),
-                        LIT_MAX_ABS: 2,
-                        LIT_MEAN_ABS: 0.5,
-                        LIT_CHANGED_FRACTION: 0.25,
-                    },
-                    LIT_LIMITS: {
-                        LIT_MAXIMUM_MAX_ABS: 3,
-                        LIT_MAXIMUM_MEAN_ABS: 1.0,
-                        LIT_MAXIMUM_CHANGED_FRACTION: 0.75,
-                    },
-                }
-            },
-        }
+        corpus = { LIT_SCHEMA: CORPUS_SCHEMA, LIT_CORPUS_ID: CURRENT_CORPUS_ID, LIT_ARTIFACT_ROOT: ".", LIT_CAPTURE_ENVIRONMENT: {LIT_GPU_VALIDATION: False}, LIT_PROFILES: { LIT_OPAQUE_TEXTURE: { LIT_REFERENCE: { LIT_DIRECTORY: "opaque-texture/reference",
+                        LIT_SOURCE_REVISION: LIT_TEST_REFERENCE, LIT_CAPTURE_SHA256: sha256_file(reference_image), LIT_MANIFEST_SHA256: sha256_file(reference_directory / LIT_MANIFEST_JSON),
+                        LIT_RUNTIME_LOG_SHA256: sha256_file(reference_directory / LIT_RUNTIME_LOG), }, LIT_SAME_REVISION_RECAPTURE: { LIT_DIRECTORY: "opaque-texture/recapture", LIT_COMPARISON_SHA256: sha256_file(comparison_path), LIT_MAX_ABS: 2,
+                        LIT_MEAN_ABS: 0.5, LIT_CHANGED_FRACTION: 0.25, }, LIT_LIMITS: { LIT_MAXIMUM_MAX_ABS: 3, LIT_MAXIMUM_MEAN_ABS: 1.0, LIT_MAXIMUM_CHANGED_FRACTION: 0.75, }, } }, }
         write_json(corpus_path, corpus)
-        _, _, corpus_reference = load_corpus_reference(
-            CURRENT_CORPUS_ID,
-            root,
-            LIT_OPAQUE_TEXTURE,
-            get_profile(LIT_OPAQUE_TEXTURE),
-            False,
-            corpus_path=corpus_path,
-        )
+        _, _, corpus_reference = load_corpus_reference(CURRENT_CORPUS_ID, root, LIT_OPAQUE_TEXTURE, get_profile(LIT_OPAQUE_TEXTURE), False, corpus_path=corpus_path,)
         reference_log = reference_directory / LIT_RUNTIME_LOG
         reference_log.write_text("tampered runtime log\n", encoding=LIT_UTF_8)
         try:
-            load_corpus_reference(
-                CURRENT_CORPUS_ID,
-                root,
-                LIT_OPAQUE_TEXTURE,
-                get_profile(LIT_OPAQUE_TEXTURE),
-                False,
-                corpus_path=corpus_path,
-            )
+            load_corpus_reference(CURRENT_CORPUS_ID, root, LIT_OPAQUE_TEXTURE, get_profile(LIT_OPAQUE_TEXTURE), False, corpus_path=corpus_path,)
         except SmokeFailure:
             pass
         else:
             raise AssertionError("corpus artifact tampering must fail closed")
         reference_log.write_text("test runtime log\n", encoding=LIT_UTF_8)
-        corpus_args = SimpleNamespace(
-            maximum_max_abs=None,
-            maximum_mean_abs=None,
-            maximum_changed_fraction=None,
-        )
+        corpus_args = SimpleNamespace(maximum_max_abs=None, maximum_mean_abs=None, maximum_changed_fraction=None,)
         apply_corpus_limits(corpus_args, corpus_reference)
         corpus_args.maximum_max_abs = 4
         try:

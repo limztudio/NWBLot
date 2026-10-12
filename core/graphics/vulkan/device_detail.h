@@ -38,10 +38,7 @@ namespace PipelineCacheDataValidation{
     };
 };
 
-[[nodiscard]] PipelineCacheDataValidation::Enum ValidatePipelineCacheData(
-    BinaryByteView cacheData,
-    const VkPhysicalDeviceProperties& properties
-)noexcept;
+[[nodiscard]] PipelineCacheDataValidation::Enum ValidatePipelineCacheData(BinaryByteView cacheData, const VkPhysicalDeviceProperties& properties)noexcept;
 
 struct AstcHdrFeatureNegotiation{
     bool apiSupportsVulkan13 = false;
@@ -50,13 +47,8 @@ struct AstcHdrFeatureNegotiation{
     bool extensionFeatureSupported = false;
 };
 
-[[nodiscard]] inline constexpr bool ShouldEnableAstcHdrFeature(
-    const AstcHdrFeatureNegotiation& negotiation
-)noexcept{
-    return negotiation.apiSupportsVulkan13
-        ? negotiation.vulkan13FeatureSupported
-        : negotiation.extensionEnabled && negotiation.extensionFeatureSupported
-    ;
+[[nodiscard]] inline constexpr bool ShouldEnableAstcHdrFeature(const AstcHdrFeatureNegotiation& negotiation)noexcept{
+    return negotiation.apiSupportsVulkan13 ? negotiation.vulkan13FeatureSupported : negotiation.extensionEnabled && negotiation.extensionFeatureSupported;
 }
 
 struct CompressedTextureFeatureState{
@@ -65,10 +57,7 @@ struct CompressedTextureFeatureState{
     bool astcHdrEnabled = false;
 };
 
-[[nodiscard]] inline constexpr bool IsCompressedTextureFormatFeatureEnabled(
-    const Format::Enum format,
-    const CompressedTextureFeatureState& featureState
-)noexcept{
+[[nodiscard]] inline constexpr bool IsCompressedTextureFormatFeatureEnabled(const Format::Enum format, const CompressedTextureFeatureState& featureState)noexcept{
     if(Format::IsBCCompressedFormat(format))
         return featureState.bcEnabled;
     if(Format::IsASTCHdrFormat(format))
@@ -84,12 +73,7 @@ public:
     [[nodiscard]] u16 allocate()noexcept{
         u32 generation = m_nextGeneration.load(MemoryOrder::relaxed);
         while(generation != 0u && generation <= static_cast<u32>(Limit<u16>::s_Max)){
-            if(m_nextGeneration.compare_exchange_weak(
-                generation,
-                generation + 1u,
-                MemoryOrder::relaxed,
-                MemoryOrder::relaxed
-            ))
+            if(m_nextGeneration.compare_exchange_weak(generation, generation + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
                 return static_cast<u16>(generation);
         }
         return 0u;
@@ -100,20 +84,12 @@ private:
     Atomic<u32> m_nextGeneration{ 1u };
 };
 
-[[nodiscard]] inline constexpr GpuQueueCapability::Mask DeviceMinimumQueueCapabilities(
-    const CommandQueue::Enum queue
-)noexcept{
+[[nodiscard]] inline constexpr GpuQueueCapability::Mask DeviceMinimumQueueCapabilities(const CommandQueue::Enum queue)noexcept{
     switch(queue){
     case CommandQueue::Graphics:
-        return static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Graphics)
-            | static_cast<u8>(GpuQueueCapability::Transfer)
-        );
+        return static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Transfer));
     case CommandQueue::Compute:
-        return static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Compute)
-            | static_cast<u8>(GpuQueueCapability::Transfer)
-        );
+        return static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer));
     case CommandQueue::Transfer:
         return GpuQueueCapability::Transfer;
     default:

@@ -21,9 +21,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ListResult Builder::virtualList(
-    const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options
-){
+ListResult Builder::virtualList(const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
     ListResult result;
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
@@ -99,8 +97,7 @@ ListResult Builder::virtualList(
     }
     const SIMDVectorSingle framepaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
     const SIMDVectorSingle framepaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle framepaddingMaximum = VectorSelect(framepaddingCandidate, framepaddingCurrent,
-        VectorGreater(framepaddingCurrent, framepaddingCandidate));
+    const SIMDVectorSingle framepaddingMaximum = VectorSelect(framepaddingCandidate, framepaddingCurrent, VectorGreater(framepaddingCurrent, framepaddingCandidate));
     frame.padding = { VectorGetX(framepaddingMaximum), VectorGetY(framepaddingMaximum), VectorGetZ(framepaddingMaximum), VectorGetW(framepaddingMaximum) };
     Item item(m_arena);
     item.state = *widget;

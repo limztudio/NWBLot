@@ -17,11 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics,
-    const Name identity
-)
+RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Name identity)
     : m_arena(arena)
     , m_graphics(graphics)
     , m_identity(identity)
@@ -35,10 +31,7 @@ void RayTracingOpticalSceneResources::invalidate(){
         m_resources.uploadState->invalidate();
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(
-        heap.isInitialized() && m_resources.descriptor.valid() && m_resources.buffer
-        && m_resources.buffer->getDeviceGeneration() == device.getDeviceGeneration()
-    )
+    if(heap.isInitialized() && m_resources.descriptor.valid() && m_resources.buffer && m_resources.buffer->getDeviceGeneration() == device.getDeviceGeneration())
         heap.free(m_resources.descriptor);
     m_resources = {};
     m_capacity = 0u;
@@ -68,13 +61,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     }
     if(!m_resources.buffer || !m_resources.uploadState || m_capacity < byteCount){
         Core::BufferDesc desc;
-        desc
-            .setByteSize(byteCount)
-            .setCanHaveRawViews(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(m_identity)
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
+        desc.setByteSize(byteCount).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(m_identity).enableAutomaticStateTracking(Core::ResourceStates::Common);
         Core::BufferHandle buffer = m_graphics.createBuffer(desc);
         if(!buffer){
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to create {}-byte metadata buffer"), byteCount);
@@ -87,9 +74,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to register metadata buffer"));
             return false;
         }
-        RayTracingOpticalUploadControlHandle uploadState = CreateRayTracingOpticalUploadControl(
-            m_arena, buffer, device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics)
-        );
+        RayTracingOpticalUploadControlHandle uploadState = CreateRayTracingOpticalUploadControl(m_arena, buffer, device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics));
         if(!uploadState){
             heap.free(descriptor);
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to create accepted upload control"));
@@ -108,16 +93,10 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         m_resources.upload
         && m_resources.upload->bytes.size() == byteCount
         && NWB_MEMCMP(m_resources.upload->bytes.data(), &gather.header, sizeof(gather.header)) == 0
-        && (instanceBytes == 0u || NWB_MEMCMP(
-            m_resources.upload->bytes.data() + sizeof(gather.header), gather.instances.data(), instanceBytes
-        ) == 0)
+        && (instanceBytes == 0u || NWB_MEMCMP(m_resources.upload->bytes.data() + sizeof(gather.header), gather.instances.data(), instanceBytes) == 0)
     ;
     if(!samePayload){
-        m_resources.upload = RayTracingOpticalSceneUploadHandle(
-            NewArenaObject<RayTracingOpticalSceneUploadControl>(m_arena, m_arena, gather),
-            ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>(&m_arena),
-            s_AdoptRef
-        );
+        m_resources.upload = RayTracingOpticalSceneUploadHandle(NewArenaObject<RayTracingOpticalSceneUploadControl>(m_arena, m_arena, gather), ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
     }
     m_resources.transparentCount = gather.header.transparentCount;
     m_resources.unspecifiedBoundariesOnly = gather.unspecifiedBoundariesOnly;
@@ -126,10 +105,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     return m_prepared;
 }
 
-bool RayTracingOpticalSceneResources::prepareRuntimeBounds(
-    const RayTracingOpticalSceneGather& gather,
-    RendererShaderSystem& shaderSystem
-){
+bool RayTracingOpticalSceneResources::prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem){
     if(!m_prepared)
         return false;
     m_runtimeBoundsSnapshot.reset();

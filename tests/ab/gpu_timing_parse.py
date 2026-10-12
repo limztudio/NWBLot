@@ -19,15 +19,9 @@ NAME_SYMBOLS_HEADER = "nwb_namesym_v1"
 
 
 NUMBER = r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
-INTERVAL_RE = re.compile(
-    r"^=== interval:\s+(?P<frames>[0-9]{1,10})\s+frames\s+/\s+" rf"(?P<seconds>{NUMBER})s\s+===$"
-)
-SCOPE_RE = re.compile(
-    r"^\s{2}(?P<scope>[^:]+):\s+window_avg_ms=" rf"(?P<average>{NUMBER})"
-    rf"\s+window_min_ms=(?P<minimum>{NUMBER})\s+window_max_ms=(?P<maximum>{NUMBER})"
-    r"\s+published_windows=(?P<published_windows>[0-9]{1,20})" rf"\s+total_ms=(?P<total>{NUMBER})"
-    r"\s+gpu_samples=(?P<gpu_samples>[0-9]{1,20})" rf"\s+sample_avg_ms=(?P<sample_average>{NUMBER})\s*$"
-)
+INTERVAL_RE = re.compile(r"^=== interval:\s+(?P<frames>[0-9]{1,10})\s+frames\s+/\s+" rf"(?P<seconds>{NUMBER})s\s+===$")
+SCOPE_RE = re.compile(r"^\s{2}(?P<scope>[^:]+):\s+window_avg_ms=" rf"(?P<average>{NUMBER})" rf"\s+window_min_ms=(?P<minimum>{NUMBER})\s+window_max_ms=(?P<maximum>{NUMBER})"
+    r"\s+published_windows=(?P<published_windows>[0-9]{1,20})" rf"\s+total_ms=(?P<total>{NUMBER})" r"\s+gpu_samples=(?P<gpu_samples>[0-9]{1,20})" rf"\s+sample_avg_ms=(?P<sample_average>{NUMBER})\s*$")
 
 
 @dataclass(frozen=True)
@@ -40,12 +34,7 @@ class ScopeSummary:
     max_ms: float
 
 
-def load_name_symbols(
-    path: Optional[Path],
-    required_scopes: Iterable[str],
-    *,
-    missing_file_message: str = "name-symbol sidecar does not exist: {path}",
-) -> Dict[str, str]:
+def load_name_symbols(path: Optional[Path], required_scopes: Iterable[str], *, missing_file_message: str = "name-symbol sidecar does not exist: {path}",) -> Dict[str, str]:
     decoded = known_name_symbols(tuple(required_scopes))
     if not path:
         return decoded
@@ -63,18 +52,12 @@ def load_name_symbols(
     return decoded
 
 
-def parse_timing_file(
-    path: Path,
-    symbols: Mapping[str, str],
-    start_byte_offset: int = 0,
-) -> List[Dict[str, float]]:
+def parse_timing_file(path: Path, symbols: Mapping[str, str], start_byte_offset: int = 0,) -> List[Dict[str, float]]:
     if not path.is_file():
         raise SmokeFailure(f"GPU timing file was not written: {path}")
     raw_timing = path.read_bytes()
     if start_byte_offset < 0 or start_byte_offset > len(raw_timing):
-        raise SmokeFailure(
-            f"GPU timing measurement offset {start_byte_offset} is outside {path} ({len(raw_timing)} bytes)"
-        )
+        raise SmokeFailure(f"GPU timing measurement offset {start_byte_offset} is outside {path} ({len(raw_timing)} bytes)")
 
     intervals: List[Dict[str, float]] = []
     current: Optional[Dict[str, float]] = None
@@ -105,9 +88,7 @@ def parse_timing_file(
         raw_scope = match.group("scope")
         scope = symbols.get(raw_scope, raw_scope)
         values = tuple(float(match.group(field)) for field in ("average", "minimum", "maximum", "total", "sample_average"))
-        if (any(not math.isfinite(value) or value < 0.0 for value in values)
-            or not 0 < int(match.group("published_windows")) < 2 ** 32 or not 0 < int(match.group("gpu_samples")) < 2 ** 64
-            or values[1] > values[0] or values[0] > values[2] or scope in current):
+        if (any(not math.isfinite(value) or value < 0.0 for value in values) or not 0 < int(match.group("published_windows")) < 2 ** 32 or not 0 < int(match.group("gpu_samples")) < 2 ** 64 or values[1] > values[0] or values[0] > values[2] or scope in current):
             raise SmokeFailure(f"invalid current GPU timing values in {path}: {raw_line}")
         current[scope] = values[0]
 
@@ -119,14 +100,7 @@ def parse_timing_file(
 def summarize_samples(values: Sequence[float]) -> ScopeSummary:
     if not values:
         return ScopeSummary(0, 0, 0.0, 0.0, 0.0, 0.0)
-    return ScopeSummary(
-        sample_count=len(values),
-        positive_sample_count=sum(value > 1.0e-6 for value in values),
-        median_ms=statistics.median(values),
-        mean_ms=statistics.fmean(values),
-        min_ms=min(values),
-        max_ms=max(values),
-    )
+    return ScopeSummary(sample_count=len(values), positive_sample_count=sum(value > 1.0e-6 for value in values), median_ms=statistics.median(values), mean_ms=statistics.fmean(values), min_ms=min(values), max_ms=max(values),)
 
 
 def summarize_scopes(intervals: Iterable[Mapping[str, float]]) -> Dict[str, ScopeSummary]:
@@ -137,18 +111,10 @@ def summarize_scopes(intervals: Iterable[Mapping[str, float]]) -> Dict[str, Scop
     return {scope: summarize_samples(scope_values) for scope, scope_values in sorted(samples.items())}
 
 
-def require_scope_samples(
-    summaries: Mapping[str, ScopeSummary],
-    scope: str,
-    minimum_samples: int,
-    timing_file: Path,
-) -> ScopeSummary:
+def require_scope_samples(summaries: Mapping[str, ScopeSummary], scope: str, minimum_samples: int, timing_file: Path,) -> ScopeSummary:
     summary = summaries.get(scope)
     if summary and summary.sample_count >= minimum_samples:
         return summary
 
     observed = ", ".join(summaries) or "none"
-    raise SmokeFailure(
-        f"required timing scope '{scope}' has fewer than {minimum_samples} samples in {timing_file}; "
-        f"observed scopes: {observed}. Build dbg/namesym or pass the matching --*-namesym sidecar."
-    )
+    raise SmokeFailure(f"required timing scope '{scope}' has fewer than {minimum_samples} samples in {timing_file}; " f"observed scopes: {observed}. Build dbg/namesym or pass the matching --*-namesym sidecar.")

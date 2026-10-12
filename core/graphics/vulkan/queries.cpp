@@ -29,9 +29,7 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
     if(!validateCommandRecordingScope(NWB_TEXT("reset timer query")))
         return false;
     if(!canResetTimerQueryHereUnchecked()){
-        NWB_LOGGER_CRITICAL_WARNING(
-            NWB_TEXT("Vulkan: Cannot reset a timer query outside recording or on an exact physical queue without Graphics or Compute capability")
-        );
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset a timer query outside recording or on an exact physical queue without Graphics or Compute capability"));
         invalidateCommandRecording();
         return false;
     }
@@ -39,61 +37,31 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
     QueueSubmissionToken priorSubmission;
     {
         ScopedLock queryLock(query.m_mutex);
-        const bool resetOwnedByCurrentCommandBuffer =
-            query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get()
-            && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID
-            && query.m_resetRecordingAuthorizationGeneration != 0u
-        ;
-        if(
-            query.m_recordingActive
-            || query.m_cycleGeneration != 0u
-            || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer)
-        ){
+        const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
+        if(query.m_recordingActive || query.m_cycleGeneration != 0u || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset a timer query while another recording transaction is active"));
             invalidateCommandRecording();
             return false;
         }
-        priorSubmission = query.m_completedCycleSubmission.valid()
-            ? query.m_completedCycleSubmission
-            : query.m_resetAuthorizationSubmission
-        ;
+        priorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
     }
-    const bool priorSubmissionObservedComplete =
-        VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission)
-    ;
+    const bool priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
 
     bool resetRecorded = false;
     {
         ScopedLock queryLock(query.m_mutex);
-        const QueueSubmissionToken currentPriorSubmission = query.m_completedCycleSubmission.valid()
-            ? query.m_completedCycleSubmission
-            : query.m_resetAuthorizationSubmission
-        ;
+        const QueueSubmissionToken currentPriorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
         if(
             !query.m_recordingActive
             && query.m_cycleGeneration == 0u
             && VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
-            && (
-                query.m_resetRecordingOwner.commandBuffer
-                || query.m_nextResetAuthorizationGeneration != Limit<u64>::s_Max
-            )
-            && (
-                !query.m_resetRecordingOwner.commandBuffer
-                || (
-                    query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get()
-                    && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID
-                )
-            )
+            && (query.m_resetRecordingOwner.commandBuffer || query.m_nextResetAuthorizationGeneration != Limit<u64>::s_Max)
+            && (!query.m_resetRecordingOwner.commandBuffer || (query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID))
         ){
-            TrackedCommandBuffer::TimerQueryRecordingClaim& claim =
-                m_currentCmdBuf->findOrAppendTimerQueryRecordingClaim(query)
-            ;
+            TrackedCommandBuffer::TimerQueryRecordingClaim& claim = m_currentCmdBuf->findOrAppendTimerQueryRecordingClaim(query);
             if(!query.m_resetRecordingOwner.commandBuffer){
                 ++query.m_nextResetAuthorizationGeneration;
-                query.m_resetRecordingOwner = TimerQuery::RecordingOwner{
-                    .commandBuffer = m_currentCmdBuf.get(),
-                    .recordingID = m_currentCmdBuf->m_recordingID,
-                };
+                query.m_resetRecordingOwner = TimerQuery::RecordingOwner{ .commandBuffer = m_currentCmdBuf.get(), .recordingID = m_currentCmdBuf->m_recordingID, };
                 query.m_resetRecordingAuthorizationGeneration = query.m_nextResetAuthorizationGeneration;
             }
             claim.queue = m_creationDesc.physicalQueue;
@@ -103,14 +71,9 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
             claim.recordingID = m_currentCmdBuf->m_recordingID;
             claim.recordsReset = true;
 
-            // Device-timeline reset: recorded into the command buffer so the validation layer can order it before
-            // timestamp writes. vkCmdResetQueryPool is illegal inside a render pass instance.
-            m_context.deviceDispatch.vkCmdResetQueryPool(
-                m_currentCmdBuf->m_cmdBuf,
-                query.m_queryPool,
-                s_TimerQueryBeginIndex,
-                s_TimerQueryTimestampCount
-            );
+            // Device-timeline reset: recorded into the command buffer so the validation layer can order it before timestamp writes.
+            // vkCmdResetQueryPool is illegal inside a render pass instance.
+            m_context.deviceDispatch.vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query.m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
             resetRecorded = true;
         }
     }
@@ -134,10 +97,7 @@ bool CommandList::canResetTimerQueryHere()const{
 bool CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     constexpr u32 s_CompleteTimestampValidBits = 64u;
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Transfer)
-    ;
+    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer);
     return
         !m_commandRecordingFailed
         && matchesActiveNativeLeaseIdentity()
@@ -156,38 +116,21 @@ bool CommandList::canResetTimerQueryHereUnchecked()const noexcept{
         return false;
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-    ;
+    constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute);
     return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
 }
 
-Expected<TimerQueryRecordingEndpoints> CommandList::inspectExactTimerQueryRecordingEndpoints(
-    const TimerQueryRecordingToken& token,
-    const u64 recordingLeaseSerial
-)const noexcept{
+Expected<TimerQueryRecordingEndpoints> CommandList::inspectExactTimerQueryRecordingEndpoints(const TimerQueryRecordingToken& token, const u64 recordingLeaseSerial)const noexcept{
     TimerQueryRecordingEndpoints endpoints{};
 
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return MakeUnexpected(Failure{});
-    if(
-        !token.valid()
-        || recordingLeaseSerial == 0u
-        || recordingLeaseSerial != m_recordingLeaseSerial
-        || !matchesNativeLeaseIdentity()
-        || !m_currentCmdBuf
-    )
+    if(!token.valid() || recordingLeaseSerial == 0u || recordingLeaseSerial != m_recordingLeaseSerial || !matchesNativeLeaseIdentity() || !m_currentCmdBuf)
         return endpoints;
 
     for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryRecordingClaims){
-        if(
-            claim.query != token.query
-            || claim.queryIncarnation != token.queryIncarnation
-            || claim.generation != token.generation
-            || claim.recordingID != m_currentCmdBuf->m_recordingID
-            || claim.queue != token.physicalQueue
-        )
+        if(claim.query != token.query || claim.queryIncarnation != token.queryIncarnation || claim.generation != token.generation || claim.recordingID != m_currentCmdBuf->m_recordingID || claim.queue != token.physicalQueue)
             continue;
 
         endpoints.recordsBegin = claim.recordsBegin;
@@ -221,17 +164,8 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
     QueueSubmissionToken priorSubmission;
     {
         ScopedLock queryLock(query.m_mutex);
-        const bool resetOwnedByCurrentCommandBuffer =
-            query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get()
-            && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID
-            && query.m_resetRecordingAuthorizationGeneration != 0u
-        ;
-        if(
-            query.m_recordingActive
-            || query.m_cycleGeneration != 0u
-            || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer)
-            || (!recordsInlineReset && !resetOwnedByCurrentCommandBuffer && !query.m_resetAuthorizationAvailable)
-        ){
+        const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
+        if(query.m_recordingActive || query.m_cycleGeneration != 0u || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer) || (!recordsInlineReset && !resetOwnedByCurrentCommandBuffer && !query.m_resetAuthorizationAvailable)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing a timer-query begin without an exclusive cycle and ordered reset"));
             invalidateCommandRecording();
             return MakeUnexpected(Failure{});
@@ -241,31 +175,18 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
             priorSubmission = query.m_resetAuthorizationSubmission;
         }
         else{
-            priorSubmission = query.m_completedCycleSubmission.valid()
-                ? query.m_completedCycleSubmission
-                : query.m_resetAuthorizationSubmission
-            ;
+            priorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
         }
     }
-    const bool priorSubmissionObservedComplete =
-        VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission)
-    ;
+    const bool priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
 
     bool beginRecorded = false;
     {
         ScopedLock queryLock(query.m_mutex);
-        const bool resetOwnedByCurrentCommandBuffer =
-            query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get()
-            && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID
-            && query.m_resetRecordingAuthorizationGeneration != 0u
-        ;
+        const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
         const QueueSubmissionToken currentPriorSubmission = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer
             ? query.m_resetAuthorizationSubmission
-            : (
-                query.m_completedCycleSubmission.valid()
-                ? query.m_completedCycleSubmission
-                : query.m_resetAuthorizationSubmission
-            )
+            : (query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission)
         ;
         if(
             !query.m_recordingActive
@@ -275,9 +196,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
             && VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
             && query.m_nextRecordingGeneration != Limit<u64>::s_Max
         ){
-            TrackedCommandBuffer::TimerQueryRecordingClaim& claim =
-                m_currentCmdBuf->findOrAppendTimerQueryRecordingClaim(query)
-            ;
+            TrackedCommandBuffer::TimerQueryRecordingClaim& claim = m_currentCmdBuf->findOrAppendTimerQueryRecordingClaim(query);
             if(!claim.recordsBegin && !claim.recordsEnd){
                 ++query.m_nextRecordingGeneration;
                 query.m_cycleBaselineQueue = query.m_timestampQueue;
@@ -288,10 +207,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
                 query.m_cycleQueue = queueInfo->id;
                 query.m_cycleValidBits = queueInfo->timestampValidBits;
                 query.m_cycleGeneration = query.m_nextRecordingGeneration;
-                query.m_beginRecordingOwner = TimerQuery::RecordingOwner{
-                    .commandBuffer = m_currentCmdBuf.get(),
-                    .recordingID = m_currentCmdBuf->m_recordingID,
-                };
+                query.m_beginRecordingOwner = TimerQuery::RecordingOwner{ .commandBuffer = m_currentCmdBuf.get(), .recordingID = m_currentCmdBuf->m_recordingID, };
                 query.m_endRecordingOwner = {};
                 query.m_beginAccepted = false;
                 query.m_cycleInvalidated = false;
@@ -310,38 +226,16 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
                 claim.recordsBegin = true;
                 claim.recordsReset = claim.recordsReset || recordsInlineReset;
                 claim.consumesResetAuthorization = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer;
-                claim.resetAuthorizationSubmission = claim.consumesResetAuthorization
-                    ? query.m_resetAuthorizationSubmission
-                    : QueueSubmissionToken{}
-                ;
-                claim.consumedResetAuthorizationGeneration = claim.consumesResetAuthorization
-                    ? query.m_resetAuthorizationGeneration
-                    : 0u
-                ;
+                claim.resetAuthorizationSubmission = claim.consumesResetAuthorization ? query.m_resetAuthorizationSubmission : QueueSubmissionToken{};
+                claim.consumedResetAuthorizationGeneration = claim.consumesResetAuthorization ? query.m_resetAuthorizationGeneration : 0u;
 
-                // Inline-capable positions order reset and begin in this command buffer. Render-pass and transfer-only
-                // timestamp positions consume the reset authorization recorded on a compatible physical queue.
+                // Inline-capable positions order reset and begin in this command buffer.
+                // Render-pass and transfer-only timestamp positions consume the reset authorization recorded on a compatible physical queue.
                 if(recordsInlineReset){
-                    m_context.deviceDispatch.vkCmdResetQueryPool(
-                        m_currentCmdBuf->m_cmdBuf,
-                        query.m_queryPool,
-                        s_TimerQueryBeginIndex,
-                        s_TimerQueryTimestampCount
-                    );
+                    m_context.deviceDispatch.vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query.m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
                 }
-                m_context.deviceDispatch.vkCmdWriteTimestamp(
-                    m_currentCmdBuf->m_cmdBuf,
-                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                    query.m_queryPool,
-                    s_TimerQueryBeginIndex
-                );
-                token = TimerQueryRecordingToken{
-                    .query = &query,
-                    .queryIncarnation = query.m_incarnation,
-                    .generation = query.m_cycleGeneration,
-                    .resetAuthorizationGeneration = claim.consumedResetAuthorizationGeneration,
-                    .physicalQueue = queueInfo->id,
-                };
+                m_context.deviceDispatch.vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query.m_queryPool, s_TimerQueryBeginIndex);
+                token = TimerQueryRecordingToken{ .query = &query, .queryIncarnation = query.m_incarnation, .generation = query.m_cycleGeneration, .resetAuthorizationGeneration = claim.consumedResetAuthorizationGeneration, .physicalQueue = queueInfo->id, };
                 beginRecorded = true;
             }
         }
@@ -387,33 +281,20 @@ bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToke
             && (query.m_beginAccepted || query.m_beginRecordingOwner.commandBuffer)
         ;
         if(matchingActiveCycle){
-            const bool endOwnedByCurrentCommandBuffer =
-                query.m_endRecordingOwner.commandBuffer == m_currentCmdBuf.get()
-                && query.m_endRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID
-            ;
+            const bool endOwnedByCurrentCommandBuffer = query.m_endRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_endRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID;
             if(query.m_endRecordingOwner.commandBuffer && !endOwnedByCurrentCommandBuffer)
                 matchingActiveCycle = false;
             if(matchingActiveCycle){
-                TrackedCommandBuffer::TimerQueryRecordingClaim& claim =
-                    m_currentCmdBuf->findOrAppendTimerQueryRecordingClaim(query)
-                ;
+                TrackedCommandBuffer::TimerQueryRecordingClaim& claim = m_currentCmdBuf->findOrAppendTimerQueryRecordingClaim(query);
                 if(claim.recordsEnd)
                     matchingActiveCycle = false;
                 else{
-                    query.m_endRecordingOwner = TimerQuery::RecordingOwner{
-                        .commandBuffer = m_currentCmdBuf.get(),
-                        .recordingID = m_currentCmdBuf->m_recordingID,
-                    };
+                    query.m_endRecordingOwner = TimerQuery::RecordingOwner{ .commandBuffer = m_currentCmdBuf.get(), .recordingID = m_currentCmdBuf->m_recordingID, };
                     claim.queue = queueInfo->id;
                     claim.generation = query.m_cycleGeneration;
                     claim.recordingID = m_currentCmdBuf->m_recordingID;
                     claim.recordsEnd = true;
-                    m_context.deviceDispatch.vkCmdWriteTimestamp(
-                        m_currentCmdBuf->m_cmdBuf,
-                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                        query.m_queryPool,
-                        s_TimerQueryEndIndex
-                    );
+                    m_context.deviceDispatch.vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query.m_queryPool, s_TimerQueryEndIndex);
                 }
             }
         }
@@ -426,10 +307,7 @@ bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToke
     return true;
 }
 
-bool CommandList::endTimerQueryFromExistingClaim(
-    TimerQuery& query,
-    const TimerQueryRecordingToken& token
-)noexcept{
+bool CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQueryRecordingToken& token)noexcept{
     if(!publicCommandStateAccessible())
         return false;
 
@@ -452,9 +330,7 @@ bool CommandList::endTimerQueryFromExistingClaim(
     bool endRecorded = false;
     {
         NothrowScopedLock queryLock(query.m_mutex);
-        TrackedCommandBuffer::TimerQueryRecordingClaim* const claim =
-            m_currentCmdBuf->findTimerQueryRecordingClaim(query, token.generation)
-        ;
+        TrackedCommandBuffer::TimerQueryRecordingClaim* const claim = m_currentCmdBuf->findTimerQueryRecordingClaim(query, token.generation);
         const bool matchingOpeningClaim = claim
             && claim->recordsBegin
             && !claim->recordsEnd
@@ -472,17 +348,9 @@ bool CommandList::endTimerQueryFromExistingClaim(
             && !query.m_endRecordingOwner.commandBuffer
         ;
         if(matchingOpeningClaim){
-            query.m_endRecordingOwner = TimerQuery::RecordingOwner{
-                .commandBuffer = m_currentCmdBuf.get(),
-                .recordingID = m_currentCmdBuf->m_recordingID,
-            };
+            query.m_endRecordingOwner = TimerQuery::RecordingOwner{ .commandBuffer = m_currentCmdBuf.get(), .recordingID = m_currentCmdBuf->m_recordingID, };
             claim->recordsEnd = true;
-            m_context.deviceDispatch.vkCmdWriteTimestamp(
-                m_currentCmdBuf->m_cmdBuf,
-                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                query.m_queryPool,
-                s_TimerQueryEndIndex
-            );
+            m_context.deviceDispatch.vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query.m_queryPool, s_TimerQueryEndIndex);
             endRecorded = true;
         }
     }

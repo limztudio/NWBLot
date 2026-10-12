@@ -24,24 +24,14 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SetGraphicsDynamicState(
-    const VolkDeviceTable& deviceDispatch,
-    VkCommandBuffer commandBuffer,
-    const GraphicsPipelineDesc& desc,
-    const GraphicsState& state
-){
+void SetGraphicsDynamicState(const VolkDeviceTable& deviceDispatch, VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
     const RasterState& rasterState = desc.renderState.rasterState;
     const DepthStencilState& depthStencilState = desc.renderState.depthStencilState;
 
     deviceDispatch.vkCmdSetLineWidth(commandBuffer, s_DefaultRasterLineWidth);
     deviceDispatch.vkCmdSetDepthBias(commandBuffer, static_cast<f32>(rasterState.depthBias), rasterState.depthBiasClamp, rasterState.slopeScaledDepthBias);
 
-    const f32 blendConstants[] = {
-        state.blendConstantColor.r,
-        state.blendConstantColor.g,
-        state.blendConstantColor.b,
-        state.blendConstantColor.a,
-    };
+    const f32 blendConstants[] = { state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a, };
     deviceDispatch.vkCmdSetBlendConstants(commandBuffer, blendConstants);
     deviceDispatch.vkCmdSetDepthBounds(commandBuffer, 0.f, 1.f);
     deviceDispatch.vkCmdSetStencilCompareMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilReadMask);
@@ -68,10 +58,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         const SIMDVectorSingle viewportMaximum = VectorSet(vp.maxX, vp.maxY, 0.0f, 0.0f);
         const SIMDVectorSingle viewportExtent = VectorSubtract(viewportMaximum, viewportMinimum);
         const SIMDVectorSingle viewportOrigin = VectorPermute<0, 5, 0, 0>(viewportMinimum, viewportMaximum);
-        const SIMDVectorSingle signedViewportExtent = VectorPermute<0, 5, 0, 0>(
-            viewportExtent,
-            VectorNegate(viewportExtent)
-        );
+        const SIMDVectorSingle signedViewportExtent = VectorPermute<0, 5, 0, 0>(viewportExtent, VectorNegate(viewportExtent));
         const SIMDVectorSingle viewportXYWH = VectorPermute<0, 1, 4, 5>(viewportOrigin, signedViewportExtent);
         Float4U viewportValues;
         StoreFloat(viewportXYWH, viewportValues);
@@ -124,19 +111,9 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
         auto* const tex = fbDesc.colorAttachments[i].texture;
         NWB_ASSERT(tex);
 
-        const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(
-            tex->m_creationDesc,
-            TextureSubresourceMipResolve::Single
-        );
-        const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
-            tex->m_creationDesc,
-            resolvedColorSubresources
-        );
-        VkImageView view = tex->getView(
-            fbDesc.colorAttachments[i].subresources,
-            viewDimension,
-            fbDesc.colorAttachments[i].format
-        );
+        const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_creationDesc, TextureSubresourceMipResolve::Single);
+        const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(tex->m_creationDesc, resolvedColorSubresources);
+        VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, fbDesc.colorAttachments[i].format);
         if(view == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
@@ -146,9 +123,7 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
         colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         colorAttachments[i].imageView = view;
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        const VulkanDetail::RenderPassAttachmentOperations operations =
-            VulkanDetail::ConvertRenderPassAttachmentActions(params.colorAttachmentActions[i])
-        ;
+        const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.colorAttachmentActions[i]);
         colorAttachments[i].loadOp = operations.loadOp;
         colorAttachments[i].storeOp = operations.storeOp;
         if(operations.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR){
@@ -164,34 +139,18 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
 
     if(fbDesc.depthAttachment.texture){
         auto* depthTex = fbDesc.depthAttachment.texture;
-        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(
-            depthTex->m_creationDesc,
-            TextureSubresourceMipResolve::Single
-        );
-        const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
-            depthTex->m_creationDesc,
-            resolvedDepthSubresources
-        );
-        VkImageView depthView = depthTex->getView(
-            fbDesc.depthAttachment.subresources,
-            depthViewDimension,
-            fbDesc.depthAttachment.format
-        );
+        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_creationDesc, TextureSubresourceMipResolve::Single);
+        const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(depthTex->m_creationDesc, resolvedDepthSubresources);
+        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, fbDesc.depthAttachment.format);
         if(depthView == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             return false;
         }
 
-        const VkImageLayout depthStencilLayout =
-            fbDesc.depthAttachment.isReadOnly
-            ? VulkanDetail::s_ReadOnlyImageLayout
-            : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        ;
+        const VkImageLayout depthStencilLayout = fbDesc.depthAttachment.isReadOnly ? VulkanDetail::s_ReadOnlyImageLayout : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
-            const VulkanDetail::RenderPassAttachmentOperations operations =
-                VulkanDetail::ConvertRenderPassAttachmentActions(params.depthAttachmentActions)
-            ;
+            const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.depthAttachmentActions);
             depthAttachment.imageView = depthView;
             depthAttachment.imageLayout = depthStencilLayout;
             depthAttachment.loadOp = operations.loadOp;
@@ -200,9 +159,7 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
             hasDepth = true;
         }
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
-            const VulkanDetail::RenderPassAttachmentOperations operations =
-                VulkanDetail::ConvertRenderPassAttachmentActions(params.stencilAttachmentActions)
-            ;
+            const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.stencilAttachmentActions);
             stencilAttachment.imageView = depthView;
             stencilAttachment.imageLayout = depthStencilLayout;
             stencilAttachment.loadOp = operations.loadOp;
@@ -377,14 +334,7 @@ void CommandList::drawIndexed(const DrawArguments& args){
     if(!validateGraphicsDrawArguments(args, true, NWB_TEXT("draw indexed")))
         return;
 
-    m_context.deviceDispatch.vkCmdDrawIndexed(
-        m_currentCmdBuf->m_cmdBuf,
-        args.vertexCount,
-        args.instanceCount,
-        args.startIndexLocation,
-        static_cast<i32>(args.startVertexLocation),
-        args.startInstanceLocation
-    );
+    m_context.deviceDispatch.vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, static_cast<i32>(args.startVertexLocation), args.startInstanceLocation);
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
@@ -392,14 +342,7 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indirect")))
         return;
-    const auto indirectBuffer = prepareDrawIndirect(
-        offsetBytes,
-        drawCount,
-        sizeof(DrawIndirectArguments),
-        NWB_TEXT("draw indirect"),
-        NWB_TEXT("drawIndirect"),
-        VulkanDetail::IndirectDrawIndexMode::NonIndexed
-    );
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), NWB_TEXT("draw indirect"), NWB_TEXT("drawIndirect"), VulkanDetail::IndirectDrawIndexMode::NonIndexed);
     if(!indirectBuffer)
         return;
 
@@ -412,14 +355,7 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed indirect")))
         return;
-    const auto indirectBuffer = prepareDrawIndirect(
-        offsetBytes,
-        drawCount,
-        sizeof(DrawIndexedIndirectArguments),
-        NWB_TEXT("draw indexed indirect"),
-        NWB_TEXT("drawIndexedIndirect"),
-        VulkanDetail::IndirectDrawIndexMode::Indexed
-    );
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), NWB_TEXT("draw indexed indirect"), NWB_TEXT("drawIndexedIndirect"), VulkanDetail::IndirectDrawIndexMode::Indexed);
     if(!indirectBuffer)
         return;
 

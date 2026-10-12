@@ -81,9 +81,7 @@
     {
       "name": "variant-namesym",
       "hidden": true,
-      "inherits": [
-        "variant-full"
-      ],
+      "inherits": ["variant-full"],
       "cacheVariables": {
         "NWB_BUILDMODE": "ON"
       }
@@ -91,9 +89,7 @@
     {
       "name": "windows-clang-base",
       "hidden": true,
-      "inherits": [
-        "base"
-      ],
+      "inherits": ["base"],
       "generator": "Ninja Multi-Config",
       "toolchainFile": "${sourceDir}/configuration/toolchains/windows-clang.cmake",
       "condition": {
@@ -105,9 +101,7 @@
     {
       "name": "linux-clang-base",
       "hidden": true,
-      "inherits": [
-        "base"
-      ],
+      "inherits": ["base"],
       "generator": "Ninja Multi-Config",
       "toolchainFile": "${sourceDir}/configuration/toolchains/linux-clang.cmake",
       "condition": {
@@ -118,111 +112,51 @@
     },
     {
       "name": "windows-clang-x64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-x64",
-        "variant-full",
-        "output-full"
-      ]
+      "inherits": ["windows-clang-base", "arch-x64", "variant-full", "output-full"]
     },
     {
       "name": "windows-clang-engine-x64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-x64",
-        "variant-engine",
-        "output-engine"
-      ]
+      "inherits": ["windows-clang-base", "arch-x64", "variant-engine", "output-engine"]
     },
     {
       "name": "windows-clang-testbed-x64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-x64",
-        "variant-testbed",
-        "output-testbed"
-      ]
+      "inherits": ["windows-clang-base", "arch-x64", "variant-testbed", "output-testbed"]
     },
     {
       "name": "windows-clang-namesym-x64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-x64",
-        "variant-namesym",
-        "output-namesym"
-      ]
+      "inherits": ["windows-clang-base", "arch-x64", "variant-namesym", "output-namesym"]
     },
     {
       "name": "windows-clang-arm64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-arm64",
-        "variant-full",
-        "output-full"
-      ]
+      "inherits": ["windows-clang-base", "arch-arm64", "variant-full", "output-full"]
     },
     {
       "name": "windows-clang-engine-arm64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-arm64",
-        "variant-engine",
-        "output-engine"
-      ]
+      "inherits": ["windows-clang-base", "arch-arm64", "variant-engine", "output-engine"]
     },
     {
       "name": "windows-clang-testbed-arm64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-arm64",
-        "variant-testbed",
-        "output-testbed"
-      ]
+      "inherits": ["windows-clang-base", "arch-arm64", "variant-testbed", "output-testbed"]
     },
     {
       "name": "windows-clang-namesym-arm64",
-      "inherits": [
-        "windows-clang-base",
-        "arch-arm64",
-        "variant-namesym",
-        "output-namesym"
-      ]
+      "inherits": ["windows-clang-base", "arch-arm64", "variant-namesym", "output-namesym"]
     },
     {
       "name": "linux-clang-x64",
-      "inherits": [
-        "linux-clang-base",
-        "arch-x64",
-        "variant-full",
-        "output-full"
-      ]
+      "inherits": ["linux-clang-base", "arch-x64", "variant-full", "output-full"]
     },
     {
       "name": "linux-clang-engine-x64",
-      "inherits": [
-        "linux-clang-base",
-        "arch-x64",
-        "variant-engine",
-        "output-engine"
-      ]
+      "inherits": ["linux-clang-base", "arch-x64", "variant-engine", "output-engine"]
     },
     {
       "name": "linux-clang-testbed-x64",
-      "inherits": [
-        "linux-clang-base",
-        "arch-x64",
-        "variant-testbed",
-        "output-testbed"
-      ]
+      "inherits": ["linux-clang-base", "arch-x64", "variant-testbed", "output-testbed"]
     },
     {
       "name": "linux-clang-namesym-x64",
-      "inherits": [
-        "linux-clang-base",
-        "arch-x64",
-        "variant-namesym",
-        "output-namesym"
-      ]
+      "inherits": ["linux-clang-base", "arch-x64", "variant-namesym", "output-namesym"]
     }
   ],
   "buildPresets": [

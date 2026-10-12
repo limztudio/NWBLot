@@ -50,8 +50,7 @@ protected:
     virtual void SetUp()override{
         Assets::AssetString caseKey(m_testArena.arena);
         AppendHexU32(static_cast<u32>(ComputeFnv64Text(AStringView(testing::UnitTest::GetInstance()->current_test_info()->name()))), caseKey);
-        m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__)
-            / "__build_obj" / "g" / caseKey;
+        m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__) / "__build_obj" / "g" / caseKey;
         m_options.outputDirectory = PathToString(m_testArena.arena, m_root / "out");
         m_options.configuration = "tests";
         s_MergeCalls = 0u;

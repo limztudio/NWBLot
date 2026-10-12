@@ -80,10 +80,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         metadata.append(testCase.fields.data(), testCase.fields.size());
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
-        EXPECT_EQ(
-            AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, metadataPath, scratchArena).has_value(),
-            testCase.accepted
-        );
+        EXPECT_EQ(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, metadataPath, scratchArena).has_value(), testCase.accepted);
         if(testCase.accepted){
             EXPECT_EQ(logger.errorCount(), priorErrors);
         }
@@ -118,9 +115,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     mesh.entry.rayQuery = true;
     mesh.entry.entryPoint = "authoredEntry";
     mesh.entry.includeRoots.emplace_back("engine/graphics", testArena.arena);
-    mesh.entry.implicitDefines.emplace(
-        Impl::ShaderCook::CookString("NWB_CSG_ENABLED", testArena.arena), Impl::ShaderCook::CookString("1", testArena.arena)
-    );
+    mesh.entry.implicitDefines.emplace(Impl::ShaderCook::CookString("NWB_CSG_ENABLED", testArena.arena), Impl::ShaderCook::CookString("1", testArena.arena));
     Impl::ShaderCook::DefineEntry authoredDefine(testArena.arena);
     authoredDefine.values.emplace_back("0", testArena.arena);
     authoredDefine.values.emplace_back("1", testArena.arena);

@@ -38,17 +38,9 @@ bool GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperatio
     if(
         !validForLocked(planAccess)
         || !submissionBinding.valid()
-        || (
-            m_recordingAttemptGeneration != 0u
-            && m_recordingAttemptGeneration != recordingAttemptGeneration
-        )
+        || (m_recordingAttemptGeneration != 0u && m_recordingAttemptGeneration != recordingAttemptGeneration)
         || (m_activeSubmissionBinding.valid() && m_activeSubmissionBinding != submissionBinding)
-        || !graph.bindSubmissionTransaction(
-            compiledGraph,
-            recordingAttemptGeneration,
-            submissionBinding,
-            preparationAttempt
-        )
+        || !graph.bindSubmissionTransaction(compiledGraph, recordingAttemptGeneration, submissionBinding, preparationAttempt)
     )
         return false;
     if(!m_activeSubmissionBinding.valid())
@@ -59,12 +51,7 @@ bool GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperatio
     return true;
 }
 
-bool GpuGraphSubmissionTransaction::matchesRecordingAttemptBinding(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const u64 recordingAttemptGeneration,
-    const GpuGraphSubmissionBinding& submissionBinding
-)const noexcept{
+bool GpuGraphSubmissionTransaction::matchesRecordingAttemptBinding(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
         return false;
@@ -73,11 +60,7 @@ bool GpuGraphSubmissionTransaction::matchesRecordingAttemptBinding(
         && validForLocked(planAccess)
         && m_recordingAttemptGeneration == recordingAttemptGeneration
         && m_activeSubmissionBinding == submissionBinding
-        && graph.matchesSubmissionTransaction(
-            compiledGraph,
-            recordingAttemptGeneration,
-            submissionBinding
-        )
+        && graph.matchesSubmissionTransaction(compiledGraph, recordingAttemptGeneration, submissionBinding)
     ;
 }
 

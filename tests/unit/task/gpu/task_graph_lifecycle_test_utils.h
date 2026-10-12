@@ -96,8 +96,7 @@ struct ReentrantCompileDuringDeclarationTask{
             if(compileAttempted)
                 *compileAttempted = true;
             const Graphics::GpuTaskGraphCompiler compiler;
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations =
-                Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations = Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
             bool succeeded = false;
             if(declarations.valid())
                 succeeded = compiler.analyze(declarations, *analysis, *scratchArena);
@@ -136,48 +135,18 @@ struct ReentrantTelemetryDuringDeclarationTask{
             : state(other.state)
         {
             other.state = nullptr;
-            if(
-                !state
-                || !state->graph
-                || !state->analysis
-                || !state->assignments
-                || !state->compiledGraph
-                || !state->transaction
-                || !state->tracker
-                || !state->builder
-                || !state->scratchArena
-            )
+            if(!state || !state->graph || !state->analysis || !state->assignments || !state->compiledGraph || !state->transaction || !state->tracker || !state->builder || !state->scratchArena)
                 return;
 
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations =
-                Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*state->graph);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations = Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*state->graph);
             const Graphics::GpuCompiledGraph::ReadView compiledPlan(*state->compiledGraph);
             state->trackerValidationAttempted = true;
-            state->trackerValidationSucceeded = state->tracker->validFor(
-                declarations,
-                *state->assignments,
-                compiledPlan
-            );
+            state->trackerValidationSucceeded = state->tracker->validFor(declarations, *state->assignments, compiledPlan);
             state->trackerUpdateAttempted = true;
-            state->trackerUpdateSucceeded = state->tracker->update(
-                declarations,
-                *state->assignments,
-                compiledPlan,
-                *state->transaction,
-                *state->scratchArena
-            );
-            const Graphics::GpuTaskGraphTelemetryOptions options{
-                .queueAssignments = state->assignments,
-                .compiledPlan = &compiledPlan,
-                .queueAssignmentTelemetry = state->tracker,
-            };
+            state->trackerUpdateSucceeded = state->tracker->update(declarations, *state->assignments, compiledPlan, *state->transaction, *state->scratchArena);
+            const Graphics::GpuTaskGraphTelemetryOptions options{ .queueAssignments = state->assignments, .compiledPlan = &compiledPlan, .queueAssignmentTelemetry = state->tracker, };
             state->appendAttempted = true;
-            state->appendSucceeded = declarations.appendFrameGraphTelemetry(
-                *state->builder,
-                *state->analysis,
-                *state->scratchArena,
-                options
-            );
+            state->appendSucceeded = declarations.appendFrameGraphTelemetry(*state->builder, *state->analysis, *state->scratchArena, options);
         }
     };
 };
@@ -202,12 +171,7 @@ struct MalformedLifecycleTask{
         u32* discardedCount = nullptr;
     };
 
-    static bool Record(
-        const Payload& payload,
-        Graphics::CommandList&,
-        const Graphics::GpuTaskRecordContext&,
-        const u32 lookalike = 0u
-    ){
+    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&, const u32 lookalike = 0u){
         static_cast<void>(lookalike);
         if(payload.recordCount)
             ++*payload.recordCount;

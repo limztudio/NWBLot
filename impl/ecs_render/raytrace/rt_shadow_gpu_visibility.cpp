@@ -155,31 +155,19 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         {
-            Core::GpuTimingMeasure opaqueTraceTiming(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowOpaqueTrace,
-                m_graphics.getDevice(),
-                commandList
-            );
+            Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
             SwShadowHeapPushConstants softTracePush = makePush();
             softTracePush.width = targets.width;
             softTracePush.height = targets.height;
             softTracePush.frameIndex = frameIndex;
-            softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
-                ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
-                : NWB_SW_SHADOW_SOFT_SPP;
+            softTracePush.softSampleCount = softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP;
             if(lightSpace && lightSpace->ready){
                 NWB_ASSERT(splitSoftTransparentFold);
-                if(!RecordLightSpaceResolve(
-                    commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA, frameIndex, softTracePush.softSampleCount,
-                    targets.bindless.shadowSoftHalfAStorage.slot(), false
-                ))
+                if(!RecordLightSpaceResolve(commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA, frameIndex, softTracePush.softSampleCount, targets.bindless.shadowSoftHalfAStorage.slot(), false))
                     return MakeUnexpected(Failure{});
                 if((lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u && !m_lightSpaceShadow.m_csgDispatchLogged){
                     m_lightSpaceShadow.m_csgDispatchLogged = true;
-                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=0, {} instances)")
-                        , static_cast<u64>(lightSpace->push.instanceCount)
-                    );
+                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=0, {} instances)"), static_cast<u64>(lightSpace->push.instanceCount));
                 }
                 if(!m_lightSpaceShadow.m_dispatchLogged){
                     m_lightSpaceShadow.m_dispatchLogged = true;
@@ -222,8 +210,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             false
         );
         if(splitSoftTransparentFold){
-            // The graph-owned transparent tail records in a later callback, so preserve the normal route's
-            // one-shot traversal diagnostic before this opaque producer returns.
+            // The graph-owned transparent tail records in a later callback, so preserve the normal route's one-shot traversal diagnostic before this opaque producer returns.
             reportSoftwareShadowTraversal(targets);
             return producedFrameIndex;
         }
@@ -233,9 +220,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     // Fallback transparent fold; it is mutually exclusive with the soft path.
     if(!softTransparentRan){
         // Compacted mode traces only classified edge records.
-        const bool graphOwnsAdaptivePlan =
-            graphOwnedAdaptivePlan && graphOwnedAdaptivePlan->enabled
-        ;
+        const bool graphOwnsAdaptivePlan = graphOwnedAdaptivePlan && graphOwnedAdaptivePlan->enabled;
         const bool compact = graphOwnsAdaptivePlan && graphOwnedAdaptivePlan->compact;
 
         // Coarse transmittance feeds both adaptive resolve modes.
@@ -347,22 +332,9 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
-    if(
-        !m_rayTracingState.m_softShadowReady
-        || !m_rayTracingState.m_softTransparentReady
-        || m_rayTracingState.m_softShadowSlotMask == 0u
-    )
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return MakeUnexpected(Failure{});
-    return renderGpuBvhShadowVisibility(
-        commandList,
-        targets,
-        deferredLightingResources,
-        true,
-        graphOwnsOpaqueTemporalMergeEntryStates,
-        true,
-        nullptr,
-        lightSpace
-    );
+    return renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, nullptr, lightSpace);
 }
 
 bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{

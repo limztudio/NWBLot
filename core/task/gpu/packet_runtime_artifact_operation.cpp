@@ -40,10 +40,7 @@ bool GpuRecordedGraph::ArtifactOperation::ActiveExclusiveFor(const GpuRecordedGr
 }
 
 
-GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
-    const GpuRecordedGraph& recordedGraph,
-    const ArtifactOperationMode mode
-)noexcept{
+GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& recordedGraph, const ArtifactOperationMode mode)noexcept{
     const bool exclusive = mode == ArtifactOperationMode::Exclusive;
     const bool waitRead = mode == ArtifactOperationMode::WaitRead;
     for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
@@ -66,12 +63,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
     const bool acquireExclusive = exclusive;
     if(acquireExclusive){
         u32 expectedState = 0u;
-        if(!recordedGraph.m_operationState.compare_exchange_strong(
-            expectedState,
-            GpuRecordedGraph::s_ArtifactOperationWriterBit,
-            MemoryOrder::acq_rel,
-            MemoryOrder::acquire
-        ))
+        if(!recordedGraph.m_operationState.compare_exchange_strong(expectedState, GpuRecordedGraph::s_ArtifactOperationWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
             return;
     }
     else{
@@ -84,20 +76,12 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
                 operationState = recordedGraph.m_operationState.load(MemoryOrder::acquire);
                 continue;
             }
-            if(
-                (operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask)
-                == GpuRecordedGraph::s_ArtifactOperationReaderMask
-            ){
+            if((operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask) == GpuRecordedGraph::s_ArtifactOperationReaderMask){
                 NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph artifact reader ownership overflowed");
                 TerminateInvariant();
             }
 
-            if(recordedGraph.m_operationState.compare_exchange_weak(
-                operationState,
-                operationState + 1u,
-                MemoryOrder::acq_rel,
-                MemoryOrder::acquire
-            ))
+            if(recordedGraph.m_operationState.compare_exchange_weak(operationState, operationState + 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
                 break;
         }
     }
@@ -134,12 +118,7 @@ GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
                 NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph shared artifact operation must retain its reader claim");
                 TerminateInvariant();
             }
-            if(m_recordedGraph->m_operationState.compare_exchange_weak(
-                operationState,
-                operationState - 1u,
-                MemoryOrder::release,
-                MemoryOrder::relaxed
-            )){
+            if(m_recordedGraph->m_operationState.compare_exchange_weak(operationState, operationState - 1u, MemoryOrder::release, MemoryOrder::relaxed)){
                 if((operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask) == 1u)
                     m_recordedGraph->m_operationState.notify_all();
                 break;

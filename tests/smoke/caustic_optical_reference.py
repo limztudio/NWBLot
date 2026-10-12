@@ -100,9 +100,7 @@ def sphere_mesh():
         vertices = tuple(positions[references[index][0]] for index in indices)
         a, b, c = vertices
         edge_b, edge_c = add(b, scale(a, -1)), add(c, scale(a, -1))
-        triangles.append(Triangle(a, edge_b, edge_c, normalized(cross(edge_b, edge_c)),
-            tuple(tuple(normals[references[index][1]]) for index in indices),
-            tuple(min(vertex[axis] for vertex in vertices) for axis in range(3)),
+        triangles.append(Triangle(a, edge_b, edge_c, normalized(cross(edge_b, edge_c)), tuple(tuple(normals[references[index][1]]) for index in indices), tuple(min(vertex[axis] for vertex in vertices) for axis in range(3)),
             tuple(max(vertex[axis] for vertex in vertices) for axis in range(3))))
     return MeshNode(triangles)
 
@@ -141,17 +139,15 @@ def exterior_samples(width=1280, height=900):
             if min(u, v, 1 - u - v) < 0.03:
                 continue
             point = add(CAMERA, scale(direction, distance))
-            normal = normalized(tuple(sum(normal[axis] * weight
-                for normal, weight in zip(triangle.shading_normals, (1 - u - v, u, v))) for axis in range(3)))
+            normal = normalized(tuple(sum(normal[axis] * weight for normal, weight in zip(triangle.shading_normals, (1 - u - v, u, v))) for axis in range(3)))
             normal = normalized(tuple(map(half, normal)))
             cosine = -dot(direction, normal)
             reflected = add(direction, scale(normal, 2 * cosine))
             if cosine < 0.3 or dot(reflected, triangle.normal) < 0.2:
                 continue
-            # Both signs of a conservative half-millimeter depth-position perturbation must still escape the mesh
-            # and ground. The 1mm normal offset matches the fixture's stable captured-glass origin guard.
-            origins = tuple(add(add(point, scale(normal, 0.001)), scale(direction, perturbation))
-                for perturbation in (-0.0005, 0.0, 0.0005))
+            # Both signs of a conservative half-millimeter depth-position perturbation must still escape the mesh and ground.
+            # The 1mm normal offset matches the fixture's stable captured-glass origin guard.
+            origins = tuple(add(add(point, scale(normal, 0.001)), scale(direction, perturbation)) for perturbation in (-0.0005, 0.0, 0.0005))
             if any(mesh.intersect(origin, reflected) is not None or hits_ground(origin, reflected) for origin in origins):
                 continue
             f0 = ((IOR - 1) / (IOR + 1)) ** 2
@@ -178,8 +174,5 @@ def expected_environment_color(disabled_rgb, fresnel):
 def predictor_metadata():
     # Canonical LF content identity is stable across the repository's required CRLF checkout policy.
     digest = hashlib.sha256(MESH_PATH.read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest()
-    return {"mesh": str(MESH_PATH.relative_to(Path(__file__).parent)), "mesh_lf_sha256": digest,
-        "camera": CAMERA, "sphere_center": (0, 0.85, 0), "sphere_scale": 0.7, "vertical_fov_degrees": 60,
-        "ior": IOR, "environment": ENVIRONMENT, "presentation": "sRGB of Reinhard scene radiance",
-        "exposure": 1.0, "shoulder": SHOULDER, "minimum_fraction_of_predicted_byte_gain": 0.5,
-        "rounding_allowance_bytes": 2.0}
+    return {"mesh": str(MESH_PATH.relative_to(Path(__file__).parent)), "mesh_lf_sha256": digest, "camera": CAMERA, "sphere_center": (0, 0.85, 0), "sphere_scale": 0.7, "vertical_fov_degrees": 60,
+        "ior": IOR, "environment": ENVIRONMENT, "presentation": "sRGB of Reinhard scene radiance", "exposure": 1.0, "shoulder": SHOULDER, "minimum_fraction_of_predicted_byte_gain": 0.5, "rounding_allowance_bytes": 2.0}

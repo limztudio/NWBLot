@@ -28,9 +28,7 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static GpuTaskCommandRequirements TextureClearCommandRequirements(
-    const GraphicsBackend::TextureClearQueueRequirement::Enum requirement
-)noexcept{
+[[nodiscard]] static GpuTaskCommandRequirements TextureClearCommandRequirements(const GraphicsBackend::TextureClearQueueRequirement::Enum requirement)noexcept{
     GpuTaskCommandRequirements commands;
     switch(requirement){
     case GraphicsBackend::TextureClearQueueRequirement::Transfer:
@@ -49,10 +47,7 @@ namespace __hidden_gpu_task_graph_builtin_clears{
     return commands;
 }
 
-[[nodiscard]] static bool IncludeHookCommandRequirements(
-    GpuTaskCommandRequirements& commands,
-    const GpuTaskCommandRequirements& hookCommands
-)noexcept{
+[[nodiscard]] static bool IncludeHookCommandRequirements(GpuTaskCommandRequirements& commands, const GpuTaskCommandRequirements& hookCommands)noexcept{
     // A hook declares one alternative clause; the additional clause belongs to the composed built-in contract.
     if(hookCommands.additionalAlternativeCapabilities != GpuQueueCapability::None)
         return false;
@@ -78,23 +73,10 @@ struct ClearBufferPayload{
 };
 
 struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ClearBufferPayload>{
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         if(!payload.destination)
             return false;
-        if(
-            context.commandIrCapture
-            && !context.commandIrCapture->captureClearBuffer(
-                context.task,
-                context.packet,
-                context.queue,
-                payload.destinationResource,
-                payload.clearValue
-            )
-        )
+        if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.destinationResource, payload.clearValue))
             return false;
         commandList.endRenderPass();
         commandList.clearBufferUInt(*payload.destination, payload.clearValue);
@@ -109,32 +91,12 @@ struct ClearTextureTask{
         GpuClearTextureTaskDesc clearDesc;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         if(!payload.destination || payload.clearDesc.valueType >= GpuClearTextureTaskValueType::kCount)
             return false;
-        if(
-            context.commandIrCapture
-            && !context.commandIrCapture->captureClearTexture(
-                context.task,
-                context.packet,
-                context.queue,
-                payload.destinationResource,
-                payload.clearDesc
-            )
-        )
+        if(context.commandIrCapture && !context.commandIrCapture->captureClearTexture(context.task, context.packet, context.queue, payload.destinationResource, payload.clearDesc))
             return false;
-        if(
-            payload.clearDesc.recordHooks.beforeClear
-            && !payload.clearDesc.recordHooks.beforeClear(
-                payload.clearDesc.recordHooks.context,
-                commandList,
-                context
-            )
-        )
+        if(payload.clearDesc.recordHooks.beforeClear && !payload.clearDesc.recordHooks.beforeClear(payload.clearDesc.recordHooks.context, commandList, context))
             return false;
         if(commandList.commandRecordingFailed())
             return false;
@@ -145,38 +107,19 @@ struct ClearTextureTask{
         bool clearRecorded = false;
         switch(payload.clearDesc.valueType){
         case GpuClearTextureTaskValueType::Float:
-            commandList.clearTextureFloat(
-                *payload.destination,
-                payload.clearDesc.subresources,
-                payload.clearDesc.floatValue
-            );
+            commandList.clearTextureFloat(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.floatValue);
             clearRecorded = true;
             break;
         case GpuClearTextureTaskValueType::UInt:
-            commandList.clearTextureUInt(
-                *payload.destination,
-                payload.clearDesc.subresources,
-                payload.clearDesc.uintValue
-            );
+            commandList.clearTextureUInt(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.uintValue);
             clearRecorded = true;
             break;
         case GpuClearTextureTaskValueType::Int:
-            commandList.clearTextureInt(
-                *payload.destination,
-                payload.clearDesc.subresources,
-                payload.clearDesc.intValue
-            );
+            commandList.clearTextureInt(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.intValue);
             clearRecorded = true;
             break;
         case GpuClearTextureTaskValueType::DepthStencil:
-            commandList.clearDepthStencilTexture(
-                *payload.destination,
-                payload.clearDesc.subresources,
-                payload.clearDesc.clearDepth,
-                payload.clearDesc.depthValue,
-                payload.clearDesc.clearStencil,
-                payload.clearDesc.stencilValue
-            );
+            commandList.clearDepthStencilTexture(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.clearDepth, payload.clearDesc.depthValue, payload.clearDesc.clearStencil, payload.clearDesc.stencilValue);
             clearRecorded = true;
             break;
         default:
@@ -184,16 +127,7 @@ struct ClearTextureTask{
         }
         if(commandList.commandRecordingFailed())
             return false;
-        return clearRecorded
-            && (
-                !payload.clearDesc.recordHooks.afterClear
-                || payload.clearDesc.recordHooks.afterClear(
-                    payload.clearDesc.recordHooks.context,
-                    commandList,
-                    context
-                )
-            )
-        ;
+        return clearRecorded && (!payload.clearDesc.recordHooks.afterClear || payload.clearDesc.recordHooks.afterClear(payload.clearDesc.recordHooks.context, commandList, context));
     }
 
     static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept{
@@ -214,32 +148,12 @@ struct ClearTextureRectUIntTask{
         GpuClearTextureRectUIntTaskDesc clearDesc;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         if(!payload.destination)
             return false;
-        if(
-            context.commandIrCapture
-            && !context.commandIrCapture->captureClearTextureRectUInt(
-                context.task,
-                context.packet,
-                context.queue,
-                payload.destinationResource,
-                payload.clearDesc
-            )
-        )
+        if(context.commandIrCapture && !context.commandIrCapture->captureClearTextureRectUInt(context.task, context.packet, context.queue, payload.destinationResource, payload.clearDesc))
             return false;
-        if(
-            payload.clearDesc.recordHooks.beforeClear
-            && !payload.clearDesc.recordHooks.beforeClear(
-                payload.clearDesc.recordHooks.context,
-                commandList,
-                context
-            )
-        )
+        if(payload.clearDesc.recordHooks.beforeClear && !payload.clearDesc.recordHooks.beforeClear(payload.clearDesc.recordHooks.context, commandList, context))
             return false;
         if(commandList.commandRecordingFailed())
             return false;
@@ -247,21 +161,10 @@ struct ClearTextureRectUIntTask{
         commandList.endRenderPass();
         if(commandList.commandRecordingFailed())
             return false;
-        commandList.clearTextureRectUInt(
-            *payload.destination,
-            payload.clearDesc.subresources,
-            payload.clearDesc.rect,
-            payload.clearDesc.uintValue
-        );
+        commandList.clearTextureRectUInt(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.rect, payload.clearDesc.uintValue);
         if(commandList.commandRecordingFailed())
             return false;
-        return !payload.clearDesc.recordHooks.afterClear
-            || payload.clearDesc.recordHooks.afterClear(
-                payload.clearDesc.recordHooks.context,
-                commandList,
-                context
-            )
-        ;
+        return !payload.clearDesc.recordHooks.afterClear || payload.clearDesc.recordHooks.afterClear(payload.clearDesc.recordHooks.context, commandList, context);
     }
 
     static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept{
@@ -293,10 +196,7 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     if(!mutation.valid())
         return {};
 
-    if(
-        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
-        || !validResource(clearDesc.destination)
-    )
+    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validResource(clearDesc.destination))
         return {};
 
     const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
@@ -305,11 +205,7 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         || !destinationResource.buffer
         || destinationResource.buffer->getCreationDescription().byteSize == 0u
         || (destinationResource.buffer->getCreationDescription().byteSize & (sizeof(u32) - 1u)) != 0u
-        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-            destinationResource.buffer->getCreationDescription(),
-            destinationResource.initialState,
-            destinationResource.externalFinalState
-        )
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationResource.buffer->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
     )
         return {};
 
@@ -323,12 +219,7 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     payload->clearValue = clearDesc.clearValue;
     payload->acceptedToken = clearDesc.acceptedToken;
 
-    const GpuTaskResourceUse resourceUse{
-        .resource = clearDesc.destination,
-        .range = {},
-        .requiredState = ResourceStates::CopyDest,
-        .access = GpuTaskResourceAccess::Write,
-    };
+    const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
@@ -346,11 +237,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !validResource(clearDesc.destination)
         || clearDesc.valueType >= GpuClearTextureTaskValueType::kCount
-        || (
-            clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil
-            && !clearDesc.clearDepth
-            && !clearDesc.clearStencil
-        )
+        || (clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil && !clearDesc.clearDepth && !clearDesc.clearStencil)
     )
         return {};
 
@@ -358,25 +245,12 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     if(
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
-        || !GpuTaskGraphBuiltinDetail::CopyOrClearTextureDestinationCanMaterializeRetainedState(
-            destinationResource.texture->getCreationDescription(),
-            destinationResource.initialState,
-            destinationResource.externalFinalState
-        )
+        || !GpuTaskGraphBuiltinDetail::CopyOrClearTextureDestinationCanMaterializeRetainedState(destinationResource.texture->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
     )
         return {};
     const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType);
     Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
-    if(
-        !valueKind
-        || !(clearContract = GraphicsBackend::ResolveTextureClearContract(
-            destinationResource.texture->getCreationDescription(),
-            clearDesc.subresources,
-            *valueKind,
-            clearDesc.clearDepth,
-            clearDesc.clearStencil
-        ))
-    )
+    if(!valueKind || !(clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, *valueKind, clearDesc.clearDepth, clearDesc.clearStencil)))
         return {};
     const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
 
@@ -388,35 +262,19 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.texture;
     payload->clearDesc = clearDesc;
-    // Capture and native lowering retain the same exact graph-declared range rather than an all-subresources alias
-    // that would need the original TextureDesc to resolve during a later validation/replay phase.
+    // Capture and native lowering retain the same exact graph-declared range rather than an all-subresources alias that would need the original TextureDesc to resolve during a later validation/replay phase.
     payload->clearDesc.subresources = resolvedSubresources;
 
-    const GpuTaskResourceUse resourceUse{
-        .resource = clearDesc.destination,
-        .range = GpuTaskResourceRange{
-            .textureSubresources = resolvedSubresources,
-        },
-        .requiredState = ResourceStates::CopyDest,
-        .access = GpuTaskResourceAccess::Write,
-    };
+    const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = GpuTaskResourceRange{ .textureSubresources = resolvedSubresources, }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
     GpuTaskDesc resolvedDesc = desc;
-    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(
-        clearContract->queueRequirement
-    );
-    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(
-        commands,
-        clearDesc.recordHooks.commands
-    ))
+    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(clearContract->queueRequirement);
+    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
         return {};
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);
 }
 
-GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
-    const GpuTaskDesc& desc,
-    const GpuClearTextureRectUIntTaskDesc& clearDesc
-){
+GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc){
     if(clearDesc.acceptedToken)
         *clearDesc.acceptedToken = {};
 
@@ -424,36 +282,21 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     if(!mutation.valid())
         return {};
 
-    if(
-        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
-        || !validResource(clearDesc.destination)
-        || clearDesc.rect.maxX <= clearDesc.rect.minX
-        || clearDesc.rect.maxY <= clearDesc.rect.minY
-    )
+    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validResource(clearDesc.destination) || clearDesc.rect.maxX <= clearDesc.rect.minX || clearDesc.rect.maxY <= clearDesc.rect.minY)
         return {};
 
     const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
     if(
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
-        // Bounded multisample clears require an active attachment. Graph recording ends rendering before this
-        // primitive and has no framebuffer lowering, so every multisample rectangle remains unsupported.
+        // Bounded multisample clears require an active attachment.
+        // Graph recording ends rendering before this primitive and has no framebuffer lowering, so every multisample rectangle remains unsupported.
         || destinationResource.texture->getCreationDescription().sampleCount != 1u
-        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-            destinationResource.texture->getCreationDescription(),
-            destinationResource.initialState,
-            destinationResource.externalFinalState
-        )
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationResource.texture->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
     )
         return {};
     Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
-    if(!(clearContract = GraphicsBackend::ResolveTextureClearContract(
-        destinationResource.texture->getCreationDescription(),
-        clearDesc.subresources,
-        GraphicsBackend::TextureClearValueKind::UInt,
-        false,
-        false
-    )))
+    if(!(clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, GraphicsBackend::TextureClearValueKind::UInt, false, false)))
         return {};
     const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
 
@@ -467,30 +310,12 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     payload->clearDesc = clearDesc;
     payload->clearDesc.subresources = resolvedSubresources;
 
-    const GpuTaskResourceUse resourceUse{
-        .resource = clearDesc.destination,
-        .range = GpuTaskResourceRange{
-            .textureSubresources = resolvedSubresources,
-        },
-        .requiredState = ResourceStates::CopyDest,
-        .access = GpuTaskResourceAccess::Write,
-    };
+    const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = GpuTaskResourceRange{ .textureSubresources = resolvedSubresources, }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
     GpuTaskDesc resolvedDesc = desc;
     const Box clearBox(clearDesc.rect, 0, Limit<i32>::s_Max);
-    const GraphicsBackend::TextureClearQueueRequirement::Enum queueRequirement =
-        GraphicsBackend::TextureClearBoxQueueRequirement(
-            destinationResource.texture->getCreationDescription(),
-            resolvedSubresources,
-            clearBox
-        )
-    ;
-    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(
-        queueRequirement
-    );
-    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(
-        commands,
-        clearDesc.recordHooks.commands
-    ))
+    const GraphicsBackend::TextureClearQueueRequirement::Enum queueRequirement = GraphicsBackend::TextureClearBoxQueueRequirement(destinationResource.texture->getCreationDescription(), resolvedSubresources, clearBox);
+    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(queueRequirement);
+    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
         return {};
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);

@@ -65,14 +65,11 @@ private:
     bool m_coarseStep = false;
 };
 
-using SharedUiSliderSmokeScene = RefCountPtr<
-    RefCounter<UiSliderSmokeScene>, ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiSliderSmokeScene = RefCountPtr< RefCounter<UiSliderSmokeScene>, ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerSliderSmokeEnabled();
 [[nodiscard]] bool IsUiLayerSliderSkinSmokeEnabled();
-[[nodiscard]] SharedUiSliderSmokeScene CreateUiSliderSmokeScene(
-    Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+[[nodiscard]] SharedUiSliderSmokeScene CreateUiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

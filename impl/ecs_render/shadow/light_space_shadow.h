@@ -211,9 +211,7 @@ public:
 // Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.
 [[nodiscard]] bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
 [[nodiscard]] bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
-[[nodiscard]] bool RecordLightSpaceCapture(
-    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, bool transparent
-);
+[[nodiscard]] bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, bool transparent);
 [[nodiscard]] bool RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
 [[nodiscard]] bool RecordLightSpaceResolve(
     Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing,

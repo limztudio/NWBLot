@@ -65,11 +65,7 @@ PresentationFpsStatus::Enum PresentationFpsProbe::observe(const u64 successfulPr
     if(!m_complete && intervalSeconds < 0.5)
         return PresentationFpsStatus::Waiting;
 
-    m_interval = {
-        .firstPresentationCount = m_intervalPresentationCount,
-        .lastPresentationCount = successfulPresentations,
-        .wallSeconds = intervalSeconds,
-    };
+    m_interval = { .firstPresentationCount = m_intervalPresentationCount, .lastPresentationCount = successfulPresentations, .wallSeconds = intervalSeconds, };
     m_intervalBegin = now;
     m_intervalPresentationCount = successfulPresentations;
     return m_complete ? PresentationFpsStatus::Complete : PresentationFpsStatus::Interval;

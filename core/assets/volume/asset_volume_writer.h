@@ -30,13 +30,7 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AssetVolumeWriteResult> WriteAssetVolume(
-    Core::Alloc::GlobalArena& arena,
-    const ResolvedCookPaths& resolvedPaths,
-    AStringView configurationSafeName,
-    const AssetVolumePackManifest& manifest,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& arena, const ResolvedCookPaths& resolvedPaths, AStringView configurationSafeName, const AssetVolumePackManifest& manifest, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

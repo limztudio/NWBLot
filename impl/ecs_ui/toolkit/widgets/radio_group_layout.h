@@ -60,18 +60,8 @@ struct RadioGroupPlacement{
 
 class RadioGroupLayout final{
 public:
-    [[nodiscard]] static Expected<RadioGroupMetrics> Measure(
-        u32 count,
-        const Point& maximumLabel,
-        const RadioGroupOptions& options,
-        const RadioGroupStyle& style
-    )noexcept;
-    [[nodiscard]] static Expected<RadioGroupPlacement> Place(
-        const Rect& bounds,
-        const Rect& clip,
-        const RadioGroupChoices& choices,
-        const RadioGroupMetrics& metrics
-    )noexcept;
+    [[nodiscard]] static Expected<RadioGroupMetrics> Measure(u32 count, const Point& maximumLabel, const RadioGroupOptions& options, const RadioGroupStyle& style)noexcept;
+    [[nodiscard]] static Expected<RadioGroupPlacement> Place(const Rect& bounds, const Rect& clip, const RadioGroupChoices& choices, const RadioGroupMetrics& metrics)noexcept;
 };
 
 

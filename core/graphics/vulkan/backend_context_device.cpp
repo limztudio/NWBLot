@@ -80,13 +80,7 @@ bool BackendContext::createVulkanDevice(){
 
         auto optIt = m_optionalExtensions.device.find(name);
         if(optIt != m_optionalExtensions.device.end()){
-            if(
-                !swapchainEnabled
-                && (
-                    name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME
-                    || name == VK_EXT_HDR_METADATA_EXTENSION_NAME
-                )
-            )
+            if(!swapchainEnabled && (name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME || name == VK_EXT_HDR_METADATA_EXTENSION_NAME))
                 continue;
             enableExtension = true;
             enabledFeature = optIt.value();
@@ -110,10 +104,7 @@ bool BackendContext::createVulkanDevice(){
     VkPhysicalDeviceProperties physicalDeviceProperties;
     m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
 
-    const AStringView deviceName(
-        physicalDeviceProperties.deviceName,
-        NWB_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE)
-    );
+    const AStringView deviceName(physicalDeviceProperties.deviceName, NWB_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE));
     m_rendererString = StringConvert(m_arena, deviceName);
 
     const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
@@ -141,12 +132,7 @@ bool BackendContext::createVulkanDevice(){
         .maintenance4ExtensionAvailable = maintenance4ExtensionEnabled,
     };
     VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
-    VulkanDetail::QueryPhysicalDeviceFeatureSupport(
-        m_instanceDispatch,
-        m_vulkanPhysicalDevice,
-        featureQueryOptions,
-        featureSupport
-    );
+    VulkanDetail::QueryPhysicalDeviceFeatureSupport(m_instanceDispatch, m_vulkanPhysicalDevice, featureQueryOptions, featureSupport);
     if(const AStringView missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport); !missingFeature.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(missingFeature));
         return false;
@@ -175,10 +161,7 @@ bool BackendContext::createVulkanDevice(){
 
     bool queriedOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
-        if(
-            feature == DeviceExtensionFeature::DescriptorBuffer
-            || (apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
-        )
+        if(feature == DeviceExtensionFeature::DescriptorBuffer || (apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr))
             continue;
         VulkanDetail::AppendOptionalDeviceFeature(pNext, supportedOptionalFeatures, feature, queriedOptionalFeatures);
     }
@@ -191,11 +174,7 @@ bool BackendContext::createVulkanDevice(){
     for(const auto& [name, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::None)
             continue;
-        if(
-            apiSupportsVulkan13
-            && feature == DeviceExtensionFeature::TextureCompressionAstcHdr
-            && supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE
-        )
+        if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr && supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE)
             continue;
         if(VulkanDetail::SupportsRequestedOptionalDeviceFeature(requestedOptionalFeatures, supportedOptionalFeatures, feature))
             continue;
@@ -224,10 +203,7 @@ bool BackendContext::createVulkanDevice(){
     {
         constexpr AStringView s_MeshShaderExtensionName = VK_EXT_MESH_SHADER_EXTENSION_NAME;
         const auto meshShaderIt = m_enabledExtensions.device.find(s_MeshShaderExtensionName);
-        if(
-            meshShaderIt != m_enabledExtensions.device.end()
-            && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU
-        ){
+        if(meshShaderIt != m_enabledExtensions.device.end() && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU){
             NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so renderer uses compute emulation instead of native mesh shaders.")
                 , StringConvert(s_MeshShaderExtensionName)
                 , StringConvert(physicalDeviceProperties.deviceName)
@@ -263,64 +239,25 @@ bool BackendContext::createVulkanDevice(){
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
     if(!m_deviceParams.enableNativeMeshShaders)
         requestedOptionalFeatures.meshShader.taskShader = VK_FALSE;
-    m_meshShaderFeatureEnabled =
-        m_deviceParams.enableNativeMeshShaders
-        && isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
-        && requestedOptionalFeatures.meshShader.meshShader == VK_TRUE
-    ;
-    m_accelerationStructureFeatureEnabled =
-        isDeviceExtensionEnabled(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
-        && requestedOptionalFeatures.accelerationStructure.accelerationStructure == VK_TRUE
-    ;
-    m_rayTracingPipelineFeatureEnabled =
-        isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayTracingPipeline.rayTracingPipeline == VK_TRUE
-    ;
-    m_rayQueryFeatureEnabled =
-        isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayQuery.rayQuery == VK_TRUE
-    ;
-    m_opacityMicromapFeatureEnabled =
-        isDeviceExtensionEnabled(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME)
-        && requestedOptionalFeatures.opacityMicromap.micromap == VK_TRUE
-    ;
-    m_clusterAccelerationStructureFeatureEnabled =
-        isDeviceExtensionEnabled(VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME)
-        && requestedOptionalFeatures.clusterAccelerationStructure.clusterAccelerationStructure == VK_TRUE
-    ;
-    m_rayTracingInvocationReorderFeatureEnabled =
-        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayTracingInvocationReorder.rayTracingInvocationReorder == VK_TRUE
-    ;
-    m_rayTracingInvocationReorderExtFeatureEnabled =
-        isDeviceExtensionEnabled(VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayTracingInvocationReorderExt.rayTracingInvocationReorder == VK_TRUE
-    ;
-    m_meshTaskShaderSupported =
-        m_meshShaderFeatureEnabled
-        && requestedOptionalFeatures.meshShader.taskShader == VK_TRUE
-    ;
-    m_rayTracingSpheresSupported =
-        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayTracingLinearSweptSpheres.spheres == VK_TRUE
-    ;
-    m_rayTracingLinearSweptSpheresSupported =
-        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
-    ;
+    m_meshShaderFeatureEnabled = m_deviceParams.enableNativeMeshShaders && isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME) && requestedOptionalFeatures.meshShader.meshShader == VK_TRUE;
+    m_accelerationStructureFeatureEnabled = isDeviceExtensionEnabled(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) && requestedOptionalFeatures.accelerationStructure.accelerationStructure == VK_TRUE;
+    m_rayTracingPipelineFeatureEnabled = isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) && requestedOptionalFeatures.rayTracingPipeline.rayTracingPipeline == VK_TRUE;
+    m_rayQueryFeatureEnabled = isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME) && requestedOptionalFeatures.rayQuery.rayQuery == VK_TRUE;
+    m_opacityMicromapFeatureEnabled = isDeviceExtensionEnabled(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) && requestedOptionalFeatures.opacityMicromap.micromap == VK_TRUE;
+    m_clusterAccelerationStructureFeatureEnabled = isDeviceExtensionEnabled(VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) && requestedOptionalFeatures.clusterAccelerationStructure.clusterAccelerationStructure == VK_TRUE;
+    m_rayTracingInvocationReorderFeatureEnabled = isDeviceExtensionEnabled(VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) && requestedOptionalFeatures.rayTracingInvocationReorder.rayTracingInvocationReorder == VK_TRUE;
+    m_rayTracingInvocationReorderExtFeatureEnabled = isDeviceExtensionEnabled(VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) && requestedOptionalFeatures.rayTracingInvocationReorderExt.rayTracingInvocationReorder == VK_TRUE;
+    m_meshTaskShaderSupported = m_meshShaderFeatureEnabled && requestedOptionalFeatures.meshShader.taskShader == VK_TRUE;
+    m_rayTracingSpheresSupported = isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) && requestedOptionalFeatures.rayTracingLinearSweptSpheres.spheres == VK_TRUE;
+    m_rayTracingLinearSweptSpheresSupported = isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE;
 
-    // Same-class routing may use every additional queue exposed by each active primary family. The separate
-    // cross-family policy may additionally expose one distinct compatible family for each enabled queue class.
-    // Query family counts here, after physical-device selection and before vkCreateDevice, so no unsupported queue
-    // index is placed in the immutable Device registry.
+    // Same-class routing may use every additional queue exposed by each active primary family.
+    // The separate cross-family policy may additionally expose one distinct compatible family for each enabled queue class.
+    // Query family counts here, after physical-device selection and before vkCreateDevice, so no unsupported queue index is placed in the immutable Device registry.
     uint32_t physicalQueueFamilyCount = 0u;
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
-    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(
-        m_vulkanPhysicalDevice,
-        &physicalQueueFamilyCount,
-        physicalQueueFamilies.data()
-    );
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, physicalQueueFamilies.data());
     const bool createCrossFamilySecondaryGraphicsQueue =
         m_deviceParams.enableSameClassMultiQueue
         && m_deviceParams.enableCrossFamilySameClassQueueRouting
@@ -329,14 +266,8 @@ bool BackendContext::createVulkanDevice(){
         && static_cast<usize>(m_secondaryGraphicsQueueFamily) < physicalQueueFamilies.size()
         && physicalQueueFamilies[static_cast<usize>(m_secondaryGraphicsQueueFamily)].queueCount > s_GraphicsQueueIndex
     ;
-    const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex
-        ? m_asyncComputeQueueFamily
-        : m_computeQueueFamily
-    ;
-    const bool createComputeQueue =
-        schedulerComputeQueueFamily != s_InvalidQueueFamilyIndex
-        && schedulerComputeQueueFamily != m_graphicsQueueFamily
-    ;
+    const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily;
+    const bool createComputeQueue = schedulerComputeQueueFamily != s_InvalidQueueFamilyIndex && schedulerComputeQueueFamily != m_graphicsQueueFamily;
     const bool createCrossFamilySecondaryComputeQueue =
         createComputeQueue
         && m_deviceParams.enableSameClassMultiQueue
@@ -346,16 +277,8 @@ bool BackendContext::createVulkanDevice(){
         && static_cast<usize>(m_secondaryComputeQueueFamily) < physicalQueueFamilies.size()
         && physicalQueueFamilies[static_cast<usize>(m_secondaryComputeQueueFamily)].queueCount > s_ComputeQueueIndex
     ;
-    const i32 secondaryComputeQueueFamily = createCrossFamilySecondaryComputeQueue
-        ? m_secondaryComputeQueueFamily
-        : s_InvalidQueueFamilyIndex
-    ;
-    const bool createDedicatedTransferQueue =
-        m_deviceParams.enableTransferQueue
-        && m_transferQueueFamily != s_InvalidQueueFamilyIndex
-        && m_transferQueueFamily != m_graphicsQueueFamily
-        && m_transferQueueFamily != m_computeQueueFamily
-    ;
+    const i32 secondaryComputeQueueFamily = createCrossFamilySecondaryComputeQueue ? m_secondaryComputeQueueFamily : s_InvalidQueueFamilyIndex;
+    const bool createDedicatedTransferQueue = m_deviceParams.enableTransferQueue && m_transferQueueFamily != s_InvalidQueueFamilyIndex && m_transferQueueFamily != m_graphicsQueueFamily && m_transferQueueFamily != m_computeQueueFamily;
     const bool createCrossFamilySecondaryTransferQueue =
         createDedicatedTransferQueue
         && m_deviceParams.enableSameClassMultiQueue
@@ -365,10 +288,7 @@ bool BackendContext::createVulkanDevice(){
         && static_cast<usize>(m_secondaryTransferQueueFamily) < physicalQueueFamilies.size()
         && physicalQueueFamilies[static_cast<usize>(m_secondaryTransferQueueFamily)].queueCount > s_TransferQueueIndex
     ;
-    const i32 secondaryTransferQueueFamily = createCrossFamilySecondaryTransferQueue
-        ? m_secondaryTransferQueueFamily
-        : s_InvalidQueueFamilyIndex
-    ;
+    const i32 secondaryTransferQueueFamily = createCrossFamilySecondaryTransferQueue ? m_secondaryTransferQueueFamily : s_InvalidQueueFamilyIndex;
 
     struct SameClassQueueRequest{
         CommandQueue::Enum queueClass = CommandQueue::kCount;
@@ -376,37 +296,17 @@ bool BackendContext::createVulkanDevice(){
         u32 queueIndex = 0u;
     };
     Vector<SameClassQueueRequest, Alloc::ScratchArena> sameClassQueueRequests{scratchArena};
-    const auto appendSameClassQueue = [&sameClassQueueRequests](
-        const CommandQueue::Enum queueClass,
-        const i32 family,
-        const u32 queueIndex
-    ){
+    const auto appendSameClassQueue = [&sameClassQueueRequests](const CommandQueue::Enum queueClass, const i32 family, const u32 queueIndex){
         for(const SameClassQueueRequest& existing : sameClassQueueRequests){
             if(existing.family == family && existing.queueIndex == queueIndex){
                 NWB_ASSERT(existing.queueClass == queueClass);
                 return;
             }
         }
-        sameClassQueueRequests.push_back(SameClassQueueRequest{
-            .queueClass = queueClass,
-            .family = family,
-            .queueIndex = queueIndex,
-        });
+        sameClassQueueRequests.push_back(SameClassQueueRequest{ .queueClass = queueClass, .family = family, .queueIndex = queueIndex, });
     };
-    const auto appendPrimaryFamilyQueues = [
-        &appendSameClassQueue,
-        &physicalQueueFamilies,
-        this
-    ](
-        const CommandQueue::Enum queueClass,
-        const i32 primaryFamily,
-        const u32 firstAdditionalQueueIndex
-    ){
-        if(
-            !m_deviceParams.enableSameClassMultiQueue
-            || primaryFamily == s_InvalidQueueFamilyIndex
-            || static_cast<usize>(primaryFamily) >= physicalQueueFamilies.size()
-        )
+    const auto appendPrimaryFamilyQueues = [&appendSameClassQueue, &physicalQueueFamilies, this](const CommandQueue::Enum queueClass, const i32 primaryFamily, const u32 firstAdditionalQueueIndex){
+        if(!m_deviceParams.enableSameClassMultiQueue || primaryFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(primaryFamily) >= physicalQueueFamilies.size())
             return;
 
         const u32 queueCount = physicalQueueFamilies[static_cast<usize>(primaryFamily)].queueCount;
@@ -414,34 +314,21 @@ bool BackendContext::createVulkanDevice(){
             appendSameClassQueue(queueClass, primaryFamily, queueIndex);
     };
 
-    // Preserve the old auxiliary identity when a cross-family route exists: it remains the first non-primary
-    // entry for that class, while every extra queue from the primary family is still registered after it.
+    // Preserve the old auxiliary identity when a cross-family route exists: it remains the first non-primary entry for that class, while every extra queue from the primary family is still registered after it.
     if(createCrossFamilySecondaryGraphicsQueue)
         appendSameClassQueue(CommandQueue::Graphics, m_secondaryGraphicsQueueFamily, s_GraphicsQueueIndex);
-    appendPrimaryFamilyQueues(
-        CommandQueue::Graphics,
-        m_graphicsQueueFamily,
-        s_SecondaryGraphicsQueueIndex
-    );
+    appendPrimaryFamilyQueues(CommandQueue::Graphics, m_graphicsQueueFamily, s_SecondaryGraphicsQueueIndex);
 
     if(createCrossFamilySecondaryComputeQueue)
         appendSameClassQueue(CommandQueue::Compute, secondaryComputeQueueFamily, s_ComputeQueueIndex);
     if(createComputeQueue){
-        appendPrimaryFamilyQueues(
-            CommandQueue::Compute,
-            schedulerComputeQueueFamily,
-            s_ComputeQueueIndex + 1u
-        );
+        appendPrimaryFamilyQueues(CommandQueue::Compute, schedulerComputeQueueFamily, s_ComputeQueueIndex + 1u);
     }
 
     if(createCrossFamilySecondaryTransferQueue)
         appendSameClassQueue(CommandQueue::Transfer, secondaryTransferQueueFamily, s_TransferQueueIndex);
     if(createDedicatedTransferQueue){
-        appendPrimaryFamilyQueues(
-            CommandQueue::Transfer,
-            m_transferQueueFamily,
-            s_TransferQueueIndex + 1u
-        );
+        appendPrimaryFamilyQueues(CommandQueue::Transfer, m_transferQueueFamily, s_TransferQueueIndex + 1u);
     }
 
     Vector<i32, Alloc::ScratchArena> uniqueQueueFamilies{scratchArena};
@@ -523,10 +410,7 @@ bool BackendContext::createVulkanDevice(){
         VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
 
     m_cooperativeVectorFeatureEnabled = coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE;
-    m_cooperativeVectorTrainingFeatureEnabled =
-        m_cooperativeVectorFeatureEnabled
-        && cooperativeVectorFeatures.cooperativeVectorTraining == VK_TRUE
-    ;
+    m_cooperativeVectorTrainingFeatureEnabled = m_cooperativeVectorFeatureEnabled && cooperativeVectorFeatures.cooperativeVectorTraining == VK_TRUE;
 
     if(apiSupportsVulkan13)
         VulkanDetail::AppendFeatureStruct(pNext, &vulkan13features);
@@ -626,11 +510,7 @@ bool BackendContext::createVulkanDevice(){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Created native queue could not be retrieved."));
                 return false;
             }
-            m_nativeQueues.push_back(VulkanNativeQueueDesc{
-                .queue = queue,
-                .familyIndex = queueInfo.queueFamilyIndex,
-                .queueIndex = nativeQueueOffset,
-            });
+            m_nativeQueues.push_back(VulkanNativeQueueDesc{ .queue = queue, .familyIndex = queueInfo.queueFamilyIndex, .queueIndex = nativeQueueOffset, });
         }
     }
 
@@ -645,23 +525,14 @@ bool BackendContext::createVulkanDevice(){
     m_presentNativeQueueIndex = Limit<u32>::s_Max;
     if(
         findNativeQueueIndex(static_cast<u32>(m_graphicsQueueFamily), s_GraphicsQueueIndex) == Limit<u32>::s_Max
-        || (
-            createComputeQueue
-            && findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex) == Limit<u32>::s_Max
-        )
-        || (
-            createDedicatedTransferQueue
-            && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) == Limit<u32>::s_Max
-        )
+        || (createComputeQueue && findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex) == Limit<u32>::s_Max)
+        || (createDedicatedTransferQueue && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) == Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required scheduler queue is absent from the canonical native registry."));
         return false;
     }
     if(!m_deviceParams.headlessDevice){
-        m_presentNativeQueueIndex = findNativeQueueIndex(
-            static_cast<u32>(m_presentQueueFamily),
-            s_PresentQueueIndex
-        );
+        m_presentNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(m_presentQueueFamily), s_PresentQueueIndex);
         if(m_presentNativeQueueIndex == Limit<u32>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Present queue is absent from the canonical native registry."));
             return false;
@@ -669,35 +540,18 @@ bool BackendContext::createVulkanDevice(){
     }
 
     const auto capabilitiesForSameClassQueue = [&physicalQueueFamilies](const i32 queueFamily){
-        if(
-            queueFamily == s_InvalidQueueFamilyIndex
-            || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()
-        ){
+        if(queueFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()){
             NWB_ASSERT(false);
             return GpuQueueCapability::None;
         }
-        return VulkanDetail::QueueCapabilitiesForQueueFlags(
-            physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
-        );
+        return VulkanDetail::QueueCapabilitiesForQueueFlags(physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags);
     };
-    const auto registerSameClassQueues = [
-        this,
-        &sameClassQueueRequests,
-        &capabilitiesForSameClassQueue,
-        &physicalQueueFamilies
-    ](
-        const CommandQueue::Enum queueClass,
-        bool& sameClassQueueEnabled,
-        i32& secondaryQueueFamily
-    ){
+    const auto registerSameClassQueues = [this, &sameClassQueueRequests, &capabilitiesForSameClassQueue, &physicalQueueFamilies](const CommandQueue::Enum queueClass, bool& sameClassQueueEnabled, i32& secondaryQueueFamily){
         for(const SameClassQueueRequest& request : sameClassQueueRequests){
             if(request.queueClass != queueClass)
                 continue;
 
-            const u32 nativeQueueIndex = findNativeQueueIndex(
-                static_cast<u32>(request.family),
-                request.queueIndex
-            );
+            const u32 nativeQueueIndex = findNativeQueueIndex(static_cast<u32>(request.family), request.queueIndex);
             if(nativeQueueIndex == Limit<u32>::s_Max){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Same-class queue is absent from the canonical native registry."));
                 return false;
@@ -719,21 +573,9 @@ bool BackendContext::createVulkanDevice(){
         return true;
     };
     if(
-        !registerSameClassQueues(
-            CommandQueue::Graphics,
-            m_sameClassGraphicsQueueEnabled,
-            m_secondaryGraphicsQueueFamily
-        )
-        || !registerSameClassQueues(
-            CommandQueue::Compute,
-            m_sameClassComputeQueueEnabled,
-            m_secondaryComputeQueueFamily
-        )
-        || !registerSameClassQueues(
-            CommandQueue::Transfer,
-            m_sameClassTransferQueueEnabled,
-            m_secondaryTransferQueueFamily
-        )
+        !registerSameClassQueues(CommandQueue::Graphics, m_sameClassGraphicsQueueEnabled, m_secondaryGraphicsQueueFamily)
+        || !registerSameClassQueues(CommandQueue::Compute, m_sameClassComputeQueueEnabled, m_secondaryComputeQueueFamily)
+        || !registerSameClassQueues(CommandQueue::Transfer, m_sameClassTransferQueueEnabled, m_secondaryTransferQueueFamily)
     )
         return false;
 

@@ -31,8 +31,7 @@
 // The scene-instance table has a distinct 64-byte record stride but shares the global StorageBuffer descriptor class with the BVH and material buffers. This view supplies its shader-side stride without a new descriptor class.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table in bindless_heap.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapSwShadowSceneInstanceBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapSwShadowSceneInstanceBuffers[];
 #pragma warning(pop)
 
 StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapSwShadowSceneInstances(const uint slot){

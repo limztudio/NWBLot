@@ -22,11 +22,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SceneShadingSetupGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool SceneShadingSetupGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(commandList);
     static_cast<void>(context);
 
@@ -38,13 +34,7 @@ namespace ECSRenderDetail{
 
 void SceneShadingSetupGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
-    payload.deferredSystem.confirmSceneShadingBufferUploads(
-        payload.lightData,
-        payload.lightCount,
-        payload.lightUploadRequired,
-        payload.sceneShadingState,
-        payload.sceneShadingUploadRequired
-    );
+    payload.deferredSystem.confirmSceneShadingBufferUploads(payload.lightData, payload.lightCount, payload.lightUploadRequired, payload.sceneShadingState, payload.sceneShadingUploadRequired);
 }
 
 

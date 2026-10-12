@@ -44,10 +44,7 @@ EditNavigationSnapshot EditNavigationState::snapshot()const noexcept{
 }
 
 bool EditNavigationState::matches(const EditNavigationSnapshot& snapshot)const noexcept{
-    return
-        snapshot.instanceGeneration == m_instanceGeneration && snapshot.generation == m_generation
-        && snapshot.preferredX == m_preferredX && snapshot.valid == m_valid
-    ;
+    return snapshot.instanceGeneration == m_instanceGeneration && snapshot.generation == m_generation && snapshot.preferredX == m_preferredX && snapshot.valid == m_valid;
 }
 
 bool EditNavigationState::setPreferredX(const f32 preferredX)noexcept{

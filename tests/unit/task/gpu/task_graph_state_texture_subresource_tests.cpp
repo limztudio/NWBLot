@@ -40,19 +40,13 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
-        graph,
-        Name("tests/task_graph/subresource_states"),
-        "Subresource States"
-    );
+    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/subresource_states"), "Subresource States");
     ASSERT_TRUE(texture.valid());
 
     const Graphics::GpuTaskResourceUse firstUse[] = {
         Graphics::GpuTaskResourceUse{
             .resource = texture,
-            .range = Graphics::GpuTaskResourceRange{
-                .textureSubresources = Graphics::TextureSubresourceSet{ 0u, 1u, 0u, 1u },
-            },
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = Graphics::TextureSubresourceSet{ 0u, 1u, 0u, 1u }, },
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
@@ -60,31 +54,13 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
     const Graphics::GpuTaskResourceUse secondUse[] = {
         Graphics::GpuTaskResourceUse{
             .resource = texture,
-            .range = Graphics::GpuTaskResourceRange{
-                .textureSubresources = Graphics::TextureSubresourceSet{ 1u, 1u, 0u, 1u },
-            },
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = Graphics::TextureSubresourceSet{ 1u, 1u, 0u, 1u }, },
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
-    const Graphics::GpuTaskId first = AddTask(
-        graph,
-        Name("tests/task_graph/subresource_first"),
-        "First Subresource",
-        nullptr,
-        0u,
-        firstUse,
-        LengthOf(firstUse)
-    );
-    const Graphics::GpuTaskId second = AddTask(
-        graph,
-        Name("tests/task_graph/subresource_second"),
-        "Second Subresource",
-        nullptr,
-        0u,
-        secondUse,
-        LengthOf(secondUse)
-    );
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/subresource_first"), "First Subresource", nullptr, 0u, firstUse, LengthOf(firstUse));
+    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/subresource_second"), "Second Subresource", nullptr, 0u, secondUse, LengthOf(secondUse));
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
 
@@ -103,22 +79,11 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
 TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
-        graph,
-        Name("tests/task_graph/fragment_fan_in_texture"),
-        "Fragment Fan-In Texture"
-    );
+    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/fragment_fan_in_texture"), "Fragment Fan-In Texture");
     ASSERT_TRUE(texture.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-        DedicatedTransferQueue(),
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), DedicatedTransferQueue(), };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
     const Graphics::GpuTaskCommandRequirements transferCommands{ Graphics::GpuQueueCapability::Transfer };
@@ -126,73 +91,20 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
 
-    const Graphics::GpuTaskResourceRange transferRange{
-        .textureSubresources = Graphics::TextureSubresourceSet(
-            0u,
-            1u,
-            0u,
-            Graphics::TextureSubresourceSet::s_AllArraySlices
-        ),
-    };
-    const Graphics::GpuTaskResourceRange computeRange{
-        .textureSubresources = Graphics::TextureSubresourceSet(
-            1u,
-            1u,
-            0u,
-            Graphics::TextureSubresourceSet::s_AllArraySlices
-        ),
-    };
-    const Graphics::GpuTaskResourceRange broadRange{
-        .textureSubresources = Graphics::s_AllSubresources,
-    };
-    const Graphics::GpuTaskResourceRange initialTailRange{
-        .textureSubresources = Graphics::TextureSubresourceSet(
-            s_ExpectedDualCount,
-            Graphics::TextureSubresourceSet::s_AllMipLevels,
-            0u,
-            Graphics::TextureSubresourceSet::s_AllArraySlices
-        ),
-    };
-    const Graphics::GpuTaskResourceUse transferUse{
-        .resource = texture,
-        .range = transferRange,
-        .requiredState = Graphics::ResourceStates::CopyDest,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskResourceUse computeUse{
-        .resource = texture,
-        .range = computeRange,
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskResourceUse consumerUse{
-        .resource = texture,
-        .range = broadRange,
-        .requiredState = Graphics::ResourceStates::ShaderResource,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
+    const Graphics::GpuTaskResourceRange transferRange{ .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, Graphics::TextureSubresourceSet::s_AllArraySlices), };
+    const Graphics::GpuTaskResourceRange computeRange{ .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, Graphics::TextureSubresourceSet::s_AllArraySlices), };
+    const Graphics::GpuTaskResourceRange broadRange{ .textureSubresources = Graphics::s_AllSubresources, };
+    const Graphics::GpuTaskResourceRange initialTailRange{ .textureSubresources = Graphics::TextureSubresourceSet(s_ExpectedDualCount, Graphics::TextureSubresourceSet::s_AllMipLevels, 0u, Graphics::TextureSubresourceSet::s_AllArraySlices), };
+    const Graphics::GpuTaskResourceUse transferUse{ .resource = texture, .range = transferRange, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskResourceUse computeUse{ .resource = texture, .range = computeRange, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
+    const Graphics::GpuTaskResourceUse consumerUse{ .resource = texture, .range = broadRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
 
     Graphics::GpuTaskDesc transferDesc;
-    transferDesc
-        .setIdentity(Name("tests/task_graph/fragment_fan_in_transfer"))
-        .setMarkerLabel("Fragment Fan-In Transfer")
-        .setScheduling(scheduling)
-        .setResourceUses(&transferUse, 1u)
-    ;
+    transferDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_transfer")).setMarkerLabel("Fragment Fan-In Transfer").setScheduling(scheduling).setResourceUses(&transferUse, 1u);
     Graphics::GpuTaskDesc computeDesc;
-    computeDesc
-        .setIdentity(Name("tests/task_graph/fragment_fan_in_compute"))
-        .setMarkerLabel("Fragment Fan-In Compute")
-        .setScheduling(scheduling)
-        .setResourceUses(&computeUse, 1u)
-    ;
+    computeDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_compute")).setMarkerLabel("Fragment Fan-In Compute").setScheduling(scheduling).setResourceUses(&computeUse, 1u);
     Graphics::GpuTaskDesc consumerDesc;
-    consumerDesc
-        .setIdentity(Name("tests/task_graph/fragment_fan_in_consumer"))
-        .setMarkerLabel("Fragment Fan-In Consumer")
-        .setScheduling(scheduling)
-        .setResourceUses(&consumerUse, 1u)
-    ;
+    consumerDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_consumer")).setMarkerLabel("Fragment Fan-In Consumer").setScheduling(scheduling).setResourceUses(&consumerUse, 1u);
     const Graphics::GpuTaskId transferTask = graph.addTask(transferDesc, transferCommands);
     const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc, computeCommands);
     const Graphics::GpuTaskId consumerTask = graph.addTask(consumerDesc, graphicsCommands);
@@ -230,16 +142,8 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     bool hasComputeSeed = false;
     for(u32 seedIndex = 0u; seedIndex < compiledConsumer->prologueStateSeedCount; ++seedIndex){
         const Graphics::GpuPacketStateSeed& seed = seeds[seedIndex];
-        hasTransferSeed = hasTransferSeed || (
-            seed.resource == texture
-            && seed.range.textureSubresources == transferRange.textureSubresources
-            && seed.sourcePacket == transferPacket
-        );
-        hasComputeSeed = hasComputeSeed || (
-            seed.resource == texture
-            && seed.range.textureSubresources == computeRange.textureSubresources
-            && seed.sourcePacket == computePacket
-        );
+        hasTransferSeed = hasTransferSeed || (seed.resource == texture && seed.range.textureSubresources == transferRange.textureSubresources && seed.sourcePacket == transferPacket);
+        hasComputeSeed = hasComputeSeed || (seed.resource == texture && seed.range.textureSubresources == computeRange.textureSubresources && seed.sourcePacket == computePacket);
         EXPECT_NE(seed.range.textureSubresources, broadRange.textureSubresources);
     }
     EXPECT_TRUE(hasTransferSeed);

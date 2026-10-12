@@ -36,9 +36,7 @@ namespace __hidden_ui_router_popup{
 [[nodiscard]] static bool Focusable(const HitTarget* target)noexcept{
     if(!target || !target->enabled || !target->focusable)
         return false;
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
-        VectorSet(target->rectangle.x, target->rectangle.y, target->rectangle.width, target->rectangle.height), VectorSet(target->clip.x, target->clip.y, target->clip.width, target->clip.height)
-    );
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target->rectangle.x, target->rectangle.y, target->rectangle.width, target->rectangle.height), VectorSet(target->clip.x, target->clip.y, target->clip.width, target->clip.height));
     return (VectorMoveMask(VectorGreater(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
 }
 
@@ -92,10 +90,7 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
 
 bool InputRouter::validPopupTarget(const HitTarget& target)const{
     if(!target.popup.widget.valid()){
-        return
-            target.layer == 0u && target.popup.declarationGeneration == 0u
-            && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u
-        ;
+        return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
     }
     for(const auto& record : m_stagedPopups){
         if(record.scope.token == target.popup)
@@ -156,8 +151,7 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
     WidgetId candidateFocus = m_popups.empty() ? m_focus : m_popups.front().restoreFocus;
     u64 candidateDeclaration = m_popups.empty() ? m_focusDeclaration : m_popups.front().restoreDeclaration;
     PopupToken candidatePopup;
-    const bool lostFocus = !m_windowFocused || (expectedFocusLossGeneration != Limit<u64>::s_Max
-        && expectedFocusLossGeneration != m_focusLossGeneration);
+    const bool lostFocus = !m_windowFocused || (expectedFocusLossGeneration != Limit<u64>::s_Max && expectedFocusLossGeneration != m_focusLossGeneration);
     if(!eligible(candidateFocus, candidateDeclaration, candidatePopup)){
         candidateFocus = {};
         candidateDeclaration = 0u;

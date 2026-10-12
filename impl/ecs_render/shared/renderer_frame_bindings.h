@@ -38,11 +38,7 @@ namespace ECSRenderDetail{
 
         [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
         [[nodiscard]] bool bindingValid()const noexcept{
-            return
-                buffer
-                && heapHandle.valid()
-                && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-            ;
+            return buffer && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
         }
     };
 
@@ -67,10 +63,7 @@ namespace ECSRenderDetail{
                 && materialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
             ;
         }
-        [[nodiscard]] bool matches(
-            const MaterialPassBufferSnapshot& materialBuffers,
-            const Core::BufferHandle& meshViewBuffer
-        )const noexcept{
+        [[nodiscard]] bool matches(const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer)const noexcept{
             return
                 bindingValid()
                 && instanceBuffer == materialBuffers.instanceBuffer
@@ -81,38 +74,20 @@ namespace ECSRenderDetail{
             ;
         }
         [[nodiscard]] bool frameReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
-            if(
-                materialTypedByteCount == 0u
-                || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u
-            )
+            if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
                 return false;
 
-            return
-                bindingValid()
-                && instanceBufferCapacity >= instanceCount
-                && materialTypedBufferCapacity >= Max<usize>(materialTypedByteCount, sizeof(u32))
-            ;
+            return bindingValid() && instanceBufferCapacity >= instanceCount && materialTypedBufferCapacity >= Max<usize>(materialTypedByteCount, sizeof(u32));
         }
     };
 
     // Shared opaque/gbuffer record prologue: frame setup is ready when both setup flags are present and set.
-    [[nodiscard]] inline bool FrameSetupReady(
-        const bool* meshViewSetupReady,
-        const bool* sceneShadingSetupReady
-    )noexcept{
-        return
-            meshViewSetupReady
-            && sceneShadingSetupReady
-            && *meshViewSetupReady
-            && *sceneShadingSetupReady
-        ;
+    [[nodiscard]] inline bool FrameSetupReady(const bool* meshViewSetupReady, const bool* sceneShadingSetupReady)noexcept{
+        return meshViewSetupReady && sceneShadingSetupReady && *meshViewSetupReady && *sceneShadingSetupReady;
     }
 
     // Reference overload for task payloads that carry the required setup flags by reference.
-    [[nodiscard]] inline bool FrameSetupReady(
-        const bool& meshViewSetupReady,
-        const bool& sceneShadingSetupReady
-    )noexcept{
+    [[nodiscard]] inline bool FrameSetupReady(const bool& meshViewSetupReady, const bool& sceneShadingSetupReady)noexcept{
         return meshViewSetupReady && sceneShadingSetupReady;
     }
 };

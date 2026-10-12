@@ -41,15 +41,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     frame->m_clear = {};
     frame->m_raster = {};
     const DrawSnapshot& snapshot = frame->m_snapshot;
-    if(
-        allowEmptySceneLayer
-        && snapshot.commands().empty()
-        && snapshot.vertices().empty()
-        && snapshot.indices().empty()
-        && snapshot.glyphPages().empty()
-        && snapshot.sdfPages().empty()
-        && snapshot.textureImages().empty()
-    ){
+    if(allowEmptySceneLayer && snapshot.commands().empty() && snapshot.vertices().empty() && snapshot.indices().empty() && snapshot.glyphPages().empty() && snapshot.sdfPages().empty() && snapshot.textureImages().empty()){
         layer.frameGeneration = snapshot.generation();
         m_declaredLayer = layer;
         m_declaredGraph = &graph;
@@ -57,10 +49,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
         m_claimed = true;
         return layer;
     }
-    const Core::GpuExternalCompletionId targetReady = graph.importExternalCompletion(
-        Core::GpuExternalCompletionDesc().setIdentity(Name("ui.layer_ready")).setMarkerLabel("UI Layer Initialization Completion")
-            .setToken(frame->m_target->m_readinessToken)
-    );
+    const Core::GpuExternalCompletionId targetReady = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.layer_ready")).setMarkerLabel("UI Layer Initialization Completion").setToken(frame->m_target->m_readinessToken));
     if(!targetReady.valid())
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId color = graph.importTexture(
@@ -68,10 +57,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.layer")).setMarkerLabel("UI Linear Layer").setType(Core::GpuGraphResourceType::Texture)
             .setInitialAvailabilityCompletion(targetReady).setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
-    const Core::GpuExternalCompletionId skinReady = graph.importExternalCompletion(
-        Core::GpuExternalCompletionDesc().setIdentity(Name("ui.atlas_ready")).setMarkerLabel("UI Atlas Upload Completion")
-            .setToken(frame->m_skin->m_texture.readinessToken)
-    );
+    const Core::GpuExternalCompletionId skinReady = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.atlas_ready")).setMarkerLabel("UI Atlas Upload Completion").setToken(frame->m_skin->m_texture.readinessToken));
     if(!color.valid() || !skinReady.valid())
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId skin = graph.importTexture(
@@ -79,13 +65,8 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.atlas")).setMarkerLabel("UI Atlas").setType(Core::GpuGraphResourceType::Texture)
             .setInitialAvailabilityCompletion(skinReady).setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
-    const Core::GpuGraphResourceVersionId version = graph.declareResourceVersion(
-        Core::GpuGraphResourceVersionDesc().setResource(color).setOrigin(Core::GpuGraphResourceVersionOrigin::TaskProduced)
-    );
-    const Core::GpuGraphPipelineId pipeline = graph.importGraphicsPipeline(
-        frame->m_resources->m_pipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.raster_pipeline")).setMarkerLabel("UI Raster Pipeline")
-            .setType(Core::GpuGraphPipelineType::Graphics)
-    );
+    const Core::GpuGraphResourceVersionId version = graph.declareResourceVersion(Core::GpuGraphResourceVersionDesc().setResource(color).setOrigin(Core::GpuGraphResourceVersionOrigin::TaskProduced));
+    const Core::GpuGraphPipelineId pipeline = graph.importGraphicsPipeline(frame->m_resources->m_pipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.raster_pipeline")).setMarkerLabel("UI Raster Pipeline").setType(Core::GpuGraphPipelineType::Graphics));
     if(!skin.valid() || !version.valid() || !pipeline.valid())
         return MakeUnexpected(Failure{});
     Core::GpuTaskSchedulingHint uploadScheduling;
@@ -109,41 +90,21 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     if(!textureImages)
         return MakeUnexpected(Failure{});
     if(!frame->m_snapshot.vertices().empty()){
-        vertices = graph.importBuffer(
-            frame->m_vertices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer)
-                .setExternalFinalState(Core::ResourceStates::Common)
-        );
-        indices = graph.importBuffer(
-            frame->m_indices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.indices")).setMarkerLabel("UI Indices").setType(Core::GpuGraphResourceType::Buffer)
-                .setExternalFinalState(Core::ResourceStates::Common)
-        );
+        vertices = graph.importBuffer(frame->m_vertices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common));
+        indices = graph.importBuffer(frame->m_indices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.indices")).setMarkerLabel("UI Indices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common));
         if(!vertices.valid() || !indices.valid())
             return MakeUnexpected(Failure{});
-        const Core::GpuUploadBlobId vertexBytes = graph.copyUploadData(
-            frame->m_snapshot.vertices().data(), frame->m_snapshot.vertices().size() * sizeof(Vertex), alignof(Vertex)
-        );
-        const Core::GpuUploadBlobId indexBytes = graph.copyUploadData(
-            frame->m_snapshot.indices().data(), frame->m_snapshot.indices().size() * sizeof(u32), alignof(u32)
-        );
+        const Core::GpuUploadBlobId vertexBytes = graph.copyUploadData(frame->m_snapshot.vertices().data(), frame->m_snapshot.vertices().size() * sizeof(Vertex), alignof(Vertex));
+        const Core::GpuUploadBlobId indexBytes = graph.copyUploadData(frame->m_snapshot.indices().data(), frame->m_snapshot.indices().size() * sizeof(u32), alignof(u32));
         if(!vertexBytes.valid() || !indexBytes.valid())
             return MakeUnexpected(Failure{});
         const Core::GpuTaskId vertexUpload = graph.addUploadBufferTask(
             Core::GpuTaskDesc().setIdentity(Name("ui.vertex_upload")).setMarkerLabel("UI Vertex Upload").setScheduling(uploadScheduling),
-            Core::GpuUploadBufferTaskDesc{
-                .source = vertexBytes,
-                .destination = vertices,
-                .finalState = Core::ResourceStates::Common,
-                .acceptedToken = &frame->m_vertexUpload,
-            }
+            Core::GpuUploadBufferTaskDesc{ .source = vertexBytes, .destination = vertices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_vertexUpload, }
         );
         const Core::GpuTaskId indexUpload = graph.addUploadBufferTask(
             Core::GpuTaskDesc().setIdentity(Name("ui.index_upload")).setMarkerLabel("UI Index Upload").setScheduling(uploadScheduling),
-            Core::GpuUploadBufferTaskDesc{
-                .source = indexBytes,
-                .destination = indices,
-                .finalState = Core::ResourceStates::Common,
-                .acceptedToken = &frame->m_indexUpload,
-            }
+            Core::GpuUploadBufferTaskDesc{ .source = indexBytes, .destination = indices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_indexUpload, }
         );
         if(!vertexUpload.valid() || !indexUpload.valid())
             return MakeUnexpected(Failure{});
@@ -154,12 +115,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     }
     const Core::GpuTaskId clear = graph.addClearTextureTask(
         Core::GpuTaskDesc().setIdentity(Name("ui.clear")).setMarkerLabel("UI Transparent Clear").setScheduling(uploadScheduling),
-        Core::GpuClearTextureTaskDesc{
-            .acceptedToken = &frame->m_clear,
-            .destination = color,
-            .valueType = Core::GpuClearTextureTaskValueType::Float,
-            .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f),
-        }
+        Core::GpuClearTextureTaskDesc{ .acceptedToken = &frame->m_clear, .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
     );
     if(!clear.valid())
         return MakeUnexpected(Failure{});

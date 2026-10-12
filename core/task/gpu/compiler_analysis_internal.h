@@ -34,12 +34,7 @@ struct TaskDependencyAdjacency{
     {}
 };
 
-void BuildTaskDependencyAdjacency(
-    const GraphicsVector<GpuTaskDependencyEdge>& edges,
-    usize taskCount,
-    TaskDependencyAdjacency& outAdjacency,
-    Alloc::ScratchArena& scratchArena
-);
+void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& edges, usize taskCount, TaskDependencyAdjacency& outAdjacency, Alloc::ScratchArena& scratchArena);
 
 [[nodiscard]] bool BuildTopologicalOrder(
     const GpuTaskGraph::DeclarationReadView& graph,

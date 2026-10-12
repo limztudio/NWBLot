@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # Gracefully close a known X11 top-level window by sending a WM_DELETE_WINDOW ClientMessage.
 #
-# The NWB render apps exit gracefully ONLY via the WM_DELETE_WINDOW protocol (their X11 event loop returns "stop" on
-# that message, which unwinds to main()'s return and -- in a NWB_BUILDMODE build -- writes the .namesym sidecar).
-# SIGINT/SIGTERM/TerminateProcess skip that path, so a plain kill produces no sidecar. This is the Linux analog of the
-# window-capture smoke's Windows WM_CLOSE teardown.
+# The NWB render apps exit gracefully ONLY via the WM_DELETE_WINDOW protocol (their X11 event loop returns "stop" on that message, which unwinds to main()'s return and -- in a NWB_BUILDMODE build -- writes the .namesym sidecar).
+# SIGINT/SIGTERM/TerminateProcess skip that path, so a plain kill produces no sidecar.
+# This is the Linux analog of the window-capture smoke's Windows WM_CLOSE teardown.
 #
-# The capture smoke provides the exact X11 window ID it captured. Only the actual ClientMessage send needs libX11 via
-# ctypes, so teardown cannot accidentally close another application's similarly titled window.
+# The capture smoke provides the exact X11 window ID it captured.
+# Only the actual ClientMessage send needs libX11 via ctypes, so teardown cannot accidentally close another application's similarly titled window.
 import ctypes
 import ctypes.util
 import sys
@@ -32,16 +31,7 @@ xlib.XInternAtom.argtypes = [DisplayP, ctypes.c_char_p, Bool]
 
 
 class XClientMessageEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", Bool),
-        ("display", DisplayP),
-        ("window", Window),
-        ("message_type", Atom),
-        ("format", ctypes.c_int),
-        ("data_l", ctypes.c_long * 5),
-    ]
+    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", Bool), ("display", DisplayP), ("window", Window), ("message_type", Atom), ("format", ctypes.c_int), ("data_l", ctypes.c_long * 5),]
 
 
 def send_wm_delete(disp, win):

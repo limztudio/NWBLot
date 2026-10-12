@@ -22,16 +22,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(
-        !heap.isInitialized()
-        || !RayTracingDetail::EnsureHeapBuffer(
-            heap,
-            *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(),
-            Core::GpuDescriptorClass::UniformBuffer,
-            false,
-            m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle
-        )
-    ){
+    if(!heap.isInitialized() || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, false, m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
         return false;
     }
@@ -62,14 +53,9 @@ RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResour
     RayTracingSceneGraphResources resources;
     if(m_shadowVisibilityResourcesPreflighted && m_shadowVisibilityTraceResourcesPreflighted){
         resources.contentStamp = m_preparedSceneContentStamp;
-        resources.opticalScene = m_shadowVisibilityHardwareSupported
-            ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
+        resources.opticalScene = m_shadowVisibilityHardwareSupported ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
     }
-    if(
-        !m_shadowVisibilityHardwareSupported
-        || !m_shadowVisibilityTraceResourcesPreflighted
-        || !state.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-    )
+    if(!m_shadowVisibilityHardwareSupported || !m_shadowVisibilityTraceResourcesPreflighted || !state.m_rayTraceMaterialContextSlotsHeapHandle.valid())
         return resources;
     resources.sceneTlas = state.m_tlas;
     resources.tlasHeapHandle = state.m_tlasHeapHandle;

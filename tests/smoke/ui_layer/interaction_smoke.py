@@ -21,26 +21,14 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from window_capture_smoke import (  # noqa: E402
-    LinuxXEvent, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WinRect,
-    build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
-    launch_logserver, launch_testbed, read_bmp_24_rows, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,
-    wait_for_log_message,
-)
+    LinuxXEvent, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WinRect, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
+    launch_logserver, launch_testbed, read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 from probe_reference import linear_rgb_bytes
 
-DISPLAY_PATTERN = re.compile(
-    r"UiInteractiveSmoke: display logical=([0-9.eE+-]+)x([0-9.eE+-]+) scale=([0-9.eE+-]+)x([0-9.eE+-]+)"
-)
-ACTION_PATTERN = re.compile(
-    r"UiInteractiveSmoke: action=(increase|enabled|reset) count=(\d+) enabled=([01]) actions=(\d+)"
-)
-EXPECTED_ACTIONS = [
-    ("increase", 1, 1, 1), ("increase", 2, 1, 2), ("increase", 3, 1, 3),
-    ("enabled", 3, 0, 4), ("enabled", 3, 1, 5), ("increase", 4, 1, 6),
-    ("increase", 5, 1, 7), ("increase", 6, 1, 8),
-]
+DISPLAY_PATTERN = re.compile(r"UiInteractiveSmoke: display logical=([0-9.eE+-]+)x([0-9.eE+-]+) scale=([0-9.eE+-]+)x([0-9.eE+-]+)")
+ACTION_PATTERN = re.compile(r"UiInteractiveSmoke: action=(increase|enabled|reset) count=(\d+) enabled=([01]) actions=(\d+)")
+EXPECTED_ACTIONS = [("increase", 1, 1, 1), ("increase", 2, 1, 2), ("increase", 3, 1, 3), ("enabled", 3, 0, 4), ("enabled", 3, 1, 5), ("increase", 4, 1, 6), ("increase", 5, 1, 7), ("increase", 6, 1, 8),]
 VIRTUAL_KEYS = {"Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B}
 OFF = (0.08, 0.01, 0.01)
 ON = (0.02, 0.70, 0.12)
@@ -48,13 +36,11 @@ MARKER_TOLERANCE = 4
 
 
 class WinKeyboardInput(ctypes.Structure):
-    _fields_ = [("virtual_key", ctypes.c_uint16), ("scan", ctypes.c_uint16),
-        ("flags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("extra", ctypes.c_void_p)]
+    _fields_ = [("virtual_key", ctypes.c_uint16), ("scan", ctypes.c_uint16), ("flags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("extra", ctypes.c_void_p)]
 
 
 class WinMouseInput(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_int32), ("y", ctypes.c_int32), ("data", ctypes.c_uint32),
-        ("flags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("extra", ctypes.c_void_p)]
+    _fields_ = [("x", ctypes.c_int32), ("y", ctypes.c_int32), ("data", ctypes.c_uint32), ("flags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("extra", ctypes.c_void_p)]
 
 
 class WinInputUnion(ctypes.Union):
@@ -66,12 +52,8 @@ class WinInput(ctypes.Structure):
 
 
 class WinGuiThreadInfo(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", ctypes.c_uint32), ("flags", ctypes.c_uint32),
-        ("hwndActive", ctypes.c_void_p), ("hwndFocus", ctypes.c_void_p), ("hwndCapture", ctypes.c_void_p),
-        ("hwndMenuOwner", ctypes.c_void_p), ("hwndMoveSize", ctypes.c_void_p), ("hwndCaret", ctypes.c_void_p),
-        ("rcCaret", WinRect),
-    ]
+    _fields_ = [("cbSize", ctypes.c_uint32), ("flags", ctypes.c_uint32), ("hwndActive", ctypes.c_void_p), ("hwndFocus", ctypes.c_void_p), ("hwndCapture", ctypes.c_void_p),
+        ("hwndMenuOwner", ctypes.c_void_p), ("hwndMoveSize", ctypes.c_void_p), ("hwndCaret", ctypes.c_void_p), ("rcCaret", WinRect),]
 
 
 def parse_args(argv, *, description=__doc__):
@@ -82,8 +64,7 @@ def parse_args(argv, *, description=__doc__):
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--application-arg", action="append", default=[])
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
-        help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if not math.isfinite(args.timeout) or args.timeout <= 0.0:
         parser.error("--timeout must be finite and positive")
@@ -113,11 +94,8 @@ def observe_markers(frame, scale_x, scale_y, expected_count, enabled):
         sample = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
         observed = tuple(sorted(pixel[channel] for pixel in sample)[4] for channel in range(3))
         error = max(abs(actual - reference) for actual, reference in zip(observed, expected))
-        probes.append({"bit": bit if bit < 8 else "enabled", "position": [x, y],
-            "expected": list(expected), "observed": list(observed), "error": error,
-            "passed": error <= MARKER_TOLERANCE})
-    return {"extent": [width, height], "count": expected_count, "enabled": enabled,
-        "probes": probes, "passed": all(probe["passed"] for probe in probes)}
+        probes.append({"bit": bit if bit < 8 else "enabled", "position": [x, y], "expected": list(expected), "observed": list(observed), "error": error, "passed": error <= MARKER_TOLERANCE})
+    return {"extent": [width, height], "count": expected_count, "enabled": enabled, "probes": probes, "passed": all(probe["passed"] for probe in probes)}
 
 
 class NativeInput:
@@ -139,8 +117,7 @@ class NativeInput:
         thread_id = self.backend.user32.GetWindowThreadProcessId(ctypes.c_void_p(self.handle), None)
         info = WinGuiThreadInfo(cbSize=ctypes.sizeof(WinGuiThreadInfo))
         if not thread_id or not self.backend.user32.GetGUIThreadInfo(thread_id, ctypes.byref(info)):
-            raise SmokeFailure(f"failed to observe capture for window {self.handle:#x}, "
-                f"thread {thread_id}: Win32 error {ctypes.get_last_error()}")
+            raise SmokeFailure(f"failed to observe capture for window {self.handle:#x}, " f"thread {thread_id}: Win32 error {ctypes.get_last_error()}")
         return info.hwndCapture
 
     def _post(self, message, parameter=0, data=0):
@@ -156,8 +133,7 @@ class NativeInput:
     def button(self, down, x, y):
         self.pointer(x, y)
         if self.windows:
-            self._post(0x0201 if down else 0x0202, 1 if down else 0,
-                ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF))
+            self._post(0x0201 if down else 0x0202, 1 if down else 0, ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF))
         else:
             event_type = self.backend.BUTTON_PRESS if down else self.backend.BUTTON_RELEASE
             self.backend.send_button_event(self.handle, event_type, int(x), int(y))
@@ -169,8 +145,7 @@ class NativeInput:
 
     def key(self, name, down, *, repeat=False, shift=False):
         if self.windows:
-            self._post(0x0100 if down else 0x0101, VIRTUAL_KEYS[name],
-                1 | ((1 << 30) if repeat or not down else 0) | ((1 << 31) if not down else 0))
+            self._post(0x0100 if down else 0x0101, VIRTUAL_KEYS[name], 1 | ((1 << 30) if repeat or not down else 0) | ((1 << 31) if not down else 0))
             return
         keysym = self.backend.x11.XStringToKeysym(name.encode("ascii"))
         keycode = self.backend.x11.XKeysymToKeycode(self.backend.display, keysym)
@@ -219,8 +194,7 @@ class NativeInput:
             time.sleep(0.15)
             self._post(0x0006, 1)
         else:
-            self.backend.x11.XSetInputFocus(self.backend.display, self.backend.root,
-                self.backend.REVERT_TO_PARENT, self.backend.CURRENT_TIME)
+            self.backend.x11.XSetInputFocus(self.backend.display, self.backend.root, self.backend.REVERT_TO_PARENT, self.backend.CURRENT_TIME)
             self.backend.x11.XFlush(self.backend.display)
             time.sleep(0.15)
             self.backend.focus_window(self.handle)
@@ -250,8 +224,7 @@ class InteractionRun:
         if not matches:
             raise SmokeFailure("the interactive fixture did not publish display metrics")
         logical_width, logical_height, self.scale_x, self.scale_y = map(float, matches[-1].groups())
-        if not all(math.isfinite(value) and value > 0.0
-            for value in (logical_width, logical_height, self.scale_x, self.scale_y)):
+        if not all(math.isfinite(value) and value > 0.0 for value in (logical_width, logical_height, self.scale_x, self.scale_y)):
             raise SmokeFailure("interactive fixture display metrics are invalid")
 
     def point(self, x, y):
@@ -280,9 +253,7 @@ class InteractionRun:
         raise SmokeFailure(f"interactive marker gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "stages": self.stages,
-            "input_path": "Win32 posted messages with native Shift modifier; posted activation loss/gain"
-                if self.native.windows else "X11 XSendEvent and XSetInputFocus",
+        report = {"passed": passed, "platform": platform.system(), "stages": self.stages, "input_path": "Win32 posted messages with native Shift modifier; posted activation loss/gain" if self.native.windows else "X11 XSendEvent and XSetInputFocus",
             "runtime_limit": "No physical pointer grab or Wayland input qualification"}
         (self.args.output_directory / "interaction.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
@@ -363,8 +334,7 @@ def run(args):
                     terminate_process(logserver, "UI interaction logserver")
                 backend.close()
     validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    observed = [(action, int(count), int(enabled), int(sequence))
-        for action, count, enabled, sequence in ACTION_PATTERN.findall(text)]
+    observed = [(action, int(count), int(enabled), int(sequence)) for action, count, enabled, sequence in ACTION_PATTERN.findall(text)]
     if observed != EXPECTED_ACTIONS:
         raise SmokeFailure(f"unexpected interactive action sequence: {observed}; expected {EXPECTED_ACTIONS}")
     interaction.write_report(True)

@@ -66,11 +66,7 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
     return std::lower_bound(first, last, value, Forward<Compare>(compare));
 }
 
-[[nodiscard]] constexpr usize NextGrowingCapacity(
-    const usize currentCapacity,
-    const usize requiredCapacity,
-    const usize initialCapacity = 1u
-)noexcept{
+[[nodiscard]] constexpr usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity, const usize initialCapacity = 1u)noexcept{
     usize capacity = currentCapacity > initialCapacity ? currentCapacity : initialCapacity;
     if(capacity == 0u)
         capacity = 1u;

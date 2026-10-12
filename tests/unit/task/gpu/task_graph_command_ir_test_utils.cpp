@@ -28,19 +28,9 @@ namespace TaskGraphTestUtils{
 
 [[nodiscard]] bool CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture){
     Graphics::TextureSlice sourceSlice;
-    sourceSlice
-        .setOrigin(1u, 2u, 3u)
-        .setSize(4u, 5u, 6u)
-        .setMipLevel(7u)
-        .setArraySlice(8u)
-    ;
+    sourceSlice.setOrigin(1u, 2u, 3u).setSize(4u, 5u, 6u).setMipLevel(7u).setArraySlice(8u);
     Graphics::TextureSlice destinationSlice;
-    destinationSlice
-        .setOrigin(9u, 10u, 11u)
-        .setSize(12u, 13u, 14u)
-        .setMipLevel(15u)
-        .setArraySlice(16u)
-    ;
+    destinationSlice.setOrigin(9u, 10u, 11u).setSize(12u, 13u, 14u).setMipLevel(15u).setArraySlice(16u);
     Graphics::GpuClearTextureTaskDesc clearTexture;
     clearTexture.destination = s_CommandIrDestination;
     clearTexture.subresources = Graphics::TextureSubresourceSet(2u, 3u, 4u, 5u);
@@ -53,46 +43,14 @@ namespace TaskGraphTestUtils{
     clearTexture.clearDepth = true;
     clearTexture.clearStencil = true;
 
-    return capture.captureCopyBuffer(
-        s_CommandIrTask,
-        s_CommandIrPacket,
-        s_CommandIrQueue,
-        s_CommandIrSource,
-        16u,
-        s_CommandIrDestination,
-        32u,
-        64u
-    )
-        && capture.captureCopyTexture(
-            s_CommandIrTask,
-            s_CommandIrPacket,
-            s_CommandIrQueue,
-            s_CommandIrSource,
-            sourceSlice,
-            s_CommandIrDestination,
-            destinationSlice
-        )
-        && capture.captureClearBuffer(
-            s_CommandIrTask,
-            s_CommandIrPacket,
-            s_CommandIrQueue,
-            s_CommandIrDestination,
-            0xdecafbadU
-        )
-        && capture.captureClearTexture(
-            s_CommandIrTask,
-            s_CommandIrPacket,
-            s_CommandIrQueue,
-            s_CommandIrDestination,
-            clearTexture
-        )
+    return capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 16u, s_CommandIrDestination, 32u, 64u)
+        && capture.captureCopyTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, sourceSlice, s_CommandIrDestination, destinationSlice)
+        && capture.captureClearBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, 0xdecafbadU)
+        && capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture)
     ;
 }
 
-void CopyCommandIrBytes(
-    Graphics::GraphicsBytes& outBytes,
-    const BinaryByteView source
-){
+void CopyCommandIrBytes(Graphics::GraphicsBytes& outBytes, const BinaryByteView source){
     outBytes.resize(source.size());
     if(!source.empty())
         NWB_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());

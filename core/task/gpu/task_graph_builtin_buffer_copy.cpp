@@ -39,37 +39,14 @@ struct CopyBufferCopy{
 struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBufferCopy>{
     using Copy = CopyBufferCopy;
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
-        return GpuTaskGraphBuiltinDetail::RecordCopies(
-            payload,
-            commandList,
-            context,
-            [](const Copy& copy){ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+        return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy){ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
-                return captureContext.commandIrCapture->captureCopyBuffer(
-                    captureContext.task,
-                    captureContext.packet,
-                    captureContext.queue,
-                    copy.sourceResource,
-                    copy.sourceOffsetBytes,
-                    copy.destinationResource,
-                    copy.destinationOffsetBytes,
-                    copy.dataSizeBytes
-                );
+                return captureContext.commandIrCapture->captureCopyBuffer(captureContext.task, captureContext.packet, captureContext.queue, copy.sourceResource, copy.sourceOffsetBytes, copy.destinationResource, copy.destinationOffsetBytes, copy.dataSizeBytes);
             },
             [](CommandList& emitCommandList, const Copy& copy){
                 emitCommandList.endRenderPass();
-                emitCommandList.copyBuffer(
-                    *copy.destination,
-                    copy.destinationOffsetBytes,
-                    *copy.source,
-                    copy.sourceOffsetBytes,
-                    copy.dataSizeBytes
-                );
+                emitCommandList.copyBuffer(*copy.destination, copy.destinationOffsetBytes, *copy.source, copy.sourceOffsetBytes, copy.dataSizeBytes);
                 return true;
             }
         );
@@ -94,13 +71,7 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
     if(!mutation.valid())
         return {};
 
-    if(
-        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
-        || !copyDesc.regions
-        || copyDesc.regionCount == 0u
-        || copyDesc.regionCount > Limit<u32>::s_Max
-        || copyDesc.regionCount > Limit<usize>::s_Max / 2u
-    )
+    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !copyDesc.regions || copyDesc.regionCount == 0u || copyDesc.regionCount > Limit<u32>::s_Max || copyDesc.regionCount > Limit<usize>::s_Max / 2u)
         return {};
 
     using CopyTask = __hidden_gpu_task_graph_builtin_buffer_copy::CopyBufferTask;
@@ -113,12 +84,7 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(copyDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](
-        const GpuGraphResourceId resource,
-        const BufferRange range,
-        const ResourceStates::Mask state,
-        const GpuTaskResourceAccess::Enum access
-    ){
+    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const BufferRange range, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
@@ -128,19 +94,11 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
             if(existing.range.bufferRange.contains(range))
                 return true;
         }
-        resourceUses.push_back(GpuTaskResourceUse{
-            .resource = resource,
-            .range = GpuTaskResourceRange{ .bufferRange = range },
-            .requiredState = state,
-            .access = access,
-        });
+        resourceUses.push_back(GpuTaskResourceUse{ .resource = resource, .range = GpuTaskResourceRange{ .bufferRange = range }, .requiredState = state, .access = access, });
         return true;
     };
     const auto validCopyRange = [](const BufferDesc& bufferDesc, const u64 offsetBytes, const u64 dataSizeBytes){
-        return dataSizeBytes != 0u
-            && offsetBytes <= bufferDesc.byteSize
-            && dataSizeBytes <= bufferDesc.byteSize - offsetBytes
-        ;
+        return dataSizeBytes != 0u && offsetBytes <= bufferDesc.byteSize && dataSizeBytes <= bufferDesc.byteSize - offsetBytes;
     };
 
     bool valid = true;
@@ -157,30 +115,12 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
             && destinationResource.type == GpuGraphResourceType::Buffer
             && sourceResource.buffer
             && destinationResource.buffer
-            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-                sourceResource.buffer->getCreationDescription(),
-                sourceResource.initialState,
-                sourceResource.externalFinalState
-            )
-            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-                destinationResource.buffer->getCreationDescription(),
-                destinationResource.initialState,
-                destinationResource.externalFinalState
-            )
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(sourceResource.buffer->getCreationDescription(), sourceResource.initialState, sourceResource.externalFinalState)
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationResource.buffer->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
             && validCopyRange(sourceResource.buffer->getCreationDescription(), region.sourceOffsetBytes, region.dataSizeBytes)
             && validCopyRange(destinationResource.buffer->getCreationDescription(), region.destinationOffsetBytes, region.dataSizeBytes)
-            && appendResourceUse(
-                region.source,
-                BufferRange(region.sourceOffsetBytes, region.dataSizeBytes),
-                ResourceStates::CopySource,
-                GpuTaskResourceAccess::Read
-            )
-            && appendResourceUse(
-                region.destination,
-                BufferRange(region.destinationOffsetBytes, region.dataSizeBytes),
-                ResourceStates::CopyDest,
-                GpuTaskResourceAccess::Write
-            )
+            && appendResourceUse(region.source, BufferRange(region.sourceOffsetBytes, region.dataSizeBytes), ResourceStates::CopySource, GpuTaskResourceAccess::Read)
+            && appendResourceUse(region.destination, BufferRange(region.destinationOffsetBytes, region.dataSizeBytes), ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
         ;
         if(valid){
             payload->copies.push_back(CopyTask::Copy{

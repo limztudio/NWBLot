@@ -72,10 +72,7 @@ bool Skeleton::validatePayload()const{
             return false;
         }
         if(jointIndex >= m_joints.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}")
-                , StringConvert(jointName.resolvedText())
-                , jointIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}"), StringConvert(jointName.resolvedText()), jointIndex);
             return false;
         }
         if(namedJoints[jointIndex] != 0u){
@@ -95,10 +92,7 @@ bool Skeleton::validatePayload()const{
     for(usize i = 0u; i < m_joints.size(); ++i){
         const SkeletonJoint& joint = m_joints[i];
         if(joint.parentIndex != s_SkeletonInvalidJointIndex && joint.parentIndex >= i){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}")
-                , i
-                , joint.parentIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}"), i, joint.parentIndex);
             return false;
         }
     }
@@ -111,26 +105,13 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     m_jointIndices.clear();
 
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(
-        binary,
-        cursor,
-        SkeletonBinaryPayload::s_SkeletonMagic,
-        NWB_TEXT("Skeleton::loadBinary"),
-        NWB_TEXT("skeleton")
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, cursor, SkeletonBinaryPayload::s_SkeletonMagic, NWB_TEXT("Skeleton::loadBinary"), NWB_TEXT("skeleton"));
     if(!headerResult)
         return false;
     const SkeletonBinaryPayload::HeaderBinary& header = *headerResult;
 
     Core::Assets::AssetVector<SkeletonBinaryPayload::JointBinary> jointBinaries(m_joints.get_allocator().arena());
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        cursor,
-        header.jointCount,
-        jointBinaries,
-        NWB_TEXT("Skeleton::loadBinary"),
-        NWB_TEXT("joints")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.jointCount, jointBinaries, NWB_TEXT("Skeleton::loadBinary"), NWB_TEXT("joints")))
         return false;
 
     m_joints.reserve(jointBinaries.size());
@@ -147,9 +128,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         m_joints.push_back(joint);
     }
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary"))
-        && validatePayload()
-    ;
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary")) && validatePayload();
 }
 
 

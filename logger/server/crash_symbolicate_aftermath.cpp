@@ -116,10 +116,7 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
     }
 
     GFSDK_Aftermath_GpuCrashDump_Decoder decoder = nullptr;
-    if(
-        !GFSDK_Aftermath_SUCCEED(decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<uint32_t>(dumpBytes.size()), &decoder))
-        || !decoder
-    ){
+    if(!GFSDK_Aftermath_SUCCEED(decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<uint32_t>(dumpBytes.size()), &decoder)) || !decoder){
         outReport += s_AftermathSectionHeader;
         outReport += s_AftermathCreateDecoderFailedReport;
         return;

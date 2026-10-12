@@ -18,9 +18,7 @@ ARMS = ("reference", "cut", "uncut")
 EXPECTED_EXTENT = (1280, 900)
 MIN_WARMUP_PRESENTATIONS = 360
 MIN_LIVE_WARMUP_SECONDS = 30.0
-NO_DEDICATED_ASYNC_COMPUTE = (
-    "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"
-)
+NO_DEDICATED_ASYNC_COMPUTE = ("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue")
 
 
 def build_environment(arm, lagged_lighting):
@@ -37,12 +35,8 @@ def build_environment(arm, lagged_lighting):
 def validate_capture_evidence(log, required_presentations):
     if required_presentations < MIN_WARMUP_PRESENTATIONS:
         raise SmokeFailure("CSG GI requires at least 360 successful warmup presentations")
-    patterns = {
-        "start": r"GiTestSmokeProject: CSG GI live warmup start source_frame=(\d+) presentations=(\d+) required_presentations=(\d+) required_seconds=(\S+)",
-        "end": r"GiTestSmokeProject: CSG GI live warmup end source_frame=(\d+) presentations=(\d+) elapsed_seconds=(\S+)",
-        "capture": r"GiTestSmokeProject: CSG GI capture source_frame=(\d+)",
-        "readback": r"FramebufferCapture: graphics source frame (\d+)",
-    }
+    patterns = { "start": r"GiTestSmokeProject: CSG GI live warmup start source_frame=(\d+) presentations=(\d+) required_presentations=(\d+) required_seconds=(\S+)",
+        "end": r"GiTestSmokeProject: CSG GI live warmup end source_frame=(\d+) presentations=(\d+) elapsed_seconds=(\S+)", "capture": r"GiTestSmokeProject: CSG GI capture source_frame=(\d+)", "readback": r"FramebufferCapture: graphics source frame (\d+)", }
     matches = {}
     for name, pattern in patterns.items():
         records = list(re.finditer(pattern, log))
@@ -71,44 +65,26 @@ def validate_capture_evidence(log, required_presentations):
         raise SmokeFailure("CSG GI capture source does not match its completed readback and live warmup")
     if not (matches["start"].start() < matches["end"].start() < matches["readback"].start() < matches["capture"].start()):
         raise SmokeFailure("CSG GI live warmup and capture evidence is out of order")
-    return {
-        "start_source_frame": start_frame,
-        "start_successful_presentations": start_presentations,
-        "required_presentations": required_presentations,
-        "required_live_seconds": required_seconds,
-        "end_source_frame": end_frame,
-        "end_successful_presentations": end_presentations,
-        "elapsed_live_seconds": elapsed_seconds,
-        "capture_source_frame": capture_frame,
-    }
+    return { "start_source_frame": start_frame, "start_successful_presentations": start_presentations, "required_presentations": required_presentations, "required_live_seconds": required_seconds, "end_source_frame": end_frame,
+        "end_successful_presentations": end_presentations, "elapsed_live_seconds": elapsed_seconds, "capture_source_frame": capture_frame, }
 
 
 def capture_arm(args, arm):
     output = args.output_directory / f"{arm}.bmp"
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
-        "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(".log")),
-        "--expect-log-message", f"GiTestSmokeProject: CSG GI arm={arm} overlapping_box_cutters=2 accepted_presentations={args.frames}",
-        "--expect-log-message", "RendererSystem: dispatched surfel GI resolve",
-        "--expect-log-message", "GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles",
-        "--expect-log-message", "GiTestSmokeProject: shutdown",
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames), "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(".log")),
+        "--expect-log-message", f"GiTestSmokeProject: CSG GI arm={arm} overlapping_box_cutters=2 accepted_presentations={args.frames}", "--expect-log-message", "RendererSystem: dispatched surfel GI resolve",
+        "--expect-log-message", "GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles", "--expect-log-message", "GiTestSmokeProject: shutdown", "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
     if args.route == "software":
-        command += ["--application-arg=--disable-hardware-ray-tracing",
-            "--expect-log-message", "Loader: hardware ray tracing disabled before device creation",
-            "--expect-log-message", "RendererSystem: created surfel trace compute pipeline",
+        command += ["--application-arg=--disable-hardware-ray-tracing", "--expect-log-message", "Loader: hardware ray tracing disabled before device creation", "--expect-log-message", "RendererSystem: created surfel trace compute pipeline",
             "--reject-log-message", "RendererSystem: created surfel HW trace compute pipeline"]
     if args.lagged_lighting:
-        command += ["--expect-log-message", "RendererSystem: frame-lagged async lighting bootstrap accepted",
-            "--expect-log-message", "RendererSystem: frame-lagged async lighting active history accepted",
-            "--skip-log-message", NO_DEDICATED_ASYNC_COMPUTE]
+        command += ["--expect-log-message", "RendererSystem: frame-lagged async lighting bootstrap accepted", "--expect-log-message", "RendererSystem: frame-lagged async lighting active history accepted", "--skip-log-message", NO_DEDICATED_ASYNC_COMPUTE]
     if args.logserver_executable:
         command += ["--logserver-executable", str(args.logserver_executable)]
     else:
         command.append("--no-logserver")
-    result = subprocess.run(command, env=build_environment(arm, args.lagged_lighting), check=False,
-        timeout=args.timeout + 45.0)
+    result = subprocess.run(command, env=build_environment(arm, args.lagged_lighting), check=False, timeout=args.timeout + 45.0)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:
@@ -128,64 +104,26 @@ def project_point(x, y, z):
 
 def measure_frame(frame):
     _, _, rows = frame
-    regions = {
-        "passage": {project_point(-1.3 + ix * 0.05, 1.3 + iy * 0.05, 1.0)
-            for iy in range(-4, 5) for ix in range(-4, 5)},
-        "cap_bounce": {project_point(1.3 + ix * 0.05, 0.61, -0.32 + iz * 0.035)
-            for iz in range(-4, 5) for ix in range(-4, 5)},
-        "cap_surface": {project_point(1.3 + ix * 0.05, 1.3 + iy * 0.05, 0.4)
-            for iy in range(-4, 5) for ix in range(-4, 5)},
-        "control": {project_point(ix * 0.035, 2.92 + iy * 0.025, 0.0)
-            for iy in range(-4, 5) for ix in range(-4, 5)},
-        "mixed_passage": {project_point(ix * 0.03, -0.55 + iy * 0.025, 1.0)
-            for iy in range(-4, 5) for ix in range(-4, 5)},
-        "mixed_floor": {project_point(-1.025 + ix * 0.03125, -0.77, -1.475 + iz * 0.04375)
-            for iz in range(-4, 5) for ix in range(-4, 5)},
-        "mixed_open_surface": {project_point(-0.95 + ix * 0.025, -0.3 + iy * 0.025, -1.0)
-            for iy in range(-4, 5) for ix in range(-4, 5)},
-        "mixed_open_surface_right": {project_point(0.95 + ix * 0.025, -0.3 + iy * 0.025, -1.0)
-            for iy in range(-4, 5) for ix in range(-4, 5)},
-    }
+    regions = { "passage": {project_point(-1.3 + ix * 0.05, 1.3 + iy * 0.05, 1.0) for iy in range(-4, 5) for ix in range(-4, 5)}, "cap_bounce": {project_point(1.3 + ix * 0.05, 0.61, -0.32 + iz * 0.035) for iz in range(-4, 5) for ix in range(-4, 5)},
+        "cap_surface": {project_point(1.3 + ix * 0.05, 1.3 + iy * 0.05, 0.4) for iy in range(-4, 5) for ix in range(-4, 5)}, "control": {project_point(ix * 0.035, 2.92 + iy * 0.025, 0.0) for iy in range(-4, 5) for ix in range(-4, 5)},
+        "mixed_passage": {project_point(ix * 0.03, -0.55 + iy * 0.025, 1.0) for iy in range(-4, 5) for ix in range(-4, 5)}, "mixed_floor": {project_point(-1.025 + ix * 0.03125, -0.77, -1.475 + iz * 0.04375) for iz in range(-4, 5) for ix in range(-4, 5)},
+        "mixed_open_surface": {project_point(-0.95 + ix * 0.025, -0.3 + iy * 0.025, -1.0) for iy in range(-4, 5) for ix in range(-4, 5)}, "mixed_open_surface_right": {project_point(0.95 + ix * 0.025, -0.3 + iy * 0.025, -1.0)
+            for iy in range(-4, 5) for ix in range(-4, 5)}, }
     metrics = {}
     for name, pixels in regions.items():
         rgb = [tuple(rows[y][x][channel] for x, y in sorted(pixels)) for channel in range(3)]
         means = [statistics.fmean(channel) for channel in rgb]
-        metrics[name] = {
-            "samples": len(pixels),
-            "mean_rgb": means,
-            "median_rgb": [statistics.median(channel) for channel in rgb],
-            "blue_excess": means[2] - means[0],
-            "green_excess": means[1] - means[0],
-        }
+        metrics[name] = { "samples": len(pixels), "mean_rgb": means, "median_rgb": [statistics.median(channel) for channel in rgb], "blue_excess": means[2] - means[0], "green_excess": means[1] - means[0], }
     # Interior grids catch missing passage/cap columns that a central mean can hide behind bright surviving pixels.
-    for name, z, first_x, channel, minimum in (
-        ("visible_passage", 1.0, -1.8, 2, 15.0), ("visible_cap", 0.4, 1.05, 1, 25.0)
-    ):
-        pixels = {project_point(first_x + ix * 0.1, 0.85 + iy * 0.1125, z)
-            for iy in range(9) for ix in range(9)}
-        signals = [statistics.fmean(rows[y + dy][x + dx][channel] - rows[y + dy][x + dx][0]
-            for dy in range(-1, 2) for dx in range(-1, 2)) for x, y in sorted(pixels)]
+    for name, z, first_x, channel, minimum in (("visible_passage", 1.0, -1.8, 2, 15.0), ("visible_cap", 0.4, 1.05, 1, 25.0)):
+        pixels = {project_point(first_x + ix * 0.1, 0.85 + iy * 0.1125, z) for iy in range(9) for ix in range(9)}
+        signals = [statistics.fmean(rows[y + dy][x + dx][channel] - rows[y + dy][x + dx][0] for dy in range(-1, 2) for dx in range(-1, 2)) for x, y in sorted(pixels)]
         covered = sum(signal >= minimum for signal in signals)
-        metrics[name] = {
-            "samples": len(pixels),
-            "covered_samples": covered,
-            "coverage": covered / len(pixels),
-            "signal_threshold": minimum,
-            "minimum_signal": min(signals),
-            "mean_signal": statistics.fmean(signals),
-        }
+        metrics[name] = { "samples": len(pixels), "covered_samples": covered, "coverage": covered / len(pixels), "signal_threshold": minimum, "minimum_signal": min(signals), "mean_signal": statistics.fmean(signals), }
     pixels = regions["mixed_passage"]
-    signals = [statistics.fmean(max(rows[y + dy][x + dx][0], rows[y + dy][x + dx][2])
-        - rows[y + dy][x + dx][1] for dy in range(-1, 2) for dx in range(-1, 2)) for x, y in sorted(pixels)]
+    signals = [statistics.fmean(max(rows[y + dy][x + dx][0], rows[y + dy][x + dx][2]) - rows[y + dy][x + dx][1] for dy in range(-1, 2) for dx in range(-1, 2)) for x, y in sorted(pixels)]
     covered = sum(signal >= 15.0 for signal in signals)
-    metrics["visible_mixed_passage"] = {
-        "samples": len(pixels),
-        "covered_samples": covered,
-        "coverage": covered / len(pixels),
-        "signal_threshold": 15.0,
-        "minimum_signal": min(signals),
-        "mean_signal": statistics.fmean(signals),
-    }
+    metrics["visible_mixed_passage"] = { "samples": len(pixels), "covered_samples": covered, "coverage": covered / len(pixels), "signal_threshold": 15.0, "minimum_signal": min(signals), "mean_signal": statistics.fmean(signals), }
     return metrics
 
 
@@ -200,12 +138,11 @@ def validate_metrics(metrics):
             raise SmokeFailure(f"ordinary reference has insufficient {region} GI signal: {expected:.3f}")
         if expected - uncut[region][signal] < minimum:
             raise SmokeFailure(f"uncut control does not distinguish {region} from the ordinary reference")
-        # The same visible G-buffer surfaces seed different scene-instance orders. Compare regional color energy
-        # after convergence, rather than requiring identical stochastic ray sequences or edge pixels.
+        # The same visible G-buffer surfaces seed different scene-instance orders.
+        # Compare regional color energy after convergence, rather than requiring identical stochastic ray sequences or edge pixels.
         tolerance = max(10.0, expected * 0.30)
         if abs(cut[region][signal] - expected) > tolerance:
-            raise SmokeFailure(f"CSG {region} differs from ordinary carved geometry: "
-                f"reference={expected:.3f}, cut={cut[region][signal]:.3f}, tolerance={tolerance:.3f}")
+            raise SmokeFailure(f"CSG {region} differs from ordinary carved geometry: " f"reference={expected:.3f}, cut={cut[region][signal]:.3f}, tolerance={tolerance:.3f}")
     if reference["cap_surface"]["green_excess"] < 25.0 or cut["cap_surface"]["green_excess"] < 25.0:
         raise SmokeFailure("the generated cap and ordinary reference cap are not both visibly green")
     for region in ("visible_passage", "visible_cap"):
@@ -225,8 +162,7 @@ def validate_metrics(metrics):
             actual = cut[region]["mean_rgb"][channel]
             tolerance = max(10.0, expected * 0.30)
             if abs(actual - expected) > tolerance:
-                raise SmokeFailure(f"CSG {region} brightness channel {channel} differs from ordinary geometry: "
-                    f"reference={expected:.3f}, cut={actual:.3f}, tolerance={tolerance:.3f}")
+                raise SmokeFailure(f"CSG {region} brightness channel {channel} differs from ordinary geometry: " f"reference={expected:.3f}, cut={actual:.3f}, tolerance={tolerance:.3f}")
     for arm in ARMS:
         floor = metrics[arm]["mixed_floor"]["mean_rgb"]
         if floor[0] - floor[1] < 8.0:
@@ -247,8 +183,7 @@ def validate_metrics(metrics):
             actual = cut[region]["mean_rgb"][channel]
             tolerance = max(10.0, expected * 0.30)
             if abs(actual - expected) > tolerance:
-                raise SmokeFailure(f"CSG {region} GI channel {channel} differs from ordinary geometry: "
-                    f"reference={expected:.3f}, cut={actual:.3f}, tolerance={tolerance:.3f}")
+                raise SmokeFailure(f"CSG {region} GI channel {channel} differs from ordinary geometry: " f"reference={expected:.3f}, cut={actual:.3f}, tolerance={tolerance:.3f}")
     expected_green = reference["mixed_passage"]["mean_rgb"][1]
     if cut["mixed_passage"]["mean_rgb"][1] - expected_green > max(8.0, expected_green * 0.30):
         raise SmokeFailure("the removed green open surface contributes false GI in the mixed-mesh passage")
@@ -263,8 +198,7 @@ def parse_args(argv):
     logging.add_argument("--logserver-executable", type=Path)
     logging.add_argument("--no-logserver", action="store_true")
     parser.add_argument("--route", choices=("natural", "software"), default="software")
-    parser.add_argument("--lagged-lighting", action=argparse.BooleanOptionalAction, default=False,
-        help="Require accepted bootstrap and active frame-lagged lighting history for every arm.")
+    parser.add_argument("--lagged-lighting", action=argparse.BooleanOptionalAction, default=False, help="Require accepted bootstrap and active frame-lagged lighting history for every arm.")
     parser.add_argument("--frames", type=int, default=360)
     parser.add_argument("--timeout", type=float, default=240.0)
     parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True)
@@ -280,8 +214,7 @@ def parse_args(argv):
 def main(argv):
     args = parse_args(argv)
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    metrics = {"route": args.route, "lagged_lighting": args.lagged_lighting,
-        "accepted_presentations": args.frames, "live_warmup": {}, "regions": {}}
+    metrics = {"route": args.route, "lagged_lighting": args.lagged_lighting, "accepted_presentations": args.frames, "live_warmup": {}, "regions": {}}
     try:
         for arm in ARMS:
             captured = capture_arm(args, arm)

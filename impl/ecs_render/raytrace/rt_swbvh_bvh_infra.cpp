@@ -50,23 +50,13 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_bvhSortShader,
-        AssetsGraphicsBvh::s_BitonicSortShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_BvhBitonicSort"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_bvhSortShader, AssetsGraphicsBvh::s_BitonicSortShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_BvhBitonicSort")){
         m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_bvhSortShader)
-        .addBindingLayout(m_rayTracingState.m_bvhSortBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_bvhSortShader).addBindingLayout(m_rayTracingState.m_bvhSortBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_rayTracingState.m_bvhSortPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_bvhSortPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
@@ -83,17 +73,10 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         return false;
 
     const auto sortHandlesReady = [this](){
-        return
-            RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle)
-            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle)
-        ;
+        return RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle) && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle);
     };
 
-    if(
-        m_rayTracingState.m_bvhSortKeysBuffer
-        && m_rayTracingState.m_bvhSortPayloadBuffer
-        && m_rayTracingState.m_bvhSortCapacity >= paddedCount
-    ){
+    if(m_rayTracingState.m_bvhSortKeysBuffer && m_rayTracingState.m_bvhSortPayloadBuffer && m_rayTracingState.m_bvhSortCapacity >= paddedCount){
         if(sortHandlesReady())
             return true;
 
@@ -128,11 +111,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         return sortHandlesReady();
     }
 
-    const usize capacity = ::NextGrowingCapacity(
-        m_rayTracingState.m_bvhSortCapacity,
-        paddedCount,
-        s_BvhSortInitialCapacity
-    );
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_bvhSortCapacity, paddedCount, s_BvhSortInitialCapacity);
 
     Core::BufferDesc keysBufferDesc;
     keysBufferDesc
@@ -265,11 +244,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
 }
 
 bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
-    if(
-        m_rayTracingState.m_bvhMortonPipeline
-        && m_rayTracingState.m_bvhTopologyPipeline
-        && m_rayTracingState.m_bvhFitPipeline
-    )
+    if(m_rayTracingState.m_bvhMortonPipeline && m_rayTracingState.m_bvhTopologyPipeline && m_rayTracingState.m_bvhFitPipeline)
         return true;
     if(m_rayTracingState.m_bvhBuildPipelineFailed)
         return false;
@@ -296,24 +271,14 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         }
     }
 
-    const auto createBuildPipeline = [this, &device, &heap](
-        Core::ShaderHandle& shader,
-        Core::ComputePipelineHandle& pipeline,
-        const Name& shaderName,
-        const AStringView debugLabel
-    )->bool{
+    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const AStringView debugLabel)->bool{
         if(pipeline)
             return true;
         if(!m_shaderSystem.loadShader<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
             return false;
 
         Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc
-            .setComputeShader(shader)
-            .addBindingLayout(m_rayTracingState.m_bvhBuildBindingLayout)
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
+        pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_bvhBuildBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         pipeline = device.createComputePipeline(pipelineDesc);
         return pipeline != nullptr;
     };
@@ -351,11 +316,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         return false;
     }
 
-    const usize capacity = ::NextGrowingCapacity(
-        m_rayTracingState.m_bvhBuildCapacity,
-        primitiveCount,
-        s_BvhBuildInitialCapacity
-    );
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_bvhBuildCapacity, primitiveCount, s_BvhBuildInitialCapacity);
 
     // Shared visit-counter scratch is safe because mesh builds are serialized.
     Core::BufferDesc counterBufferDesc;
@@ -386,23 +347,14 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
     return true;
 }
 
-bool RendererRayTracingSystem::createMeshBvhStorage(
-    usize primitiveCount,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
-    Core::GpuDescriptorHandle& nodeHeapHandle,
-    Core::GpuDescriptorHandle& parentHeapHandle
-){
+bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
     if(nodeBuffer && parentBuffer){
-        if(
-            RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(nodeHeapHandle)
-            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(parentHeapHandle)
-        )
+        if(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(nodeHeapHandle) && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(parentHeapHandle))
             return true;
 
         Core::GpuDescriptorHandle acquiredNode = Core::GpuDescriptorHandle::Invalid();
@@ -432,10 +384,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
             nodeHeapHandle = acquiredNode;
         if(acquiredParent.valid())
             parentHeapHandle = acquiredParent;
-        return
-            RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(nodeHeapHandle)
-            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(parentHeapHandle)
-        ;
+        return RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(nodeHeapHandle) && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(parentHeapHandle);
     }
     if(nodeBuffer || parentBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: per-mesh BVH storage is partially allocated"));
@@ -502,18 +451,9 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     return true;
 }
 
-bool RendererRayTracingSystem::ensureMeshSwBvhResources(
-    u32 primitiveCount,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
-    Core::GpuDescriptorHandle& nodeHeapHandle,
-    Core::GpuDescriptorHandle& parentHeapHandle
-){
+bool RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
     if(primitiveCount > s_BvhMaxPrimitivesPerMesh){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped")
-            , static_cast<u64>(primitiveCount)
-            , static_cast<u64>(s_BvhMaxPrimitivesPerMesh)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped"), static_cast<u64>(primitiveCount), static_cast<u64>(s_BvhMaxPrimitivesPerMesh));
         return false;
     }
 
@@ -531,12 +471,7 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
     return true;
 }
 
-bool RendererRayTracingSystem::meshSwBvhResourcesReady(
-    const Core::BufferHandle& nodeBuffer,
-    const Core::BufferHandle& parentBuffer,
-    const Core::GpuDescriptorHandle nodeHeapHandle,
-    const Core::GpuDescriptorHandle parentHeapHandle
-){
+bool RendererRayTracingSystem::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle){
     return
         nodeBuffer
         && parentBuffer
@@ -567,12 +502,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     const Core::GpuDescriptorHandle nodeHeapHandle,
     const Core::GpuDescriptorHandle parentHeapHandle
 ){
-    if(
-        primitiveCount == 0u
-        || positionHeapSlot == Limit<u32>::s_Max
-        || triangleIndexHeapSlot == Limit<u32>::s_Max
-        || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle)
-    )
+    if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
     u32 paddedCount = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
@@ -653,12 +583,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     const Core::GpuDescriptorHandle nodeHeapHandle,
     const Core::GpuDescriptorHandle parentHeapHandle
 ){
-    if(
-        primitiveCount == 0u
-        || positionHeapSlot == Limit<u32>::s_Max
-        || triangleIndexHeapSlot == Limit<u32>::s_Max
-        || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle)
-    )
+    if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
     Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
@@ -698,11 +623,7 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
     // Binary scene BVH keeps CPU topology; runtime scenes refit its bounds from live mesh roots.
     const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
     if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhNodeCapacity < requiredNodes){
-        const usize capacity = ::NextGrowingCapacity(
-            m_rayTracingState.m_sceneBvhNodeCapacity,
-            requiredNodes,
-            s_SceneBvhInitialInstanceCapacity * 2u - 1u
-        );
+        const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_sceneBvhNodeCapacity, requiredNodes, s_SceneBvhInitialInstanceCapacity * 2u - 1u);
 
         Core::BufferDesc nodeBufferDesc;
         nodeBufferDesc
@@ -726,11 +647,7 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
     }
 
     if(!m_rayTracingState.m_sceneInstanceBuffer || m_rayTracingState.m_sceneInstanceCapacity < instanceCount){
-        const usize capacity = ::NextGrowingCapacity(
-            m_rayTracingState.m_sceneInstanceCapacity,
-            instanceCount,
-            s_SceneBvhInitialInstanceCapacity
-        );
+        const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_sceneInstanceCapacity, instanceCount, s_SceneBvhInitialInstanceCapacity);
 
         Core::BufferDesc instanceBufferDesc;
         instanceBufferDesc
@@ -749,14 +666,9 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             return false;
         m_rayTracingState.m_sceneInstanceBuffer = Move(instanceBuffer);
         m_rayTracingState.m_sceneInstanceCapacity = capacity;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)")
-            , static_cast<u64>(capacity)
-        );
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)"), static_cast<u64>(capacity));
     }
-    return ensureRayTraceMaterialContextHeapHandle(
-        *m_rayTracingState.m_sceneBvhNodeBuffer.get(),
-        m_rayTracingState.m_sceneBvhNodeHeapHandle
-    ) && ensureRayTraceMaterialContextHeapHandle(
+    return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle) && ensureRayTraceMaterialContextHeapHandle(
         *m_rayTracingState.m_sceneInstanceBuffer.get(),
         m_rayTracingState.m_sceneInstanceHeapHandle
     );

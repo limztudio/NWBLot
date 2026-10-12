@@ -54,8 +54,8 @@ void Device::captureDeviceLoss(const AStringView context){
                 if(!physicalQueue || remainingEntries == 0u)
                     continue;
 
-                // Vulkan checkpoint retrieval is a device-loss diagnostic and has no VkQueue host-synchronization
-                // requirement. Do not wait behind a potentially wedged submission lock while collecting it.
+                // Vulkan checkpoint retrieval is a device-loss diagnostic and has no VkQueue host-synchronization requirement.
+                // Do not wait behind a potentially wedged submission lock while collecting it.
                 VkQueue queue = physicalQueue->m_nativeQueue.queue;
                 uint32_t checkpointCount = 0;
                 m_context.deviceDispatch.vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
@@ -88,17 +88,9 @@ void Device::captureDeviceLoss(const AStringView context){
             const u32* breadcrumbSlots = static_cast<const u32*>(m_amdBreadcrumb.mappedMemory);
             if(breadcrumbSlots){
                 // Select each exact queue independently because physical queues remain unordered globally.
-                for(
-                    usize queueIndex = 0u;
-                    queueIndex < m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u;
-                    ++queueIndex
-                ){
+                for(usize queueIndex = 0u; queueIndex < m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u; ++queueIndex){
                     const GpuPhysicalQueueId& queue = m_physicalQueueInfos[queueIndex].id;
-                    const auto firstSlot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(
-                        m_amdBreadcrumb.layout,
-                        queue,
-                        0u
-                    );
+                    const auto firstSlot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(m_amdBreadcrumb.layout, queue, 0u);
                     if(!firstSlot)
                         continue;
 
@@ -115,10 +107,7 @@ void Device::captureDeviceLoss(const AStringView context){
 
                             hasObservedMarker = true;
                             const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.metadata->slotRecords[flatSlot];
-                            if(
-                                VulkanDetail::MatchesAmdBreadcrumbObservation(observedMarker, record.marker)
-                                && record.serial > newestRecord.serial
-                            )
+                            if(VulkanDetail::MatchesAmdBreadcrumbObservation(observedMarker, record.marker) && record.serial > newestRecord.serial)
                                 newestRecord = record;
                         }
                     }
@@ -152,12 +141,7 @@ void Device::captureDeviceLoss(const AStringView context){
                         }
                     }
                     else{
-                        report.details.append(StringFormat(
-                            m_gpuCrashReportArena,
-                            "best-effort last-observed breadcrumb (queue {}:{}): <label overwritten>\n",
-                            queue.index,
-                            queue.deviceGeneration
-                        ));
+                        report.details.append(StringFormat(m_gpuCrashReportArena, "best-effort last-observed breadcrumb (queue {}:{}): <label overwritten>\n", queue.index, queue.deviceGeneration));
                     }
                     --remainingEntries;
                 }
@@ -262,10 +246,7 @@ void Device::captureDeviceLoss(const AStringView context){
     DispatchGpuCrash(report);
 }
 
-Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(
-    const GpuPhysicalQueueId& queue,
-    const usize markerHash
-){
+Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, const usize markerHash){
     AmdBreadcrumbWrite write;
     const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
     if(
@@ -282,17 +263,10 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(
     {
         // Serialize the queue-local reservation and its paired CPU record.
         ScopedLock lock(m_amdBreadcrumb.slotMutex);
-        const auto reservation = VulkanDetail::TryBuildNextAmdBreadcrumbReservation(
-            m_amdBreadcrumb.metadata->nextSerials[queue.index],
-            m_amdBreadcrumb.layout.slotsPerQueue
-        );
+        const auto reservation = VulkanDetail::TryBuildNextAmdBreadcrumbReservation(m_amdBreadcrumb.metadata->nextSerials[queue.index], m_amdBreadcrumb.layout.slotsPerQueue);
         if(!reservation)
             return write;
-        const auto slot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(
-            m_amdBreadcrumb.layout,
-            queue,
-            reservation->localSlot
-        );
+        const auto slot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(m_amdBreadcrumb.layout, queue, reservation->localSlot);
         if(!slot)
             return write;
 

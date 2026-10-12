@@ -57,8 +57,7 @@ TEST_F(MultilineModelTests, InvalidSetAndReplacementPreserveTextHistorySelection
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("q\nr", 0u, 3u));
     const MultilineSnapshot before(m_arena, m_model);
-    const AStringView invalid[]{ "\r\n", "\t", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9",
-        "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
+    const AStringView invalid[]{ "\r\n", "\t", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9", "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
     for(const AStringView value : invalid){
         SCOPED_TRACE(value);
         EXPECT_FALSE(m_model.setText(value));

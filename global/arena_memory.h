@@ -48,10 +48,7 @@ class ArenaMemoryTracker final : NoCopy{
 
 public:
     constexpr ArenaMemoryTracker()noexcept = default;
-    explicit ArenaMemoryTracker(
-        const Name& ownerName,
-        ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate
-    );
+    explicit ArenaMemoryTracker(const Name& ownerName, ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate);
     ~ArenaMemoryTracker();
 
 
@@ -115,10 +112,7 @@ public:
     [[nodiscard]] ArenaMemoryStats snapshot()const noexcept{
         ArenaMemoryStats stats;
         stats.usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
-        stats.reservedBytes = m_reservation == ArenaMemoryReservation::FollowsUsage
-            ? stats.usedBytes
-            : m_reservedBytes.load(MemoryOrder::relaxed)
-        ;
+        stats.reservedBytes = m_reservation == ArenaMemoryReservation::FollowsUsage ? stats.usedBytes : m_reservedBytes.load(MemoryOrder::relaxed);
         stats.peakUsedBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
         stats.allocationCount = m_allocationCount.load(MemoryOrder::relaxed);
         stats.reallocationCount = m_reallocationCount.load(MemoryOrder::relaxed);
@@ -168,14 +162,8 @@ struct ArenaMemoryOwnerSnapshot{
 // Records live for process lifetime; traversal captures head to stay bounded.
 [[nodiscard]] const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept;
 // Identity and successor are immutable after publication; this read does not sample counters or lock live trackers.
-[[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(
-    const ArenaMemoryOwnerRecord& record,
-    ArenaMemoryOwnerIdentity& outIdentity
-)noexcept;
-[[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(
-    const ArenaMemoryOwnerRecord& record,
-    ArenaMemoryOwnerSnapshot& outSnapshot
-)noexcept;
+[[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerIdentity& outIdentity)noexcept;
+[[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerSnapshot& outSnapshot)noexcept;
 
 // Raw heap total is separate from named arenas; per-thread counters retain exited history.
 void RecordHeapMemoryAllocation(u64 bytes)noexcept;

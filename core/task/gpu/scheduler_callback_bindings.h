@@ -40,23 +40,12 @@ public:
 
 public:
     // Resolve before recording or native submission. The caller retains the immutable callback array through publication.
-    [[nodiscard]] bool resolve(
-        const GpuTaskGraph::DeclarationReadView& declarations,
-        const GpuCompiledGraph::ReadView& plan,
-        const GpuSubmissionPacketRange& range,
-        const TaskCallback* const callbacks,
-        const usize callbackCount
-    ){
+    [[nodiscard]] bool resolve(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& plan, const GpuSubmissionPacketRange& range, const TaskCallback* const callbacks, const usize callbackCount){
         m_callbacks = nullptr;
         m_callbackCount = 0u;
         m_generation = 0u;
         m_indices.reset();
-        if(
-            (callbackCount != 0u && !callbacks)
-            || !plan.validFor(declarations)
-            || !plan.validPacketRange(range)
-            || callbackCount > declarations.taskCount()
-        )
+        if((callbackCount != 0u && !callbacks) || !plan.validFor(declarations) || !plan.validPacketRange(range) || callbackCount > declarations.taskCount())
             return false;
         if(callbackCount > s_InlineCallbackCount)
             m_indices.emplace(AddSize(callbackCount, callbackCount), m_scratchArena);

@@ -38,31 +38,10 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
-    INTERVAL_RE,
-    ScopeSummary,
-    load_name_symbols as load_timing_name_symbols,
-    parse_timing_file,
-    require_scope_samples,
-    summarize_scopes,
-)
+    INTERVAL_RE, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
 from window_capture_smoke import (  # noqa: E402
-    SKIP_EXIT_CODE,
-    STRICT_LOG_FAILURE_MESSAGES,
-    SmokeFailure,
-    SmokeSkip,
-    WindowsCapture,
-    build_launch_environment,
-    make_runtime_launch_args,
-    collect_log_delta,
-    create_capture_backend,
-    ensure_process_running,
-    launch_logserver,
-    launch_testbed,
-    require_normal_process_exit,
-    shutdown_logserver_and_collect,
-    terminate_process,
-    validate_capture_result,
-)
+    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_capture_result,)
 
 LIT_RENDER_FRAME = "render.frame"
 LIT_RENDER_ASYNC_SHADOW = "render.async_shadow"
@@ -114,22 +93,11 @@ LIT_MAIN = "__main__"
 LIT_APPEND = "append"
 
 
-LANE_RE = re.compile(
-    r"StressTestSmokeProject:\s+M4 async compute\s+requested=([01])\s+effective=([01])"
-    r"\s+graphicsQueue=(\d+):(\d+)\s+computeQueue=(\d+):(\d+)"
-    r"\s+computeDedicated=([01])\s+computeSupported=([01])\s+computeGraphics=([01])(?=\s|$)",
-)
+LANE_RE = re.compile(r"StressTestSmokeProject:\s+M4 async compute\s+requested=([01])\s+effective=([01])" r"\s+graphicsQueue=(\d+):(\d+)\s+computeQueue=(\d+):(\d+)" r"\s+computeDedicated=([01])\s+computeSupported=([01])\s+computeGraphics=([01])(?=\s|$)",)
 INVALID_PHYSICAL_QUEUE_INDEX = 65535
 MAX_DEVICE_GENERATION = 65535
-REQUIRED_ASYNC_SCOPES = (
-    LIT_RENDER_FRAME,
-    LIT_RENDER_ASYNC_SHADOW,
-    LIT_RENDER_ASYNC_FINAL,
-)
-DEFAULT_FORBIDDEN_LOGS = (
-    *STRICT_LOG_FAILURE_MESSAGES,
-    LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO,
-)
+REQUIRED_ASYNC_SCOPES = (LIT_RENDER_FRAME, LIT_RENDER_ASYNC_SHADOW, LIT_RENDER_ASYNC_FINAL,)
+DEFAULT_FORBIDDEN_LOGS = (*STRICT_LOG_FAILURE_MESSAGES, LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO,)
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
 M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG = "render submission suspended"
 M4_RENDER_UNFOCUSED_LOG = "AvboitTimingProbe: render unfocused 1"
@@ -161,15 +129,8 @@ class LaneStatus:
 
     @property
     def dedicated_compute(self) -> bool:
-        return (
-            self.graphics_queue.valid
-            and self.compute_queue.valid
-            and self.compute_queue.device_generation == self.graphics_queue.device_generation
-            and self.compute_queue != self.graphics_queue
-            and self.compute_dedicated
-            and self.compute_supported
-            and not self.compute_graphics
-        )
+        return (self.graphics_queue.valid and self.compute_queue.valid and self.compute_queue.device_generation == self.graphics_queue.device_generation and self.compute_queue != self.graphics_queue and self.compute_dedicated and self.compute_supported
+            and not self.compute_graphics)
 
 
 @dataclass(frozen=True)
@@ -212,24 +173,11 @@ def parse_lane_status(log_text: str) -> Optional[LaneStatus]:
         return None
 
     requested, effective, graphics_index, graphics_generation, compute_index, compute_generation, dedicated, supported, graphics = matches[-1]
-    return LaneStatus(
-        requested=requested == "1",
-        effective=effective == "1",
-        graphics_queue=PhysicalQueueId(int(graphics_index), int(graphics_generation)),
-        compute_queue=PhysicalQueueId(int(compute_index), int(compute_generation)),
-        compute_dedicated=dedicated == "1",
-        compute_supported=supported == "1",
-        compute_graphics=graphics == "1",
-    )
+    return LaneStatus(requested=requested == "1", effective=effective == "1", graphics_queue=PhysicalQueueId(int(graphics_index), int(graphics_generation)), compute_queue=PhysicalQueueId(int(compute_index), int(compute_generation)),
+        compute_dedicated=dedicated == "1", compute_supported=supported == "1", compute_graphics=graphics == "1",)
 
 
-def wait_for_lane_status(
-    process,
-    log_directory: Path,
-    log_baseline: Mapping[Path, int],
-    log_pattern: str,
-    timeout_seconds: float,
-) -> LaneStatus:
+def wait_for_lane_status(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, timeout_seconds: float,) -> LaneStatus:
     deadline = time.monotonic() + timeout_seconds
     latest_log = ""
     while time.monotonic() < deadline:
@@ -244,14 +192,7 @@ def wait_for_lane_status(
     raise SmokeFailure(f"timed out waiting for selected async-lane capability log\n{detail}")
 
 
-def wait_for_log_message(
-    process,
-    log_directory: Path,
-    log_baseline: Mapping[Path, int],
-    log_pattern: str,
-    message: str,
-    timeout_seconds: float,
-) -> None:
+def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, message: str, timeout_seconds: float,) -> None:
     deadline = time.monotonic() + timeout_seconds
     latest_log = ""
     while time.monotonic() < deadline:
@@ -293,11 +234,7 @@ def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_sec
 
 
 def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
-    return load_timing_name_symbols(
-        path,
-        REQUIRED_ASYNC_SCOPES,
-        missing_file_message="Name-symbol sidecar does not exist: {path}",
-    )
+    return load_timing_name_symbols(path, REQUIRED_ASYNC_SCOPES, missing_file_message="Name-symbol sidecar does not exist: {path}",)
 
 
 def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
@@ -341,10 +278,7 @@ def compare_bmp_rgb(first: Path, second: Path) -> PixelDiff:
     first_width, first_height, first_rgb = read_bmp_rgb(first)
     second_width, second_height, second_rgb = read_bmp_rgb(second)
     if (first_width, first_height) != (second_width, second_height):
-        raise SmokeFailure(
-            f"pixel-parity captures have different dimensions: {first_width}x{first_height} vs "
-            f"{second_width}x{second_height}"
-        )
+        raise SmokeFailure(f"pixel-parity captures have different dimensions: {first_width}x{first_height} vs " f"{second_width}x{second_height}")
 
     total_abs = 0
     max_abs = 0
@@ -360,14 +294,7 @@ def compare_bmp_rgb(first: Path, second: Path) -> PixelDiff:
             changed_pixels += 1
 
     total_pixels = first_width * first_height
-    return PixelDiff(
-        width=first_width,
-        height=first_height,
-        max_abs=max_abs,
-        mean_abs=total_abs / len(first_rgb),
-        changed_pixels=changed_pixels,
-        total_pixels=total_pixels,
-    )
+    return PixelDiff(width=first_width, height=first_height, max_abs=max_abs, mean_abs=total_abs / len(first_rgb), changed_pixels=changed_pixels, total_pixels=total_pixels,)
 
 
 def write_json(path: Path, payload: Mapping[str, object]) -> None:
@@ -385,22 +312,8 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
         async_run = report[LIT_ASYNC]
         assert isinstance(sync, Mapping)
         assert isinstance(async_run, Mapping)
-        lines = (
-            LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT,
-            "",
-            "Verdict: **FAIL**",
-            "",
-            "## Incomplete telemetry",
-            "",
-            str(report[LIT_COLLECTION_ERROR]),
-            "",
-            LIT_ARTIFACTS,
-            "",
-            f"- Sync timing: `{sync['timing_file']}`",
-            f"- Async timing: `{async_run['timing_file']}`",
-            f"- Sync log: `{sync['log_file']}`",
-            f"- Async log: `{async_run['log_file']}`",
-        )
+        lines = (LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT, "", "Verdict: **FAIL**", "", "## Incomplete telemetry", "", str(report[LIT_COLLECTION_ERROR]), "", LIT_ARTIFACTS, "", f"- Sync timing: `{sync['timing_file']}`",
+            f"- Async timing: `{async_run['timing_file']}`", f"- Sync log: `{sync['log_file']}`", f"- Async log: `{async_run['log_file']}`",)
         path.write_text("\n".join(lines) + "\n", encoding=LIT_UTF_8)
         return
 
@@ -411,45 +324,20 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
     gates = report[LIT_GATES]
     assert isinstance(gates, Sequence)
 
-    lines = [
-        LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT,
-        "",
-        f"Verdict: **{report['verdict'].upper()}**",
-        "",
-        "| Gate | Result | Detail |",
-        "| --- | --- | --- |",
-    ]
+    lines = [LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT, "", f"Verdict: **{report['verdict'].upper()}**", "", "| Gate | Result | Detail |", "| --- | --- | --- |",]
     for gate in gates:
         assert isinstance(gate, Mapping)
         result = "PASS" if gate[LIT_PASSED] else "FAIL"
         lines.append(f"| {gate['name']} | {result} | {gate['detail']} |")
 
-    lines.extend((
-        "",
-        "## Critical path",
-        "",
-        f"- Synchronous `render.frame`: {sync['frame_median_ms']:.4f} ms",
-        f"- Async `render.frame`: {async_run['frame_median_ms']:.4f} ms",
-        f"- Delta: {report['frame_regression_percent']:+.3f}%",
-        f"- Async graph-owned shadow median: {async_run['shadow_median_ms']:.4f} ms",
-        f"- Async graph-owned shadow positive samples: {async_run['shadow_positive_sample_count']}/{async_run['shadow_sample_count']}",
-        "",
-        LIT_ARTIFACTS,
-        "",
-        f"- Sync timing: `{sync['timing_file']}`",
-        f"- Async timing: `{async_run['timing_file']}`",
-        f"- Sync log: `{sync['log_file']}`",
-        f"- Async log: `{async_run['log_file']}`",
-    ))
+    lines.extend(("", "## Critical path", "", f"- Synchronous `render.frame`: {sync['frame_median_ms']:.4f} ms", f"- Async `render.frame`: {async_run['frame_median_ms']:.4f} ms", f"- Delta: {report['frame_regression_percent']:+.3f}%",
+        f"- Async graph-owned shadow median: {async_run['shadow_median_ms']:.4f} ms", f"- Async graph-owned shadow positive samples: {async_run['shadow_positive_sample_count']}/{async_run['shadow_sample_count']}", "", LIT_ARTIFACTS, "",
+        f"- Sync timing: `{sync['timing_file']}`", f"- Async timing: `{async_run['timing_file']}`", f"- Sync log: `{sync['log_file']}`", f"- Async log: `{async_run['log_file']}`",))
     if report.get(LIT_PIXEL_DIFF):
         pixel_diff = report[LIT_PIXEL_DIFF]
         assert isinstance(pixel_diff, Mapping)
-        lines.extend((
-            f"- Pixel comparison: max abs {pixel_diff['max_abs']}, mean abs {pixel_diff['mean_abs']:.6f}, "
-            f"changed {pixel_diff['changed_fraction'] * 100.0:.4f}%",
-            f"- Sync capture: `{sync['capture_file']}`",
-            f"- Async capture: `{async_run['capture_file']}`",
-        ))
+        lines.extend((f"- Pixel comparison: max abs {pixel_diff['max_abs']}, mean abs {pixel_diff['mean_abs']:.6f}, " f"changed {pixel_diff['changed_fraction'] * 100.0:.4f}%", f"- Sync capture: `{sync['capture_file']}`",
+            f"- Async capture: `{async_run['capture_file']}`",))
 
     path.write_text("\n".join(lines) + "\n", encoding=LIT_UTF_8)
 
@@ -480,10 +368,7 @@ def validate_lane_for_mode(mode: str, lane: LaneStatus) -> None:
         if not lane.requested:
             raise SmokeFailure(f"async benchmark did not request an async compute lane: {lane}")
         if not lane.effective:
-            raise DedicatedComputeUnavailable(
-                "async-shadow M4 skipped: the requested async lane did not resolve to a distinct dedicated compute-only queue "
-                f"(Graphics {lane.graphics_queue}, Compute {lane.compute_queue})"
-            )
+            raise DedicatedComputeUnavailable("async-shadow M4 skipped: the requested async lane did not resolve to a distinct dedicated compute-only queue " f"(Graphics {lane.graphics_queue}, Compute {lane.compute_queue})")
     if mode == LIT_SYNC and (lane.requested or lane.effective):
         raise SmokeFailure(f"synchronous baseline unexpectedly enabled async compute: {lane}")
 
@@ -501,12 +386,7 @@ def prepare_m4_client_area(capture_backend, window):
         capture_backend.prepare_raw_client_window(window)
 
 
-def run_frame_locked_capture(
-    args: argparse.Namespace,
-    mode: str,
-    executable: Path,
-    capture_backend,
-) -> FrameLockedCapture:
+def run_frame_locked_capture(args: argparse.Namespace, mode: str, executable: Path, capture_backend,) -> FrameLockedCapture:
     """Capture a settled temporal frame after an identical number of world ticks in each mode."""
     if not executable.is_file():
         raise SmokeFailure(f"{mode} executable does not exist: {executable}")
@@ -532,55 +412,27 @@ def run_frame_locked_capture(
     log_text = ""
     window = None
     try:
-        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
-            launch_args, executable, environment
-        )
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(launch_args, executable, environment)
         if not log_directory:
             raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
         app_process = launch_testbed(launch_args, executable, environment, log_port)
 
-        lane = wait_for_lane_status(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            args.startup_timeout,
-        )
+        lane = wait_for_lane_status(app_process, log_directory, log_baseline, log_pattern, args.startup_timeout,)
         validate_lane_for_mode(mode, lane)
-        wait_for_log_message(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            M4_RENDER_UNFOCUSED_LOG,
-            args.startup_timeout,
-        )
+        wait_for_log_message(app_process, log_directory, log_baseline, log_pattern, M4_RENDER_UNFOCUSED_LOG, args.startup_timeout,)
 
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:
             raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
 
         prepare_m4_client_area(capture_backend, window)
-        wait_for_log_message(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG,
-            args.startup_timeout,
-        )
+        wait_for_log_message(app_process, log_directory, log_baseline, log_pattern, M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG, args.startup_timeout,)
         wait_while_running(app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
         capture_result = capture_m4_client_area(capture_backend, window, capture_path)
         validate_capture_result(capture_result)
         app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
         app_process = None
-        log_text = shutdown_logserver_and_collect(
-            logserver_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            LIT_BENCHMARK_LOGSERVER,
-        )
+        log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, LIT_BENCHMARK_LOGSERVER,)
         logserver_process = None
         capture_log_path.write_text(log_text, encoding=LIT_UTF_8)
     finally:
@@ -604,14 +456,7 @@ def run_frame_locked_capture(
     return FrameLockedCapture(str(capture_path), log_text, lane)
 
 
-def run_single_mode(
-    args: argparse.Namespace,
-    mode: str,
-    executable: Path,
-    symbols: Mapping[str, str],
-    capture_backend,
-    frame_locked_capture: Optional[FrameLockedCapture],
-) -> RunResult:
+def run_single_mode(args: argparse.Namespace, mode: str, executable: Path, symbols: Mapping[str, str], capture_backend, frame_locked_capture: Optional[FrameLockedCapture],) -> RunResult:
     if not executable.is_file():
         raise SmokeFailure(f"{mode} executable does not exist: {executable}")
 
@@ -636,29 +481,14 @@ def run_single_mode(
     measurement_log_text = ""
     window = None
     try:
-        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
-            launch_args, executable, environment
-        )
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(launch_args, executable, environment)
         if not log_directory:
             raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
         app_process = launch_testbed(launch_args, executable, environment, log_port)
 
-        lane = wait_for_lane_status(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            args.startup_timeout,
-        )
+        lane = wait_for_lane_status(app_process, log_directory, log_baseline, log_pattern, args.startup_timeout,)
         validate_lane_for_mode(mode, lane)
-        wait_for_log_message(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            M4_RENDER_UNFOCUSED_LOG,
-            args.startup_timeout,
-        )
+        wait_for_log_message(app_process, log_directory, log_baseline, log_pattern, M4_RENDER_UNFOCUSED_LOG, args.startup_timeout,)
 
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:
@@ -669,13 +499,7 @@ def run_single_mode(
         wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
         app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
         app_process = None
-        measurement_log_text = shutdown_logserver_and_collect(
-            logserver_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            LIT_BENCHMARK_LOGSERVER,
-        )
+        measurement_log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, LIT_BENCHMARK_LOGSERVER,)
         logserver_process = None
     finally:
         terminate_process(app_process, f"{mode} benchmark", window)
@@ -690,28 +514,14 @@ def run_single_mode(
         raise SmokeFailure(f"{mode} benchmark lost its async-lane capability log during collection")
     validate_lane_for_mode(mode, lane)
     if frame_locked_capture:
-        log_text = (
-            "=== frame-locked pixel capture ===\n"
-            f"{frame_locked_capture.log_text}\n"
-            "=== timed benchmark ===\n"
-            f"{measurement_log_text}"
-        )
+        log_text = ("=== frame-locked pixel capture ===\n" f"{frame_locked_capture.log_text}\n" "=== timed benchmark ===\n" f"{measurement_log_text}")
     else:
         log_text = measurement_log_text
     log_path.write_text(log_text, encoding=LIT_UTF_8)
     summaries = summarize_scopes(parse_timing_file(timing_path, symbols, measurement_start_byte_offset))
     forbidden = find_forbidden_log_messages(log_text, tuple(DEFAULT_FORBIDDEN_LOGS) + tuple(args.reject_log))
-    return RunResult(
-        mode=mode,
-        executable=str(executable),
-        timing_file=str(timing_path),
-        log_file=str(log_path),
-        capture_file=frame_locked_capture.capture_file if frame_locked_capture else None,
-        lane=lane,
-        scopes=summaries,
-        forbidden_log_messages=forbidden,
-        measurement_start_byte_offset=measurement_start_byte_offset,
-    )
+    return RunResult(mode=mode, executable=str(executable), timing_file=str(timing_path), log_file=str(log_path), capture_file=frame_locked_capture.capture_file if frame_locked_capture else None, lane=lane, scopes=summaries, forbidden_log_messages=forbidden,
+        measurement_start_byte_offset=measurement_start_byte_offset,)
 
 
 def gate(name: str, passed: bool, detail: str) -> Dict[str, object]:
@@ -719,16 +529,8 @@ def gate(name: str, passed: bool, detail: str) -> Dict[str, object]:
 
 
 def raw_run_payload(run: RunResult) -> Dict[str, object]:
-    return {
-        "executable": run.executable,
-        LIT_TIMING_FILE: run.timing_file,
-        LIT_LOG_FILE: run.log_file,
-        "capture_file": run.capture_file,
-        "measurement_start_byte_offset": run.measurement_start_byte_offset,
-        "lane": asdict(run.lane),
-        "forbidden_log_messages": run.forbidden_log_messages,
-        "scopes": {name: asdict(summary) for name, summary in run.scopes.items()},
-    }
+    return { "executable": run.executable, LIT_TIMING_FILE: run.timing_file, LIT_LOG_FILE: run.log_file, "capture_file": run.capture_file, "measurement_start_byte_offset": run.measurement_start_byte_offset, "lane": asdict(run.lane),
+        "forbidden_log_messages": run.forbidden_log_messages, "scopes": {name: asdict(summary) for name, summary in run.scopes.items()}, }
 
 
 def raw_pixel_diff_payload(pixel_diff: PixelDiff) -> Dict[str, object]:
@@ -740,20 +542,11 @@ def raw_pixel_diff_payload(pixel_diff: PixelDiff) -> Dict[str, object]:
 def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResult) -> Dict[str, object]:
     sync_frame = require_scope_samples(sync.scopes, LIT_RENDER_FRAME, args.minimum_samples, Path(sync.timing_file))
     async_frame = require_scope_samples(async_run.scopes, LIT_RENDER_FRAME, args.minimum_samples, Path(async_run.timing_file))
-    shadow = require_scope_samples(
-        async_run.scopes,
-        LIT_RENDER_ASYNC_SHADOW,
-        args.minimum_samples,
-        Path(async_run.timing_file),
-    )
+    shadow = require_scope_samples(async_run.scopes, LIT_RENDER_ASYNC_SHADOW, args.minimum_samples, Path(async_run.timing_file),)
     for scope in REQUIRED_ASYNC_SCOPES:
         require_scope_samples(async_run.scopes, scope, args.minimum_samples, Path(async_run.timing_file))
 
-    regression_percent = (
-        (async_frame.median_ms - sync_frame.median_ms) * 100.0 / sync_frame.median_ms
-        if sync_frame.median_ms > 0.0
-        else math.inf
-    )
+    regression_percent = ((async_frame.median_ms - sync_frame.median_ms) * 100.0 / sync_frame.median_ms if sync_frame.median_ms > 0.0 else math.inf)
     shadow_scope_passed = shadow.median_ms >= args.minimum_shadow_ms
     timing_passed = regression_percent <= args.maximum_frame_regression_percent
 
@@ -763,78 +556,26 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
     if not args.skip_pixel_parity:
         assert sync.capture_file and async_run.capture_file
         pixel_diff = compare_bmp_rgb(Path(sync.capture_file), Path(async_run.capture_file))
-        pixel_passed = (
-            pixel_diff.max_abs <= args.maximum_pixel_max_abs
-            and pixel_diff.mean_abs <= args.maximum_pixel_mean_abs
-            and (
-                args.maximum_pixel_changed_fraction is None
-                or pixel_diff.changed_fraction <= args.maximum_pixel_changed_fraction
-            )
-        )
-        pixel_detail = (
-            f"max abs {pixel_diff.max_abs}/{args.maximum_pixel_max_abs}, mean abs "
-            f"{pixel_diff.mean_abs:.6f}/{args.maximum_pixel_mean_abs:.6f}, changed "
-            f"{pixel_diff.changed_fraction * 100.0:.4f}%"
-        )
+        pixel_passed = (pixel_diff.max_abs <= args.maximum_pixel_max_abs and pixel_diff.mean_abs <= args.maximum_pixel_mean_abs and (args.maximum_pixel_changed_fraction is None or pixel_diff.changed_fraction <= args.maximum_pixel_changed_fraction))
+        pixel_detail = (f"max abs {pixel_diff.max_abs}/{args.maximum_pixel_max_abs}, mean abs " f"{pixel_diff.mean_abs:.6f}/{args.maximum_pixel_mean_abs:.6f}, changed " f"{pixel_diff.changed_fraction * 100.0:.4f}%")
 
     logs_passed = not sync.forbidden_log_messages and not async_run.forbidden_log_messages
-    gates = [
-        gate(
-            "dedicated async lane",
-            async_run.lane.requested
-            and async_run.lane.effective
-            and async_run.lane.dedicated_compute,
-            f"requested={async_run.lane.requested}, effective={async_run.lane.effective}, "
-            f"queues={async_run.lane.graphics_queue}/{async_run.lane.compute_queue}, "
-            f"dedicated={async_run.lane.compute_dedicated}, compute={async_run.lane.compute_supported}, "
-            f"graphics={async_run.lane.compute_graphics}",
-        ),
-        gate(
-            "graph-owned shadow timing",
-            shadow_scope_passed,
-            f"median {format_ms(shadow.median_ms)} (min {args.minimum_shadow_ms:.4f} ms), "
-            f"positive {shadow.positive_sample_count}/{shadow.sample_count}",
-        ),
-        gate(
-            "critical path",
-            timing_passed,
-            f"sync {format_ms(sync_frame.median_ms)}, async {format_ms(async_frame.median_ms)}, "
-            f"delta {regression_percent:+.3f}% (limit +{args.maximum_frame_regression_percent:.3f}%)",
-        ),
-        gate("pixel parity", pixel_passed, pixel_detail),
-        gate(
-            "runtime and validation logs",
-            logs_passed,
-            "no forbidden log messages"
-            if logs_passed
-            else f"sync={sync.forbidden_log_messages}, async={async_run.forbidden_log_messages}",
-        ),
-    ]
+    gates = [gate("dedicated async lane", async_run.lane.requested and async_run.lane.effective and async_run.lane.dedicated_compute, f"requested={async_run.lane.requested}, effective={async_run.lane.effective}, "
+            f"queues={async_run.lane.graphics_queue}/{async_run.lane.compute_queue}, " f"dedicated={async_run.lane.compute_dedicated}, compute={async_run.lane.compute_supported}, " f"graphics={async_run.lane.compute_graphics}",), gate(
+            "graph-owned shadow timing", shadow_scope_passed, f"median {format_ms(shadow.median_ms)} (min {args.minimum_shadow_ms:.4f} ms), " f"positive {shadow.positive_sample_count}/{shadow.sample_count}",), gate("critical path", timing_passed,
+            f"sync {format_ms(sync_frame.median_ms)}, async {format_ms(async_frame.median_ms)}, " f"delta {regression_percent:+.3f}% (limit +{args.maximum_frame_regression_percent:.3f}%)",), gate("pixel parity", pixel_passed, pixel_detail), gate(
+            "runtime and validation logs", logs_passed, "no forbidden log messages" if logs_passed else f"sync={sync.forbidden_log_messages}, async={async_run.forbidden_log_messages}",),]
     verdict = LIT_PASS if all(bool(item[LIT_PASSED]) for item in gates) else LIT_FAIL
 
     def compact_run(run: RunResult, frame: ScopeSummary, shadow_scope: Optional[ScopeSummary] = None) -> Dict[str, object]:
         result = raw_run_payload(run)
-        result.update({
-            "frame_median_ms": frame.median_ms,
-            "frame_sample_count": frame.sample_count,
-        })
+        result.update({ "frame_median_ms": frame.median_ms, "frame_sample_count": frame.sample_count, })
         if shadow_scope:
-            result.update(
-                shadow_median_ms=shadow_scope.median_ms,
-                shadow_sample_count=shadow_scope.sample_count,
-                shadow_positive_sample_count=shadow_scope.positive_sample_count,
-            )
+            result.update(shadow_median_ms=shadow_scope.median_ms, shadow_sample_count=shadow_scope.sample_count, shadow_positive_sample_count=shadow_scope.positive_sample_count,)
         return result
 
-    return {
-        LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3,
-        LIT_VERDICT: verdict,
-        LIT_GATES: gates,
-        "frame_regression_percent": regression_percent,
-        LIT_SYNC: compact_run(sync, sync_frame),
-        LIT_ASYNC: compact_run(async_run, async_frame, shadow),
-        LIT_PIXEL_DIFF: raw_pixel_diff_payload(pixel_diff) if pixel_diff else None,
-    }
+    return { LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3, LIT_VERDICT: verdict, LIT_GATES: gates, "frame_regression_percent": regression_percent, LIT_SYNC: compact_run(sync, sync_frame), LIT_ASYNC: compact_run(async_run, async_frame, shadow),
+        LIT_PIXEL_DIFF: raw_pixel_diff_payload(pixel_diff) if pixel_diff else None, }
 
 
 def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
@@ -863,34 +604,15 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(LIT_WARMUP_SECONDS, type=float, default=4.0, help="Settling time before each timed measurement.")
     parser.add_argument(LIT_MEASURE_SECONDS, type=float, default=12.0, help="Timing collection time per mode after warmup.")
     parser.add_argument(LIT_STARTUP_TIMEOUT, type=float, default=45.0, help="Timeout for device creation and window visibility.")
-    parser.add_argument(
-        "--pixel-capture-frames",
-        type=int,
-        default=96,
-        help="World ticks to render before the benchmark-only held-frame pixel capture.",
-    )
-    parser.add_argument(
-        LIT_PIXEL_CAPTURE_SETTLE_SECONDS,
-        type=float,
-        default=0.75,
-        help="Additional time to let the held capture frame present before it is read back.",
-    )
+    parser.add_argument("--pixel-capture-frames", type=int, default=96, help="World ticks to render before the benchmark-only held-frame pixel capture.",)
+    parser.add_argument(LIT_PIXEL_CAPTURE_SETTLE_SECONDS, type=float, default=0.75, help="Additional time to let the held capture frame present before it is read back.",)
     parser.add_argument("--minimum-samples", type=int, default=6, help="Minimum captured timing intervals required per rollout scope.")
     parser.add_argument(LIT_MINIMUM_SHADOW_MS, type=float, default=0.01, help="Minimum median graph-owned async shadow time.")
-    parser.add_argument(
-        LIT_MAXIMUM_FRAME_REGRESSION_PERCENT,
-        type=float,
-        default=3.0,
-        help="Maximum allowed async render.frame median regression versus sync.",
-    )
+    parser.add_argument(LIT_MAXIMUM_FRAME_REGRESSION_PERCENT, type=float, default=3.0, help="Maximum allowed async render.frame median regression versus sync.",)
     parser.add_argument("--skip-pixel-parity", action=LIT_STORE_TRUE, help="Do not capture or compare native window pixels.")
     parser.add_argument("--maximum-pixel-max-abs", type=int, default=16, help="Maximum allowed per-channel pixel delta.")
     parser.add_argument(LIT_MAXIMUM_PIXEL_MEAN_ABS, type=float, default=0.75, help="Maximum allowed mean per-channel pixel delta.")
-    parser.add_argument(
-        "--maximum-pixel-changed-fraction",
-        type=float,
-        help="Optional maximum fraction of changed pixels; unset tolerates widespread sub-threshold temporal noise.",
-    )
+    parser.add_argument("--maximum-pixel-changed-fraction", type=float, help="Optional maximum fraction of changed pixels; unset tolerates widespread sub-threshold temporal noise.",)
     parser.add_argument("--gpu-validation", action=LIT_STORE_TRUE, help="Pass --gpudbg to both loader processes.")
     parser.add_argument("--reject-log", action=LIT_APPEND, default=[], help="Additional log substring that fails the run.")
     parser.add_argument("--report-only", action=LIT_STORE_TRUE, help="Write a report but return success if a rollout gate fails.")
@@ -931,25 +653,13 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 def run_self_test() -> int:
     capture_args = parse_args([LIT_SELF_TEST])
 
-    lane_log = (
-        "StressTestSmokeProject: M4 async compute requested=1 effective=1 graphicsQueue=0:17 computeQueue=1:17 "
-        "computeDedicated=1 computeSupported=1 computeGraphics=0"
-    )
+    lane_log = ("StressTestSmokeProject: M4 async compute requested=1 effective=1 graphicsQueue=0:17 computeQueue=1:17 " "computeDedicated=1 computeSupported=1 computeGraphics=0")
     lane = parse_lane_status(lane_log)
     assert lane is not None
     validate_lane_for_mode(LIT_ASYNC, lane)
-    for invalid_log in (
-        lane_log.replace("graphicsQueue=0:17", "graphicsQueue=65535:17"),
-        lane_log.replace("computeQueue=1:17", "computeQueue=1:18"),
-        lane_log.replace("computeQueue=1:17", "computeQueue=1:0"),
-        lane_log.replace("computeQueue=1:17", "computeQueue=65535:0"),
-        lane_log.replace("computeQueue=1:17", "computeQueue=0:17"),
-        lane_log.replace("computeDedicated=1", "computeDedicated=0"),
-        lane_log.replace("computeSupported=1", "computeSupported=0"),
-        lane_log.replace("computeGraphics=0", "computeGraphics=1"),
-        lane_log.replace("effective=1", "effective=0"),
-        lane_log.replace("requested=1 effective=1", "requested=0 effective=0"),
-    ):
+    for invalid_log in (lane_log.replace("graphicsQueue=0:17", "graphicsQueue=65535:17"), lane_log.replace("computeQueue=1:17", "computeQueue=1:18"), lane_log.replace("computeQueue=1:17", "computeQueue=1:0"),
+        lane_log.replace("computeQueue=1:17", "computeQueue=65535:0"), lane_log.replace("computeQueue=1:17", "computeQueue=0:17"), lane_log.replace("computeDedicated=1", "computeDedicated=0"), lane_log.replace("computeSupported=1", "computeSupported=0"),
+        lane_log.replace("computeGraphics=0", "computeGraphics=1"), lane_log.replace("effective=1", "effective=0"), lane_log.replace("requested=1 effective=1", "requested=0 effective=0"),):
         invalid_lane = parse_lane_status(invalid_log)
         assert invalid_lane is not None
         try:
@@ -960,14 +670,8 @@ def run_self_test() -> int:
             pass
         else:
             raise AssertionError("M4 accepted invalid or contradictory selected queue evidence")
-    absent_compute_log = (
-        "StressTestSmokeProject: M4 async compute requested=1 effective=0 graphicsQueue=0:17 computeQueue=65535:0 "
-        "computeDedicated=0 computeSupported=0 computeGraphics=0"
-    )
-    shared_compute_log = (
-        "StressTestSmokeProject: M4 async compute requested=1 effective=0 graphicsQueue=0:17 computeQueue=0:17 "
-        "computeDedicated=0 computeSupported=1 computeGraphics=1"
-    )
+    absent_compute_log = ("StressTestSmokeProject: M4 async compute requested=1 effective=0 graphicsQueue=0:17 computeQueue=65535:0 " "computeDedicated=0 computeSupported=0 computeGraphics=0")
+    shared_compute_log = ("StressTestSmokeProject: M4 async compute requested=1 effective=0 graphicsQueue=0:17 computeQueue=0:17 " "computeDedicated=0 computeSupported=1 computeGraphics=1")
     for unavailable_log in (absent_compute_log, shared_compute_log):
         unavailable_lane = parse_lane_status(unavailable_log)
         assert unavailable_lane is not None
@@ -980,12 +684,8 @@ def run_self_test() -> int:
     disabled_lane = parse_lane_status(lane_log.replace("requested=1 effective=1", "requested=0 effective=0"))
     assert disabled_lane is not None
     validate_lane_for_mode(LIT_SYNC, disabled_lane)
-    for malformed_log in (
-        lane_log.replace("computeGraphics=0", "computeGraphics="),
-        lane_log.replace("computeGraphics=0", "computeGraphics=2"),
-        lane_log.replace("graphicsQueue=0:17", "graphicsQueue=0"),
-        lane_log.replace("StressTestSmokeProject:", "OtherProject:"),
-    ):
+    for malformed_log in (lane_log.replace("computeGraphics=0", "computeGraphics="), lane_log.replace("computeGraphics=0", "computeGraphics=2"), lane_log.replace("graphicsQueue=0:17", "graphicsQueue=0"),
+        lane_log.replace("StressTestSmokeProject:", "OtherProject:"),):
         assert parse_lane_status(malformed_log) is None
 
     class ClientRectUser32:
@@ -1056,10 +756,7 @@ def run_self_test() -> int:
         assert "0x80070057" in str(error)
     else:
         raise AssertionError("M4 DWM setup accepted an unsupported corner-preference attribute")
-    assert unsupported_calls == [
-        (LIT_PREPARE, 17),
-        (LIT_DWMSETWINDOWATTRIBUTE, 17, 33, 1, 4),
-    ]
+    assert unsupported_calls == [(LIT_PREPARE, 17), (LIT_DWMSETWINDOWATTRIBUTE, 17, 33, 1, 4),]
 
     negative_failure_calls = []
     negative_failure_capture = object.__new__(WindowsCapture)
@@ -1074,10 +771,7 @@ def run_self_test() -> int:
         raise AssertionError("M4 DWM setup accepted a negative DwmSetWindowAttribute failure")
     assert len(negative_failure_calls) == 2
 
-    for set_result, flush_result, expected_operation, expected_calls in (
-        (1, 0, LIT_DWMSETWINDOWATTRIBUTE, 2),
-        (0, 1, LIT_DWMFLUSH, 3),
-    ):
+    for set_result, flush_result, expected_operation, expected_calls in ((1, 0, LIT_DWMSETWINDOWATTRIBUTE, 2), (0, 1, LIT_DWMFLUSH, 3),):
         failure_calls = []
         failure_capture = object.__new__(WindowsCapture)
         failure_capture.dwmapi = DwmApi(failure_calls, set_result, flush_result)
@@ -1103,10 +797,7 @@ def run_self_test() -> int:
         baseline = {root / "old.log": 7}
         backend = mock.Mock()
         backend.wait_for_window.return_value = 17
-        backend.capture_client_window.return_value = SimpleNamespace(
-            appears_empty_or_white=False,
-            has_pixel_variation=True,
-        )
+        backend.capture_client_window.return_value = SimpleNamespace(appears_empty_or_white=False, has_pixel_variation=True,)
         orchestration_lane = LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False)
         events = []
 
@@ -1147,52 +838,18 @@ def run_self_test() -> int:
             else:
                 raise AssertionError("timed orchestration accepted an abnormal Testbed exit")
 
-        assert events == [
-            (LIT_APP_STOP, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
-            (LIT_LOGSERVER_HELPER, LIT_BENCHMARK_LOGSERVER),
-            (LIT_CLEANUP_NONE, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
-            (LIT_CLEANUP_NONE, LIT_BENCHMARK_LOGSERVER, None),
-            (LIT_APP_STOP, LIT_SYNC_BENCHMARK, 17),
-            (LIT_LOGSERVER_HELPER, LIT_BENCHMARK_LOGSERVER),
-            (LIT_CLEANUP_NONE, LIT_SYNC_BENCHMARK, 17),
-            (LIT_CLEANUP_NONE, LIT_BENCHMARK_LOGSERVER, None),
-        ]
-        assert terminate_mock.mock_calls == [
-            mock.call(app, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
-            mock.call(None, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
-            mock.call(None, LIT_BENCHMARK_LOGSERVER),
-            mock.call(app, LIT_SYNC_BENCHMARK, 17),
-            mock.call(None, LIT_SYNC_BENCHMARK, 17),
-            mock.call(None, LIT_BENCHMARK_LOGSERVER),
-        ]
+        assert events == [(LIT_APP_STOP, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), (LIT_LOGSERVER_HELPER, LIT_BENCHMARK_LOGSERVER), (LIT_CLEANUP_NONE, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), (LIT_CLEANUP_NONE, LIT_BENCHMARK_LOGSERVER, None),
+            (LIT_APP_STOP, LIT_SYNC_BENCHMARK, 17), (LIT_LOGSERVER_HELPER, LIT_BENCHMARK_LOGSERVER), (LIT_CLEANUP_NONE, LIT_SYNC_BENCHMARK, 17), (LIT_CLEANUP_NONE, LIT_BENCHMARK_LOGSERVER, None),]
+        assert terminate_mock.mock_calls == [mock.call(app, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), mock.call(None, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), mock.call(None, LIT_BENCHMARK_LOGSERVER), mock.call(app, LIT_SYNC_BENCHMARK, 17),
+            mock.call(None, LIT_SYNC_BENCHMARK, 17), mock.call(None, LIT_BENCHMARK_LOGSERVER),]
 
-        # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate
-        # submissions. The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
+        # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate submissions.
+        # The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
         stable_scope = ScopeSummary(6, 6, 1.0, 1.0, 1.0, 1.0)
-        async_run = RunResult(
-            mode=LIT_ASYNC,
-            executable="async.exe",
-            timing_file="async.timing.txt",
-            log_file=LIT_ASYNC_LOG,
-            capture_file=None,
-            lane=LaneStatus(True, True, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False),
-            scopes={
-                LIT_RENDER_FRAME: stable_scope,
-                LIT_RENDER_ASYNC_SHADOW: stable_scope,
-                LIT_RENDER_ASYNC_FINAL: stable_scope,
-            },
-            forbidden_log_messages=[],
-        )
-        sync_run = RunResult(
-            mode=LIT_SYNC,
-            executable="sync.exe",
-            timing_file="sync.timing.txt",
-            log_file=LIT_SYNC_LOG,
-            capture_file=None,
-            lane=LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False),
-            scopes={LIT_RENDER_FRAME: stable_scope},
-            forbidden_log_messages=[],
-        )
+        async_run = RunResult(mode=LIT_ASYNC, executable="async.exe", timing_file="async.timing.txt", log_file=LIT_ASYNC_LOG, capture_file=None, lane=LaneStatus(True, True, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False), scopes={
+                LIT_RENDER_FRAME: stable_scope, LIT_RENDER_ASYNC_SHADOW: stable_scope, LIT_RENDER_ASYNC_FINAL: stable_scope, }, forbidden_log_messages=[],)
+        sync_run = RunResult(mode=LIT_SYNC, executable="sync.exe", timing_file="sync.timing.txt", log_file=LIT_SYNC_LOG, capture_file=None, lane=LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False),
+            scopes={LIT_RENDER_FRAME: stable_scope}, forbidden_log_messages=[],)
         capture_args.skip_pixel_parity = True
         assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_PASS
 
@@ -1204,10 +861,7 @@ def run_self_test() -> int:
             def timing_interval(frame_ms: float) -> bytes:
                 lines = ["=== interval: 20 frames / 0.5s ==="]
                 for scope, value in ((LIT_RENDER_FRAME, frame_ms), (LIT_RENDER_ASYNC_SHADOW, 1.0), (LIT_RENDER_ASYNC_FINAL, 0.1), ("warmup_한", 0.2)):
-                    lines.append(
-                        f"  {scope}: window_avg_ms={value} window_min_ms={value} window_max_ms={value} "
-                        f"published_windows=20 total_ms={value * 20} gpu_samples=40 sample_avg_ms={value / 2}"
-                    )
+                    lines.append(f"  {scope}: window_avg_ms={value} window_min_ms={value} window_max_ms={value} " f"published_windows=20 total_ms={value * 20} gpu_samples=40 sample_avg_ms={value / 2}")
                 return (newline.join(lines) + newline).encode(LIT_UTF_8)
 
             for warmup_ms, measured_ms, expected_verdict in ((500.0, 10.0, LIT_PASS), (1.0, 12.0, LIT_FAIL)):
@@ -1291,49 +945,20 @@ def run(args: argparse.Namespace) -> int:
 
     capture_backend = None
     try:
-        # Run async first. A no-dedicated-compute host exits 77 before spending time on an A/B whose asynchronous half
-        # would only exercise the intentional Graphics queue route.
+        # Run async first.
+        # A no-dedicated-compute host exits 77 before spending time on an A/B whose asynchronous half would only exercise the intentional Graphics queue route.
         capture_backend = create_capture_backend()
-        async_capture = (
-            run_frame_locked_capture(args, LIT_ASYNC, args.async_executable, capture_backend)
-            if not args.skip_pixel_parity
-            else None
-        )
-        async_run = run_single_mode(
-            args,
-            LIT_ASYNC,
-            args.async_executable,
-            load_name_symbols(args.async_namesym),
-            capture_backend,
-            async_capture,
-        )
-        sync_capture = (
-            run_frame_locked_capture(args, LIT_SYNC, args.sync_executable, capture_backend)
-            if not args.skip_pixel_parity
-            else None
-        )
-        sync_run = run_single_mode(
-            args,
-            LIT_SYNC,
-            args.sync_executable,
-            load_name_symbols(args.sync_namesym),
-            capture_backend,
-            sync_capture,
-        )
+        async_capture = (run_frame_locked_capture(args, LIT_ASYNC, args.async_executable, capture_backend) if not args.skip_pixel_parity else None)
+        async_run = run_single_mode(args, LIT_ASYNC, args.async_executable, load_name_symbols(args.async_namesym), capture_backend, async_capture,)
+        sync_capture = (run_frame_locked_capture(args, LIT_SYNC, args.sync_executable, capture_backend) if not args.skip_pixel_parity else None)
+        sync_run = run_single_mode(args, LIT_SYNC, args.sync_executable, load_name_symbols(args.sync_namesym), capture_backend, sync_capture,)
         json_path = args.output_dir / "m4_report.json"
         markdown_path = args.output_dir / "m4_report.md"
         try:
             report = evaluate_runs(args, sync_run, async_run)
         except SmokeFailure as error:
-            report = {
-                LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3,
-                LIT_VERDICT: LIT_FAIL,
-                LIT_COLLECTION_ERROR: str(error),
-                LIT_GATES: [gate("required timestamp telemetry", False, str(error))],
-                LIT_SYNC: raw_run_payload(sync_run),
-                LIT_ASYNC: raw_run_payload(async_run),
-                LIT_PIXEL_DIFF: None,
-            }
+            report = { LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3, LIT_VERDICT: LIT_FAIL, LIT_COLLECTION_ERROR: str(error), LIT_GATES: [gate("required timestamp telemetry", False, str(error))], LIT_SYNC: raw_run_payload(sync_run),
+                LIT_ASYNC: raw_run_payload(async_run), LIT_PIXEL_DIFF: None, }
         write_json(json_path, report)
         write_markdown_report(markdown_path, report)
         print(f"M4 report: {markdown_path}")

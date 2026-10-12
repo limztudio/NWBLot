@@ -65,16 +65,7 @@ class ScrollLayout final{
 public:
     // Extents and offsets are logical doubles; only the clipped visible row interval reaches float paint geometry.
     // Reject viewports that cannot be represented within the double content extent.
-    [[nodiscard]] static Expected<ScrollPlacement> Calculate(
-        const Rect& bounds,
-        const Rect& inheritedClip,
-        const Insets& padding,
-        f32 scrollbarWidth,
-        f32 minimumThumb,
-        u64 rowCount,
-        f32 rowHeight,
-        f64 offset
-    )noexcept;
+    [[nodiscard]] static Expected<ScrollPlacement> Calculate(const Rect& bounds, const Rect& inheritedClip, const Insets& padding, f32 scrollbarWidth, f32 minimumThumb, u64 rowCount, f32 rowHeight, f64 offset)noexcept;
     [[nodiscard]] static Expected<Rect> RowBounds(u64 index, const ScrollPlacement& placement, f32 rowHeight)noexcept;
 };
 

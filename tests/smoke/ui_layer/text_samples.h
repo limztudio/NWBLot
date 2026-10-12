@@ -41,9 +41,7 @@ private:
     Array<Impl::Ui::SharedSdfAtlasPage, 4u> m_sdf;
 };
 
-using SharedUiTextSmokeSamples = RefCountPtr<
-    RefCounter<UiTextSmokeSamples>, ArenaRefDeleter<RefCounter<UiTextSmokeSamples>, Core::Alloc::GlobalArena>
->;
+using SharedUiTextSmokeSamples = RefCountPtr< RefCounter<UiTextSmokeSamples>, ArenaRefDeleter<RefCounter<UiTextSmokeSamples>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] SharedUiTextSmokeSamples CreateUiTextSmokeSamples(Core::Alloc::GlobalArena& arena);
 

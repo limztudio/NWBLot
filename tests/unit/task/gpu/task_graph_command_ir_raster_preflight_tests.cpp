@@ -34,32 +34,13 @@ using namespace TaskGraphTestUtils;
 TEST(GpuCommandIrRasterPreflight, DrawWithoutHeapBindingRejectsWholePacket){
     TaskGraphTestUtils::TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId color = AddTextureMetadata(
-        graph,
-        Name("tests/command_ir_raster/color"),
-        "Raster Color",
-        Graphics::ResourceStates::RenderTarget
-    );
-    const Graphics::GpuGraphPipelineId pipeline = AddPipelineMetadata(
-        graph,
-        Name("tests/command_ir_raster/pipeline"),
-        "Raster Pipeline",
-        Graphics::GpuGraphPipelineType::Graphics
-    );
+    const Graphics::GpuGraphResourceId color = AddTextureMetadata(graph, Name("tests/command_ir_raster/color"), "Raster Color", Graphics::ResourceStates::RenderTarget);
+    const Graphics::GpuGraphPipelineId pipeline = AddPipelineMetadata(graph, Name("tests/command_ir_raster/pipeline"), "Raster Pipeline", Graphics::GpuGraphPipelineType::Graphics);
     ASSERT_TRUE(color.valid());
     ASSERT_TRUE(pipeline.valid());
-    const Graphics::GpuTaskResourceUse use{
-        .resource = color,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::RenderTarget,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
+    const Graphics::GpuTaskResourceUse use{ .resource = color, .range = {}, .requiredState = Graphics::ResourceStates::RenderTarget, .access = Graphics::GpuTaskResourceAccess::Write, };
     Graphics::GpuTaskDesc description;
-    description
-        .setIdentity(Name("tests/command_ir_raster/draw"))
-        .setMarkerLabel("Raster Draw")
-        .setResourceUses(&use, 1u)
-    ;
+    description.setIdentity(Name("tests/command_ir_raster/draw")).setMarkerLabel("Raster Draw").setResourceUses(&use, 1u);
     const Graphics::GpuTaskId task = graph.addTask(description, GraphicsCommands());
     ASSERT_TRUE(task.valid());
     SingleQueueCompile compiled(testArena);
@@ -80,8 +61,7 @@ TEST(GpuCommandIrRasterPreflight, DrawWithoutHeapBindingRejectsWholePacket){
     ASSERT_TRUE(validCapture.captureEndRenderPass(task, packet, queue));
     const auto valid = validCapture.exportOwned(testArena.arena);
     ASSERT_TRUE(valid);
-    const Graphics::GpuCommandIrReplayResult accepted = Graphics::PreflightGpuCommandIrPacket(
-        *valid, declarations, plan, packet);
+    const Graphics::GpuCommandIrReplayResult accepted = Graphics::PreflightGpuCommandIrPacket(*valid, declarations, plan, packet);
     EXPECT_EQ(accepted.error, Graphics::GpuCommandIrReplayError::None);
     EXPECT_TRUE(accepted.streamValidation.valid());
 
@@ -92,14 +72,12 @@ TEST(GpuCommandIrRasterPreflight, DrawWithoutHeapBindingRejectsWholePacket){
     ASSERT_TRUE(invalidCapture.captureEndRenderPass(task, packet, queue));
     const auto invalid = invalidCapture.exportOwned(testArena.arena);
     ASSERT_TRUE(invalid);
-    const Graphics::GpuCommandIrReplayResult rejected = Graphics::PreflightGpuCommandIrPacket(
-        *invalid, declarations, plan, packet);
+    const Graphics::GpuCommandIrReplayResult rejected = Graphics::PreflightGpuCommandIrPacket(*invalid, declarations, plan, packet);
     EXPECT_EQ(rejected.error, Graphics::GpuCommandIrReplayError::InvalidRasterDraw);
     EXPECT_EQ(rejected.recordIndex, 2u);
     EXPECT_TRUE(rejected.streamValidation.valid());
 
-    const Graphics::GpuCommandIrReplayResult raw = Graphics::PreflightGpuCommandIrPacket(
-        valid->bytes(), declarations, plan, packet);
+    const Graphics::GpuCommandIrReplayResult raw = Graphics::PreflightGpuCommandIrPacket(valid->bytes(), declarations, plan, packet);
     EXPECT_EQ(raw.error, Graphics::GpuCommandIrReplayError::MissingOwnedSidecar);
     EXPECT_TRUE(raw.streamValidation.valid());
 
@@ -110,38 +88,22 @@ TEST(GpuCommandIrRasterPreflight, DrawWithoutHeapBindingRejectsWholePacket){
     stateRecord.pipeline = pipeline;
     stateRecord.colorAttachment = color;
     stateRecord.viewport = state.viewport;
-    ASSERT_EQ(
-        Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(
-            stateRecord, declarations, declarations.taskAt(task.index), graphState),
-        Graphics::GpuCommandIrReplayError::None
-    );
+    ASSERT_EQ(Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(stateRecord, declarations, declarations.taskAt(task.index), graphState), Graphics::GpuCommandIrReplayError::None);
     Graphics::GpuCommandIrRasterTaskRecord heapRecord;
     heapRecord.opcode = Graphics::GpuCommandIrWireOpcode::BindGraphicsHeap;
     heapRecord.task = task;
     heapRecord.pipeline = pipeline;
-    ASSERT_EQ(
-        Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(
-            heapRecord, declarations, declarations.taskAt(task.index), graphState),
-        Graphics::GpuCommandIrReplayError::None
-    );
+    ASSERT_EQ(Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(heapRecord, declarations, declarations.taskAt(task.index), graphState), Graphics::GpuCommandIrReplayError::None);
     Graphics::GpuCommandIrRasterTaskRecord pushRecord;
     pushRecord.opcode = Graphics::GpuCommandIrWireOpcode::SetPushConstants;
     pushRecord.task = task;
     pushRecord.blobSizeBytes = sizeof(pushBytes);
-    ASSERT_EQ(
-        Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(
-            pushRecord, declarations, declarations.taskAt(task.index), graphState),
-        Graphics::GpuCommandIrReplayError::None
-    );
+    ASSERT_EQ(Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(pushRecord, declarations, declarations.taskAt(task.index), graphState), Graphics::GpuCommandIrReplayError::None);
     Graphics::GpuCommandIrRasterTaskRecord indexedDraw;
     indexedDraw.opcode = Graphics::GpuCommandIrWireOpcode::DrawIndexed;
     indexedDraw.task = task;
     indexedDraw.drawArguments.setVertexCount(3u);
-    EXPECT_EQ(
-        Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(
-            indexedDraw, declarations, declarations.taskAt(task.index), graphState),
-        Graphics::GpuCommandIrReplayError::InvalidRasterDraw
-    );
+    EXPECT_EQ(Graphics::GpuCommandIrDetail::ValidateRasterGraphOperation(indexedDraw, declarations, declarations.taskAt(task.index), graphState), Graphics::GpuCommandIrReplayError::InvalidRasterDraw);
 }
 
 

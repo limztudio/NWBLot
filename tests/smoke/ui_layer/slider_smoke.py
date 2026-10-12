@@ -10,12 +10,8 @@ import time
 from slider_native import SliderNativeInput
 from slider_probe import bits_value, center, f32, observe_slider, snapshot_from_logs, value_bits
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -33,13 +29,8 @@ class SliderRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = {
-            "focus_code": 0, "changes": 0, "popup_changes": 0, "before_clicks": 0, "after_clicks": 0,
-            "enabled": 1, "range_code": 0, "step_code": 0, "parent": 0, "popup_count": 0, "focus_scope": 0,
-            "main_valid": 1, "main_dragging": 0, "popup_valid": 0, "popup_dragging": 0, "external_intents": 0,
-            "main_bits": value_bits(0.25), "disabled_bits": value_bits(0.75),
-            "constant_bits": value_bits(0.5), "popup_bits": value_bits(0.5),
-        }
+        self.expected = { "focus_code": 0, "changes": 0, "popup_changes": 0, "before_clicks": 0, "after_clicks": 0, "enabled": 1, "range_code": 0, "step_code": 0, "parent": 0, "popup_count": 0, "focus_scope": 0,
+            "main_valid": 1, "main_dragging": 0, "popup_valid": 0, "popup_dragging": 0, "external_intents": 0, "main_bits": value_bits(0.25), "disabled_bits": value_bits(0.75), "constant_bits": value_bits(0.5), "popup_bits": value_bits(0.5), }
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -118,8 +109,7 @@ class SliderRun:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
-            report = observe_slider(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra, modes=modes)
+            report = observe_slider(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, modes=modes)
             self.native.record("capture_after", name=name, sequence=snapshot["sequence"], passed=report["passed"])
             if report["passed"]:
                 self.snapshot = snapshot
@@ -130,19 +120,14 @@ class SliderRun:
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(),
-            "observation": report}
+        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"slider displayed-state gate '{name}' failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {
-            "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "failure": self.failure_report, "native_actions": self.native.actions,
-            "input_path": "Win32 ClipCursor-isolated physical cursor positioning with posted pointer/key messages"
-                if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus",
-            "runtime_limit": "No native Wayland, physical pointer-grab, or live IME qualification.",
-        }
+        report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "native_actions": self.native.actions,
+            "input_path": "Win32 ClipCursor-isolated physical cursor positioning with posted pointer/key messages" if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus",
+            "runtime_limit": "No native Wayland, physical pointer-grab, or live IME qualification.", }
         (self.args.output_directory / "slider.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):
@@ -165,37 +150,31 @@ class SliderRun:
         prior_changes = self.expected["changes"]
         self.native.tap("Home")
         self.native.tap("Right", repeat_count=3)
-        self.checkpoint("home_then_accepted_arrow_repeats", main_bits=value_bits(0.5), dynamic=("changes",),
-            extra=lambda snapshot: prior_changes + 1 <= snapshot["changes"] <= prior_changes + 5)
+        self.checkpoint("home_then_accepted_arrow_repeats", main_bits=value_bits(0.5), dynamic=("changes",), extra=lambda snapshot: prior_changes + 1 <= snapshot["changes"] <= prior_changes + 5)
         seek = self.track_point("main", 0.75)
         sought = self.seek_value("main", seek)
         self.native.button(True, *seek)
-        self.checkpoint("track_press_seeks_absolute_value_while_held", neutral=False, modes={"main": "pressed"},
-            main_dragging=1, **self.value_changes("main", sought))
+        self.checkpoint("track_press_seeks_absolute_value_while_held", neutral=False, modes={"main": "pressed"}, main_dragging=1, **self.value_changes("main", sought))
         self.native.button(False, *seek)
         origin = self.thumb_point("main")
         baseline = bits_value(self.expected["main_bits"])
         original_rectangles = dict(self.snapshot["rectangles"])
         self.native.button(True, *origin)
-        self.checkpoint("offcenter_thumb_press_preserves_exact_value", neutral=False, modes={"main": "pressed"},
-            main_dragging=1)
+        self.checkpoint("offcenter_thumb_press_preserves_exact_value", neutral=False, modes={"main": "pressed"}, main_dragging=1)
         travel = self.snapshot["rectangles"]["main_center"][2]
         scale = self.snapshot["scale"][0]
         moved = origin[0] + round(travel * 0.125 * scale), origin[1]
         self.native.pointer(*moved)
         value = self.drag_value("main", origin, moved, baseline, original_rectangles)
-        self.checkpoint("held_thumb_move_preserves_grab_offset", neutral=False, modes={"main": "pressed"},
-            **self.value_changes("main", value))
+        self.checkpoint("held_thumb_move_preserves_grab_offset", neutral=False, modes={"main": "pressed"}, **self.value_changes("main", value))
         moved_again = origin[0] + round(travel * 0.375 * scale), origin[1]
         self.native.pointer(*moved_again)
         value = self.drag_value("main", origin, moved_again, baseline, original_rectangles)
-        self.checkpoint("later_move_uses_original_baseline_and_clamps_maximum", neutral=False, modes={"main": "pressed"},
-            **self.value_changes("main", value))
+        self.checkpoint("later_move_uses_original_baseline_and_clamps_maximum", neutral=False, modes={"main": "pressed"}, **self.value_changes("main", value))
         self.native.pointer(*self.point(4, 4))
         time.sleep(0.15)
         self.native.button(False, *self.point(4, 4))
-        self.checkpoint("outside_capture_clamps_minimum_and_release_finishes", main_dragging=0,
-            **self.value_changes("main", 0.0))
+        self.checkpoint("outside_capture_clamps_minimum_and_release_finishes", main_dragging=0, **self.value_changes("main", 0.0))
         self.click("disabled_thumb")
         self.native.tap("End")
         self.click("constant_thumb")
@@ -218,8 +197,7 @@ class SliderRun:
         self.native.key("Right", True)
         time.sleep(0.15)
         self.native.key("Right", True, repeat=True)
-        self.checkpoint("fresh_coarse_step_and_repeat_use_new_policy", main_bits=value_bits(0.75), dynamic=("changes",),
-            extra=lambda snapshot: prior_changes + 1 <= snapshot["changes"] <= prior_changes + 2)
+        self.checkpoint("fresh_coarse_step_and_repeat_use_new_policy", main_bits=value_bits(0.75), dynamic=("changes",), extra=lambda snapshot: prior_changes + 1 <= snapshot["changes"] <= prior_changes + 2)
         self.native.command("toggle_range")
         self.native.key("Right", True, repeat=True)
         self.native.key("Right", False)
@@ -234,12 +212,10 @@ class SliderRun:
         self.checkpoint("disable_retires_capture_and_blocks_fresh_input", enabled=0, focus_code=0, main_dragging=0)
         self.native.command("toggle_enabled")
         self.native.command("set_quarter")
-        self.checkpoint("reenable_and_external_value_publish_fresh_state", enabled=1, external_intents=2,
-            main_bits=value_bits(0.25))
+        self.checkpoint("reenable_and_external_value_publish_fresh_state", enabled=1, external_intents=2, main_bits=value_bits(0.25))
         old_thumb = self.thumb_point("main")
         self.native.button(True, *old_thumb)
-        self.checkpoint("fresh_thumb_press_is_published_before_external_fence", neutral=False,
-            modes={"main": "pressed"}, focus_code=2, main_dragging=1)
+        self.checkpoint("fresh_thumb_press_is_published_before_external_fence", neutral=False, modes={"main": "pressed"}, focus_code=2, main_dragging=1)
         self.native.command("fence_value")
         self.native.pointer(old_thumb[0] - 40, old_thumb[1])
         self.native.button(False, old_thumb[0] - 40, old_thumb[1])
@@ -254,16 +230,12 @@ class SliderRun:
         time.sleep(0.3)
         self.native.pointer(old_thumb[0] + 40, old_thumb[1])
         self.native.button(False, old_thumb[0] + 40, old_thumb[1])
-        self.checkpoint("resize_changes_admission_and_retires_old_drag", extent=physical_extent, main_dragging=0,
-            dynamic=("focus_code",), extra=lambda snapshot: snapshot["focus_code"] in (0, 2)
-                and snapshot["rectangles"]["main_center"][2] != old_width
-                and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0
-                and abs(snapshot["logical_extent"][1] - target_extent[1]) < 1.0)
+        self.checkpoint("resize_changes_admission_and_retires_old_drag", extent=physical_extent, main_dragging=0, dynamic=("focus_code",), extra=lambda snapshot: snapshot["focus_code"] in (0, 2) and snapshot["rectangles"]["main_center"][2] != old_width
+                and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0 and abs(snapshot["logical_extent"][1] - target_extent[1]) < 1.0)
         fresh = self.track_point("main", 0.75)
         value = self.seek_value("main", fresh)
         self.native.click(*fresh)
-        self.checkpoint("fresh_seek_uses_resized_geometry_and_current_range", focus_code=2,
-            **self.value_changes("main", value))
+        self.checkpoint("fresh_seek_uses_resized_geometry_and_current_range", focus_code=2, **self.value_changes("main", value))
         old_thumb = self.thumb_point("main")
         self.native.button(True, *old_thumb)
         self.native.focus_loss_and_gain()
@@ -271,22 +243,18 @@ class SliderRun:
         self.native.button(False, old_thumb[0] - 40, old_thumb[1])
         self.checkpoint("native_focus_loss_retires_drag_without_value_change", focus_code=0, main_dragging=0)
         self.click("open")
-        self.checkpoint("parent_popup_publishes_slider_focus_and_geometry", parent=1, popup_count=1,
-            focus_code=5, focus_scope=1, popup_valid=1)
+        self.checkpoint("parent_popup_publishes_slider_focus_and_geometry", parent=1, popup_count=1, focus_code=5, focus_scope=1, popup_valid=1)
         popup_seek = self.track_point("popup", 0.75)
         value = self.seek_value("popup", popup_seek)
         self.native.button(True, *popup_seek)
-        self.checkpoint("popup_track_seek_publishes_held_value", neutral=False, modes={"popup": "pressed"},
-            popup_dragging=1, **self.value_changes("popup", value))
+        self.checkpoint("popup_track_seek_publishes_held_value", neutral=False, modes={"popup": "pressed"}, popup_dragging=1, **self.value_changes("popup", value))
         self.native.command("close_parent")
-        self.checkpoint("ancestor_close_retires_popup_drag_and_hidden_diagnostics", neutral=False, parent=0, popup_count=0,
-            focus_code=4, focus_scope=0, popup_valid=0, popup_dragging=0)
+        self.checkpoint("ancestor_close_retires_popup_drag_and_hidden_diagnostics", neutral=False, parent=0, popup_count=0, focus_code=4, focus_scope=0, popup_valid=0, popup_dragging=0)
         self.native.pointer(popup_seek[0] - 60, popup_seek[1])
         self.native.button(False, popup_seek[0] - 60, popup_seek[1])
         self.checkpoint("stale_popup_motion_and_release_preserve_closed_value")
         self.click("open")
-        self.checkpoint("reopened_popup_publishes_before_fresh_thumb_input", parent=1, popup_count=1,
-            focus_code=5, focus_scope=1, popup_valid=1)
+        self.checkpoint("reopened_popup_publishes_before_fresh_thumb_input", parent=1, popup_count=1, focus_code=5, focus_scope=1, popup_valid=1)
         origin = self.thumb_point("popup")
         baseline = bits_value(self.expected["popup_bits"])
         original_rectangles = dict(self.snapshot["rectangles"])
@@ -296,8 +264,7 @@ class SliderRun:
         self.native.drag(origin, destination)
         self.checkpoint("fresh_popup_thumb_drag_after_ancestor_reopen", **self.value_changes("popup", value))
         self.click("popup_close")
-        self.checkpoint("popup_close_button_returns_root_focus", parent=0, popup_count=0, focus_code=4, focus_scope=0,
-            popup_valid=0, popup_dragging=0)
+        self.checkpoint("popup_close_button_returns_root_focus", parent=0, popup_count=0, focus_code=4, focus_scope=0, popup_valid=0, popup_dragging=0)
 
 
 def run(args):
@@ -345,8 +312,7 @@ def run(args):
                             slider_run.native.restore_pointer()
                     finally:
                         backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"],
-        STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
     slider_run.write_report(True)
     print(f"UI slider: {len(slider_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
     return 0

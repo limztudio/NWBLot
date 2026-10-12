@@ -14,23 +14,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool MeshMeshletRefValidation::MeshletPositionRefInRange(
-    const MeshletPositionStreamRef& ref,
-    const usize positionCount,
-    const usize skinCount,
-    const bool skinRequired
-)noexcept{
+[[nodiscard]] bool MeshMeshletRefValidation::MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const bool skinRequired)noexcept{
     return ref.position < positionCount && ( skinRequired ? ref.skin < skinCount : ref.skin == s_MeshMissingStreamIndex );
 }
 
 
-[[nodiscard]] bool MeshMeshletRefValidation::MeshletAttributeRefInRange(
-    const MeshletAttributeStreamRef& ref,
-    const usize normalCount,
-    const usize tangentCount,
-    const usize uv0Count,
-    const usize colorCount
-)noexcept{
+[[nodiscard]] bool MeshMeshletRefValidation::MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept{
     return ref.normal < normalCount && ref.tangent < tangentCount && ref.uv0 < uv0Count && ref.color < colorCount;
 }
 

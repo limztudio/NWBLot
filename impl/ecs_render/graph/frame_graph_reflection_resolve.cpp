@@ -22,12 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphReflectionResolve::FrameGraphReflectionResolve(
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    RendererRayTracingSystem& raytracingSystem,
-    RendererReflectionSystem& reflectionSystem
-)
+FrameGraphReflectionResolve::FrameGraphReflectionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem, RendererReflectionSystem& reflectionSystem)
     : m_graph(graph)
     , m_graphics(graphics)
     , m_raytracingSystem(raytracingSystem)
@@ -35,11 +30,7 @@ FrameGraphReflectionResolve::FrameGraphReflectionResolve(
 }
 
 
-Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(
-    const FrameGraphReflectionResolveInputs& inputs,
-    RayTracingSceneGraphReads& sceneReads,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(const FrameGraphReflectionResolveInputs& inputs, RayTracingSceneGraphReads& sceneReads, Core::Alloc::ScratchArena& scratchArena){
     FrameGraphReflectionResolveResult result{};
     using namespace RendererTaskGraphDetail;
     DeferredFrameTargets& deferredTargets = *inputs.targets;
@@ -84,13 +75,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     );
     if(!reflectionResources.valid())
         return MakeUnexpected(Failure{});
-    if(
-        !sceneReads.valid()
-        && (reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace))
-    ){
-        sceneReads = ImportRayTracingSceneGraphReads(
-            m_graph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena
-        );
+    if(!sceneReads.valid() && (reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace))){
+        sceneReads = ImportRayTracingSceneGraphReads(m_graph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena);
         if(!sceneReads.valid())
             return MakeUnexpected(Failure{});
     }
@@ -114,10 +100,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     usize reflectionSetCount = 0u;
     for(const Core::GpuGraphResourceSetId set : {hardwareTraceGeometrySet, traceMaterialSampledTextureSet}){
         if(set.valid()){
-            reflectionSets[reflectionSetCount++] = Core::GpuTaskResourceSetUse{
-                .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource,
-                .access = Core::GpuTaskResourceAccess::Read,
-            };
+            reflectionSets[reflectionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
         }
     }
     const ReflectionGraphInputs reflectionInputs{
@@ -131,17 +114,10 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         .hardwareDispatchLogged = inputs.hardwareDispatchLogged,
         .fallbackDispatchLogged = inputs.fallbackDispatchLogged,
     };
-    const ReflectionGraphResult reflectionGraph = DeclareReflectionTasks(
-        m_graph, m_graphics, m_reflectionSystem, traceGeometryScratchArena,
-        reflectionResources, reflectionInputs, inputs.lightingTask
-    );
+    const ReflectionGraphResult reflectionGraph = DeclareReflectionTasks(m_graph, m_graphics, m_reflectionSystem, traceGeometryScratchArena, reflectionResources, reflectionInputs, inputs.lightingTask);
     if(!reflectionGraph.valid())
         return MakeUnexpected(Failure{});
-    const ReflectionCompositeInputs reflectionCompositeInputs{
-        .opaqueRadianceSlot = reflectionResources.parameters.opaqueRadianceSlot,
-        .glassRadianceSlot = reflectionResources.parameters.glassRadianceSlot,
-        .debugView = reflectionSettings.debugView,
-    };
+    const ReflectionCompositeInputs reflectionCompositeInputs{ .opaqueRadianceSlot = reflectionResources.parameters.opaqueRadianceSlot, .glassRadianceSlot = reflectionResources.parameters.glassRadianceSlot, .debugView = reflectionSettings.debugView, };
     refractionResources.opaqueReflectionSlot = reflectionCompositeInputs.opaqueRadianceSlot;
 
     Core::GpuTaskId refractionResolveTask;
@@ -168,20 +144,13 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
                 refractionUses.push_back(read);
             for(const Core::GpuTaskResourceUse& read : sceneReads.csgUses)
                 refractionUses.push_back(read);
-            const Core::GpuGraphResourceSetId sets[] = {
-                hardwareTraceGeometrySet, traceMaterialSampledTextureSet
-            };
+            const Core::GpuGraphResourceSetId sets[] = { hardwareTraceGeometrySet, traceMaterialSampledTextureSet };
             for(const auto set : sets){
                 if(set.valid())
-                    refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{
-                        .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource,
-                        .access = Core::GpuTaskResourceAccess::Read,
-                    };
+                    refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
             }
         }
-        const Core::GpuTaskId refractionDependencies[] = {
-            reflectionGraph.completion, inputs.avboitFinalTask, inputs.surfelGiTask
-        };
+        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, inputs.avboitFinalTask, inputs.surfelGiTask };
         Core::GpuTaskDesc refractionDesc;
         refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
             .setMarkerLabel("AVBOIT Refraction Resolve")
@@ -199,16 +168,13 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     }
     else{
         Core::GpuTaskDesc clearDesc;
-        clearDesc.setIdentity(Name("render.avboit.refraction_resolve_clear"))
-            .setMarkerLabel("AVBOIT Refraction Resolve Clear")
-            .setDependencies(&inputs.avboitFinalTask, 1u);
+        clearDesc.setIdentity(Name("render.avboit.refraction_resolve_clear")).setMarkerLabel("AVBOIT Refraction Resolve Clear").setDependencies(&inputs.avboitFinalTask, 1u);
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = refractionResolve;
         clear.subresources = ECSRenderDetail::s_FramebufferSubresources;
         clear.valueType = Core::GpuClearTextureTaskValueType::Float;
         clear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
-        refractionResolveTask = m_graph.addClearTextureTask(
-            clearDesc, clear);
+        refractionResolveTask = m_graph.addClearTextureTask(clearDesc, clear);
     }
     if(!refractionResolveTask.valid())
         return MakeUnexpected(Failure{});

@@ -107,12 +107,7 @@ static void AppendEventSummary(LogArena& arena, const CrashPackageSummary& summa
     outReport += summary.event;
     outReport += "\n";
 
-    if(
-        summary.triggerExpression.empty()
-        && summary.triggerMessage.empty()
-        && summary.triggerFile.empty()
-        && summary.triggerLine == 0u
-    )
+    if(summary.triggerExpression.empty() && summary.triggerMessage.empty() && summary.triggerFile.empty() && summary.triggerLine == 0u)
         AppendExceptionSummary(arena, outReport, summary);
 }
 
@@ -125,11 +120,7 @@ struct ReportSectionRange{
     [[nodiscard]] bool found()const noexcept{ return removeBegin != AStringView::npos; }
 };
 
-[[nodiscard]] static Expected<ReportSectionRange> FindReportSection(
-    const AStringView report,
-    const AStringView header,
-    const AStringView headerWithLeadingNewline
-)noexcept{
+[[nodiscard]] static Expected<ReportSectionRange> FindReportSection(const AStringView report, const AStringView header, const AStringView headerWithLeadingNewline)noexcept{
     ReportSectionRange outRange;
 
     if(StartsWith(report, header)){

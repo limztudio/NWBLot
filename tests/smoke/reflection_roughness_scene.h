@@ -32,16 +32,14 @@ namespace ReflectionRoughnessCase{
 
 class ReflectionRoughnessScene final{
 public:
-    ReflectionRoughnessScene(ProjectRuntimeContext& context, Core::ECS::World& world,
-        Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness);
+    ReflectionRoughnessScene(ProjectRuntimeContext& context, Core::ECS::World& world, Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness);
     [[nodiscard]] bool create(AStringView caseName, bool finalState);
     [[nodiscard]] bool mutationCase()const noexcept{ return m_case >= ReflectionRoughnessCase::Camera && m_case <= ReflectionRoughnessCase::Deform; }
     [[nodiscard]] bool deforming()const noexcept{ return m_case == ReflectionRoughnessCase::Deform || m_case == ReflectionRoughnessCase::StaticDeform; }
     [[nodiscard]] bool applyMutation();
 
 private:
-    [[nodiscard]] Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& color,
-        const Float4& position, const Float4& scale, f32 f0 = 0.f, f32 roughness = 0.f);
+    [[nodiscard]] Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, f32 roughness = 0.f);
     [[nodiscard]] bool createDeformingSource();
 
 private:

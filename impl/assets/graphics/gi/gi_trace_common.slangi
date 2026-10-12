@@ -50,7 +50,8 @@ bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lambert hit shade: direct light * the authored material-surface base colour. The caller adds any surfel-to-surfel multi-bounce term.
+// Lambert hit shade: direct light * the authored material-surface base colour.
+// The caller adds any surfel-to-surfel multi-bounce term.
 // Shadow rays use the backend's nwbGiTraceOccluded implementation.
 half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     half3 irradiance = half3(0.0h, 0.0h, 0.0h);
@@ -103,9 +104,7 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
                     dominantLightDir = toLight / distance;
             }
             // Local-light occlusion ends before the source; geometry behind it cannot shadow the bounce surface.
-            const bool occluded = shadowMaximum > NWB_GI_TRACE_RAY_MIN_DISTANCE && nwbGiTraceOccluded(
-                shadowOrigin, dominantLightDir, NWB_GI_TRACE_RAY_MIN_DISTANCE, shadowMaximum
-            );
+            const bool occluded = shadowMaximum > NWB_GI_TRACE_RAY_MIN_DISTANCE && nwbGiTraceOccluded(shadowOrigin, dominantLightDir, NWB_GI_TRACE_RAY_MIN_DISTANCE, shadowMaximum);
             if(occluded)
                 irradiance *= 0.0h; // fully shadowed by the dominant-light occlusion ray
         }

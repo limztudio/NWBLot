@@ -81,11 +81,7 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.accumulationTiming);
@@ -126,11 +122,7 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.accumulationTiming);
@@ -158,12 +150,7 @@ struct AvboitAccumulationGraphTask{
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
 
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererAvboitSystem& avboitSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket& timingTicketIn
-        )
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererAvboitSystem& avboitSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn)
             : avboitSystem(avboitSystemIn)
             , targets(targetsIn)
             , timingTicket(timingTicketIn)
@@ -171,11 +158,7 @@ struct AvboitAccumulationGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.accumulationComputeEmulationTiming);
@@ -189,11 +172,7 @@ struct AvboitAccumulationFinalizeGraphTask{
 
     struct Payload{};
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    )noexcept;
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
 
 };
 

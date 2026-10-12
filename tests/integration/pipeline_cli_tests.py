@@ -57,25 +57,12 @@ def parse_args() -> argparse.Namespace:
 
 def run_command(command: list[str], working_directory: pathlib.Path, failure: bool = False) -> str:
     try:
-        result = subprocess.run(
-            command,
-            cwd=working_directory,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding=LIT_UTF_8,
-            errors="replace",
-            timeout=CHILD_TIMEOUT_SECONDS,
-            check=False,
-        )
+        result = subprocess.run(command, cwd=working_directory, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding=LIT_UTF_8, errors="replace", timeout=CHILD_TIMEOUT_SECONDS, check=False,)
     except subprocess.TimeoutExpired as error:
         raise AssertionError(f"pipeline command timed out: {command}") from error
     allowed_codes = (1, 255, 0xFFFFFFFF) if failure else (0,)
     if result.returncode not in allowed_codes:
-        raise AssertionError(
-            f"pipeline command returned {result.returncode}, expected {allowed_codes}: {command}; "
-            f"output tail:\n{result.stdout[-4000:]}"
-        )
+        raise AssertionError(f"pipeline command returned {result.returncode}, expected {allowed_codes}: {command}; " f"output tail:\n{result.stdout[-4000:]}")
     return result.stdout
 
 
@@ -120,27 +107,13 @@ def read_volume(directory: pathlib.Path) -> dict[bytes, bytes]:
 
 
 def sampler_filters(payloads: dict[bytes, bytes]) -> list[int]:
-    return sorted(
-        struct.unpack_from("<I", payload, 32)[0]
-        for payload in payloads.values()
-        if len(payload) == 64 and struct.unpack_from("<II", payload) == (0x53414D31, 1)
-    )
+    return sorted(struct.unpack_from("<I", payload, 32)[0] for payload in payloads.values() if len(payload) == 64 and struct.unpack_from("<II", payload) == (0x53414D31, 1))
 
 
 def write_sampler(path: pathlib.Path, filtering: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    metadata = (
-        "sampler asset;\n"
-        f'asset.min_filter = "{filtering}";\n'
-        f'asset.mag_filter = "{filtering}";\n'
-        f'asset.mip_filter = "{LIT_LINEAR}";\n'
-        f'asset.address_u = "{LIT_CLAMP}";\n'
-        f'asset.address_v = "{LIT_CLAMP}";\n'
-        f'asset.address_w = "{LIT_CLAMP}";\n'
-        'asset.reduction = "standard";\n'
-        "asset.max_anisotropy = 1.0;\n"
-        "asset.mip_bias = 0.0;\n"
-    )
+    metadata = ("sampler asset;\n" f'asset.min_filter = "{filtering}";\n' f'asset.mag_filter = "{filtering}";\n' f'asset.mip_filter = "{LIT_LINEAR}";\n' f'asset.address_u = "{LIT_CLAMP}";\n' f'asset.address_v = "{LIT_CLAMP}";\n'
+        f'asset.address_w = "{LIT_CLAMP}";\n' 'asset.reduction = "standard";\n' "asset.max_anisotropy = 1.0;\n" "asset.mip_bias = 0.0;\n")
     path.write_bytes(metadata.replace(LIT_N, "\r\n").encode(LIT_UTF_8))
 
 
@@ -150,12 +123,8 @@ def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_r
         raise AssertionError("could not load the pipeline launcher for discovery failure regression")
     pipeline_launcher = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(pipeline_launcher)
-    options = pipeline_launcher.parse_arguments([
-        LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(asset_root),
-        LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / "c"), LIT_CONFIGURATION, LIT_TESTS,
-        LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder),
-        LIT_ASSET_GATHERER, str(args.asset_gatherer),
-    ])
+    options = pipeline_launcher.parse_arguments([LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(asset_root), LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / "c"), LIT_CONFIGURATION, LIT_TESTS,
+        LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),])
     previous_volume = read_volume(output)
     with pipeline_launcher.os.scandir(asset_root) as entries:
         readable_entry = next(iter(entries))
@@ -163,10 +132,7 @@ def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_r
     inaccessible_entry.stat.side_effect = PermissionError("test entry cannot be inspected")
     partial_scan = mock.MagicMock()
     partial_scan.__enter__.return_value = (readable_entry, inaccessible_entry)
-    scan_failures = (
-        {"side_effect": PermissionError("test directory cannot be scanned")},
-        {"return_value": partial_scan},
-    )
+    scan_failures = ({"side_effect": PermissionError("test directory cannot be scanned")}, {"return_value": partial_scan},)
     for scan_failure in scan_failures:
         with mock.patch.object(pipeline_launcher.os, "scandir", **scan_failure), mock.patch.object(pipeline_launcher, "run_stage") as stage:
             try:
@@ -194,45 +160,21 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if manifest.read_text(encoding=LIT_UTF_8).splitlines() != input_values:
         raise AssertionError("dependency computation must preserve every input, its order, and duplicate values")
 
-    build_options = [
-        LIT_REPO_ROOT, str(args.repo_root),
-        LIT_ASSET_ROOT, str(first_root), str(second_root),
-        LIT_CACHE_DIRECTORY, str(root / "c"),
-        LIT_CONFIGURATION, LIT_TESTS,
-    ]
-    failure_output = run_command(
-        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset),
-         LIT_OUTPUT_DIRECTORY, str(root / "unsupported"), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL],
-        root,
-        failure=True,
-    )
+    build_options = [LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(first_root), str(second_root), LIT_CACHE_DIRECTORY, str(root / "c"), LIT_CONFIGURATION, LIT_TESTS,]
+    failure_output = run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), LIT_OUTPUT_DIRECTORY, str(root / "unsupported"), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL], root, failure=True,)
     expected_message = f"unsupported --asset-type '{ASSET_TYPE_SENTINEL}'. Available types:"
     if expected_message not in failure_output or "[ERROR]:" not in failure_output:
         raise AssertionError(f"builder did not preserve handled unsupported-type diagnostics:\n{failure_output[-4000:]}")
-    run_command(
-        [str(args.asset_builder), *build_options, LIT_INPUT, str(root / "missing.nwb"),
-         LIT_OUTPUT_DIRECTORY, str(root / "missing-output")],
-        root,
-        failure=True,
-    )
+    run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(root / "missing.nwb"), LIT_OUTPUT_DIRECTORY, str(root / "missing-output")], root, failure=True,)
 
     combined_directory = root / "combined artifacts"
-    run_command(
-        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), str(second_asset),
-         LIT_OUTPUT_DIRECTORY, str(combined_directory)],
-        root,
-    )
+    run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), str(second_asset), LIT_OUTPUT_DIRECTORY, str(combined_directory)], root,)
     combined_payloads = read_artifacts(combined_directory)
     if sampler_filters(combined_payloads) != [0, 1]:
         raise AssertionError("multiple input assets did not produce both runtime sampler descriptions")
 
     previous_build_files = {path.relative_to(combined_directory): path.read_bytes() for path in combined_directory.rglob("*") if path.is_file()}
-    failure_output = run_command(
-        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset),
-         LIT_OUTPUT_DIRECTORY, str(combined_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE],
-        root,
-        failure=True,
-    )
+    failure_output = run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), LIT_OUTPUT_DIRECTORY, str(combined_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE], root, failure=True,)
     if "unsupported --asset-type ''" not in failure_output:
         raise AssertionError(f"builder accepted or misreported an explicitly empty domain:\n{failure_output[-4000:]}")
     rejected_build_files = {path.relative_to(combined_directory): path.read_bytes() for path in combined_directory.rglob("*") if path.is_file()}
@@ -245,11 +187,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         directory = root / f"individual-{index}"
         list_path = root / f"input-{index}.txt"
         list_path.write_text(str(asset) + LIT_N, encoding=LIT_UTF_8)
-        run_command(
-            [str(args.asset_builder), *build_options, LIT_INPUT_LIST, str(list_path),
-             LIT_OUTPUT_DIRECTORY, str(directory)],
-            root,
-        )
+        run_command([str(args.asset_builder), *build_options, LIT_INPUT_LIST, str(list_path), LIT_OUTPUT_DIRECTORY, str(directory)], root,)
         payloads = read_artifacts(directory)
         if sampler_filters(payloads) != [1 - index]:
             raise AssertionError("explicit builder input selection included unselected assets or changed their data")
@@ -263,89 +201,46 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
 
     if sys.platform == "win32":
         case_directory = root / "case-input"
-        run_command(
-            [str(args.asset_builder), *build_options, LIT_INPUT, str(first_root).upper(),
-             LIT_OUTPUT_DIRECTORY, str(case_directory)],
-            root,
-        )
+        run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_root).upper(), LIT_OUTPUT_DIRECTORY, str(case_directory)], root,)
         if read_artifacts(case_directory) != read_artifacts(individual_directories[0]):
             raise AssertionError("Windows directory input selection changed when path spelling used uppercase letters")
 
     cooked_directory = root / "cooked"
-    run_command(
-        [sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options,
-         LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer),
-         LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
-         LIT_OUTPUT_DIRECTORY, str(cooked_directory)],
-        root,
-    )
+    run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+         LIT_OUTPUT_DIRECTORY, str(cooked_directory)], root,)
     if read_volume(cooked_directory) != combined_payloads:
         raise AssertionError("pipeline orchestration did not gather all built runtime payloads")
 
     first_asset.unlink()
     second_asset.unlink()
     gathered_directory = root / "gathered"
-    run_command(
-        [str(args.asset_gatherer), LIT_INPUT, *(str(path) for path in individual_directories),
-         LIT_OUTPUT_DIRECTORY, str(gathered_directory), LIT_CONFIGURATION, LIT_TESTS],
-        root,
-    )
+    run_command([str(args.asset_gatherer), LIT_INPUT, *(str(path) for path in individual_directories), LIT_OUTPUT_DIRECTORY, str(gathered_directory), LIT_CONFIGURATION, LIT_TESTS], root,)
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("gathering independent build outputs changed or dropped runtime payloads")
 
     write_sampler(first_asset, LIT_NEAREST)
-    run_command(
-        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset),
-         LIT_OUTPUT_DIRECTORY, str(combined_directory)],
-        root,
-    )
+    run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), LIT_OUTPUT_DIRECTORY, str(combined_directory)], root,)
     refreshed_directory = root / "refreshed"
-    run_command(
-        [str(args.asset_gatherer), LIT_INPUT, str(combined_directory),
-         LIT_OUTPUT_DIRECTORY, str(refreshed_directory)],
-        root,
-    )
+    run_command([str(args.asset_gatherer), LIT_INPUT, str(combined_directory), LIT_OUTPUT_DIRECTORY, str(refreshed_directory)], root,)
     refreshed_payloads = read_volume(refreshed_directory)
     if set(refreshed_payloads) != set(read_artifacts(individual_directories[0])) or sampler_filters(refreshed_payloads) != [0]:
         raise AssertionError("gathering a rebuilt directory retained stale assets or an old runtime payload")
 
-    run_command(
-        [str(args.asset_gatherer), LIT_INPUT, str(individual_directories[0]), str(combined_directory),
-         LIT_OUTPUT_DIRECTORY, str(gathered_directory)],
-        root,
-        failure=True,
-    )
+    run_command([str(args.asset_gatherer), LIT_INPUT, str(individual_directories[0]), str(combined_directory), LIT_OUTPUT_DIRECTORY, str(gathered_directory)], root, failure=True,)
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("conflicting duplicate assets changed an already published volume")
 
-    run_command(
-        [str(args.asset_gatherer), LIT_INPUT, str(root / "missing.nwba"),
-         LIT_OUTPUT_DIRECTORY, str(gathered_directory)],
-        root,
-        failure=True,
-    )
+    run_command([str(args.asset_gatherer), LIT_INPUT, str(root / "missing.nwba"), LIT_OUTPUT_DIRECTORY, str(gathered_directory)], root, failure=True,)
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("a missing gather input changed an already published volume")
 
-    run_command(
-        [sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options,
-         LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer),
-         LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
-         LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL],
-        root,
-        failure=True,
-    )
+    run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+         LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL], root, failure=True,)
     if read_volume(cooked_directory) != combined_payloads:
         raise AssertionError("a failed build stage did not preserve the previously cooked volume")
 
-    failure_output = run_command(
-        [sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options,
-         LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer),
-         LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
-         LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE],
-        root,
-        failure=True,
-    )
+    failure_output = run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+         LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE], root, failure=True,)
     if "unsupported --asset-type ''" not in failure_output:
         raise AssertionError(f"pipeline launcher accepted or replaced an explicitly empty domain:\n{failure_output[-4000:]}")
     if read_volume(cooked_directory) != combined_payloads:
@@ -355,11 +250,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     artifact_bytes = bytearray(next(combined_directory.rglob(LIT_NWBA)).read_bytes())
     artifact_bytes[-1] ^= 0x01
     corrupt_path.write_bytes(artifact_bytes)
-    run_command(
-        [str(args.asset_gatherer), LIT_INPUT, str(corrupt_path), LIT_OUTPUT_DIRECTORY, str(gathered_directory)],
-        root,
-        failure=True,
-    )
+    run_command([str(args.asset_gatherer), LIT_INPUT, str(corrupt_path), LIT_OUTPUT_DIRECTORY, str(gathered_directory)], root, failure=True,)
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("a corrupt gather input changed an already published volume")
 
@@ -368,11 +259,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     for artifact in combined_directory.glob(LIT_NWBA):
         artifact.unlink()
     moved_volume_directory = root / "copied-volume"
-    run_command(
-        [str(args.asset_gatherer), LIT_INPUT, str(moved_directory),
-         LIT_OUTPUT_DIRECTORY, str(moved_volume_directory)],
-        root,
-    )
+    run_command([str(args.asset_gatherer), LIT_INPUT, str(moved_directory), LIT_OUTPUT_DIRECTORY, str(moved_volume_directory)], root,)
     if read_volume(moved_volume_directory) != refreshed_payloads:
         raise AssertionError("copied build outputs still depended on their original artifact directory")
 

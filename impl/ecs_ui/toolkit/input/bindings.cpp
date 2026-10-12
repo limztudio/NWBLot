@@ -93,13 +93,7 @@ InputCommandIntent InputBindings::resolve(const i32 key, const i32 modifiers)con
     for(const auto& binding : m_bindings){
         if(binding.key != key || (chord & ~binding.ignoredModifiers) != binding.modifiers)
             continue;
-        return {
-            binding.command,
-            binding.selection == InputSelectionPolicy::Always
-                || (binding.selection == InputSelectionPolicy::Shift && (chord & Core::InputModifier::Shift) != 0),
-            binding.edit,
-            binding.allowText
-        };
+        return { binding.command, binding.selection == InputSelectionPolicy::Always || (binding.selection == InputSelectionPolicy::Shift && (chord & Core::InputModifier::Shift) != 0), binding.edit, binding.allowText };
     }
     return {};
 }

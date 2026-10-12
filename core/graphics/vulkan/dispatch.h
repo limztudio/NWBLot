@@ -25,12 +25,7 @@ namespace VulkanDetail{
 
 [[nodiscard]] VkResult InitializeVolkLoader()noexcept;
 void LoadVolkInstanceDispatch(VolkInstanceTable& instanceDispatch, VkInstance instance)noexcept;
-void LoadVolkDeviceDispatch(
-    VolkInstanceTable& instanceDispatch,
-    VolkDeviceTable& deviceDispatch,
-    VkInstance instance,
-    VkDevice device
-)noexcept;
+void LoadVolkDeviceDispatch(VolkInstanceTable& instanceDispatch, VolkDeviceTable& deviceDispatch, VkInstance instance, VkDevice device)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

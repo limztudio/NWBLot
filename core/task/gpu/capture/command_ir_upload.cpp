@@ -82,8 +82,7 @@ bool GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, con
         return false;
 
     const usize nextRecordCount = m_recordEndOffsets.size() + 1u;
-    const usize recordSize = record.opcode == GpuCommandIrOpcode::UploadBuffer
-        ? sizeof(GpuCommandIrUploadBufferRecord) : sizeof(GpuCommandIrUploadTextureRecord);
+    const usize recordSize = record.opcode == GpuCommandIrOpcode::UploadBuffer ? sizeof(GpuCommandIrUploadBufferRecord) : sizeof(GpuCommandIrUploadTextureRecord);
     if(
         nextRecordCount == 0u
         || m_nextSerial == Limit<u64>::s_Max

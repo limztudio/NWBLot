@@ -41,10 +41,8 @@ namespace ECSRenderDetail{
 struct GbufferGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot,
-    // and the setup readiness flags are required: G-buffer always records the opaque pass against
-    // this frame's bindings. References (not nullable pointers) carry those bindings so a missing
-    // binding fails at declaration time instead of silently returning `false` inside Record.
+    // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: G-buffer always records the opaque pass against this frame's bindings.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -87,11 +85,7 @@ struct GbufferGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.regularSharedComputeEmulationTiming);

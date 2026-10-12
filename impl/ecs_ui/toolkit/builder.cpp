@@ -46,15 +46,11 @@ bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
 }
 
 ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const{
-    return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag,
-        StringView(m_textLanguage.data(), m_textLanguage.size()) };
+    return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()) };
 }
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
-    if(
-        declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin
-        || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)
-    ){
+    if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)){
         m_context.fail();
         return false;
     }
@@ -156,13 +152,8 @@ void Builder::reset(){
     m_popupFrameCount = 0u;
 }
 
-bool Builder::beginContainer(
-    const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options
-){
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= 64u
-        || !m_context.declare(stableKey, WidgetKind::Container)
-    ){
+bool Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
+    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= 64u || !m_context.declare(stableKey, WidgetKind::Container)){
         m_context.fail();
         return false;
     }
@@ -183,13 +174,8 @@ bool Builder::beginContainer(
     return true;
 }
 
-Builder::Item* Builder::addItem(
-    const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options
-){
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
-        || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
-    ){
+Builder::Item* Builder::addItem(const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
+    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return nullptr;
     }
@@ -216,8 +202,7 @@ Builder::Item* Builder::addItem(
             return nullptr;
         }
         item.padding = m_listStyle.row.padding;
-        const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top),
-            VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
+        const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
         const SIMDVectorSingle paddedMeasure = VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), paddingSize);
         measured = { VectorGetX(paddedMeasure), VectorGetY(paddedMeasure) };
         minimum = { skinRegion->minimumWidth, skinRegion->minimumHeight };
@@ -228,8 +213,7 @@ Builder::Item* Builder::addItem(
             return nullptr;
         }
         buttonMetrics(minimum, item.padding);
-        const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top),
-            VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
+        const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
         const SIMDVectorSingle paddedMeasure = VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), paddingSize);
         measured = { VectorGetX(paddedMeasure), VectorGetY(paddedMeasure) };
     }
@@ -278,15 +262,12 @@ void Builder::buttonMetrics(Point& size, Insets& padding)const{
         if(!skinRegion)
             continue;
         const SIMDVectorSingle sizeCurrent = VectorSet(size.x, size.y, size.x, size.y);
-        const SIMDVectorSingle sizeCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
-            skinRegion->minimumWidth, skinRegion->minimumHeight);
-        const SIMDVectorSingle sizeMaximum = VectorSelect(sizeCandidate, sizeCurrent,
-            VectorGreater(sizeCurrent, sizeCandidate));
+        const SIMDVectorSingle sizeCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
+        const SIMDVectorSingle sizeMaximum = VectorSelect(sizeCandidate, sizeCurrent, VectorGreater(sizeCurrent, sizeCandidate));
         size = { VectorGetX(sizeMaximum), VectorGetY(sizeMaximum) };
         const SIMDVectorSingle paddingCurrent = VectorSet(padding.left, padding.top, padding.right, padding.bottom);
         const SIMDVectorSingle paddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVectorSingle paddingMaximum = VectorSelect(paddingCandidate, paddingCurrent,
-            VectorGreater(paddingCurrent, paddingCandidate));
+        const SIMDVectorSingle paddingMaximum = VectorSelect(paddingCandidate, paddingCurrent, VectorGreater(paddingCurrent, paddingCandidate));
         padding = { VectorGetX(paddingMaximum), VectorGetY(paddingMaximum), VectorGetZ(paddingMaximum), VectorGetW(paddingMaximum) };
     }
 }

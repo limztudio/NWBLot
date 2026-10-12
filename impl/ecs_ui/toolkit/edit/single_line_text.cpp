@@ -54,9 +54,7 @@ static Expected<TextStep> ReadStep(const AStringView source, const usize offset)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingleLineText(
-    Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes
-){
+Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingleLineText(Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes){
     if(!GraphemeSegmentation::Validate(source, false))
         return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;

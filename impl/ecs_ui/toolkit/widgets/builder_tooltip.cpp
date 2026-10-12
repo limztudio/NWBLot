@@ -17,14 +17,9 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text,
-    TooltipState& state, const TooltipOptions& options
-){
+bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text, TooltipState& state, const TooltipOptions& options){
     Item* anchor = annotationAnchor(anchorKey);
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
-        || !anchor || m_scope->m_tooltips.size() >= s_LayoutMaxNodes
-    ){
+    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || !anchor || m_scope->m_tooltips.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return false;
     }
@@ -43,9 +38,7 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     const bool eligible = options.enabled && anchor->enabled && input.windowFocused() && input.pointerKnown()
         && !m_pointerBusy && !input.primaryDown() && !input.secondaryDown() && !input.capture().valid()
         && accepted && accepted->enabled && accepted->popup == m_context.popupToken() && overAnchor;
-    if(!TooltipBehavior::Update(state, anchor->state.id, anchor->state.declarationGeneration,
-        m_context.popupToken(), input.focusLossGeneration(), input.hoverActivityGeneration(),
-        eligible, m_deltaSeconds, options)){
+    if(!TooltipBehavior::Update(state, anchor->state.id, anchor->state.declarationGeneration, m_context.popupToken(), input.focusLossGeneration(), input.hoverActivityGeneration(), eligible, m_deltaSeconds, options)){
         m_context.fail();
         return false;
     }
@@ -82,9 +75,7 @@ bool Builder::paintTooltips(){
             continue;
         const Rect clip = visibleClip(box->clip);
         const Point& pointer = m_context.input().pointerPosition();
-        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
-            VectorSet(box->rectangle.x, box->rectangle.y, box->rectangle.width, box->rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height)
-        );
+        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(box->rectangle.x, box->rectangle.y, box->rectangle.width, box->rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
         const f32 left = VectorGetX(visibleBounds);
         const f32 top = VectorGetY(visibleBounds);
         const f32 right = VectorGetZ(visibleBounds);
@@ -96,9 +87,7 @@ bool Builder::paintTooltips(){
             || (m_context.topPopupToken().valid() && m_context.topPopupToken() != frame.state->m_popup)
             || pointer.x < left || pointer.y < top || pointer.x >= right || pointer.y >= bottom
         ){
-            if(!TooltipBehavior::Update(*frame.state, frame.anchor.id, frame.anchor.declarationGeneration,
-                frame.state->m_popup, input.focusLossGeneration(), input.hoverActivityGeneration(),
-                false, 0.0f, frame.options))
+            if(!TooltipBehavior::Update(*frame.state, frame.anchor.id, frame.anchor.declarationGeneration, frame.state->m_popup, input.focusLossGeneration(), input.hoverActivityGeneration(), false, 0.0f, frame.options))
                 return false;
             frame.revision = frame.state->revision();
             continue;
@@ -106,41 +95,28 @@ bool Builder::paintTooltips(){
         const UiSkinRegion* background = region(frame.style.background, frame.style.fallback);
         if(!background)
             return false;
-        const SIMDVectorSingle firstPadding = VectorSet(background->padding.left, background->padding.top,
-            background->padding.right, background->padding.bottom);
-        const SIMDVectorSingle secondPadding = VectorSet(frame.style.padding.left, frame.style.padding.top,
-            frame.style.padding.right, frame.style.padding.bottom);
+        const SIMDVectorSingle firstPadding = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+        const SIMDVectorSingle secondPadding = VectorSet(frame.style.padding.left, frame.style.padding.top, frame.style.padding.right, frame.style.padding.bottom);
         const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
         const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
         const Point measured = frame.text.measure();
         PopupOptions options;
         options.anchor = box->rectangle;
-        const SIMDVectorSingle paddedSize = VectorAdd(
-            VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), VectorSwizzle<0, 1, 0, 1>(paddingValue)),
-            VectorSwizzle<2, 3, 2, 3>(paddingValue)
-        );
-        const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight,
-            background->minimumWidth, background->minimumHeight);
+        const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), VectorSwizzle<0, 1, 0, 1>(paddingValue)), VectorSwizzle<2, 3, 2, 3>(paddingValue));
+        const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, background->minimumWidth, background->minimumHeight);
         const SIMDVectorSingle size = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
         options.size = { Min(frame.options.maximumWidth, VectorGetX(size)), VectorGetY(size) };
         options.gap = frame.options.gap;
         options.side = frame.options.side;
             const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
-        if(
-            !placement
-            || !m_paint.beginOverlay(frame.layer)
-        )
+        if(!placement || !m_paint.beginOverlay(frame.layer))
             return false;
         m_paint.pushClip(placement->bounds);
         const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-        const SIMDVectorSingle inset = InsetRectValue(
-            VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height),
-            VectorSet(padding.left, padding.top, padding.right, padding.bottom)
-        );
+        const SIMDVectorSingle inset = InsetRectValue(VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
         const Rect content{ VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
         m_paint.pushClip(content);
-        const bool painted = backgroundPainted
-            && m_text.paint(m_paint, frame.text, { content.x, content.y }, frame.style.text);
+        const bool painted = backgroundPainted && m_text.paint(m_paint, frame.text, { content.x, content.y }, frame.style.text);
         const bool contentPopped = m_paint.popClip();
         const bool popped = m_paint.popClip();
         const bool ended = m_paint.endOverlay();

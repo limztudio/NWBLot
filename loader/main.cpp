@@ -78,10 +78,7 @@ inline constexpr i32 s_UninitializedFrameExtent = 0;
 
 class CallbackShutdownGuard : NoCopy{
 public:
-    explicit CallbackShutdownGuard(
-        NWB::IProjectEntryCallbacks& callbacks,
-        NWB::Core::CpuTaskScope& tasks
-    )
+    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks, NWB::Core::CpuTaskScope& tasks)
         : m_callbacks(callbacks)
         , m_tasks(tasks)
     {}
@@ -187,10 +184,7 @@ private:
 };
 
 
-Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadShaderArchiveRecords(
-    NWB::Core::GraphicsArena& arena,
-    const NWB::Core::Assets::IAssetBinarySource& assetBinarySource
-){
+Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadShaderArchiveRecords(NWB::Core::GraphicsArena& arena, const NWB::Core::Assets::IAssetBinarySource& assetBinarySource){
     NWB::Core::Assets::AssetBytes indexBinary{arena};
     if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
         return MakeUnexpected(Failure{});
@@ -253,39 +247,18 @@ bool InstallCrashCapture(CrashArena& crashArena){
         return false;
 
     NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
-        const AStringView binaryDump = report.binaryDump
-            ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize)
-            : AStringView()
-        ;
-        const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective
-            ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective
-            : NWB::Core::Crash::GpuCrashDumpKind::Aftermath
-        ;
-        const NWB::Core::Crash::CrashDumpResult dumpResult =
-            NWB::Core::Crash::CaptureGpuCrashDump(
-                AStringView(report.details.data(), report.details.size())
-                , binaryDump
-                , dumpKind
-            );
-        if(
-            dumpResult.status == NWB::Core::Crash::CrashDumpStatus::NotInstalled
-            || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::RequestFailed
-            || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed
-        ){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Loader: GPU crash dump capture failed (status {})")
-                , static_cast<u32>(dumpResult.status)
-            );
+        const AStringView binaryDump = report.binaryDump ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize) : AStringView();
+        const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective : NWB::Core::Crash::GpuCrashDumpKind::Aftermath;
+        const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details.data(), report.details.size()), binaryDump, dumpKind);
+        if(dumpResult.status == NWB::Core::Crash::CrashDumpStatus::NotInstalled || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::RequestFailed || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed){
+            NWB_LOGGER_WARNING(NWB_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
         }
     }, nullptr);
     return true;
 }
 
 void ConfigureCrashReporting(const LoaderOptions& options){
-    const AStringView logServerUrl = options.useStandaloneLogger
-        ? AStringView()
-        : AStringView(options.logAddress.data(), options.logAddress.size())
-    ;
+    const AStringView logServerUrl = options.useStandaloneLogger ? AStringView() : AStringView(options.logAddress.data(), options.logAddress.size());
     if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, AStringView(options.crashUploadToken.data(), options.crashUploadToken.size())))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
     if(!NWB::Core::Crash::SetCrashMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue))
@@ -309,12 +282,7 @@ bool UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int RunProjectRuntime(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const __hidden_loader::LoaderOptions& options,
-    void* inst,
-    NWB::Log::Client* telemetryClient
-){
+static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst, NWB::Log::Client* telemetryClient){
     {
         // The log server resolves Name tokens; release clients do not load .namesym files.
 
@@ -357,9 +325,7 @@ static int RunProjectRuntime(
         if(!graphicsMount.volumeName.assign(__hidden_loader::s_GraphicsVolumeName))
             return __hidden_loader::s_LoaderExitFailure;
         graphicsMount.mountDirectory = resourceMountDirectory;
-        UniquePtr<NWB::Core::Filesystem::IFilesystem> graphicsFilesystem = NWB::Core::Filesystem::CreateFilesystem(
-            frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory
-        );
+        UniquePtr<NWB::Core::Filesystem::IFilesystem> graphicsFilesystem = NWB::Core::Filesystem::CreateFilesystem(frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory);
         if(!graphicsFilesystem)
             return __hidden_loader::s_LoaderExitFailure;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
@@ -374,17 +340,12 @@ static int RunProjectRuntime(
 
             auto archiveRecords = __hidden_loader::LoadShaderArchiveRecords(frame.projectObjectArena(), assetBinarySource);
             if(!archiveRecords){
-                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
-                    , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
-                );
+                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'"), StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath));
                 return __hidden_loader::s_LoaderExitFailure;
             }
 
             const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& shaderArchiveRecords = *archiveRecords;
-            NWB::Core::CpuTaskScope projectTasks(
-                frame.cpuTasks(),
-                frame.cpuTasks().registerProfileLabel(NWB::LoaderProfileScope::s_ProjectTaskProfileName)
-            );
+            NWB::Core::CpuTaskScope projectTasks(frame.cpuTasks(), frame.cpuTasks().registerProfileLabel(NWB::LoaderProfileScope::s_ProjectTaskProfileName));
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
                 frame.input(),
@@ -405,12 +366,7 @@ static int RunProjectRuntime(
                 {},
             };
             context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName){
-                return NWB::Core::ShaderArchive::FindVirtualPath(
-                    shaderArchiveRecords,
-                    shaderName,
-                    variantName,
-                    stageName
-                );
+                return NWB::Core::ShaderArchive::FindVirtualPath(shaderArchiveRecords, shaderName, variantName, stageName);
             };
             context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& options){
                 frame.setTelemetryCapture(options);
@@ -430,10 +386,7 @@ static int RunProjectRuntime(
                 NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
                 return __hidden_loader::s_LoaderExitFailure;
             }
-            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{
-                *callbacks,
-                projectTasks
-            };
+            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ *callbacks, projectTasks };
             __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
 
             callbackShutdownGuard.activate();

@@ -19,10 +19,7 @@ using namespace UiEditNavigationTestSupport;
 class UiEditNavigationLifetimeTests : public UiEditNavigationHostTests{
 protected:
     [[nodiscard]] bool seedPreferredColumn(const Ui::EditBoxOptions& options = {}){
-        if(
-            !m_navigationModel.setText("abcdef\nx\nabcdef") || !m_navigationModel.setSelection(5u, 5u)
-            || !activateNavigation(options) || !key(Core::Key::Down) || !navigationFrame(options)
-        )
+        if(!m_navigationModel.setText("abcdef\nx\nabcdef") || !m_navigationModel.setSelection(5u, 5u) || !activateNavigation(options) || !key(Core::Key::Down) || !navigationFrame(options))
             return false;
         m_resolver.records.clear();
         m_actions.records.clear();

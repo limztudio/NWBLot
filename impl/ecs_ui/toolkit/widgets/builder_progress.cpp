@@ -18,10 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::progress(const AStringView stableKey, const f64 fraction, const ProgressOptions& options){
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed()
-        || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes
-    ){
+    if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return false;
     }

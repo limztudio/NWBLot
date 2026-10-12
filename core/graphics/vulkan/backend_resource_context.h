@@ -162,11 +162,7 @@ struct GraphicsPipelineFixedState{
     {}
 };
 
-inline void AttachGraphicsPipelineFixedState(
-    VkGraphicsPipelineCreateInfo& pipelineInfo,
-    const VkPipelineRasterizationStateCreateInfo& rasterizer,
-    const GraphicsPipelineFixedState& fixedState
-)noexcept{
+inline void AttachGraphicsPipelineFixedState(VkGraphicsPipelineCreateInfo& pipelineInfo, const VkPipelineRasterizationStateCreateInfo& rasterizer, const GraphicsPipelineFixedState& fixedState)noexcept{
     pipelineInfo.pViewportState = &fixedState.viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &fixedState.multisampling;
@@ -209,21 +205,9 @@ Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     BufferImageCopyPitchFields::Enum pitchFields,
     TStringView operationName = {}
 );
-VkImageSubresourceLayers BuildImageSubresourceLayers(
-    VkImageAspectFlags aspectMask,
-    MipLevel mipLevel,
-    ArraySlice arraySlice,
-    ArraySlice layerCount = 1u
-)noexcept;
+VkImageSubresourceLayers BuildImageSubresourceLayers(VkImageAspectFlags aspectMask, MipLevel mipLevel, ArraySlice arraySlice, ArraySlice layerCount = 1u)noexcept;
 VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, VkImageAspectFlags aspectMask)noexcept;
-Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(
-    Texture& texture,
-    const TextureSubresourceSet& resolvedSubresources,
-    TextureDimension::Enum dimension,
-    Format::Enum format,
-    TStringView operationName,
-    bool assertFailure
-);
+Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, TextureDimension::Enum dimension, Format::Enum format, TStringView operationName, bool assertFailure);
 Expected<StagingTextureRange> BuildStagingTextureRange(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
@@ -249,18 +233,8 @@ template<typename... Pointers>
     return byteSize != 0u && (byteSize & s_BufferAlignmentMask) == 0u && byteSize <= maximumByteSize;
 }
 
-[[nodiscard]] constexpr bool AreDispatchGroupCountsValid(
-    const u32 groupsX,
-    const u32 groupsY,
-    const u32 groupsZ,
-    const u32* const maximumGroupCounts
-)noexcept{
-    return
-        maximumGroupCounts
-        && groupsX <= maximumGroupCounts[0u]
-        && groupsY <= maximumGroupCounts[1u]
-        && groupsZ <= maximumGroupCounts[2u]
-    ;
+[[nodiscard]] constexpr bool AreDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32* const maximumGroupCounts)noexcept{
+    return maximumGroupCounts && groupsX <= maximumGroupCounts[0u] && groupsY <= maximumGroupCounts[1u] && groupsZ <= maximumGroupCounts[2u];
 }
 
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
@@ -268,10 +242,7 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept;
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);
 Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, TStringView operationName);
 void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-[[nodiscard]] Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(
-    RayTracingAccelStructBuildFlags::Mask buildFlags,
-    TStringView operationName
-);
+[[nodiscard]] Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, TStringView operationName);
 Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
@@ -304,10 +275,7 @@ struct ClusterOperationInput{
     }
 };
 
-Expected<ClusterOperationInput> BuildClusterOperationInputInfo(
-    const RayTracingClusterOperationParams& params,
-    TStringView operationName
-);
+Expected<ClusterOperationInput> BuildClusterOperationInputInfo(const RayTracingClusterOperationParams& params, TStringView operationName);
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept;
 VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages)noexcept;
 // Descriptor-buffer offset alignment clamped to a 32-bit value (1 when zero/oversized) for byte-offset math.
@@ -341,19 +309,14 @@ constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode)noexcept{
     }
 }
 
-inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(
-    const RasterState& rasterState,
-    const VkPolygonMode polygonMode,
-    const VkBool32 depthClampEnable
-)noexcept{
+inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(const RasterState& rasterState, const VkPolygonMode polygonMode, const VkBool32 depthClampEnable)noexcept{
     auto rasterizer = MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
     rasterizer.depthClampEnable = depthClampEnable;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = polygonMode;
     rasterizer.cullMode = ConvertCullMode(rasterState.cullMode);
     rasterizer.frontFace = rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
-    rasterizer.depthBiasEnable =
-        rasterState.depthBias != 0 || rasterState.slopeScaledDepthBias != 0.0f ? VK_TRUE : VK_FALSE;
+    rasterizer.depthBiasEnable = rasterState.depthBias != 0 || rasterState.slopeScaledDepthBias != 0.0f ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = static_cast<f32>(rasterState.depthBias);
     rasterizer.depthBiasClamp = rasterState.depthBiasClamp;
     rasterizer.depthBiasSlopeFactor = rasterState.slopeScaledDepthBias;
@@ -474,14 +437,7 @@ Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept;
 
-inline void CopyHostMemory(
-    CpuTaskScheduler& cpuScheduler,
-    void* dst,
-    const void* src,
-    usize size,
-    usize parallelThreshold = s_CopyHostMemoryParallelThreshold,
-    usize chunkSize = s_CopyHostMemoryChunkSize
-){
+inline void CopyHostMemory(CpuTaskScheduler& cpuScheduler, void* dst, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){
     if(!dst || !src || size == 0)
         return;
 

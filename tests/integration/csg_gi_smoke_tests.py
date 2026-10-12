@@ -58,8 +58,7 @@ class CsgGiCaptureEvidenceTests(unittest.TestCase):
                 validate_capture_evidence(EVIDENCE.replace("required_seconds=30", f"required_seconds={value}"), 360)
 
     def test_elapsed_idle_without_live_presentation_progress_is_rejected(self):
-        for before, after in (("source_frame=512 presentations=511", "source_frame=361 presentations=511"),
-                              ("source_frame=512 presentations=511", "source_frame=512 presentations=360")):
+        for before, after in (("source_frame=512 presentations=511", "source_frame=361 presentations=511"), ("source_frame=512 presentations=511", "source_frame=512 presentations=360")):
             with self.subTest(after=after), self.assertRaisesRegex(SmokeFailure, "presentation progress"):
                 validate_capture_evidence(EVIDENCE.replace(before, after), 360)
 

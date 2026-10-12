@@ -103,9 +103,7 @@ TEST_F(HorizontalNavigationFixture, DelegatedEditorKeepsCaretKeysLocalToAvoidMov
     bindEditor();
     ASSERT_TRUE(publish(3u));
     focusTarget(2u);
-    const Array<Core::Key::Enum, 6u> localKeys{
-        Core::Key::Left, Core::Key::Right, Core::Key::Home, Core::Key::End, Core::Key::Space, Core::Key::Backspace
-    };
+    const Array<Core::Key::Enum, 6u> localKeys{ Core::Key::Left, Core::Key::Right, Core::Key::Home, Core::Key::End, Core::Key::Space, Core::Key::Backspace };
     for(const auto key : localKeys){
         press(key);
         EXPECT_TRUE(m_router.controlActions().empty());

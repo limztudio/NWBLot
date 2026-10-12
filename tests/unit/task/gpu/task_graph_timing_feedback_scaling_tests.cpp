@@ -32,14 +32,7 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 using namespace Graphics::GpuTaskGraphCompilerDetail;
 
-constexpr Graphics::GpuTaskTimingFeedbackPolicy s_TimingPolicy{
-    .minimumAbsoluteBenefitSeconds = 0.0,
-    .minimumRelativeBenefit = 0.1,
-    .minimumFramesBetweenSwitches = 0u,
-    .minimumSampleCount = 1u,
-    .calibrationIntervalFrames = 0u,
-    .enabled = true,
-};
+constexpr Graphics::GpuTaskTimingFeedbackPolicy s_TimingPolicy{ .minimumAbsoluteBenefitSeconds = 0.0, .minimumRelativeBenefit = 0.1, .minimumFramesBetweenSwitches = 0u, .minimumSampleCount = 1u, .calibrationIntervalFrames = 0u, .enabled = true, };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,17 +45,10 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     Graphics::GraphicsVector<u32> assignmentIndices(testArena.arena);
     assignments.reserve(4u);
     assignmentIndices.reserve(4u);
-    Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(), GraphicsQueue(1u), GraphicsQueue(2u), GraphicsQueue(3u), GraphicsQueue(4u),
-    };
+    Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), GraphicsQueue(1u), GraphicsQueue(2u), GraphicsQueue(3u), GraphicsQueue(4u), };
     for(usize queueIndex = 1u; queueIndex < LengthOf(queues); ++queueIndex)
         queues[queueIndex].queueIndex = static_cast<u32>(queueIndex);
-    const Graphics::GpuTaskCostHint::Enum costs[] = {
-        Graphics::GpuTaskCostHint::Large,
-        Graphics::GpuTaskCostHint::Large,
-        Graphics::GpuTaskCostHint::Medium,
-        Graphics::GpuTaskCostHint::Medium,
-    };
+    const Graphics::GpuTaskCostHint::Enum costs[] = { Graphics::GpuTaskCostHint::Large, Graphics::GpuTaskCostHint::Large, Graphics::GpuTaskCostHint::Medium, Graphics::GpuTaskCostHint::Medium, };
     const usize assignedQueues[] = { 2u, 3u, 4u, 0u };
     Graphics::GpuTaskId target;
     for(usize taskIndex = 0u; taskIndex < LengthOf(costs); ++taskIndex){
@@ -112,21 +98,7 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
         const Graphics::GpuPhysicalQueueTopology topology{ .queues = reorderedQueues, .queueCount = LengthOf(reorderedQueues) };
         ASSERT_TRUE(IsValidQueueTopology(topology));
         scoringData.rebuildAssignmentLoads(assignments, topology);
-        const Graphics::GpuPhysicalQueueInfo* const selected = FindTimingFeedbackQueue(
-            declarations,
-            analysis,
-            assignments,
-            assignmentIndices,
-            topology,
-            reachability,
-            scoringData,
-            task,
-            reorderedQueues[0u],
-            assignmentKey,
-            snapshot,
-            s_TimingPolicy,
-            100u
-        );
+        const Graphics::GpuPhysicalQueueInfo* const selected = FindTimingFeedbackQueue(declarations, analysis, assignments, assignmentIndices, topology, reachability, scoringData, task, reorderedQueues[0u], assignmentKey, snapshot, s_TimingPolicy, 100u);
         ASSERT_NE(selected, nullptr);
         // Queue one wins the first slower tie; the later fast tie must use its own loads (eight versus four).
         EXPECT_EQ(selected->id, queues[4u].id);

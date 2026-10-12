@@ -56,12 +56,7 @@ public:
 
 public:
     [[nodiscard]] bool initialize(bool requested, bool presentationTimingEnabled, AStringView outputPath);
-    [[nodiscard]] bool observe(
-        const Core::Perf::Session& session,
-        const PresentationFpsProbe& presentation,
-        u64 successfulPresentations,
-        bool complete
-    );
+    [[nodiscard]] bool observe(const Core::Perf::Session& session, const PresentationFpsProbe& presentation, u64 successfulPresentations, bool complete);
     [[nodiscard]] bool hasCompletedGpuSamples(const Name& scope, u64 minimumSamples)const noexcept;
 
 

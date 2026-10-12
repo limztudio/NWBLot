@@ -28,22 +28,14 @@ def evidence(selection=LIT_SEQUENCE1):
         first, last = 10 + index * 10, 13 + index * 10
         sequence, publish = 100 + index, 20 + index
         seed = 101 + index
-        lines += [
-            f"ReflectionSpatialOwnerPhase: index={index} radius={radius} seed={seed} graphics_frame={first}",
-            f"ReflectionSpatialOwnerWork: publish={publish} first={first} last={last} samples=4",
+        lines += [f"ReflectionSpatialOwnerPhase: index={index} radius={radius} seed={seed} graphics_frame={first}", f"ReflectionSpatialOwnerWork: publish={publish} first={first} last={last} samples=4",
             f"ReflectionSpatialOwnerWarm: index={index} sequence={sequence} generation=7 graphics_frame={last} epoch={index + 1} start_graphics_frame={first} sample_index=3 seed={seed} work_publish={publish} work_first={first} work_last={last} work_samples=4",
         ]
-        history.append(dict(sequence=sequence, generation=7, graphics_frame=last, epoch=index + 1,
-            start_graphics_frame=first, sample_index=3, seed=seed, count=1, eligible=1))
+        history.append(dict(sequence=sequence, generation=7, graphics_frame=last, epoch=index + 1, start_graphics_frame=first, sample_index=3, seed=seed, count=1, eligible=1))
         statistics.append(dict(sequence=sequence, generation=7, hardware_ready=1, device_generation=2))
     source, last = 10 + len(radii) * 10, 12 + len(radii) * 10
-    lines += [
-        f"ReflectionSpatialOwnerCapture: radius={radii[-1]} graphics_frame={source} seed=0",
-        f"FramebufferCapture: graphics source frame {source}",
-        f"ReflectionSpatialOwnerWork: publish=90 first={source - 1} last={last} samples=4",
-    ]
-    history.append(dict(sequence=999, generation=7, graphics_frame=last, epoch=20,
-        start_graphics_frame=source, sample_index=2, seed=0, count=1, eligible=1))
+    lines += [f"ReflectionSpatialOwnerCapture: radius={radii[-1]} graphics_frame={source} seed=0", f"FramebufferCapture: graphics source frame {source}", f"ReflectionSpatialOwnerWork: publish=90 first={source - 1} last={last} samples=4",]
+    history.append(dict(sequence=999, generation=7, graphics_frame=last, epoch=20, start_graphics_frame=source, sample_index=2, seed=0, count=1, eligible=1))
     statistics.append(dict(sequence=999, generation=7, hardware_ready=1, device_generation=2))
     return LIT_N.join(lines), history, statistics
 
@@ -108,8 +100,7 @@ class SpatialOwnerEvidenceTests(unittest.TestCase):
     def test_duplicate_publication_and_duplicate_field_are_rejected(self):
         text, history, statistics = evidence()
         with self.assertRaises(SmokeFailure):
-            validate_owner_evidence(text + "\nReflectionSpatialOwnerWork: publish=90 first=50 last=50 samples=1",
-                LIT_SEQUENCE1, history, statistics)
+            validate_owner_evidence(text + "\nReflectionSpatialOwnerWork: publish=90 first=50 last=50 samples=1", LIT_SEQUENCE1, history, statistics)
         with self.assertRaises(SmokeFailure):
             records("ReflectionSpatialOwnerWork: publish=1 first=0 last=0 samples=1 samples=1", "Work")
 

@@ -37,9 +37,7 @@ namespace __hidden_shadow_cutter_snapshot{
     return NWB_CSG_RAY_SHAPE_UNSUPPORTED;
 }
 
-[[nodiscard]] Expected<BinaryByteView> ResolveParameters(
-    const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter
-)noexcept{
+[[nodiscard]] Expected<BinaryByteView> ResolveParameters(const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter)noexcept{
     const u8* parameterBytes = nullptr;
     usize parameterByteCount = 0u;
     if(cutter.parameterBytes.empty()){
@@ -55,11 +53,7 @@ namespace __hidden_shadow_cutter_snapshot{
     return BinaryByteView(parameterBytes, parameterByteCount);
 }
 
-void AppendReceiverCutters(
-    const CsgShadowReceiverInput& receiver, const CsgReceiverDrawState& drawState,
-    const CsgFrameReceiverLookup& receiverLookup, const CsgShapeRegistry& shapeRegistry,
-    CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range
-){
+void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgReceiverDrawState& drawState, const CsgFrameReceiverLookup& receiverLookup, const CsgShapeRegistry& shapeRegistry, CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range){
     const SIMDVectorSingle receiverMin = LoadFloat(receiver.worldMin);
     const SIMDVectorSingle receiverMax = LoadFloat(receiver.worldMax);
     const bool boundsCanCull = receiver.boundsValid && AabbTests::Valid(receiverMin, receiverMax);
@@ -128,11 +122,7 @@ void AppendReceiverCutters(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildCsgShadowSnapshot(
-    Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry,
-    const CsgShadowReceiverInput* const receivers, const usize receiverCount,
-    Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot
-){
+bool BuildCsgShadowSnapshot(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry, const CsgShadowReceiverInput* const receivers, const usize receiverCount, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot){
     outSnapshot.receiverRanges.clear();
     outSnapshot.cutters.clear();
     outSnapshot.identity = 0u;
@@ -185,9 +175,7 @@ bool BuildCsgShadowSnapshot(
                 Fnv64AppendValue(outSnapshot.identity, receiver.worldMin);
                 Fnv64AppendValue(outSnapshot.identity, receiver.worldMax);
             }
-            __hidden_shadow_cutter_snapshot::AppendReceiverCutters(
-                receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range
-            );
+            __hidden_shadow_cutter_snapshot::AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range);
             outSnapshot.hasCsg = outSnapshot.hasCsg || (range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         }
         Fnv64AppendValue(outSnapshot.identity, range);

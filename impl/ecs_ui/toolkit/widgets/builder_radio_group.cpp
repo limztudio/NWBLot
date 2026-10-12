@@ -52,10 +52,7 @@ public:
             return false;
         for(usize index = 0u; index < m_count; ++index){
             const PopupLoan& loan = *m_popups[index];
-            if(
-                !loan.state.isOpen() || loan.state.instanceGeneration() != loan.token.instanceGeneration
-                || loan.state.openGeneration() != loan.token.openGeneration
-            )
+            if(!loan.state.isOpen() || loan.state.instanceGeneration() != loan.token.instanceGeneration || loan.state.openGeneration() != loan.token.openGeneration)
                 return false;
         }
         return true;
@@ -78,14 +75,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDataSource& source,
-    RadioGroupState& state, const RadioGroupOptions& options
-){
+RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options){
     RadioGroupResult result;
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed()
-        || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes
-    ){
+    if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return result;
     }
@@ -206,18 +198,13 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
     const UiSkinRegion* mark = region(frame.m_style.mark, frame.m_style.markFallback);
     if(!normal || !checked || !mark || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
         return false;
-    const UiSkinRegion* states[] = { normal, checked, m_skin->findRegion(frame.m_style.hover),
-        m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
+    const UiSkinRegion* states[] = { normal, checked, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* skinRegion : states){
         if(!skinRegion)
             continue;
-        const f32 horizontal = static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.left) + skinRegion->sliceInsets.right)
-            / m_skin->referenceDensity();
-        const f32 vertical = static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.top) + skinRegion->sliceInsets.bottom)
-            / m_skin->referenceDensity();
-        frame.m_style.indicatorExtent = Max(frame.m_style.indicatorExtent,
-            Max(Max(skinRegion->minimumWidth, skinRegion->minimumHeight), Max(horizontal, vertical))
-        );
+        const f32 horizontal = static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.left) + skinRegion->sliceInsets.right) / m_skin->referenceDensity();
+        const f32 vertical = static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.top) + skinRegion->sliceInsets.bottom) / m_skin->referenceDensity();
+        frame.m_style.indicatorExtent = Max(frame.m_style.indicatorExtent, Max(Max(skinRegion->minimumWidth, skinRegion->minimumHeight), Max(horizontal, vertical)));
     }
     const auto metrics = RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
     if(!metrics)

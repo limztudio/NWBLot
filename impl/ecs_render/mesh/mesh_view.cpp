@@ -30,9 +30,7 @@ bool RendererMeshSystem::createMeshViewBuffer(){
         .setIsConstantBuffer(true)
         .setDebugName(ECSRenderDetail::s_MeshViewBufferName)
         // Either caustic producer can consume the view; keep concurrent to avoid serializing lanes.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common);
     Core::BufferHandle meshViewBuffer = m_graphics.createBuffer(meshViewBufferDesc);
     if(!meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh view buffer"));
@@ -61,17 +59,12 @@ Expected<Float44> RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip()const
     return acceptedView.worldToClip;
 }
 
-ECSRenderDetail::MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(
-    const f32 fallbackAspectRatio
-)const{
+ECSRenderDetail::MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(const f32 fallbackAspectRatio)const{
     NWB_ASSERT(m_meshState.m_meshViewBuffer);
 
     ECSRenderDetail::MeshViewBufferUpload upload;
     upload.viewState = ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio);
-    upload.uploadRequired = !(
-        m_meshState.m_meshViewGpuDataValid
-        && NWB_MEMCMP(m_meshState.m_meshViewGpuData, &upload.viewState, sizeof(upload.viewState)) == 0
-    );
+    upload.uploadRequired = !(m_meshState.m_meshViewGpuDataValid && NWB_MEMCMP(m_meshState.m_meshViewGpuData, &upload.viewState, sizeof(upload.viewState)) == 0);
     return upload;
 }
 

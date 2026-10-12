@@ -30,12 +30,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     const CommandListResourceStateHandoff*& outInitialStates
 ){
     outInitialStates = nullptr;
-    if(
-        !declarationAccess.validFor(graph)
-        || !planAccess.validFor(declarationAccess)
-        || !validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess)
-        || !planAccess.validPacket(packetID)
-    )
+    if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess) || !validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess) || !planAccess.validPacket(packetID))
         return false;
 
     scratch.initialStateSeed.reset();
@@ -44,9 +39,8 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     scratch.externalBaseStateSeed.reset();
     scratch.externalMergedStateSeed.reset();
 
-    // State snapshots include inherited state as well as resources a producer changed.  Preserve the established
-    // base-plus-branches fan-in rule while deriving every filtered branch from graph declarations: a later source
-    // may replace the base, but two independent sources may not leave incompatible final state for one resource.
+    // State snapshots include inherited state as well as resources a producer changed.
+    // Preserve the established base-plus-branches fan-in rule while deriving every filtered branch from graph declarations: a later source may replace the base, but two independent sources may not leave incompatible final state for one resource.
     const auto appendSourceSubset = [&]{
         if(scratch.stateSubsetScratch.empty())
             return true;
@@ -55,12 +49,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             return scratch.stateMergeScratch.copyFrom(scratch.stateSubsetScratch);
 
         const CommandListResourceStateHandoff* const branches[] = { &scratch.stateSubsetScratch };
-        if(!scratch.initialStateSeed.buildFanIn(
-            scratch.stateMergeScratch,
-            branches,
-            LengthOf(branches),
-            stateFanInScratchArena
-        ))
+        if(!scratch.initialStateSeed.buildFanIn(scratch.stateMergeScratch, branches, LengthOf(branches), stateFanInScratchArena))
             return false;
         return scratch.stateMergeScratch.copyFrom(scratch.initialStateSeed);
     };
@@ -70,24 +59,13 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             return true;
 
         if(!scratch.externalBaseStateSeed.valid()){
-            if(
-                !scratch.externalBaseStateSeed.copyFrom(scratch.stateMergeScratch)
-                || !scratch.externalMergedStateSeed.copyFrom(scratch.stateMergeScratch)
-            )
+            if(!scratch.externalBaseStateSeed.copyFrom(scratch.stateMergeScratch) || !scratch.externalMergedStateSeed.copyFrom(scratch.stateMergeScratch))
                 return false;
             return true;
         }
 
-        const CommandListResourceStateHandoff* const branches[] = {
-            &scratch.externalMergedStateSeed,
-            &scratch.stateMergeScratch,
-        };
-        if(!scratch.initialStateSeed.buildFanIn(
-            scratch.externalBaseStateSeed,
-            branches,
-            LengthOf(branches),
-            stateFanInScratchArena
-        ))
+        const CommandListResourceStateHandoff* const branches[] = { &scratch.externalMergedStateSeed, &scratch.stateMergeScratch, };
+        if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches, LengthOf(branches), stateFanInScratchArena))
             return false;
         return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
     };
@@ -98,16 +76,8 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
 
-    const auto appendStateSource = [&](
-        const CommandListResourceStateHandoff* const sourceStates,
-        const GpuTaskId* const sourceTasks,
-        const u32 sourceTaskCount
-    ){
-        if(
-            !sourceStates
-            || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration())
-            || (sourceTaskCount != 0u && !sourceTasks)
-        )
+    const auto appendStateSource = [&](const CommandListResourceStateHandoff* const sourceStates, const GpuTaskId* const sourceTasks, const u32 sourceTaskCount){
+        if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()) || (sourceTaskCount != 0u && !sourceTasks))
             return false;
 
         scratch.stateMergeScratch.reset();
@@ -122,11 +92,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 switch(resource.type){
                 case GpuGraphResourceType::Texture:{
                     Texture* const texture = declarationAccess.textureForResource(use.resource);
-                    if(!texture || !scratch.stateSubsetScratch.buildTextureRangeSubset(
-                        *sourceStates,
-                        texture,
-                        use.range.textureSubresources
-                    ))
+                    if(!texture || !scratch.stateSubsetScratch.buildTextureRangeSubset(*sourceStates, texture, use.range.textureSubresources))
                         return false;
                     break;
                 }
@@ -154,9 +120,8 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     return false;
                 }
 
-                // A given external producer need not have touched every resource declared by the consumer.  Empty
-                // subsets deliberately remain absent instead of manufacturing an initial state; a later source or
-                // the compiler's transition supplies the state that actually exists.
+                // A given external producer need not have touched every resource declared by the consumer.
+                // Empty subsets deliberately remain absent instead of manufacturing an initial state; a later source or the compiler's transition supplies the state that actually exists.
                 if(!appendSourceSubset())
                     return false;
             }
@@ -171,12 +136,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         if(!source)
             return false;
         const CommandListResourceStateHandoff* const sourceStates = source->stateSource;
-        if(
-            !sourceStates
-            || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration())
-            || source->sourceQueue != barrier.sourceQueue
-            || source->destinationQueue != barrier.destinationQueue
-        )
+        if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()) || source->sourceQueue != barrier.sourceQueue || source->destinationQueue != barrier.destinationQueue)
             return false;
 
         scratch.stateMergeScratch.reset();
@@ -186,32 +146,15 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             Texture* const texture = declarationAccess.textureForResource(barrier.resource);
             if(
                 !texture
-                || !sourceStates->coversTextureRangeWithOwnership(
-                    texture,
-                    barrier.range.textureSubresources,
-                    barrier.sourceQueue,
-                    barrier.destinationQueue
-                )
-                || !scratch.stateSubsetScratch.buildTextureRangeSubset(
-                    *sourceStates,
-                    texture,
-                    barrier.range.textureSubresources
-                )
+                || !sourceStates->coversTextureRangeWithOwnership(texture, barrier.range.textureSubresources, barrier.sourceQueue, barrier.destinationQueue)
+                || !scratch.stateSubsetScratch.buildTextureRangeSubset(*sourceStates, texture, barrier.range.textureSubresources)
             )
                 return false;
             break;
         }
         case GpuGraphResourceType::Buffer:{
             Buffer* const buffer = declarationAccess.bufferForResource(barrier.resource);
-            if(
-                !buffer
-                || !sourceStates->coversBufferWithOwnership(
-                    buffer,
-                    barrier.sourceQueue,
-                    barrier.destinationQueue,
-                    barrier.range.bufferRange
-                )
-            )
+            if(!buffer || !sourceStates->coversBufferWithOwnership(buffer, barrier.sourceQueue, barrier.destinationQueue, barrier.range.bufferRange))
                 return false;
             if(!scratch.stateSubsetScratch.buildBufferRangeSubset(*sourceStates, buffer, barrier.range.bufferRange))
                 return false;
@@ -220,14 +163,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         case GpuGraphResourceType::AccelStruct:{
             RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(barrier.resource);
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
-            if(
-                !backingBuffer
-                || !sourceStates->coversBufferWithOwnership(
-                    backingBuffer,
-                    barrier.sourceQueue,
-                    barrier.destinationQueue
-                )
-            )
+            if(!backingBuffer || !sourceStates->coversBufferWithOwnership(backingBuffer, barrier.sourceQueue, barrier.destinationQueue))
                 return false;
             Buffer* const buffers[] = { backingBuffer };
             if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
@@ -238,17 +174,15 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             return false;
         }
 
-        // Unlike an optional task state source, an imported ownership handoff must name every first-use range. A
-        // missing state would leave the acquire marker without the native source layout/owner it is required to
-        // import, so reject recording instead of falling back to descriptor creation state.
+        // Unlike an optional task state source, an imported ownership handoff must name every first-use range.
+        // A missing state would leave the acquire marker without the native source layout/owner it is required to import, so reject recording instead of falling back to descriptor creation state.
         if(scratch.stateSubsetScratch.empty() || !appendSourceSubset())
             return false;
         return appendMergedExternalSource();
     };
 
     // Resource-owned external handoffs are resolved from compiler markers rather than a renderer packet override.
-    // They are imported before ordinary task sources so the native command list opens with the released ownership
-    // and emits the paired Vulkan acquire before any graph prologue transition records.
+    // They are imported before ordinary task sources so the native command list opens with the released ownership and emits the paired Vulkan acquire before any graph prologue transition records.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())
@@ -257,22 +191,15 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         const GpuCompiledBarrier* const barriers = compiledTaskView.prologueBarriers;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
             const GpuCompiledBarrier& barrier = barriers[barrierIndex];
-            if(
-                !barrier.isInitialOwnerHandoff
-                || (
-                    barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire
-                    && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire
-                    && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire
-                )
-            )
+            if(!barrier.isInitialOwnerHandoff || (barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire))
                 continue;
             if(!appendInitialOwnerStateSource(barrier))
                 return false;
         }
     }
 
-    // Declaration-owned sources are attached to the task that needs their imported state. That preserves the
-    // source/resource relationship across packet coalescing and lets ordinary record traversal remain compiler-owned.
+    // Declaration-owned sources are attached to the task that needs their imported state.
+    // That preserves the source/resource relationship across packet coalescing and lets ordinary record traversal remain compiler-owned.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
         if(task.externalStateSourceCount != 0u && !task.externalStateSources)
@@ -287,25 +214,15 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             const GpuTaskExternalStateSource& source = task.externalStateSources[sourceIndex];
             if(source.applicableConsumerQueueClass > CommandQueue::kCount)
                 return false;
-            if(
-                source.applicableConsumerQueueClass != CommandQueue::kCount
-                && source.applicableConsumerQueueClass != taskQueue->queueClass
-            )
+            if(source.applicableConsumerQueueClass != CommandQueue::kCount && source.applicableConsumerQueueClass != taskQueue->queueClass)
                 continue;
-            if(!appendStateSource(
-                source.states,
-                tasks + taskIndex,
-                1u
-            ))
+            if(!appendStateSource(source.states, tasks + taskIndex, 1u))
                 return false;
         }
     }
 
     scratch.initialStateSeed.reset();
-    if(
-        scratch.externalMergedStateSeed.valid()
-        && !scratch.initialStateSeed.copyFrom(scratch.externalMergedStateSeed)
-    )
+    if(scratch.externalMergedStateSeed.valid() && !scratch.initialStateSeed.copyFrom(scratch.externalMergedStateSeed))
         return false;
     scratch.stateMergeScratch.reset();
 
@@ -314,21 +231,12 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             return scratch.initialStateSeed.copyFrom(scratch.stateSubsetScratch);
 
         const CommandListResourceStateHandoff* const branches[] = { &scratch.stateSubsetScratch };
-        if(!scratch.stateMergeScratch.buildFanIn(
-            scratch.initialStateSeed,
-            branches,
-            LengthOf(branches),
-            stateFanInScratchArena
-        ))
+        if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches, LengthOf(branches), stateFanInScratchArena))
             return false;
         return scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch);
     };
 
-    const auto buildSeedSubset = [&](
-        const GpuPacketStateSeed& seed,
-        const CommandListResourceStateHandoff& sourceStates,
-        CommandListResourceStateHandoff& subset
-    ){
+    const auto buildSeedSubset = [&](const GpuPacketStateSeed& seed, const CommandListResourceStateHandoff& sourceStates, CommandListResourceStateHandoff& subset){
         subset.reset();
         if(Texture* const texture = declarationAccess.textureForResource(seed.resource)){
             if(!subset.buildTextureRangeSubset(sourceStates, texture, seed.range.textureSubresources))
@@ -352,7 +260,8 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         return !subset.empty();
     };
 
-    // Consecutive subsets from one immutable source agree on overlapping state. Preserve source order between batches.
+    // Consecutive subsets from one immutable source agree on overlapping state.
+    // Preserve source order between batches.
     // The scratch vector owns temporary snapshots; fan-in copies their contents before this local storage is released.
     constexpr usize s_MaxSeedSubsetBatch = 8u;
     Vector<CommandListResourceStateHandoff, Alloc::ScratchArena> seedSubsetBatch(stateFanInScratchArena);
@@ -368,24 +277,13 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()))
                 return false;
             usize batchCount = 1u;
-            while(
-                batchCount < s_MaxSeedSubsetBatch
-                && batchCount < compiledTask.prologueStateSeedCount - seedIndex
-                && stateSeeds[seedIndex + batchCount].sourcePacket == firstSeed.sourcePacket
-            )
+            while(batchCount < s_MaxSeedSubsetBatch && batchCount < compiledTask.prologueStateSeedCount - seedIndex && stateSeeds[seedIndex + batchCount].sourcePacket == firstSeed.sourcePacket)
                 ++batchCount;
 
             // Preserve prefix failures when a partial merge would split an existing pending buffer release.
-            if(
-                batchCount == 1u
-                || scratch.initialStateSeed.hasPendingBufferReleases()
-                || sourceStates->hasPendingBufferReleases()
-            ){
+            if(batchCount == 1u || scratch.initialStateSeed.hasPendingBufferReleases() || sourceStates->hasPendingBufferReleases()){
                 for(usize offset = 0u; offset < batchCount; ++offset){
-                    if(
-                        !buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, scratch.stateSubsetScratch)
-                        || !appendInitialStateSubset()
-                    )
+                    if(!buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, scratch.stateSubsetScratch) || !appendInitialStateSubset())
                         return false;
                 }
                 seedIndex += static_cast<u32>(batchCount);
@@ -410,12 +308,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     return false;
                 firstBranch = 1u;
             }
-            if(!scratch.stateMergeScratch.buildFanIn(
-                scratch.initialStateSeed,
-                branches.data() + firstBranch,
-                batchCount - firstBranch,
-                stateFanInScratchArena
-            ))
+            if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches.data() + firstBranch, batchCount - firstBranch, stateFanInScratchArena))
                 return false;
             if(!scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch))
                 return false;

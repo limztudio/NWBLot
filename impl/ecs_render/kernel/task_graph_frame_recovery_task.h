@@ -30,20 +30,16 @@ struct FrameRecoveryGraphTask{
     // Frame timing must end on the same primary physical queue that recorded its beginning.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
 
-    // The transaction owns the timing reservation this recovery tail may retire. The armed/retire flags are
-    // caller-owned outputs the tail clears. All three are references (not nullable pointers) so a missing
-    // binding fails at declaration time instead of silently skipping recovery inside Record/Accepted.
+    // The transaction owns the timing reservation this recovery tail may retire.
+    // The armed/retire flags are caller-owned outputs the tail clears.
+    // All three are references (not nullable pointers) so a missing binding fails at declaration time instead of silently skipping recovery inside Record/Accepted.
     struct Payload{
         Core::GpuTimingFrameTransaction& frameTimingTransaction;
         bool& armed;
         bool& retiresFrameTiming;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
     static void Discarded(Payload& payload);
 };

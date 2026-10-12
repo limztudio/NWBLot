@@ -42,10 +42,7 @@ NWB_IMPL_UI_BEGIN
 // Padding lanes are left, top, right, bottom; retain the two separately rounded size subtractions.
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL InsetRectValue(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept{
     const SIMDVectorSingle origin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(rectangle), VectorSwizzle<0, 1, 0, 1>(padding));
-    const SIMDVectorSingle extent = VectorSubtract(
-        VectorSubtract(VectorSwizzle<2, 3, 2, 3>(rectangle), VectorSwizzle<0, 1, 0, 1>(padding)),
-        VectorSwizzle<2, 3, 2, 3>(padding)
-    );
+    const SIMDVectorSingle extent = VectorSubtract(VectorSubtract(VectorSwizzle<2, 3, 2, 3>(rectangle), VectorSwizzle<0, 1, 0, 1>(padding)), VectorSwizzle<2, 3, 2, 3>(padding));
     const SIMDVectorSingle size = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
     return VectorPermute<0, 1, 4, 5>(origin, size);
 }

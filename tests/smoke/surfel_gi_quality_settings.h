@@ -17,11 +17,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ApplySurfelGiQualitySmokeSettings(
-    Impl::RendererSystem& renderer,
-    Core::Alloc::GlobalArena& arena,
-    const Impl::SurfelGiQualitySettings& baseSettings = {}
-);
+[[nodiscard]] bool ApplySurfelGiQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::SurfelGiQualitySettings& baseSettings = {});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

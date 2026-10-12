@@ -36,24 +36,13 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(
-        testArena.arena,
-        Telemetry::PerfTimingSource::Gpu,
-        scopeName,
-        s_RENDERER_FRAME_TEXT,
-        stats,
-        payload
-    ));
+    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Gpu, scopeName, s_RENDERER_FRAME_TEXT, stats, payload));
 
     Expected<Telemetry::PerfTimingPayload> parsed = MakeUnexpected(Failure{});
     ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size())));
 
     const Telemetry::TelemetryBytes current = payload;
-    const u16 unsupportedVersions[] = {
-        0u,
-        static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u),
-        Limit<u16>::s_Max,
-    };
+    const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u), Limit<u16>::s_Max, };
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
         usize cursor = 0u;
@@ -76,24 +65,10 @@ TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
     Telemetry::TelemetryBytes payload(testArena.arena);
     NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
-    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(
-        testArena.arena,
-        Telemetry::PerfTimingSource::Unknown,
-        Name(s_RENDERER_FRAME),
-        s_RENDERER_FRAME_TEXT,
-        stats,
-        payload
-    ));
+    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Unknown, Name(s_RENDERER_FRAME), s_RENDERER_FRAME_TEXT, stats, payload));
 
     stats.sampleCount = 0u;
-    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(
-        testArena.arena,
-        Telemetry::PerfTimingSource::Cpu,
-        Name(s_RENDERER_FRAME),
-        s_RENDERER_FRAME_TEXT,
-        stats,
-        payload
-    ));
+    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Cpu, Name(s_RENDERER_FRAME), s_RENDERER_FRAME_TEXT, stats, payload));
 }
 
 TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
@@ -103,14 +78,7 @@ TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(
-        testArena.arena,
-        scopeName,
-        s_PROJECT_ARENA_TEXT,
-        snapshot,
-        delta,
-        payload
-    ));
+    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
 
     Expected<Telemetry::PerfMemoryPayload> parsed = MakeUnexpected(Failure{});
     ASSERT_TRUE((parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size())));
@@ -126,44 +94,16 @@ TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
-        testArena.arena,
-        s_NameNone,
-        s_PROJECT_ARENA_TEXT,
-        snapshot,
-        delta,
-        payload
-    ));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, s_NameNone, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
 
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
-        testArena.arena,
-        scopeName,
-        AStringView(),
-        snapshot,
-        delta,
-        payload
-    ));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, AStringView(), snapshot, delta, payload));
 
     snapshot.scopeName = Name("memory/other_arena");
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
-        testArena.arena,
-        scopeName,
-        s_PROJECT_ARENA_TEXT,
-        snapshot,
-        delta,
-        payload
-    ));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
 
     snapshot = MakeTestMemorySnapshot(scopeName);
     delta.currentFrameIndex = 99u;
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
-        testArena.arena,
-        scopeName,
-        s_PROJECT_ARENA_TEXT,
-        snapshot,
-        delta,
-        payload
-    ));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
 }
 
 TEST(Telemetry, PerfTimingViewRejectsIndexAtScopeCount){

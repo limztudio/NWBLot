@@ -186,9 +186,7 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
     }
 }
 
-static void DispatchKeyEvent(
-    Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText, const bool dispatchPhysical = true
-){
+static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText, const bool dispatchPhysical = true){
     XKeyEvent translatedEvent = keyEvent;
     const KeySym keySym = keyEvent.keycode ? XLookupKeysym(&translatedEvent, 0) : NoSymbol;
     const i32 key = TranslateKey(keySym);
@@ -212,9 +210,7 @@ static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const bool dis
     const u32 serial = static_cast<u32>(event.serial);
     const u64 receivedAtMs = DurationInMS<u64>(TimerNow());
     const bool released = event.type == KeyRelease;
-    if(s_FilteredKeyHistory.isForwardedDuplicate(
-        keycode, released, timestamp, serial, event.send_event != False, receivedAtMs
-    )){
+    if(s_FilteredKeyHistory.isForwardedDuplicate(keycode, released, timestamp, serial, event.send_event != False, receivedAtMs)){
         // The physical event already ran, but an unfiltered press must still reach XIM text lookup.
         if(dispatchText && !released)
             DispatchKeyEvent(frame, event, InputAction::Press, true, false);
@@ -388,18 +384,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData)noexcept{
 
 bool InitX11Frame(Frame& frame){
     const TStringView windowTitle = frame.windowTitleOrDefault();
-    constexpr long s_WindowEventMask =
-        ExposureMask
-        | FocusChangeMask
-        | StructureNotifyMask
-        | KeyPressMask
-        | KeyReleaseMask
-        | ButtonPressMask
-        | ButtonReleaseMask
-        | PointerMotionMask
-        | EnterWindowMask
-        | LeaveWindowMask
-        ;
+    constexpr long s_WindowEventMask = ExposureMask | FocusChangeMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask | EnterWindowMask | LeaveWindowMask;
 
     auto& frameData = frame.data<Common::LinuxFrame>();
     ResetFrameData(frameData);
@@ -423,15 +408,7 @@ bool InitX11Frame(Frame& frame){
         return false;
     }
     if(windowWidth != requestedWidth || windowHeight != requestedHeight){
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("Frame X11 client size clamped from {}x{} to {}x{} for display {}x{}"),
-            requestedWidth,
-            requestedHeight,
-            windowWidth,
-            windowHeight,
-            displayWidth,
-            displayHeight
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame X11 client size clamped from {}x{} to {}x{} for display {}x{}"), requestedWidth, requestedHeight, windowWidth, windowHeight, displayWidth, displayHeight);
     }
     frameData.width() = windowWidth;
     frameData.height() = windowHeight;
@@ -441,17 +418,7 @@ bool InitX11Frame(Frame& frame){
     const i32 x = centeredX > 0 ? centeredX : 0;
     const i32 y = centeredY > 0 ? centeredY : 0;
 
-    SetX11Window(frameData, XCreateSimpleWindow(
-        GetX11Display(frameData),
-        RootWindow(GetX11Display(frameData), screen),
-        x,
-        y,
-        windowWidth,
-        windowHeight,
-        0,
-        BlackPixel(GetX11Display(frameData), screen),
-        WhitePixel(GetX11Display(frameData), screen)
-    ));
+    SetX11Window(frameData, XCreateSimpleWindow(GetX11Display(frameData), RootWindow(GetX11Display(frameData), screen), x, y, windowWidth, windowHeight, 0, BlackPixel(GetX11Display(frameData), screen), WhitePixel(GetX11Display(frameData), screen)));
     if(GetX11Window(frameData) == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window creation failed"));
         CleanupX11Frame(frame);
@@ -464,23 +431,12 @@ bool InitX11Frame(Frame& frame){
     XSelectInput(GetX11Display(frameData), GetX11Window(frameData), s_WindowEventMask);
     XStoreName(GetX11Display(frameData), GetX11Window(frameData), windowTitle.data());
 
-    // Tag the top-level window with the process id so smoke teardown can locate
-    // the exact window for graceful WM_DELETE_WINDOW close on headless XWayland,
-    // where the window is never mapped and PID lookup is the only match key.
+    // Tag the top-level window with the process id so smoke teardown can locate the exact window for graceful WM_DELETE_WINDOW close on headless XWayland, where the window is never mapped and PID lookup is the only match key.
     {
         const Atom pidAtom = XInternAtom(GetX11Display(frameData), "_NET_WM_PID", False);
         if(pidAtom != None){
             const long pidValue = static_cast<long>(::getpid());
-            XChangeProperty(
-                GetX11Display(frameData),
-                GetX11Window(frameData),
-                pidAtom,
-                XA_CARDINAL,
-                s_X11CardinalPropertyFormatBits,
-                PropModeReplace,
-                reinterpret_cast<const unsigned char*>(&pidValue),
-                1
-            );
+            XChangeProperty(GetX11Display(frameData), GetX11Window(frameData), pidAtom, XA_CARDINAL, s_X11CardinalPropertyFormatBits, PropModeReplace, reinterpret_cast<const unsigned char*>(&pidValue), 1);
         }
     }
 
@@ -539,16 +495,9 @@ bool RunX11Frame(Frame& frame){
                 const XEvent physical = event;
                 if(FilterX11TextInputEvent(*textInput, event)){
                     // XIM filtering owns text. Normalized physical presses/releases must remain balanced.
-                    if(
-                        physical.xany.window == GetX11Window(frameData)
-                        && (physical.type == KeyPress || physical.type == KeyRelease)
-                        && physical.xkey.keycode != 0u
-                    )
+                    if(physical.xany.window == GetX11Window(frameData) && (physical.type == KeyPress || physical.type == KeyRelease) && physical.xkey.keycode != 0u)
                         ProcessKeyEvent(frame, physical.xkey, false);
-                    else if(
-                        physical.type == FocusIn || physical.type == FocusOut
-                        || physical.type == UnmapNotify || physical.type == DestroyNotify
-                    ){
+                    else if(physical.type == FocusIn || physical.type == FocusOut || physical.type == UnmapNotify || physical.type == DestroyNotify){
                         if(!ProcessEvent(frame, physical))
                             return true;
                     }

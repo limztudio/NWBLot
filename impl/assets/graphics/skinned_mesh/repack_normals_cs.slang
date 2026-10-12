@@ -15,8 +15,7 @@ struct NwbSkinnedMeshRepackPushConstants{
     uint2 payload0;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbSkinnedMeshRepackPushConstants> g_NwbSkinnedMeshRepackPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbSkinnedMeshRepackPushConstants> g_NwbSkinnedMeshRepackPushConstants;
 
 // The persistent stream-slot payload is selected from the global UniformBuffer heap by payload0.y.
 #define g_NwbSkinnedMeshRepackBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshRepackPushConstants.payload0[NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT])
@@ -54,12 +53,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         const uint localVertex = nwbSkinnedMeshRepackLoadPrimitiveIndex(primitiveByte);
         const NwbMeshletLocalVertexRef localVertexRef = nwbSkinnedMeshHeapLocalVertexRefs(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.x)[meshlet.localVertexOffset + localVertex];
         const uint localAttributeIndex = nwbMeshletLocalAttribute(localVertexRef);
-        const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(
-            nwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots2.x),
-            meshlet,
-            decodeInfo,
-            localAttributeIndex
-        );
+        const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(nwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots2.x), meshlet, decodeInfo, localAttributeIndex);
 
         // AttribGpu stride = 16: Half4 normal @ +0 (xy, zw), Float2 uv0 @ +8. Write ONLY the 8-byte normal halves; uv0 (bytes 8..15) is pose-invariant and stays as uploaded.
         const NwbMeshHalf4 skinnedNormal = nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshRepackBindlessResources.streamSlots0.w)[attributeRef.normal];

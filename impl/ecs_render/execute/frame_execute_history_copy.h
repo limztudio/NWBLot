@@ -25,9 +25,7 @@ struct DeferredFrameTargets;
 
 
 // Lagged-lighting history-copy tail acceptance (shadow/caustic/surfel returns).
-// Separated from RendererFramePipeline::render(): the history-copy context plus its
-// recorded/accepted callbacks are one functionality — build filtered subsets for the
-// three return states, then commit them together on acceptance.
+// Separated from RendererFramePipeline::render(): the history-copy context plus its recorded/accepted callbacks are one functionality — build filtered subsets for the three return states, then commit them together on acceptance.
 class FrameExecuteHistoryCopy final{
 public:
     FrameExecuteHistoryCopy() = delete;
@@ -45,14 +43,8 @@ public:
     };
 
 
-    [[nodiscard]] static bool PrepareHistoryCopyFinalState(
-        void* rawContext,
-        const Core::CommandListResourceStateHandoff* finalState
-    );
-    [[nodiscard]] static bool AcceptHistoryCopyFinalState(
-        void* rawContext,
-        const Core::QueueSubmissionToken& token
-    );
+    [[nodiscard]] static bool PrepareHistoryCopyFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
+    [[nodiscard]] static bool AcceptHistoryCopyFinalState(void* rawContext, const Core::QueueSubmissionToken& token);
 };
 
 

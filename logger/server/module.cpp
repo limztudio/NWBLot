@@ -170,12 +170,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     return responseResult;
 }
 
-[[nodiscard]] MHD_Result FinishConnectionUpload(
-    Server& server,
-    MHD_Connection& connection,
-    ConnectionInfo*& info,
-    void*& connectionContext
-){
+[[nodiscard]] MHD_Result FinishConnectionUpload(Server& server, MHD_Connection& connection, ConnectionInfo*& info, void*& connectionContext){
     const MHD_Result responseResult = QueueEmptyResponse(server, connection);
     DestroyConnectionInfo(info, connectionContext);
     return responseResult;
@@ -349,12 +344,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
 
     const bool isCrashUpload = urlView == Core::Crash::PackageNames::s_CrashUploadEndpoint;
     const bool isTelemetryUpload = urlView == s_TelemetryUploadEndpoint;
-    const auto uploadKind = isCrashUpload
-        ? __hidden_logger_server::ConnectionUploadKind::Crash
-        : isTelemetryUpload
-            ? __hidden_logger_server::ConnectionUploadKind::Telemetry
-            : __hidden_logger_server::ConnectionUploadKind::LogMessage
-    ;
+    const auto uploadKind = isCrashUpload ? __hidden_logger_server::ConnectionUploadKind::Crash : isTelemetryUpload ? __hidden_logger_server::ConnectionUploadKind::Telemetry : __hidden_logger_server::ConnectionUploadKind::LogMessage;
 
     if(!connectionContext){
         if(isCrashUpload && !thisPtr->crashUploadAuthorized(*connection)){
@@ -383,10 +373,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         }
 
         const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->uploadKind);
-        if(
-            uploadDataSize > static_cast<size_t>(uploadSizeLimit)
-            || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)
-        ){
+        if(uploadDataSize > static_cast<size_t>(uploadSizeLimit) || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
@@ -409,14 +396,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         if(info->closeCrashUploadStream() && info->crashUploadPath[0] != 0){
             const Path storedPath(thisPtr->arena(), AStringView(info->crashUploadPath));
             if(thisPtr->enqueueCrashUpload(storedPath)){
-                thisPtr->enqueue(
-                    StringFormat(
-                        thisPtr->arena(),
-                        NWB_TEXT("Crash upload queued for ingest at '{}'"),
-                        PathToString<tchar>(storedPath)
-                    ),
-                    Core::Common::LogType::EssentialInfo
-                );
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
             }
             else{
                 if(const auto removed = RemoveFile(storedPath); !removed || !*removed)
@@ -430,12 +410,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         }
     }
     else if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Telemetry){
-        TelemetryIngestResult result = ProcessTelemetryUpload(
-            thisPtr->arena(),
-            info->buffer,
-            info->size,
-            thisPtr->m_telemetryIngestConfig
-        );
+        TelemetryIngestResult result = ProcessTelemetryUpload(thisPtr->arena(), info->buffer, info->size, thisPtr->m_telemetryIngestConfig);
         thisPtr->enqueue(Move(result.message), result.type);
     }
     else{
@@ -443,11 +418,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         if(message)
             thisPtr->enqueue(Move(*message));
         else{
-            __hidden_logger_server::EnqueueServerMessage(
-                *thisPtr,
-                message.error(),
-                Core::Common::LogType::Error
-            );
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, message.error(), Core::Common::LogType::Error);
         }
     }
 
@@ -477,13 +448,7 @@ Server::~Server(){
     m_processedMessageFile.close();
 }
 
-bool Server::internalInit(
-    u16 port,
-    BasicStringView<tchar> logFileNameBase,
-    AStringView crashSymbolStoreDirectory,
-    CrashRetentionConfig crashRetentionConfig,
-    AStringView crashUploadToken
-){
+bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStringView crashSymbolStoreDirectory, CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken){
     m_crashIngestConfig.symbolication.symbolStoreDirectory.clear();
     if(!crashSymbolStoreDirectory.empty())
         m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
@@ -506,18 +471,7 @@ bool Server::internalInit(
     listenAddress.sin_family = AF_INET;
     listenAddress.sin_port = htons(port);
     listenAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    m_daemon = MHD_start_daemon(
-        MHD_USE_INTERNAL_POLLING_THREAD,
-        0u,
-        nullptr,
-        nullptr,
-        &Server::RequestCallback,
-        this,
-        MHD_OPTION_SOCK_ADDR_LEN,
-        static_cast<socklen_t>(sizeof(listenAddress)),
-        &listenAddress,
-        MHD_OPTION_END
-    );
+    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, 0u, nullptr, nullptr, &Server::RequestCallback, this, MHD_OPTION_SOCK_ADDR_LEN, static_cast<socklen_t>(sizeof(listenAddress)), &listenAddress, MHD_OPTION_END);
 
     if(!m_daemon)
         return false;

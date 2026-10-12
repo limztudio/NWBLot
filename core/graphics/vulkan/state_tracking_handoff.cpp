@@ -42,10 +42,7 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
     BufferStateEntry entries[s_MaxVertexAttributes + 2u]{};
     u32 entryCount = 0u;
 
-    const auto addRequiredState = [&entries, &entryCount](
-        Buffer* const buffer,
-        const ResourceStates::Mask requiredState
-    )noexcept{
+    const auto addRequiredState = [&entries, &entryCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept{
         if(!buffer)
             return;
         for(u32 entryIndex = 0u; entryIndex < entryCount; ++entryIndex){
@@ -80,29 +77,11 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     NWB_ASSERT(states.m_valid);
 
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
-        if(
-            state.texture
-            && (
-                !VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
-                || !isTextureReadyForCommandQueue(
-                    state.texture,
-                    VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
-                )
-            )
-        )
+        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state))))
             return false;
     }
     for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
-        if(
-            state.texture
-            && (
-                !VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
-                || !isTextureReadyForCommandQueue(
-                    state.texture,
-                    VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
-                )
-            )
-        )
+        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state))))
             return false;
     }
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
@@ -112,10 +91,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             && (
                 !VulkanBufferDetail::IsBufferResourceStateMaskValid(state.state)
                 || !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(*description, state.state)
-                || !isBufferReadyForCommandQueue(
-                    state.buffer,
-                    VulkanBufferDetail::RequiredBufferUsageForResourceStates(*description, state.state)
-                )
+                || !isBufferReadyForCommandQueue(state.buffer, VulkanBufferDetail::RequiredBufferUsageForResourceStates(*description, state.state))
             )
         )
             return false;
@@ -127,10 +103,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             && (
                 !VulkanBufferDetail::IsBufferResourceStateMaskValid(state.state)
                 || !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(*description, state.state)
-                || !isBufferReadyForCommandQueue(
-                    state.buffer,
-                    VulkanBufferDetail::RequiredBufferUsageForResourceStates(*description, state.state)
-                )
+                || !isBufferReadyForCommandQueue(state.buffer, VulkanBufferDetail::RequiredBufferUsageForResourceStates(*description, state.state))
             )
         )
             return false;
@@ -149,10 +122,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         orderedBufferStates.push_back(&state);
     }
     Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto* lhs, const auto* rhs){
-        return lhs->buffer != rhs->buffer
-            ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer)
-            : lhs->range.byteOffset < rhs->range.byteOffset
-        ;
+        return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
     });
     for(usize index = 1u; index < orderedBufferStates.size(); ++index){
         const auto& previous = *orderedBufferStates[index - 1u];
@@ -172,7 +142,14 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> acquireImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> acquireBufferBarriers{scratchArena};
 
-    const auto appendTextureAcquire = [&](Texture& texture, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> bool {
+    const auto appendTextureAcquire = [&](
+        Texture& texture,
+        const TextureSubresourceSet& subresources,
+        const ResourceStates::Mask state,
+        const ResourceQueueSharing::Mask sharing,
+        const GpuPhysicalQueueId ownerQueue,
+        const GpuPhysicalQueueId releaseDestinationQueue
+    ) -> bool {
         if(sharing != texture.m_creationDesc.queueSharing){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
             return false;
@@ -195,10 +172,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
-        const u32 sourceQueueFamily = ownerQueue.valid()
-            ? m_device.getQueueFamilyIndex(ownerQueue)
-            : VK_QUEUE_FAMILY_IGNORED
-        ;
+        const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
@@ -206,9 +180,8 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         }
 
         if(!releaseDestinationQueue.valid()){
-            // Vulkan ownership belongs to a queue family, not one VkQueue. A state handoff from another physical
-            // queue in this family is valid once its timeline token is waited; reject only a true family crossing
-            // that omitted the compiler-planned release/acquire pair.
+            // Vulkan ownership belongs to a queue family, not one VkQueue.
+            // A state handoff from another physical queue in this family is valid once its timeline token is waited; reject only a true family crossing that omitted the compiler-planned release/acquire pair.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
                 return false;
@@ -217,11 +190,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         }
 
         const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
-        if(
-            !ownerQueue.valid()
-            || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED
-            || releaseDestinationFamily != destinationQueueFamily
-        ){
+        if(!ownerQueue.valid() || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED || releaseDestinationFamily != destinationQueueFamily){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination family"));
             return false;
         }
@@ -231,15 +200,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
         if(sourceQueueFamily != destinationQueueFamily){
-            acquireImageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureOwnershipAcquireBarrier(
-                texture.m_image,
-                texture.m_aspectMask,
-                subresources,
-                state,
-                sourceQueueFamily,
-                destinationQueueFamily,
-                m_context.extensions.khrRayTracingPipeline
-            ));
+            acquireImageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureOwnershipAcquireBarrier(texture.m_image, texture.m_aspectMask, subresources, state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline));
         }
         return true;
     };
@@ -266,10 +227,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
-        const u32 sourceQueueFamily = ownerQueue.valid()
-            ? m_device.getQueueFamilyIndex(ownerQueue)
-            : VK_QUEUE_FAMILY_IGNORED
-        ;
+        const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
@@ -286,11 +244,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         }
 
         const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
-        if(
-            !ownerQueue.valid()
-            || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED
-            || releaseDestinationFamily != destinationQueueFamily
-        ){
+        if(!ownerQueue.valid() || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED || releaseDestinationFamily != destinationQueueFamily){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination family"));
             return false;
         }
@@ -300,20 +254,13 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
         if(sourceQueueFamily != destinationQueueFamily){
-            acquireBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipAcquireBarrier(
-                buffer.m_buffer,
-                state,
-                sourceQueueFamily,
-                destinationQueueFamily,
-                m_context.extensions.khrRayTracingPipeline,
-                range
-            ));
+            acquireBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipAcquireBarrier(buffer.m_buffer, state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline, range));
         }
         return true;
     };
 
-    // Validate the complete handoff before publishing any state. Permanent state survives clearState(), so a
-    // progressive import would otherwise poison later recording attempts when a later entry is incompatible.
+    // Validate the complete handoff before publishing any state.
+    // Permanent state survives clearState(), so a progressive import would otherwise poison later recording attempts when a later entry is incompatible.
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(!state.texture)
             continue;
@@ -324,14 +271,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
-        if(!appendTextureAcquire(
-            *state.texture,
-            TextureSubresourceSet(state.mipLevel, 1u, state.arraySlice, 1u),
-            state.state,
-            state.queueSharing,
-            state.ownerQueue,
-            state.releaseDestinationQueue
-        ))
+        if(!appendTextureAcquire(*state.texture, TextureSubresourceSet(state.mipLevel, 1u, state.arraySlice, 1u), state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
     }
 
@@ -345,14 +285,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
-        if(!appendBufferAcquire(
-            *state.buffer,
-            state.range.resolve(state.buffer->m_creationDesc),
-            state.state,
-            state.queueSharing,
-            state.ownerQueue,
-            state.releaseDestinationQueue
-        ))
+        if(!appendBufferAcquire(*state.buffer, state.range.resolve(state.buffer->m_creationDesc), state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
     }
 
@@ -378,14 +311,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             }
         }
 
-        if(!appendTextureAcquire(
-            *state.texture,
-            s_AllSubresources,
-            state.state,
-            state.queueSharing,
-            state.ownerQueue,
-            state.releaseDestinationQueue
-        ))
+        if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
     }
 
@@ -411,14 +337,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             }
         }
 
-        if(!appendBufferAcquire(
-            *state.buffer,
-            state.range.resolve(state.buffer->m_creationDesc),
-            state.state,
-            state.queueSharing,
-            state.ownerQueue,
-            state.releaseDestinationQueue
-        ))
+        if(!appendBufferAcquire(*state.buffer, state.range.resolve(state.buffer->m_creationDesc), state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
     }
 
@@ -460,8 +379,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     }
 
     if(!acquireImageBarriers.empty() || !acquireBufferBarriers.empty()){
-        executePipelineBarrier(
-            {},
+        executePipelineBarrier({},
             { acquireImageBarriers.data(), acquireImageBarriers.size() },
             { acquireBufferBarriers.data(), acquireBufferBarriers.size() }
         );
@@ -483,16 +401,10 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
             return {};
 
         const auto release = m_textureOwnershipReleaseDestinations.find(key);
-        return QueueOwnership{
-            m_creationDesc.physicalQueue,
-            release != m_textureOwnershipReleaseDestinations.end() ? release.value() : GpuPhysicalQueueId{}
-        };
+        return QueueOwnership{ m_creationDesc.physicalQueue, release != m_textureOwnershipReleaseDestinations.end() ? release.value() : GpuPhysicalQueueId{} };
     };
     const auto getBufferOwnership = [&](Buffer* buffer) -> GpuPhysicalQueueId{
-        return buffer && buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT
-            ? m_creationDesc.physicalQueue
-            : GpuPhysicalQueueId{}
-        ;
+        return buffer && buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT ? m_creationDesc.physicalQueue : GpuPhysicalQueueId{};
     };
 
     states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
@@ -502,15 +414,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
             continue;
 
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
-        states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{
-            key.texture,
-            key.mipLevel,
-            key.arraySlice,
-            it.value(),
-            key.texture->m_creationDesc.queueSharing,
-            ownerQueue,
-            releaseDestinationQueue
-        });
+        states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{ key.texture, key.mipLevel, key.arraySlice, it.value(), key.texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue });
     }
 
     states.m_bufferStates.reserve(m_stateTracker.m_bufferStates.size());
@@ -522,9 +426,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         const auto releases = m_bufferOwnershipReleaseDestinations.find(buffer);
         const auto append = [&](const BufferRange range, const ResourceStates::Mask state, const GpuPhysicalQueueId destination){
             if(range.hasExtent()){
-                states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
-                    buffer, state, buffer->m_creationDesc.queueSharing, ownerQueue, destination, range
-                });
+                states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{ buffer, state, buffer->m_creationDesc.queueSharing, ownerQueue, destination, range });
             }
         };
         for(const StateTracker::BufferRangeState& state : it.value()){
@@ -553,13 +455,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
         const TextureSubresourceStateKey key{ texture, 0u, 0u };
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
-        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
-            texture,
-            it.value().state,
-            texture->m_creationDesc.queueSharing,
-            ownerQueue,
-            releaseDestinationQueue
-        });
+        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{ texture, it.value().state, texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue });
     }
 
     states.m_permanentBufferStates.reserve(m_stateTracker.m_permanentBufferStates.size());
@@ -569,13 +465,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
             continue;
 
         const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
-        states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{
-            buffer,
-            it.value().state,
-            buffer->m_creationDesc.queueSharing,
-            ownerQueue,
-            {}
-        });
+        states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{ buffer, it.value().state, buffer->m_creationDesc.queueSharing, ownerQueue, {} });
     }
 
     states.m_deviceGeneration = m_context.deviceGeneration;
@@ -627,34 +517,22 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
         const TextureSubresourceStateKey& key = it->first;
         Texture* const texture = key.texture;
         if(!texture){
-            rejectCommandRecording(
-                s_OwnershipReleaseBarriersOperation,
-                NWB_TEXT("pending texture release has no resource")
-            );
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("pending texture release has no resource"));
             return;
         }
         if(texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-            rejectCommandRecording(
-                s_OwnershipReleaseBarriersOperation,
-                NWB_TEXT("concurrent texture has a pending exclusive release")
-            );
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("concurrent texture has a pending exclusive release"));
             return;
         }
         if(m_stateTracker.isPermanentTexture(*texture)){
-            rejectCommandRecording(
-                s_OwnershipReleaseBarriersOperation,
-                NWB_TEXT("permanent texture has a pending ownership release")
-            );
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("permanent texture has a pending ownership release"));
             return;
         }
 
         const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            rejectCommandRecording(
-                s_OwnershipReleaseBarriersOperation,
-                NWB_TEXT("texture destination queue family is unavailable")
-            );
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("texture destination queue family is unavailable"));
             return;
         }
 
@@ -689,14 +567,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
                 const BufferRange overlap = state.range.intersect(release.range);
                 if(!overlap.hasExtent())
                     continue;
-                m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(
-                    buffer->m_buffer,
-                    state.state,
-                    sourceQueueFamily,
-                    destinationQueueFamily,
-                    m_context.extensions.khrRayTracingPipeline,
-                    overlap
-                ));
+                m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(buffer->m_buffer, state.state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline, overlap));
             }
         }
         retainResource(buffer);

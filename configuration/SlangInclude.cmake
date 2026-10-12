@@ -10,18 +10,10 @@ function(nwb_configure_slang_include)
     if(NWB_SLANGC_EXECUTABLE)
         set(_slangc_executable "${NWB_SLANGC_EXECUTABLE}")
     else()
-        set(_slangc_search_hints
-            "${CMAKE_SOURCE_DIR}/__cmake/slang"
-            "$ENV{VULKAN_SDK}/Bin"
-            "$ENV{VULKAN_SDK}/bin"
-        )
+        set(_slangc_search_hints "${CMAKE_SOURCE_DIR}/__cmake/slang" "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
 
         if(WIN32)
-            file(GLOB _slangc_vulkan_sdk_candidates
-                LIST_DIRECTORIES false
-                "C:/VulkanSDK/*/Bin/slangc.exe"
-                "C:/VulkanSDK/*/bin/slangc.exe"
-            )
+            file(GLOB _slangc_vulkan_sdk_candidates LIST_DIRECTORIES false "C:/VulkanSDK/*/Bin/slangc.exe" "C:/VulkanSDK/*/bin/slangc.exe")
             if(_slangc_vulkan_sdk_candidates)
                 list(SORT _slangc_vulkan_sdk_candidates COMPARE NATURAL ORDER DESCENDING)
                 foreach(_slangc_vulkan_sdk_candidate IN LISTS _slangc_vulkan_sdk_candidates)
@@ -31,12 +23,7 @@ function(nwb_configure_slang_include)
             endif()
         endif()
 
-        find_program(_slangc_executable
-            NAMES slangc slangc.exe
-            HINTS ${_slangc_search_hints}
-            PATH_SUFFIXES bin Bin
-            NO_CACHE
-        )
+        find_program(_slangc_executable NAMES slangc slangc.exe HINTS ${_slangc_search_hints} PATH_SUFFIXES bin Bin NO_CACHE)
     endif()
 
     if(NOT _slangc_executable)

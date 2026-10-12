@@ -66,12 +66,7 @@ struct MemoryDelta{
     [[nodiscard]] bool valid()const noexcept{ return hasSamples; }
 };
 
-[[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(
-    const Name& scopeName,
-    const u64 frameIndex,
-    const ::ArenaMemoryStats& stats,
-    const MemorySource::Enum source = MemorySource::ExplicitScope
-){
+[[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const ::ArenaMemoryStats& stats, const MemorySource::Enum source = MemorySource::ExplicitScope){
     MemorySnapshot snapshot;
     snapshot.scopeName = scopeName;
     snapshot.source = source;
@@ -160,12 +155,7 @@ public:
     void clear()noexcept;
     [[nodiscard]] MemoryScopeId registerScope(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope);
     void recordSnapshot(MemoryScopeId scope, const ::ArenaMemoryStats& stats, u64 frameIndex)noexcept;
-    void recordSnapshot(
-        const Name& scopeName,
-        const ::ArenaMemoryStats& stats,
-        u64 frameIndex,
-        MemorySource::Enum source = MemorySource::ExplicitScope
-    )noexcept;
+    void recordSnapshot(const Name& scopeName, const ::ArenaMemoryStats& stats, u64 frameIndex, MemorySource::Enum source = MemorySource::ExplicitScope)noexcept;
 
     [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const noexcept;

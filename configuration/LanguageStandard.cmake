@@ -4,19 +4,11 @@ include(CheckCXXSourceCompiles)
 
 function(nwb_get_latest_cxx_flag out_var)
     if(NWB_COMPILER_FRONTEND_MSVC)
-        set(_cxx_flag_candidates
-            /std:c++latest
-            /std:c++23
-        )
+        set(_cxx_flag_candidates /std:c++latest /std:c++23)
     elseif(NWB_COMPILER_FRONTEND_GNU)
-        set(_cxx_flag_candidates
-            -std=c++2c
-            -std=c++23
-        )
+        set(_cxx_flag_candidates -std=c++2c -std=c++23)
     else()
-        message(FATAL_ERROR
-            "Unsupported C++ frontend '${NWB_COMPILER_FRONTEND}' while selecting the latest language mode."
-        )
+        message(FATAL_ERROR "Unsupported C++ frontend '${NWB_COMPILER_FRONTEND}' while selecting the latest language mode.")
     endif()
 
     set(_selected_flag "")
@@ -43,9 +35,7 @@ function(nwb_get_latest_cxx_flag out_var)
     endforeach()
 
     if(NOT _selected_flag)
-        message(FATAL_ERROR
-            "C++23 or newer is required for std::expected; no supported language mode was found for ${NWB_COMPILER_DESCRIPTION}."
-        )
+        message(FATAL_ERROR "C++23 or newer is required for std::expected; no supported language mode was found for ${NWB_COMPILER_DESCRIPTION}.")
     endif()
 
     set(${out_var} "${_selected_flag}" PARENT_SCOPE)
@@ -53,7 +43,5 @@ endfunction()
 
 function(nwb_apply_latest_cxx target)
     nwb_get_latest_cxx_flag(_nwb_latest_cxx_flag)
-    target_compile_options(${target} PRIVATE
-        $<$<COMPILE_LANGUAGE:CXX>:${_nwb_latest_cxx_flag}>
-    )
+    target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${_nwb_latest_cxx_flag}>)
 endfunction()

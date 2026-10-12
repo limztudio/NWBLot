@@ -24,9 +24,7 @@ class RendererFramePipeline;
 
 
 // Surfel-counter readback tail acceptance (Transfer queue).
-// Separated from RendererFramePipeline::render(): the readback context plus its
-// recorded/accepted callbacks are one functionality — retain the counter candidate
-// privately until Transfer accepts, then publish the submission token.
+// Separated from RendererFramePipeline::render(): the readback context plus its recorded/accepted callbacks are one functionality — retain the counter candidate privately until Transfer accepts, then publish the submission token.
 class FrameExecuteSurfelReadback final{
 public:
     FrameExecuteSurfelReadback() = delete;
@@ -43,14 +41,8 @@ public:
     };
 
 
-    [[nodiscard]] static bool PrepareReadbackFinalState(
-        void* rawContext,
-        const Core::CommandListResourceStateHandoff* finalState
-    );
-    [[nodiscard]] static bool AcceptReadbackFinalState(
-        void* rawContext,
-        const Core::QueueSubmissionToken& token
-    );
+    [[nodiscard]] static bool PrepareReadbackFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
+    [[nodiscard]] static bool AcceptReadbackFinalState(void* rawContext, const Core::QueueSubmissionToken& token);
 };
 
 

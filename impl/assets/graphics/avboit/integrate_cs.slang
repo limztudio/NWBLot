@@ -54,10 +54,7 @@ void nwbAvboitIntegrateMain(uint lowPixelIndex){
             cachedPackedWord = g_Extinction[wordIndex];
             cachedWordIndex = wordIndex;
         }
-        accumulatedExtinction = min(
-            accumulatedExtinction + nwbAvboitUnpackExtinctionByte(cachedPackedWord, physicalSlice),
-            saturatedExtinction
-        );
+        accumulatedExtinction = min(accumulatedExtinction + nwbAvboitUnpackExtinctionByte(cachedPackedWord, physicalSlice), saturatedExtinction);
     }
 }
 

@@ -98,19 +98,10 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
 
 
 template<typename RecordVector>
-const ShaderArchive::Record* FindRecord(
-    const RecordVector& records,
-    const Name& shaderName,
-    const AStringView variantName,
-    const Name& stageName
-){
+const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name& shaderName, const AStringView variantName, const Name& stageName){
     const NameHash& targetShader = shaderName.hash();
     const NameHash& targetStage = stageName.hash();
-    const auto it = LowerBound(
-        records.begin(),
-        records.end(),
-        nullptr,
-        [&targetShader, &variantName, &targetStage](const ShaderArchive::Record& record, decltype(nullptr)){
+    const auto it = LowerBound(records.begin(), records.end(), nullptr, [&targetShader, &variantName, &targetStage](const ShaderArchive::Record& record, decltype(nullptr)){
             const NameHash& recordShader = record.shaderName.hash();
             if(recordShader != targetShader)
                 return LessNameHash(recordShader, targetShader);
@@ -124,11 +115,7 @@ const ShaderArchive::Record* FindRecord(
     );
     if(it == records.end())
         return nullptr;
-    if(
-        it->shaderName.hash() != targetShader
-        || AStringView(it->variantName) != variantName
-        || it->stage.hash() != targetStage
-    )
+    if(it->shaderName.hash() != targetShader || AStringView(it->variantName) != variantName || it->stage.hash() != targetStage)
         return nullptr;
     return &*it;
 }
@@ -154,11 +141,7 @@ Name ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringVi
     NameHash derivedHash = {};
     static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        u64 laneHash = UpdateFnv64(
-            s_Fnv64OffsetBasis,
-            reinterpret_cast<const u8*>(s_VirtualPathPrefix.data()),
-            s_VirtualPathPrefix.size()
-        );
+        u64 laneHash = UpdateFnv64(s_Fnv64OffsetBasis, reinterpret_cast<const u8*>(s_VirtualPathPrefix.data()), s_VirtualPathPrefix.size());
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, shaderName.hash(), lane);
         laneHash = UpdateFnv64TextExact(laneHash, variantName);
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, stageName.hash(), lane);

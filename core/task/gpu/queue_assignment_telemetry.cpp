@@ -22,10 +22,7 @@ namespace __hidden_queue_assignment_telemetry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MatchesAssignment(
-    const GpuTaskQueueAssignment& lhs,
-    const GpuTaskQueueAssignment& rhs
-)noexcept{
+[[nodiscard]] static bool MatchesAssignment(const GpuTaskQueueAssignment& lhs, const GpuTaskQueueAssignment& rhs)noexcept{
     return lhs.task == rhs.task
         && lhs.initialQueue == rhs.initialQueue
         && lhs.queue == rhs.queue
@@ -78,19 +75,10 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     if(assignments.validFor(declarations, compiledPlan) && compiledPlan.deviceGeneration() != 0u)
         acceptanceSnapshot = transaction.copyAcceptedPacketTokens(compiledPlan, scratchArena);
     const bool sourcesValid = acceptanceSnapshot.has_value();
-    if(
-        sourcesValid
-        && currentMatchesPlan
-        && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration
-        && m_acceptanceRevision == acceptanceSnapshot->acceptanceRevision
-    )
+    if(sourcesValid && currentMatchesPlan && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration && m_acceptanceRevision == acceptanceSnapshot->acceptanceRevision)
         return true;
 
-    const bool sameAcceptanceAttempt = sourcesValid
-        && currentMatchesPlan
-        && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration
-        && acceptanceSnapshot->recordingAttemptGeneration != 0u
-    ;
+    const bool sameAcceptanceAttempt = sourcesValid && currentMatchesPlan && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration && acceptanceSnapshot->recordingAttemptGeneration != 0u;
     m_generation = 0u;
     m_declarationRevision = 0u;
     m_planGeneration = 0u;
@@ -100,12 +88,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     if(!sourcesValid)
         return false;
 
-    HashMap<Name, u8, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> taskNames(
-        0,
-        Hasher<Name>(),
-        EqualTo<Name>(),
-        scratchArena
-    );
+    HashMap<Name, u8, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> taskNames(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
     taskNames.reserve(declarations.taskCount());
     for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
@@ -121,12 +104,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         const GpuTaskQueueAssignment* const assignment = assignments.find(task.id);
         const GpuSubmissionPacketId packet = compiledPlan.packetForTask(task.id);
         const GpuCompiledPacketView packetView = compiledPlan.packet(packet);
-        if(
-            !assignment
-            || !packetView.valid()
-            || assignment->task != task.id
-            || assignment->queue != packetView.plan->queue
-        )
+        if(!assignment || !packetView.valid() || assignment->task != task.id || assignment->queue != packetView.plan->queue)
             return false;
 
         const GpuPhysicalQueueInfo* const initialQueueInfo = compiledPlan.queueInfo(assignment->initialQueue);
@@ -143,12 +121,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         )
             return false;
 
-        GpuTaskQueueAssignmentTelemetry telemetry{
-            .assignment = *assignment,
-            .acceptedQueue = {},
-            .previousAcceptedQueue = {},
-            .acceptance = GpuTaskQueueAssignmentAcceptance::NotAccepted,
-        };
+        GpuTaskQueueAssignmentTelemetry telemetry{ .assignment = *assignment, .acceptedQueue = {}, .previousAcceptedQueue = {}, .acceptance = GpuTaskQueueAssignmentAcceptance::NotAccepted, };
         const auto previous = hasCurrentGenerationHistory ? m_history.find(task.identity) : m_history.end();
         const bool hasPrevious = hasCurrentGenerationHistory && previous != m_history.end();
         const QueueSubmissionToken& token = acceptanceSnapshot->packetTokens[packet.index];
@@ -158,22 +131,12 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
             staged.push_back(telemetry);
             continue;
         }
-        if(
-            token.queue != assignment->queueClass
-            || !token.matchesPhysicalQueue(assignment->queue.index, assignment->queue.deviceGeneration)
-        )
+        if(token.queue != assignment->queueClass || !token.matchesPhysicalQueue(assignment->queue.index, assignment->queue.deviceGeneration))
             return false;
 
         telemetry.acceptedQueue = assignment->queue;
-        const GpuTaskQueueAssignmentTelemetry* const previousCurrent = sameAcceptanceAttempt
-            ? &m_current[taskIndex]
-            : nullptr
-        ;
-        if(
-            previousCurrent
-            && previousCurrent->acceptedQueue == assignment->queue
-            && previousCurrent->acceptance != GpuTaskQueueAssignmentAcceptance::NotAccepted
-        ){
+        const GpuTaskQueueAssignmentTelemetry* const previousCurrent = sameAcceptanceAttempt ? &m_current[taskIndex] : nullptr;
+        if(previousCurrent && previousCurrent->acceptedQueue == assignment->queue && previousCurrent->acceptance != GpuTaskQueueAssignmentAcceptance::NotAccepted){
             telemetry.previousAcceptedQueue = previousCurrent->previousAcceptedQueue;
             telemetry.acceptance = previousCurrent->acceptance;
         }
@@ -218,11 +181,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     return true;
 }
 
-bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(
-    const GpuTaskGraph::DeclarationReadView& declarations,
-    const GpuTaskGraphQueueAssignments& assignments,
-    const GpuCompiledGraph::ReadView& compiledPlan
-)const{
+bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const{
     if(!declarations.valid() || !compiledPlan.validFor(declarations))
         return false;
 
@@ -240,29 +199,14 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(
     for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
         const GpuTaskQueueAssignment* const assignment = assignments.find(task.id);
-        if(
-            !assignment
-            || m_current[taskIndex].assignment.task != task.id
-            || !__hidden_queue_assignment_telemetry::MatchesAssignment(
-                m_current[taskIndex].assignment,
-                *assignment
-            )
-        )
+        if(!assignment || m_current[taskIndex].assignment.task != task.id || !__hidden_queue_assignment_telemetry::MatchesAssignment(m_current[taskIndex].assignment, *assignment))
             return false;
     }
     return true;
 }
 
-const GpuTaskQueueAssignmentTelemetry* GpuTaskGraphQueueAssignmentTelemetryTracker::find(
-    const GpuTaskId task
-)const noexcept{
-    if(
-        !m_valid
-        || !task.valid()
-        || task.generation != m_generation
-        || task.index >= m_current.size()
-        || m_current[task.index].assignment.task != task
-    )
+const GpuTaskQueueAssignmentTelemetry* GpuTaskGraphQueueAssignmentTelemetryTracker::find(const GpuTaskId task)const noexcept{
+    if(!m_valid || !task.valid() || task.generation != m_generation || task.index >= m_current.size() || m_current[task.index].assignment.task != task)
         return nullptr;
     return &m_current[task.index];
 }

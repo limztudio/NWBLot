@@ -39,34 +39,13 @@ struct CopyTextureCopy{
 struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTextureCopy>{
     using Copy = CopyTextureCopy;
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
-        return GpuTaskGraphBuiltinDetail::RecordCopies(
-            payload,
-            commandList,
-            context,
-            [](const Copy& copy){ return copy.source && copy.destination; },
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+        return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy){ return copy.source && copy.destination; },
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
-                return captureContext.commandIrCapture->captureCopyTexture(
-                    captureContext.task,
-                    captureContext.packet,
-                    captureContext.queue,
-                    copy.sourceResource,
-                    copy.sourceSlice,
-                    copy.destinationResource,
-                    copy.destinationSlice
-                );
+                return captureContext.commandIrCapture->captureCopyTexture(captureContext.task, captureContext.packet, captureContext.queue, copy.sourceResource, copy.sourceSlice, copy.destinationResource, copy.destinationSlice);
             },
             [](CommandList& emitCommandList, const Copy& copy){
-                emitCommandList.copyTexture(
-                    *copy.destination,
-                    copy.destinationSlice,
-                    *copy.source,
-                    copy.sourceSlice
-                );
+                emitCommandList.copyTexture(*copy.destination, copy.destinationSlice, *copy.source, copy.sourceSlice);
                 return !emitCommandList.commandRecordingFailed();
             }
         );
@@ -94,23 +73,14 @@ struct ResolveTexturePayload{
 struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ResolveTexturePayload>{
     using Resolve = ResolveTextureResolve;
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         if(payload.resolves.empty() || context.commandIrCapture)
             return false;
 
         for(const Resolve& resolve : payload.resolves){
             if(!resolve.source || !resolve.destination)
                 return false;
-            commandList.resolveTexture(
-                *resolve.destination,
-                resolve.destinationSubresources,
-                *resolve.source,
-                resolve.sourceSubresources
-            );
+            commandList.resolveTexture(*resolve.destination, resolve.destinationSubresources, *resolve.source, resolve.sourceSubresources);
             if(commandList.commandRecordingFailed())
                 return false;
         }
@@ -123,33 +93,17 @@ struct TextureResolveContract{
     TextureSubresourceSet destinationSubresources;
 };
 
-[[nodiscard]] static Expected<TextureResolveContract> ResolveTextureContract(
-    const TextureDesc& sourceDesc,
-    const TextureSubresourceSet& sourceSubresources,
-    const TextureDesc& destinationDesc,
-    const TextureSubresourceSet& destinationSubresources
-)noexcept{
+[[nodiscard]] static Expected<TextureResolveContract> ResolveTextureContract(const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources, const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources)noexcept{
     TextureResolveContract resolved;
-    if(
-        !GraphicsBackend::AreTextureCopyDimensionsCompatible(sourceDesc.dimension, destinationDesc.dimension)
-        || sourceDesc.sampleCount <= 1u
-        || destinationDesc.sampleCount != 1u
-        || sourceDesc.format != destinationDesc.format
-    )
+    if(!GraphicsBackend::AreTextureCopyDimensionsCompatible(sourceDesc.dimension, destinationDesc.dimension) || sourceDesc.sampleCount <= 1u || destinationDesc.sampleCount != 1u || sourceDesc.format != destinationDesc.format)
         return MakeUnexpected(Failure{});
 
     const FormatInfo& formatInfo = GetFormatInfo(sourceDesc.format);
     if(formatInfo.hasDepth || formatInfo.hasStencil)
         return MakeUnexpected(Failure{});
 
-    resolved.sourceSubresources = sourceSubresources.resolve(
-        sourceDesc,
-        TextureSubresourceMipResolve::Range
-    );
-    resolved.destinationSubresources = destinationSubresources.resolve(
-        destinationDesc,
-        TextureSubresourceMipResolve::Range
-    );
+    resolved.sourceSubresources = sourceSubresources.resolve(sourceDesc, TextureSubresourceMipResolve::Range);
+    resolved.destinationSubresources = destinationSubresources.resolve(destinationDesc, TextureSubresourceMipResolve::Range);
     if(
         !resolved.sourceSubresources.hasExtent()
         || !resolved.destinationSubresources.hasExtent()
@@ -163,21 +117,11 @@ struct TextureResolveContract{
         const MipLevel destinationMipLevel = resolved.destinationSubresources.baseMipLevel + mipOffset;
         const u32 sourceWidth = Max<u32>(sourceDesc.width >> sourceMipLevel, 1u);
         const u32 sourceHeight = Max<u32>(sourceDesc.height >> sourceMipLevel, 1u);
-        const u32 sourceDepth = sourceDesc.dimension == TextureDimension::Texture3D
-            ? Max<u32>(sourceDesc.depth >> sourceMipLevel, 1u)
-            : 1u
-        ;
+        const u32 sourceDepth = sourceDesc.dimension == TextureDimension::Texture3D ? Max<u32>(sourceDesc.depth >> sourceMipLevel, 1u) : 1u;
         const u32 destinationWidth = Max<u32>(destinationDesc.width >> destinationMipLevel, 1u);
         const u32 destinationHeight = Max<u32>(destinationDesc.height >> destinationMipLevel, 1u);
-        const u32 destinationDepth = destinationDesc.dimension == TextureDimension::Texture3D
-            ? Max<u32>(destinationDesc.depth >> destinationMipLevel, 1u)
-            : 1u
-        ;
-        if(
-            sourceWidth != destinationWidth
-            || sourceHeight != destinationHeight
-            || sourceDepth != destinationDepth
-        )
+        const u32 destinationDepth = destinationDesc.dimension == TextureDimension::Texture3D ? Max<u32>(destinationDesc.depth >> destinationMipLevel, 1u) : 1u;
+        if(sourceWidth != destinationWidth || sourceHeight != destinationHeight || sourceDepth != destinationDepth)
             return MakeUnexpected(Failure{});
     }
 
@@ -202,13 +146,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     if(!mutation.valid())
         return {};
 
-    if(
-        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
-        || !copyDesc.regions
-        || copyDesc.regionCount == 0u
-        || copyDesc.regionCount > Limit<u32>::s_Max
-        || copyDesc.regionCount > Limit<usize>::s_Max / 2u
-    )
+    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !copyDesc.regions || copyDesc.regionCount == 0u || copyDesc.regionCount > Limit<u32>::s_Max || copyDesc.regionCount > Limit<usize>::s_Max / 2u)
         return {};
 
     using CopyTask = __hidden_gpu_task_graph_builtin_texture_transfers::CopyTextureTask;
@@ -221,27 +159,17 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(copyDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](
-        const GpuGraphResourceId resource,
-        const TextureSubresourceSet& subresources,
-        const ResourceStates::Mask state,
-        const GpuTaskResourceAccess::Enum access
-    ){
+    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
 
-            // A primitive copy cannot safely read and write the same imported image inside one task. Keep that
-            // sequencing explicit in separate tasks instead of silently weakening its graph declarations.
+            // A primitive copy cannot safely read and write the same imported image inside one task.
+            // Keep that sequencing explicit in separate tasks instead of silently weakening its graph declarations.
             if(existing.requiredState != state || existing.access != access)
                 return false;
         }
-        resourceUses.push_back(GpuTaskResourceUse{
-            .resource = resource,
-            .range = { .textureSubresources = subresources },
-            .requiredState = state,
-            .access = access,
-        });
+        resourceUses.push_back(GpuTaskResourceUse{ .resource = resource, .range = { .textureSubresources = subresources }, .requiredState = state, .access = access, });
         return true;
     };
 
@@ -263,51 +191,16 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
-            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-                sourceResource.texture->getCreationDescription(),
-                sourceResource.initialState,
-                sourceResource.externalFinalState
-            )
-            && GpuTaskGraphBuiltinDetail::CopyOrClearTextureDestinationCanMaterializeRetainedState(
-                destinationResource.texture->getCreationDescription(),
-                destinationResource.initialState,
-                destinationResource.externalFinalState
-            )
-            && (contract = GraphicsBackend::ResolveTextureCopyContract(
-                sourceResource.texture->getCreationDescription(),
-                region.sourceSlice,
-                destinationResource.texture->getCreationDescription(),
-                region.destinationSlice
-            ))
-            && appendResourceUse(
-                region.source,
-                TextureSubresourceSet(contract->sourceSlice.mipLevel, 1u, contract->sourceSlice.arraySlice, 1u),
-                ResourceStates::CopySource,
-                GpuTaskResourceAccess::Read
-            )
-            && appendResourceUse(
-                region.destination,
-                TextureSubresourceSet(
-                    contract->destinationSlice.mipLevel,
-                    1u,
-                    contract->destinationSlice.arraySlice,
-                    1u
-                ),
-                ResourceStates::CopyDest,
-                GpuTaskResourceAccess::Write
-            )
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(sourceResource.texture->getCreationDescription(), sourceResource.initialState, sourceResource.externalFinalState)
+            && GpuTaskGraphBuiltinDetail::CopyOrClearTextureDestinationCanMaterializeRetainedState(destinationResource.texture->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
+            && (contract = GraphicsBackend::ResolveTextureCopyContract(sourceResource.texture->getCreationDescription(), region.sourceSlice, destinationResource.texture->getCreationDescription(), region.destinationSlice))
+            && appendResourceUse(region.source, TextureSubresourceSet(contract->sourceSlice.mipLevel, 1u, contract->sourceSlice.arraySlice, 1u), ResourceStates::CopySource, GpuTaskResourceAccess::Read)
+            && appendResourceUse(region.destination, TextureSubresourceSet(contract->destinationSlice.mipLevel, 1u, contract->destinationSlice.arraySlice, 1u), ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
         ;
         if(valid){
-            requiresTransferCapability = requiresTransferCapability
-                || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Transfer
-            ;
-            requiresGraphicsCapability = requiresGraphicsCapability
-                || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Graphics
-            ;
-            requiresComputeOrGraphicsCapability = requiresComputeOrGraphicsCapability
-                || contract->queueRequirement
-                    == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics
-            ;
+            requiresTransferCapability = requiresTransferCapability || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Transfer;
+            requiresGraphicsCapability = requiresGraphicsCapability || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Graphics;
+            requiresComputeOrGraphicsCapability = requiresComputeOrGraphicsCapability || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics;
             payload->copies.push_back(CopyTask::Copy{
                 .sourceResource = region.source,
                 .source = sourceResource.texture,
@@ -333,10 +226,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     return appendBuiltinTaskWithinMutation<CopyTask>(resolvedDesc, payload, mutation, commands);
 }
 
-GpuTaskId GpuTaskGraph::addResolveTextureTask(
-    const GpuTaskDesc& desc,
-    const GpuResolveTextureTaskDesc& resolveDesc
-){
+GpuTaskId GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc){
     if(resolveDesc.acceptedToken)
         *resolveDesc.acceptedToken = {};
 
@@ -344,13 +234,7 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
     if(!mutation.valid())
         return {};
 
-    if(
-        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
-        || !resolveDesc.regions
-        || resolveDesc.regionCount == 0u
-        || resolveDesc.regionCount > Limit<u32>::s_Max
-        || resolveDesc.regionCount > Limit<usize>::s_Max / 2u
-    )
+    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !resolveDesc.regions || resolveDesc.regionCount == 0u || resolveDesc.regionCount > Limit<u32>::s_Max || resolveDesc.regionCount > Limit<usize>::s_Max / 2u)
         return {};
 
     using ResolveTask = __hidden_gpu_task_graph_builtin_texture_transfers::ResolveTextureTask;
@@ -363,26 +247,15 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(resolveDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](
-        const GpuGraphResourceId resource,
-        const TextureSubresourceSet& subresources,
-        const ResourceStates::Mask state,
-        const GpuTaskResourceAccess::Enum access
-    ){
+    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
-            // A resolve source cannot also be a destination in one task: the required states need an explicit
-            // inter-task boundary rather than an ambiguous packet prologue.
+            // A resolve source cannot also be a destination in one task: the required states need an explicit inter-task boundary rather than an ambiguous packet prologue.
             if(existing.requiredState != state || existing.access != access)
                 return false;
         }
-        resourceUses.push_back(GpuTaskResourceUse{
-            .resource = resource,
-            .range = { .textureSubresources = subresources },
-            .requiredState = state,
-            .access = access,
-        });
+        resourceUses.push_back(GpuTaskResourceUse{ .resource = resource, .range = { .textureSubresources = subresources }, .requiredState = state, .access = access, });
         return true;
     };
 
@@ -401,34 +274,16 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
-            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-                sourceResource.texture->getCreationDescription(),
-                sourceResource.initialState,
-                sourceResource.externalFinalState
-            )
-            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-                destinationResource.texture->getCreationDescription(),
-                destinationResource.initialState,
-                destinationResource.externalFinalState
-            )
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(sourceResource.texture->getCreationDescription(), sourceResource.initialState, sourceResource.externalFinalState)
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationResource.texture->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
             && (resolvedSubresources = __hidden_gpu_task_graph_builtin_texture_transfers::ResolveTextureContract(
                 sourceResource.texture->getCreationDescription(),
                 region.sourceSubresources,
                 destinationResource.texture->getCreationDescription(),
                 region.destinationSubresources
             ))
-            && appendResourceUse(
-                region.source,
-                resolvedSubresources->sourceSubresources,
-                ResourceStates::ResolveSource,
-                GpuTaskResourceAccess::Read
-            )
-            && appendResourceUse(
-                region.destination,
-                resolvedSubresources->destinationSubresources,
-                ResourceStates::ResolveDest,
-                GpuTaskResourceAccess::Write
-            )
+            && appendResourceUse(region.source, resolvedSubresources->sourceSubresources, ResourceStates::ResolveSource, GpuTaskResourceAccess::Read)
+            && appendResourceUse(region.destination, resolvedSubresources->destinationSubresources, ResourceStates::ResolveDest, GpuTaskResourceAccess::Write)
         ;
         if(valid){
             payload->resolves.push_back(ResolveTask::Resolve{

@@ -76,9 +76,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     for(usize index = 0u; index < layout.glyphs().size(); ++index){
         const PlacedGlyph& glyph = layout.glyphs()[index];
         const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize);
-        const TextGlyphIntersection::Enum status = TextGlyphVisibility::Candidate(
-            glyph, atlas, layout.fontSize(), rasterPpem, topLeft, clip, deviceScale
-        );
+        const TextGlyphIntersection::Enum status = TextGlyphVisibility::Candidate(glyph, atlas, layout.fontSize(), rasterPpem, topLeft, clip, deviceScale);
         if(status == TextGlyphIntersection::Invalid)
             return false;
         if(status == TextGlyphIntersection::Visible)
@@ -107,10 +105,8 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
                 item.sdfPage = &atlas->page(record.group);
                 item.channel = record.channel;
                 const SdfAtlasPageBinding& binding = (*item.sdfPage)->binding();
-                const SIMDVectorSingle coordinates = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y),
-                    static_cast<f32>(record.width), static_cast<f32>(record.height));
-                const SIMDVectorSingle atlasSize = VectorSet(static_cast<f32>(binding.width), static_cast<f32>(binding.height),
-                    static_cast<f32>(binding.width), static_cast<f32>(binding.height));
+                const SIMDVectorSingle coordinates = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y), static_cast<f32>(record.width), static_cast<f32>(record.height));
+                const SIMDVectorSingle atlasSize = VectorSet(static_cast<f32>(binding.width), static_cast<f32>(binding.height), static_cast<f32>(binding.width), static_cast<f32>(binding.height));
                 const SIMDVectorSingle normalized = VectorDivide(coordinates, atlasSize);
                 item.uv = { VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
             }
@@ -165,10 +161,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     if(!paint.prepareImages(m_pages.data(), m_pages.size(), m_sdfPages.data(), m_sdfPages.size()))
         return false;
     for(const auto& glyph : prepared){
-        const bool drawn = glyph.sdfPage
-            ? paint.drawSdfGlyph(m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color)
-            : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color)
-        ;
+        const bool drawn = glyph.sdfPage ? paint.drawSdfGlyph(m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color) : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color);
         if(!drawn){
             NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Admitted UI glyph draw must succeed"));
             return false;

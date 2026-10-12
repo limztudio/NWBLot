@@ -49,17 +49,11 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return
-            begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions())
-            && m_builder.slider("slider", m_state, Options())
-        ;
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions()) && m_builder.slider("slider", m_state, Options());
     }
 
     [[nodiscard]] bool beginChild(){
-        return
-            m_builder.beginPopup("child", m_child, ChildOptions())
-            && m_builder.slider("slider", m_childState, Options())
-        ;
+        return m_builder.beginPopup("child", m_child, ChildOptions()) && m_builder.slider("slider", m_childState, Options());
     }
 
     [[nodiscard]] bool declareFamily(const u64 generation){

@@ -27,28 +27,9 @@ class FbxMeshBuild final : NoCopy{
 public:
     [[nodiscard]] static SIMDVectorSingle ToVector(const ufbx_vec3 value, const f32 w = 0.0f);
     [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position);
-    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputPositionVector(
-        const ufbx_mesh& mesh,
-        const ufbx_node& node,
-        const ImportOptions& options,
-        const bool wantsSkinning,
-        const u32 cornerIndex
-    );
-    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputNormalVector(
-        const ufbx_mesh& mesh,
-        const ufbx_matrix& normalToWorld,
-        const ImportOptions& options,
-        const bool wantsSkinning,
-        const u32 cornerIndex
-    );
-    [[nodiscard]] static Expected<SIMDVectorSingle> BuildCornerOutputTangentVector(
-        const ufbx_mesh& mesh,
-        const ufbx_matrix& normalToWorld,
-        const ImportOptions& options,
-        const bool wantsSkinning,
-        const u32 cornerIndex,
-        const SIMDVectorSingle normal
-    );
+    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex);
+    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex);
+    [[nodiscard]] static Expected<SIMDVectorSingle> BuildCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal);
     [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVectorSingle weights);
     [[nodiscard]] static bool IsFiniteSourceTriangleCorner(
         const SIMDVectorSingle position,
@@ -61,19 +42,8 @@ public:
         const SIMDVectorSingle skinWeights
     );
     template<typename VisitTriangle>
-    [[nodiscard]] static bool VisitTriangulatedMeshTriangles(
-        const ufbx_mesh& mesh,
-        const bool flipWinding,
-        UtilityVector<u32>& inOutTriangleIndices,
-        VisitTriangle&& visitTriangle
-    );
-    [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
-        const ufbx_mesh& mesh,
-        const ufbx_node& node,
-        const ImportOptions& options,
-        const bool wantsSkinning,
-        UtilityVector<u32>& inOutTriangleIndices
-    );
+    [[nodiscard]] static bool VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, UtilityVector<u32>& inOutTriangleIndices, VisitTriangle&& visitTriangle);
+    [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, UtilityVector<u32>& inOutTriangleIndices);
     static bool AppendInstanceMesh(
         const MeshInstance& instance,
         const ImportOptions& options,
@@ -87,9 +57,7 @@ public:
         bool& inOutSawVertexUvs,
         bool& inOutUsedDefaultUvs
     );
-    static Expected<usize> EstimateSelectedTriangleCorners(
-        const UtilityVector<MeshInstance>& instances,
-        const UtilityVector<usize>& selection);
+    static Expected<usize> EstimateSelectedTriangleCorners(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection);
 
 
 public:
@@ -101,12 +69,7 @@ public:
 
 
 template<typename VisitTriangle>
-[[nodiscard]] bool FbxMeshBuild::VisitTriangulatedMeshTriangles(
-    const ufbx_mesh& mesh,
-    const bool flipWinding,
-    UtilityVector<u32>& inOutTriangleIndices,
-    VisitTriangle&& visitTriangle
-){
+[[nodiscard]] bool FbxMeshBuild::VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, UtilityVector<u32>& inOutTriangleIndices, VisitTriangle&& visitTriangle){
     if(!FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
         return false;
     for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){
@@ -114,19 +77,10 @@ template<typename VisitTriangle>
         if(face.num_indices < s_TriangleIndexCount)
             continue;
 
-        const u32 triangleCount = ufbx_triangulate_face(
-            inOutTriangleIndices.data(),
-            inOutTriangleIndices.size(),
-            &mesh,
-            face
-        );
+        const u32 triangleCount = ufbx_triangulate_face(inOutTriangleIndices.data(), inOutTriangleIndices.size(), &mesh, face);
 
         for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-            u32 cornerIndices[s_TriangleIndexCount] = {
-                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u],
-                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u],
-                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u],
-            };
+            u32 cornerIndices[s_TriangleIndexCount] = { inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u], };
             if(flipWinding)
                 Swap(cornerIndices[1], cornerIndices[2]);
 

@@ -23,12 +23,7 @@ struct NwbOpticalInstance{
     uint flags;
 };
 
-bool nwbOpticalReadInstance(
-    const NwbOpticalTraceConfig config,
-    const uint instance,
-    out NwbOpticalInstance optical,
-    inout NwbOpticalTraceResult result
-){
+bool nwbOpticalReadInstance(const NwbOpticalTraceConfig config, const uint instance, out NwbOpticalInstance optical, inout NwbOpticalTraceResult result){
     optical = (NwbOpticalInstance)0;
     if(instance >= config.opticalInstanceCount){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
@@ -40,21 +35,14 @@ bool nwbOpticalReadInstance(
     optical.priority = asint(record.y);
     optical.mode = record.z;
     optical.flags = record.w;
-    if(
-        (optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) != 0u
-        && (optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID) == 0u
-    ){
+    if((optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) != 0u && (optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID) == 0u){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
         return false;
     }
     return true;
 }
 
-bool nwbOpticalSetMediumProperties(
-    const NwbMeshSurface surface,
-    inout NwbOpticalMedium medium,
-    inout NwbOpticalTraceResult result
-){
+bool nwbOpticalSetMediumProperties(const NwbMeshSurface surface, inout NwbOpticalMedium medium, inout NwbOpticalTraceResult result){
     medium.ior = float(surface.refractionIor);
     if(!isfinite(medium.ior) || medium.ior < 1.0 || !all(isfinite(float3(surface.shadowAbsorptionTint)))){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
@@ -65,13 +53,7 @@ bool nwbOpticalSetMediumProperties(
 }
 
 // Closed volumes promise UV/normal/position/direction-independent IOR + absorption; neutral hook inputs avoid retaining transforms/attributes per event. Appearance still evaluates at the real surface.
-bool nwbOpticalLoadHomogeneousMedium(
-    const NwbOpticalTraceConfig config,
-    const float3 origin,
-    const float3 direction,
-    inout NwbOpticalMedium medium,
-    inout NwbOpticalTraceResult result
-){
+bool nwbOpticalLoadHomogeneousMedium(const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, inout NwbOpticalMedium medium, inout NwbOpticalTraceResult result){
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[medium.instance];
     NwbShadowHit input = (NwbShadowHit)0;
     input.meshInstanceIndex = material.meshInstanceIndex;

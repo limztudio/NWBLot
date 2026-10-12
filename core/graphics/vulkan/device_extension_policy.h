@@ -76,8 +76,7 @@ namespace DeviceExtensionRequestAction{
 };
 
 // A disabled RT policy rejects required RT extensions instead of silently weakening either request.
-[[nodiscard]] DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(
-    HardwareRayTracingPolicy::Enum policy, AStringView extensionName, bool required)noexcept;
+[[nodiscard]] DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(HardwareRayTracingPolicy::Enum policy, AStringView extensionName, bool required)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

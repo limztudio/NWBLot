@@ -125,27 +125,12 @@ struct MaterialPipelineCsgBindingUse{
     bool intervalSample = false;
 };
 
-[[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(
-    const MaterialPipelineKey& pipelineKey,
-    const MaterialPipelinePass::Enum pass
-){
+[[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(const MaterialPipelineKey& pipelineKey, const MaterialPipelinePass::Enum pass){
     MaterialPipelineCsgBindingUse result;
-    result.clip =
-        pipelineKey.csgMode != MaterialPipelineCsgMode::None
-        && MaterialPipelinePassUsesRendererCsgShaderVariant(pass)
-    ;
-    result.avboitClip =
-        result.clip
-        && MaterialPipelinePassUsesRendererAvboit(pass)
-    ;
-    result.receiverSurface =
-        result.clip
-        && pass == MaterialPipelinePass::CsgReceiverSurface
-    ;
-    result.intervalSample =
-        result.clip
-        && MaterialPipelinePassUsesRendererCsgIntervalSample(pass)
-    ;
+    result.clip = pipelineKey.csgMode != MaterialPipelineCsgMode::None && MaterialPipelinePassUsesRendererCsgShaderVariant(pass);
+    result.avboitClip = result.clip && MaterialPipelinePassUsesRendererAvboit(pass);
+    result.receiverSurface = result.clip && pass == MaterialPipelinePass::CsgReceiverSurface;
+    result.intervalSample = result.clip && MaterialPipelinePassUsesRendererCsgIntervalSample(pass);
     return result;
 }
 struct MaterialPipelineKeyHasher{
@@ -170,15 +155,13 @@ struct MaterialSurfaceInfo{
     MaterialTypedLayoutBlockVector typedLayoutBlocks;
     MaterialTypedLayoutFieldVector typedLayoutFields;
     MaterialResourceReferenceVector resourceReferences;
-    // The cooked constants have zero-filled resource words. The renderer patches a working copy with current heap
-    // slots and restores from this immutable copy when descriptor resources are invalidated.
+    // The cooked constants have zero-filled resource words. The renderer patches a working copy with current heap slots and restores from this immutable copy when descriptor resources are invalidated.
     MaterialTypedByteVector unpatchedConstantTypedBytes;
     MaterialTypedByteVector constantTypedBytes;
     MaterialTypedByteVector mutableDefaultTypedBytes;
     u32 shadingModelId = 0u;
     u32 surfaceDispatchId = 0u;
-    // CSG caps evaluate the cook-generated surface hook with this material's typed constants and mutable instance
-    // storage. Explicit opaque stage shaders have no hook, so clipping is deliberately disabled for them.
+    // CSG caps evaluate the cook-generated surface hook with this material's typed constants and mutable instance storage. Explicit opaque stage shaders have no hook, so clipping is deliberately disabled for them.
     bool csgCapSurfaceDispatchAvailable = false;
     bool csgCapSurfaceDispatchUnavailableLogged = false;
     bool resourceReferencesResolved = false;

@@ -21,8 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns one texture asset's device-local image and its persistent global sampled-image heap entry. Release it before
-// its Graphics owner tears down so the heap can retire the descriptor and retain the image through in-flight work.
+// Owns one texture asset's device-local image and its persistent global sampled-image heap entry. Release it before its Graphics owner tears down so the heap can retire the descriptor and retain the image through in-flight work.
 struct TextureGpuResource final : NoCopy{
     Core::TextureHandle texture;
     Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::Invalid();
@@ -45,27 +44,14 @@ namespace TextureAssetLoader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Creates, uploads, and registers a static 2D, cube, or 3D texture asset. LDR UASTC uses ASTC 4x4 when available,
-// then BC7, otherwise portable RGBA8. Opaque HDR UASTC uses ASTC HDR 4x4, then BC6H, then RGBA16_FLOAT. HDR textures with
-// constant or companion-stream alpha decode and merge into RGBA16_FLOAT because one sampled-image descriptor owns
-// the complete RGBA result.
-[[nodiscard]] bool Create(
-    TextureGpuResource& outResource,
-    const Texture& textureAsset,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    const TStringView ownerName
-);
+// Creates, uploads, and registers a static 2D, cube, or 3D texture asset.
+// LDR UASTC uses ASTC 4x4 when available, then BC7, otherwise portable RGBA8.
+// Opaque HDR UASTC uses ASTC HDR 4x4, then BC6H, then RGBA16_FLOAT.
+// HDR textures with constant or companion-stream alpha decode and merge into RGBA16_FLOAT because one sampled-image descriptor owns the complete RGBA result.
+[[nodiscard]] bool Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName);
 
 // Loads a cooked Texture asset through the normal asset manager, then delegates to Create().
-[[nodiscard]] bool Load(
-    TextureGpuResource& outResource,
-    const Core::Assets::AssetRef<Texture>& textureAsset,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    const TStringView ownerName
-);
+[[nodiscard]] bool Load(TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName);
 
 // Frees the global descriptor first, then releases the owner's TextureHandle. Safe to call on an empty resource.
 void Release(TextureGpuResource& inOutResource, Core::GraphicsRuntime& graphics);

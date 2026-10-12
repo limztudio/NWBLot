@@ -50,11 +50,7 @@ RayTracingOpticalUploadPlan RayTracingOpticalUploadState::plan(const RayTracingO
     NothrowScopedLock lock(m_mutex);
 
     RayTracingOpticalUploadPlan result;
-    if(
-        m_retired || m_quarantined || m_reservedSequence != 0u || !m_buffer || !upload || upload->bytes.empty()
-        || !m_primaryQueue.valid() || m_primaryQueue.deviceGeneration != m_buffer->getDeviceGeneration()
-        || m_nextSequence == Limit<u64>::s_Max
-    )
+    if(m_retired || m_quarantined || m_reservedSequence != 0u || !m_buffer || !upload || upload->bytes.empty() || !m_primaryQueue.valid() || m_primaryQueue.deviceGeneration != m_buffer->getDeviceGeneration() || m_nextSequence == Limit<u64>::s_Max)
         return result;
 
     result.buffer = m_buffer;
@@ -72,10 +68,7 @@ RayTracingOpticalUploadPlan RayTracingOpticalUploadState::plan(const RayTracingO
 bool RayTracingOpticalUploadState::reserve(const RayTracingOpticalUploadPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    if(
-        !matchesBuffer(plan) || plan.reused || m_reservedSequence != 0u
-        || plan.acceptedSequence != m_acceptedSequence || plan.sequence >= m_nextSequence
-    )
+    if(!matchesBuffer(plan) || plan.reused || m_reservedSequence != 0u || plan.acceptedSequence != m_acceptedSequence || plan.sequence >= m_nextSequence)
         return false;
 
     m_reservedSequence = plan.sequence;
@@ -92,10 +85,7 @@ bool RayTracingOpticalUploadState::isReserved(const RayTracingOpticalUploadPlan&
 void RayTracingOpticalUploadState::discard(const RayTracingOpticalUploadPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    if(
-        plan.owner == this && plan.buffer.get() == m_buffer.get()
-        && plan.sequence == m_reservedSequence && plan.upload.get() == m_reservedUpload.get()
-    ){
+    if(plan.owner == this && plan.buffer.get() == m_buffer.get() && plan.sequence == m_reservedSequence && plan.upload.get() == m_reservedUpload.get()){
         m_reservedSequence = 0u;
         m_reservedUpload = nullptr;
     }
@@ -108,11 +98,7 @@ bool RayTracingOpticalUploadState::accept(const RayTracingOpticalUploadPlan& pla
         return false;
     m_reservedSequence = 0u;
     m_reservedUpload = nullptr;
-    if(
-        !token.valid() || token.queue != Core::CommandQueue::Graphics
-        || !token.matchesPhysicalQueue(m_primaryQueue.index, m_primaryQueue.deviceGeneration)
-        || (m_acceptedToken.valid() && token.value <= m_acceptedToken.value)
-    ){
+    if(!token.valid() || token.queue != Core::CommandQueue::Graphics || !token.matchesPhysicalQueue(m_primaryQueue.index, m_primaryQueue.deviceGeneration) || (m_acceptedToken.valid() && token.value <= m_acceptedToken.value)){
         // This callback follows native acceptance. Discard cannot prove the old bytes survived an unknown write.
         m_quarantined = true;
         return false;
@@ -125,37 +111,24 @@ bool RayTracingOpticalUploadState::accept(const RayTracingOpticalUploadPlan& pla
 }
 
 bool RayTracingOpticalUploadState::matchesBuffer(const RayTracingOpticalUploadPlan& plan)const noexcept{
-    return !m_retired && !m_quarantined && plan.valid() && plan.owner == this
-        && plan.buffer.get() == m_buffer.get() && plan.queue == m_primaryQueue && m_buffer && m_primaryQueue.valid()
-        && m_primaryQueue.deviceGeneration == m_buffer->getDeviceGeneration();
+    return !m_retired && !m_quarantined && plan.valid() && plan.owner == this && plan.buffer.get() == m_buffer.get() && plan.queue == m_primaryQueue && m_buffer && m_primaryQueue.valid() && m_primaryQueue.deviceGeneration == m_buffer->getDeviceGeneration();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(
-    Core::Alloc::GlobalArena& arena,
-    const Core::BufferHandle& buffer,
-    const Core::GpuPhysicalQueueId primaryQueue
-){
+RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, const Core::GpuPhysicalQueueId primaryQueue){
     if(!buffer || !primaryQueue.valid() || primaryQueue.deviceGeneration != buffer->getDeviceGeneration())
         return {};
-    return RayTracingOpticalUploadControlHandle(
-        NewArenaObject<RayTracingOpticalUploadControl>(arena, buffer, primaryQueue),
-        ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return RayTracingOpticalUploadControlHandle(NewArenaObject<RayTracingOpticalUploadControl>(arena, buffer, primaryQueue), ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalUploadReservation::RayTracingOpticalUploadReservation(
-    RayTracingOpticalUploadControlHandle control,
-    const RayTracingOpticalUploadPlan& plan
-)
+RayTracingOpticalUploadReservation::RayTracingOpticalUploadReservation(RayTracingOpticalUploadControlHandle control, const RayTracingOpticalUploadPlan& plan)
     : m_control(Move(control))
     , m_plan(plan)
 {

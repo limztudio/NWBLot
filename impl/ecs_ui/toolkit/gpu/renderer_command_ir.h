@@ -17,16 +17,8 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordRasterCommandIr(
-    const GpuRasterTask::Payload& payload,
-    Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context
-);
-[[nodiscard]] bool RecordOutputCommandIr(
-    const GpuOutputTask::Payload& payload,
-    Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context
-);
+[[nodiscard]] bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
+[[nodiscard]] bool RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

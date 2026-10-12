@@ -25,21 +25,8 @@ namespace __hidden_buffer_native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateNativeBufferSharing(
-    const Device& device,
-    const VolkInstanceTable& instanceDispatch,
-    const VkPhysicalDevice physicalDevice,
-    const BufferDesc& desc,
-    const NativeBufferProvenance& provenance
-){
-    return VulkanNativeSharingDetail::ValidateNativeResourceSharing(
-        device,
-        instanceDispatch,
-        physicalDevice,
-        desc.queueSharing,
-        provenance,
-        "buffer handle for native buffer"
-    );
+[[nodiscard]] static bool ValidateNativeBufferSharing(const Device& device, const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const BufferDesc& desc, const NativeBufferProvenance& provenance){
+    return VulkanNativeSharingDetail::ValidateNativeResourceSharing(device, instanceDispatch, physicalDevice, desc.queueSharing, provenance, "buffer handle for native buffer");
 }
 
 
@@ -52,16 +39,9 @@ namespace __hidden_buffer_native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-BufferHandle Device::createHandleForNativeBuffer(
-    const ObjectType objectType,
-    const Object nativeBufferHandle,
-    const BufferDesc& desc,
-    const NativeBufferProvenance& nativeProvenance
-){
+BufferHandle Device::createHandleForNativeBuffer(const ObjectType objectType, const Object nativeBufferHandle, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance){
     if(!ResourceQueueSharing::IsValid(desc.queueSharing)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: queue sharing contains unknown bits")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: queue sharing contains unknown bits"));
         return nullptr;
     }
     if(objectType != ObjectTypes::s_Buffer){
@@ -127,22 +107,13 @@ BufferHandle Device::createHandleForNativeBuffer(
     bufferInfo.queueFamilyIndexCount = nativeProvenance.queueFamilyIndexCount;
     bufferInfo.pQueueFamilyIndices = nativeProvenance.queueFamilyIndices;
 
-    auto* buffer = NewArenaObject<Buffer>(
-        m_context.objectArena,
-        m_context,
-        m_allocator,
-        desc,
-        bufferInfo,
-        nativeProvenance.initialStateKnown
-    );
+    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, desc, bufferInfo, nativeProvenance.initialStateKnown);
     buffer->m_buffer = nativeBuffer;
     buffer->m_deviceAddress = deviceAddress;
     buffer->m_managed = false;
 
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: a live wrapper already exists")
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: a live wrapper already exists"));
         DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }

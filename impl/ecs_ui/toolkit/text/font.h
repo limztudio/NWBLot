@@ -75,12 +75,7 @@ public:
     [[nodiscard]] bool coverageInkReliable()const noexcept;
     [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const noexcept;
     [[nodiscard]] Expected<FontMetrics> metrics(f32 fontSize)const;
-    [[nodiscard]] bool shape(
-        const ShapeRequest& request,
-        u32 byteBegin,
-        u32 byteEnd,
-        PaintVector<RawShapedGlyph>& output
-    )const;
+    [[nodiscard]] bool shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const;
     [[nodiscard]] bool rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output);
 
 

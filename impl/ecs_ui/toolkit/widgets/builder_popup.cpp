@@ -83,8 +83,7 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     description.height = { LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
     const Insets& stylePadding = m_scope->m_popupPaintStyle.padding;
     const SIMDVectorSingle preferredPadding = VectorSet(stylePadding.left, stylePadding.top, stylePadding.right, stylePadding.bottom);
-    const SIMDVectorSingle minimumPadding = VectorSet(background->padding.left, background->padding.top,
-        background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle minimumPadding = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
     const SIMDVectorSingle padding = VectorSelect(minimumPadding, preferredPadding, VectorGreater(preferredPadding, minimumPadding));
     description.padding = { VectorGetX(padding), VectorGetY(padding), VectorGetZ(padding), VectorGetW(padding) };
     description.gap = m_style.gap;

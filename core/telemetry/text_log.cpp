@@ -24,11 +24,7 @@ namespace __hidden_telemetry_text_log{
 
 
 [[nodiscard]] static bool ValidatePayloadHeader(const EncodedTextLogPayloadHeader& header)noexcept{
-    return header.magic == s_TextLogPayloadMagic
-        && header.version == s_TextLogPayloadVersion
-        && header.reserved == 0u
-        && IsValidTextLogType(static_cast<Common::LogType::Enum>(header.type))
-    ;
+    return header.magic == s_TextLogPayloadMagic && header.version == s_TextLogPayloadVersion && header.reserved == 0u && IsValidTextLogType(static_cast<Common::LogType::Enum>(header.type));
 }
 
 template<typename Out>
@@ -61,12 +57,7 @@ bool IsValidTextLogType(const Common::LogType::Enum type)noexcept{
     return false;
 }
 
-bool BuildTextLogPayload(
-    TelemetryArena& arena,
-    const Common::LogType::Enum type,
-    TStringView message,
-    TelemetryBytes& outPayload
-){
+bool BuildTextLogPayload(TelemetryArena& arena, const Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload){
     if(!IsValidTextLogType(type)){
         outPayload.clear();
         return false;
@@ -101,11 +92,7 @@ bool BuildTextLogPayload(
     return true;
 }
 
-Expected<TextLogPayload> ParseTextLogPayload(
-    TelemetryArena& arena,
-    const void* const payload,
-    const usize payloadBytes
-){
+Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
     TextLogPayload parsedPayload(arena);
 
     if(payloadBytes < sizeof(EncodedTextLogPayloadHeader) || !payload)
@@ -132,18 +119,8 @@ Expected<TextLogPayload> ParseTextLogPayload(
     return parsedPayload;
 }
 
-bool RecordTextLog(
-    Recorder& recorder,
-    const Common::LogType::Enum type,
-    const TStringView message,
-    const u64 frameIndex,
-    const u32 streamId
-){
-    return recorder.recordBuiltPayload(
-        EventKind::TextLog,
-        frameIndex,
-        streamId,
-        [type, message](TelemetryArena& arena, TelemetryBytes& payload){
+bool RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TStringView message, const u64 frameIndex, const u32 streamId){
+    return recorder.recordBuiltPayload(EventKind::TextLog, frameIndex, streamId, [type, message](TelemetryArena& arena, TelemetryBytes& payload){
             return BuildTextLogPayload(arena, type, message, payload);
         }
     );

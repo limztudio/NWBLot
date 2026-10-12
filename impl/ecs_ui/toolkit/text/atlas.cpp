@@ -124,16 +124,10 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
     }
     AtlasPage& page = m_pages[pageIndex];
     record.pageIndex = static_cast<u32>(pageIndex);
-    record.pixels = { static_cast<f32>(placement.x + 1u), static_cast<f32>(placement.y + 1u),
-        static_cast<f32>(m_bitmap.width), static_cast<f32>(m_bitmap.height) };
+    record.pixels = { static_cast<f32>(placement.x + 1u), static_cast<f32>(placement.y + 1u), static_cast<f32>(m_bitmap.width), static_cast<f32>(m_bitmap.height) };
     for(u32 row = 0u; row < m_bitmap.height; ++row){
         const usize destination = static_cast<usize>(placement.y + row + 1u) * s_GlyphAtlasPageExtent + placement.x + 1u;
-        NWB_MEMCPY(
-            page.pixels.data() + destination,
-            m_bitmap.width,
-            m_bitmap.pixels.data() + static_cast<usize>(row) * m_bitmap.width,
-            m_bitmap.width
-        );
+        NWB_MEMCPY(page.pixels.data() + destination, m_bitmap.width, m_bitmap.pixels.data() + static_cast<usize>(row) * m_bitmap.width, m_bitmap.width);
     }
     page.cursorX = placement.x + paddedWidth;
     page.cursorY = placement.y;
@@ -165,8 +159,7 @@ SharedGlyphPage GlyphAtlas::page(u32 index){
             return {};
         GlyphPage::Pixels copy(m_arena);
         copy.assign(page.pixels.begin(), page.pixels.end());
-        const GlyphPageBinding binding{ page.face->identity(), page.face->generation(), m_identity,
-            page.generation + 1u, index, s_GlyphAtlasPageExtent, s_GlyphAtlasPageExtent };
+        const GlyphPageBinding binding{ page.face->identity(), page.face->generation(), m_identity, page.generation + 1u, index, s_GlyphAtlasPageExtent, s_GlyphAtlasPageExtent };
         SharedGlyphPage published = CreateGlyphPage(m_arena, binding, Move(copy));
         if(!published)
             return {};

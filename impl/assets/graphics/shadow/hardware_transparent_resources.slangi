@@ -45,8 +45,7 @@ struct NwbHardwareTransparentCrossing{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::push_constant]]
-ConstantBuffer<NwbHardwareTransparentPushConstants> g_NwbHardwareTransparentPush;
+[[vk::push_constant]] ConstantBuffer<NwbHardwareTransparentPushConstants> g_NwbHardwareTransparentPush;
 
 #define g_NwbHardwareTransparentContext nwbHeapShadowMaterialContextSlots(g_NwbHardwareTransparentPush.materialContextSlotsHeapSlot)
 #define g_NwbHardwareTransparentCrossings nwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.crossingsHeapSlot)
@@ -62,12 +61,7 @@ uint nwbHwShadowCrossingAddress(const uint pixel, const uint rayCount, const uin
     return (1u + slot * NWB_HW_TRANSPARENT_CROSSING_WORDS + word) * rayCount + pixel;
 }
 
-void nwbHwShadowStoreCrossing(
-    const uint pixel,
-    const uint rayCount,
-    const uint slot,
-    const NwbHardwareTransparentCrossing crossing
-){
+void nwbHwShadowStoreCrossing(const uint pixel, const uint rayCount, const uint slot, const NwbHardwareTransparentCrossing crossing){
     const uint base = nwbHwShadowCrossingAddress(pixel, rayCount, slot, 0u);
     g_NwbHardwareTransparentCrossings[base] = asuint(crossing.distance);
     g_NwbHardwareTransparentCrossings[base + rayCount] = crossing.instance;
@@ -82,10 +76,7 @@ NwbHardwareTransparentCrossing nwbHwShadowLoadCrossing(const uint pixel, const u
     crossing.distance = asfloat(g_NwbHardwareTransparentCrossings[base]);
     crossing.instance = g_NwbHardwareTransparentCrossings[base + rayCount];
     crossing.primitive = g_NwbHardwareTransparentCrossings[base + rayCount * 2u];
-    crossing.barycentrics = asfloat(uint2(
-        g_NwbHardwareTransparentCrossings[base + rayCount * 3u],
-        g_NwbHardwareTransparentCrossings[base + rayCount * 4u]
-    ));
+    crossing.barycentrics = asfloat(uint2(g_NwbHardwareTransparentCrossings[base + rayCount * 3u], g_NwbHardwareTransparentCrossings[base + rayCount * 4u]));
     return crossing;
 }
 

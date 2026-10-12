@@ -23,9 +23,7 @@ void nwbLightSpaceStoreView(const uint index, const NwbLightSpaceView view){
 }
 
 float3 nwbLightSpaceCorner(const NwbBvhNode root, const uint corner){
-    return float3((corner & 1u) != 0u ? root.aabbMax.x : root.aabbMin.x,
-        (corner & 2u) != 0u ? root.aabbMax.y : root.aabbMin.y,
-        (corner & 4u) != 0u ? root.aabbMax.z : root.aabbMin.z);
+    return float3((corner & 1u) != 0u ? root.aabbMax.x : root.aabbMin.x, (corner & 2u) != 0u ? root.aabbMax.y : root.aabbMin.y, (corner & 4u) != 0u ? root.aabbMax.z : root.aabbMin.z);
 }
 
 bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
@@ -43,10 +41,7 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
     float3 right;
     float3 up;
     if(point){
-        const float3 faceDirections[6] = {
-            float3(1, 0, 0), float3(-1, 0, 0), float3(0, 1, 0),
-            float3(0, -1, 0), float3(0, 0, 1), float3(0, 0, -1),
-        };
+        const float3 faceDirections[6] = { float3(1, 0, 0), float3(-1, 0, 0), float3(0, 1, 0), float3(0, -1, 0), float3(0, 0, 1), float3(0, 0, -1), };
         if(view.light.z >= 6u || !all(isfinite(light.position.xyz)))
             return false;
         forward = faceDirections[view.light.z];

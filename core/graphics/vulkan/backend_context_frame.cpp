@@ -24,23 +24,13 @@ Texture* BackendContext::getBackBuffer(u32 index)const noexcept{
 
 QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexcept{
     NothrowScopedLock presentationLock(m_framePresentationMutex);
-    if(
-        !m_framePresentationClaimsEnabled
-        || !m_rhiDevice
-        || !m_frameAcquired
-        || m_framePresentationSignalState != FramePresentationSignalState::Idle
-        || !m_swapChain
-        || m_swapChainIndex >= m_presentSemaphores.size()
-    )
+    if(!m_framePresentationClaimsEnabled || !m_rhiDevice || !m_frameAcquired || m_framePresentationSignalState != FramePresentationSignalState::Idle || !m_swapChain || m_swapChainIndex >= m_presentSemaphores.size())
         return {};
 
     const VkSemaphore semaphore = m_presentSemaphores[m_swapChainIndex];
     if(semaphore == VK_NULL_HANDLE)
         return {};
-    if(
-        m_framePresentationClaimIdentityExhausted
-        || m_nextFramePresentationClaimIdentity == Limit<u64>::s_Max
-    )
+    if(m_framePresentationClaimIdentityExhausted || m_nextFramePresentationClaimIdentity == Limit<u64>::s_Max)
         return {};
 
     m_framePresentationSemaphore = semaphore;
@@ -52,28 +42,16 @@ QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexc
         m_framePresentationClaimIdentityExhausted = true;
     m_framePresentationClaimIdentity = m_nextFramePresentationClaimIdentity;
     m_framePresentationSignalState = FramePresentationSignalState::Claimed;
-    return QueueSubmissionPreSubmitHook{
-        .context = this,
-        .identity = m_framePresentationClaimIdentity,
-        .invoke = &BackendContext::InvokeFramePresentationSignalPreparation,
-        .resolved = &BackendContext::InvokeFramePresentationSignalResolution,
-    };
+    return QueueSubmissionPreSubmitHook{ .context = this, .identity = m_framePresentationClaimIdentity, .invoke = &BackendContext::InvokeFramePresentationSignalPreparation, .resolved = &BackendContext::InvokeFramePresentationSignalResolution, };
 }
 
-Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(
-    void* const context,
-    const u64 identity,
-    const GpuPhysicalQueueId& executionQueue
-){
+Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(void* const context, const u64 identity, const GpuPhysicalQueueId& executionQueue){
     if(!context)
         return MakeUnexpected(Failure{});
     return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(identity, executionQueue);
 }
 
-Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSignal(
-    const u64 identity,
-    const GpuPhysicalQueueId& executionQueue
-)noexcept{
+Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSignal(const u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept{
     NothrowScopedLock presentationLock(m_framePresentationMutex);
     QueueSubmissionNativeSignal signal;
     if(
@@ -111,20 +89,13 @@ Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSi
     return signal;
 }
 
-bool BackendContext::InvokeFramePresentationSignalResolution(
-    void* const context,
-    const u64 identity,
-    const QueueSubmissionToken& token
-)noexcept{
+bool BackendContext::InvokeFramePresentationSignalResolution(void* const context, const u64 identity, const QueueSubmissionToken& token)noexcept{
     if(!context)
         return false;
     return static_cast<BackendContext*>(context)->resolveFramePresentationSignal(identity, token);
 }
 
-bool BackendContext::resolveFramePresentationSignal(
-    const u64 identity,
-    const QueueSubmissionToken& token
-)noexcept{
+bool BackendContext::resolveFramePresentationSignal(const u64 identity, const QueueSubmissionToken& token)noexcept{
     bool resolved = false;
     {
         NothrowScopedLock presentationLock(m_framePresentationMutex);
@@ -149,14 +120,7 @@ bool BackendContext::resolveFramePresentationSignal(
         else{
             const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(m_framePresentationQueue);
             const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-            if(
-                token.queue != CommandQueue::Graphics
-                || !token.matchesPhysicalQueue(
-                    m_framePresentationQueue.index,
-                    m_framePresentationQueue.deviceGeneration
-                )
-                || !VulkanDetail::IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, queueInfo)
-            ){
+            if(token.queue != CommandQueue::Graphics || !token.matchesPhysicalQueue(m_framePresentationQueue.index, m_framePresentationQueue.deviceGeneration) || !VulkanDetail::IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, queueInfo)){
                 m_framePresentationSignalState = FramePresentationSignalState::Failed;
                 m_rhiDevice->quarantineDevice();
                 resolved = false;
@@ -172,10 +136,7 @@ bool BackendContext::resolveFramePresentationSignal(
     return resolved;
 }
 
-bool BackendContext::confirmFramePresentationSignal(
-    const QueueSubmissionPreSubmitHook& claim,
-    const QueueSubmissionToken& token
-)noexcept{
+bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
     NothrowScopedLock presentationLock(m_framePresentationMutex);
     return m_framePresentationClaimsEnabled
         && claim.context == this
@@ -193,12 +154,7 @@ bool BackendContext::confirmFramePresentationSignal(
 }
 
 bool BackendContext::replaceFramePresentationSemaphoreAfterIdle(){
-    if(
-        !m_vulkanDevice
-        || m_framePresentationSemaphore == VK_NULL_HANDLE
-        || m_framePresentationSwapChainIndex >= m_presentSemaphores.size()
-        || m_presentSemaphores[m_framePresentationSwapChainIndex] != m_framePresentationSemaphore
-    )
+    if(!m_vulkanDevice || m_framePresentationSemaphore == VK_NULL_HANDLE || m_framePresentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[m_framePresentationSwapChainIndex] != m_framePresentationSemaphore)
         return false;
 
     VkSemaphoreCreateInfo createInfo = {};
@@ -237,15 +193,8 @@ bool BackendContext::cancelFramePresentationSignal(const QueueSubmissionPreSubmi
     return result;
 }
 
-bool BackendContext::cancelFramePresentationSignalDeferred(
-    const QueueSubmissionPreSubmitHook* const claim,
-    UniqueLock<Futex>& lifecycleLock
-){
-    if(
-        !lifecycleLock.owns_lock()
-        || m_swapChainLifecycleState != SwapChainLifecycleState::Ready
-        || m_lifecycleDrainActive
-    )
+bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* const claim, UniqueLock<Futex>& lifecycleLock){
+    if(!lifecycleLock.owns_lock() || m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_lifecycleDrainActive)
         return false;
 
     UniqueLock<Futex> presentationLock(m_framePresentationMutex);
@@ -266,30 +215,17 @@ bool BackendContext::cancelFramePresentationSignalDeferred(
     m_framePresentationCondition.wait(presentationLock, [this](){
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
     });
-    if(
-        claim
-        && (
-            claim->identity != m_framePresentationClaimIdentity
-            || claim->invoke != &BackendContext::InvokeFramePresentationSignalPreparation
-            || claim->resolved != &BackendContext::InvokeFramePresentationSignalResolution
-        )
-    )
+    if(claim && (claim->identity != m_framePresentationClaimIdentity || claim->invoke != &BackendContext::InvokeFramePresentationSignalPreparation || claim->resolved != &BackendContext::InvokeFramePresentationSignalResolution))
         return false;
     if(m_framePresentationSignalState == FramePresentationSignalState::Idle)
         return claim == nullptr;
 
-    if(
-        m_framePresentationSignalState == FramePresentationSignalState::Claimed
-        || m_framePresentationSignalState == FramePresentationSignalState::Rejected
-    ){
+    if(m_framePresentationSignalState == FramePresentationSignalState::Claimed || m_framePresentationSignalState == FramePresentationSignalState::Rejected){
         resetFramePresentationSignal();
         return true;
     }
 
-    if(
-        m_framePresentationSignalState != FramePresentationSignalState::Accepted
-        && m_framePresentationSignalState != FramePresentationSignalState::Failed
-    )
+    if(m_framePresentationSignalState != FramePresentationSignalState::Accepted && m_framePresentationSignalState != FramePresentationSignalState::Failed)
         return false;
 
     DeviceHandle device = m_rhiDevice;
@@ -306,16 +242,10 @@ bool BackendContext::cancelFramePresentationSignalDeferred(
     const u32 presentationSwapChainIndex = m_framePresentationSwapChainIndex;
     const u32 swapChainIndex = m_swapChainIndex;
     const bool frameAcquired = m_frameAcquired;
-    if(
-        !frameAcquired
-        || presentationSemaphore == VK_NULL_HANDLE
-        || presentationSwapChainIndex >= m_presentSemaphores.size()
-        || m_presentSemaphores[presentationSwapChainIndex] != presentationSemaphore
-    )
+    if(!frameAcquired || presentationSemaphore == VK_NULL_HANDLE || presentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[presentationSwapChainIndex] != presentationSemaphore)
         return false;
 
-    // Retiring blocks all new presentation claims and lifecycle operations while the queue locks are acquired in
-    // their canonical order by the native device join.
+    // Retiring blocks all new presentation claims and lifecycle operations while the queue locks are acquired in their canonical order by the native device join.
     m_framePresentationSignalState = FramePresentationSignalState::Retiring;
     m_swapChainLifecycleState = SwapChainLifecycleState::RetiringPresentation;
     presentationLock.unlock();
@@ -409,10 +339,7 @@ bool BackendContext::createFrameSyncQueries(){
     for(u32 index = 0u; index < m_maxFramesInFlight; ++index){
         EventQueryHandle query = m_rhiDevice->createEventQuery();
         if(!query){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create frame synchronization query {} of {}")
-                , index + 1u
-                , m_maxFramesInFlight
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create frame synchronization query {} of {}"), index + 1u, m_maxFramesInFlight);
             m_queryPool.clear();
             return false;
         }
@@ -451,10 +378,7 @@ bool BackendContext::recreateAcquireSyncSlots(const usize count){
         if(result == VK_SUCCESS)
             result = m_deviceDispatch.vkCreateFence(m_vulkanDevice, &fenceInfo, nullptr, &slot.fence);
         if(result != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire synchronization slot {}. {}")
-                , index
-                , ResultToString(result)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire synchronization slot {}. {}"), index, ResultToString(result));
             if(slot.fence)
                 m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
             if(slot.semaphore)
@@ -469,19 +393,9 @@ bool BackendContext::recreateAcquireSyncSlots(const usize count){
 
 bool BackendContext::prepareAcquireSyncSlot(AcquireSyncSlot& slot){
     if(slot.state == AcquireSyncSlotState::Idle){
-        return slot.semaphore != VK_NULL_HANDLE
-            && slot.fence != VK_NULL_HANDLE
-            && !slot.consumerToken.valid()
-        ;
+        return slot.semaphore != VK_NULL_HANDLE && slot.fence != VK_NULL_HANDLE && !slot.consumerToken.valid();
     }
-    if(
-        slot.state != AcquireSyncSlotState::ConsumerAccepted
-        || !m_rhiDevice
-        || !m_rhiDevice->waitForSubmissionTokenInternal(
-            slot.consumerToken,
-            Device::DeviceLossDiagnosticPolicy::Defer
-        )
-    )
+    if(slot.state != AcquireSyncSlotState::ConsumerAccepted || !m_rhiDevice || !m_rhiDevice->waitForSubmissionTokenInternal(slot.consumerToken, Device::DeviceLossDiagnosticPolicy::Defer))
         return false;
 
     VkResult result = m_deviceDispatch.vkWaitForFences(m_vulkanDevice, 1u, &slot.fence, VK_TRUE, UINT64_MAX);
@@ -506,13 +420,7 @@ bool BackendContext::waitAcquireSyncSlotsForLifecycle(){
     for(AcquireSyncSlot& slot : m_acquireSyncSlots){
         if(slot.state == AcquireSyncSlotState::Idle)
             continue;
-        const VkResult result = m_deviceDispatch.vkWaitForFences(
-            m_vulkanDevice,
-            1u,
-            &slot.fence,
-            VK_TRUE,
-            UINT64_MAX
-        );
+        const VkResult result = m_deviceDispatch.vkWaitForFences(m_vulkanDevice, 1u, &slot.fence, VK_TRUE, UINT64_MAX);
         if(result == VK_SUCCESS)
             continue;
         if(result == VK_ERROR_DEVICE_LOST && m_rhiDevice)

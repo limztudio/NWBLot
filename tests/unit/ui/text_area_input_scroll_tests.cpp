@@ -80,10 +80,7 @@ public:
 
 protected:
     [[nodiscard]] bool prepareDocument(const Point scroll = {}){
-        return
-            m_model.setText(m_document) && m_model.setSelection(1u, 1u) && m_model.replaceSelection("b")
-            && m_model.setSelection(0u, 0u) && m_state.scrollTo(scroll)
-        ;
+        return m_model.setText(m_document) && m_model.setSelection(1u, 1u) && m_model.replaceSelection("b") && m_model.setSelection(0u, 0u) && m_state.scrollTo(scroll);
     }
 
     [[nodiscard]] bool prepareScroll(const TextAreaOptions& options = ScrollOptions(), const Point scroll = {}){
@@ -111,10 +108,7 @@ protected:
         if(!begin(generation) || !m_builder.beginPopup("popup", popup, options))
             return false;
         m_result = m_builder.textArea("area", m_model, m_state, ScrollOptions());
-        return
-            m_result.valid && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame()
-            && m_context.commitFrame(generation)
-        ;
+        return m_result.valid && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
 

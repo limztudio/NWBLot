@@ -26,19 +26,11 @@ public:
         return result;
     }
 
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&,
-        const EditBoxOptions&, const PopupToken&
-    )override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
-        const PopupToken&, IEditActionSink&
-    )override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&,
-        const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&
-    )override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
 
-    [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&,
-        const EditBoxOptions&
-    )override{
+    [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)override{
         ++publishes;
         return true;
     }

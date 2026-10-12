@@ -69,9 +69,7 @@ def sfnt_tables(data):
 def read_atlas(data):
     if len(data) < ATLAS_HEADER.size:
         raise AssertionError("truncated FTA1 header")
-    (magic, version, encoding, reserved, identity, font_hash, face_index,
-     units_per_em, source_glyph_count, ppem, spread, guard, raster,
-     ascender, descender, line_gap, glyph_count, group_count, table_count) = ATLAS_HEADER.unpack_from(data)
+    (magic, version, encoding, reserved, identity, font_hash, face_index, units_per_em, source_glyph_count, ppem, spread, guard, raster, ascender, descender, line_gap, glyph_count, group_count, table_count) = ATLAS_HEADER.unpack_from(data)
     if (magic, version, encoding, reserved) != (0x31415446, 2, 1, 0):
         raise AssertionError("invalid FTA1 header")
     if not (glyph_count == source_glyph_count and 0 < group_count <= 8 and table_count <= 3):
@@ -80,10 +78,7 @@ def read_atlas(data):
     glyphs = []
     for _ in range(glyph_count):
         values = GLYPH_RECORD.unpack_from(data, cursor)
-        glyphs.append({"id": values[0], "group": values[1], "channel": values[2],
-                       "x": values[3], "y": values[4], "width": values[5], "height": values[6],
-                       "plane_left": values[7], "plane_top": values[8],
-                       "plane_right": values[9], "plane_bottom": values[10],
+        glyphs.append({"id": values[0], "group": values[1], "channel": values[2], "x": values[3], "y": values[4], "width": values[5], "height": values[6], "plane_left": values[7], "plane_top": values[8], "plane_right": values[9], "plane_bottom": values[10],
                        "advance_units": values[11], "drawable": values[12]})
         cursor += GLYPH_RECORD.size
     groups = []
@@ -110,10 +105,7 @@ def read_atlas(data):
         cursor += byte_count
     if cursor != len(data):
         raise AssertionError("trailing FTA1 bytes")
-    return {"font_hash": font_hash, "identity": identity, "face_index": face_index,
-            "units_per_em": units_per_em, "ppem": ppem, "spread": spread,
-            "guard": guard, "raster": raster, "ascender": ascender,
-            "descender": descender, "line_gap": line_gap,
+    return {"font_hash": font_hash, "identity": identity, "face_index": face_index, "units_per_em": units_per_em, "ppem": ppem, "spread": spread, "guard": guard, "raster": raster, "ascender": ascender, "descender": descender, "line_gap": line_gap,
             "glyphs": glyphs, "groups": groups, "tables": tables}
 
 
@@ -145,23 +137,19 @@ class FontBuilderCli(unittest.TestCase):
     def decode_package(cls, metadata, success=True):
         with tempfile.TemporaryDirectory(prefix="decoded_", dir=cls.root) as temporary:
             destination = Path(temporary)
-            result = subprocess.run([str(CONFIG.package_probe), str(metadata), str(destination)],
-                                    cwd=cls.root, capture_output=True, text=True, timeout=120)
+            result = subprocess.run([str(CONFIG.package_probe), str(metadata), str(destination)], cwd=cls.root, capture_output=True, text=True, timeout=120)
             if (result.returncode == 0) != success:
                 raise AssertionError(f"Package probe exit {result.returncode}: {result.stdout}\n{result.stderr}")
             return {path.name: path.read_bytes() for path in destination.iterdir()}
 
     def assert_pair(self, output, payloads=None):
-        self.assertEqual({path.name for path in output.parent.iterdir()},
-                         {output.with_suffix(extension).name for extension in (".nwb", ".font")})
+        self.assertEqual({path.name for path in output.parent.iterdir()}, {output.with_suffix(extension).name for extension in (".nwb", ".font")})
         text = output.read_text(encoding="utf-8")
         self.assertIn("font face;", text)
         self.assertIn("font_atlas atlas;", text)
         self.assertIn("atlas.font = face;", text)
         self.assertIn("asset_bunch bunch = [face, atlas];", text)
-        for obsolete in ("schema_version", "sha256", "source", ".atlas", "face_index",
-                         "units_per_em", "glyph_count", "guard_texels", "atlas.groups",
-                         "plane_right", "plane_bottom", "drawable"):
+        for obsolete in ("schema_version", "sha256", "source", ".atlas", "face_index", "units_per_em", "glyph_count", "guard_texels", "atlas.groups", "plane_right", "plane_bottom", "drawable"):
             self.assertNotIn(obsolete, text)
         payloads = self.decode_package(output) if payloads is None else payloads
         atlas = read_atlas(payloads["atlas.bin"])
@@ -179,14 +167,11 @@ class FontBuilderCli(unittest.TestCase):
         units_per_pixel = struct.unpack("<f", struct.pack("<f", atlas["units_per_em"] / atlas["ppem"]))[0]
         for index, (declared, decoded) in enumerate(zip(metadata_glyphs, atlas["glyphs"])):
             self.assertEqual(decoded["id"], index)
-            self.assertEqual(set(declared), (set(decoded) - {"id", "drawable", "plane_right", "plane_bottom"})
-                             if decoded["drawable"] else {"advance_units"})
-            for origin, extent, end in (("plane_left", "width", "plane_right"),
-                                        ("plane_top", "height", "plane_bottom")):
+            self.assertEqual(set(declared), (set(decoded) - {"id", "drawable", "plane_right", "plane_bottom"}) if decoded["drawable"] else {"advance_units"})
+            for origin, extent, end in (("plane_left", "width", "plane_right"), ("plane_top", "height", "plane_bottom")):
                 size = struct.unpack("<f", struct.pack("<f", decoded[extent] * units_per_pixel))[0]
                 # ARM can fuse the multiply/add; either rounding retains the same bitmap plane.
-                expected = (struct.pack("<f", decoded[origin] + size),
-                            struct.pack("<f", decoded[origin] + decoded[extent] * units_per_pixel))
+                expected = (struct.pack("<f", decoded[origin] + size), struct.pack("<f", decoded[origin] + decoded[extent] * units_per_pixel))
                 self.assertIn(struct.pack("<f", decoded[end]), expected)
             for key in declared:
                 if key in float_fields:
@@ -226,12 +211,10 @@ class FontBuilderCli(unittest.TestCase):
                     self.assertFalse(any(pixels[begin:end:width * channels]))
 
     def pair_bytes(self, output):
-        return {extension: output.with_suffix(extension).read_bytes()
-                for extension in (".nwb", ".font")}
+        return {extension: output.with_suffix(extension).read_bytes() for extension in (".nwb", ".font")}
 
     def test_non_drawable_glyphs_retain_positive_advance(self):
-        self.assertTrue(any(glyph["drawable"] == 0 and glyph["advance_units"] > 0
-                            for glyph in self.atlas["glyphs"]))
+        self.assertTrue(any(glyph["drawable"] == 0 and glyph["advance_units"] > 0 for glyph in self.atlas["glyphs"]))
 
     def test_compact_channels_preserve_guards_and_exact_positioning_tables(self):
         atlas = self.atlas
@@ -265,9 +248,7 @@ class FontBuilderCli(unittest.TestCase):
         self.assertTrue(any(dimension & (dimension - 1) for group in atlas["groups"] for dimension in group[:2]))
         self.assertTrue(all(width <= 1023 and height <= 1023 for width, height, _, _ in atlas["groups"]))
         self.assertLess(sum(len(group[3]) for group in atlas["groups"]), len(atlas["groups"]) * 1023 * 1023 * 4)
-        self.assertEqual(payloads, {
-            "atlas.bin": payloads["atlas.bin"], "source.sfnt": source_bytes(self.latin),
-            **{f"group_{index}.pixels": group[3] for index, group in enumerate(atlas["groups"])},
+        self.assertEqual(payloads, { "atlas.bin": payloads["atlas.bin"], "source.sfnt": source_bytes(self.latin), **{f"group_{index}.pixels": group[3] for index, group in enumerate(atlas["groups"])},
             **{f"table_{tag}.bin": raw for tag, raw in atlas["tables"].items()}})
 
     def test_overwrite_and_failed_capacity_preserve_complete_pair(self):
@@ -310,8 +291,7 @@ class FontBuilderCli(unittest.TestCase):
                 original = self.output.with_suffix(extension).read_bytes()
                 output.with_suffix(extension).write_bytes(original)
                 self.invoke(self.latin, output, "--overwrite", success=False)
-                self.assertEqual({path.name for path in output.parent.iterdir()},
-                                 {output.with_suffix(extension).name})
+                self.assertEqual({path.name for path in output.parent.iterdir()}, {output.with_suffix(extension).name})
                 self.assertEqual(output.with_suffix(extension).read_bytes(), original)
         for extension in (".nwb.tmp", ".font.tmp", ".nwb.old", ".font.old"):
             with self.subTest(work_path=extension):
@@ -334,16 +314,9 @@ class FontBuilderCli(unittest.TestCase):
         output.with_suffix(".font").write_bytes(corrupt)
         self.assertFalse(self.decode_package(output, success=False))
         output.with_suffix(".font").write_bytes(original_font)
-        for text in (original_text + "\nface.face_index = 0;\n",
-                     original_text + "\natlas.units_per_em = 1000;\n",
-                     original_text + "\natlas.guard_texels = 1;\n",
-                     original_text + '\natlas.groups = [{ "width": 1, "height": 1, "channels": 4 }];\n',
-                     original_text.replace('"group":', '"id": 0, "group":', 1),
-                     original_text.replace('"group":', '"drawable": 1, "group":', 1),
-                     original_text.replace('"group":', '"plane_right": 0, "group":', 1),
-                     original_text.replace('"group":', '"plane_bottom": 0, "group":', 1),
-                     re.sub(r'"height": \d+', '"height": 0', original_text, count=1),
-                     original_text.replace('{ "advance_units":', '{ "x": 0, "advance_units":', 1)):
+        for text in (original_text + "\nface.face_index = 0;\n", original_text + "\natlas.units_per_em = 1000;\n", original_text + "\natlas.guard_texels = 1;\n", original_text + '\natlas.groups = [{ "width": 1, "height": 1, "channels": 4 }];\n',
+                     original_text.replace('"group":', '"id": 0, "group":', 1), original_text.replace('"group":', '"drawable": 1, "group":', 1), original_text.replace('"group":', '"plane_right": 0, "group":', 1),
+                     original_text.replace('"group":', '"plane_bottom": 0, "group":', 1), re.sub(r'"height": \d+', '"height": 0', original_text, count=1), original_text.replace('{ "advance_units":', '{ "x": 0, "advance_units":', 1)):
             output.write_text(text, encoding="utf-8")
             self.assertFalse(self.decode_package(output, success=False))
 

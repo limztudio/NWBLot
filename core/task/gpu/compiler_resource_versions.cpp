@@ -22,11 +22,7 @@ namespace __hidden_gpu_task_resource_versions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<GpuTaskResourceRange> ResolvePhysicalRange(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range
-)noexcept{
+[[nodiscard]] static Expected<GpuTaskResourceRange> ResolvePhysicalRange(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range)noexcept{
     using namespace GpuTaskGraphCompilerDetail;
 
     GpuTaskResourceRange result = range;
@@ -54,11 +50,7 @@ namespace __hidden_gpu_task_resource_versions{
     }
 }
 
-[[nodiscard]] static Expected<GpuTaskResourceRange> ResolveVersionRange(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range
-)noexcept{
+[[nodiscard]] static Expected<GpuTaskResourceRange> ResolveVersionRange(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range)noexcept{
     const auto result = ResolvePhysicalRange(graph, resource, range);
     if(!result)
         return MakeUnexpected(Failure{});
@@ -88,10 +80,7 @@ namespace __hidden_gpu_task_resource_versions{
             return *result;
 
         const BufferRange& resolved = result->bufferRange;
-        if(
-            requested.byteOffset != resolved.byteOffset
-            || (requested.byteSize != BufferRange::s_AllBytes && requested.byteSize != resolved.byteSize)
-        )
+        if(requested.byteOffset != resolved.byteOffset || (requested.byteSize != BufferRange::s_AllBytes && requested.byteSize != resolved.byteSize))
             return MakeUnexpected(Failure{});
         return *result;
     }
@@ -105,18 +94,10 @@ namespace __hidden_gpu_task_resource_versions{
     }
 }
 
-[[nodiscard]] static bool RangeContainsVersion(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& outer,
-    const GpuTaskResourceRange& inner
-)noexcept{
+[[nodiscard]] static bool RangeContainsVersion(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
     Expected<GpuTaskResourceRange> resolvedOuter = GpuTaskResourceRange{};
     Expected<GpuTaskResourceRange> resolvedInner = GpuTaskResourceRange{};
-    if(
-        !(resolvedOuter = ResolvePhysicalRange(graph, resource, outer))
-        || !(resolvedInner = ResolveVersionRange(graph, resource, inner))
-    )
+    if(!(resolvedOuter = ResolvePhysicalRange(graph, resource, outer)) || !(resolvedInner = ResolveVersionRange(graph, resource, inner)))
         return false;
 
     switch(resource.type){
@@ -131,18 +112,10 @@ namespace __hidden_gpu_task_resource_versions{
     }
 }
 
-[[nodiscard]] static bool RangeOverlapsVersion(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& physicalRange,
-    const GpuTaskResourceRange& versionRange
-)noexcept{
+[[nodiscard]] static bool RangeOverlapsVersion(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& physicalRange, const GpuTaskResourceRange& versionRange)noexcept{
     Expected<GpuTaskResourceRange> resolvedPhysical = GpuTaskResourceRange{};
     Expected<GpuTaskResourceRange> resolvedVersion = GpuTaskResourceRange{};
-    if(
-        !(resolvedPhysical = ResolvePhysicalRange(graph, resource, physicalRange))
-        || !(resolvedVersion = ResolveVersionRange(graph, resource, versionRange))
-    )
+    if(!(resolvedPhysical = ResolvePhysicalRange(graph, resource, physicalRange)) || !(resolvedVersion = ResolveVersionRange(graph, resource, versionRange)))
         return false;
 
     switch(resource.type){
@@ -157,25 +130,14 @@ namespace __hidden_gpu_task_resource_versions{
     }
 }
 
-[[nodiscard]] static bool HasCoveringPhysicalUse(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphTaskView& task,
-    const GpuTaskGraphResourceVersionView& version,
-    const GpuTaskResourceVersionRole::Enum role
-)noexcept{
+[[nodiscard]] static bool HasCoveringPhysicalUse(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuTaskGraphResourceVersionView& version, const GpuTaskResourceVersionRole::Enum role)noexcept{
     const GpuTaskGraphResourceView resource = graph.resourceAt(version.resource.index);
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
         const GpuTaskResourceUse& physicalUse = task.resourceUses[useIndex];
         if(
             physicalUse.resource != version.resource
-            || (
-                role == GpuTaskResourceVersionRole::Produce
-                && !GpuTaskGraphCompilerDetail::IsWriteAccess(physicalUse.access)
-            )
-            || (
-                role == GpuTaskResourceVersionRole::Consume
-                && !GpuTaskGraphCompilerDetail::IsReadAccess(physicalUse.access)
-            )
+            || (role == GpuTaskResourceVersionRole::Produce && !GpuTaskGraphCompilerDetail::IsWriteAccess(physicalUse.access))
+            || (role == GpuTaskResourceVersionRole::Consume && !GpuTaskGraphCompilerDetail::IsReadAccess(physicalUse.access))
         )
             continue;
         if(RangeContainsVersion(graph, resource, physicalUse.range, version.range))
@@ -184,19 +146,11 @@ namespace __hidden_gpu_task_resource_versions{
     return false;
 }
 
-[[nodiscard]] static bool HasOverlappingPhysicalWrite(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphTaskView& task,
-    const GpuTaskGraphResourceVersionView& version
-)noexcept{
+[[nodiscard]] static bool HasOverlappingPhysicalWrite(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuTaskGraphResourceVersionView& version)noexcept{
     const GpuTaskGraphResourceView resource = graph.resourceAt(version.resource.index);
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
         const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-        if(
-            use.resource == version.resource
-            && GpuTaskGraphCompilerDetail::IsWriteAccess(use.access)
-            && RangeOverlapsVersion(graph, resource, use.range, version.range)
-        )
+        if(use.resource == version.resource && GpuTaskGraphCompilerDetail::IsWriteAccess(use.access) && RangeOverlapsVersion(graph, resource, use.range, version.range))
             return true;
     }
     return false;
@@ -223,11 +177,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(
-        const Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& edges,
-        const usize taskCount,
-        const usize maximumRowCount
-    ){
+    [[nodiscard]] bool build(const Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& edges, const usize taskCount, const usize maximumRowCount){
         m_wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
         if(m_wordsPerRow != 0u && taskCount > Limit<usize>::s_Max / m_wordsPerRow)
             return false;
@@ -267,11 +217,7 @@ public:
             m_pending.push_back(destination.index);
             for(usize pendingIndex = 0u; pendingIndex < m_pending.size(); ++pendingIndex){
                 const u32 consumerIndex = m_pending[pendingIndex];
-                for(
-                    usize edgeIndex = m_incomingOffsets[consumerIndex];
-                    edgeIndex < m_incomingOffsets[consumerIndex + 1u];
-                    ++edgeIndex
-                ){
+                for(usize edgeIndex = m_incomingOffsets[consumerIndex]; edgeIndex < m_incomingOffsets[consumerIndex + 1u]; ++edgeIndex){
                     const u32 producerIndex = m_incomingProducers[edgeIndex];
                     const usize producerWord = producerIndex / s_BitsPerWord;
                     const u64 producerMask = static_cast<u64>(1u) << (producerIndex % s_BitsPerWord);
@@ -315,22 +261,12 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
-    Alloc::ScratchArena& scratchArena
-){
+Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(const GpuTaskGraph::DeclarationReadView& graph, Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges, Alloc::ScratchArena& scratchArena){
     using namespace __hidden_gpu_task_resource_versions;
 
     outEdges.clear();
     GpuTaskGraphAnalysisDiagnostic diagnostic;
-    const auto fail = [&](
-        const GpuTaskGraphAnalysisStatus::Enum status,
-        const GpuTaskId task,
-        const GpuTaskId relatedTask,
-        const GpuGraphResourceId resource,
-        const GpuGraphResourceVersionId version
-    ){
+    const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task, const GpuTaskId relatedTask, const GpuGraphResourceId resource, const GpuGraphResourceVersionId version){
         diagnostic.status = status;
         diagnostic.task = task;
         diagnostic.relatedTask = relatedTask;
@@ -343,25 +279,13 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
         if(!graph.validResource(version.resource) || version.origin >= GpuGraphResourceVersionOrigin::kCount){
-            return fail(
-                GpuTaskGraphAnalysisStatus::InvalidResourceVersion,
-                {},
-                {},
-                version.resource,
-                version.id
-            );
+            return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersion, {}, {}, version.resource, version.id);
         }
 
         const GpuTaskGraphResourceView resource = graph.resourceAt(version.resource.index);
         const auto resolvedRange = ResolveVersionRange(graph, resource, version.range);
         if(!resolvedRange){
-            return fail(
-                GpuTaskGraphAnalysisStatus::InvalidResourceVersion,
-                {},
-                {},
-                version.resource,
-                version.id
-            );
+            return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersion, {}, {}, version.resource, version.id);
         }
         hasTaskProducedVersions = hasTaskProducedVersions || version.origin == GpuGraphResourceVersionOrigin::TaskProduced;
     }
@@ -378,23 +302,11 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         for(usize useIndex = 0u; useIndex < task.resourceVersionUseCount; ++useIndex){
             const GpuTaskResourceVersionUse& use = task.resourceVersionUses[useIndex];
             if(!graph.validResourceVersion(use.version)){
-                return fail(
-                    GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
-                    task.id,
-                    {},
-                    {},
-                    use.version
-                );
+                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, {}, use.version);
             }
             const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(use.version.index);
             if(use.role >= GpuTaskResourceVersionRole::kCount){
-                return fail(
-                    GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
-                    task.id,
-                    {},
-                    version.resource,
-                    use.version
-                );
+                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, version.resource, use.version);
             }
 
             if(task.resourceVersionUseCount > s_LinearDuplicateCheckUseLimit){
@@ -402,57 +314,27 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
                     lastVersionUseTasks.emplace(graph.resourceVersionCount(), Limit<u32>::s_Max, scratchArena);
                 u32& lastUseTask = (*lastVersionUseTasks)[use.version.index];
                 if(lastUseTask == task.id.index){
-                    return fail(
-                        GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
-                        task.id,
-                        {},
-                        version.resource,
-                        use.version
-                    );
+                    return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, version.resource, use.version);
                 }
                 lastUseTask = task.id.index;
             }
             else{
                 for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
                     if(task.resourceVersionUses[previousUseIndex].version == use.version){
-                        return fail(
-                            GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
-                            task.id,
-                            {},
-                            version.resource,
-                            use.version
-                        );
+                        return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, version.resource, use.version);
                     }
                 }
             }
             if(!HasCoveringPhysicalUse(graph, task, version, use.role)){
-                return fail(
-                    GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
-                    task.id,
-                    {},
-                    version.resource,
-                    use.version
-                );
+                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, version.resource, use.version);
             }
             if(use.role != GpuTaskResourceVersionRole::Produce)
                 continue;
             if(version.origin != GpuGraphResourceVersionOrigin::TaskProduced){
-                return fail(
-                    GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
-                    task.id,
-                    {},
-                    version.resource,
-                    use.version
-                );
+                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, version.resource, use.version);
             }
             if(producers[use.version.index].valid()){
-                return fail(
-                    GpuTaskGraphAnalysisStatus::DuplicateResourceVersionProducer,
-                    task.id,
-                    producers[use.version.index],
-                    version.resource,
-                    use.version
-                );
+                return fail(GpuTaskGraphAnalysisStatus::DuplicateResourceVersionProducer, task.id, producers[use.version.index], version.resource, use.version);
             }
             producers[use.version.index] = task.id;
         }
@@ -462,13 +344,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
             const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
             if(version.origin == GpuGraphResourceVersionOrigin::TaskProduced && !producers[versionIndex].valid()){
-                return fail(
-                    GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer,
-                    {},
-                    {},
-                    version.resource,
-                    version.id
-                );
+                return fail(GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer, {}, {}, version.resource, version.id);
             }
         }
     }
@@ -486,13 +362,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
             const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(use.version.index);
             if(version.origin == GpuGraphResourceVersionOrigin::ImportedRoot)
                 continue;
-            outEdges.push_back(GpuTaskDependencyEdge{
-                .producer = producers[use.version.index],
-                .consumer = task.id,
-                .resource = version.resource,
-                .resourceVersion = version.id,
-                .hazard = GpuTaskHazardType::VersionDependency,
-            });
+            outEdges.push_back(GpuTaskDependencyEdge{ .producer = producers[use.version.index], .consumer = task.id, .resource = version.resource, .resourceVersion = version.id, .hazard = GpuTaskHazardType::VersionDependency, });
         }
     }
 
@@ -509,13 +379,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
         for(usize dependencyIndex = 0u; dependencyIndex < task.dependencyCount; ++dependencyIndex){
-            semanticEdges.push_back(GpuTaskDependencyEdge{
-                .producer = task.dependencies[dependencyIndex],
-                .consumer = task.id,
-                .resource = {},
-                .resourceVersion = {},
-                .hazard = GpuTaskHazardType::Explicit,
-            });
+            semanticEdges.push_back(GpuTaskDependencyEdge{ .producer = task.dependencies[dependencyIndex], .consumer = task.id, .resource = {}, .resourceVersion = {}, .hazard = GpuTaskHazardType::Explicit, });
         }
     }
     for(const GpuTaskDependencyEdge& edge : outEdges)
@@ -534,11 +398,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         }
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            if(
-                !IsWriteAccess(use.access)
-                || !graph.validResource(use.resource)
-                || lastWriterTasks[use.resource.index] == task.id.index
-            )
+            if(!IsWriteAccess(use.access) || !graph.validResource(use.resource) || lastWriterTasks[use.resource.index] == task.id.index)
                 continue;
             lastWriterTasks[use.resource.index] = task.id.index;
             ++writerOffsets[use.resource.index + 1u];
@@ -570,11 +430,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            if(
-                !IsWriteAccess(use.access)
-                || !graph.validResource(use.resource)
-                || lastWriterTasks[use.resource.index] == task.id.index
-            )
+            if(!IsWriteAccess(use.access) || !graph.validResource(use.resource) || lastWriterTasks[use.resource.index] == task.id.index)
                 continue;
             lastWriterTasks[use.resource.index] = task.id.index;
             writerTasks[writeOffsets[use.resource.index]++] = task.id;
@@ -582,8 +438,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     }
 
     // Imported roots precede every graph task, so their consumers must finish before any other overlapping writer.
-    // These constraints are unconditional and participate in produced-version reachability regardless of version
-    // declaration order.
+    // These constraints are unconditional and participate in produced-version reachability regardless of version declaration order.
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
         if(version.origin != GpuGraphResourceVersionOrigin::ImportedRoot)
@@ -594,11 +449,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         if(consumerBegin == consumerEnd)
             continue;
 
-        for(
-            usize writerIndex = writerOffsets[version.resource.index];
-            writerIndex < writerOffsets[version.resource.index + 1u];
-            ++writerIndex
-        ){
+        for(usize writerIndex = writerOffsets[version.resource.index]; writerIndex < writerOffsets[version.resource.index + 1u]; ++writerIndex){
             const GpuTaskGraphTaskView writer = graph.taskAt(writerTasks[writerIndex].index);
             if(!HasOverlappingPhysicalWrite(graph, writer, version))
                 continue;
@@ -607,13 +458,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
                 const GpuTaskId consumer = consumerTasks[consumerIndex];
                 if(consumer == writer.id)
                     continue;
-                const GpuTaskDependencyEdge edge{
-                    .producer = consumer,
-                    .consumer = writer.id,
-                    .resource = version.resource,
-                    .resourceVersion = version.id,
-                    .hazard = GpuTaskHazardType::VersionLifetime,
-                };
+                const GpuTaskDependencyEdge edge{ .producer = consumer, .consumer = writer.id, .resource = version.resource, .resourceVersion = version.id, .hazard = GpuTaskHazardType::VersionLifetime, };
                 outEdges.push_back(edge);
                 semanticEdges.push_back(edge);
             }
@@ -635,11 +480,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         if(consumerBegin == consumerEnd)
             continue;
 
-        for(
-            usize writerIndex = writerOffsets[version.resource.index];
-            writerIndex < writerOffsets[version.resource.index + 1u];
-            ++writerIndex
-        ){
+        for(usize writerIndex = writerOffsets[version.resource.index]; writerIndex < writerOffsets[version.resource.index + 1u]; ++writerIndex){
             const GpuTaskGraphTaskView writer = graph.taskAt(writerTasks[writerIndex].index);
             if(writer.id == producers[versionIndex] || !HasOverlappingPhysicalWrite(graph, writer, version))
                 continue;
@@ -655,13 +496,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
                 const GpuTaskId consumer = consumerTasks[consumerIndex];
                 if(consumer == writer.id)
                     continue;
-                outEdges.push_back(GpuTaskDependencyEdge{
-                    .producer = consumer,
-                    .consumer = writer.id,
-                    .resource = version.resource,
-                    .resourceVersion = version.id,
-                    .hazard = GpuTaskHazardType::VersionLifetime,
-                });
+                outEdges.push_back(GpuTaskDependencyEdge{ .producer = consumer, .consumer = writer.id, .resource = version.resource, .resourceVersion = version.id, .hazard = GpuTaskHazardType::VersionLifetime, });
             }
         }
     }

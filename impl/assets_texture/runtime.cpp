@@ -119,96 +119,58 @@ bool Texture::validatePayload()const{
     if(!checkVirtualPath(TextureBinaryPayload::s_TextureValidatePayloadContext))
         return false;
     if(!IsValidTextureColorSpace(m_colorSpace)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid color space")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid color space"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(!IsValidTexturePayloadFormat(m_payloadFormat)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid payload format")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid payload format"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(IsHdrTexturePayloadFormat(m_payloadFormat) && m_colorSpace != TextureColorSpace::Linear){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: HDR texture '{}' must use linear color space")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: HDR texture '{}' must use linear color space"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(!IsValidTextureDimension(m_dimension)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid dimension")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid dimension"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(m_width == 0u || m_height == 0u || m_depth == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an empty resolution")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an empty resolution"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(m_dimension != TextureDimension::Texture3D && m_depth != 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: non-volume texture '{}' has an invalid depth")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: non-volume texture '{}' has an invalid depth"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(m_dimension == TextureDimension::TextureCube && m_width != m_height){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: cubemap texture '{}' must have square faces")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: cubemap texture '{}' must have square faces"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(m_mipLevels.empty() || m_payloadBytes.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an incomplete payload")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an incomplete payload"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
 
     if(!IsValidTextureAlphaMode(m_alphaMode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha mode")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha mode"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
 
     const bool alphaModeHasAlpha = m_alphaMode != TextureAlphaMode::Opaque;
     if(m_hasAlpha != alphaModeHasAlpha){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has inconsistent alpha metadata")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has inconsistent alpha metadata"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     if(m_alphaMode != TextureAlphaMode::ConstantUnorm8 && m_alphaConstantUnorm8 != TextureFormat::s_OpaqueAlphaUnorm8){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an unexpected alpha constant")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an unexpected alpha constant"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
-    if(
-        (m_payloadFormat == TexturePayloadFormat::UastcLdr4x4
-            && m_alphaMode != TextureAlphaMode::Opaque
-            && m_alphaMode != TextureAlphaMode::EmbeddedLdr)
-        || (IsHdrTexturePayloadFormat(m_payloadFormat)
-            && m_alphaMode == TextureAlphaMode::EmbeddedLdr)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha transport for its payload format")
-            , StringConvert(virtualPath().resolvedText())
-        );
+    if((m_payloadFormat == TexturePayloadFormat::UastcLdr4x4 && m_alphaMode != TextureAlphaMode::Opaque && m_alphaMode != TextureAlphaMode::EmbeddedLdr) || (IsHdrTexturePayloadFormat(m_payloadFormat) && m_alphaMode == TextureAlphaMode::EmbeddedLdr)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha transport for its payload format"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
 
-    const auto primaryPayloadByteCountResult = __hidden_texture_runtime::ValidateTextureMipLevels(
-        m_mipLevels,
-        m_payloadFormat,
-        m_dimension,
-        m_width,
-        m_height,
-        m_depth,
-        NWB_TEXT("Texture::validatePayload")
-    );
+    const auto primaryPayloadByteCountResult = __hidden_texture_runtime::ValidateTextureMipLevels(m_mipLevels, m_payloadFormat, m_dimension, m_width, m_height, m_depth, NWB_TEXT("Texture::validatePayload"));
     if(!primaryPayloadByteCountResult)
         return false;
     const u64 primaryPayloadByteCount = *primaryPayloadByteCountResult;
@@ -216,17 +178,13 @@ bool Texture::validatePayload()const{
     u64 expectedPayloadByteCount = primaryPayloadByteCount;
     if(m_alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
         if(primaryPayloadByteCount > Limit<u64>::s_Max - expectedPayloadByteCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' alpha payload size overflows")
-                , StringConvert(virtualPath().resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' alpha payload size overflows"), StringConvert(virtualPath().resolvedText()));
             return false;
         }
         expectedPayloadByteCount += primaryPayloadByteCount;
     }
     if(expectedPayloadByteCount != static_cast<u64>(m_payloadBytes.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' byte count does not match its payload transport")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' byte count does not match its payload transport"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -250,13 +208,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
 
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(
-        binary,
-        cursor,
-        TextureBinaryPayload::s_TextureMagic,
-        TextureBinaryPayload::s_TextureLoadBinaryContext,
-        TextureBinaryPayload::s_TextureAssetKindLabel
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(binary, cursor, TextureBinaryPayload::s_TextureMagic, TextureBinaryPayload::s_TextureLoadBinaryContext, TextureBinaryPayload::s_TextureAssetKindLabel);
     if(!headerResult)
         return false;
     const TextureBinaryPayload::HeaderBinary& header = *headerResult;
@@ -264,10 +216,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: unsupported texture payload version; recook required"));
         return false;
     }
-    if(
-        (header.alphaInfo & TextureBinaryPayload::s_AlphaInfoReservedMask) != 0u
-        || header.payloadFormat > static_cast<u32>(Limit<u8>::s_Max)
-    ){
+    if((header.alphaInfo & TextureBinaryPayload::s_AlphaInfoReservedMask) != 0u || header.payloadFormat > static_cast<u32>(Limit<u8>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid texture payload flags"));
         return false;
     }
@@ -280,20 +229,11 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     const u32 mipCount = header.mipCount;
     const TexturePayloadFormat::Enum payloadFormat = static_cast<TexturePayloadFormat::Enum>(header.payloadFormat);
     const TextureAlphaMode::Enum alphaMode = static_cast<TextureAlphaMode::Enum>(header.alphaInfo & TextureBinaryPayload::s_AlphaInfoModeMask);
-    const u8 alphaConstantUnorm8 = static_cast<u8>(
-        (header.alphaInfo & TextureBinaryPayload::s_AlphaInfoConstantMask)
-        >> TextureBinaryPayload::s_AlphaInfoConstantShift
-    );
+    const u8 alphaConstantUnorm8 = static_cast<u8>((header.alphaInfo & TextureBinaryPayload::s_AlphaInfoConstantMask) >> TextureBinaryPayload::s_AlphaInfoConstantShift);
     const u64 payloadByteCount64 = header.payloadByteCount;
 
     const TextureDimension::Enum dimension = static_cast<TextureDimension::Enum>(dimensionValue);
-    if(
-        dimensionValue > static_cast<u32>(Limit<u8>::s_Max)
-        || !IsValidTextureDimension(dimension)
-        || !IsValidTexturePayloadFormat(payloadFormat)
-        || !IsValidTextureAlphaMode(alphaMode)
-        || depth == 0u
-    ){
+    if(dimensionValue > static_cast<u32>(Limit<u8>::s_Max) || !IsValidTextureDimension(dimension) || !IsValidTexturePayloadFormat(payloadFormat) || !IsValidTextureAlphaMode(alphaMode) || depth == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid texture payload dimensions"));
         return false;
     }
@@ -303,14 +243,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     }
 
     Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinary> mipBinaries(m_mipLevels.get_allocator().arena());
-    if(!Core::Assets::ReadVectorPayload(
-        binary,
-        cursor,
-        mipCount,
-        mipBinaries,
-        TextureBinaryPayload::s_TextureLoadBinaryContext,
-        NWB_TEXT("mip levels")
-    ))
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, mipCount, mipBinaries, TextureBinaryPayload::s_TextureLoadBinaryContext, NWB_TEXT("mip levels")))
         return false;
 
     const usize payloadByteCount = static_cast<usize>(payloadByteCount64);

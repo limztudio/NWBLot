@@ -56,12 +56,7 @@ void MeshSkinningDeformationState::invalidateCurrent()noexcept{
     m_pendingCandidate = 0u;
 }
 
-void MeshSkinningDeformationState::refreshCurrent(
-    const MeshSkinningDeformationInputs& inputs,
-    const SkeletonJointMatrix* const joints,
-    const usize jointCount,
-    const bool inputDirty
-)noexcept{
+void MeshSkinningDeformationState::refreshCurrent(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount, const bool inputDirty)noexcept{
     invalidateCurrent();
     if(
         inputDirty
@@ -77,19 +72,9 @@ void MeshSkinningDeformationState::refreshCurrent(
     m_current = jointCount == 0u || NWB_MEMCMP(joints, m_acceptedJoints.data(), jointCount * sizeof(SkeletonJointMatrix)) == 0;
 }
 
-u64 MeshSkinningDeformationState::stage(
-    const MeshSkinningDeformationInputs& inputs,
-    const SkeletonJointMatrix* const joints,
-    const usize jointCount
-){
+u64 MeshSkinningDeformationState::stage(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount){
     invalidateCurrent();
-    if(
-        !inputs.resourceSlotsBuffer
-        || (jointCount != 0u && !joints)
-        || jointCount > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix)
-        || m_candidateSerial == Limit<u64>::s_Max
-        || m_acceptedRevision == Limit<u64>::s_Max
-    ){
+    if(!inputs.resourceSlotsBuffer || (jointCount != 0u && !joints) || jointCount > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || m_candidateSerial == Limit<u64>::s_Max || m_acceptedRevision == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningDeformationState: invalid or exhausted deformation candidate"));
         return 0u;
     }

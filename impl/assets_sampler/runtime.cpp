@@ -41,9 +41,7 @@ bool Sampler::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("Sampler::validatePayload")))
         return false;
     if(!IsValidSamplerDescription(m_description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description")
-            , StringConvert(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description"), StringConvert(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -53,13 +51,7 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
     m_description = {};
 
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(
-        binary,
-        cursor,
-        SamplerBinaryPayload::s_SamplerMagic,
-        NWB_TEXT("Sampler::loadBinary"),
-        NWB_TEXT("sampler")
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, cursor, SamplerBinaryPayload::s_SamplerMagic, NWB_TEXT("Sampler::loadBinary"), NWB_TEXT("sampler"));
     if(!headerResult)
         return false;
     const SamplerBinaryPayload::HeaderBinary& header = *headerResult;
@@ -67,23 +59,13 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: unsupported sampler version {}; recook required"), header.version);
         return false;
     }
-    if(
-        header.reserved != 0u
-        || header.minFilter > 1u
-        || header.magFilter > 1u
-        || header.mipFilter > 1u
-    ){
+    if(header.reserved != 0u || header.minFilter > 1u || header.magFilter > 1u || header.mipFilter > 1u){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler header contains invalid flags"));
         return false;
     }
 
     Core::SamplerDesc description;
-    description.borderColor = Core::Color(
-        header.borderColorR,
-        header.borderColorG,
-        header.borderColorB,
-        header.borderColorA
-    );
+    description.borderColor = Core::Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);
     description.maxAnisotropy = header.maxAnisotropy;
     description.mipBias = header.mipBias;
     description.minFilter = header.minFilter != 0u;

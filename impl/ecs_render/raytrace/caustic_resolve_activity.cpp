@@ -43,10 +43,7 @@ bool CausticResolveActivitySnapshot::valid()const noexcept{
     if(halfWidth == 0u || halfHeight == 0u)
         return false;
     for(u32 index = 0u; index < LengthOf(buffers); ++index){
-        if(
-            !buffers[index] || !descriptors[index].valid()
-            || descriptors[index].descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        )
+        if(!buffers[index] || !descriptors[index].valid() || descriptors[index].descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
             return false;
     }
     return true;
@@ -93,21 +90,11 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
     const Name names[] = { Name("caustic_resolve_activity_a"), Name("caustic_resolve_activity_b") };
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
-        desc
-            .setByteSize(layout->bufferByteSize)
-            .setCanHaveRawViews(true)
-            .setCanHaveUAVs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-            .setDebugName(names[index])
-        ;
+        desc.setByteSize(layout->bufferByteSize).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common).setDebugName(names[index]);
         activity.buffers[index] = m_graphics.createBuffer(desc);
         if(activity.buffers[index])
             activity.descriptors[index] = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(
-            !activity.buffers[index] || !activity.descriptors[index].valid()
-            || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))
-        ){
+        if(!activity.buffers[index] || !activity.descriptors[index].valid() || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))){
             releaseCausticResolveActivity();
             return false;
         }
@@ -119,11 +106,7 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
 
 CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const{
     const auto& activity = m_rayTracingState.m_causticResolve.m_activity;
-    if(
-        !activity.valid()
-        || activity.halfWidth != DivideUp(targets.width, 2u)
-        || activity.halfHeight != DivideUp(targets.height, 2u)
-    )
+    if(!activity.valid() || activity.halfWidth != DivideUp(targets.width, 2u) || activity.halfHeight != DivideUp(targets.height, 2u))
         return {};
     return activity;
 }

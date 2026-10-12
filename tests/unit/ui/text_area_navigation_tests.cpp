@@ -187,10 +187,7 @@ TEST_F(UiTextAreaNavigationTests, PageReachesTheTrailingEmptyLine){
 }
 
 TEST_F(UiTextAreaNavigationTests, EmptyDocumentResolvesEveryDirectionWithoutMoving){
-    const EditNavigationDirection::Enum directions[]{
-        EditNavigationDirection::Up, EditNavigationDirection::Down,
-        EditNavigationDirection::PageUp, EditNavigationDirection::PageDown
-    };
+    const EditNavigationDirection::Enum directions[]{ EditNavigationDirection::Up, EditNavigationDirection::Down, EditNavigationDirection::PageUp, EditNavigationDirection::PageDown };
     for(const auto direction : directions){
         const auto result = resolve(direction, 160.0f);
         ASSERT_TRUE(result.resolved);
@@ -365,8 +362,7 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
 
     const auto preferred = m_state.navigation().snapshot();
     AString<Core::Alloc::GlobalArena> language("ko", m_arena);
-    TextAreaNavigationResolver configured(m_arena, m_text, m_context, m_state, 14.0f,
-        TextScriptTag('H', 'a', 'n', 'g'), StringView(language.data(), language.size()));
+    TextAreaNavigationResolver configured(m_arena, m_text, m_context, m_state, 14.0f, TextScriptTag('H', 'a', 'n', 'g'), StringView(language.data(), language.size()));
     language.assign("!!", 2u);
     const EditNavigationResult matching = configured.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(matching.resolved);

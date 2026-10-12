@@ -15,26 +15,11 @@ from typing import Optional, Sequence
 
 
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".c++", ".C"}
-FRONTEND_VALUE_OPTIONS = {
-    "-D", "-U", "-I", "-isystem", "-iquote", "-idirafter", "-include",
-    "-imacros", "-include-pch", "-iprefix", "-iwithprefix", "-iwithprefixbefore",
-    "-isystem-after", "-iframework", "-iframeworkwithsysroot", "-ivfsoverlay",
-    "-MF", "-MT", "-MQ", "-MJ", "-dependency-file", "-serialize-diagnostics", "-x", "-std",
-}
-DRIVER_VALUE_OPTIONS = {
-    "-target", "--target", "-arch", "-isysroot", "--sysroot", "-resource-dir",
-    "-B", "-gcc-toolchain", "--gcc-toolchain", "-Xassembler", "-mllvm",
-    "-Xpreprocessor", "-Xclang", "-fdebug-compilation-dir", "-fcoverage-compilation-dir",
-}
-FRONTEND_SINGLE_OPTIONS = {
-    "-MD", "-MMD", "-MP", "-MG", "-fno-rtti", "-frtti", "-fno-exceptions",
-    "-fexceptions", "-nostdinc", "-nostdinc++", "-undef", "-pedantic", "-pedantic-errors",
-}
-FRONTEND_PREFIX_OPTIONS = (
-    "-D", "-U", "-I", "-std=", "-MF", "-MT", "-MQ", "-MJ", "-fdiagnostics-",
-    "-isystem", "-iquote", "-idirafter", "-include", "-imacros", "-iframework",
-    "-fmacro-prefix-map=", "-fmodules-cache-path=", "-fmodule-file=",
-)
+FRONTEND_VALUE_OPTIONS = { "-D", "-U", "-I", "-isystem", "-iquote", "-idirafter", "-include", "-imacros", "-include-pch", "-iprefix", "-iwithprefix", "-iwithprefixbefore", "-isystem-after", "-iframework", "-iframeworkwithsysroot", "-ivfsoverlay",
+    "-MF", "-MT", "-MQ", "-MJ", "-dependency-file", "-serialize-diagnostics", "-x", "-std", }
+DRIVER_VALUE_OPTIONS = { "-target", "--target", "-arch", "-isysroot", "--sysroot", "-resource-dir", "-B", "-gcc-toolchain", "--gcc-toolchain", "-Xassembler", "-mllvm", "-Xpreprocessor", "-Xclang", "-fdebug-compilation-dir", "-fcoverage-compilation-dir", }
+FRONTEND_SINGLE_OPTIONS = { "-MD", "-MMD", "-MP", "-MG", "-fno-rtti", "-frtti", "-fno-exceptions", "-fexceptions", "-nostdinc", "-nostdinc++", "-undef", "-pedantic", "-pedantic-errors", }
+FRONTEND_PREFIX_OPTIONS = ("-D", "-U", "-I", "-std=", "-MF", "-MT", "-MQ", "-MJ", "-fdiagnostics-", "-isystem", "-iquote", "-idirafter", "-include", "-imacros", "-iframework", "-fmacro-prefix-map=", "-fmodules-cache-path=", "-fmodule-file=",)
 
 
 def effective_argument(argument: str) -> str:

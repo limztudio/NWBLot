@@ -53,22 +53,9 @@ inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle ext
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void FrustumCorners(
-    const SIMDVectorSingle origin,
-    const SIMDVectorSingle orientation,
-    const f32 rightSlope,
-    const f32 leftSlope,
-    const f32 topSlope,
-    const f32 bottomSlope,
-    const f32 nearPlane,
-    const f32 farPlane,
-    SIMDVectorSingle* outCorners
-)noexcept{
+inline void FrustumCorners(const SIMDVectorSingle origin, const SIMDVectorSingle orientation, const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope, const f32 nearPlane, const f32 farPlane, SIMDVectorSingle* outCorners)noexcept{
     const SIMDVectorSingle slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
-    const SIMDVectorSingle depths[2] = {
-        VectorReplicate(nearPlane),
-        VectorReplicate(farPlane),
-    };
+    const SIMDVectorSingle depths[2] = { VectorReplicate(nearPlane), VectorReplicate(farPlane), };
     const SIMDVectorSingle zero = VectorZero();
     u32 corner = 0u;
     for(const SIMDVectorSingle depth : depths){
@@ -136,22 +123,9 @@ inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble ext
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void FrustumCorners(
-    const SIMDVectorDouble origin,
-    const SIMDVectorDouble orientation,
-    const f64 rightSlope,
-    const f64 leftSlope,
-    const f64 topSlope,
-    const f64 bottomSlope,
-    const f64 nearPlane,
-    const f64 farPlane,
-    SIMDVectorDouble* outCorners
-)noexcept{
+inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble orientation, const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope, const f64 nearPlane, const f64 farPlane, SIMDVectorDouble* outCorners)noexcept{
     const SIMDVectorDouble slopes = VectorDoubleSet(rightSlope, leftSlope, bottomSlope, topSlope);
-    const SIMDVectorDouble depths[2] = {
-        VectorDoubleReplicate(nearPlane),
-        VectorDoubleReplicate(farPlane),
-    };
+    const SIMDVectorDouble depths[2] = { VectorDoubleReplicate(nearPlane), VectorDoubleReplicate(farPlane), };
     const SIMDVectorDouble zero = VectorDoubleZero();
     u64 corner = 0u;
     for(const SIMDVectorDouble depth : depths){
@@ -215,22 +189,12 @@ inline void FrustumCorners(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(
-    SIMDVectorSingle sphereValue,
-    const f32 scale,
-    const SIMDVectorSingle rotation,
-    const SIMDVectorSingle translation
-)noexcept{
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)noexcept{
     const SIMDVectorSingle transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
     return CollisionDetail::SphereCenterRadius(transformedCenter, VectorScale(VectorSplatW(sphereValue), Abs(scale)));
 }
 
-[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(
-    SIMDVectorDouble sphereValue,
-    const f64 scale,
-    const SIMDVectorDouble rotation,
-    const SIMDVectorDouble translation
-)noexcept{
+[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(SIMDVectorDouble sphereValue, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)noexcept{
     const SIMDVectorDouble transformedCenter = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(CollisionDoubleDetail::SphereCenter(sphereValue), scale), rotation), translation);
     return CollisionDoubleDetail::SphereCenterRadius(transformedCenter, VectorDoubleScale(VectorDoubleSplatW(sphereValue), Abs(scale)));
 }

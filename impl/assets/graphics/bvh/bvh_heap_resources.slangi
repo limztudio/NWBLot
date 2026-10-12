@@ -21,10 +21,8 @@
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate writable typed aliases of the global StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapBvhWritableUintBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-globallycoherent RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbHeapBvhWritableNodeBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapBvhWritableUintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] globallycoherent RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbHeapBvhWritableNodeBuffers[];
 #pragma warning(pop)
 
 

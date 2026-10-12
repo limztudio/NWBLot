@@ -21,14 +21,7 @@ NWB_ASSETS_BEGIN
 
 
 template<typename ValueContainer>
-[[nodiscard]] bool ReadVectorPayload(
-    const AssetBytes& binary,
-    usize& inOutCursor,
-    const u64 count,
-    ValueContainer& outValues,
-    const TStringView failureContext,
-    const TStringView label
-){
+[[nodiscard]] bool ReadVectorPayload(const AssetBytes& binary, usize& inOutCursor, const u64 count, ValueContainer& outValues, const TStringView failureContext, const TStringView label){
     const auto result = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
     if(result)
         return true;
@@ -44,13 +37,7 @@ template<typename ValueContainer>
 }
 
 template<typename HeaderT>
-[[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(
-    const AssetBytes& binary,
-    usize& inOutCursor,
-    const u32 expectedMagic,
-    const TStringView failureContext,
-    const TStringView assetType
-){
+[[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(const AssetBytes& binary, usize& inOutCursor, const u32 expectedMagic, const TStringView failureContext, const TStringView assetType){
     const auto header = ReadPOD<HeaderT>(binary, inOutCursor);
     if(!header){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
@@ -65,11 +52,7 @@ template<typename HeaderT>
     return header;
 }
 
-[[nodiscard]] inline bool ReadCompletePayload(
-    const AssetBytes& binary,
-    const usize cursor,
-    const TStringView failureContext
-){
+[[nodiscard]] inline bool ReadCompletePayload(const AssetBytes& binary, const usize cursor, const TStringView failureContext){
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
         return false;
@@ -89,12 +72,7 @@ template<typename HeaderT>
 
 
 template<typename ValueContainer>
-[[nodiscard]] bool AppendVectorPayload(
-    AssetBytes& outBinary,
-    const ValueContainer& values,
-    const TStringView failureContext,
-    const TStringView label
-){
+[[nodiscard]] bool AppendVectorPayload(AssetBytes& outBinary, const ValueContainer& values, const TStringView failureContext, const TStringView label){
     const auto result = ::AppendBinaryVectorPayload(outBinary, values);
     if(result)
         return true;

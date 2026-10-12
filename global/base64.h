@@ -84,11 +84,7 @@ inline constexpr u8 s_InvalidDigit = 255u;
 
 // The returned candidate owns its bytes; borrowed input may alias a caller-owned destination.
 template<typename ByteContainer>
-[[nodiscard]] inline Expected<ByteContainer> DecodeBase64(
-    const AStringView source,
-    const typename ByteContainer::allocator_type& allocator,
-    const usize maxBytes
-){
+[[nodiscard]] inline Expected<ByteContainer> DecodeBase64(const AStringView source, const typename ByteContainer::allocator_type& allocator, const usize maxBytes){
     BinaryDetail::RequireByteContainer<ByteContainer>();
     const auto parsedSize = Base64DecodedSize(source, maxBytes);
     if(!parsedSize)

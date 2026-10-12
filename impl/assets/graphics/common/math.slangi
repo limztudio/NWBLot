@@ -23,11 +23,7 @@
 
 
 half nwbLuminance(const half3 color){
-    return dot(color, half3(
-        half(NWB_LUMINANCE_REC709_RED),
-        half(NWB_LUMINANCE_REC709_GREEN),
-        half(NWB_LUMINANCE_REC709_BLUE)
-    ));
+    return dot(color, half3(half(NWB_LUMINANCE_REC709_RED), half(NWB_LUMINANCE_REC709_GREEN), half(NWB_LUMINANCE_REC709_BLUE)));
 }
 
 float nwbLuminance(const float3 color){
@@ -56,10 +52,7 @@ bool nwbFiniteFloat4(const float4 value){
 
 float3 nwbSafeNormalizeMinLengthSquared(const float3 value, const float3 fallback, const float minLengthSquared){
     const float lengthSquared = dot(value, value);
-    return nwbFiniteFloat3(value) && nwbFiniteFloat(lengthSquared) && lengthSquared > minLengthSquared
-        ? value * rsqrt(lengthSquared)
-        : fallback
-    ;
+    return nwbFiniteFloat3(value) && nwbFiniteFloat(lengthSquared) && lengthSquared > minLengthSquared ? value * rsqrt(lengthSquared) : fallback;
 }
 
 float3 nwbSafeNormalize(const float3 value, const float3 fallback){
@@ -145,15 +138,9 @@ float nwbTangentHandedness(const float handedness, const float fallbackHandednes
 float3 nwbResolveFrameTangent(const float3 normal, const float3 tangent, const float3 fallbackTangent){
     const float3 safeFallbackTangent = nwbFrameFallbackTangent(normal);
 
-    float3 projectedTangent = nwbFiniteFloat3(tangent)
-        ? nwbProjectOntoPlane(tangent, normal)
-        : safeFallbackTangent
-    ;
+    float3 projectedTangent = nwbFiniteFloat3(tangent) ? nwbProjectOntoPlane(tangent, normal) : safeFallbackTangent;
     if(!nwbValidFrameDirection(projectedTangent)){
-        projectedTangent = nwbFiniteFloat3(fallbackTangent)
-            ? nwbProjectOntoPlane(fallbackTangent, normal)
-            : safeFallbackTangent
-        ;
+        projectedTangent = nwbFiniteFloat3(fallbackTangent) ? nwbProjectOntoPlane(fallbackTangent, normal) : safeFallbackTangent;
     }
     if(!nwbValidFrameDirection(projectedTangent))
         return safeFallbackTangent;
@@ -161,12 +148,7 @@ float3 nwbResolveFrameTangent(const float3 normal, const float3 tangent, const f
     return nwbSafeFrameNormalize(projectedTangent, safeFallbackTangent);
 }
 
-void nwbOrthonormalizeFrame(
-    inout float3 normal,
-    inout float4 tangent,
-    const float3 fallbackNormal,
-    const float4 fallbackTangent
-){
+void nwbOrthonormalizeFrame(inout float3 normal, inout float4 tangent, const float3 fallbackNormal, const float4 fallbackTangent){
     normal = nwbSafeFrameNormalize(normal, nwbSafeFrameNormalize(fallbackNormal, float3(0.0, 0.0, 1.0)));
     tangent.xyz = nwbResolveFrameTangent(normal, tangent.xyz, fallbackTangent.xyz);
     tangent.w = nwbTangentHandedness(tangent.w, fallbackTangent.w);

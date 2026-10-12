@@ -25,13 +25,10 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shadow-visibility all-lit and surfel-irradiance clears share one float-clear
-// record path; only the subresources and clear color differ per use.
+// Shadow-visibility all-lit and surfel-irradiance clears share one float-clear record path; only the subresources and clear color differ per use.
 struct FloatTextureClearGraphTask{
     // Native uncompressed color clears accept either Compute or Graphics commands.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
-        Core::GpuQueueCapability::None, false, Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute,
-    };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, false, Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute, };
 
     struct Payload{
         Core::GpuGraphResourceId destination;
@@ -39,11 +36,7 @@ struct FloatTextureClearGraphTask{
         Core::Color floatValue = {};
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 

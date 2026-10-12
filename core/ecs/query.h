@@ -80,14 +80,7 @@ struct ViewIterator{
     DenseIndexTuple denseIndices;
     EntityID entity;
 
-    ViewIterator(
-        ComponentTuple poolsValue,
-        const ViewEntityVector* anchorEntitiesValue,
-        usize anchorPoolIndexValue,
-        usize indexValue,
-        usize countValue,
-        bool validValue
-    )
+    ViewIterator(ComponentTuple poolsValue, const ViewEntityVector* anchorEntitiesValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)
         : pools(Move(poolsValue))
         , anchorEntities(anchorEntitiesValue)
         , anchorPoolIndex(anchorPoolIndexValue)

@@ -15,15 +15,13 @@ from window_capture_smoke import SmokeFailure
 def runtime_log(variant="current"):
     photons = variant != "no_photons"
     first = 700
-    lines = [f"SkinnedCausticTransition: setup lagged={int(variant == 'lagged')} caustics={int(photons)} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism",
-        "SkinnedCausticTransition: warmup started graphics frame 360",
+    lines = [f"SkinnedCausticTransition: setup lagged={int(variant == 'lagged')} caustics={int(photons)} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism", "SkinnedCausticTransition: warmup started graphics frame 360",
         f"SkinnedCausticTransition: warmup complete elapsed_seconds=30.001234 first_frame={first}"]
     for phase in range(4):
         lines.append(f"SkinnedCausticTransition: phase {phase} csg={phase % 2} graphics frame {first + phase * 64}")
     for sample in range(8):
         frame = first + (sample + 1) * 32 - 1
-        lines += [f"SkinnedCausticTransition: sample {sample} graphics frame {frame} phase {sample // 2} pose_frame {(frame - first) % 64}",
-            "FramebufferCapture: capture ready"]
+        lines += [f"SkinnedCausticTransition: sample {sample} graphics frame {frame} phase {sample // 2} pose_frame {(frame - first) % 64}", "FramebufferCapture: capture ready"]
     for phase in range(4):
         lines.append(f"SkinnedCausticTransition: completed GPU phase {phase} photon_samples={60 if photons else 0} skinning_samples=60")
     if photons:
@@ -32,8 +30,7 @@ def runtime_log(variant="current"):
             lines.append(f"SkinnedCausticTransition: accepted photon route phase {phase} source_frame={first + phase * 64 + 8} queue={queue} graphics_queue=0 generation=1 off_graphics={queue}")
         lines.append("RendererSystem: dispatched hardware caustic producer (16384 photons/frame)")
     if variant == "lagged":
-        lines += ["RendererSystem: frame-lagged async lighting bootstrap accepted",
-            "RendererSystem: frame-lagged async lighting active history accepted"]
+        lines += ["RendererSystem: frame-lagged async lighting bootstrap accepted", "RendererSystem: frame-lagged async lighting active history accepted"]
     return "\n".join(lines + ["SkinnedCausticTransition: complete samples=8", "SkinnedCausticSmokeProject: shutdown"])
 
 
@@ -47,8 +44,7 @@ def image_series():
         frames = []
         for sample in range(8):
             value = 10 + (sample % 4) * 10
-            frames.append({"receiver": region((value, value + 15, value + 30)),
-                "ground": region((40, 40, 40) if variant != "no_photons" else (30, 30, 30))})
+            frames.append({"receiver": region((value, value + 15, value + 30)), "ground": region((40, 40, 40) if variant != "no_photons" else (30, 30, 30))})
         series[variant] = frames
     return series
 
@@ -65,8 +61,7 @@ class SkinnedCausticTransitionTests(unittest.TestCase):
 
     def test_uncompleted_skinning_is_rejected(self):
         with self.assertRaises(SmokeFailure):
-            smoke.validate_series_log(runtime_log().replace("GPU phase 2 photon_samples=60 skinning_samples=60",
-                "GPU phase 2 photon_samples=60 skinning_samples=0"), "current")
+            smoke.validate_series_log(runtime_log().replace("GPU phase 2 photon_samples=60 skinning_samples=60", "GPU phase 2 photon_samples=60 skinning_samples=0"), "current")
 
     def test_graphics_fallback_cannot_qualify_compute_reader_hazard(self):
         with self.assertRaises(SmokeFailure):
@@ -74,8 +69,7 @@ class SkinnedCausticTransitionTests(unittest.TestCase):
 
     def test_photon_queue_assigned_graphics_cannot_qualify_async_hazard(self):
         with self.assertRaises(SmokeFailure):
-            smoke.validate_series_log(runtime_log("lagged").replace("queue=1 graphics_queue=0 generation=1 off_graphics=1",
-                "queue=0 graphics_queue=0 generation=1 off_graphics=0"), "lagged")
+            smoke.validate_series_log(runtime_log("lagged").replace("queue=1 graphics_queue=0 generation=1 off_graphics=1", "queue=0 graphics_queue=0 generation=1 off_graphics=0"), "lagged")
 
     def test_declared_compute_route_without_accepted_packet_is_rejected(self):
         log = runtime_log("lagged")

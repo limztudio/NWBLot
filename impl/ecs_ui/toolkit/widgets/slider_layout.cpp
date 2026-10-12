@@ -36,16 +36,11 @@ namespace __hidden_ui_slider_layout{
         || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y)
     )
         return false;
-    const SIMDVectorDouble padding = SIMDVectorDouble{ metrics.padding.left, metrics.padding.top }
-        + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom };
-    const SIMDVectorDouble size = padding + SIMDVectorDouble{ metrics.thumbExtent.x,
-        Max(static_cast<f64>(metrics.thumbExtent.y), static_cast<f64>(metrics.trackHeight)) };
+    const SIMDVectorDouble padding = SIMDVectorDouble{ metrics.padding.left, metrics.padding.top } + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom };
+    const SIMDVectorDouble size = padding + SIMDVectorDouble{ metrics.thumbExtent.x, Max(static_cast<f64>(metrics.thumbExtent.y), static_cast<f64>(metrics.trackHeight)) };
     const f64 width = size.x;
     const f64 height = size.y;
-    return
-        width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max
-        && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height)
-    ;
+    return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height);
 }
 
 
@@ -73,8 +68,7 @@ Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, cons
     candidate.thumbExtent = style.thumbExtent;
     candidate.trackHeight = style.trackHeight;
     const f64 width = static_cast<f64>(style.padding.left) + style.padding.right + style.thumbExtent.x;
-    const f64 height = Max(static_cast<f64>(options.height), static_cast<f64>(style.padding.top) + style.padding.bottom
-        + Max(static_cast<f64>(style.thumbExtent.y), static_cast<f64>(style.trackHeight)));
+    const f64 height = Max(static_cast<f64>(options.height), static_cast<f64>(style.padding.top) + style.padding.bottom + Max(static_cast<f64>(style.thumbExtent.y), static_cast<f64>(style.trackHeight)));
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
@@ -83,17 +77,9 @@ Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, cons
     return candidate;
 }
 
-Expected<SliderPlacement> SliderLayout::Place(
-    const Rect& bounds,
-    const Rect& clip,
-    const SliderMetrics& metrics,
-    const f64 normalized
-)noexcept{
+Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& clip, const SliderMetrics& metrics, const f64 normalized)noexcept{
     using namespace __hidden_ui_slider_layout;
-    if(
-        !IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(metrics)
-        || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0
-    )
+    if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(metrics) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
         return MakeUnexpected(Failure{});
     SliderPlacement candidate;
     candidate.bounds = bounds;

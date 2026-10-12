@@ -54,11 +54,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> uniqueEdges(scratchArena);
     uniqueEdges.reserve(analysis.inferredEdges().size());
     for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
-        if(
-            edge.hazard == GpuTaskHazardType::VersionDependency
-            || edge.hazard == GpuTaskHazardType::VersionLifetime
-            || !edge.resource.valid()
-        )
+        if(edge.hazard == GpuTaskHazardType::VersionDependency || edge.hazard == GpuTaskHazardType::VersionLifetime || !edge.resource.valid())
             continue;
         uniqueEdges.push_back(&edge);
     }
@@ -111,10 +107,7 @@ u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)c
     return 0u;
 }
 
-void GpuTaskQueueScoringData::rebuildAssignmentLoads(
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GpuPhysicalQueueTopology& topology
-){
+void GpuTaskQueueScoringData::rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuPhysicalQueueTopology& topology){
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     m_assignedQueueLoads.resize(topology.queueCount);
@@ -173,11 +166,7 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(
     }
 }
 
-void GpuTaskQueueScoringData::updateAssignmentLoads(
-    const GpuTaskId& task,
-    const GpuPhysicalQueueId& previousQueue,
-    const GpuPhysicalQueueId& selectedQueue
-)noexcept{
+void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     if(previousQueue == selectedQueue)
@@ -223,12 +212,7 @@ u64 GpuTaskQueueScoringData::assignedQueueLoad(const GpuPhysicalQueueId& queue)c
 }
 
 
-u64 GpuTaskQueueScoringData::independentQueueCost(
-    const GpuTaskSchedulingReachability& reachability,
-    const GpuPhysicalQueueId& queue,
-    const NotNull<const GpuTaskQueueAssignment*> members,
-    const usize memberCount
-)const noexcept{
+u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, const NotNull<const GpuTaskQueueAssignment*> members, const usize memberCount)const noexcept{
     if(!reachability.m_valid || reachability.m_totalOrder || memberCount == 0u)
         return 0u;
 #if defined(NWB_DEBUG)

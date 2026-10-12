@@ -51,7 +51,8 @@ struct RayTracingOpticalUploadPlan{
     [[nodiscard]] bool valid()const noexcept{ return available && buffer && upload && owner && sequence != 0u && queue.valid(); }
 };
 
-// One physical buffer, one primary Graphics writer domain. Only accepted writes replace residency.
+// One physical buffer, one primary Graphics writer domain.
+// Only accepted writes replace residency.
 // Renderer graph admission is serial; this does not admit independently submitted overlapping read graphs.
 class RayTracingOpticalUploadState : NoCopy{
 public:
@@ -86,11 +87,7 @@ private:
 using RayTracingOpticalUploadControl = RefCounter<RayTracingOpticalUploadState>;
 using RayTracingOpticalUploadControlHandle = RefCountPtr<RayTracingOpticalUploadControl, ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(
-    Core::Alloc::GlobalArena& arena,
-    const Core::BufferHandle& buffer,
-    Core::GpuPhysicalQueueId primaryQueue
-);
+[[nodiscard]] RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, Core::GpuPhysicalQueueId primaryQueue);
 
 class RayTracingOpticalUploadReservation final : NoCopy{
 public:

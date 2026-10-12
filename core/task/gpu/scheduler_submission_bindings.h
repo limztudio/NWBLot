@@ -63,10 +63,7 @@ struct TaskSubmissionBindings : NoCopy{
         usize taskSubmissionHookCount
     );
     [[nodiscard]] bool validateOwnedTimingTicket(GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* timingTicket)const noexcept;
-    [[nodiscard]] const QueueSubmissionPreSubmitHook* collectPacket(
-        GpuSubmissionPacketId packet,
-        Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena>& inOutTimingTickets
-    )const;
+    [[nodiscard]] const QueueSubmissionPreSubmitHook* collectPacket(GpuSubmissionPacketId packet, Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena>& inOutTimingTickets)const;
 };
 
 

@@ -26,17 +26,14 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(
-    const DeferredFrameTailInputs& inputs
-){
+[[nodiscard]] Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const DeferredFrameTailInputs& inputs){
     using namespace RendererTaskGraphDetail;
     DeferredFrameTailResult result{};
     if(!inputs.terminalPresentationTask.valid())
         return MakeUnexpected(Failure{});
 
     if(inputs.capturesLaggedLightingHistory){
-        // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains
-        // the imports itself. The array slices stay explicit only in the native copy body.
+        // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains the imports itself. The array slices stay explicit only in the native copy body.
         Core::GpuCopyTextureTaskRegion historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 2u] = {};
         for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
             Core::GpuCopyTextureTaskRegion& region = historyCopyRegions[shadowSlot];
@@ -55,40 +52,24 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
         historyCopyScheduling.allowPacketMerge = false;
         const Core::GpuTaskId historyCopyDependencies[] = { inputs.terminalPresentationTask };
         Core::GpuTaskDesc historyCopyDesc;
-        historyCopyDesc
-            .setIdentity(Name("render.lagged_history_copy"))
-            .setMarkerLabel("Lagged Lighting History Copy")
-            .setScheduling(historyCopyScheduling)
-            .setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies))
-        ;
-        result.historyCopyTask = m_graph.addCopyTextureTask(
-            historyCopyDesc,
-            Core::GpuCopyTextureTaskDesc{
-                .regions = historyCopyRegions,
-                .regionCount = LengthOf(historyCopyRegions),
-                .acceptedToken = &inputs.historyCopySubmissionToken,
-            }
-        );
+        historyCopyDesc.setIdentity(Name("render.lagged_history_copy")).setMarkerLabel("Lagged Lighting History Copy").setScheduling(historyCopyScheduling).setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies));
+        result.historyCopyTask = m_graph.addCopyTextureTask(historyCopyDesc, Core::GpuCopyTextureTaskDesc{ .regions = historyCopyRegions, .regionCount = LengthOf(historyCopyRegions), .acceptedToken = &inputs.historyCopySubmissionToken, });
         if(!result.historyCopyTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
             return MakeUnexpected(Failure{});
         }
     }
 
-    // Recovery is a late independent Graphics tail. It deliberately has no packet dependency on normal work: a
-    // rejected suffix must not prevent it from retiring the accepted frame prefix. Its compiled packet asks the
-    // graph transaction to join every accepted non-Graphics physical queue at submit time.
-    const Core::GpuGraphResourceId recoveryDomain = m_graph.importHazardDomain(
-        HazardDomainDesc(Name("render.frame_recovery.timing"), "Frame Recovery Timing")
-    );
+    // Recovery is a late independent Graphics tail.
+    // It deliberately has no packet dependency on normal work: a rejected suffix must not prevent it from retiring the accepted frame prefix.
+    // Its compiled packet asks the graph transaction to join every accepted non-Graphics physical queue at submit time.
+    const Core::GpuGraphResourceId recoveryDomain = m_graph.importHazardDomain(HazardDomainDesc(Name("render.frame_recovery.timing"), "Frame Recovery Timing"));
     if(!recoveryDomain.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
         return MakeUnexpected(Failure{});
     }
 
-    const Core::GpuTaskResourceUse recoveryResourceUses[] = {
-        ReadWriteUse(recoveryDomain, Core::ResourceStates::Common),
-    };
+    const Core::GpuTaskResourceUse recoveryResourceUses[] = { ReadWriteUse(recoveryDomain, Core::ResourceStates::Common), };
     Core::GpuTaskSchedulingHint recoveryScheduling;
     recoveryScheduling.cost = Core::GpuTaskCostHint::Tiny;
     recoveryScheduling.forceSubmissionBoundary = true;
@@ -96,19 +77,10 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
     recoveryScheduling.isRecoverySubmission = true;
     Core::GpuTaskDesc recoveryDesc;
-    recoveryDesc
-        .setIdentity(Name("render.frame_recovery"))
-        .setMarkerLabel("Frame Recovery")
-        .setScheduling(recoveryScheduling)
-        .setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses))
-    ;
+    recoveryDesc.setIdentity(Name("render.frame_recovery")).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses));
     result.recoveryTask = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
         recoveryDesc,
-        ECSRenderDetail::FrameRecoveryGraphTask::Payload{
-            .frameTimingTransaction = inputs.frameTimingTransaction,
-            .armed = inputs.recoveryArmed,
-            .retiresFrameTiming = inputs.recoveryRetiresFrameTiming,
-        }
+        ECSRenderDetail::FrameRecoveryGraphTask::Payload{ .frameTimingTransaction = inputs.frameTimingTransaction, .armed = inputs.recoveryArmed, .retiresFrameTiming = inputs.recoveryRetiresFrameTiming, }
     );
     if(!result.recoveryTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-recovery graph task"));

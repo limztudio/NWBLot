@@ -21,13 +21,7 @@ namespace __hidden_softshadow_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EnsureResolveChannel(
-    RendererShaderSystem& shaderSystem,
-    Core::GraphicsBackend::Device& device,
-    const Core::BindingLayoutHandle& bindingLayout,
-    const Name& shaderName,
-    SoftShadowResolveChannelState& channel
-){
+[[nodiscard]] bool EnsureResolveChannel(RendererShaderSystem& shaderSystem, Core::GraphicsBackend::Device& device, const Core::BindingLayoutHandle& bindingLayout, const Name& shaderName, SoftShadowResolveChannelState& channel){
     struct StageRequest{
         AStringView m_variant;
         SoftShadowResolveStageState& m_state;
@@ -46,12 +40,7 @@ namespace __hidden_softshadow_pipelines{
             return false;
         }
         Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc
-            .setComputeShader(stage.m_state.m_shader)
-            .addBindingLayout(bindingLayout)
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
+        pipelineDesc.setComputeShader(stage.m_state.m_shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         stage.m_state.m_pipeline = device.createComputePipeline(pipelineDesc);
         if(!stage.m_state.m_pipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
@@ -92,22 +81,12 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_shadowGeometryDownsampleShader,
-        AssetsGraphicsShadow::s_GeometryDownsampleShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_ShadowGeometryDownsample"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowGeometryDownsampleShader, AssetsGraphicsShadow::s_GeometryDownsampleShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowGeometryDownsample")){
         m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
         return false;
     }
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_shadowGeometryDownsampleShader)
-        .addBindingLayout(m_rayTracingState.m_shadowGeometryDownsampleBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowGeometryDownsampleShader).addBindingLayout(m_rayTracingState.m_shadowGeometryDownsampleBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_rayTracingState.m_shadowGeometryDownsamplePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_shadowGeometryDownsamplePipeline){
         m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
@@ -136,9 +115,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
             return false;
         }
     }
-    return __hidden_softshadow_pipelines::EnsureResolveChannel(
-        m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveShaderName, resolve.m_scalar
-    );
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveShaderName, resolve.m_scalar);
 }
 
 bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
@@ -151,9 +128,7 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     auto& device = m_graphics.getDevice();
     if(!device.getDescriptorHeap().isInitialized())
         return false;
-    return __hidden_softshadow_pipelines::EnsureResolveChannel(
-        m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveRgbShaderName, resolve.m_rgb
-    );
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveRgbShaderName, resolve.m_rgb);
 }
 
 // Both trace backends publish the same independent channel textures and use the same optional resolve pipelines.
@@ -189,7 +164,9 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     const DeferredBindlessFrameResources& bindless = targets.bindless;
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
-    const auto runPass = [&](const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const bool graphOwnsInputColorState = false, const bool graphOwnsOutputState = false){
+    const auto runPass = [&](
+        const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const bool graphOwnsInputColorState = false, const bool graphOwnsOutputState = false
+    ){
         NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
         switch(stage){
             case ShadowResolveStage::Wavelet:
@@ -242,10 +219,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
         push.visibilityStorageSlot = dispatch.visibilityStorage;
         push.sceneShadingSlot = dispatch.sceneShading;
 
-        Core::ComputePipeline& pipeline = stage == ShadowResolveStage::Upsample
-            ? *dispatch.upsamplePipeline
-            : *dispatch.waveletPipeline
-        ;
+        Core::ComputePipeline& pipeline = stage == ShadowResolveStage::Upsample ? *dispatch.upsamplePipeline : *dispatch.waveletPipeline;
         Core::ComputeState state;
         state.setPipeline(&pipeline);
         commandList.setComputeState(state);
@@ -260,15 +234,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     NWB_ASSERT(dispatchFirstWavelet || dispatchTail);
 
     if(dispatchFirstWavelet){
-        runPass(
-            dispatch.firstWaveletResources,
-            1u,
-            ShadowResolveStage::Wavelet,
-            halfGroupsX,
-            halfGroupsY,
-            dispatch.graphOwnsFirstWaveletInputState,
-            dispatch.graphOwnsFirstWaveletOutputState
-        );
+        runPass(dispatch.firstWaveletResources, 1u, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY, dispatch.graphOwnsFirstWaveletInputState, dispatch.graphOwnsFirstWaveletOutputState);
     }
     if(!dispatchTail)
         return;
@@ -276,30 +242,13 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     bool sourceIsHalfA = dispatch.firstWaveletWritesHalfA;
     [[maybe_unused]] const SoftShadowResolvePassResources* lastWaveletResources = &dispatch.firstWaveletResources;
     for(u32 pass = 1u; pass < dispatch.waveletPassCount; ++pass){
-        const SoftShadowResolvePassResources& nextWaveletResources = sourceIsHalfA
-            ? dispatch.outputHalfBResources
-            : dispatch.outputHalfAResources
-        ;
-        runPass(
-            nextWaveletResources,
-            1u << pass,
-            ShadowResolveStage::Wavelet,
-            halfGroupsX,
-            halfGroupsY
-        );
+        const SoftShadowResolvePassResources& nextWaveletResources = sourceIsHalfA ? dispatch.outputHalfBResources : dispatch.outputHalfAResources;
+        runPass(nextWaveletResources, 1u << pass, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
         lastWaveletResources = &nextWaveletResources;
         sourceIsHalfA = !sourceIsHalfA;
     }
     NWB_ASSERT(dispatch.upsampleResources.inputColorTexture == lastWaveletResources->outputTexture);
-    runPass(
-        dispatch.upsampleResources,
-        1u,
-        ShadowResolveStage::Upsample,
-        fullGroupsX,
-        fullGroupsY,
-        dispatch.graphOwnsUpsampleInputColorEntryState,
-        dispatch.graphOwnsUpsampleVisibilityOutputState
-    );
+    runPass(dispatch.upsampleResources, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY, dispatch.graphOwnsUpsampleInputColorEntryState, dispatch.graphOwnsUpsampleVisibilityOutputState);
 }
 
 bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
@@ -322,22 +271,12 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_shadowReprojectMergeShader,
-        AssetsGraphicsShadow::s_SoftReprojectMergeShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_SoftShadowReprojectMerge"
-    )){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowReprojectMergeShader, AssetsGraphicsShadow::s_SoftReprojectMergeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SoftShadowReprojectMerge")){
         m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
         return false;
     }
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_shadowReprojectMergeShader)
-        .addBindingLayout(m_rayTracingState.m_shadowReprojectMergeBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowReprojectMergeShader).addBindingLayout(m_rayTracingState.m_shadowReprojectMergeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     m_rayTracingState.m_shadowReprojectMergePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_shadowReprojectMergePipeline){
         m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;

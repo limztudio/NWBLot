@@ -44,13 +44,7 @@ template<typename CharT>
     for(usize i = 0u; i <= pathText.size(); ++i){
         const bool atEnd = i == pathText.size();
         const char ch = atEnd ? '/' : pathText[i];
-        if(
-            !atEnd
-            && (
-                static_cast<unsigned char>(ch) < GlobalFilesystemArchiveDetail::s_MinSafeArchivePathCharacter
-                || ch == ':'
-            )
-        )
+        if(!atEnd && (static_cast<unsigned char>(ch) < GlobalFilesystemArchiveDetail::s_MinSafeArchivePathCharacter || ch == ':'))
             return false;
 
         if(!atEnd && !GlobalFilesystemArchiveDetail::IsArchivePathSeparator(ch))

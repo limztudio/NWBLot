@@ -26,26 +26,12 @@ struct SkinnedRuntimeMeshIdentity{
 };
 
 // Caller resolves instances from binding handles; queries retain no GPU buffers.
-[[nodiscard]] Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(
-    Core::ECS::EntityID entity,
-    RuntimeMeshHandle runtimeMesh,
-    const MeshSkinningRuntimeInstance* instance
-);
+[[nodiscard]] Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(Core::ECS::EntityID entity, RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* instance);
 // Success retains raster and optional RT roles.
-[[nodiscard]] Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(
-    Core::ECS::EntityID entity,
-    RuntimeMeshHandle runtimeMesh,
-    const MeshSkinningRuntimeInstance* instance,
-    bool boundsFresh,
-    bool conesFresh
-);
+[[nodiscard]] Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(Core::ECS::EntityID entity, RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* instance, bool boundsFresh, bool conesFresh);
 
 template<typename ResolveIdentity>
-void MarkLiveSkinnedRuntimeMeshes(
-    Core::ECS::World& world,
-    RuntimeMeshRequestSet& requests,
-    ResolveIdentity&& resolveIdentity
-){
+void MarkLiveSkinnedRuntimeMeshes(Core::ECS::World& world, RuntimeMeshRequestSet& requests, ResolveIdentity&& resolveIdentity){
     if(requests.complete())
         return;
     for(auto&& [entity, binding] : world.view<SkinnedMeshBindingComponent>()){

@@ -93,14 +93,7 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex)noexcep
     return CsgDeformValidator::FiniteVertex(vertex);
 }
 
-Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(
-    CsgDeformVertexVector<ScratchArena>& vertices,
-    CsgDeformEdgeSplitMap& edgeSplits,
-    const u32 first,
-    const u32 second,
-    const f32 firstDistance,
-    const f32 secondDistance
-){
+Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(CsgDeformVertexVector<ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits, const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance){
     if(vertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure{});
     const u64 edge = CsgDeformEdgeKey(first, second);
@@ -112,9 +105,7 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(
     if(!CsgDeformValidator::FiniteFloat(denominator) || NumericSimd::Abs(denominator) < s_SplitDenominatorEpsilon)
         return MakeUnexpected(Failure{});
     // A zero secondDistance selects the second endpoint.
-    const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(
-        CsgDeformValidator::AbsDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))
-    ));
+    const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(CsgDeformValidator::AbsDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))));
     CsgDeformVertex mixed = CsgDeformWallBuilder::MixVertices(vertices[first], vertices[second], firstWeight);
     if(!CsgDeformWallBuilder::NormalizeDeformVertex(mixed))
         return MakeUnexpected(Failure{});
@@ -124,12 +115,7 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(
     return created;
 }
 
-void CsgDeformWallBuilder::EmitTriangle(
-    CsgDeformTriangleVector<ScratchArena>& triangles,
-    const u32 first,
-    const u32 second,
-    const u32 third
-){
+void CsgDeformWallBuilder::EmitTriangle(CsgDeformTriangleVector<ScratchArena>& triangles, const u32 first, const u32 second, const u32 third){
     CsgDeformTriangle triangle;
     triangle.indices[0u] = first;
     triangle.indices[1u] = second;
@@ -162,11 +148,7 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformWallBuilder::ClipShell(
         NWB_ASSERT(triangle.indices[0u] < inOutVertices.size());
         NWB_ASSERT(triangle.indices[1u] < inOutVertices.size());
         NWB_ASSERT(triangle.indices[2u] < inOutVertices.size());
-        const f32 distances[s_TriangleCornerCount] = {
-            scratchDistances[triangle.indices[0u]],
-            scratchDistances[triangle.indices[1u]],
-            scratchDistances[triangle.indices[2u]],
-        };
+        const f32 distances[s_TriangleCornerCount] = { scratchDistances[triangle.indices[0u]], scratchDistances[triangle.indices[1u]], scratchDistances[triangle.indices[2u]], };
         const bool kept[s_TriangleCornerCount] = { distances[0u] >= s_KeepDistanceZero, distances[1u] >= s_KeepDistanceZero, distances[2u] >= s_KeepDistanceZero };
         const u32 keepCount = (kept[0u] ? 1u : 0u) + (kept[1u] ? 1u : 0u) + (kept[2u] ? 1u : 0u);
         if(keepCount == 3u){

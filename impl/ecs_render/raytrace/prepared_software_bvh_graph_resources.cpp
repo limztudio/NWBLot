@@ -14,11 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::GpuTaskGraph& graph,
-    const PreparedMeshSwBvhBuildVector& builds
-){
+Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(Core::Alloc::ScratchArena& scratchArena, const Core::GpuTaskGraph& graph, const PreparedMeshSwBvhBuildVector& builds){
     PreparedMeshSwBvhGraphResourceVector result(scratchArena);
     if(builds.empty())
         return result;
@@ -37,15 +33,7 @@ Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphRe
             .sortPayload = declarations.findImportedBuffer(build.sortPayloadBuffer),
             .visitCounter = declarations.findImportedBuffer(build.visitCounterBuffer),
         };
-        if(
-            !resources.position.valid()
-            || !resources.triangleIndex.valid()
-            || !resources.node.valid()
-            || !resources.parent.valid()
-            || !resources.sortKeys.valid()
-            || !resources.sortPayload.valid()
-            || !resources.visitCounter.valid()
-        ){
+        if(!resources.position.valid() || !resources.triangleIndex.valid() || !resources.node.valid() || !resources.parent.valid() || !resources.sortKeys.valid() || !resources.sortPayload.valid() || !resources.visitCounter.valid()){
             return MakeUnexpected(Failure{});
         }
         result.push_back(resources);

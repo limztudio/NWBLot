@@ -29,8 +29,7 @@ def parse_args(argv):
     parser.add_argument("--frames", type=int, default=60)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--application-arg", action="append", default=[])
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
-        help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 3:
         parser.error("--frames must be at least 3 so the empty startup frames precede painted capture")
@@ -40,22 +39,11 @@ def parse_args(argv):
 
 
 def capture_command(args, output):
-    command = [
-        sys.executable, str(SMOKE_DIRECTORY / "window_capture_smoke.py"),
-        "--executable", str(args.executable.resolve()),
-        "--working-directory", str(args.working_directory.resolve()),
-        "--output", str(output),
-        "--window-title", "NWB UI Layer Smoke",
-        "--timeout", str(args.timeout),
-        "--expect-log-message", "Loader: project startup complete",
-        "--expect-log-message", "UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2",
-        "--expect-log-message", "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted",
-        "--expect-log-message", "UiLayerSmokeProject: shutdown",
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation",
-    ]
+    command = [sys.executable, str(SMOKE_DIRECTORY / "window_capture_smoke.py"), "--executable", str(args.executable.resolve()), "--working-directory", str(args.working_directory.resolve()), "--output", str(output), "--window-title", "NWB UI Layer Smoke",
+        "--timeout", str(args.timeout), "--expect-log-message", "Loader: project startup complete", "--expect-log-message", "UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2",
+        "--expect-log-message", "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted", "--expect-log-message", "UiLayerSmokeProject: shutdown", "--gpu-validation" if args.gpu_validation else "--no-gpu-validation",]
     if args.mode == "framebuffer":
-        command += ["--application-capture", "--application-capture-frame-count", str(args.frames),
-            "--log-output", str(output.with_suffix(".log"))]
+        command += ["--application-capture", "--application-capture-frame-count", str(args.frames), "--log-output", str(output.with_suffix(".log"))]
     else:
         command += ["--resize-client", "800", "600", "--settle-seconds", "1.0", "--resize-settle-seconds", "1.0"]
     if args.logserver_executable:

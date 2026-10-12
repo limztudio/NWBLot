@@ -44,13 +44,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
         char identityText[32u] = {};
         const Name identity = DeriveName(Name("tests/ownership_statistics/resource/"), FormatDecimal(resourceIndex, identityText));
-        const Graphics::GpuGraphResourceId resource = AddTextureMetadata(
-            graph,
-            identity,
-            "Ownership Statistics Texture",
-            Graphics::ResourceStates::Common,
-            Graphics::ResourceQueueSharing::Exclusive
-        );
+        const Graphics::GpuGraphResourceId resource = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
         ASSERT_TRUE(resource.valid());
         for(u32 rangeIndex = 0u; rangeIndex < 2u; ++rangeIndex){
             uses.push_back({
@@ -64,11 +58,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     for(usize taskIndex = 0u; taskIndex < 3u; ++taskIndex){
         char identityText[32u] = {};
         Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText)))
-            .setMarkerLabel("Ownership Statistics Task")
-            .setResourceUses(uses.data(), uses.size())
-        ;
+        desc.setIdentity(DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText))).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses.data(), uses.size());
         const auto commands = taskIndex == 1u ? ComputeCommands() : GraphicsCommands();
         ASSERT_TRUE(graph.addTask(desc, commands).valid());
     }

@@ -32,8 +32,7 @@ namespace Tests::Smoke{
 // RefCounter owns the scene; primitive and Builder image declarations copy immutable source versions and geometry.
 class UiTextureImageSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
-    UiTextureImageSmokeScene(
-        Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets);
+    UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets);
     virtual ~UiTextureImageSmokeScene()override;
 
 
@@ -72,19 +71,11 @@ private:
     bool m_sourcesValid = false;
 };
 
-using SharedUiTextureImageSmokeScene = RefCountPtr<
-    RefCounter<UiTextureImageSmokeScene>,
-    ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiTextureImageSmokeScene = RefCountPtr< RefCounter<UiTextureImageSmokeScene>, ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerTextureImageSmokeEnabled();
 [[nodiscard]] bool IsUiLayerTextureImageSkinSmokeEnabled();
-[[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(
-    Core::Alloc::GlobalArena& arena,
-    Core::InputDispatcher& input,
-    const Core::Assets::AssetManager& assets,
-    Core::GraphicsRuntime& graphics
-);
+[[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets, Core::GraphicsRuntime& graphics);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

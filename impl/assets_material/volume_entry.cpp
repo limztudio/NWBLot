@@ -28,21 +28,8 @@ namespace __hidden_assets_material_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialCookEntry> ParseMaterialDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseMaterialCookMetadata(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        doc,
-        context.cookArena,
-        context.scratchArena
-    );
+static Expected<MaterialCookEntry> ParseMaterialDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+    return ParseMaterialCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
 static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){

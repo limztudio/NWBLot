@@ -48,12 +48,7 @@ CpuTaskScheduler::TaskNode::TaskNode(Alloc::GlobalArena& arena)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CpuTaskScheduler::Execution::Execution(
-    CpuTaskScheduler& owner,
-    TaskHandle handle,
-    usize index,
-    CpuAffinity::Enum workerAffinity
-)noexcept
+CpuTaskScheduler::Execution::Execution(CpuTaskScheduler& owner, TaskHandle handle, usize index, CpuAffinity::Enum workerAffinity)noexcept
     : scheduler(owner)
     , previous(s_Execution)
     , task(handle)
@@ -206,18 +201,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::reserveTaskLocked(){
     return { m_domainIdentity, index, node.generation };
 }
 
-CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
-    TaskFunction&& function,
-    CpuTaskScope* const scope,
-    const CpuTaskOptions options,
-    const TaskHandle* const dependencies,
-    const usize dependencyCount
-){
-    if(
-        !function || (dependencyCount != 0u && !dependencies)
-        || options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background
-        || options.target > CpuTaskTarget::MainThread
-    )
+CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(TaskFunction&& function, CpuTaskScope* const scope, const CpuTaskOptions options, const TaskHandle* const dependencies, const usize dependencyCount){
+    if(!function || (dependencyCount != 0u && !dependencies) || options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
         return {};
 
     TaskHandle handle;
@@ -377,15 +362,13 @@ void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
     queue.tail = index;
 }
 
-CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
-    const CpuAffinity::Enum affinity,
-    const bool mainThread,
-    const bool cooperative,
-    ScopeWait* const preferredScope
-)noexcept{
+CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::Enum affinity, const bool mainThread, const bool cooperative, ScopeWait* const preferredScope)noexcept{
     // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
-    const usize firstPriority = dispatch % __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionTick ? 2u : (dispatch % __hidden_cpu_scheduler_fairness::s_NormalAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_NormalAdmissionTick ? 1u : 0u);
+    const usize firstPriority = dispatch % __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionTick
+        ? 2u
+        : (dispatch % __hidden_cpu_scheduler_fairness::s_NormalAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_NormalAdmissionTick ? 1u : 0u)
+    ;
     const usize preferredCost = affinity == CpuAffinity::Efficiency ? CpuTaskCost::Light : CpuTaskCost::Heavy;
     const usize costs[s_CostSlotCount] = { s_MainThreadTargetSlot, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? static_cast<usize>(CpuTaskCost::Light) : static_cast<usize>(CpuTaskCost::Heavy) };
     for(usize pass = 0u; pass < s_PrioritySlotCount; ++pass){
@@ -417,12 +400,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
     return {};
 }
 
-bool CpuTaskScheduler::hasReadyLocked(
-    const CpuAffinity::Enum affinity,
-    const bool mainThread,
-    const bool cooperative,
-    ScopeWait* const preferredScope
-)noexcept{
+bool CpuTaskScheduler::hasReadyLocked(const CpuAffinity::Enum affinity, const bool mainThread, const bool cooperative, ScopeWait* const preferredScope)noexcept{
     for(usize index = 0u; index < s_QueueCount; ++index){
         if(m_ready[index].head == TaskHandle::s_InvalidIndex || !queueEligible(index, affinity, mainThread, cooperative))
             continue;
@@ -433,12 +411,7 @@ bool CpuTaskScheduler::hasReadyLocked(
     return false;
 }
 
-bool CpuTaskScheduler::queueEligible(
-    const usize queue,
-    const CpuAffinity::Enum affinity,
-    const bool mainThread,
-    const bool cooperative
-)const noexcept{
+bool CpuTaskScheduler::queueEligible(const usize queue, const CpuAffinity::Enum affinity, const bool mainThread, const bool cooperative)const noexcept{
     const usize cost = queue % s_CostSlotCount;
     if(cost == s_MainThreadTargetSlot)
         return mainThread;
@@ -453,12 +426,7 @@ bool CpuTaskScheduler::queueEligible(
     return affinity == CpuAffinity::Efficiency || m_busyEfficiency >= m_statistics.efficiencyWorkers;
 }
 
-void CpuTaskScheduler::execute(
-    const TaskHandle handle,
-    const usize workerIndex,
-    const CpuAffinity::Enum affinity,
-    const bool cooperative
-){
+void CpuTaskScheduler::execute(const TaskHandle handle, const usize workerIndex, const CpuAffinity::Enum affinity, const bool cooperative){
     TaskNode* node;
     bool invoke;
     Optional<ProfileSample> profile;
@@ -601,9 +569,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
             }
             wakeMask = workerWakeMaskLocked();
             // Ready prerequisites and completed joins can change a registered waiter's predicate.
-            wakeJoiners = m_joinWaiters != 0u
-                && (madeReady || scopeCompleted || m_outstanding == 0u || m_handleJoinWaiters != 0u)
-            ;
+            wakeJoiners = m_joinWaiters != 0u && (madeReady || scopeCompleted || m_outstanding == 0u || m_handleJoinWaiters != 0u);
         }
         notifyProgress(wakeMask, wakeJoiners);
         handle = parentHandle;

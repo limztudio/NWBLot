@@ -140,11 +140,7 @@ using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
     return Move((*objectPaths)[0u]);
 }
 
-[[nodiscard]] static Expected<Path> FindNewAssetObjectCachePath(
-    TestArena& testArena,
-    const Path& cacheDirectory,
-    const Path& oldPath
-){
+[[nodiscard]] static Expected<Path> FindNewAssetObjectCachePath(TestArena& testArena, const Path& cacheDirectory, const Path& oldPath){
     auto objectPaths = FindAssetObjectCachePaths(testArena, cacheDirectory);
     if(!objectPaths)
         return MakeUnexpected(Failure{});

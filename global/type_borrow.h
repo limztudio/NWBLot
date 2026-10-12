@@ -319,10 +319,8 @@ using IndexSequenceFor = std::index_sequence_for<Ts...>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<bool Test, class T = void>
-using EnableIf = std::enable_if<Test, T>;
-template<bool Test, class T = void>
-using EnableIf_T = typename EnableIf<Test, T>::type;
+template<bool Test, class T = void> using EnableIf = std::enable_if<Test, T>;
+template<bool Test, class T = void> using EnableIf_T = typename EnableIf<Test, T>::type;
 
 template<bool Test, class T, class F>
 using Conditional = std::conditional<Test, T, F>;
@@ -333,33 +331,23 @@ using Conditional_T = typename Conditional<Test, T, F>::type;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<class T = void>
-using EqualTo = std::equal_to<T>;
-template<class T = void>
-using NotEqualTo = std::not_equal_to<T>;
+template<class T = void> using EqualTo = std::equal_to<T>;
+template<class T = void> using NotEqualTo = std::not_equal_to<T>;
 
-template<class T = void>
-using GreaterThan = std::greater<T>;
-template<class T = void>
-using LessThan = std::less<T>;
+template<class T = void> using GreaterThan = std::greater<T>;
+template<class T = void> using LessThan = std::less<T>;
 
-template<class T = void>
-using GreaterThanEqualTo = std::greater_equal<T>;
-template<class T = void>
-using LessThanEqualTo = std::less_equal<T>;
+template<class T = void> using GreaterThanEqualTo = std::greater_equal<T>;
+template<class T = void> using LessThanEqualTo = std::less_equal<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<class T, class Cat = PartialOrdering>
-concept ThreeWayComparable = std::three_way_comparable<T, Cat>;
-template<class T, class F, class Cat = PartialOrdering>
-concept ThreeWayComparableWith = std::three_way_comparable_with<T, F, Cat>;
-template<class T, class F = T>
-using CompareThreeWayResult_T = std::compare_three_way_result_t<T, F>;
-template<class T, class F = T>
-using CompareThreeWayResult = typename std::compare_three_way_result<T, F>::type;
+template<class T, class Cat = PartialOrdering> concept ThreeWayComparable = std::three_way_comparable<T, Cat>;
+template<class T, class F, class Cat = PartialOrdering> concept ThreeWayComparableWith = std::three_way_comparable_with<T, F, Cat>;
+template<class T, class F = T> using CompareThreeWayResult_T = std::compare_three_way_result_t<T, F>;
+template<class T, class F = T> using CompareThreeWayResult = typename std::compare_three_way_result<T, F>::type;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,8 +379,7 @@ constexpr auto IsConstantEvaluated()noexcept{ return std::is_constant_evaluated(
 
 
 #if _HAS_CXX23
-template<class Pointer, class SizeType = std::size_t>
-using AllocationResult = std::allocation_result<Pointer, SizeType>;
+template<class Pointer, class SizeType = std::size_t> using AllocationResult = std::allocation_result<Pointer, SizeType>;
 #endif
 
 

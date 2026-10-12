@@ -26,8 +26,7 @@ using namespace NWB::UiTextVisibleTests;
 class TextVisibleCoverageTests : public TextVisibleFixture{
 protected:
     [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin){
-        return { origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y,
-            glyph.ink.width, glyph.ink.height };
+        return { origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
     }
 
     [[nodiscard]] static Rect RasterFringe(const Rect& raster, const Rect& outline){
@@ -63,9 +62,7 @@ protected:
         return painted && popped;
     }
 
-    [[nodiscard]] Expected<Rect> rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize,
-        const DisplayMetrics& display, const Point origin
-    ){
+    [[nodiscard]] Expected<Rect> rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize, const DisplayMetrics& display, const Point origin){
         const f32 physicalSize = Ceil(fontSize * Max(display.pixelScaleX, display.pixelScaleY));
         if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(physicalSize), m_bitmap))
             return MakeUnexpected(Failure{});

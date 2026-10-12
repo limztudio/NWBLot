@@ -40,8 +40,7 @@ struct MeshletTriangleData{
 };
 
 
-// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary,
-// the meshlet scoring helpers can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
+// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary, the meshlet scoring helpers can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
 struct MeshletTriangleCalculation{
     MeshletTriangleVectors vectors;
 };
@@ -142,97 +141,40 @@ struct MeshletBoundsCalculation{
 class MeshCookMeshlets final : NoCopy{
 public:
     [[nodiscard]] static SIMDVectorSingle MakeMeshletPositionVector(const SIMDVectorSingle position)noexcept;
-    [[nodiscard]] static MeshletTriangleVectors MakeMeshletTriangleVectors(
-    const SIMDVectorSingle position0,
-    const SIMDVectorSingle position1,
-    const SIMDVectorSingle position2,
-    const SIMDVectorSingle centroid,
-    const SIMDVectorSingle areaNormal
-    )noexcept;
+    [[nodiscard]] static MeshletTriangleVectors MakeMeshletTriangleVectors(const SIMDVectorSingle position0, const SIMDVectorSingle position1, const SIMDVectorSingle position2, const SIMDVectorSingle centroid, const SIMDVectorSingle areaNormal)noexcept;
     [[nodiscard]] static SIMDVectorSingle NormalizeMeshletDirectionOrZero(const SIMDVectorSingle value)noexcept;
     template<typename VectorT>
     [[nodiscard]] static usize MeshletCookVectorBytes(const VectorT& values);
     template<typename CookEntryT>
-    [[nodiscard]] static usize EstimateCommonMeshletSourceBytes(
-    const Core::Assets::AssetVector<u32>& indices,
-    const CookEntryT& entry
-    );
-    [[nodiscard]] static usize EstimateMeshletSourceBytes(
-    const Core::Assets::AssetVector<u32>& indices,
-    const MeshCookEntry& entry
-    )noexcept;
+    [[nodiscard]] static usize EstimateCommonMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry);
+    [[nodiscard]] static usize EstimateMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const MeshCookEntry& entry)noexcept;
     template<typename CookEntryT>
     [[nodiscard]] static usize EstimateCommonMeshletRuntimeBytes(const CookEntryT& entry);
     [[nodiscard]] static usize EstimateMeshletRuntimeBytes(const MeshCookEntry& entry)noexcept;
     template<typename CookEntryT>
     [[nodiscard]] static MeshletCookMetrics BuildMeshletCookMetrics(const CookEntryT& entry);
     template<typename CookEntryT>
-    static void LogMeshletCookMetrics(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    const CookEntryT& entry
-    );
+    static void LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry);
     template<typename CookEntryT>
-    [[nodiscard]] static Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    const CookEntryT& entry
-    );
+    [[nodiscard]] static Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry);
     template<typename PositionAtT, typename VisitFaceNormalsT>
-    [[nodiscard]] static MeshletBoundsCalculation CalculateMeshletBounds(
-    const u32 positionCount,
-    const u32 primitiveCount,
-    const PositionAtT& positionAt,
-    const VisitFaceNormalsT& visitFaceNormals
-    );
+    [[nodiscard]] static MeshletBoundsCalculation CalculateMeshletBounds(const u32 positionCount, const u32 primitiveCount, const PositionAtT& positionAt, const VisitFaceNormalsT& visitFaceNormals);
     template<typename CookEntryT>
     static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet);
     template<typename VertexRefVectorT>
-    [[nodiscard]] static Expected<u8> FindMeshletLocalVertex(
-    const VertexRefVectorT& localVertexRefs,
-    const u32 vertexRefIndex
-    );
+    [[nodiscard]] static Expected<u8> FindMeshletLocalVertex(const VertexRefVectorT& localVertexRefs, const u32 vertexRefIndex);
     template<typename VertexRefVectorT>
-    [[nodiscard]] static MeshletVertexCounts CountMeshletMissingVertices(
-    const VertexRefVectorT& localVertexRefs,
-    const MeshletTriangleData& triangle
-    );
+    [[nodiscard]] static MeshletVertexCounts CountMeshletMissingVertices(const VertexRefVectorT& localVertexRefs, const MeshletTriangleData& triangle);
     static void ResetMeshletScoreState(MeshletScoreState& state)noexcept;
-    static void AccumulateMeshletScoreBounds(
-    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount],
-    SIMDVectorSingle& minBounds,
-    SIMDVectorSingle& maxBounds
-    )noexcept;
-    [[nodiscard]] static f32 PredictMeshletScoreRadius(
-    const MeshletScoreState& state,
-    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount]
-    )noexcept;
+    static void AccumulateMeshletScoreBounds(const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount], SIMDVectorSingle& minBounds, SIMDVectorSingle& maxBounds)noexcept;
+    [[nodiscard]] static f32 PredictMeshletScoreRadius(const MeshletScoreState& state, const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount])noexcept;
     [[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept;
     [[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept;
-    static void UpdateMeshletScoreConeCutoff(
-    const SIMDVectorSingle axis,
-    const SIMDVectorSingle triangleAreaNormal,
-    bool& hasNormal,
-    f32& coneCutoff
-    )noexcept;
+    static void UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, f32& coneCutoff)noexcept;
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-    [[nodiscard]] static MeshletConeScore ComputeMeshletScoreConeCutoff(
-    const TriangleIndexVectorT& triangleIndices,
-    const SIMDVectorSingle axis,
-    const u32 extraTriangleIndex,
-    const bool hasExtraTriangle,
-    const TriangleAreaNormalAtT& triangleAreaNormalAt
-    );
+    [[nodiscard]] static MeshletConeScore ComputeMeshletScoreConeCutoff(const TriangleIndexVectorT& triangleIndices, const SIMDVectorSingle axis, const u32 extraTriangleIndex, const bool hasExtraTriangle, const TriangleAreaNormalAtT& triangleAreaNormalAt);
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-    [[nodiscard]] static f32 PredictMeshletScoreConeWidening(
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletScoreState& state,
-    const u32 triangleIndex,
-    const SIMDVectorSingle triangleAreaNormal,
-    const TriangleAreaNormalAtT& triangleAreaNormalAt
-    );
+    [[nodiscard]] static f32 PredictMeshletScoreConeWidening(const TriangleIndexVectorT& triangleIndices, const MeshletScoreState& state, const u32 triangleIndex, const SIMDVectorSingle triangleAreaNormal, const TriangleAreaNormalAtT& triangleAreaNormalAt);
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
     [[nodiscard]] static f32 ScoreMeshletCandidate(
     const TriangleIndexVectorT& triangleIndices,
@@ -244,16 +186,9 @@ public:
     const u32 missingVertexCount,
     const bool disconnected
     );
-    [[nodiscard]] static Expected<u32> FindNextUnvisitedMeshletTriangle(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchOffset
-    )noexcept;
+    [[nodiscard]] static Expected<u32> FindNextUnvisitedMeshletTriangle(const MeshletTrianglePrecompute& trianglePrecompute, const usize searchOffset)noexcept;
     template<typename VertexRefVectorT>
-    [[nodiscard]] static Expected<MeshletVertexCounts> MeshletCanFitTriangle(
-    const MeshletDesc& meshlet,
-    const VertexRefVectorT& localVertexRefs,
-    const MeshletTriangleData& triangle
-    );
+    [[nodiscard]] static Expected<MeshletVertexCounts> MeshletCanFitTriangle(const MeshletDesc& meshlet, const VertexRefVectorT& localVertexRefs, const MeshletTriangleData& triangle);
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     static void UpdateBestMeshletCandidateIfBetter(
     const MeshletTrianglePrecompute& trianglePrecompute,
@@ -267,11 +202,7 @@ public:
     bool& found,
     MeshletFrontierCandidate& outCandidate
     );
-    static void UpdateBestMeshletCandidateFromResult(
-    const MeshletCandidateSearchResult& candidate,
-    bool& found,
-    MeshletFrontierCandidate& outCandidate
-    )noexcept;
+    static void UpdateBestMeshletCandidateFromResult(const MeshletCandidateSearchResult& candidate, bool& found, MeshletFrontierCandidate& outCandidate)noexcept;
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     [[nodiscard]] static Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidate(
     const MeshletTrianglePrecompute& trianglePrecompute,
@@ -305,34 +236,13 @@ public:
     template<typename FrontierVectorT>
     static void ClearMeshletFrontier(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags);
     template<typename FrontierVectorT>
-    static void RemoveMeshletFrontierCandidate(
-    FrontierVectorT& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags,
-    const usize frontierOffset
-    );
+    static void RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags, const usize frontierOffset);
     template<typename FrontierVectorT>
-    static void AddMeshletTriangleNeighborsToFrontier(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const u32 triangleIndex,
-    FrontierVectorT& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
-    );
+    static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags);
     template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
-    [[nodiscard]] static bool AddMeshletTriangleToBuilder(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const MeshletTriangleData& triangle,
-    VertexRefVectorT& localSourceVertexRefs,
-    MeshletDesc& meshlet,
-    PrimitiveIndexVectorT& primitiveIndices
-    );
+    [[nodiscard]] static bool AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, VertexRefVectorT& localSourceVertexRefs, MeshletDesc& meshlet, PrimitiveIndexVectorT& primitiveIndices);
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-    static void AddMeshletTriangleToScoreState(
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletTriangleVectors& triangleVectors,
-    const TriangleAreaNormalAtT& triangleAreaNormalAt,
-    MeshletScoreState& state
-    );
+    static void AddMeshletTriangleToScoreState(const TriangleIndexVectorT& triangleIndices, const MeshletTriangleVectors& triangleVectors, const TriangleAreaNormalAtT& triangleAreaNormalAt, MeshletScoreState& state);
     [[nodiscard]] static bool AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
     const TStringView metaKind,
@@ -362,17 +272,9 @@ public:
     Core::Assets::AssetVector<u8>& frontierFlags
     );
     template<typename PositionRefVectorT>
-    [[nodiscard]] static Expected<u16> FindMeshletPositionRef(
-    const PositionRefVectorT& refs,
-    const MeshletPositionStreamRef& ref
-    );
+    [[nodiscard]] static Expected<u16> FindMeshletPositionRef(const PositionRefVectorT& refs, const MeshletPositionStreamRef& ref);
     template<typename AttributeRefVectorT, typename AttributeSkinVectorT>
-    [[nodiscard]] static Expected<u16> FindMeshletAttributeRef(
-    const AttributeRefVectorT& refs,
-    const AttributeSkinVectorT& skins,
-    const MeshletAttributeStreamRef& ref,
-    const u32 skin
-    );
+    [[nodiscard]] static Expected<u16> FindMeshletAttributeRef(const AttributeRefVectorT& refs, const AttributeSkinVectorT& skins, const MeshletAttributeStreamRef& ref, const u32 skin);
     template<
     typename CookEntryT,
     typename LocalVertexVectorT,
@@ -392,13 +294,7 @@ public:
     LocalVertexRefVectorT& outLocalVertexRefs
     );
     template<typename CookEntryT>
-    static bool BuildMeshlets(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    CookEntryT& entry,
-    Core::CpuTaskScheduler& cpuScheduler
-    );
+    static bool BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, CookEntryT& entry, Core::CpuTaskScheduler& cpuScheduler);
 
 
 public:
@@ -416,10 +312,7 @@ usize MeshCookMeshlets::MeshletCookVectorBytes(const VectorT& values){
 
 
 template<typename CookEntryT>
-usize MeshCookMeshlets::EstimateCommonMeshletSourceBytes(
-    const Core::Assets::AssetVector<u32>& indices,
-    const CookEntryT& entry
-){
+usize MeshCookMeshlets::EstimateCommonMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry){
     return MeshletCookVectorBytes(indices)
         + MeshletCookVectorBytes(entry.positions)
         + MeshletCookVectorBytes(entry.normals)
@@ -488,12 +381,7 @@ MeshletCookMetrics MeshCookMeshlets::BuildMeshletCookMetrics(const CookEntryT& e
 
 
 template<typename CookEntryT>
-void MeshCookMeshlets::LogMeshletCookMetrics(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    const CookEntryT& entry
-){
+void MeshCookMeshlets::LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry){
     const MeshletCookMetrics metrics = BuildMeshletCookMetrics(entry);
     if(metrics.meshletCount == 0u)
         return;
@@ -507,10 +395,7 @@ void MeshCookMeshlets::LogMeshletCookMetrics(
     const f64 attributeCountAverage = attributeCountAverageRadiusAverageValue.x;
     const f64 radiusAverage = attributeCountAverageRadiusAverageValue.y;
     const f64 coneDisabledPercentage = static_cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
-    const f64 coneCutoffAverage = metrics.coneEnabledCount != 0u
-        ? metrics.coneCutoffSum / static_cast<f64>(metrics.coneEnabledCount)
-        : 0.0
-    ;
+    const f64 coneCutoffAverage = metrics.coneEnabledCount != 0u ? metrics.coneCutoffSum / static_cast<f64>(metrics.coneEnabledCount) : 0.0;
     const f32 worstConeCutoff = metrics.coneEnabledCount != 0u ? metrics.worstConeCutoff : 0.0f;
     const usize sourceBytes = EstimateMeshletSourceBytes(indices, entry);
     const usize runtimeBytes = EstimateMeshletRuntimeBytes(entry);
@@ -540,20 +425,12 @@ void MeshCookMeshlets::LogMeshletCookMetrics(
 
 
 template<typename CookEntryT>
-Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleData(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    const CookEntryT& entry
-){
+Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry){
     MeshletTrianglePrecompute data(entry.positions.get_allocator().arena());
 
     const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
     if(triangleCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits"), metaKind, PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -572,11 +449,7 @@ Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleD
         data.positionTriangleOffsets[positionIndex + 1u] += data.positionTriangleOffsets[positionIndex];
 
     Core::Assets::AssetVector<u32> positionTriangleCursor(entry.positions.get_allocator().arena());
-    positionTriangleCursor.insert(
-        positionTriangleCursor.end(),
-        data.positionTriangleOffsets.begin(),
-        data.positionTriangleOffsets.end()
-    );
+    positionTriangleCursor.insert(positionTriangleCursor.end(), data.positionTriangleOffsets.begin(), data.positionTriangleOffsets.end());
 
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         MeshletTriangleData& triangle = data.triangles[triangleIndex];
@@ -594,13 +467,7 @@ Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleD
         const SIMDVectorSingle p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
         const SIMDVectorSingle centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / s_TriangleVertexCount);
         const SIMDVectorSingle areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
-        calculation.vectors = MakeMeshletTriangleVectors(
-            p0,
-            p1,
-            p2,
-            VectorSetW(centroid, 0.0f),
-            VectorSetW(areaNormal, 0.0f)
-        );
+        calculation.vectors = MakeMeshletTriangleVectors(p0, p1, p2, VectorSetW(centroid, 0.0f), VectorSetW(areaNormal, 0.0f));
 
         const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
         for(const u32 positionIndex : triangle.positions){
@@ -614,12 +481,7 @@ Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleD
 
 
 template<typename PositionAtT, typename VisitFaceNormalsT>
-MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(
-    const u32 positionCount,
-    const u32 primitiveCount,
-    const PositionAtT& positionAt,
-    const VisitFaceNormalsT& visitFaceNormals
-){
+MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(const u32 positionCount, const u32 primitiveCount, const PositionAtT& positionAt, const VisitFaceNormalsT& visitFaceNormals){
     MeshletBoundsCalculation result;
 
     SIMDVectorSingle minBounds;
@@ -676,15 +538,12 @@ MeshletBounds MeshCookMeshlets::BuildMeshletBounds(const CookEntryT& entry, cons
         return positions[localPositionIndex];
     };
     const auto localPositionAt = [&](const u8 localVertexIndex){
-        const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[
-            meshlet.localVertexOffset + localVertexIndex
-        ];
+        const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
         return positions[localVertexRef.localDeformedPosition];
     };
     const auto visitFaceNormals = [&](auto&& callback){
         for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
-            const usize primitiveOffset = meshlet.primitiveOffset
-                + static_cast<usize>(primitiveIndex) * s_MeshletTriangleIndexCount;
+            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * s_MeshletTriangleIndexCount;
             const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
             const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
             const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];
@@ -694,28 +553,17 @@ MeshletBounds MeshCookMeshlets::BuildMeshletBounds(const CookEntryT& entry, cons
             callback(TriangleTests::AreaNormal(p0, p1, p2));
         }
     };
-    const MeshletBoundsCalculation calculation = CalculateMeshletBounds(
-        positionCount,
-        MeshletPrimitiveCount(meshlet),
-        positionAt,
-        visitFaceNormals
-    );
+    const MeshletBoundsCalculation calculation = CalculateMeshletBounds(positionCount, MeshletPrimitiveCount(meshlet), positionAt, visitFaceNormals);
 
     MeshletBounds bounds;
-    StoreFloat(
-        VectorSetW(calculation.center, calculation.radius * s_MeshletBoundsRadiusInflation),
-        bounds.sphere
-    );
+    StoreFloat(VectorSetW(calculation.center, calculation.radius * s_MeshletBoundsRadiusInflation), bounds.sphere);
     bounds.conePacked = PackMeshletCone(calculation.coneAxis, calculation.coneCutoff);
     return bounds;
 }
 
 
 template<typename VertexRefVectorT>
-Expected<u8> MeshCookMeshlets::FindMeshletLocalVertex(
-    const VertexRefVectorT& localVertexRefs,
-    const u32 vertexRefIndex
-){
+Expected<u8> MeshCookMeshlets::FindMeshletLocalVertex(const VertexRefVectorT& localVertexRefs, const u32 vertexRefIndex){
     for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
         if(localVertexRefs[localIndex] != vertexRefIndex)
             continue;
@@ -728,10 +576,7 @@ Expected<u8> MeshCookMeshlets::FindMeshletLocalVertex(
 
 
 template<typename VertexRefVectorT>
-MeshletVertexCounts MeshCookMeshlets::CountMeshletMissingVertices(
-    const VertexRefVectorT& localVertexRefs,
-    const MeshletTriangleData& triangle
-){
+MeshletVertexCounts MeshCookMeshlets::CountMeshletMissingVertices(const VertexRefVectorT& localVertexRefs, const MeshletTriangleData& triangle){
     MeshletVertexCounts counts{};
     for(usize cornerIndex = 0u; cornerIndex < s_MeshletTriangleIndexCount; ++cornerIndex){
         const u32 vertexRefIndex = triangle.vertexRefs[cornerIndex];
@@ -756,13 +601,7 @@ MeshletVertexCounts MeshCookMeshlets::CountMeshletMissingVertices(
 
 
 template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(
-    const TriangleIndexVectorT& triangleIndices,
-    const SIMDVectorSingle axis,
-    const u32 extraTriangleIndex,
-    const bool hasExtraTriangle,
-    const TriangleAreaNormalAtT& triangleAreaNormalAt
-){
+MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(const TriangleIndexVectorT& triangleIndices, const SIMDVectorSingle axis, const u32 extraTriangleIndex, const bool hasExtraTriangle, const TriangleAreaNormalAtT& triangleAreaNormalAt){
     if(!::FrameValidDirection(axis))
         return {};
 
@@ -785,24 +624,12 @@ MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(
 
 
 template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-f32 MeshCookMeshlets::PredictMeshletScoreConeWidening(
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletScoreState& state,
-    const u32 triangleIndex,
-    const SIMDVectorSingle triangleAreaNormal,
-    const TriangleAreaNormalAtT& triangleAreaNormalAt
-){
+f32 MeshCookMeshlets::PredictMeshletScoreConeWidening(const TriangleIndexVectorT& triangleIndices, const MeshletScoreState& state, const u32 triangleIndex, const SIMDVectorSingle triangleAreaNormal, const TriangleAreaNormalAtT& triangleAreaNormalAt){
     if(!state.coneEnabled)
         return 0.0f;
 
     const SIMDVectorSingle predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal));
-    const auto predictedCone = ComputeMeshletScoreConeCutoff(
-        triangleIndices,
-        predictedAxis,
-        triangleIndex,
-        true,
-        triangleAreaNormalAt
-    );
+    const auto predictedCone = ComputeMeshletScoreConeCutoff(triangleIndices, predictedAxis, triangleIndex, true, triangleAreaNormalAt);
     if(!predictedCone.enabled)
         return 1.0f;
 
@@ -824,19 +651,10 @@ f32 MeshCookMeshlets::ScoreMeshletCandidate(
 ){
     const f32 predictedRadius = PredictMeshletScoreRadius(state, triangleVectors.positions);
     // Radius growth is the positive part of (predicted - current); difference and zero floor stay on SIMD lanes.
-    const f32 predictedRadiusGrowth = VectorGetX(VectorMax(
-        VectorSubtract(VectorReplicate(predictedRadius), VectorReplicate(state.radius)),
-        VectorZero()
-    ));
+    const f32 predictedRadiusGrowth = VectorGetX(VectorMax(VectorSubtract(VectorReplicate(predictedRadius), VectorReplicate(state.radius)), VectorZero()));
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleVectors.centroid);
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleVectors.areaNormal);
-    const f32 coneWidening = PredictMeshletScoreConeWidening(
-        triangleIndices,
-        state,
-        triangleIndex,
-        triangleVectors.areaNormal,
-        triangleAreaNormalAt
-    );
+    const f32 coneWidening = PredictMeshletScoreConeWidening(triangleIndices, state, triangleIndex, triangleVectors.areaNormal, triangleAreaNormalAt);
     return s_MeshletScoreSharedVertexWeight * static_cast<f32>(sharedVertexCount)
         - s_MeshletScoreNewVertexWeight * static_cast<f32>(missingVertexCount)
         - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
@@ -849,11 +667,7 @@ f32 MeshCookMeshlets::ScoreMeshletCandidate(
 
 
 template<typename VertexRefVectorT>
-Expected<MeshletVertexCounts> MeshCookMeshlets::MeshletCanFitTriangle(
-    const MeshletDesc& meshlet,
-    const VertexRefVectorT& localVertexRefs,
-    const MeshletTriangleData& triangle
-){
+Expected<MeshletVertexCounts> MeshCookMeshlets::MeshletCanFitTriangle(const MeshletDesc& meshlet, const VertexRefVectorT& localVertexRefs, const MeshletTriangleData& triangle){
     if(MeshletPrimitiveCount(meshlet) + 1u > s_MeshMaxMeshletTriangles)
         return MakeUnexpected(Failure{});
 
@@ -886,16 +700,7 @@ void MeshCookMeshlets::UpdateBestMeshletCandidateIfBetter(
     const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex){
         return trianglePrecompute.triangleCalculations[otherTriangleIndex].vectors.areaNormal;
     };
-    const f32 score = ScoreMeshletCandidate(
-        triangleIndices,
-        scoreState,
-        triangleIndex,
-        triangleVectors,
-        triangleAreaNormalAt,
-        vertexCounts->shared,
-        vertexCounts->missing,
-        disconnected
-    );
+    const f32 score = ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, triangleVectors, triangleAreaNormalAt, vertexCounts->shared, vertexCounts->missing, disconnected);
     if(found && (score < outCandidate.score || (score == outCandidate.score && triangleIndex > outCandidate.triangleIndex)))
         return;
 
@@ -919,18 +724,7 @@ Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestMeshletFrontierCand
     MeshletFrontierCandidate candidate;
     for(usize frontierOffset = 0u; frontierOffset < frontier.size(); ++frontierOffset){
         const u32 triangleIndex = frontier[frontierOffset];
-        UpdateBestMeshletCandidateIfBetter(
-            trianglePrecompute,
-            triangleIndices,
-            scoreState,
-            meshlet,
-            localVertexRefs,
-            frontierOffset,
-            triangleIndex,
-            false,
-            found,
-            candidate
-        );
+        UpdateBestMeshletCandidateIfBetter(trianglePrecompute, triangleIndices, scoreState, meshlet, localVertexRefs, frontierOffset, triangleIndex, false, found, candidate);
     }
 
     if(!found)
@@ -955,18 +749,7 @@ Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestDisconnectedMeshlet
         if(trianglePrecompute.visitedTriangles[triangleIndex] != 0u)
             continue;
 
-        UpdateBestMeshletCandidateIfBetter(
-            trianglePrecompute,
-            triangleIndices,
-            scoreState,
-            meshlet,
-            localVertexRefs,
-            0u,
-            static_cast<u32>(triangleIndex),
-            true,
-            found,
-            candidate
-        );
+        UpdateBestMeshletCandidateIfBetter(trianglePrecompute, triangleIndices, scoreState, meshlet, localVertexRefs, 0u, static_cast<u32>(triangleIndex), true, found, candidate);
     }
 
     if(!found)
@@ -992,15 +775,7 @@ Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestDisconnectedMeshlet
 
     const usize searchCount = triangleCount - searchOffset;
     if(!cpuScheduler.isParallelEnabled() || searchCount < s_MeshletDisconnectedCandidateParallelThreshold){
-        return FindBestDisconnectedMeshletCandidateRange(
-            trianglePrecompute,
-            searchOffset,
-            triangleCount,
-            triangleIndices,
-            scoreState,
-            meshlet,
-            localVertexRefs
-        );
+        return FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, searchOffset, triangleCount, triangleIndices, scoreState, meshlet, localVertexRefs);
     }
 
     const usize workerCount = static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u;
@@ -1016,15 +791,7 @@ Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestDisconnectedMeshlet
         const usize chunkEnd = chunkBegin + chunkSize + (chunkIndex < remainder ? 1u : 0u);
 
         MeshletCandidateSearchResult result;
-        const auto foundCandidate = FindBestDisconnectedMeshletCandidateRange(
-            trianglePrecompute,
-            chunkBegin,
-            chunkEnd,
-            triangleIndices,
-            scoreState,
-            meshlet,
-            localVertexRefs
-        );
+        const auto foundCandidate = FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, chunkBegin, chunkEnd, triangleIndices, scoreState, meshlet, localVertexRefs);
         result.found = foundCandidate.has_value();
         if(foundCandidate)
             result.candidate = *foundCandidate;
@@ -1051,11 +818,7 @@ void MeshCookMeshlets::ClearMeshletFrontier(FrontierVectorT& frontier, Core::Ass
 
 
 template<typename FrontierVectorT>
-void MeshCookMeshlets::RemoveMeshletFrontierCandidate(
-    FrontierVectorT& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags,
-    const usize frontierOffset
-){
+void MeshCookMeshlets::RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags, const usize frontierOffset){
     const u32 triangleIndex = frontier[frontierOffset];
     frontierFlags[triangleIndex] = 0u;
     frontier[frontierOffset] = frontier.back();
@@ -1064,23 +827,14 @@ void MeshCookMeshlets::RemoveMeshletFrontierCandidate(
 
 
 template<typename FrontierVectorT>
-void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const u32 triangleIndex,
-    FrontierVectorT& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
-){
+void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
     for(const u32 positionIndex : triangle.positions){
         const u32 triangleOffsetBegin = trianglePrecompute.positionTriangleOffsets[positionIndex];
         const u32 triangleOffsetEnd = trianglePrecompute.positionTriangleOffsets[positionIndex + 1u];
         for(u32 triangleOffset = triangleOffsetBegin; triangleOffset < triangleOffsetEnd; ++triangleOffset){
             const u32 neighborTriangleIndex = trianglePrecompute.positionTriangleIndices[triangleOffset];
-            if(
-                neighborTriangleIndex == triangleIndex
-                || trianglePrecompute.visitedTriangles[neighborTriangleIndex] != 0u
-                || frontierFlags[neighborTriangleIndex] != 0u
-            )
+            if(neighborTriangleIndex == triangleIndex || trianglePrecompute.visitedTriangles[neighborTriangleIndex] != 0u || frontierFlags[neighborTriangleIndex] != 0u)
                 continue;
 
             frontierFlags[neighborTriangleIndex] = 1u;
@@ -1091,23 +845,13 @@ void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(
 
 
 template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
-bool MeshCookMeshlets::AddMeshletTriangleToBuilder(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const MeshletTriangleData& triangle,
-    VertexRefVectorT& localSourceVertexRefs,
-    MeshletDesc& meshlet,
-    PrimitiveIndexVectorT& primitiveIndices
-){
+bool MeshCookMeshlets::AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, VertexRefVectorT& localSourceVertexRefs, MeshletDesc& meshlet, PrimitiveIndexVectorT& primitiveIndices){
     for(const u32 vertexRefIndex : triangle.vertexRefs){
         const auto found = FindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex);
         u8 localVertex = found ? *found : 0u;
         if(!found){
             if(localSourceVertexRefs.size() >= s_MeshMaxMeshletVertices){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet")
-                    , metaKind
-                    , PathToString<tchar>(nwbFilePath)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;
             }
             localVertex = static_cast<u8>(localSourceVertexRefs.size());
@@ -1121,35 +865,21 @@ bool MeshCookMeshlets::AddMeshletTriangleToBuilder(
 
 
 template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-void MeshCookMeshlets::AddMeshletTriangleToScoreState(
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletTriangleVectors& triangleVectors,
-    const TriangleAreaNormalAtT& triangleAreaNormalAt,
-    MeshletScoreState& state
-){
+void MeshCookMeshlets::AddMeshletTriangleToScoreState(const TriangleIndexVectorT& triangleIndices, const MeshletTriangleVectors& triangleVectors, const TriangleAreaNormalAtT& triangleAreaNormalAt, MeshletScoreState& state){
     AccumulateMeshletScoreBounds(triangleVectors.positions, state.minBounds, state.maxBounds);
     state.radius = AabbTests::Radius(state.minBounds, state.maxBounds);
     state.centroidSum = VectorAdd(state.centroidSum, triangleVectors.centroid);
     state.normalSum = VectorAdd(state.normalSum, triangleVectors.areaNormal);
     state.normalAxis = NormalizeMeshletDirectionOrZero(state.normalSum);
     ++state.primitiveCount;
-    const auto cone = ComputeMeshletScoreConeCutoff(
-        triangleIndices,
-        state.normalAxis,
-        0u,
-        false,
-        triangleAreaNormalAt
-    );
+    const auto cone = ComputeMeshletScoreConeCutoff(triangleIndices, state.normalAxis, 0u, false, triangleAreaNormalAt);
     state.coneCutoff = cone.cutoff;
     state.coneEnabled = cone.enabled;
 }
 
 
 template<typename PositionRefVectorT>
-Expected<u16> MeshCookMeshlets::FindMeshletPositionRef(
-    const PositionRefVectorT& refs,
-    const MeshletPositionStreamRef& ref
-){
+Expected<u16> MeshCookMeshlets::FindMeshletPositionRef(const PositionRefVectorT& refs, const MeshletPositionStreamRef& ref){
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
         if(refs[localIndex].position != ref.position || refs[localIndex].skin != ref.skin)
             continue;
@@ -1162,21 +892,10 @@ Expected<u16> MeshCookMeshlets::FindMeshletPositionRef(
 
 
 template<typename AttributeRefVectorT, typename AttributeSkinVectorT>
-Expected<u16> MeshCookMeshlets::FindMeshletAttributeRef(
-    const AttributeRefVectorT& refs,
-    const AttributeSkinVectorT& skins,
-    const MeshletAttributeStreamRef& ref,
-    const u32 skin
-){
+Expected<u16> MeshCookMeshlets::FindMeshletAttributeRef(const AttributeRefVectorT& refs, const AttributeSkinVectorT& skins, const MeshletAttributeStreamRef& ref, const u32 skin){
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
         const MeshletAttributeStreamRef& existing = refs[localIndex];
-        if(
-            existing.normal != ref.normal
-            || existing.tangent != ref.tangent
-            || existing.uv0 != ref.uv0
-            || existing.color != ref.color
-            || skins[localIndex] != skin
-        )
+        if(existing.normal != ref.normal || existing.tangent != ref.tangent || existing.uv0 != ref.uv0 || existing.color != ref.color || skins[localIndex] != skin)
             continue;
 
         return static_cast<u16>(localIndex);
@@ -1222,10 +941,7 @@ template<
         u16 localPosition = foundLocalPosition ? *foundLocalPosition : 0u;
         if(!foundLocalPosition){
             if(outPositionRefs.size() >= s_MeshMaxMeshletVertices){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits")
-                    , metaKind
-                    , PathToString<tchar>(nwbFilePath)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;
             }
             localPosition = static_cast<u16>(outPositionRefs.size());
@@ -1236,10 +952,7 @@ template<
         u16 localAttribute = foundLocalAttribute ? *foundLocalAttribute : 0u;
         if(!foundLocalAttribute){
             if(outAttributeRefs.size() >= s_MeshMaxMeshletVertices){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet attributes exceed local index limits")
-                    , metaKind
-                    , PathToString<tchar>(nwbFilePath)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet attributes exceed local index limits"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;
             }
             localAttribute = static_cast<u16>(outAttributeRefs.size());
@@ -1255,22 +968,14 @@ template<
 
 
 template<typename CookEntryT>
-bool MeshCookMeshlets::BuildMeshlets(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    CookEntryT& entry,
-    Core::CpuTaskScheduler& cpuScheduler
-){
+bool MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, CookEntryT& entry, Core::CpuTaskScheduler& cpuScheduler){
     entry.meshlets.clear();
     entry.meshletBounds.clear();
     entry.meshletPositionStreamRefs.clear();
     entry.meshletAttributeStreamRefs.clear();
     entry.meshletLocalVertexRefs.clear();
     entry.meshletPrimitiveIndices.clear();
-    entry.meshlets.reserve(
-        (indices.size() / s_MeshletTriangleIndexCount + s_MeshMaxMeshletTriangles - 1u) / s_MeshMaxMeshletTriangles
-    );
+    entry.meshlets.reserve((indices.size() / s_MeshletTriangleIndexCount + s_MeshMaxMeshletTriangles - 1u) / s_MeshMaxMeshletTriangles);
     entry.meshletBounds.reserve(entry.meshlets.capacity());
     entry.meshletPositionStreamRefs.reserve(indices.size());
     entry.meshletAttributeStreamRefs.reserve(indices.size());
@@ -1316,43 +1021,17 @@ bool MeshCookMeshlets::BuildMeshlets(
         if(primitiveCount == 0u)
             return true;
 
-        if(!BuildZippedMeshletRefs(
-            nwbFilePath,
-            metaKind,
-            entry,
-            localSourceVertexRefs,
-            localPositionRefs,
-            localAttributeRefs,
-            localAttributeSkins,
-            localVertexRefs
-        ))
+        if(!BuildZippedMeshletRefs(nwbFilePath, metaKind, entry, localSourceVertexRefs, localPositionRefs, localAttributeRefs, localAttributeSkins, localVertexRefs))
             return false;
 
         current.localVertexOffset = static_cast<u32>(entry.meshletLocalVertexRefs.size());
         current.positionRefOffset = static_cast<u32>(entry.meshletPositionStreamRefs.size());
         current.attributeRefOffset = static_cast<u32>(entry.meshletAttributeStreamRefs.size());
-        current.counts = PackMeshletCounts(
-            static_cast<u32>(localVertexRefs.size()),
-            primitiveCount,
-            static_cast<u32>(localPositionRefs.size()),
-            static_cast<u32>(localAttributeRefs.size())
-        );
+        current.counts = PackMeshletCounts(static_cast<u32>(localVertexRefs.size()), primitiveCount, static_cast<u32>(localPositionRefs.size()), static_cast<u32>(localAttributeRefs.size()));
 
-        entry.meshletPositionStreamRefs.insert(
-            entry.meshletPositionStreamRefs.end(),
-            localPositionRefs.begin(),
-            localPositionRefs.end()
-        );
-        entry.meshletAttributeStreamRefs.insert(
-            entry.meshletAttributeStreamRefs.end(),
-            localAttributeRefs.begin(),
-            localAttributeRefs.end()
-        );
-        entry.meshletLocalVertexRefs.insert(
-            entry.meshletLocalVertexRefs.end(),
-            localVertexRefs.begin(),
-            localVertexRefs.end()
-        );
+        entry.meshletPositionStreamRefs.insert(entry.meshletPositionStreamRefs.end(), localPositionRefs.begin(), localPositionRefs.end());
+        entry.meshletAttributeStreamRefs.insert(entry.meshletAttributeStreamRefs.end(), localAttributeRefs.begin(), localAttributeRefs.end());
+        entry.meshletLocalVertexRefs.insert(entry.meshletLocalVertexRefs.end(), localVertexRefs.begin(), localVertexRefs.end());
         entry.meshlets.push_back(current);
         entry.meshletBounds.push_back(BuildMeshletBounds(entry, current));
 
@@ -1366,36 +1045,10 @@ bool MeshCookMeshlets::BuildMeshlets(
         ClearMeshletFrontier(frontier, frontierFlags);
         resetCurrentMeshlet();
 
-        if(!AddVisitedMeshletTriangle(
-            nwbFilePath,
-            metaKind,
-            trianglePrecompute,
-            *seedTriangleIndex,
-            localSourceVertexRefs,
-            localTriangleIndices,
-            current,
-            entry.meshletPrimitiveIndices,
-            scoreState,
-            frontier,
-            frontierFlags
-        ))
+        if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, trianglePrecompute, *seedTriangleIndex, localSourceVertexRefs, localTriangleIndices, current, entry.meshletPrimitiveIndices, scoreState, frontier, frontierFlags))
             return false;
 
-        if(!GrowMeshletFromFrontier(
-            nwbFilePath,
-            metaKind,
-            trianglePrecompute,
-            seedSearchOffset,
-            localSourceVertexRefs,
-            localTriangleIndices,
-            current,
-            entry.meshletPrimitiveIndices,
-            scoreState,
-            cpuScheduler,
-            parallelCandidates,
-            frontier,
-            frontierFlags
-        ))
+        if(!GrowMeshletFromFrontier(nwbFilePath, metaKind, trianglePrecompute, seedSearchOffset, localSourceVertexRefs, localTriangleIndices, current, entry.meshletPrimitiveIndices, scoreState, cpuScheduler, parallelCandidates, frontier, frontierFlags))
             return false;
 
         ClearMeshletFrontier(frontier, frontierFlags);
@@ -1404,10 +1057,7 @@ bool MeshCookMeshlets::BuildMeshlets(
     }
 
     if(entry.meshlets.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet build produced no meshlets")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet build produced no meshlets"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
     }
 

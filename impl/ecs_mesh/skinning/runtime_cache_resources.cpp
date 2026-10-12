@@ -81,9 +81,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         sourceText.assign(NWB_TEXT("<unnamed>"));
 
     if(!Core::Mesh::MeshClassUsesSkinning(instance.meshClass)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class")
-            , TStringView(sourceText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class"), TStringView(sourceText));
         return false;
     }
     if(
@@ -103,9 +101,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         || instance.meshletAttributeRefCount == 0u
         || instance.attributeSkins.size() != instance.meshletAttributeRefCount
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload")
-            , TStringView(sourceText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload"), TStringView(sourceText));
         return false;
     }
     if(
@@ -119,28 +115,19 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         || !FitsU32(instance.meshletLocalVertexRefs.size())
         || !FitsU32(instance.meshletPrimitiveIndices.size())
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits")
-            , TStringView(sourceText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits"), TStringView(sourceText));
         return false;
     }
     if(instance.skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has skin but no skeleton joint count")
-            , TStringView(sourceText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has skin but no skeleton joint count"), TStringView(sourceText));
         return false;
     }
     if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
-            , TStringView(sourceText)
-            , instance.skeletonJointCount
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits"), TStringView(sourceText), instance.skeletonJointCount);
         return false;
     }
     if(!SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
-            , TStringView(sourceText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid"), TStringView(sourceText));
         return false;
     }
     for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices){
@@ -148,25 +135,17 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         if(MatrixIsInvertibleAffine(inverseBind, SkinValidation::s_Epsilon, SkinValidation::s_Epsilon))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
-            , TStringView(sourceText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid"), TStringView(sourceText));
         return false;
     }
 
     for(usize skinIndex = 0u; skinIndex < instance.skin.size(); ++skinIndex){
         const SkinInfluence4& skin = instance.skin[skinIndex];
         const SIMDVectorSingle weights = LoadFloat(skin.weight);
-        if(
-            SkinValidation::ValidSkinInfluenceWeights(weights)
-            && SkinValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount)
-        )
+        if(SkinValidation::ValidSkinInfluenceWeights(weights) && SkinValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skin influence {} is invalid")
-            , TStringView(sourceText)
-            , skinIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skin influence {} is invalid"), TStringView(sourceText), skinIndex);
         return false;
     }
 
@@ -175,30 +154,17 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         const MeshletDesc& meshlet = instance.meshlets[meshletIndex];
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
             const auto ref = DecodeMeshletPositionRef(instance.meshletPositionRefDeltas.data(), instance.meshletPositionRefDeltas.size(), meshlet, localPositionIndex, true);
-            if(
-                ref
-                && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, instance.restPositions.size(), instance.skin.size(), true)
-            )
+            if(ref && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, instance.restPositions.size(), instance.skin.size(), true))
                 continue;
 
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range")
-                , TStringView(sourceText)
-                , meshletIndex
-                , localPositionIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range"), TStringView(sourceText), meshletIndex, localPositionIndex);
             return false;
         }
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
             const auto ref = DecodeMeshletAttributeRef(instance.meshletAttributeRefDeltas.data(), instance.meshletAttributeRefDeltas.size(), meshlet, localAttributeIndex);
             if(
                 ref
-                && MeshMeshletRefValidation::MeshletAttributeRefInRange(
-                    *ref,
-                    instance.restNormals.size(),
-                    instance.restTangents.size(),
-                    instance.uv0.size(),
-                    instance.colors.size()
-                )
+                && MeshMeshletRefValidation::MeshletAttributeRefInRange(*ref, instance.restNormals.size(), instance.restTangents.size(), instance.uv0.size(), instance.colors.size())
                 && logicalAttributeRefIndex < instance.attributeSkins.size()
                 && instance.attributeSkins[logicalAttributeRefIndex] < instance.skin.size()
             ){
@@ -206,18 +172,12 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
                 continue;
             }
 
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range")
-                , TStringView(sourceText)
-                , meshletIndex
-                , localAttributeIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range"), TStringView(sourceText), meshletIndex, localAttributeIndex);
             return false;
         }
     }
     if(logicalAttributeRefIndex != instance.attributeSkins.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload")
-            , TStringView(sourceText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload"), TStringView(sourceText));
         return false;
     }
 
@@ -237,26 +197,13 @@ template<typename PayloadT, typename PayloadVector>
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
     const bool isIndexBuffer = false
 ){
-    const Name bufferName = DeriveRuntimeResourceName(
-        instance.sourceName,
-        instance.entity.id,
-        instance.editRevision,
-        suffix
-    );
+    const Name bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
     if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
-            , label
-            , instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
         return {};
     }
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(
-        graphics,
-        bufferName,
-        payload,
-        { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer }
-    );
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, bufferName, payload, { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer });
     if(buffer)
         return Move(*buffer);
     switch(buffer.error()){
@@ -269,10 +216,7 @@ template<typename PayloadT, typename PayloadVector>
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'")
-        , label
-        , instance.handle.value
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"), label, instance.handle.value);
     return {};
 }
 
@@ -290,18 +234,7 @@ template<typename PayloadT, typename PayloadVector>
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
     const bool isIndexBuffer = false
 ){
-    outBuffer = SetupRuntimeBuffer<PayloadT>(
-        graphics,
-        instance,
-        suffix,
-        payload,
-        canHaveUavs,
-        label,
-        canHaveRawViews,
-        accelStructBuildInput,
-        queueSharing,
-        isIndexBuffer
-    );
+    outBuffer = SetupRuntimeBuffer<PayloadT>(graphics, instance, suffix, payload, canHaveUavs, label, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer);
     return outBuffer != nullptr;
 }
 
@@ -319,27 +252,13 @@ template<typename PayloadVector>
 ){
     outBuffer = nullptr;
 
-    const Name bufferName = DeriveRuntimeResourceName(
-        instance.sourceName,
-        instance.entity.id,
-        instance.editRevision,
-        suffix
-    );
+    const Name bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
     if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
-            , label
-            , instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
         return false;
     }
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(
-        graphics,
-        arena,
-        bufferName,
-        payload,
-        { canHaveUavs, true, false, queueSharing }
-    );
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, arena, bufferName, payload, { canHaveUavs, true, false, queueSharing });
     if(buffer){
         outBuffer = Move(*buffer);
         return true;
@@ -352,10 +271,7 @@ template<typename PayloadVector>
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"),
-            label,
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"), label, instance.handle.value);
         return false;
     }
 
@@ -438,24 +354,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         true,
         __hidden_runtime_cache_resources::s_SkinnedTangentLabel
     ) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(
-        m_graphics,
-        instance,
-        instance.uv0Buffer,
-        __hidden_runtime_cache_resources::s_Uv0Suffix,
-        instance.uv0,
-        false,
-        __hidden_runtime_cache_resources::s_Uv0Label
-    ) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
-        m_graphics,
-        instance,
-        instance.colorBuffer,
-        __hidden_runtime_cache_resources::s_ColorsSuffix,
-        instance.colors,
-        false,
-        __hidden_runtime_cache_resources::s_ColorLabel
-    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(m_graphics, instance, instance.uv0Buffer, __hidden_runtime_cache_resources::s_Uv0Suffix, instance.uv0, false, __hidden_runtime_cache_resources::s_Uv0Label) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(m_graphics, instance, instance.colorBuffer, __hidden_runtime_cache_resources::s_ColorsSuffix, instance.colors, false, __hidden_runtime_cache_resources::s_ColorLabel) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletDesc>(
         m_graphics,
         instance,
@@ -527,30 +427,14 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
         const usize indexCount = instance.meshletPrimitiveIndices.size();
-        Core::Alloc::ScratchArena scratchArena(
-            SkinningArenaScope::s_RuntimeBlasIndexArena,
-            indexCount * sizeof(u32) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes
-        );
-        const auto triangleIndices = BuildMeshletTriangleIndices(
-            scratchArena,
-            instance.meshlets,
-            instance.meshletLocalVertexRefs,
-            instance.meshletPositionRefDeltas,
-            instance.meshletPrimitiveIndices,
-            instance.restPositions.size()
-        );
+        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasIndexArena, indexCount * sizeof(u32) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes);
+        const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size());
         if(!triangleIndices){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'")
-                , instance.handle.value
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
         if(triangleIndices->size() != indexCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: reconstructed ray tracing index count {} does not match expected {} for runtime mesh '{}'")
-                , static_cast<u64>(triangleIndices->size())
-                , static_cast<u64>(indexCount)
-                , instance.handle.value
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: reconstructed ray tracing index count {} does not match expected {} for runtime mesh '{}'"), static_cast<u64>(triangleIndices->size()), static_cast<u64>(indexCount), instance.handle.value);
             return false;
         }
 
@@ -572,23 +456,10 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
         const usize attributeCount = instance.meshletPrimitiveIndices.size();
-        Core::Alloc::ScratchArena scratchArena(
-            SkinningArenaScope::s_RuntimeBlasAttributeArena,
-            attributeCount * sizeof(AttribGpu) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes
-        );
-        const auto triangleAttributes = BuildMeshletTriangleAttributes(
-            scratchArena,
-            instance.meshlets,
-            instance.meshletLocalVertexRefs,
-            instance.meshletAttributeRefDeltas,
-            instance.meshletPrimitiveIndices,
-            instance.restNormals,
-            instance.uv0
-        );
+        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasAttributeArena, attributeCount * sizeof(AttribGpu) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes);
+        const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0);
         if(!triangleAttributes){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'")
-                , instance.handle.value
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
 
@@ -599,11 +470,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             MeshResourceNames::s_RtTriangleAttributesBufferName,
             *triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
-            __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel,
-            true,
-            false,
-            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-        ) && uploaded;
+            __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute) && uploaded;
     }
 
     return uploaded;

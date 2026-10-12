@@ -33,9 +33,7 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(
-        TextInputSessionToken token, const TextInputSessionDesc& desc
-    )override;
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken token, const TextInputSessionDesc& desc)override;
     virtual void endNativeSession(TextInputSessionToken token)override;
     [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(TextInputRect caret)override;
 
@@ -47,9 +45,7 @@ private:
     [[nodiscard]] Expected<usize, TextInputAdmission::Enum> compositionCursor(NotNull<void*> nativeContext);
     [[nodiscard]] TextInputAdmission::Enum acceptComposition(TextInputSessionToken token, usize wParam, isize flags);
     [[nodiscard]] TextInputAdmission::Enum acceptInsertedPreedit(TextInputSessionToken token, u32 unit, bool moveCaret);
-    [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(
-        TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte
-    );
+    [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte);
     void clearCompositionPreedit()noexcept;
     void rejectNativeInput(TextInputSessionToken token, TextInputAdmission::Enum admission);
     void replayContextVisibility();

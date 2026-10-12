@@ -12,8 +12,7 @@ from refraction_gallery_smoke import capture, png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 
-IDENTITY_CAPTURES = tuple((case, route) for case in
-    ("identity_reference", "identity_same_ior", "identity_different_ior") for route in ("automatic", "screen"))
+IDENTITY_CAPTURES = tuple((case, route) for case in ("identity_reference", "identity_same_ior", "identity_different_ior") for route in ("automatic", "screen"))
 FAILURE_CAPTURES = (("crossing_overflow", "automatic"), ("crossing_overflow", "screen"))
 NEAR_AIR_CAPTURES = tuple((case, route) for case in ("near_air_ordinary", "near_air_csg") for route in ("automatic", "screen"))
 # This bright stripe interior avoids the foreground/behind panels, horizontal markers and stripe boundaries.
@@ -42,8 +41,7 @@ def require_capacity_rejection(hardware, screen):
         raise SmokeFailure("diagnosed CSG capacity failure leaked transmission through screen fallback")
     if mean < MINIMUM_SCREEN_MEAN_CHANNEL:
         raise SmokeFailure("screen capacity control lacks visible transmitted energy")
-    return {"rectangle": list(FAILURE_RECTANGLE), "pixels": pixels,
-        "maximum_hardware_channel": maximum, "mean_screen_channel": mean}
+    return {"rectangle": list(FAILURE_RECTANGLE), "pixels": pixels, "maximum_hardware_channel": maximum, "mean_screen_channel": mean}
 
 
 def require_near_air_thickness(hardware, screen):
@@ -60,34 +58,27 @@ def require_near_air_thickness(hardware, screen):
         raise SmokeFailure("near-air thickness controls lack positive transmitted energy on the bright stripe interior")
     if minimum_attenuation < MINIMUM_NEAR_AIR_RED_ATTENUATION:
         raise SmokeFailure("near-air hardware did not retain the longer tinted volume path")
-    return {"difference": distinct, "bright_rectangle": list(NEAR_AIR_RECTANGLE),
-        "minimum_hardware_red": minimum_hardware, "minimum_screen_red": minimum_screen,
-        "minimum_red_attenuation": minimum_attenuation}
+    return {"difference": distinct, "bright_rectangle": list(NEAR_AIR_RECTANGLE), "minimum_hardware_red": minimum_hardware, "minimum_screen_red": minimum_screen, "minimum_red_attenuation": minimum_attenuation}
 
 
 def analyze_near_air_frames(frames):
     metrics = {}
     for route in ("automatic", "screen"):
-        metrics["near_air_" + route + "_retained_geometry"] = require_refraction_match(
-            frames[("near_air_ordinary", route)], frames[("near_air_csg", route)])
+        metrics["near_air_" + route + "_retained_geometry"] = require_refraction_match(frames[("near_air_ordinary", route)], frames[("near_air_csg", route)])
     for case in ("near_air_ordinary", "near_air_csg"):
-        metrics[case + "_measured_thickness"] = require_near_air_thickness(
-            frames[(case, "automatic")], frames[(case, "screen")])
+        metrics[case + "_measured_thickness"] = require_near_air_thickness(frames[(case, "automatic")], frames[(case, "screen")])
     return metrics
 
 
 def analyze_frames(frames, identity_only=False):
     reference_screen = frames[("identity_reference", "screen")]
-    metrics = {"valid_volume_uses_hardware": require_refraction_distinct(
-        reference_screen, frames[("identity_reference", "automatic")], "valid closed-volume hardware control")}
+    metrics = {"valid_volume_uses_hardware": require_refraction_distinct(reference_screen, frames[("identity_reference", "automatic")], "valid closed-volume hardware control")}
     for case in ("identity_same_ior", "identity_different_ior"):
         metrics[case + "_capture_primary"] = require_refraction_match(reference_screen, frames[(case, "screen")])
         metrics[case + "_exact_association"] = require_refraction_match(frames[(case, "screen")], frames[(case, "automatic")])
-    metrics["ior_does_not_select_entity"] = require_refraction_match(
-        frames[("identity_different_ior", "automatic")], frames[("identity_same_ior", "automatic")])
+    metrics["ior_does_not_select_entity"] = require_refraction_match(frames[("identity_different_ior", "automatic")], frames[("identity_same_ior", "automatic")])
     if not identity_only:
-        metrics["explicit_capacity_failure_is_terminal"] = require_capacity_rejection(
-            frames[("crossing_overflow", "automatic")], frames[("crossing_overflow", "screen")])
+        metrics["explicit_capacity_failure_is_terminal"] = require_capacity_rejection(frames[("crossing_overflow", "automatic")], frames[("crossing_overflow", "screen")])
     return metrics
 
 

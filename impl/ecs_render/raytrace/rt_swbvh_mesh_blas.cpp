@@ -77,29 +77,19 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
     return true;
 }
 
-bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
-    Core::CommandList& commandList,
-    const bool meshBlasGeometryBuildInputStatesGraphOwned
-){
+bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& commandList, const bool meshBlasGeometryBuildInputStatesGraphOwned){
     if(!m_preparedMeshBlasBuildsReady || m_preparedMeshBlasBuilds.empty())
         return false;
 
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(
-            !meshResourcesResult
-            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)
-        ){
+        if(!meshResourcesResult || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
         }
     }
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        if(!RayTracingSoftwareBvhDetail::RecordPreparedMeshBlasBuild(
-            commandList,
-            build,
-            meshBlasGeometryBuildInputStatesGraphOwned
-        )){
+        if(!RayTracingSoftwareBvhDetail::RecordPreparedMeshBlasBuild(commandList, build, meshBlasGeometryBuildInputStatesGraphOwned)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
         }
@@ -122,10 +112,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     bool allPlansCurrent = true;
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(
-            !meshResourcesResult
-            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)
-        ){
+        if(!meshResourcesResult || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)){
             allPlansCurrent = false;
             continue;
         }
@@ -143,12 +130,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         }
         if(build.firstBuild){
             ++m_blasLedgerFirstBuilds;
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
-                , StringConvert(build.meshName.resolvedText())
-                , build.runtimeMesh
-                , static_cast<u64>(build.vertexCount)
-                , static_cast<u64>(build.indexCount)
-            );
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)"), StringConvert(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.vertexCount), static_cast<u64>(build.indexCount));
         }
         else if(build.performRefit)
             ++m_blasLedgerRefits;
@@ -159,13 +141,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS rebuild rather than retaining a static-scene hash that may describe the retired generation.
     if(!allPlansCurrent)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}")
-        , m_blasLedgerStaticSkipped
-        , m_blasLedgerFirstBuilds
-        , m_blasLedgerRefits
-        , m_blasLedgerRebuilds
-        , m_blasLedgerUploadedBytes
-    );
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}"), m_blasLedgerStaticSkipped, m_blasLedgerFirstBuilds, m_blasLedgerRefits, m_blasLedgerRebuilds, m_blasLedgerUploadedBytes);
     clearPreparedMeshBlasBuilds();
 }
 

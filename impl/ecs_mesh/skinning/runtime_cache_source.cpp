@@ -40,32 +40,16 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
 
 
 template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVertexRefVectorT>
-[[nodiscard]] bool ResolveAttributeSkins(
-    const MeshletVectorT& meshlets,
-    const PositionRefVectorT& positionRefs,
-    const LocalVertexRefVectorT& localVertexRefs,
-    const usize attributeRefCount,
-    MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins
-){
-    return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
-        meshlets,
-        positionRefs,
-        localVertexRefs,
-        attributeRefCount,
-        outAttributeSkins,
-        [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
+[[nodiscard]] bool ResolveAttributeSkins(const MeshletVectorT& meshlets, const PositionRefVectorT& positionRefs, const LocalVertexRefVectorT& localVertexRefs, const usize attributeRefCount, MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins){
+    return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(meshlets, positionRefs, localVertexRefs, attributeRefCount, outAttributeSkins, [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(attributeIndex);
             static_cast<void>(previousSkin);
             static_cast<void>(skinIndex);
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities")
-                , meshletIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities"), meshletIndex);
             return false;
         },
         [](const usize attributeIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced")
-                , attributeIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced"), attributeIndex);
             return false;
         }
     );
@@ -74,9 +58,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 [[nodiscard]] bool BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
     instance.localBounds = RuntimeMeshLocalBounds{};
     if(instance.restPositions.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds")
-            , StringConvert(instance.sourceName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds"), StringConvert(instance.sourceName.resolvedText()));
         return false;
     }
 
@@ -87,9 +69,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
         AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
 
     if(!AabbTests::Valid(minBounds, maxBounds)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds")
-            , StringConvert(instance.sourceName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds"), StringConvert(instance.sourceName.resolvedText()));
         return false;
     }
 
@@ -101,11 +81,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 
 
 template<typename MeshT, typename SkinStreamT>
-[[nodiscard]] bool BuildRuntimeZippedPayload(
-    const MeshT& mesh,
-    const SkinStreamT& skinStream,
-    MeshSkinningRuntimeInstance& instance
-){
+[[nodiscard]] bool BuildRuntimeZippedPayload(const MeshT& mesh, const SkinStreamT& skinStream, MeshSkinningRuntimeInstance& instance){
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_ZippedPayloadArena);
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
@@ -141,15 +117,8 @@ template<typename MeshT, typename SkinStreamT>
 
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(sourceMeshlet); ++localPositionIndex){
             const auto sourceRef = DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), sourceMeshlet, localPositionIndex, false);
-            if(
-                !sourceRef
-                || !MeshMeshletRefValidation::MeshletPositionRefInRange(*sourceRef, mesh.positionStream().size(), skinStream.size(), false)
-                || sourceRef->position >= skinStream.size()
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid")
-                    , meshletIndex
-                    , localPositionIndex
-                );
+            if(!sourceRef || !MeshMeshletRefValidation::MeshletPositionRefInRange(*sourceRef, mesh.positionStream().size(), skinStream.size(), false) || sourceRef->position >= skinStream.size()){
+                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid"), meshletIndex, localPositionIndex);
                 return false;
             }
 
@@ -162,20 +131,8 @@ template<typename MeshT, typename SkinStreamT>
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(sourceMeshlet); ++localAttributeIndex){
             const auto sourceRef = DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), sourceMeshlet, localAttributeIndex);
-            if(
-                !sourceRef
-                || !MeshMeshletRefValidation::MeshletAttributeRefInRange(
-                    *sourceRef,
-                    mesh.normalStream().size(),
-                    mesh.tangentStream().size(),
-                    mesh.uv0Stream().size(),
-                    mesh.colorStream().size()
-                )
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid")
-                    , meshletIndex
-                    , localAttributeIndex
-                );
+            if(!sourceRef || !MeshMeshletRefValidation::MeshletAttributeRefInRange(*sourceRef, mesh.normalStream().size(), mesh.tangentStream().size(), mesh.uv0Stream().size(), mesh.colorStream().size())){
+                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid"), meshletIndex, localAttributeIndex);
                 return false;
             }
 
@@ -189,27 +146,11 @@ template<typename MeshT, typename SkinStreamT>
         }
     }
 
-    if(!ResolveAttributeSkins(
-        instance.meshlets,
-        runtimePositionRefs,
-        instance.meshletLocalVertexRefs,
-        runtimeAttributeRefs.size(),
-        instance.attributeSkins
-    ))
+    if(!ResolveAttributeSkins(instance.meshlets, runtimePositionRefs, instance.meshletLocalVertexRefs, runtimeAttributeRefs.size(), instance.attributeSkins))
         return false;
 
-    if(!EncodeMeshletRefDeltas(
-        instance.meshlets,
-        runtimePositionRefs,
-        runtimeAttributeRefs,
-        instance.meshletPositionRefDeltas,
-        instance.meshletAttributeRefDeltas,
-        true,
-        [&](const usize meshletIndex, const TStringView reason){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}")
-                , meshletIndex
-                , reason
-            );
+    if(!EncodeMeshletRefDeltas(instance.meshlets, runtimePositionRefs, runtimeAttributeRefs, instance.meshletPositionRefDeltas, instance.meshletAttributeRefDeltas, true, [&](const usize meshletIndex, const TStringView reason){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}"), meshletIndex, reason);
             return false;
         }
     ))
@@ -249,9 +190,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
                     component.runtimeMesh.reset();
                     return false;
                 }
-                instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-                    instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags
-                );
+                instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags);
             }
             return instance.valid();
         }
@@ -299,9 +238,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
         eraseUnusedSource(sourceName);
         return false;
     }
-    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags
-    );
+    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags);
 
     ++source.referenceCount;
     const RuntimeMeshHandle handle = instance.handle;
@@ -327,20 +264,12 @@ Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache
         return &cachedSource;
     }
 
-    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(
-        skinAsset.name(),
-        NWB_TEXT("MeshSkinningRuntimeCache"),
-        "skin"
-    );
+    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), NWB_TEXT("MeshSkinningRuntimeCache"), "skin");
     const Skin* loadedSkin = loadedSkinAsset ? loadedSkinAsset->get() : nullptr;
     if(!loadedSkin)
         return MakeUnexpected(Failure{});
 
-    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>(
-        loadedSkin->mesh().name(),
-        NWB_TEXT("MeshSkinningRuntimeCache"),
-        Mesh::s_AssetTypeText
-    );
+    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>(loadedSkin->mesh().name(), NWB_TEXT("MeshSkinningRuntimeCache"), Mesh::s_AssetTypeText);
     const Mesh* loadedMesh = loadedMeshAsset ? loadedMeshAsset->get() : nullptr;
     if(!loadedMesh)
         return MakeUnexpected(Failure{});

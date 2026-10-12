@@ -32,21 +32,14 @@ inline constexpr AStringView s_PacketMarkerLabel = "GPU Task Packet";
 inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
 
 
-[[nodiscard]] inline GpuTimingScopeDefinition TimingScopeDefinition(
-    const Name& identity,
-    const AStringView markerLabel
-)noexcept{
+[[nodiscard]] inline GpuTimingScopeDefinition TimingScopeDefinition(const Name& identity, const AStringView markerLabel)noexcept{
     GpuTimingScopeDefinition definition;
     definition.identity = identity;
     definition.markerLabel = markerLabel;
     return definition;
 }
 
-[[nodiscard]] inline Name PacketTimingScopeName(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId& packet
-){
+[[nodiscard]] inline Name PacketTimingScopeName(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packet){
     const GpuCompiledPacketView packetView = planAccess.packet(packet);
     if(!packetView.valid() || packetView.plan->taskCount == 0u)
         return s_NameNone;
@@ -54,24 +47,12 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     return task.id == packetView.tasks[0u] ? GpuTaskPacketTimingScopeName(task.identity) : s_NameNone;
 }
 
-[[nodiscard]] bool PrepareCompiledTimingQueries(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    GpuTimingRecorder* const timingRecorder,
-    Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* const timingRecorder, Alloc::ScratchArena& scratchArena);
 
-[[nodiscard]] bool HasExplicitKnownInitialState(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledBarrier& barrier,
-    CommandList& commandList
-);
+[[nodiscard]] bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList);
 
 #if defined(NWB_DEBUG)
-[[nodiscard]] inline bool HasQueueCapabilities(
-    const GpuQueueCapability::Mask available,
-    const GpuQueueCapability::Mask required
-)noexcept{
+[[nodiscard]] inline bool HasQueueCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{
     return (static_cast<u8>(available) & static_cast<u8>(required)) == static_cast<u8>(required);
 }
 #endif

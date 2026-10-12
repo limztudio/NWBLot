@@ -113,12 +113,7 @@ bool QueuedClipboardService::pump(){
     for(;;){
         Request* next = nullptr;
         for(Request& request : m_requests){
-            if(
-                request.token.valid()
-                && request.token.generation < generationLimit
-                && !request.completed
-                && (!next || request.token.generation < next->token.generation)
-            )
+            if(request.token.valid() && request.token.generation < generationLimit && !request.completed && (!next || request.token.generation < next->token.generation))
                 next = &request;
         }
         if(!next)
@@ -147,11 +142,7 @@ void QueuedClipboardService::cancelNativeRequest(ClipboardRequestToken){}
 
 void QueuedClipboardService::pumpNativeRequests(){}
 
-bool QueuedClipboardService::completeNativeRequest(
-    const ClipboardRequestToken token,
-    ClipboardStatus::Enum status,
-    const AStringView text
-){
+bool QueuedClipboardService::completeNativeRequest(const ClipboardRequestToken token, ClipboardStatus::Enum status, const AStringView text){
     if(!isOwnerThread())
         return false;
     Request* const request = findRequest(token);
@@ -172,11 +163,7 @@ bool QueuedClipboardService::completeNativeRequest(
     return true;
 }
 
-ClipboardRequestResult QueuedClipboardService::enqueue(
-    const ClipboardChannel::Enum channel,
-    const ClipboardOperation::Enum operation,
-    const AStringView text
-){
+ClipboardRequestResult QueuedClipboardService::enqueue(const ClipboardChannel::Enum channel, const ClipboardOperation::Enum operation, const AStringView text){
     if(!isOwnerThread())
         return { .token = {}, .admission = ClipboardAdmission::WrongThread };
 

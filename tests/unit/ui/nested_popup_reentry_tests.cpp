@@ -229,19 +229,11 @@ protected:
     [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup("parent", m_parent, ParentOptions()); }
 
     [[nodiscard]] bool declareChild(){
-        return
-            m_builder.beginPopup("child", m_child, ChildOptions())
-            && m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid
-            && m_builder.endPopup()
-        ;
+        return m_builder.beginPopup("child", m_child, ChildOptions()) && m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid && m_builder.endPopup();
     }
 
     [[nodiscard]] bool declareSibling(){
-        return
-            m_builder.beginPopup("sibling", m_sibling, ChildOptions())
-            && m_builder.virtualList("list", m_siblingSource, m_siblingList, ListOptions()).valid
-            && m_builder.endPopup()
-        ;
+        return m_builder.beginPopup("sibling", m_sibling, ChildOptions()) && m_builder.virtualList("list", m_siblingSource, m_siblingList, ListOptions()).valid && m_builder.endPopup();
     }
 
     [[nodiscard]] AcceptedFrame accepted()const{

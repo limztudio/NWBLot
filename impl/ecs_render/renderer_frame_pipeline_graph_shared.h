@@ -42,11 +42,7 @@ inline constexpr AStringView s_SceneTlasResourceLabel = "Scene TLAS";
 // Five raytracing scene/shadow buffers shared by the caustics and shadow-visibility graph declares.
 // The importer callback matches each file's local importBuffer lambda, so call sites keep their exact graph.
 template<typename ImportBufferFn, typename AppendBufferFn>
-[[nodiscard]] inline bool AppendRayTracingSceneShadowBuffers(
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
-    ImportBufferFn&& importBuffer,
-    AppendBufferFn&& appendBuffer
-){
+[[nodiscard]] inline bool AppendRayTracingSceneShadowBuffers(const RayTracingDeferredGraphResourceSnapshot& rayTracingResources, ImportBufferFn&& importBuffer, AppendBufferFn&& appendBuffer){
     const Core::BufferHandle sceneShadowBuffers[] = {
         rayTracingResources.sceneBvhNodeBuffer,
         rayTracingResources.sceneInstanceBuffer,
@@ -54,28 +50,12 @@ template<typename ImportBufferFn, typename AppendBufferFn>
         rayTracingResources.shadowMaterialTypedBuffer,
         rayTracingResources.shadowInstanceBuffer,
     };
-    const Name sceneShadowIdentities[] = {
-        Name("render.shadow_visibility.scene_bvh_nodes"),
-        Name("render.shadow_visibility.scene_instances"),
-        Name(s_SceneShadowInstanceMaterialName),
-        Name(s_SceneShadowMaterialTypedName),
-        Name(s_SceneShadowInstancesName),
-    };
-    const AStringView sceneShadowLabels[] = {
-        "Scene BVH Nodes",
-        "Scene Instances",
-        s_SceneShadowInstanceMaterialLabel,
-        s_SceneShadowMaterialTypedLabel,
-        s_SceneShadowInstancesLabel,
-    };
+    const Name sceneShadowIdentities[] = { Name("render.shadow_visibility.scene_bvh_nodes"), Name("render.shadow_visibility.scene_instances"), Name(s_SceneShadowInstanceMaterialName), Name(s_SceneShadowMaterialTypedName), Name(s_SceneShadowInstancesName), };
+    const AStringView sceneShadowLabels[] = { "Scene BVH Nodes", "Scene Instances", s_SceneShadowInstanceMaterialLabel, s_SceneShadowMaterialTypedLabel, s_SceneShadowInstancesLabel, };
     for(usize bufferIndex = 0u; bufferIndex < 5u; ++bufferIndex){
         if(!sceneShadowBuffers[bufferIndex])
             continue;
-        const Core::GpuGraphResourceId resource = importBuffer(
-            sceneShadowBuffers[bufferIndex],
-            sceneShadowIdentities[bufferIndex],
-            sceneShadowLabels[bufferIndex]
-        );
+        const Core::GpuGraphResourceId resource = importBuffer(sceneShadowBuffers[bufferIndex], sceneShadowIdentities[bufferIndex], sceneShadowLabels[bufferIndex]);
         if(!resource.valid())
             return false;
         appendBuffer(resource, Core::ResourceStates::ShaderResource);
@@ -89,13 +69,7 @@ struct TraceResourceSetUses{
 };
 
 template<typename AppendBufferFn>
-[[nodiscard]] inline bool AppendCurrentCsgRayGeometry(
-    Core::GpuTaskGraph& graph,
-    const Core::BufferHandle& context,
-    const Core::BufferHandle* bounds,
-    const usize boundsCount,
-    AppendBufferFn&& appendBuffer
-){
+[[nodiscard]] inline bool AppendCurrentCsgRayGeometry(Core::GpuTaskGraph& graph, const Core::BufferHandle& context, const Core::BufferHandle* bounds, const usize boundsCount, AppendBufferFn&& appendBuffer){
     if(!context)
         return true;
     if(boundsCount != 0u && !bounds)
@@ -111,9 +85,7 @@ template<typename AppendBufferFn>
             resource = declarations.findImportedBuffer(buffer);
         }
         if(!resource.valid()){
-            resource = graph.importBuffer(
-                buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, "Current CSG Ray Geometry")
-            );
+            resource = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, "Current CSG Ray Geometry"));
         }
         if(!resource.valid())
             return false;
@@ -129,26 +101,13 @@ template<typename AppendBufferFn>
     return true;
 }
 
-[[nodiscard]] inline TraceResourceSetUses MakeTraceResourceSetUses(
-    const Core::GpuGraphResourceSetId traceGeometrySet,
-    const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet
-){
+[[nodiscard]] inline TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId traceGeometrySet, const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet){
     TraceResourceSetUses result;
     if(traceGeometrySet.valid()){
-        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{
-            .resourceSet = traceGeometrySet,
-            .range = {},
-            .requiredState = Core::ResourceStates::ShaderResource,
-            .access = Core::GpuTaskResourceAccess::Read,
-        };
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     }
     if(traceMaterialSampledTextureSet.valid()){
-        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{
-            .resourceSet = traceMaterialSampledTextureSet,
-            .range = {},
-            .requiredState = Core::ResourceStates::ShaderResource,
-            .access = Core::GpuTaskResourceAccess::Read,
-        };
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     }
     return result;
 }

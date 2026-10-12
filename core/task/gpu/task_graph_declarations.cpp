@@ -37,12 +37,7 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
             NWB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
             TerminateInvariant();
         }
-        if(s_NextGeneration.compare_exchange_weak(
-            nextGeneration,
-            nextGeneration + 1u,
-            MemoryOrder::relaxed,
-            MemoryOrder::relaxed
-        ))
+        if(s_NextGeneration.compare_exchange_weak(nextGeneration, nextGeneration + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return nextGeneration;
     }
 }
@@ -88,11 +83,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
             && m_submissionBindingState != SubmissionBindingState::ExceptionClosing
         ;
         for(const GpuTaskNode& task : m_tasks){
-            if(
-                task.lifecycleState == TaskLifecycleState::Recording
-                || task.lifecycleState == TaskLifecycleState::Submitting
-                || task.lifecycleState == TaskLifecycleState::Accepting
-            )
+            if(task.lifecycleState == TaskLifecycleState::Recording || task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting)
                 teardownValid = false;
         }
         if(teardownValid){
@@ -104,10 +95,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     if(!teardownValid)
         TerminateInvariant();
 
-    const bool taskPayloadsDestroyed = UncaughtExceptionCount() != 0
-        ? destroyTaskPayloadsWithoutCallbacks()
-        : destroyTaskPayloads()
-    ;
+    const bool taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
     if(!taskPayloadsDestroyed){
         NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
         TerminateInvariant();
@@ -125,10 +113,7 @@ GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc, const GpuTaskCommandReq
 
 bool GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
     DeclarationMutationScope mutation(*this);
-    if(
-        !mutation.valid() || m_normalExecutionPrelude.valid() || !validTask(task)
-        || task.index != 0u || m_tasks.size() != 1u
-    )
+    if(!mutation.valid() || m_normalExecutionPrelude.valid() || !validTask(task) || task.index != 0u || m_tasks.size() != 1u)
         return false;
 
     const GpuTaskNode& prelude = m_tasks[0u];

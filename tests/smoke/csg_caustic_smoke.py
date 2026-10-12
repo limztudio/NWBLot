@@ -20,21 +20,16 @@ def capture(args, route, arm):
     output = args.output_directory / (route + "_" + arm + ".bmp")
     capture_script = Path(__file__).with_name("window_capture_smoke.py") if arm != "disabled" \
         else Path(__file__).parent / "ui_layer" / "raster_ir_flat_capture.py"
-    command = [sys.executable, str(capture_script),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
-        "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(".log")),
-        "--expect-log-message", "CsgShadowSmokeProject: shutdown",
-        "--expect-log-message", "CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two",
-        "--expect-log-message", "CsgCausticSmokeProject: photons " + ("disabled" if arm == "disabled" else "enabled"),
+    command = [sys.executable, str(capture_script), "--executable", str(args.executable), "--working-directory", str(args.working_directory), "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
+        "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(".log")), "--expect-log-message", "CsgShadowSmokeProject: shutdown",
+        "--expect-log-message", "CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two", "--expect-log-message", "CsgCausticSmokeProject: photons " + ("disabled" if arm == "disabled" else "enabled"),
         "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
     if arm != "disabled":
         command += ["--expect-log-message", "RendererSystem: dispatched " + route + " caustic producer"]
     else:
         command += ["--reject-log-message", "caustic producer ("]
     if route == "software":
-        command += ["--application-arg=--disable-hardware-ray-tracing",
-            "--expect-log-message", "Loader: hardware ray tracing disabled before device creation"]
+        command += ["--application-arg=--disable-hardware-ray-tracing", "--expect-log-message", "Loader: hardware ray tracing disabled before device creation"]
     else:
         index = {"reference": 0, "cut": 1, "uncut": 2, "disabled": 1}[arm]
         command += ["--skip-log-message", f"atlas arm={index} light=directional hardware=0"]
@@ -57,8 +52,7 @@ def capture(args, route, arm):
         return None
     if result.returncode:
         raise SmokeFailure(f"CSG caustic {route}/{arm} capture failed: {result.returncode}")
-    verify_settings(output.with_suffix(".log").read_text(encoding="utf-8"), PHOTON_GRID_DIVISOR,
-        producer_enabled=arm != "disabled")
+    verify_settings(output.with_suffix(".log").read_text(encoding="utf-8"), PHOTON_GRID_DIVISOR, producer_enabled=arm != "disabled")
     frame = read_bmp_24_rows(output)
     if frame[:2] != (960, 720):
         raise SmokeFailure("CSG caustic smoke requires the actual 960x720 framebuffer")

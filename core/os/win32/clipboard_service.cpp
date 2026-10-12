@@ -88,18 +88,10 @@ ClipboardCapabilities Win32ClipboardService::capabilities(const ClipboardChannel
     return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ .readText = true, .writeText = true } : ClipboardCapabilities{};
 }
 
-void Win32ClipboardService::startNativeRequest(
-    const ClipboardRequestToken token,
-    const ClipboardOperation::Enum operation,
-    const ClipboardChannel::Enum,
-    const AStringView text
-){
+void Win32ClipboardService::startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum, const AStringView text){
     m_nativeToken = token;
     m_utf8Text.clear();
-    const ClipboardStatus::Enum status = operation == ClipboardOperation::ReadText
-        ? readNativeText(m_utf8Text)
-        : writeNativeText(text)
-    ;
+    const ClipboardStatus::Enum status = operation == ClipboardOperation::ReadText ? readNativeText(m_utf8Text) : writeNativeText(text);
     if(m_nativeToken == token){
         m_nativeToken = {};
         if(!completeNativeRequest(token, status, m_utf8Text))
@@ -153,9 +145,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
         text.clear();
         return ClipboardStatus::Success;
     }
-    const i32 utf8Length = WideCharToMultiByte(
-        CP_UTF8, WC_ERR_INVALID_CHARS, wide, static_cast<i32>(length), nullptr, 0, nullptr, nullptr
-    );
+    const i32 utf8Length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, static_cast<i32>(length), nullptr, 0, nullptr, nullptr);
     if(utf8Length == 0){
         NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: invalid Unicode text ({})"), GetLastError());
         return ClipboardStatus::InvalidText;
@@ -163,9 +153,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
     if(static_cast<usize>(utf8Length) > s_ClipboardMaxTextBytes * 2u)
         return ClipboardStatus::TooLarge;
     text.resize(static_cast<usize>(utf8Length));
-    const i32 convertedBytes = WideCharToMultiByte(
-        CP_UTF8, WC_ERR_INVALID_CHARS, wide, static_cast<i32>(length), text.data(), utf8Length, nullptr, nullptr
-    );
+    const i32 convertedBytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, static_cast<i32>(length), text.data(), utf8Length, nullptr, nullptr);
     if(convertedBytes != utf8Length){
         NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: Unicode conversion failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
@@ -193,9 +181,7 @@ ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView t
             return ClipboardStatus::InvalidText;
         }
         m_wideText.resize(static_cast<usize>(length));
-        const i32 convertedLength = MultiByteToWideChar(
-            CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<i32>(text.size()), m_wideText.data(), length
-        );
+        const i32 convertedLength = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<i32>(text.size()), m_wideText.data(), length);
         if(convertedLength != length){
             NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: UTF-8 conversion failed ({})"), GetLastError());
             return ClipboardStatus::NativeFailure;

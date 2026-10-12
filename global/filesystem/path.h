@@ -25,15 +25,10 @@ namespace GlobalFilesystemPathDetail{
 
 
 template<typename CharT>
-concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar>
-    || SameAs<CharT, char8_t>
-;
+concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar> || SameAs<CharT, char8_t>;
 
 template<typename SourceT>
-concept PathSourceLike =
-    BasicStringDetail::CanMakeCharView<SourceT>
-    || BasicStringDetail::CanMakeWCharView<SourceT>
-;
+concept PathSourceLike = BasicStringDetail::CanMakeCharView<SourceT> || BasicStringDetail::CanMakeWCharView<SourceT>;
 
 template<typename CharT>
 [[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept{

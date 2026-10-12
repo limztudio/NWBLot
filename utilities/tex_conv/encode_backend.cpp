@@ -24,12 +24,7 @@ namespace EncodeBackendDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ConfigureCompressor(
-    basisu::basis_compressor_params& parameters,
-    basisu::job_pool& jobPool,
-    const basist::basis_tex_format format,
-    const bool srgb
-){
+void ConfigureCompressor(basisu::basis_compressor_params& parameters, basisu::job_pool& jobPool, const basist::basis_tex_format format, const bool srgb){
     parameters.set_format_mode(format);
     parameters.set_srgb_options(srgb);
     parameters.m_status_output = false;
@@ -40,15 +35,7 @@ void ConfigureCompressor(
     parameters.m_pJob_pool = &jobPool;
 }
 
-void ResetPayload(
-    TexturePayload& outPayload,
-    const TextureDimension::Enum dimension,
-    const u32 width,
-    const u32 height,
-    const u32 depth,
-    const TexturePayloadFormat::Enum format,
-    const bool srgb
-){
+void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb){
     outPayload.dimension = dimension;
     outPayload.width = width;
     outPayload.height = height;
@@ -65,10 +52,7 @@ void ResetPayload(
 
 
 
-[[nodiscard]] bool ValidateBackendOutput(
-    const basisu::basisu_backend_output& backendOutput,
-    const basist::basis_tex_format expectedFormat
-){
+[[nodiscard]] bool ValidateBackendOutput(const basisu::basisu_backend_output& backendOutput, const basist::basis_tex_format expectedFormat){
     if(backendOutput.m_tex_format != expectedFormat){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an unexpected UASTC block format."));
         return false;
@@ -83,14 +67,7 @@ void ResetPayload(
 // Basis slices are source-major; m_source_file_index restores on-disk plane order.
 
 
-[[nodiscard]] bool AppendCanonicalMip(
-    const basisu::basisu_backend_output& backendOutput,
-    const u32 backendMipIndex,
-    const u32 planeCount,
-    const u32 width,
-    const u32 height,
-    TexturePayload& inOutPayload
-){
+[[nodiscard]] bool AppendCanonicalMip(const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload){
     if(planeCount == 0u || backendOutput.m_slice_desc.size() != backendOutput.m_slice_image_data.size())
         return false;
 
@@ -165,11 +142,7 @@ void ResetPayload(
 
 
 
-[[nodiscard]] Expected<basisu::imagef> LoadAlphaMask(
-    const AlphaSource& alphaSource,
-    const u32 expectedWidth,
-    const u32 expectedHeight
-){
+[[nodiscard]] Expected<basisu::imagef> LoadAlphaMask(const AlphaSource& alphaSource, const u32 expectedWidth, const u32 expectedHeight){
     basisu::imagef mask;
     if(alphaSource.mode != AlphaSourceMode::Image)
         return mask;

@@ -1,18 +1,5 @@
 function(run_converter input_path normal_mode output_path)
-    execute_process(
-        COMMAND
-            "${FBX_TO_NWB_EXE}"
-            "${input_path}"
-            --output "${output_path}"
-            --asset-type mesh
-            --normal-mode "${normal_mode}"
-            --preserve-space
-            --yes
-            --force
-        RESULT_VARIABLE result
-        OUTPUT_VARIABLE stdout
-        ERROR_VARIABLE stderr
-    )
+    execute_process(COMMAND "${FBX_TO_NWB_EXE}" "${input_path}" --output "${output_path}" --asset-type mesh --normal-mode "${normal_mode}" --preserve-space --yes --force RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
     if(NOT result EQUAL 0)
         message(FATAL_ERROR "fbx_to_nwb ${normal_mode} failed:\n${stdout}\n${stderr}")
     endif()

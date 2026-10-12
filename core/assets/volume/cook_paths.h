@@ -29,12 +29,7 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] StagedVolumePaths BuildStagedVolumePaths(
-    const Path& outputDirectory,
-    AStringView volumeName,
-    AStringView configurationSafeName,
-    ScratchArena& scratchArena
-);
+[[nodiscard]] StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, AStringView volumeName, AStringView configurationSafeName, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

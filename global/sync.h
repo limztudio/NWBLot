@@ -86,8 +86,7 @@ using SharedQueuingMutex = tbb::queuing_rw_mutex;
 using ConditionVariable = std::condition_variable;
 using ConditionVariableAny = std::condition_variable_any;
 
-template<isize LeastMaxValue = static_cast<isize>(INT_MAX)>
-using Semaphore = std::counting_semaphore<LeastMaxValue>;
+template<isize LeastMaxValue = static_cast<isize>(INT_MAX)> using Semaphore = std::counting_semaphore<LeastMaxValue>;
 using BinarySemaphore = Semaphore<1>;
 
 template<typename Mutex>
@@ -134,12 +133,7 @@ public:
 
     bool try_lock()noexcept{
         u32 expected = s_Unlocked;
-        return m_state.compare_exchange_strong(
-            expected,
-            s_Locked,
-            MemoryOrder::acquire,
-            MemoryOrder::relaxed
-        );
+        return m_state.compare_exchange_strong(expected, s_Locked, MemoryOrder::acquire, MemoryOrder::relaxed);
     }
 
     void unlock()noexcept{

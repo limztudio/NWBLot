@@ -93,20 +93,11 @@ struct FrameGraphReflectionResolveResult{
 
 class FrameGraphReflectionResolve final : NoCopy{
 public:
-    FrameGraphReflectionResolve(
-        Core::GpuTaskGraph& graph,
-        Core::GraphicsRuntime& graphics,
-        RendererRayTracingSystem& raytracingSystem,
-        RendererReflectionSystem& reflectionSystem
-    );
+    FrameGraphReflectionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem, RendererReflectionSystem& reflectionSystem);
 
 
 public:
-    [[nodiscard]] Expected<FrameGraphReflectionResolveResult> declare(
-        const FrameGraphReflectionResolveInputs& inputs,
-        RayTracingSceneGraphReads& sceneReads,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] Expected<FrameGraphReflectionResolveResult> declare(const FrameGraphReflectionResolveInputs& inputs, RayTracingSceneGraphReads& sceneReads, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

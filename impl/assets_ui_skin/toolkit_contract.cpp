@@ -79,9 +79,7 @@ bool ValidateUiSkinToolkitContract(const UiSkin& skin){
         return false;
     for(const auto& required : __hidden_ui_skin_toolkit_contract::s_RequiredRegions){
         if(!skin.findRegion(required.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: missing required region '{}'")
-                , StringConvert(required.text)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: missing required region '{}'"), StringConvert(required.text));
             return false;
         }
     }

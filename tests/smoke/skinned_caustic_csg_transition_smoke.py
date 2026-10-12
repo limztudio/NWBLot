@@ -13,8 +13,7 @@ import statistics
 import subprocess
 import sys
 
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure,
-    read_bmp_24_rows, validate_expected_log_text)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text)
 
 
 SAMPLE_COUNT = 8
@@ -23,10 +22,8 @@ CAPTURE_INTERVAL = 32
 EXPECTED_EXTENT = (1280, 900)
 VARIANTS = ("current", "lagged", "no_photons")
 REGIONS = {"receiver": (320, 100, 960, 735), "ground": (260, 640, 1020, 870)}
-MATCH_LIMITS = {"mean_absolute_channel_error": 5.0, "p95_channel_error": 12,
-    "large_error_fraction": .03, "large_error_channel_threshold": 24}
-SIGNAL_LIMITS = {"csg_changed_pixels": 256, "motion_changed_pixels": 64,
-    "photon_changed_pixels": 32, "photon_mean_channel_error": .03, "channel_threshold": 3}
+MATCH_LIMITS = {"mean_absolute_channel_error": 5.0, "p95_channel_error": 12, "large_error_fraction": .03, "large_error_channel_threshold": 24}
+SIGNAL_LIMITS = {"csg_changed_pixels": 256, "motion_changed_pixels": 64, "photon_changed_pixels": 32, "photon_mean_channel_error": .03, "channel_threshold": 3}
 
 
 def sample_path(directory, sample):
@@ -35,8 +32,7 @@ def sample_path(directory, sample):
 
 def validate_series_log(log, variant):
     lagged, photons = variant == "lagged", variant != "no_photons"
-    validate_expected_log_text(log, ("SkinnedCausticTransition: complete samples=8",
-        "SkinnedCausticSmokeProject: shutdown"), STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(log, ("SkinnedCausticTransition: complete samples=8", "SkinnedCausticSmokeProject: shutdown"), STRICT_LOG_FAILURE_MESSAGES)
     setup = re.findall(r"SkinnedCausticTransition: setup lagged=([01]) caustics=([01]) minimum_frame=(\d+) warmup_seconds=(\d+) phase_frames=(\d+) samples=(\d+) model=(\w+)", log)
     if setup != [(str(int(lagged)), str(int(photons)), "360", "30", "64", "8", "closed_prism")]:
         raise SmokeFailure("transition setup does not match the requested public controls")
@@ -47,25 +43,19 @@ def validate_series_log(log, variant):
     elapsed, first = float(completions[0][0]), int(completions[0][1])
     if not math.isfinite(elapsed) or elapsed < 30 or int(starts[0]) < 360 or first <= int(starts[0]):
         raise SmokeFailure("transition captures must follow 360 frames and 30 steady-clock warmup seconds")
-    phases = [(int(phase), int(csg), int(frame)) for phase, csg, frame in re.findall(
-        r"SkinnedCausticTransition: phase (\d+) csg=([01]) graphics frame (\d+)", log)]
+    phases = [(int(phase), int(csg), int(frame)) for phase, csg, frame in re.findall(r"SkinnedCausticTransition: phase (\d+) csg=([01]) graphics frame (\d+)", log)]
     if phases != [(phase, phase % 2, first + phase * PHASE_FRAMES) for phase in range(4)]:
         raise SmokeFailure("ordinary/CSG source-frame transitions differ from the deterministic schedule")
-    samples = [(int(sample), int(frame), int(phase), int(pose)) for sample, frame, phase, pose in re.findall(
-        r"SkinnedCausticTransition: sample (\d+) graphics frame (\d+) phase (\d+) pose_frame (\d+)", log)]
-    expected = [(sample, first + (sample + 1) * CAPTURE_INTERVAL - 1, sample // 2,
-        ((sample + 1) * CAPTURE_INTERVAL - 1) % PHASE_FRAMES)
-        for sample in range(SAMPLE_COUNT)]
+    samples = [(int(sample), int(frame), int(phase), int(pose)) for sample, frame, phase, pose in re.findall(r"SkinnedCausticTransition: sample (\d+) graphics frame (\d+) phase (\d+) pose_frame (\d+)", log)]
+    expected = [(sample, first + (sample + 1) * CAPTURE_INTERVAL - 1, sample // 2, ((sample + 1) * CAPTURE_INTERVAL - 1) % PHASE_FRAMES) for sample in range(SAMPLE_COUNT)]
     if samples != expected or log.count("FramebufferCapture: capture ready") != SAMPLE_COUNT:
         raise SmokeFailure("transition readbacks do not identify every matched source-frame pose")
-    gpu = [(int(phase), int(photon), int(skinning)) for phase, photon, skinning in re.findall(
-        r"SkinnedCausticTransition: completed GPU phase (\d+) photon_samples=(\d+) skinning_samples=(\d+)", log)]
+    gpu = [(int(phase), int(photon), int(skinning)) for phase, photon, skinning in re.findall(r"SkinnedCausticTransition: completed GPU phase (\d+) photon_samples=(\d+) skinning_samples=(\d+)", log)]
     if [phase for phase, _, _ in gpu] != list(range(4)):
         raise SmokeFailure("transition run did not publish all completed GPU phase counts")
     if any(skinning <= 0 or (photon <= 0 if photons else photon != 0) for _, photon, skinning in gpu):
         raise SmokeFailure("each phase requires completed skinning and the requested photon admission")
-    routes = [(int(phase), int(frame), int(queue), int(graphics), int(generation), int(off_graphics))
-        for phase, frame, queue, graphics, generation, off_graphics in re.findall(
+    routes = [(int(phase), int(frame), int(queue), int(graphics), int(generation), int(off_graphics)) for phase, frame, queue, graphics, generation, off_graphics in re.findall(
         r"SkinnedCausticTransition: accepted photon route phase (\d+) source_frame=(\d+) queue=(\d+) graphics_queue=(\d+) generation=(\d+) off_graphics=([01])", log)]
     if photons:
         if [route[0] for route in routes] != list(range(4)):
@@ -83,12 +73,10 @@ def validate_series_log(log, variant):
     if photons and hw not in log or not photons and "caustic producer (" in log:
         raise SmokeFailure("transition fixture did not dispatch the requested hardware photon route")
     if lagged:
-        validate_expected_log_text(log, ("RendererSystem: frame-lagged async lighting bootstrap accepted",
-            "RendererSystem: frame-lagged async lighting active history accepted"), ())
+        validate_expected_log_text(log, ("RendererSystem: frame-lagged async lighting bootstrap accepted", "RendererSystem: frame-lagged async lighting active history accepted"), ())
         if "RendererSystem: frame-lagged async lighting Graphics queue route accepted" in log:
             raise SmokeFailure("Graphics fallback cannot qualify the dedicated Compute reader lifetime")
-    return {"variant": variant, "first_frame": first, "warmup_elapsed_seconds": elapsed,
-        "source_frames": [sample[1] for sample in samples], "gpu_phases": gpu, "accepted_photon_routes": routes}
+    return {"variant": variant, "first_frame": first, "warmup_elapsed_seconds": elapsed, "source_frames": [sample[1] for sample in samples], "gpu_phases": gpu, "accepted_photon_routes": routes}
 
 
 def frame_regions(frame):
@@ -112,18 +100,14 @@ def difference(first, second):
         raise SmokeFailure("transition image regions must contain equal nonempty RGB samples")
     errors = [abs(left - right) for left, right in zip(first, second)]
     ordered = sorted(errors)
-    changed = sum(max(errors[index:index + 3]) > SIGNAL_LIMITS["channel_threshold"]
-        for index in range(0, len(errors), 3))
-    return {"mean_absolute_channel_error": statistics.mean(errors),
-        "p95_channel_error": ordered[round((len(ordered) - 1) * .95)],
-        "large_error_fraction": sum(error > MATCH_LIMITS["large_error_channel_threshold"] for error in errors) / len(errors),
+    changed = sum(max(errors[index:index + 3]) > SIGNAL_LIMITS["channel_threshold"] for index in range(0, len(errors), 3))
+    return {"mean_absolute_channel_error": statistics.mean(errors), "p95_channel_error": ordered[round((len(ordered) - 1) * .95)], "large_error_fraction": sum(error > MATCH_LIMITS["large_error_channel_threshold"] for error in errors) / len(errors),
         "changed_pixels": changed, "pixels": len(errors) // 3}
 
 
 def require_match(first, second, label):
     measured = difference(first, second)
-    if any(measured[key] > MATCH_LIMITS[key] for key in (
-        "mean_absolute_channel_error", "p95_channel_error", "large_error_fraction")):
+    if any(measured[key] > MATCH_LIMITS[key] for key in ("mean_absolute_channel_error", "p95_channel_error", "large_error_fraction")):
         raise SmokeFailure(f"{label} has stale or unstable posed geometry/light: {measured}")
     return measured
 
@@ -141,28 +125,19 @@ def compare_series(series):
     comparisons = {"current_vs_lagged": [], "repeated_states": [], "csg_signal": [], "motion_signal": [], "photon_signal": []}
     for sample in range(SAMPLE_COUNT):
         for region in REGIONS:
-            comparisons["current_vs_lagged"].append({"sample": sample, "region": region,
-                **require_match(series["current"][sample][region], series["lagged"][sample][region],
-                    f"current/lagged sample {sample} {region}")})
+            comparisons["current_vs_lagged"].append({"sample": sample, "region": region, **require_match(series["current"][sample][region], series["lagged"][sample][region], f"current/lagged sample {sample} {region}")})
         # Only ground pixels qualify photon contribution; body transmission or CSG silhouettes cannot satisfy it.
         if sample < 2:
-            comparisons["photon_signal"].append({"sample": sample,
-                **require_signal(series["current"][sample]["ground"], series["no_photons"][sample]["ground"],
-                    SIGNAL_LIMITS["photon_changed_pixels"], "hardware photons on ordinary ground",
+            comparisons["photon_signal"].append({"sample": sample, **require_signal(series["current"][sample]["ground"], series["no_photons"][sample]["ground"], SIGNAL_LIMITS["photon_changed_pixels"], "hardware photons on ordinary ground",
                     SIGNAL_LIMITS["photon_mean_channel_error"])})
     for variant in ("current", "lagged"):
         for sample in range(4):
             for region in REGIONS:
-                comparisons["repeated_states"].append({"variant": variant, "sample": sample, "region": region,
-                    **require_match(series[variant][sample][region], series[variant][sample + 4][region],
-                        f"{variant} repeated ordinary/CSG pose {sample} {region}")})
+                comparisons["repeated_states"].append({"variant": variant, "sample": sample, "region": region, **require_match(series[variant][sample][region], series[variant][sample + 4][region], f"{variant} repeated ordinary/CSG pose {sample} {region}")})
         for sample in range(2):
-            comparisons["csg_signal"].append({"variant": variant, "sample": sample,
-                **require_signal(series[variant][sample]["receiver"], series[variant][sample + 2]["receiver"],
+            comparisons["csg_signal"].append({"variant": variant, "sample": sample, **require_signal(series[variant][sample]["receiver"], series[variant][sample + 2]["receiver"],
                     SIGNAL_LIMITS["csg_changed_pixels"], "active cutter on the live skinned receiver")})
-        comparisons["motion_signal"].append({"variant": variant,
-            **require_signal(series[variant][0]["receiver"], series[variant][1]["receiver"],
-                SIGNAL_LIMITS["motion_changed_pixels"], "live joint pose motion")})
+        comparisons["motion_signal"].append({"variant": variant, **require_signal(series[variant][0]["receiver"], series[variant][1]["receiver"], SIGNAL_LIMITS["motion_changed_pixels"], "live joint pose motion")})
     return comparisons
 
 
@@ -176,19 +151,12 @@ def capture(args, variant):
         if key.startswith(("NWB_SKINNED_CAUSTIC_CSG_", "NWB_RENDERER_BASELINE_", "NWB_GI_SMOKE_", "NWB_CAUSTIC_SMOKE_")):
             environment.pop(key)
     environment.pop("NWB_GPU_TIMING_FILE", None)
-    environment.update({"NWB_SKINNED_CAUSTIC_CSG_TRANSITION": "1",
-        "NWB_SKINNED_CAUSTIC_CSG_LAGGED": str(int(variant == "lagged")),
-        "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS": str(int(variant == "no_photons")),
-        "NWB_GPU_TIMING_FILE": str((directory / "gpu_timing.txt").resolve()),
-        "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "128"})
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(sample_path(directory, SAMPLE_COUNT - 1)), "--application-capture",
-        "--application-capture-frame-count", "1", "--timeout", str(args.timeout),
-        "--log-output", str(directory / "runtime.log"), "--expect-log-message", "SkinnedCausticTransition: complete samples=8",
-        "--expect-log-message", "SkinnedCausticSmokeProject: shutdown",
-        "--skip-log-message", "natural software-only shadow route selected because RayQuery-capable hardware is unavailable",
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
+    environment.update({"NWB_SKINNED_CAUSTIC_CSG_TRANSITION": "1", "NWB_SKINNED_CAUSTIC_CSG_LAGGED": str(int(variant == "lagged")), "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS": str(int(variant == "no_photons")),
+        "NWB_GPU_TIMING_FILE": str((directory / "gpu_timing.txt").resolve()), "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "128"})
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        "--output", str(sample_path(directory, SAMPLE_COUNT - 1)), "--application-capture", "--application-capture-frame-count", "1", "--timeout", str(args.timeout),
+        "--log-output", str(directory / "runtime.log"), "--expect-log-message", "SkinnedCausticTransition: complete samples=8", "--expect-log-message", "SkinnedCausticSmokeProject: shutdown",
+        "--skip-log-message", "natural software-only shadow route selected because RayQuery-capable hardware is unavailable", "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
     if variant == "lagged":
         command += ["--skip-log-message", "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue",
             "--skip-log-message", "SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable"]
@@ -217,8 +185,7 @@ def analyze(directory):
             series[variant].append(frame_regions(read_bmp_24_rows(path)))
             files.append({"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
         runs[-1]["files"] = files
-    return {"runs": runs, "comparisons": compare_series(series), "match_limits": MATCH_LIMITS,
-        "signal_limits": SIGNAL_LIMITS, "regions": REGIONS,
+    return {"runs": runs, "comparisons": compare_series(series), "match_limits": MATCH_LIMITS, "signal_limits": SIGNAL_LIMITS, "regions": REGIONS,
         "contract": "Every frame writes deterministic joint poses. Accepted readbacks are polled without waitForIdle. Four 64-frame phases alternate ordinary/CSG; samples at phase frames 31/63 recur at the same poses. Dedicated Compute lagged lighting must match current lighting; accepted native photon packet telemetry must identify a physical queue distinct from primary Graphics in every lagged phase, and completed skinning/HW photons must cover every admitted phase.",
         "limitations": ["Visual and validation regression exercises the asynchronous reader hazard; it does not prove every possible GPU interleaving.",
             "The 30-second warmup precedes live transitions; this is a posed-geometry/caustic lifetime test, not a settled post-transition GI quality qualification."]}

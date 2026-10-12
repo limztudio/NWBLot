@@ -37,16 +37,10 @@ namespace __hidden_ui_radio_group_layout{
         || !IsFinite(metrics.markInset) || metrics.markInset < 0.0f || metrics.markInset > 0.5f
     )
         return false;
-    const SIMDVectorDouble padding = SIMDVectorDouble{ metrics.padding.left, metrics.padding.top }
-        + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom };
-    const f64 height = padding.y + static_cast<f64>(metrics.count) * metrics.rowHeight
-        + static_cast<f64>(metrics.count == 0u ? 0u : metrics.count - 1u) * metrics.rowGap;
-    const f64 minimumWidth = padding.x
-        + (metrics.count == 0u ? 0.0 : static_cast<f64>(metrics.indicatorExtent) + metrics.gap);
-    return
-        height <= Limit<f32>::s_Max && metrics.contentSize.y == static_cast<f32>(height)
-        && minimumWidth <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(minimumWidth)
-    ;
+    const SIMDVectorDouble padding = SIMDVectorDouble{ metrics.padding.left, metrics.padding.top } + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom };
+    const f64 height = padding.y + static_cast<f64>(metrics.count) * metrics.rowHeight + static_cast<f64>(metrics.count == 0u ? 0u : metrics.count - 1u) * metrics.rowGap;
+    const f64 minimumWidth = padding.x + (metrics.count == 0u ? 0.0 : static_cast<f64>(metrics.indicatorExtent) + metrics.gap);
+    return height <= Limit<f32>::s_Max && metrics.contentSize.y == static_cast<f32>(height) && minimumWidth <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(minimumWidth);
 }
 
 
@@ -59,12 +53,7 @@ namespace __hidden_ui_radio_group_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RadioGroupMetrics> RadioGroupLayout::Measure(
-    const u32 count,
-    const Point& maximumLabel,
-    const RadioGroupOptions& options,
-    const RadioGroupStyle& style
-)noexcept{
+Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Point& maximumLabel, const RadioGroupOptions& options, const RadioGroupStyle& style)noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(
         count > s_RadioGroupMaxChoices || !IsValidUiExtent(maximumLabel) || !IsValidUiPadding(style.padding)
@@ -85,12 +74,9 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(
     candidate.markInset = style.markInset;
     candidate.padding = style.padding;
     candidate.count = count;
-    const SIMDVectorDouble padding = SIMDVectorDouble{ style.padding.left, style.padding.top }
-        + SIMDVectorDouble{ style.padding.right, style.padding.bottom };
-    const f64 width = padding.x
-        + (count == 0u ? 0.0 : static_cast<f64>(style.indicatorExtent) + style.gap + maximumLabel.x);
-    const f64 height = padding.y + static_cast<f64>(count) * candidate.rowHeight
-        + static_cast<f64>(count == 0u ? 0u : count - 1u) * style.rowGap;
+    const SIMDVectorDouble padding = SIMDVectorDouble{ style.padding.left, style.padding.top } + SIMDVectorDouble{ style.padding.right, style.padding.bottom };
+    const f64 width = padding.x + (count == 0u ? 0.0 : static_cast<f64>(style.indicatorExtent) + style.gap + maximumLabel.x);
+    const f64 height = padding.y + static_cast<f64>(count) * candidate.rowHeight + static_cast<f64>(count == 0u ? 0u : count - 1u) * style.rowGap;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
@@ -99,12 +85,7 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(
     return candidate;
 }
 
-Expected<RadioGroupPlacement> RadioGroupLayout::Place(
-    const Rect& bounds,
-    const Rect& clip,
-    const RadioGroupChoices& choices,
-    const RadioGroupMetrics& metrics
-)noexcept{
+Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const Rect& clip, const RadioGroupChoices& choices, const RadioGroupMetrics& metrics)noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !ValidMetrics(metrics) || choices.count != metrics.count)
         return MakeUnexpected(Failure{});

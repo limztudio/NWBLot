@@ -12,9 +12,7 @@ macro(nwb_configure_project)
     nwb_configure_build_configs()
     nwb_configure_compiler_frontend()
     if(NOT NWB_COMPILER_IS_CLANG)
-        message(FATAL_ERROR
-            "NWBLot now requires Clang on every platform. Use the clang presets from CMakePresets.json."
-        )
+        message(FATAL_ERROR "NWBLot now requires Clang on every platform. Use the clang presets from CMakePresets.json.")
     endif()
     nwb_configure_optimization()
     nwb_configure_string_literals()

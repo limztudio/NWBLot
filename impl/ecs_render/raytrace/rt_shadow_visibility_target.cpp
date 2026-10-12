@@ -32,11 +32,8 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowVisibilityFormat)
         .setInUAV(true)
-        // The graph-owned lagged-history copy may run on a dedicated Transfer family after the graphics/compute
-        // producers finish. Keep all three real transports concurrently shareable rather than fabricating aliases.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        .setName("engine/shadow/visibility")
-    ;
+        // The graph-owned lagged-history copy may run on a dedicated Transfer family after the graphics/compute producers finish. Keep all three real transports concurrently shareable rather than fabricating aliases.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/shadow/visibility");
     targets.shadowVisibility = m_graphics.createTexture(visibilityDesc);
     if(!targets.shadowVisibility){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow visibility target"));
@@ -94,14 +91,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     }
 
     Core::TextureDesc softGeometryDesc;
-    softGeometryDesc
-        .setWidth(softHalfWidth)
-        .setHeight(softHalfHeight)
-        .setFormat(targets.shadowSoftGeometryFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/shadow/soft_geometry")
-    ;
+    softGeometryDesc.setWidth(softHalfWidth).setHeight(softHalfHeight).setFormat(targets.shadowSoftGeometryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/shadow/soft_geometry");
     targets.shadowSoftGeometry = m_graphics.createTexture(softGeometryDesc);
     if(!targets.shadowSoftGeometry){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow geometry cache target"));
@@ -225,16 +215,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     }
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(
-        !heap.isInitialized()
-        || !RayTracingDetail::ReplaceHeapBuffer(
-            heap,
-            *edgeListBuffer.get(),
-            Core::GpuDescriptorClass::StorageBuffer,
-            true,
-            m_rayTracingState.m_swShadowEdgeListHeapHandle
-        )
-    ){
+    if(!heap.isInitialized() || !RayTracingDetail::ReplaceHeapBuffer(heap, *edgeListBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeListHeapHandle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
         m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
@@ -242,9 +223,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     m_rayTracingState.m_swShadowEdgeListBuffer = Move(edgeListBuffer);
     m_rayTracingState.m_swShadowEdgeListCapacity = edgeListCapacityRecords;
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created shadow receiver grid factor={} full={}x{} receiver={}x{}")
-        , targets.shadowReceiverFactor, targets.width, targets.height, softHalfWidth, softHalfHeight
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created shadow receiver grid factor={} full={}x{} receiver={}x{}"), targets.shadowReceiverFactor, targets.width, targets.height, softHalfWidth, softHalfHeight);
 
     return true;
 }
@@ -308,12 +287,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         producedFrameIndex = frameIndex;
 
         {
-            Core::GpuTimingMeasure opaqueTraceTiming(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowOpaqueTrace,
-                m_graphics.getDevice(),
-                commandList
-            );
+            Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
             Core::ComputeState softState;
             softState.setPipeline(m_rayTracingState.m_shadowSoftPipeline.get());
             commandList.setComputeState(softState);
@@ -324,9 +298,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
             softPush.receiverFactor = targets.shadowReceiverFactor;
             softPush.height = targets.height;
             softPush.frameIndex = frameIndex;
-            softPush.softSampleCount = softShadowTemporalHistoryUsable()
-                ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
-                : NWB_SW_SHADOW_SOFT_SPP;
+            softPush.softSampleCount = softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP;
             softPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
             softPush.normalSlot = targets.bindless.gbufferNormal.slot();
             softPush.depthSlot = targets.bindless.gbufferDepth.slot();
@@ -337,8 +309,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         }
 
         if(lightSpace && lightSpace->ready){
-            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources,
-                Core::ResourceStates::UnorderedAccess, true);
+            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
             commandList.commitBarriers();
             if(!RecordLightSpaceResolve(commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA,
                 frameIndex, softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP,
@@ -346,9 +317,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
                 return MakeUnexpected(Failure{});
             if(!m_lightSpaceShadow.m_csgDispatchLogged){
                 m_lightSpaceShadow.m_csgDispatchLogged = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=1, {} instances)")
-                    , static_cast<u64>(lightSpace->push.instanceCount)
-                );
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=1, {} instances)"), static_cast<u64>(lightSpace->push.instanceCount));
             }
         }
 
@@ -384,12 +353,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
     // Full-resolution inline-RayQuery fallback.
 
     {
-        Core::GpuTimingMeasure opaqueTraceTiming(
-            m_graphics.gpuTiming(),
-            RendererGpuTimingScope::s_ShadowOpaqueTrace,
-            m_graphics.getDevice(),
-            commandList
-        );
+        Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
         Core::ComputeState shadowState;
         shadowState.setPipeline(m_rayTracingState.m_shadowPipeline.get());
         commandList.setComputeState(shadowState);
@@ -403,11 +367,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         shadowPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
         shadowPush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
         commandList.setPushConstants(&shadowPush, sizeof(shadowPush));
-        commandList.dispatch(
-            DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
-            DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
-            1u
-        );
+        commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)), 1u);
     }
     return producedFrameIndex;
 }

@@ -127,12 +127,7 @@ private:
     }
 
     void report(const Core::Perf::TimingView& gpuTiming){
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("{}: gpu per-pass timing over {} frames / {}s")
-            , m_label
-            , m_intervalFrames
-            , m_intervalSeconds
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: gpu per-pass timing over {} frames / {}s"), m_label, m_intervalFrames, m_intervalSeconds);
 
         // GUI logging is not scrapeable; the optional file sink exposes per-pass A/B timings.
         OutputFileStream timingFile;
@@ -150,18 +145,9 @@ private:
                 continue;
 
             const Name scopeName = gpuTiming.scopeNameAt(i);
-            const SIMDVectorDouble totalsMs = SIMDVectorDouble{
-                accum.sumSeconds / static_cast<f64>(accum.frames), accum.sumSeconds
-            } * s_MillisecondsPerSecond;
+            const SIMDVectorDouble totalsMs = SIMDVectorDouble{ accum.sumSeconds / static_cast<f64>(accum.frames), accum.sumSeconds } * s_MillisecondsPerSecond;
             const SIMDVectorDouble rangeMs = SIMDVectorDouble{ accum.minSeconds, accum.maxSeconds } * s_MillisecondsPerSecond;
-            NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
-                , StringConvert(scopeName.resolvedText())
-                , totalsMs.x
-                , rangeMs.x
-                , rangeMs.y
-                , accum.frames
-            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}"), StringConvert(scopeName.resolvedText()), totalsMs.x, rangeMs.x, rangeMs.y, accum.frames);
             if(timingFile.is_open()){
                 timingFile
                     << "  " << scopeName.resolvedText()

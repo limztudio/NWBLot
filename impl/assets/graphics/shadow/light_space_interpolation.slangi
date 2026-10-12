@@ -11,14 +11,7 @@
 
 // Recover the original perspective-correct corner varyings at an already-covered sample.
 // Homogeneous equations avoid division by vertex w, including triangles clipped across the near plane.
-bool nwbLightSpaceInterpolateBarycentrics(
-    const uint2 pixel,
-    const uint2 extent,
-    const float4 clip0,
-    const float4 clip1,
-    const float4 clip2,
-    out float3 weights
-){
+bool nwbLightSpaceInterpolateBarycentrics(const uint2 pixel, const uint2 extent, const float4 clip0, const float4 clip1, const float4 clip2, out float3 weights){
     weights = float3(0.0);
     if(any(extent == 0u) || any(pixel >= extent) || !all(isfinite(clip0)) || !all(isfinite(clip1)) || !all(isfinite(clip2)))
         return false;
@@ -41,7 +34,8 @@ bool nwbLightSpaceInterpolateBarycentrics(
     // Capture stores two unit-corner varyings; shading reconstructs the first weight the same way.
     weights = float3(1.0 - bary.x - bary.y, bary);
     const float interpolatedW = dot(weights, float3(clip0.w, clip1.w, clip2.w));
-    // Coverage belongs to rasterization. Fixed-subpixel coverage can extrapolate the unsnapped vertex varyings slightly.
+    // Coverage belongs to rasterization.
+    // Fixed-subpixel coverage can extrapolate the unsnapped vertex varyings slightly.
     // Do not impose another inside-triangle test or clamp across an authored material/UV edge.
     return all(isfinite(weights)) && isfinite(interpolatedW) && interpolatedW > 0.0;
 }

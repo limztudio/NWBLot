@@ -67,11 +67,7 @@ static constexpr AStringView s_SkinRowSuffixText = "] },\n";
     return leftOk && rightOk;
 }
 
-[[nodiscard]] Expected<TextReplacement> FindListAssignmentRange(
-    const AStringView source,
-    const AStringView variableName,
-    const AStringView fieldName
-){
+[[nodiscard]] Expected<TextReplacement> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName){
     TextReplacement outRange;
     AString pattern;
     pattern.reserve(variableName.size() + fieldName.size() + 1u);
@@ -177,15 +173,7 @@ template<typename Value, typename WriteValue>
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
     for(const SourceVertexRef& ref : refs){
-        out
-            << s_RowOpenText
-            << ref.position << s_RowItemSeparatorText
-            << ref.normal << s_RowItemSeparatorText
-            << ref.tangent << s_RowItemSeparatorText
-            << ref.uv0 << s_RowItemSeparatorText
-            << ref.color
-            << s_RowSuffixText
-        ;
+        out << s_RowOpenText << ref.position << s_RowItemSeparatorText << ref.normal << s_RowItemSeparatorText << ref.tangent << s_RowItemSeparatorText << ref.uv0 << s_RowItemSeparatorText << ref.color << s_RowSuffixText;
     }
     out << s_ListCloseText;
     return out.str();
@@ -214,19 +202,10 @@ template<typename Value, typename WriteValue>
     return out.str();
 }
 
-[[nodiscard]] bool AddReplacement(
-    UtilityVector<TextReplacement>& replacements,
-    const AStringView source,
-    const AStringView variableName,
-    const AStringView fieldName,
-    AString&& replacementText
-){
+[[nodiscard]] bool AddReplacement(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing '{}.{}' assignment")
-            , StringConvert(variableName)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing '{}.{}' assignment"), StringConvert(variableName), StringConvert(fieldName));
         return false;
     }
 
@@ -236,13 +215,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool AppendMeshReplacements(
-    UtilityVector<TextReplacement>& replacements,
-    const AStringView source,
-    const AStringView variableName,
-    const SourceMeshStreams& before,
-    const SourceMeshStreams& after
-){
+[[nodiscard]] bool AppendMeshReplacements(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreams& before, const SourceMeshStreams& after){
     if(before.positions.size() != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
         return false;
     if(before.normals.size() != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
@@ -271,10 +244,7 @@ template<typename Value, typename WriteValue>
 }
 
 [[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityVector<TextReplacement>& replacements){
-    Sort(
-        replacements.begin(),
-        replacements.end(),
-        [](const TextReplacement& lhs, const TextReplacement& rhs){
+    Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs){
             return lhs.begin > rhs.begin;
         }
     );
@@ -299,10 +269,7 @@ template<typename Value, typename WriteValue>
     return false;
 }
 
-[[nodiscard]] Expected<SkinReference> FindSkinForMesh(
-    const Core::Metascript::Document& doc,
-    const AStringView meshVariableName
-){
+[[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName){
     SkinReference result;
 
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){

@@ -49,9 +49,7 @@ TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAnd
     const Array<SharedGlyphPage, 3u> glyphCopies{ glyphs[0u], glyphs[1u], glyphs[0u] };
     const Array<SharedSdfAtlasPage, 2u> sdfCopies{ sdf, sdf };
     const Array<SharedImageSource, 3u> imageCopies{ image, imageCopy, image };
-    ASSERT_TRUE(m_builder.prepareImages(
-        glyphCopies.data(), glyphCopies.size(), sdfCopies.data(), sdfCopies.size(), imageCopies.data(), imageCopies.size()
-    ));
+    ASSERT_TRUE(m_builder.prepareImages(glyphCopies.data(), glyphCopies.size(), sdfCopies.data(), sdfCopies.size(), imageCopies.data(), imageCopies.size()));
     EXPECT_FALSE(m_builder.prepareTextureImages(&overflow, 1u));
     EXPECT_FALSE(m_builder.drawImage(overflow, { 48.0f, 3.0f, 8.0f, 4.0f }));
     const DrawSnapshot actual = m_builder.freeze();

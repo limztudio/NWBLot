@@ -15,8 +15,7 @@ def linear_rgb_bytes(color):
 
 
 def linear_channels(color):
-    return tuple(channel / 255.0 / 12.92 if channel <= 10 else
-        ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in color)
+    return tuple(channel / 255.0 / 12.92 if channel <= 10 else ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in color)
 
 
 def encoded_marker(value, intensity=1.0):
@@ -26,8 +25,7 @@ def encoded_marker(value, intensity=1.0):
 def compose(source, alpha, tint, backdrop):
     background = linear_channels(backdrop)
     opacity = alpha * tint[3]
-    return linear_rgb_bytes(tuple(channel * tint[index] * opacity + background[index] * (1.0 - opacity)
-        for index, channel in enumerate(source)))
+    return linear_rgb_bytes(tuple(channel * tint[index] * opacity + background[index] * (1.0 - opacity) for index, channel in enumerate(source)))
 
 
 def authored_texel(kind, x, y, fill, border):
@@ -56,8 +54,7 @@ def _sample_texel(kind, sx, sy, fill, border):
     x0, y0 = math.floor(sx), math.floor(sy)
     tx, ty = sx - x0, sy - y0
     channels, alpha = [0.0, 0.0, 0.0], 0.0
-    for dx, dy, weight in ((0, 0, (1.0 - tx) * (1.0 - ty)), (1, 0, tx * (1.0 - ty)),
-            (0, 1, (1.0 - tx) * ty), (1, 1, tx * ty)):
+    for dx, dy, weight in ((0, 0, (1.0 - tx) * (1.0 - ty)), (1, 0, tx * (1.0 - ty)), (0, 1, (1.0 - tx) * ty), (1, 1, tx * ty)):
         rgb, coverage = authored_texel(kind, x0 + dx, y0 + dy, fill, border)
         alpha += coverage * weight
         for channel in range(3):

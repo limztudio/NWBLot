@@ -55,13 +55,7 @@ public:
 
 
 protected:
-    bool internalInit(
-        u16 port,
-        BasicStringView<tchar> logFileNameBase = {},
-        AStringView crashSymbolStoreDirectory = {},
-        CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{},
-        AStringView crashUploadToken = AStringView()
-    );
+    bool internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {}, CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}, AStringView crashUploadToken = AStringView());
     void internalDestroy();
     bool internalUpdate();
 

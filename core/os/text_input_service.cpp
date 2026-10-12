@@ -85,9 +85,7 @@ TextInputBeginResult QueuedTextInputService::begin(const TextInputSessionDesc& d
         return { .token = {}, .admission = TextInputAdmission::Unavailable };
     if(!IsTextInputCaretRectValid(desc.caret))
         return { .token = {}, .admission = TextInputAdmission::InvalidRange };
-    const TextInputAdmission::Enum validation = __hidden_text_input_service::ValidateSurrounding(
-        desc.surrounding, desc.anchorByte, desc.caretByte
-    );
+    const TextInputAdmission::Enum validation = __hidden_text_input_service::ValidateSurrounding(desc.surrounding, desc.anchorByte, desc.caretByte);
     if(validation != TextInputAdmission::Accepted)
         return { .token = {}, .admission = validation };
     if(m_nextGeneration == Limit<u64>::s_Max)
@@ -152,13 +150,7 @@ TextInputAdmission::Enum QueuedTextInputService::updateCaret(const TextInputSess
     return TextInputAdmission::Accepted;
 }
 
-TextInputAdmission::Enum QueuedTextInputService::updateSurrounding(
-    const TextInputSessionToken token,
-    const AStringView text,
-    const usize anchorByte,
-    const usize caretByte,
-    const TextInputChangeCause::Enum cause
-){
+TextInputAdmission::Enum QueuedTextInputService::updateSurrounding(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte, const TextInputChangeCause::Enum cause){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
     if(m_transitioning || !token.valid() || token != m_activeToken)

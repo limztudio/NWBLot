@@ -29,36 +29,12 @@ namespace __hidden_assets_model_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<ModelCookEntry> ParseModelDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseModelCookMetadata(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        doc,
-        context.cookArena,
-        context.scratchArena
-    );
+static Expected<ModelCookEntry> ParseModelDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+    return ParseModelCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static Expected<ModelCookEntry> ParseModelValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseModelCookMetadata(
-        virtualPath,
-        nwbFilePath,
-        asset,
-        context.cookArena,
-        context.scratchArena
-    );
+static Expected<ModelCookEntry> ParseModelValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+    return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
 static Expected<Model> BuildModelCookedAsset(ModelCookEntry& entry, Core::Assets::AssetArena& arena){
@@ -67,13 +43,7 @@ static Expected<Model> BuildModelCookedAsset(ModelCookEntry& entry, Core::Assets
 }
 
 static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(
-        registry,
-        NWB_TEXT("model"),
-        &ParseModelDocument,
-        &ParseModelValue,
-        &BuildModelCookedAsset
-    );
+    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, NWB_TEXT("model"), &ParseModelDocument, &ParseModelValue, &BuildModelCookedAsset);
 }
 
 

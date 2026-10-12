@@ -25,115 +25,54 @@ namespace __hidden_gpu_command_ir_upload_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool DeclaresBufferWrite(
-    const GpuTaskGraphTaskView& task,
-    const GpuGraphResourceId resource,
-    const BufferDesc& description,
-    const ResourceStates::Mask state,
-    const BufferRange requested
-)noexcept{
+[[nodiscard]] static bool DeclaresBufferWrite(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const BufferDesc& description, const ResourceStates::Mask state, const BufferRange requested)noexcept{
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
-        if(
-            use.resource == resource
-            && use.requiredState == state
-            && use.access == GpuTaskResourceAccess::Write
-            && use.range.bufferRange.resolve(description).contains(requested)
-        )
+        if(use.resource == resource && use.requiredState == state && use.access == GpuTaskResourceAccess::Write && use.range.bufferRange.resolve(description).contains(requested))
             return true;
     }
     return false;
 }
 
-[[nodiscard]] static bool DeclaresTextureWrite(
-    const GpuTaskGraphTaskView& task,
-    const GpuGraphResourceId resource,
-    const TextureDesc& description,
-    const ResourceStates::Mask state,
-    const TextureSubresourceSet requested
-)noexcept{
+[[nodiscard]] static bool DeclaresTextureWrite(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const TextureDesc& description, const ResourceStates::Mask state, const TextureSubresourceSet requested)noexcept{
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
-        if(
-            use.resource == resource
-            && use.requiredState == state
-            && use.access == GpuTaskResourceAccess::Write
-            && use.range.textureSubresources.resolve(description, TextureSubresourceMipResolve::Range).contains(requested)
-        )
+        if(use.resource == resource && use.requiredState == state && use.access == GpuTaskResourceAccess::Write && use.range.textureSubresources.resolve(description, TextureSubresourceMipResolve::Range).contains(requested))
             return true;
     }
     return false;
 }
 
-[[nodiscard]] static bool DeclaresTerminalBufferState(
-    const GpuTaskGraphTaskView& task,
-    const GpuGraphResourceId resource,
-    const BufferDesc& description,
-    const BufferRange requested,
-    const ResourceStates::Mask finalState
-)noexcept{
+[[nodiscard]] static bool DeclaresTerminalBufferState(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const BufferDesc& description, const BufferRange requested, const ResourceStates::Mask finalState)noexcept{
     ResourceStates::Mask terminalState = ResourceStates::Unknown;
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
-        if(
-            use.resource == resource
-            && use.access == GpuTaskResourceAccess::Write
-            && use.range.bufferRange.resolve(description).contains(requested)
-        )
+        if(use.resource == resource && use.access == GpuTaskResourceAccess::Write && use.range.bufferRange.resolve(description).contains(requested))
             terminalState = use.requiredState;
     }
     return terminalState == finalState;
 }
 
-[[nodiscard]] static bool DeclaresTerminalTextureState(
-    const GpuTaskGraphTaskView& task,
-    const GpuGraphResourceId resource,
-    const TextureDesc& description,
-    const TextureSubresourceSet requested,
-    const ResourceStates::Mask finalState
-)noexcept{
+[[nodiscard]] static bool DeclaresTerminalTextureState(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const TextureDesc& description, const TextureSubresourceSet requested, const ResourceStates::Mask finalState)noexcept{
     ResourceStates::Mask terminalState = ResourceStates::Unknown;
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
-        if(
-            use.resource == resource
-            && use.access == GpuTaskResourceAccess::Write
-            && use.range.textureSubresources.resolve(description, TextureSubresourceMipResolve::Range).contains(requested)
-        )
+        if(use.resource == resource && use.access == GpuTaskResourceAccess::Write && use.range.textureSubresources.resolve(description, TextureSubresourceMipResolve::Range).contains(requested))
             terminalState = use.requiredState;
     }
     return terminalState == finalState;
 }
 
-[[nodiscard]] static bool HasSourceBlob(
-    const GpuCommandIrBuiltinTaskRecord& record,
-    const BinaryByteView blobBytes,
-    const GpuTaskGraphDeclarationReadView& graph
-)noexcept{
+[[nodiscard]] static bool HasSourceBlob(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph)noexcept{
     if(!graph.validUploadBlob(record.sourceUploadBlob))
         return false;
     const auto source = graph.uploadBlobData(record.sourceUploadBlob);
-    if(
-        !source
-        || !blobBytes.data()
-        || record.blobOffsetBytes > static_cast<u64>(blobBytes.size())
-        || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes
-        || record.blobSizeBytes > static_cast<u64>(source->size())
-    )
+    if(!source || !blobBytes.data() || record.blobOffsetBytes > static_cast<u64>(blobBytes.size()) || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes || record.blobSizeBytes > static_cast<u64>(source->size()))
         return false;
-    return NWB_MEMCMP(
-        source->data(),
-        blobBytes.data() + static_cast<usize>(record.blobOffsetBytes),
-        static_cast<usize>(record.blobSizeBytes)
-    ) == 0;
+    return NWB_MEMCMP(source->data(), blobBytes.data() + static_cast<usize>(record.blobOffsetBytes), static_cast<usize>(record.blobSizeBytes)) == 0;
 }
 
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferUpload(
-    const GpuCommandIrBuiltinTaskRecord& record,
-    const BinaryByteView blobBytes,
-    const GpuTaskGraphDeclarationReadView& graph,
-    const GpuTaskGraphTaskView& task
-)noexcept{
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferUpload(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task)noexcept{
     if(!graph.validResource(record.destination))
         return GpuCommandIrReplayError::InvalidResource;
     const GpuTaskGraphResourceView view = graph.resourceAt(record.destination.index);
@@ -151,17 +90,9 @@ namespace __hidden_gpu_command_ir_upload_preflight{
         || record.blobSizeBytes > static_cast<u64>(Limit<usize>::s_Max)
         || (record.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (record.blobSizeBytes & (sizeof(u32) - 1u)) != 0u
-        || !GraphicsBackend::IsBufferRangeInBounds(
-            description,
-            record.destinationOffsetBytes,
-            record.blobSizeBytes
-        )
+        || !GraphicsBackend::IsBufferRangeInBounds(description, record.destinationOffsetBytes, record.blobSizeBytes)
         || record.finalState == ResourceStates::Unknown
-        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
-            description,
-            view.initialState,
-            view.externalFinalState
-        )
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(description, view.initialState, view.externalFinalState)
         || (description.keepInitialState && record.finalState != description.initialState)
     )
         return GpuCommandIrReplayError::InvalidBufferUpload;
@@ -205,20 +136,8 @@ namespace __hidden_gpu_command_ir_upload_preflight{
         || record.depthPitch > static_cast<u64>(Limit<usize>::s_Max)
         || record.finalState == ResourceStates::Unknown
         || !resolvedAspect
-        || !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(
-            description,
-            view.initialState,
-            view.externalFinalState,
-            record.finalState
-        )
-        || !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(
-            description,
-            slice.arraySlice,
-            slice.mipLevel,
-            static_cast<usize>(record.rowPitch),
-            static_cast<usize>(record.depthPitch),
-            record.uploadAspect
-        ))
+        || !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(description, view.initialState, view.externalFinalState, record.finalState)
+        || !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(description, slice.arraySlice, slice.mipLevel, static_cast<usize>(record.rowPitch), static_cast<usize>(record.depthPitch), record.uploadAspect))
         || *requiredBytes != record.blobSizeBytes
     )
         return GpuCommandIrReplayError::InvalidTextureUpload;
@@ -227,14 +146,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     fullSlice.mipLevel = slice.mipLevel;
     fullSlice.arraySlice = slice.arraySlice;
     fullSlice = fullSlice.resolve(description);
-    if(
-        slice.x != fullSlice.x
-        || slice.y != fullSlice.y
-        || slice.z != fullSlice.z
-        || slice.width != fullSlice.width
-        || slice.height != fullSlice.height
-        || slice.depth != fullSlice.depth
-    )
+    if(slice.x != fullSlice.x || slice.y != fullSlice.y || slice.z != fullSlice.z || slice.width != fullSlice.width || slice.height != fullSlice.height || slice.depth != fullSlice.depth)
         return GpuCommandIrReplayError::InvalidTextureUpload;
 
     const u8 taskCapabilities = static_cast<u8>(task.commands.allowedCapabilities());
@@ -242,13 +154,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     if(
         (taskCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
         || (queueCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
-        || (
-            *resolvedAspect != TextureUploadAspect::Color
-            && (
-                (taskCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
-                || (queueCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
-            )
-        )
+        || (*resolvedAspect != TextureUploadAspect::Color && ((taskCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u || (queueCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u))
     )
         return GpuCommandIrReplayError::InvalidTextureUpload;
 
@@ -278,13 +184,7 @@ namespace GpuCommandIrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCommandIrReplayError::Enum ValidateUploadOperation(
-    const GpuCommandIrBuiltinTaskRecord& record,
-    const BinaryByteView blobBytes,
-    const GpuTaskGraphDeclarationReadView& graph,
-    const GpuTaskGraphTaskView& task,
-    const GpuPhysicalQueueInfo& queue
-)noexcept{
+GpuCommandIrReplayError::Enum ValidateUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept{
     switch(record.opcode){
     case GpuCommandIrOpcode::UploadBuffer:
         return __hidden_gpu_command_ir_upload_preflight::ValidateBufferUpload(record, blobBytes, graph, task);

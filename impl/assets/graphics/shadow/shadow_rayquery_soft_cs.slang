@@ -32,8 +32,7 @@ struct NwbShadowRqSoftPushConstants{
     uint receiverFactor;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbShadowRqSoftPushConstants> g_NwbShadowRqSoftPushConstants;
+[[vk::push_constant]] ConstantBuffer<NwbShadowRqSoftPushConstants> g_NwbShadowRqSoftPushConstants;
 
 #define NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT g_NwbShadowRqSoftPushConstants.deferredResourcesHeapSlot
 #define NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT g_NwbShadowRqSoftPushConstants.visibilityStorageSlot

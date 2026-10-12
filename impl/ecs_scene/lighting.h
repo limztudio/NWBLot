@@ -19,33 +19,9 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Core::ECS::EntityID CreateDirectionalLightEntity(
-    Core::ECS::World& world,
-    f32 pitchRadians,
-    f32 yawRadians,
-    f32 rollRadians,
-    const Float4& color,
-    f32 intensity
-);
-[[nodiscard]] Core::ECS::EntityID CreatePointLightEntity(
-    Core::ECS::World& world,
-    const Float4& position,
-    const Float4& color,
-    f32 intensity,
-    f32 range
-);
-[[nodiscard]] Core::ECS::EntityID CreateSpotLightEntity(
-    Core::ECS::World& world,
-    const Float4& position,
-    f32 pitchRadians,
-    f32 yawRadians,
-    f32 rollRadians,
-    const Float4& color,
-    f32 intensity,
-    f32 range,
-    f32 innerConeCos,
-    f32 outerConeCos
-);
+[[nodiscard]] Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, f32 pitchRadians, f32 yawRadians, f32 rollRadians, const Float4& color, f32 intensity);
+[[nodiscard]] Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, f32 intensity, f32 range);
+[[nodiscard]] Core::ECS::EntityID CreateSpotLightEntity(Core::ECS::World& world, const Float4& position, f32 pitchRadians, f32 yawRadians, f32 rollRadians, const Float4& color, f32 intensity, f32 range, f32 innerConeCos, f32 outerConeCos);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,12 +33,7 @@ struct alignas(Float4) SceneLight{
     // Directional: direction toward light. Spot: emission axis. w = outer cone cosine.
     Float4 direction = Float4(0.0f, 0.0f, -1.0f, 1.0f);
     // xyz = color, w = intensity.
-    Float4 colorIntensity = Float4(
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_Intensity
-    );
+    Float4 colorIntensity = Float4(LightDefaults::s_WhiteColorComponent, LightDefaults::s_WhiteColorComponent, LightDefaults::s_WhiteColorComponent, LightDefaults::s_Intensity);
     f32 range = 0.0f;
     // Soft-shadow source size: angular radius (radians) / punctual radius (world units).
     f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;

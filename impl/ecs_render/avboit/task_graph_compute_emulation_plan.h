@@ -70,10 +70,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
                 return false;
             }
             const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-            ){
+            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()){
                 reset();
                 return false;
             }
@@ -86,10 +83,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
             outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
             outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
         }
-        captured = drawItems.size() == outputBuffers.size()
-            && outputBuffers.size() == outputHeapSlots.size()
-            && !drawItems.empty()
-        ;
+        captured = drawItems.size() == outputBuffers.size() && outputBuffers.size() == outputHeapSlots.size() && !drawItems.empty();
         return captured;
     }
 

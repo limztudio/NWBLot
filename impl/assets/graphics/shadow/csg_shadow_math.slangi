@@ -16,23 +16,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbCsgShadowCutterInterval(
-    const NwbCsgShadowCutter cutter,
-    const float3 rayOrigin,
-    const float3 rayDirection,
-    out float2 interval
-){
-    return nwbCsgAnalyticCutterInterval(
-        cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2,
-        cutter.parameter0, rayOrigin, rayDirection, interval
-    );
+bool nwbCsgShadowCutterInterval(const NwbCsgShadowCutter cutter, const float3 rayOrigin, const float3 rayDirection, out float2 interval){
+    return nwbCsgAnalyticCutterInterval(cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2, cutter.parameter0, rayOrigin, rayDirection, interval);
 }
 
 bool nwbCsgShadowCapNormal(const NwbCsgShadowCutter cutter, const float3 world, out float3 normal){
-    return nwbCsgAnalyticCutterNormal(
-        cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2,
-        cutter.parameter0, world, normal
-    );
+    return nwbCsgAnalyticCutterNormal(cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2, cutter.parameter0, world, normal);
 }
 
 

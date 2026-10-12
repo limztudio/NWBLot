@@ -41,10 +41,7 @@ struct PreparedShadowVisibilityTasks{
     bool combinedTemporal = false;
 };
 
-[[nodiscard]] bool PreparedShadowVisibilityTasksSharePacket(
-    const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    const PreparedShadowVisibilityTasks& tasks
-);
+[[nodiscard]] bool PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks);
 
 
 // Shadow-visibility merge validation owns packet-merge checks for visibility tasks.
@@ -64,10 +61,7 @@ public:
 
 
 public:
-    void validate(
-        const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        ShadowVisibilityMergeValidationResult& outResult
-    )const;
+    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowVisibilityMergeValidationResult& outResult)const;
 
 
 private:

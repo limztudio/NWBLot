@@ -423,11 +423,7 @@ NWB_INLINE NativeDoublePair NWB_SIMD_CALL PermutePair(SIMDVectorDouble v0, SIMDV
 
 #if defined(NWB_HAS_NEON64)
 NWB_INLINE uint8x16_t PermuteByteIndices(u32 x, u32 y)noexcept{
-    const uint64x2_t offsets = vsetq_lane_u64(
-        static_cast<u64>(y) * 0x0808080808080808u,
-        vdupq_n_u64(static_cast<u64>(x) * 0x0808080808080808u),
-        1
-    );
+    const uint64x2_t offsets = vsetq_lane_u64(static_cast<u64>(y) * 0x0808080808080808u, vdupq_n_u64(static_cast<u64>(x) * 0x0808080808080808u), 1);
     const uint8x8_t laneBytes = vcreate_u8(0x0706050403020100u);
     return vaddq_u8(vreinterpretq_u8_u64(offsets), vcombine_u8(laneBytes, laneBytes));
 }

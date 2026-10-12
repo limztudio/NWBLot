@@ -52,10 +52,8 @@ struct NwbReflectionView{
 };
 #pragma warning(push)
 #pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbReflectionParameters, Std140DataLayout> g_NwbHeapReflectionParameters[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbReflectionView, Std140DataLayout> g_NwbHeapReflectionViews[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbReflectionParameters, Std140DataLayout> g_NwbHeapReflectionParameters[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbReflectionView, Std140DataLayout> g_NwbHeapReflectionViews[];
 #pragma warning(pop)
 
 #define g_NwbReflectionParameters g_NwbHeapReflectionParameters[g_NwbReflectionPush.frameParametersSlot]
@@ -105,12 +103,7 @@ bool nwbReflectionFeedbackWriting(){
     ;
 }
 
-bool nwbReflectionLoadSurface(
-    const uint2 pixel,
-    const bool glass,
-    out NwbReflectionSurface surface,
-    out bool stableTraceEligible
-){
+bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflectionSurface surface, out bool stableTraceEligible){
     stableTraceEligible = false;
     surface = (NwbReflectionSurface)0;
     const int3 texel = int3(pixel, 0);

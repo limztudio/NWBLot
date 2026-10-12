@@ -17,9 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context,
-    Core::ITextInputService& textInput, Core::IClipboardService& clipboard
-)
+UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard)
     : m_arena(arena)
     , m_context(context)
     , m_textInput(textInput)
@@ -38,9 +36,7 @@ UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& conte
 
 UiEditBoxHost::~UiEditBoxHost(){ cancelTransfers(); }
 
-bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
-    const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options
-){
+bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
     if(rejectBorrowedMutation())
         return false;
     Entry* entry = find(widget.id);
@@ -77,10 +73,7 @@ void UiEditBoxHost::finishFrame(){
         const auto& entry = m_entries[index - 1u];
         if(entry.seen == m_generation)
             continue;
-        if(
-            m_session.owner() == entry.owner || (m_clipboard.pending() && m_clipboardOwner == entry.owner)
-            || (m_primary.pending() && m_primaryOwner == entry.owner)
-        )
+        if(m_session.owner() == entry.owner || (m_clipboard.pending() && m_clipboardOwner == entry.owner) || (m_primary.pending() && m_primaryOwner == entry.owner))
             cancelTransfers();
         discard(entry.owner);
         m_entries.erase(m_entries.begin() + static_cast<isize>(index - 1u));
@@ -112,11 +105,7 @@ void UiEditBoxHost::commitFrame(const u64 generation){
 
 bool UiEditBoxHost::hasTextFocus()const{
     const Entry* entry = find(m_context.input().focus());
-    if(
-        !entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled
-        || entry->displayed.modelGeneration != entry->owner.modelGeneration
-        || entry->displayed.popup != entry->popup
-    )
+    if(!entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled || entry->displayed.modelGeneration != entry->owner.modelGeneration || entry->displayed.popup != entry->popup)
         return false;
     const Ui::HitTarget* target = m_context.input().findTarget(entry->widget.id, entry->owner.declarationGeneration);
     return target && target->enabled && target->textEditable && target->popup == entry->popup;
@@ -175,11 +164,7 @@ void UiEditBoxHost::synchronizeFocus(){
         candidate.dragging = false;
         candidate.wordDragging = false;
     }
-    if(
-        (m_session.token().valid() && (!focused || entry->owner != m_session.owner()))
-        || (m_clipboard.pending() && (!focused || entry->owner != m_clipboardOwner))
-        || (m_primary.pending() && (!focused || entry->owner != m_primaryOwner))
-    )
+    if((m_session.token().valid() && (!focused || entry->owner != m_session.owner())) || (m_clipboard.pending() && (!focused || entry->owner != m_clipboardOwner)) || (m_primary.pending() && (!focused || entry->owner != m_primaryOwner)))
         cancelTransfers();
 }
 

@@ -47,11 +47,7 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
         if(result == 0)
             result = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_SDF);
         if(result != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: {} SDF failed for glyph {} (FreeType error {}); choose bitmap mode for intersecting outlines")
-                , options.outline ? NWB_TEXT("outline") : NWB_TEXT("bitmap")
-                , glyphId
-                , result
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: {} SDF failed for glyph {} (FreeType error {}); choose bitmap mode for intersecting outlines"), options.outline ? NWB_TEXT("outline") : NWB_TEXT("bitmap"), glyphId, result);
             return MakeUnexpected(Failure{});
         }
         const FT_Bitmap& bitmap = face->glyph->bitmap;
@@ -60,12 +56,7 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
             continue;
         }
         if(bitmap.pixel_mode != FT_PIXEL_MODE_GRAY || bitmap.width + 2u > options.extent || bitmap.rows + 2u > options.extent){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} footprint {}x{} exceeds page {} including guards")
-                , glyphId
-                , bitmap.width + 2u
-                , bitmap.rows + 2u
-                , options.extent
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} footprint {}x{} exceeds page {} including guards"), glyphId, bitmap.width + 2u, bitmap.rows + 2u, options.extent);
             return MakeUnexpected(Failure{});
         }
         const u64 byteCount = static_cast<u64>(bitmap.width) * bitmap.rows;
@@ -88,11 +79,8 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
         glyph.record.drawable = 1u;
         glyph.record.width = bitmap.width;
         glyph.record.height = bitmap.rows;
-        const SIMDVectorSingle origin = VectorScale(VectorSet(static_cast<f32>(face->glyph->bitmap_left),
-            static_cast<f32>(-face->glyph->bitmap_top), static_cast<f32>(face->glyph->bitmap_left),
-            static_cast<f32>(-face->glyph->bitmap_top)), designPerPixel);
-        const SIMDVectorSingle size = VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows),
-            static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows));
+        const SIMDVectorSingle origin = VectorScale(VectorSet(static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(-face->glyph->bitmap_top), static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(-face->glyph->bitmap_top)), designPerPixel);
+        const SIMDVectorSingle size = VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows), static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows));
         const SIMDVectorSingle end = VectorMultiplyAddExpression(size, VectorReplicate(designPerPixel), origin);
         glyph.record.planeLeft = VectorGetX(origin);
         glyph.record.planeTop = VectorGetY(origin);

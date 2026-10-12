@@ -32,32 +32,18 @@ using TaskGraphTestUtils::TestArena;
 
 inline constexpr Graphics::GpuUploadBlobId s_BufferBlob{ .generation = s_CommandIrTask.generation, .index = 7u };
 inline constexpr Graphics::GpuUploadBlobId s_TextureBlob{ .generation = s_CommandIrTask.generation, .index = 8u };
-inline constexpr usize s_SecondUploadOffset = sizeof(Graphics::GpuCommandIrStreamHeader)
-    + sizeof(Graphics::GpuCommandIrUploadBufferRecord);
+inline constexpr usize s_SecondUploadOffset = sizeof(Graphics::GpuCommandIrStreamHeader) + sizeof(Graphics::GpuCommandIrUploadBufferRecord);
 inline constexpr usize s_TextureByteCount = 96u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CaptureTwoUploads(Graphics::GpuCommandIrCapture& capture,
-    const BinaryByteView bufferBytes, const BinaryByteView textureBytes
-){
+[[nodiscard]] bool CaptureTwoUploads(Graphics::GpuCommandIrCapture& capture, const BinaryByteView bufferBytes, const BinaryByteView textureBytes){
     Graphics::TextureSlice slice;
-    slice
-        .setOrigin(0u, 0u, 0u)
-        .setSize(4u, 3u, 2u)
-        .setMipLevel(1u)
-        .setArraySlice(2u)
-    ;
-    return capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination,
-        32u, bufferBytes, Graphics::ResourceStates::ShaderResource
-    ) && capture.captureUploadTexture(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_TextureBlob, s_CommandIrDestination,
-        slice, 16u, 48u, Graphics::TextureUploadAspect::Color, textureBytes,
-        Graphics::ResourceStates::ShaderResource
-    );
+    slice.setOrigin(0u, 0u, 0u).setSize(4u, 3u, 2u).setMipLevel(1u).setArraySlice(2u);
+    return capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination, 32u, bufferBytes, Graphics::ResourceStates::ShaderResource) &&
+        capture.captureUploadTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_TextureBlob, s_CommandIrDestination, slice, 16u, 48u, Graphics::TextureUploadAspect::Color, textureBytes, Graphics::ResourceStates::ShaderResource);
 }
 
 
@@ -68,10 +54,7 @@ TEST(GpuCommandIrUploadStream, PreservesBufferAndPitchedTextureBlobsAfterCallerM
     u8 textureBytes[s_TextureByteCount]{};
     for(usize index = 0u; index < s_TextureByteCount; ++index)
         textureBytes[index] = static_cast<u8>(index + 1u);
-    ASSERT_TRUE(CaptureTwoUploads(
-        capture, BinaryByteView{ bufferBytes, sizeof(bufferBytes) },
-        BinaryByteView{ textureBytes, sizeof(textureBytes) }
-    ));
+    ASSERT_TRUE(CaptureTwoUploads(capture, BinaryByteView{ bufferBytes, sizeof(bufferBytes) }, BinaryByteView{ textureBytes, sizeof(textureBytes) }));
 
     bufferBytes[0] = 99u;
     textureBytes[0] = 99u;
@@ -93,16 +76,10 @@ TEST(GpuCommandIrUploadStream, LateBadBlobOffsetRejectsWithoutOverwritingTheFail
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const u8 bufferBytes[]{ 1u, 2u, 3u, 4u };
     const u8 textureBytes[s_TextureByteCount]{};
-    ASSERT_TRUE(CaptureTwoUploads(
-        capture, BinaryByteView{ bufferBytes, sizeof(bufferBytes) },
-        BinaryByteView{ textureBytes, sizeof(textureBytes) }
-    ));
+    ASSERT_TRUE(CaptureTwoUploads(capture, BinaryByteView{ bufferBytes, sizeof(bufferBytes) }, BinaryByteView{ textureBytes, sizeof(textureBytes) }));
     Graphics::GraphicsBytes bytes(testArena.arena);
     CopyCommandIrBytes(bytes, capture.commandBytes());
-    WriteCommandIrPod(
-        bytes, s_SecondUploadOffset + offsetof(Graphics::GpuCommandIrUploadTextureRecord, blobOffsetBytes),
-        Limit<u64>::s_Max
-    );
+    WriteCommandIrPod(bytes, s_SecondUploadOffset + offsetof(Graphics::GpuCommandIrUploadTextureRecord, blobOffsetBytes), Limit<u64>::s_Max);
     const BinaryByteView malformed{ bytes.data(), bytes.size() };
     const auto validation = Graphics::ValidateGpuCommandIrStream(malformed);
     EXPECT_TRUE(validation.failed());
@@ -132,27 +109,18 @@ TEST(GpuCommandIrUploadStream, BlobSizeOverflowAndTruncationRejectTheSecondRecor
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const u8 bufferBytes[]{ 1u, 2u, 3u, 4u };
     const u8 textureBytes[s_TextureByteCount]{};
-    ASSERT_TRUE(CaptureTwoUploads(
-        capture, BinaryByteView{ bufferBytes, sizeof(bufferBytes) },
-        BinaryByteView{ textureBytes, sizeof(textureBytes) }
-    ));
+    ASSERT_TRUE(CaptureTwoUploads(capture, BinaryByteView{ bufferBytes, sizeof(bufferBytes) }, BinaryByteView{ textureBytes, sizeof(textureBytes) }));
 
     Graphics::GraphicsBytes bytes(testArena.arena);
     CopyCommandIrBytes(bytes, capture.commandBytes());
-    WriteCommandIrPod(
-        bytes, s_SecondUploadOffset + offsetof(Graphics::GpuCommandIrUploadTextureRecord, blobSizeBytes),
-        Limit<u64>::s_Max
-    );
+    WriteCommandIrPod(bytes, s_SecondUploadOffset + offsetof(Graphics::GpuCommandIrUploadTextureRecord, blobSizeBytes), Limit<u64>::s_Max);
     auto validation = Graphics::ValidateGpuCommandIrStream(BinaryByteView{ bytes.data(), bytes.size() });
     EXPECT_EQ(validation.error, Graphics::GpuCommandIrStreamValidationError::InvalidBlobRange);
     EXPECT_EQ(validation.recordIndex, 1u);
 
     CopyCommandIrBytes(bytes, capture.commandBytes());
     bytes.resize(bytes.size() - 1u);
-    WriteCommandIrPod(
-        bytes, offsetof(Graphics::GpuCommandIrStreamHeader, blobBytes),
-        static_cast<u64>(sizeof(bufferBytes) + sizeof(textureBytes) - 1u)
-    );
+    WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, blobBytes), static_cast<u64>(sizeof(bufferBytes) + sizeof(textureBytes) - 1u));
     validation = Graphics::ValidateGpuCommandIrStream(BinaryByteView{ bytes.data(), bytes.size() });
     EXPECT_EQ(validation.error, Graphics::GpuCommandIrStreamValidationError::InvalidBlobRange);
     EXPECT_EQ(validation.recordIndex, 1u);
@@ -169,22 +137,13 @@ TEST(GpuCommandIrUploadStream, TruncatedLateRecordDoesNotPublishPartialOutput){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const u8 uploadBytes[]{ 1u, 2u, 3u, 4u };
-    ASSERT_TRUE(capture.captureClearBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, 0xdecafbadU
-    ));
-    ASSERT_TRUE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination,
-        32u, BinaryByteView{ uploadBytes, sizeof(uploadBytes) }, Graphics::ResourceStates::ShaderResource
-    ));
+    ASSERT_TRUE(capture.captureClearBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, 0xdecafbadU));
+    ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination, 32u, BinaryByteView{ uploadBytes, sizeof(uploadBytes) }, Graphics::ResourceStates::ShaderResource));
     Graphics::GraphicsBytes bytes(testArena.arena);
     CopyCommandIrBytes(bytes, capture.commandBytes());
-    const usize secondOffset = sizeof(Graphics::GpuCommandIrStreamHeader)
-        + sizeof(Graphics::GpuCommandIrClearBufferRecord);
+    const usize secondOffset = sizeof(Graphics::GpuCommandIrStreamHeader) + sizeof(Graphics::GpuCommandIrClearBufferRecord);
     bytes.resize(secondOffset + sizeof(Graphics::GpuCommandIrHeader));
-    WriteCommandIrPod(
-        bytes, offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes),
-        static_cast<u64>(sizeof(Graphics::GpuCommandIrClearBufferRecord) + sizeof(Graphics::GpuCommandIrHeader))
-    );
+    WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(sizeof(Graphics::GpuCommandIrClearBufferRecord) + sizeof(Graphics::GpuCommandIrHeader)));
     WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, blobBytes), u64(0u));
     const BinaryByteView malformed{ bytes.data(), bytes.size() };
     const auto validation = Graphics::ValidateGpuCommandIrStream(malformed);
@@ -209,16 +168,10 @@ TEST(GpuCommandIrUploadStream, EarlierWireVersionRejectsBeforeAnyRecordOrBlobIsE
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const u8 uploadBytes[]{ 1u, 2u, 3u, 4u };
-    ASSERT_TRUE(capture.captureUploadBuffer(
-        s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination,
-        32u, BinaryByteView{ uploadBytes, sizeof(uploadBytes) }, Graphics::ResourceStates::ShaderResource
-    ));
+    ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination, 32u, BinaryByteView{ uploadBytes, sizeof(uploadBytes) }, Graphics::ResourceStates::ShaderResource));
     Graphics::GraphicsBytes bytes(testArena.arena);
     CopyCommandIrBytes(bytes, capture.commandBytes());
-    WriteCommandIrPod(
-        bytes, offsetof(Graphics::GpuCommandIrStreamHeaderPrefix, version),
-        static_cast<u16>(Graphics::s_GpuCommandIrStreamVersion - 1u)
-    );
+    WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeaderPrefix, version), static_cast<u16>(Graphics::s_GpuCommandIrStreamVersion - 1u));
     const BinaryByteView oldVersion{ bytes.data(), bytes.size() };
     const auto validation = Graphics::ValidateGpuCommandIrStream(oldVersion);
     EXPECT_EQ(validation.error, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);

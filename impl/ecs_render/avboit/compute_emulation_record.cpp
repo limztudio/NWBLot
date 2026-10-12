@@ -24,11 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(
-    const AvboitComputeEmulationRecordInputs& inputs,
-    Core::CommandList& commandList,
-    const AvboitComputeEmulationRecordTrait& trait
-){
+[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
     if(
         !inputs.graphics
         || !inputs.materialSystem
@@ -50,16 +46,7 @@ NWB_IMPL_BEGIN
     RendererMaterialSystem& materialSystem = *inputs.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*inputs.timingTicket);
     const bool csgComputeEmulation = inputs.csgPlan->captured;
-    if(
-        !(csgComputeEmulation
-            ? inputs.csgPlan->matches()
-            : inputs.plan->matches())
-        || !inputs.materialDrawBuffersUploaded
-        || !inputs.frameBindings->frameReady(
-            inputs.instanceCount,
-            inputs.materialTypedByteCount
-        )
-    )
+    if(!(csgComputeEmulation ? inputs.csgPlan->matches() : inputs.plan->matches()) || !inputs.materialDrawBuffersUploaded || !inputs.frameBindings->frameReady(inputs.instanceCount, inputs.materialTypedByteCount))
         return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -70,32 +57,18 @@ NWB_IMPL_BEGIN
     else
         inputs.plan->materialize(drawItems);
     // Reject late losses so the packet is discarded and the next frame re-preflights.
-    if(
-        !materialSystem.materialPassDrawResourcesReady(drawItems, *inputs.frameBindings)
-        || (csgComputeEmulation && (
-            !inputs.csgFrameBuffersUploaded
-            || !csgFrameData.hasWork()
-            || !inputs.csgResources->frameReady(csgFrameData)
-        ))
-    )
+    if(!materialSystem.materialPassDrawResourcesReady(drawItems, *inputs.frameBindings) || (csgComputeEmulation && (!inputs.csgFrameBuffersUploaded || !csgFrameData.hasWork() || !inputs.csgResources->frameReady(csgFrameData))))
         return false;
     if(inputs.timing->has_value())
         return false;
 
     commandList.endRenderPass();
-    inputs.timing->emplace(
-        graphics.gpuTiming(),
-        *trait.timingScope,
-        graphics.getDevice(),
-        commandList
-    );
+    inputs.timing->emplace(graphics.gpuTiming(), *trait.timingScope, graphics.getDevice(), commandList);
     // Close the marker now; the raster consumer owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(inputs.timing))
         return false;
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(
-        (inputs.targets->avboit.*(trait.framebuffer))->getFramebufferInfo().getViewport()
-    );
+    viewportState.addViewportAndScissorRect((inputs.targets->avboit.*(trait.framebuffer))->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext drawContext{
         commandList,
         nullptr,
@@ -117,11 +90,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(
-    const AvboitSharedComputeEmulationRecordInputs& inputs,
-    Core::CommandList& commandList,
-    const AvboitSharedComputeEmulationRecordTrait& trait
-){
+[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
     const bool generatePhase = inputs.phase == AvboitSharedComputeEmulationPhase::Generate;
     if(
         !inputs.graphics
@@ -142,14 +111,7 @@ NWB_IMPL_BEGIN
     Core::GraphicsRuntime& graphics = *inputs.graphics;
     RendererMaterialSystem& materialSystem = *inputs.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*inputs.timingTicket);
-    if(
-        !inputs.plan->matches(inputs.drawIndex)
-        || !inputs.materialDrawBuffersUploaded
-        || !inputs.frameBindings->frameReady(
-            inputs.instanceCount,
-            inputs.materialTypedByteCount
-        )
-    )
+    if(!inputs.plan->matches(inputs.drawIndex) || !inputs.materialDrawBuffersUploaded || !inputs.frameBindings->frameReady(inputs.instanceCount, inputs.materialTypedByteCount))
         return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -164,12 +126,7 @@ NWB_IMPL_BEGIN
         if(inputs.beginTiming){
             if(inputs.timing->has_value())
                 return false;
-            inputs.timing->emplace(
-                graphics.gpuTiming(),
-                *trait.timingScope,
-                graphics.getDevice(),
-                commandList
-            );
+            inputs.timing->emplace(graphics.gpuTiming(), *trait.timingScope, graphics.getDevice(), commandList);
             // Close the marker before advancing to the raster consumer.
             if(!Core::FinishSplitGpuTimingMarker(inputs.timing))
                 return false;
@@ -181,33 +138,14 @@ NWB_IMPL_BEGIN
         return false;
 
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(
-        (inputs.targets->avboit.*(trait.framebuffer))->getFramebufferInfo().getViewport()
-    );
-    Core::Framebuffer* const rasterFramebuffer = generatePhase
-        ? nullptr
-        : (inputs.targets->avboit.*(trait.framebuffer)).get()
-    ;
-    const MaterialPassDrawContext drawContext{
-        commandList,
-        rasterFramebuffer,
-        &inputs.targets->avboit,
-        viewportState,
-        nullptr,
-        *inputs.frameBindings,
-        trait.pipelinePass,
-        inputs.materialFrameStatesGraphOwned,
-        inputs.materialGeometryStatesGraphOwned,
-        true
-    };
+    viewportState.addViewportAndScissorRect((inputs.targets->avboit.*(trait.framebuffer))->getFramebufferInfo().getViewport());
+    Core::Framebuffer* const rasterFramebuffer = generatePhase ? nullptr : (inputs.targets->avboit.*(trait.framebuffer)).get();
+    const MaterialPassDrawContext drawContext{ commandList, rasterFramebuffer, &inputs.targets->avboit, viewportState, nullptr, *inputs.frameBindings, trait.pipelinePass, inputs.materialFrameStatesGraphOwned, inputs.materialGeometryStatesGraphOwned, true };
     if(generatePhase){
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     }
     else{
-        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(
-            drawContext,
-            drawItems.computeDrawItems
-        );
+        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems.computeDrawItems);
         if(inputs.finishTiming){
             inputs.timing->value().finishTiming(commandList);
             inputs.timing->reset();

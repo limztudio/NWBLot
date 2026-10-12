@@ -48,8 +48,7 @@ bool InputRouter::canEditCommand(const InputEvent& event)const{
         || source->focusOwner.popup != focused->popup || source->focusOwner.control != focused->control
     )
         return false;
-    return !source->delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit)
-        && currentControlKeyOwner(source->controlOwner));
+    return !source->delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && currentControlKeyOwner(source->controlOwner));
 }
 
 
@@ -90,9 +89,7 @@ Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
         if(m_boundSources.size() == s_InputMaxSources)
             return MakeUnexpected(Failure{});
         if(physical){
-            const i32 modifiers = (event.shift ? Core::InputModifier::Shift : 0)
-                | (event.control ? Core::InputModifier::Control : 0) | (event.alt ? Core::InputModifier::Alt : 0)
-                | (event.super ? Core::InputModifier::Super : 0);
+            const i32 modifiers = (event.shift ? Core::InputModifier::Shift : 0) | (event.control ? Core::InputModifier::Control : 0) | (event.alt ? Core::InputModifier::Alt : 0) | (event.super ? Core::InputModifier::Super : 0);
             const InputCommandIntent intent = m_bindings.resolve(event.key, modifiers);
             resolved.command = intent.command;
             resolved.extend = intent.extend;

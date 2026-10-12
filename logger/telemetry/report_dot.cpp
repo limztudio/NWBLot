@@ -44,17 +44,11 @@ static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
 void FrameGraphOwnerStatisticsRange::advance(const Telemetry::FrameGraphPayload& graph, const u32 ownerNodeIndex)noexcept{
     physicalQueueBegin = physicalQueueEnd;
-    while(
-        physicalQueueEnd < graph.physicalQueueRuntimeStatistics.size()
-        && graph.physicalQueueRuntimeStatistics[physicalQueueEnd].ownerNodeIndex == ownerNodeIndex
-    )
+    while(physicalQueueEnd < graph.physicalQueueRuntimeStatistics.size() && graph.physicalQueueRuntimeStatistics[physicalQueueEnd].ownerNodeIndex == ownerNodeIndex)
         ++physicalQueueEnd;
 
     packetSubmissionBegin = packetSubmissionEnd;
-    while(
-        packetSubmissionEnd < graph.packetSubmissionStatistics.size()
-        && graph.packetSubmissionStatistics[packetSubmissionEnd].ownerNodeIndex == ownerNodeIndex
-    )
+    while(packetSubmissionEnd < graph.packetSubmissionStatistics.size() && graph.packetSubmissionStatistics[packetSubmissionEnd].ownerNodeIndex == ownerNodeIndex)
         ++packetSubmissionEnd;
 }
 
@@ -81,13 +75,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
             runtimeStatisticsBytes += s_TimedGraphDotRuntimeStatisticsBytes;
     }
 
-    return s_TimedGraphDotFixedReserveBytes
-        + s_TimedGraphDotBytesPerGraph
-        + graph.nodes.size() * s_TimedGraphDotBytesPerNode
-        + graph.edges.size() * s_TimedGraphDotBytesPerEdge
-        + labelBytes
-        + runtimeStatisticsBytes
-    ;
+    return s_TimedGraphDotFixedReserveBytes + s_TimedGraphDotBytesPerGraph + graph.nodes.size() * s_TimedGraphDotBytesPerNode + graph.edges.size() * s_TimedGraphDotBytesPerEdge + labelBytes + runtimeStatisticsBytes;
 }
 
 [[nodiscard]] usize EstimateTimedGraphsDotReserve(const FrameGraphReportRecords& graphs)noexcept{
@@ -101,10 +89,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FrameGraphNodeIdentityText(
-    const Telemetry::FrameGraphNodePayload& node,
-    char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]
-)noexcept{
+[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Telemetry::FrameGraphNodePayload& node, char (&identityText)[NameDetail::s_DebugHashTextLength + 1u])noexcept{
     NameDetail::HashToDebugString(node.name.hash(), identityText, sizeof(identityText));
     return AStringView(identityText, NameDetail::s_DebugHashTextLength);
 }
@@ -164,9 +149,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     }
 }
 
-[[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(
-    const Telemetry::FrameGraphQueueAssignmentReason::Enum reason
-)noexcept{
+[[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(const Telemetry::FrameGraphQueueAssignmentReason::Enum reason)noexcept{
     switch(reason){
     case Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics:
         return "requiredGraphics";
@@ -180,9 +163,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     }
 }
 
-[[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(
-    const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance
-)noexcept{
+[[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept{
     switch(acceptance){
     case Telemetry::FrameGraphQueueAssignmentAcceptance::First:
         return "first";
@@ -201,9 +182,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(
-    const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision
-)noexcept{
+[[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision)noexcept{
     switch(decision){
     case Telemetry::FrameGraphTaskPacketizationDecision::FirstTask:
         return "firstTask";
@@ -237,11 +216,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendFrameGraphPhysicalQueueDot(
-    AString<TelemetryArena>& out,
-    const AStringView prefix,
-    const Telemetry::FrameGraphPhysicalQueueId& queue
-){
+void AppendFrameGraphPhysicalQueueDot(AString<TelemetryArena>& out, const AStringView prefix, const Telemetry::FrameGraphPhysicalQueueId& queue){
     if(!queue.valid()){
         StringAppendFormat(out, ", {}_index=\"none\", {}_device_generation=\"none\"", prefix, prefix);
         return;
@@ -250,10 +225,7 @@ void AppendFrameGraphPhysicalQueueDot(
     StringAppendFormat(out, ", {}_index={}, {}_device_generation={}", prefix, queue.index, prefix, queue.deviceGeneration);
 }
 
-void AppendFrameGraphQueueAssignmentDot(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphQueueAssignment& assignment
-){
+void AppendFrameGraphQueueAssignmentDot(AString<TelemetryArena>& out, const Telemetry::FrameGraphQueueAssignment& assignment){
     if(!assignment.present){
         out += ", queue_assignment=\"none\"";
         return;
@@ -285,26 +257,15 @@ void AppendFrameGraphQueueAssignmentDot(
     );
 }
 
-void AppendFrameGraphCompiledTaskDot(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompiledTask& compiledTask
-){
+void AppendFrameGraphCompiledTaskDot(AString<TelemetryArena>& out, const Telemetry::FrameGraphCompiledTask& compiledTask){
     if(!compiledTask.present){
         out += ", compiled_task=\"none\"";
         return;
     }
 
-    StringAppendFormat(
-        out,
-        ", compiled_task=\"present\", compiled_plan_generation={}, compiled_packet_index={}",
-        compiledTask.planGeneration,
-        compiledTask.packetIndex
-    );
+    StringAppendFormat(out, ", compiled_task=\"present\", compiled_plan_generation={}, compiled_packet_index={}", compiledTask.planGeneration, compiledTask.packetIndex);
     out += ", packetization_decision=";
-    AppendDotQuotedText(
-        out,
-        AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision))
-    );
+    AppendDotQuotedText(out, AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision)));
 }
 
 void AppendFrameGraphRuntimeStatisticsDot(
@@ -341,13 +302,7 @@ void AppendFrameGraphRuntimeStatisticsDot(
 
 // Join timing by exact frame and scope Name; retain every graph, stable identity, and opaque producer flag.
 // Timing and graph streams may differ.
-void AppendTimedGraphDot(
-    TelemetryArena& arena,
-    const FrameGraphReportRecord& record,
-    const usize graphIndex,
-    const GraphTimingMap& timing,
-    AString<TelemetryArena>& out
-){
+void AppendTimedGraphDot(TelemetryArena& arena, const FrameGraphReportRecord& record, const usize graphIndex, const GraphTimingMap& timing, AString<TelemetryArena>& out){
     const Telemetry::FrameGraphPayload& graph = record.payload;
     StringAppendFormat(out, "digraph frame_graph_{}_{}_{} {{\n", graph.frameIndex, record.streamId, graphIndex);
     StringAppendFormat(out, "  graph [label=\"Frame {} stream {}\"];\n", graph.frameIndex, record.streamId);
@@ -386,14 +341,7 @@ void AppendTimedGraphDot(
         ownerRange.advance(graph, static_cast<u32>(i));
         const usize physicalQueueRuntimeStatisticsCount = ownerRange.physicalQueueEnd - ownerRange.physicalQueueBegin;
         const usize packetSubmissionStatisticsCount = ownerRange.packetSubmissionEnd - ownerRange.packetSubmissionBegin;
-        AppendFrameGraphRuntimeStatisticsDot(
-            out,
-            node.runtimeStatistics,
-            physicalQueueRuntimeStatisticsCount,
-            packetSubmissionStatisticsCount,
-            physicalQueueRuntimeStatisticsCount != 0u,
-            graph.packetSubmissionStatisticsPresent
-        );
+        AppendFrameGraphRuntimeStatisticsDot(out, node.runtimeStatistics, physicalQueueRuntimeStatisticsCount, packetSubmissionStatisticsCount, physicalQueueRuntimeStatisticsCount != 0u, graph.packetSubmissionStatisticsPresent);
         out += "];\n";
     }
 
@@ -406,12 +354,7 @@ void AppendTimedGraphDot(
     out += "}\n";
 }
 
-void BuildTimedGraphsDot(
-    TelemetryArena& arena,
-    const FrameGraphReportRecords& graphs,
-    const GraphTimingMap& timing,
-    AString<TelemetryArena>& out
-){
+void BuildTimedGraphsDot(TelemetryArena& arena, const FrameGraphReportRecords& graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out){
     out.clear();
     out.reserve(EstimateTimedGraphsDotReserve(graphs));
     for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex){

@@ -81,8 +81,7 @@ Expected<UniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeCont
     }
 
     const Impl::UiLayerSystem::FontReferences fonts{
-        { { __hidden_ui_layer_smoke_world::s_DefaultLatin, __hidden_ui_layer_smoke_world::s_DefaultLatinAtlas },
-            { __hidden_ui_layer_smoke_world::s_DefaultKorean, __hidden_ui_layer_smoke_world::s_DefaultKoreanAtlas } }, context.objectArena
+        { { __hidden_ui_layer_smoke_world::s_DefaultLatin, __hidden_ui_layer_smoke_world::s_DefaultLatinAtlas }, { __hidden_ui_layer_smoke_world::s_DefaultKorean, __hidden_ui_layer_smoke_world::s_DefaultKoreanAtlas } }, context.objectArena
     };
     const bool windowSmoke = IsUiLayerWindowSmokeEnabled();
     const bool popupSmoke = IsUiLayerPopupSmokeEnabled();
@@ -139,22 +138,9 @@ Expected<UniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeCont
     if(imageSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     if(textureImageSmoke){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: skin={}")
-            , alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     }
-    auto& layer = world->addSystem<Impl::UiLayerSystem>(
-        *world,
-        context.graphics,
-        context.input,
-        context.clipboard,
-        context.textInput,
-        context.assetManager,
-        context.shaderPathResolver,
-        skin,
-        fonts,
-        Impl::UiLayerPresentation::Standalone
-    );
+    auto& layer = world->addSystem<Impl::UiLayerSystem>(*world, context.graphics, context.input, context.clipboard, context.textInput, context.assetManager, context.shaderPathResolver, skin, fonts, Impl::UiLayerPresentation::Standalone);
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE")){
         Impl::Ui::InputBindings defaults(context.objectArena);
         Impl::Ui::InputBindings::BindingVector bindings(context.objectArena);
@@ -180,9 +166,7 @@ Expected<UniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeCont
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
     if(textureImageSmoke){
-        const auto scene = CreateUiTextureImageSmokeScene(
-            context.objectArena, context.input, context.assetManager, context.graphics
-        );
+        const auto scene = CreateUiTextureImageSmokeScene(context.objectArena, context.input, context.assetManager, context.graphics);
         paint.paint = [scene](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));

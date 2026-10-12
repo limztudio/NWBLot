@@ -28,14 +28,7 @@ struct FormatMapping{
     bool hasStencil;
     bool isCompressed;
 
-    constexpr FormatMapping(
-        const Format::Enum inFormat,
-        const VkFormat inVkFormat,
-        const u32 inBytesPerPixel,
-        const bool inHasDepth,
-        const bool inHasStencil,
-        const bool inIsCompressed
-    )noexcept
+    constexpr FormatMapping(const Format::Enum inFormat, const VkFormat inVkFormat, const u32 inBytesPerPixel, const bool inHasDepth, const bool inHasStencil, const bool inIsCompressed)noexcept
         : vkFormat(inVkFormat)
         , bytesPerPixel(inBytesPerPixel)
         , format(inFormat)
@@ -260,11 +253,7 @@ VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool 
     if(states & (ResourceStates::CopyDest | ResourceStates::CopySource | ResourceStates::ResolveDest | ResourceStates::ResolveSource))
         flags |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
     if(states & ResourceStates::AccelStructRead){
-        flags |=
-            VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
-            | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
-            | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-        ;
+        flags |= VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
         if(rayTracingStageAvailable)
             flags |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
     }

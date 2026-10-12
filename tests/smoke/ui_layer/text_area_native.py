@@ -38,9 +38,7 @@ class TextAreaNativeInput(NumericEditNativeInput):
                 return
             remaining = deadline - time.monotonic()
             if remaining <= 0.0:
-                raise SmokeFailure(f"TextArea focus click {phase} did not acknowledge capture: "
-                    f"expected owner {expected_owner!r}, observed {observed_owner!r}, "
-                    f"fixture {self.handle:#x}, native window {self.observe_window()}")
+                raise SmokeFailure(f"TextArea focus click {phase} did not acknowledge capture: " f"expected owner {expected_owner!r}, observed {observed_owner!r}, " f"fixture {self.handle:#x}, native window {self.observe_window()}")
             time.sleep(min(0.01, remaining))
 
     def text_down_text(self, first, last):
@@ -60,8 +58,7 @@ class TextAreaNativeInput(NumericEditNativeInput):
             if not self.backend.user32.ClientToScreen(ctypes.c_void_p(self.handle), ctypes.byref(point)):
                 raise SmokeFailure("ClientToScreen failed for the positioned horizontal wheel event")
             delta = int(steps) * 120
-            self._post(0x020E, (delta & 0xFFFF) << 16,
-                ((int(point.y) & 0xFFFF) << 16) | (int(point.x) & 0xFFFF))
+            self._post(0x020E, (delta & 0xFFFF) << 16, ((int(point.y) & 0xFFFF) << 16) | (int(point.x) & 0xFFFF))
         else:
             for _ in range(abs(int(steps))):
                 for down in (True, False):

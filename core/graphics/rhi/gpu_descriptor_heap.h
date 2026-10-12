@@ -23,8 +23,8 @@ NWB_CORE_BEGIN
 // Bit-layout and class taxonomy are shared; the Vulkan renderer resolves handles through its global heap.
 
 
-// Resource classes a shader selects between. Each class maps to exactly one heap register space,
-// so the class tag alone selects the shader-side array.
+// Resource classes a shader selects between.
+// Each class maps to exactly one heap register space, so the class tag alone selects the shader-side array.
 namespace GpuDescriptorClass{
     static constexpr u8 s_GpuDescriptorClassSampledImageBase = 0;
     enum Enum : u8{
@@ -55,8 +55,7 @@ namespace GpuDescriptorClass{
 //   bits 31..28 (4)  : class tag  - GpuDescriptorClass::Enum (<= kCount classes, fits with headroom)
 //   bits 27..0 (28)  : slot index - global within its namespace (resource heap or sampler heap), max 2^28
 
-// Generation/versioning is intentionally not packed here (index bits are more valuable); a debug-only
-// side table validates handles instead.
+// Generation/versioning is intentionally not packed here (index bits are more valuable); a debug-only side table validates handles instead.
 struct GpuDescriptorHandle{
     static constexpr u32 s_Invalid = 0xFFFFFFFFu;
     static constexpr u32 s_ClassShift = 28u;
@@ -82,8 +81,8 @@ static constexpr usize s_GpuDescriptorHandleByteSize = 4;
 static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
 
-// Values connecting the generic descriptor heap to the shared shader ABI. Core validates this payload without
-// depending on the implementation-owned macro contract; stricter layout checks run at initialize().
+// Values connecting the generic descriptor heap to the shared shader ABI.
+// Core validates this payload without depending on the implementation-owned macro contract; stricter layout checks run at initialize().
 struct GpuDescriptorHeapAbi{
     static constexpr u32 s_Unspecified = s_MaxU32;
 
@@ -122,8 +121,8 @@ struct GpuDescriptorHeapAbi{
 };
 
 
-// Capacities are hard ceilings (no mid-frame growth). Effective caps clamp to device limits at initialize()
-// and are logged; zero means "use the renderer default".
+// Capacities are hard ceilings (no mid-frame growth).
+// Effective caps clamp to device limits at initialize() and are logged; zero means "use the renderer default".
 struct GpuDescriptorHeapDesc{
     u32 resourceCapacity = 0;   // slots shared by all non-sampler classes (one global namespace)
     u32 samplerCapacity = 0;    // samplers live in their own global namespace
@@ -135,9 +134,9 @@ struct GpuDescriptorHeapDesc{
 };
 
 
-// Coherent-by-value lifecycle snapshot for the descriptor-buffer global heap. The Vulkan backend samples every
-// field while holding its heap mutex. Resource slots are one shared namespace for every non-sampler, non-TLAS
-// descriptor class; TLAS slots select separate immutable per-generation blocks.
+// Coherent-by-value lifecycle snapshot for the descriptor-buffer global heap.
+// The Vulkan backend samples every field while holding its heap mutex.
+// Resource slots are one shared namespace for every non-sampler, non-TLAS descriptor class; TLAS slots select separate immutable per-generation blocks.
 struct GpuDescriptorHeapLifecycleStatistics{
     // False after shutdown or before initialization. The remaining counters are ordinarily zero in that state.
     bool initialized = false;
@@ -148,17 +147,16 @@ struct GpuDescriptorHeapLifecycleStatistics{
     usize resourceLiveSlotCount = 0u;
     usize samplerLiveSlotCount = 0u;
     usize accelStructLiveSlotCount = 0u;
-    // Aggregate slots awaiting reuse because a pending CPU snapshot may still record them or a prior heap binding
-    // may still need their descriptor/resource.
+    // Aggregate slots awaiting reuse because a pending CPU snapshot may still record them or a prior heap binding may still need their descriptor/resource.
     usize pendingRetiredSlotCount = 0u;
     // Heap uses with an accepted submission token, retained until collectRetired() reaps their token.
     // This can include work that has physically completed but has not yet been collected.
     usize acceptedHeapUseCount = 0u;
-    // Heap uses still owned by a recorded command buffer without an accepted submission token. Rejected or
-    // abandoned command buffers stop contributing here before collectRetired() releases their retired slots.
+    // Heap uses still owned by a recorded command buffer without an accepted submission token.
+    // Rejected or abandoned command buffers stop contributing here before collectRetired() releases their retired slots.
     usize unsubmittedHeapUseCount = 0u;
-    // Heap uses whose command buffer was discarded without an accepted token. They have no trustworthy physical
-    // queue identity and remain visible only until collectRetired() releases the associated deferred-free slots.
+    // Heap uses whose command buffer was discarded without an accepted token.
+    // They have no trustworthy physical queue identity and remain visible only until collectRetired() releases the associated deferred-free slots.
     usize abandonedHeapUseCount = 0u;
 };
 

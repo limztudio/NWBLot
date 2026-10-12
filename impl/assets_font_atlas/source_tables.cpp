@@ -16,11 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(
-    const Font& font,
-    const u32 sourceGlyphCount,
-    Core::Assets::AssetArena& arena
-){
+Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Font& font, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
     if(!font.validatePayload())
         return MakeUnexpected(Failure{});
     const Core::Assets::AssetBytes& source = font.fontBytes();

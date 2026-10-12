@@ -83,11 +83,7 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.extinctionTiming);
@@ -128,11 +124,7 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.extinctionTiming);
@@ -160,12 +152,7 @@ struct AvboitExtinctionGraphTask{
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
 
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererAvboitSystem& avboitSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket& timingTicketIn
-        )
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererAvboitSystem& avboitSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn)
             : avboitSystem(avboitSystemIn)
             , targets(targetsIn)
             , timingTicket(timingTicketIn)
@@ -173,11 +160,7 @@ struct AvboitExtinctionGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.extinctionComputeEmulationTiming);
@@ -188,11 +171,9 @@ struct AvboitExtinctionGraphTask{
 struct AvboitIntegrationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The avboit system, the frame targets, and the timing ticket are required: integration always
-    // dispatches against this frame's targets. The timing feedback and scope stay optional: tasks
-    // without feedback skip sample attribution. References (not nullable pointers) carry the required
-    // bindings so a missing binding fails at declaration time instead of silently returning `false`
-    // inside Record.
+    // The avboit system, the frame targets, and the timing ticket are required: integration always dispatches against this frame's targets.
+    // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
+    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererAvboitSystem& avboitSystem;
         AvboitFrameTargets& targets;
@@ -202,11 +183,7 @@ struct AvboitIntegrationGraphTask{
         mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 

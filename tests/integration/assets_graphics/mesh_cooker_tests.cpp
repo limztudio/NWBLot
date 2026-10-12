@@ -41,12 +41,7 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 
 #if defined(NWB_FINAL)
-static void ExpectCookFailure(
-    TestArena& testArena,
-    const CookSingleMetaFn cookSingleMeta,
-    const AStringView metaText,
-    const AStringView caseName
-){
+static void ExpectCookFailure(TestArena& testArena, const CookSingleMetaFn cookSingleMeta, const AStringView metaText, const AStringView caseName){
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, caseName);
     ASSERT_TRUE(cookCase);
     EXPECT_FALSE(cookSingleMeta(metaText, testArena, *cookCase));
@@ -54,12 +49,7 @@ static void ExpectCookFailure(
     EXPECT_TRUE(RemoveAllIfExists(cookCase->root));
 }
 
-static void ExpectCookFailure(
-    TestArena& testArena,
-    const CookSingleMetaFn cookSingleMeta,
-    const AString& metaText,
-    const AStringView caseName
-){
+static void ExpectCookFailure(TestArena& testArena, const CookSingleMetaFn cookSingleMeta, const AString& metaText, const AStringView caseName){
     ExpectCookFailure(testArena, cookSingleMeta, AStringView(metaText.data(), metaText.size()), caseName);
 }
 #endif
@@ -73,20 +63,11 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
     TestArena testArena;
     ExpectCookFailure(testArena, AssetsGraphicsFixture::CookSingleMeshMeta, AssetsGraphicsFixture::s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields");
     ExpectCookFailure(testArena, AssetsGraphicsFixture::CookSingleMeshMeta, AssetsGraphicsFixture::s_MismatchedMeshMeta, "mismatched_mesh_streams");
+    ExpectCookFailure(testArena, AssetsGraphicsFixture::CookSingleMeshMeta, AssetsGraphicsFixture::BuildMeshTriangleMeta("", AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField), "missing_mesh_normal_field");
     ExpectCookFailure(
         testArena,
         AssetsGraphicsFixture::CookSingleMeshMeta,
-        AssetsGraphicsFixture::BuildMeshTriangleMeta("", AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "missing_mesh_normal_field"
-    );
-    ExpectCookFailure(
-        testArena,
-        AssetsGraphicsFixture::CookSingleMeshMeta,
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(
-            AssetsGraphicsFixture::s_TriangleNormalField,
-            AssetsGraphicsFixture::s_TriangleTangentField,
-            AssetsGraphicsFixture::s_TriangleMissingNormalVertexRefsField
-        ),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleMissingNormalVertexRefsField),
         "missing_mesh_normal_vertex_ref"
     );
     ExpectCookFailure(
@@ -101,20 +82,11 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalMapField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
         "empty_map_mesh_normal"
     );
+    ExpectCookFailure(testArena, AssetsGraphicsFixture::CookSingleMeshMeta, AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, "", AssetsGraphicsFixture::s_TriangleVertexRefsField), "missing_mesh_tangent_field");
     ExpectCookFailure(
         testArena,
         AssetsGraphicsFixture::CookSingleMeshMeta,
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, "", AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "missing_mesh_tangent_field"
-    );
-    ExpectCookFailure(
-        testArena,
-        AssetsGraphicsFixture::CookSingleMeshMeta,
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(
-            AssetsGraphicsFixture::s_TriangleNormalField,
-            AssetsGraphicsFixture::s_TriangleTangentField,
-            AssetsGraphicsFixture::s_TriangleMissingTangentVertexRefsField
-        ),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleMissingTangentVertexRefsField),
         "missing_mesh_tangent_vertex_ref"
     );
     ExpectCookFailure(

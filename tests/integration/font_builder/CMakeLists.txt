@@ -8,11 +8,7 @@ if(Python3_Interpreter_FOUND)
     target_link_libraries(nwb_font_builder_package_probe PRIVATE nwb_assets_font_atlas_cook nwb_assets_bunch_cook nwb_common nwb_alloc nwb_logclient)
     target_compile_definitions(nwb_font_builder_package_probe PRIVATE NWB_COOK=1)
 
-    add_test(NAME nwb_font_builder_cli_integration
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/font_builder_cli_tests.py"
-            --executable "$<TARGET_FILE:nwb_font_builder>"
-            --package-probe "$<TARGET_FILE:nwb_font_builder_package_probe>"
-            --fonts "${PROJECT_SOURCE_DIR}/impl/assets/ui/fonts/default"
-    )
+    add_test(NAME nwb_font_builder_cli_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/font_builder_cli_tests.py" --executable "$<TARGET_FILE:nwb_font_builder>" --package-probe "$<TARGET_FILE:nwb_font_builder_package_probe>"
+            --fonts "${PROJECT_SOURCE_DIR}/impl/assets/ui/fonts/default")
     set_tests_properties(nwb_font_builder_cli_integration PROPERTIES TIMEOUT 420)
 endif()

@@ -24,12 +24,7 @@ namespace __hidden_telemetry_recorder{
     return DurationInNS<u64>(TimerNow());
 }
 
-[[nodiscard]] static EventHeader MakeEventHeader(
-    const EventKind::Enum kind,
-    const u64 frameIndex,
-    const usize payloadBytes,
-    const u32 streamId
-)noexcept{
+[[nodiscard]] static EventHeader MakeEventHeader(const EventKind::Enum kind, const u64 frameIndex, const usize payloadBytes, const u32 streamId)noexcept{
     EventHeader header;
     header.kind = kind;
     header.streamId = streamId;
@@ -118,40 +113,20 @@ usize Recorder::eventCount()const{
     return m_events.size();
 }
 
-bool Recorder::recordBinary(
-    const EventKind::Enum kind,
-    const u64 frameIndex,
-    const void* payload,
-    const usize payloadBytes,
-    const u32 streamId
-){
+bool Recorder::recordBinary(const EventKind::Enum kind, const u64 frameIndex, const void* payload, const usize payloadBytes, const u32 streamId){
     EventSlotLease lease(*this);
     if(!enabledUnlocked(kind))
         return false;
 
-    return appendUnlocked(
-        lease,
-        __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payloadBytes, streamId),
-        payload,
-        payloadBytes
-    );
+    return appendUnlocked(lease, __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payloadBytes, streamId), payload, payloadBytes);
 }
 
-bool Recorder::recordPayload(
-    const EventKind::Enum kind,
-    const u64 frameIndex,
-    TelemetryBytes&& payload,
-    const u32 streamId
-){
+bool Recorder::recordPayload(const EventKind::Enum kind, const u64 frameIndex, TelemetryBytes&& payload, const u32 streamId){
     EventSlotLease lease(*this);
     if(!enabledUnlocked(kind))
         return false;
 
-    return appendPayloadUnlocked(
-        lease,
-        __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payload.size(), streamId),
-        Move(payload)
-    );
+    return appendPayloadUnlocked(lease, __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payload.size(), streamId), Move(payload));
 }
 
 bool Recorder::append(const EventHeader& header, const void* payload, const usize payloadBytes){
@@ -164,12 +139,7 @@ bool Recorder::append(const EventHeader& header, TelemetryBytes&& payload){
     return appendPayloadUnlocked(lease, header, Move(payload));
 }
 
-bool Recorder::appendUnlocked(
-    EventSlotLease& lease,
-    const EventHeader& header,
-    const void* payload,
-    const usize payloadBytes
-){
+bool Recorder::appendUnlocked(EventSlotLease& lease, const EventHeader& header, const void* payload, const usize payloadBytes){
     if(!header.valid())
         return false;
     if(header.payloadBytes != payloadBytes)
@@ -197,8 +167,8 @@ bool Recorder::appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& h
     if(header.payloadBytes != payload.size())
         return false;
 
-    // Prebuilt payloads from the recorder arena can transfer their backing allocation. Preserve the raw-byte append
-    // behavior for callers whose payload belongs to a different arena.
+    // Prebuilt payloads from the recorder arena can transfer their backing allocation.
+    // Preserve the raw-byte append behavior for callers whose payload belongs to a different arena.
     if(payload.get_allocator().arenaPtr() != &m_arena)
         return appendUnlocked(lease, header, payload.data(), payload.size());
 
@@ -244,19 +214,12 @@ void Recorder::publishSlotUnlocked(EventSlotLease& lease, const EventHeader& hea
     m_events.push_back(Move(lease.m_slot));
 }
 
-bool Recorder::publishBuiltSlot(
-    EventSlotLease& lease,
-    const EventKind::Enum kind,
-    const u64 frameIndex,
-    const u32 streamId
-){
+bool Recorder::publishBuiltSlot(EventSlotLease& lease, const EventKind::Enum kind, const u64 frameIndex, const u32 streamId){
     lease.m_lock.lock();
     if(!enabledUnlocked(kind))
         return false;
 
-    const EventHeader header = __hidden_telemetry_recorder::MakeEventHeader(
-        kind, frameIndex, lease.m_slot->record.payload.size(), streamId
-    );
+    const EventHeader header = __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, lease.m_slot->record.payload.size(), streamId);
     if(!header.valid())
         return false;
 

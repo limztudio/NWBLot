@@ -15,10 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PreparedShadowVisibilityTasksSharePacket(
-    const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    const PreparedShadowVisibilityTasks& tasks
-){
+bool PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks){
     if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
         return false;
     if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
@@ -27,9 +24,7 @@ bool PreparedShadowVisibilityTasksSharePacket(
         return !tasks.combinedUpsample && !tasks.combinedWavelet && !tasks.combinedTemporal && !tasks.diagnostics.valid();
     if(tasks.combinedUpsample ? tasks.opaqueResolve.valid() : !tasks.opaqueResolve.valid())
         return false;
-    const Core::GpuTaskId required[] = {
-        tasks.opaque, tasks.transparentTrace, tasks.transparentFirstWavelet
-    };
+    const Core::GpuTaskId required[] = { tasks.opaque, tasks.transparentTrace, tasks.transparentFirstWavelet };
     for(const Core::GpuTaskId task : required){
         if(!task.valid() || !compiledPlan.tasksSharePacket(tasks.terminal, task))
             return false;
@@ -55,10 +50,7 @@ ShadowVisibilityMergeValidator::ShadowVisibilityMergeValidator(NotNull<RendererF
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ShadowVisibilityMergeValidator::validate(
-    const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    ShadowVisibilityMergeValidationResult& outResult
-)const{
+void ShadowVisibilityMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowVisibilityMergeValidationResult& outResult)const{
     RendererFramePipeline& pipeline = *m_pipeline;
     outResult = ShadowVisibilityMergeValidationResult{};
     outResult.preparedTasksMerged = PreparedShadowVisibilityTasksSharePacket(
@@ -81,19 +73,10 @@ void ShadowVisibilityMergeValidator::validate(
     outResult.allLitClearMerged = pipeline.m_deferredShadowVisibilityOpaqueTask.valid()
         ? !pipeline.m_deferredShadowVisibilityAllLitClearTask.valid()
         : pipeline.m_deferredShadowVisibilityAllLitClearTask.valid()
-            && compiledPlan.tasksSharePacket(
-                pipeline.m_deferredShadowVisibilityTask,
-                pipeline.m_deferredShadowVisibilityAllLitClearTask
-            )
+            && compiledPlan.tasksSharePacket(pipeline.m_deferredShadowVisibilityTask, pipeline.m_deferredShadowVisibilityAllLitClearTask)
     ;
     // The append-counter clear must precede visibility in the same packet.
-    outResult.adaptivePrimitivesMerged =
-        !pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()
-        || compiledPlan.tasksSharePacket(
-            pipeline.m_deferredShadowVisibilityTask,
-            pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask
-        )
-    ;
+    outResult.adaptivePrimitivesMerged = !pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_deferredShadowVisibilityTask, pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask);
 }
 
 

@@ -33,9 +33,7 @@ namespace RendererTaskGraphDetail{
         const u32 bucket = dimension / s_ResolutionBucketPixels + (dimension % s_ResolutionBucketPixels != 0u ? 1u : 0u);
         return Min(bucket, s_MaxPackedResolutionBucket);
     };
-    return Core::GpuTaskTimingMetadata{
-        .resolutionClass = bucketDimension(targets.lowWidth) | (bucketDimension(targets.lowHeight) << s_ResolutionHeightShiftBits),
-    };
+    return Core::GpuTaskTimingMetadata{ .resolutionClass = bucketDimension(targets.lowWidth) | (bucketDimension(targets.lowHeight) << s_ResolutionHeightShiftBits), };
 }
 
 

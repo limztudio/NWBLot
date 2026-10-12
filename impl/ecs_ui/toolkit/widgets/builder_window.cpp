@@ -20,9 +20,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::beginWindow(
-    const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options
-){
+bool Builder::beginWindow(const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options){
     if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || m_context.failed()){
         m_context.fail();
         return false;
@@ -35,10 +33,7 @@ bool Builder::beginWindow(
     const UiSkinRegion* resize = region(m_style.windowResize, m_style.windowResize);
     WidgetState* window = m_context.declare(stableKey, WidgetKind::Window);
     const ShapeRequest request = textShapeRequest(title, m_style.fontSize);
-    if(
-        !frame || !header || (options.collapsible && !collapse)
-        || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window
-    ){
+    if(!frame || !header || (options.collapsible && !collapse) || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window){
         m_context.fail();
         return false;
     }
@@ -48,10 +43,7 @@ bool Builder::beginWindow(
         return false;
     }
     m_scope->m_window.title = Move(*titleLayout);
-    const auto metrics = WindowLayout::Measure(
-        *frame, *header, collapse, resize, m_style, options,
-        m_scope->m_window.title.measure(), m_skin->referenceDensity()
-    );
+    const auto metrics = WindowLayout::Measure(*frame, *header, collapse, resize, m_style, options, m_scope->m_window.title.measure(), m_skin->referenceDensity());
     if(!metrics){
         m_context.fail();
         return false;
@@ -100,14 +92,11 @@ bool Builder::beginWindow(
     m_scope->m_bounds = WindowLayout::Content(candidate, m_scope->m_window.metrics);
     LayoutNodeDesc description;
     description.direction = options.direction;
-    description.width = m_scope->m_window.firstUse && options.contentWidthFirstUse
-        ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
-    description.height = m_scope->m_window.firstUse && options.contentHeightFirstUse
-        ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
+    description.width = m_scope->m_window.firstUse && options.contentWidthFirstUse ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
+    description.height = m_scope->m_window.firstUse && options.contentHeightFirstUse ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
     description.padding = m_scope->m_window.metrics.contentPadding;
     description.gap = m_style.gap;
-    const SIMDVectorSingle minimum = VectorSet(m_scope->m_window.metrics.minimumSize.x,
-        NumericSimd::Subtract(m_scope->m_window.metrics.minimumSize.y, m_scope->m_window.metrics.titleHeight), 0.0f, 0.0f);
+    const SIMDVectorSingle minimum = VectorSet(m_scope->m_window.metrics.minimumSize.x, NumericSimd::Subtract(m_scope->m_window.metrics.minimumSize.y, m_scope->m_window.metrics.titleHeight), 0.0f, 0.0f);
     const SIMDVectorSingle paddingStart = VectorSet(description.padding.left, description.padding.top, 0.0f, 0.0f);
     const SIMDVectorSingle paddingEnd = VectorSet(description.padding.right, description.padding.bottom, 0.0f, 0.0f);
     const SIMDVectorSingle extent = VectorSubtract(VectorSubtract(minimum, paddingStart), paddingEnd);
@@ -138,8 +127,7 @@ bool Builder::endWindow(){
     bool arranged = true;
     if(!state.collapsed){
         const DisplayMetrics& display = m_paint.displayMetrics();
-        const SIMDVectorSingle boundsSize = VectorSet(m_scope->m_bounds.width, m_scope->m_bounds.height,
-            m_scope->m_bounds.width, m_scope->m_bounds.height);
+        const SIMDVectorSingle boundsSize = VectorSet(m_scope->m_bounds.width, m_scope->m_bounds.height, m_scope->m_bounds.width, m_scope->m_bounds.height);
         const SIMDVectorSingle displaySize = VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight);
         const SIMDVectorSingle viewportSize = VectorSelect(displaySize, boundsSize, VectorGreater(boundsSize, displaySize));
         const Rect viewport{ m_scope->m_bounds.x, m_scope->m_bounds.y, VectorGetX(viewportSize), VectorGetY(viewportSize) };
@@ -149,9 +137,7 @@ bool Builder::endWindow(){
             if(m_scope->m_window.firstUse && m_scope->m_window.options.contentWidthFirstUse)
                 state.bounds.width = NumericSimd::Max(root->rectangle.width, m_scope->m_window.metrics.minimumSize.x);
             if(m_scope->m_window.firstUse && m_scope->m_window.options.contentHeightFirstUse)
-                state.bounds.height = NumericSimd::Max(
-                    NumericSimd::Add(root->rectangle.height, m_scope->m_window.metrics.titleHeight), m_scope->m_window.metrics.minimumSize.y
-                );
+                state.bounds.height = NumericSimd::Max(NumericSimd::Add(root->rectangle.height, m_scope->m_window.metrics.titleHeight), m_scope->m_window.metrics.minimumSize.y);
             arranged = WindowBehavior::Constrain(state, display, m_scope->m_window.metrics.titleHeight);
             m_scope->m_bounds = WindowLayout::Content(state, m_scope->m_window.metrics);
             if(arranged)

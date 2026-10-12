@@ -36,18 +36,13 @@ TextInputAdmission::Enum Win32TextInputService::readCompositionText(const NotNul
     const LONG readBytes = ImmGetCompositionStringW(context, index, m_wideText.data(), static_cast<DWORD>(byteCount));
     if(readBytes != byteCount)
         return TextInputAdmission::NativeFailure;
-    const i32 utf8Length = WideCharToMultiByte(
-        CP_UTF8, WC_ERR_INVALID_CHARS, m_wideText.data(), static_cast<i32>(m_wideText.size()), nullptr, 0, nullptr, nullptr
-    );
+    const i32 utf8Length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, m_wideText.data(), static_cast<i32>(m_wideText.size()), nullptr, 0, nullptr, nullptr);
     if(utf8Length == 0)
         return TextInputAdmission::InvalidText;
     if(static_cast<usize>(utf8Length) > s_TextInputMaxEventTextBytes)
         return TextInputAdmission::TooLarge;
     m_utf8Text.resize(static_cast<usize>(utf8Length));
-    const i32 converted = WideCharToMultiByte(
-        CP_UTF8, WC_ERR_INVALID_CHARS, m_wideText.data(), static_cast<i32>(m_wideText.size()),
-        m_utf8Text.data(), utf8Length, nullptr, nullptr
-    );
+    const i32 converted = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, m_wideText.data(), static_cast<i32>(m_wideText.size()), m_utf8Text.data(), utf8Length, nullptr, nullptr);
     return converted == utf8Length ? TextInputAdmission::Accepted : TextInputAdmission::InvalidText;
 }
 
@@ -57,19 +52,13 @@ Expected<usize, TextInputAdmission::Enum> Win32TextInputService::compositionCurs
         return MakeUnexpected(TextInputAdmission::InvalidRange);
     if(cursor == 0)
         return 0u;
-    const i32 prefixLength = WideCharToMultiByte(
-        CP_UTF8, WC_ERR_INVALID_CHARS, m_wideText.data(), cursor, nullptr, 0, nullptr, nullptr
-    );
+    const i32 prefixLength = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, m_wideText.data(), cursor, nullptr, 0, nullptr, nullptr);
     if(prefixLength == 0)
         return MakeUnexpected(TextInputAdmission::InvalidRange);
     return static_cast<usize>(prefixLength);
 }
 
-TextInputAdmission::Enum Win32TextInputService::acceptComposition(
-    const TextInputSessionToken token,
-    const usize wParam,
-    const isize flags
-){
+TextInputAdmission::Enum Win32TextInputService::acceptComposition(const TextInputSessionToken token, const usize wParam, const isize flags){
     if((flags & CS_INSERTCHAR) != 0 && (flags & (GCS_RESULTSTR | GCS_COMPSTR)) == 0){
         if(wParam > 0xffffu)
             return TextInputAdmission::InvalidText;

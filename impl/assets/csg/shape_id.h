@@ -43,11 +43,7 @@ inline constexpr Name s_CsgCapsuleShapeName("engine/csg/capsule");
     const NameHash& shapeHash = shapeName.hash();
     u64 foldedHash = shapeHash.qwords[0u];
     for(u32 lane = 1u; lane < NameDetail::s_HashLaneCount; ++lane){
-        foldedHash ^= shapeHash.qwords[lane]
-            + 0x9e3779b97f4a7c15ull
-            + (foldedHash << 6u)
-            + (foldedHash >> 2u)
-        ;
+        foldedHash ^= shapeHash.qwords[lane] + 0x9e3779b97f4a7c15ull + (foldedHash << 6u) + (foldedHash >> 2u);
     }
 
     const CsgShapeTypeId typeId = static_cast<CsgShapeTypeId>(foldedHash ^ (foldedHash >> s_CsgShapeHashFoldShiftBits));

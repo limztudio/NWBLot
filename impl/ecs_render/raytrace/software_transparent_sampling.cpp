@@ -47,11 +47,7 @@ void SoftwareTransparentSamplingHistory::discard()noexcept{
 }
 
 bool SoftwareTransparentSamplingHistory::usable()const noexcept{
-    return
-        m_accepted && m_lightingPrepared && m_scene.trusted && m_acceptedScene.trusted
-        && m_scene.geometry == m_acceptedScene.geometry && m_scene.material == m_acceptedScene.material
-        && m_lightHash == m_acceptedLightHash
-    ;
+    return m_accepted && m_lightingPrepared && m_scene.trusted && m_acceptedScene.trusted && m_scene.geometry == m_acceptedScene.geometry && m_scene.material == m_acceptedScene.material && m_lightHash == m_acceptedLightHash;
 }
 
 

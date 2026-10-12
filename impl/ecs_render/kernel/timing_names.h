@@ -93,18 +93,11 @@ inline constexpr Core::GpuTimingScopeDefinition s_SurfelResolve("render.surfel_r
 inline constexpr Core::GpuTimingScopeDefinition s_SurfelUpsample("render.surfel_upsample");
 
 
-[[nodiscard]] inline Name DeferredGraphQueueInternalIdle(
-    const Core::GpuPhysicalQueueId& queue,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] inline Name DeferredGraphQueueInternalIdle(const Core::GpuPhysicalQueueId& queue, Core::Alloc::ScratchArena& scratchArena){
     if(!queue.valid())
         return s_NameNone;
 
-    const AString<Core::Alloc::ScratchArena> scopeName = StringFormat(
-        scratchArena,
-        "render.deferred_graph.queue_{}.internal_idle",
-        queue.index
-    );
+    const AString<Core::Alloc::ScratchArena> scopeName = StringFormat(scratchArena, "render.deferred_graph.queue_{}.internal_idle", queue.index);
     return ToName(scopeName);
 }
 

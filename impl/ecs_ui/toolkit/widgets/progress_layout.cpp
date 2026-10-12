@@ -32,22 +32,16 @@ namespace __hidden_ui_progress_layout{
 [[nodiscard]] static bool ValidMetrics(const ProgressMetrics& metrics)noexcept{
     if(!IsBoundedUiPadding(metrics.padding) || !IsValidUiExtent(metrics.fillMinimum) || !IsValidUiExtent(metrics.contentSize))
         return false;
-    const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(metrics.padding.left), static_cast<f64>(metrics.padding.top) } + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom }) + SIMDVectorDouble{ metrics.fillMinimum.x, metrics.fillMinimum.y });
+    const SIMDVectorDouble widthHeightValue =
+        ((SIMDVectorDouble{ static_cast<f64>(metrics.padding.left), static_cast<f64>(metrics.padding.top) } + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom }) + SIMDVectorDouble{ metrics.fillMinimum.x, metrics.fillMinimum.y });
     const f64 width = widthHeightValue.x;
     const f64 height = widthHeightValue.y;
-    return
-        width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max
-        && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height)
-    ;
+    return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height);
 }
 
 [[nodiscard]] static Expected<Point> MinimumSize(const UiSkinRegion& region, const f32 density)noexcept{
     const Insets padding{ region.padding.left, region.padding.top, region.padding.right, region.padding.bottom };
-    if(
-        !IsBoundedUiPadding(padding)
-        || !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f
-        || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f
-    )
+    if(!IsBoundedUiPadding(padding) || !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
         return MakeUnexpected(Failure{});
     const auto sliceExtents = LoadUiSkinSliceExtents(region);
     if(!sliceExtents)
@@ -72,13 +66,7 @@ namespace __hidden_ui_progress_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ProgressMetrics> ProgressLayout::Measure(
-    const ProgressOptions& options,
-    const ProgressStyle& style,
-    const UiSkinRegion& track,
-    const UiSkinRegion& fill,
-    const f32 density
-)noexcept{
+Expected<ProgressMetrics> ProgressLayout::Measure(const ProgressOptions& options, const ProgressStyle& style, const UiSkinRegion& track, const UiSkinRegion& fill, const f32 density)noexcept{
     using namespace __hidden_ui_progress_layout;
     if(
         options.width.policy > LayoutSizePolicy::Stretch || !IsFinite(options.width.value) || options.width.value < 0.0f
@@ -94,14 +82,10 @@ Expected<ProgressMetrics> ProgressLayout::Measure(
     if(!fillMinimum)
         return MakeUnexpected(Failure{});
     ProgressMetrics candidate;
-    candidate.padding = {
-        Max(style.padding.left, track.padding.left),
-        Max(style.padding.top, track.padding.top),
-        Max(style.padding.right, track.padding.right),
-        Max(style.padding.bottom, track.padding.bottom)
-    };
+    candidate.padding = { Max(style.padding.left, track.padding.left), Max(style.padding.top, track.padding.top), Max(style.padding.right, track.padding.right), Max(style.padding.bottom, track.padding.bottom) };
     candidate.fillMinimum = *fillMinimum;
-    const SIMDVectorDouble innerWidthInnerHeightValue = ((SIMDVectorDouble{ static_cast<f64>(candidate.padding.left), static_cast<f64>(candidate.padding.top) } + SIMDVectorDouble{ candidate.padding.right, candidate.padding.bottom }) + SIMDVectorDouble{ fillMinimum->x, fillMinimum->y });
+    const SIMDVectorDouble innerWidthInnerHeightValue =
+        ((SIMDVectorDouble{ static_cast<f64>(candidate.padding.left), static_cast<f64>(candidate.padding.top) } + SIMDVectorDouble{ candidate.padding.right, candidate.padding.bottom }) + SIMDVectorDouble{ fillMinimum->x, fillMinimum->y });
     const f64 innerWidth = innerWidthInnerHeightValue.x;
     const f64 innerHeight = innerWidthInnerHeightValue.y;
     const SIMDVectorDouble geometryPair5Operand0 = SIMDVectorDouble{ static_cast<f64>(trackMinimum->x), static_cast<f64>(options.height) };
@@ -117,12 +101,7 @@ Expected<ProgressMetrics> ProgressLayout::Measure(
     return candidate;
 }
 
-Expected<ProgressPlacement> ProgressLayout::Place(
-    const Rect& bounds,
-    const Rect& clip,
-    const ProgressMetrics& metrics,
-    const f64 fraction
-)noexcept{
+Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect& clip, const ProgressMetrics& metrics, const f64 fraction)noexcept{
     using namespace __hidden_ui_progress_layout;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !ValidMetrics(metrics) || !IsFinite(fraction))
         return MakeUnexpected(Failure{});
@@ -139,12 +118,7 @@ Expected<ProgressPlacement> ProgressLayout::Place(
     const f64 rightInset = rightInsetTopInsetValue.x;
     const f64 topInset = rightInsetTopInsetValue.y;
     const f64 bottomInset = Min(static_cast<f64>(metrics.padding.bottom), static_cast<f64>(bounds.height) - topInset);
-    const auto content = MakeUiRect<UiRectPrecision::EmptyPaint>(
-        static_cast<f64>(bounds.x) + leftInset,
-        static_cast<f64>(bounds.y) + topInset,
-        static_cast<f64>(bounds.width) - leftInset - rightInset,
-        static_cast<f64>(bounds.height) - topInset - bottomInset
-    );
+    const auto content = MakeUiRect<UiRectPrecision::EmptyPaint>(static_cast<f64>(bounds.x) + leftInset, static_cast<f64>(bounds.y) + topInset, static_cast<f64>(bounds.width) - leftInset - rightInset, static_cast<f64>(bounds.height) - topInset - bottomInset);
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
@@ -156,19 +130,11 @@ Expected<ProgressPlacement> ProgressLayout::Place(
         candidate.fillCanvas.width = 0.0f;
     }
     else if(normalized != 1.0){
-        const auto fillReveal = MakeUiRect<UiRectPrecision::EmptyPaint>(
-            candidate.content.x,
-            candidate.content.y,
-            static_cast<f64>(candidate.content.width) * normalized,
-            candidate.content.height
-        );
+        const auto fillReveal = MakeUiRect<UiRectPrecision::EmptyPaint>(candidate.content.x, candidate.content.y, static_cast<f64>(candidate.content.width) * normalized, candidate.content.height);
         if(!fillReveal)
             return MakeUnexpected(Failure{});
         candidate.fillReveal = *fillReveal;
-        const f64 canvasWidth = candidate.fillReveal.width == 0.0f ? 0.0 : Min(
-            static_cast<f64>(candidate.content.width),
-            Max(static_cast<f64>(candidate.fillReveal.width), static_cast<f64>(metrics.fillMinimum.x))
-        );
+        const f64 canvasWidth = candidate.fillReveal.width == 0.0f ? 0.0 : Min(static_cast<f64>(candidate.content.width), Max(static_cast<f64>(candidate.fillReveal.width), static_cast<f64>(metrics.fillMinimum.x)));
         const auto fillCanvas = MakeUiRect<UiRectPrecision::EmptyPaint>(candidate.content.x, candidate.content.y, canvasWidth, candidate.content.height);
         if(!fillCanvas)
             return MakeUnexpected(Failure{});

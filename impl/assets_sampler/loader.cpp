@@ -17,13 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SamplerAssetLoader::Create(
-    SamplerGpuResource& outResource,
-    const Sampler& samplerAsset,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    const TStringView ownerName
-){
+bool SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName){
     const TStringView owner = ownerName;
     const Name samplerName = debugName ? debugName : samplerAsset.virtualPath();
     NWB_ASSERT(!outResource.valid());
@@ -39,10 +33,7 @@ bool SamplerAssetLoader::Create(
     Core::Device& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load sampler '{}' without an initialized descriptor heap")
-            , owner
-            , StringConvert(samplerName.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load sampler '{}' without an initialized descriptor heap"), owner, StringConvert(samplerName.resolvedText()));
         return false;
     }
 
@@ -68,25 +59,14 @@ bool SamplerAssetLoader::Create(
     return true;
 }
 
-bool SamplerAssetLoader::Load(
-    SamplerGpuResource& outResource,
-    const Core::Assets::AssetRef<Sampler>& samplerAsset,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    const TStringView ownerName
-){
+bool SamplerAssetLoader::Load(SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
     const TStringView owner = ownerName;
     if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, Sampler::s_AssetTypeText))
         return outResource.valid();
 
     const Name& samplerVirtualPath = samplerAsset.name();
 
-    auto loadedAsset = assetManager.loadTypedSync<Sampler>(
-        samplerVirtualPath,
-        owner,
-        Sampler::s_AssetTypeText
-    );
+    auto loadedAsset = assetManager.loadTypedSync<Sampler>(samplerVirtualPath, owner, Sampler::s_AssetTypeText);
     const Sampler* loadedSampler = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedSampler)
         return false;

@@ -45,11 +45,7 @@ struct ShadowReprojectMergeHeapResources{
 
 
 bool RendererRayTracingSystem::softShadowTemporalHistoryUsable()const noexcept{
-    return
-        m_rayTracingState.m_softShadowTemporalReady
-        && m_rayTracingState.m_prevWorldToClipValid
-        && m_rayTracingState.m_softShadowTemporalSeeded
-    ;
+    return m_rayTracingState.m_softShadowTemporalReady && m_rayTracingState.m_prevWorldToClipValid && m_rayTracingState.m_softShadowTemporalSeeded;
 }
 
 
@@ -112,12 +108,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
 
         {
-            Core::GpuTimingMeasure geometryTiming(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowGeometryDownsample,
-                m_graphics.getDevice(),
-                commandList
-            );
+            Core::GpuTimingMeasure geometryTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowGeometryDownsample, m_graphics.getDevice(), commandList);
             ShadowGeometryDownsamplePushConstants geometryPush;
             geometryPush.receiverFactor = targets.shadowReceiverFactor;
             geometryPush.width = targets.width;
@@ -136,14 +127,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         }
     }
 
-    if(
-        !dispatchOpaqueResolve
-        && !dispatchOpaqueResolveTail
-        && !dispatchTransparentTrace
-        && !dispatchTransparentResolve
-        && !dispatchTransparentResolveTail
-        && !dispatchTransparentTemporalMerge
-    )
+    if(!dispatchOpaqueResolve && !dispatchOpaqueResolveTail && !dispatchTransparentTrace && !dispatchTransparentResolve && !dispatchTransparentResolveTail && !dispatchTransparentTemporalMerge)
         return;
 
     u32 slotRangeCount = 0u;
@@ -159,7 +143,10 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool temporalHistoryReadable = softShadowTemporalHistoryUsable();
     const u32 historyValid = temporalHistoryReadable ? 1u : 0u;
 
-    const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeCurrentGeometryEntryState, const bool graphOwnsMergeStaticReadEntryStates, const bool graphOwnsMergeTemporalEntryStates){
+    const auto dispatchMerge = [&](
+        const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeCurrentGeometryEntryState, const bool graphOwnsMergeStaticReadEntryStates,
+        const bool graphOwnsMergeTemporalEntryStates
+    ){
         NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
         if(!graphOwnsSoftTraceInputState)
             commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
@@ -224,33 +211,16 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         Core::Texture* const opaqueResolveMoments = frontIsA ? targets.shadowMomentsB.get() : targets.shadowMomentsA.get();
         const u32 opaqueResolveMomentsSlot = frontIsA ? targets.bindless.shadowMomentsB.slot() : targets.bindless.shadowMomentsA.slot();
         if(dispatchOpaqueResolve && opaqueTemporalActive && opaquePhase != SoftShadowOpaqueResolvePhase::WaveletOnly){
-            Core::GpuTimingMeasure opaqueTemporalTiming(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowOpaqueTemporal,
-                m_graphics.getDevice(),
-                commandList
-            );
+            Core::GpuTimingMeasure opaqueTemporalTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTemporal, m_graphics.getDevice(), commandList);
             // The graph owns the selected history/moments plus stable previous-geometry/world reads.
             // The geometry downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
-            dispatchMerge(
-                opaqueMerge,
-                graphOwnsOpaqueTraceToFirstWaveletBoundary,
-                graphOwnsOpaqueGeometryToResolveBoundary,
-                graphOwnsOpaqueTemporalMergeEntryStates,
-                graphOwnsOpaqueTemporalMergeEntryStates
-            );
+            dispatchMerge(opaqueMerge, graphOwnsOpaqueTraceToFirstWaveletBoundary, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates, graphOwnsOpaqueTemporalMergeEntryStates);
         }
 
         if(opaquePhase != SoftShadowOpaqueResolvePhase::TemporalOnly){
             // Feed the first wavelet directly from this frame's trace or temporal merge. PREPARE was only a half-res copy into soft-B before this same wavelet, so eliminating it preserves the exact filtering input while removing a dispatch.
-            Core::Texture* const opaqueWaveletInput = opaqueTemporalActive
-                ? (frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get())
-                : targets.shadowSoftHalfA.get()
-            ;
-            const u32 opaqueWaveletInputSlot = opaqueTemporalActive
-                ? (frontIsA ? targets.bindless.shadowHistB.slot() : targets.bindless.shadowHistA.slot())
-                : targets.bindless.shadowSoftHalfA.slot()
-            ;
+            Core::Texture* const opaqueWaveletInput = opaqueTemporalActive ? (frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get()) : targets.shadowSoftHalfA.get();
+            const u32 opaqueWaveletInputSlot = opaqueTemporalActive ? (frontIsA ? targets.bindless.shadowHistB.slot() : targets.bindless.shadowHistA.slot()) : targets.bindless.shadowSoftHalfA.slot();
             SoftShadowResolveDispatch opaqueDispatch;
             opaqueDispatch.waveletPipeline = m_rayTracingState.m_softShadowResolve.m_scalar.m_wavelet.m_pipeline.get();
             opaqueDispatch.upsamplePipeline = m_rayTracingState.m_softShadowResolve.m_scalar.m_upsample.m_pipeline.get();
@@ -276,31 +246,18 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             opaqueDispatch.temporalMomentsValid = opaqueTemporalActive;
             opaqueDispatch.graphOwnsWaveletGeometryEntryState = graphOwnsOpaqueGeometryToResolveBoundary;
             opaqueDispatch.graphOwnsUpsampleStaticEntryStates = true;
-            const bool graphOwnsDeferredOpaqueWaveletInputs =
-                opaquePhase == SoftShadowOpaqueResolvePhase::WaveletOnly;
+            const bool graphOwnsDeferredOpaqueWaveletInputs = opaquePhase == SoftShadowOpaqueResolvePhase::WaveletOnly;
             opaqueDispatch.graphOwnsWaveletMomentsEntryState = graphOwnsDeferredOpaqueWaveletInputs;
-            opaqueDispatch.graphOwnsFirstWaveletInputState = graphOwnsDeferredOpaqueWaveletInputs
-                || (graphOwnsOpaqueTraceToFirstWaveletBoundary && !opaqueTemporalActive);
-            opaqueDispatch.graphOwnsFirstWaveletOutputState =
-                dispatchOpaqueResolve && !dispatchOpaqueResolveTail
-            ;
-            const bool graphOwnsOneWaveletOpaqueResolveTailEntryStates =
-                !dispatchOpaqueResolve
-                && dispatchOpaqueResolveTail
-                && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u
-            ;
+            opaqueDispatch.graphOwnsFirstWaveletInputState = graphOwnsDeferredOpaqueWaveletInputs || (graphOwnsOpaqueTraceToFirstWaveletBoundary && !opaqueTemporalActive);
+            opaqueDispatch.graphOwnsFirstWaveletOutputState = dispatchOpaqueResolve && !dispatchOpaqueResolveTail;
+            const bool graphOwnsOneWaveletOpaqueResolveTailEntryStates = !dispatchOpaqueResolve && dispatchOpaqueResolveTail && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u;
             opaqueDispatch.graphOwnsUpsampleInputColorEntryState = graphOwnsOneWaveletOpaqueResolveTailEntryStates;
             opaqueDispatch.graphOwnsUpsampleVisibilityOutputState = graphOwnsOneWaveletOpaqueResolveTailEntryStates;
             opaqueDispatch.firstWaveletWritesHalfA = false;
             opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
             opaqueDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT);
             if(dispatchOpaqueResolve && dispatchOpaqueResolveTail){
-                Core::GpuTimingMeasure opaqueResolveTiming(
-                    m_graphics.gpuTiming(),
-                    RendererGpuTimingScope::s_ShadowOpaqueResolve,
-                    m_graphics.getDevice(),
-                    commandList
-                );
+                Core::GpuTimingMeasure opaqueResolveTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueResolve, m_graphics.getDevice(), commandList);
                 dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch);
             }
             else if(dispatchOpaqueResolve)
@@ -312,12 +269,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
 
     if(dispatchTransparentTrace && m_rayTracingState.m_softTransparentReady){
         {
-            Core::GpuTimingMeasure transparentTraceTiming(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowTransparentTrace,
-                m_graphics.getDevice(),
-                commandList
-            );
+            Core::GpuTimingMeasure transparentTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList);
             if(hardwareTransparentShadowReady()){
                 dispatchHardwareTransparentShadow(commandList, targets, frameIndex);
             }
@@ -331,14 +283,12 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 if(!graphOwnsOpaqueToTransparentBoundary)
                     commandList.commitBarriers();
 
-                const bool samplingHistoryUsable = temporalHistoryReadable && m_rayTracingState.m_softTransparentTemporalReady
-                    && m_rayTracingState.m_softwareTransparentSampling.m_history.usable();
+                const bool samplingHistoryUsable = temporalHistoryReadable && m_rayTracingState.m_softTransparentTemporalReady && m_rayTracingState.m_softwareTransparentSampling.m_history.usable();
                 if(samplingHistoryUsable && !graphOwnsOpaqueToTransparentBoundary){
                     // These reads also belong to the split trace task; unsplit phases retain local transitions.
                     commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                     commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-                    commandList.setTextureState(frontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(),
-                        ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(frontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                     commandList.commitBarriers();
                 }
                 SoftwareTransparentSamplingPush tracePush;
@@ -367,9 +317,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     }
 
     const bool dispatchTransparentWavelet = dispatchTransparentResolve || dispatchTransparentResolveTail;
-    const bool dispatchTransparentMerge =
-        dispatchTransparentTemporalMerge || (dispatchTransparentResolve && !splitTransparentResolve)
-    ;
+    const bool dispatchTransparentMerge = dispatchTransparentTemporalMerge || (dispatchTransparentResolve && !splitTransparentResolve);
     if((dispatchTransparentMerge || dispatchTransparentWavelet) && m_rayTracingState.m_softTransparentReady){
         const bool transparentTemporalActive = m_rayTracingState.m_softTransparentTemporalReady;
         const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources transparentMerge = frontIsA
@@ -388,31 +336,14 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         Core::Texture* const transparentResolveMoments = frontIsA ? targets.transparentMomentsB.get() : targets.transparentMomentsA.get();
         const u32 transparentResolveMomentsSlot = frontIsA ? targets.bindless.transparentMomentsB.slot() : targets.bindless.transparentMomentsA.slot();
         if(dispatchTransparentMerge && transparentTemporalActive){
-            Core::GpuTimingMeasure transparentTemporalTiming(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowTransparentTemporal,
-                m_graphics.getDevice(),
-                commandList
-            );
-            dispatchMerge(
-                transparentMerge,
-                graphOwnsTransparentTraceToResolveBoundary,
-                graphOwnsTransparentTemporalMergeEntryStates,
-                graphOwnsTransparentTemporalMergeEntryStates,
-                graphOwnsTransparentTemporalMergeEntryStates
-            );
+            Core::GpuTimingMeasure transparentTemporalTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTemporal, m_graphics.getDevice(), commandList);
+            dispatchMerge(transparentMerge, graphOwnsTransparentTraceToResolveBoundary, graphOwnsTransparentTemporalMergeEntryStates, graphOwnsTransparentTemporalMergeEntryStates, graphOwnsTransparentTemporalMergeEntryStates);
             m_rayTracingState.m_transparentShadowSamplingHistory.record(m_rayTracingState.m_softShadowSlotMask);
         }
 
         if(dispatchTransparentWavelet){
-        Core::Texture* const transparentWaveletInput = transparentTemporalActive
-            ? (frontIsA ? targets.transparentHistB.get() : targets.transparentHistA.get())
-            : targets.transparentSoftHalf.get()
-        ;
-        const u32 transparentWaveletInputSlot = transparentTemporalActive
-            ? (frontIsA ? targets.bindless.transparentHistB.slot() : targets.bindless.transparentHistA.slot())
-            : targets.bindless.transparentSoftHalf.slot()
-        ;
+        Core::Texture* const transparentWaveletInput = transparentTemporalActive ? (frontIsA ? targets.transparentHistB.get() : targets.transparentHistA.get()) : targets.transparentSoftHalf.get();
+        const u32 transparentWaveletInputSlot = transparentTemporalActive ? (frontIsA ? targets.bindless.transparentHistB.slot() : targets.bindless.transparentHistA.slot()) : targets.bindless.transparentSoftHalf.slot();
         SoftShadowResolveDispatch transparentDispatch;
         transparentDispatch.waveletPipeline = m_rayTracingState.m_softShadowResolve.m_rgb.m_wavelet.m_pipeline.get();
         transparentDispatch.upsamplePipeline = m_rayTracingState.m_softShadowResolve.m_rgb.m_upsample.m_pipeline.get();
@@ -436,47 +367,20 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         transparentDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();
         transparentDispatch.sceneShading = targets.bindless.sceneShading.slot();
         transparentDispatch.temporalMomentsValid = transparentTemporalActive;
-        const bool graphOwnsTransparentTemporalMergeToWaveletBoundary =
-            dispatchTransparentResolve
-            && splitTransparentResolve
-            && !dispatchTransparentTemporalMerge
-            && transparentTemporalActive
-        ;
-        transparentDispatch.graphOwnsFirstWaveletInputState =
-            (graphOwnsTransparentTraceToResolveBoundary && !transparentTemporalActive)
-            || graphOwnsTransparentTemporalMergeToWaveletBoundary
-        ;
-        transparentDispatch.graphOwnsWaveletMomentsEntryState =
-            graphOwnsTransparentTemporalMergeToWaveletBoundary
-        ;
-        transparentDispatch.graphOwnsWaveletGeometryEntryState =
-            graphOwnsTransparentTraceToResolveBoundary
-        ;
+        const bool graphOwnsTransparentTemporalMergeToWaveletBoundary = dispatchTransparentResolve && splitTransparentResolve && !dispatchTransparentTemporalMerge && transparentTemporalActive;
+        transparentDispatch.graphOwnsFirstWaveletInputState = (graphOwnsTransparentTraceToResolveBoundary && !transparentTemporalActive) || graphOwnsTransparentTemporalMergeToWaveletBoundary;
+        transparentDispatch.graphOwnsWaveletMomentsEntryState = graphOwnsTransparentTemporalMergeToWaveletBoundary;
+        transparentDispatch.graphOwnsWaveletGeometryEntryState = graphOwnsTransparentTraceToResolveBoundary;
         transparentDispatch.graphOwnsUpsampleStaticEntryStates = true;
-        transparentDispatch.graphOwnsFirstWaveletOutputState =
-            dispatchTransparentResolve && splitTransparentResolve
-        ;
-        const bool graphOwnsOneWaveletTransparentResolveTailEntryStates =
-            !dispatchTransparentResolve
-            && dispatchTransparentResolveTail
-            && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u
-        ;
-        transparentDispatch.graphOwnsUpsampleInputColorEntryState =
-            graphOwnsOneWaveletTransparentResolveTailEntryStates
-        ;
-        transparentDispatch.graphOwnsUpsampleVisibilityOutputState =
-            graphOwnsOneWaveletTransparentResolveTailEntryStates
-        ;
+        transparentDispatch.graphOwnsFirstWaveletOutputState = dispatchTransparentResolve && splitTransparentResolve;
+        const bool graphOwnsOneWaveletTransparentResolveTailEntryStates = !dispatchTransparentResolve && dispatchTransparentResolveTail && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u;
+        transparentDispatch.graphOwnsUpsampleInputColorEntryState = graphOwnsOneWaveletTransparentResolveTailEntryStates;
+        transparentDispatch.graphOwnsUpsampleVisibilityOutputState = graphOwnsOneWaveletTransparentResolveTailEntryStates;
         transparentDispatch.firstWaveletWritesHalfA = true;
         transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
         transparentDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT);
         if(dispatchTransparentResolve && !splitTransparentResolve){
-            Core::GpuTimingMeasure transparentResolveTiming(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_ShadowTransparentResolve,
-                m_graphics.getDevice(),
-                commandList
-            );
+            Core::GpuTimingMeasure transparentResolveTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentResolve, m_graphics.getDevice(), commandList);
             dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch);
         }
         else if(dispatchTransparentResolve)
@@ -488,10 +392,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
 
     // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate targets.bindless.
     // RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics submission succeeds.
-    if(
-        ((dispatchTransparentResolve && !splitTransparentResolve) || dispatchTransparentResolveTail)
-        && m_rayTracingState.m_softShadowTemporalReady
-    )
+    if(((dispatchTransparentResolve && !splitTransparentResolve) || dispatchTransparentResolveTail) && m_rayTracingState.m_softShadowTemporalReady)
         m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = true;
 }
 

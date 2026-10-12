@@ -21,15 +21,7 @@ NWB_VULKAN_BEGIN
 
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
-    if(
-        !desc.nativeQueues
-        || desc.nativeQueueCount == 0u
-        || !desc.physicalQueues
-        || desc.physicalQueueCount == 0u
-        || !desc.getInstanceProcAddr
-        || !desc.instanceDispatch.vkGetPhysicalDeviceProperties
-        || !desc.deviceDispatch.vkDestroyDevice
-    ){
+    if(!desc.nativeQueues || desc.nativeQueueCount == 0u || !desc.physicalQueues || desc.physicalQueueCount == 0u || !desc.getInstanceProcAddr || !desc.instanceDispatch.vkGetPhysicalDeviceProperties || !desc.deviceDispatch.vkDestroyDevice){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires non-empty native and physical queue registries."));
         return {};
     }

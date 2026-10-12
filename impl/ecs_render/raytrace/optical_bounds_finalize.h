@@ -81,11 +81,7 @@ public:
 
 public:
     void invalidate();
-    [[nodiscard]] RayTracingOpticalBoundsFinalizeHandle prepare(
-        const RayTracingOpticalSceneGather& gather,
-        Core::GpuDescriptorHandle sourceDescriptor,
-        RendererShaderSystem& shaderSystem
-    );
+    [[nodiscard]] RayTracingOpticalBoundsFinalizeHandle prepare(const RayTracingOpticalSceneGather& gather, Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem);
 
 private:
     [[nodiscard]] bool ensurePipeline(RendererShaderSystem& shaderSystem);

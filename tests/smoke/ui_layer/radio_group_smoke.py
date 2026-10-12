@@ -10,12 +10,8 @@ import time
 from radio_group_native import RadioGroupNativeInput
 from radio_group_probe import center, observe_radio_group, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -33,13 +29,8 @@ class RadioGroupRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = {
-            "main_selected": 10, "main_cursor": 10, "focus_code": 0, "changes": 0, "activations": 0,
-            "before_clicks": 0, "after_clicks": 0, "enabled": 1, "source_revision": 1, "source_generation": 1701,
-            "reversed": 0, "removed": 0, "parent": 0, "popup_selected": 10, "popup_cursor": 10,
-            "popup_changes": 0, "popup_activations": 0, "popup_count": 0, "focus_scope": 0, "label_reads": 10,
-            "disabled_selected": 30, "choice_count": 5,
-        }
+        self.expected = { "main_selected": 10, "main_cursor": 10, "focus_code": 0, "changes": 0, "activations": 0, "before_clicks": 0, "after_clicks": 0, "enabled": 1, "source_revision": 1, "source_generation": 1701,
+            "reversed": 0, "removed": 0, "parent": 0, "popup_selected": 10, "popup_cursor": 10, "popup_changes": 0, "popup_activations": 0, "popup_count": 0, "focus_scope": 0, "label_reads": 10, "disabled_selected": 30, "choice_count": 5, }
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -63,8 +54,7 @@ class RadioGroupRun:
     def navigate(self, key, selected, name):
         changed = int(self.expected["main_selected"] != selected)
         self.native.tap(key)
-        self.checkpoint(name, main_selected=selected, main_cursor=selected, focus_code=2,
-            **self.increments(changes=changed))
+        self.checkpoint(name, main_selected=selected, main_cursor=selected, focus_code=2, **self.increments(changes=changed))
 
     def checkpoint(self, name, *, extent=None, extra=None, neutral=True, pressed=None, **changes):
         self.expected.update(changes)
@@ -89,8 +79,7 @@ class RadioGroupRun:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
-            report = observe_radio_group(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra, pressed=pressed)
+            report = observe_radio_group(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, pressed=pressed)
             if report["passed"]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
@@ -98,19 +87,13 @@ class RadioGroupRun:
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(),
-            "observation": report}
+        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"radio displayed-state gate '{name}' failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {
-            "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "failure": self.failure_report,
-            "input_path": "Win32 physical cursor positioning with posted pointer/key messages"
-                if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus",
-            "runtime_limit": "No native Wayland, physical pointer-grab, or live IME qualification.",
-        }
+        report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 physical cursor positioning with posted pointer/key messages"
+                if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus", "runtime_limit": "No native Wayland, physical pointer-grab, or live IME qualification.", }
         (self.args.output_directory / "radio_group.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):
@@ -140,8 +123,7 @@ class RadioGroupRun:
         self.native.button(True, *pressed)
         self.checkpoint("pointer_press_keeps_selection_until_release", neutral=False, pressed=("", 40))
         self.native.button(False, *pressed)
-        self.checkpoint("pointer_release_selects_and_activates_once", main_selected=40, main_cursor=40,
-            **self.increments(changes=1, activations=1))
+        self.checkpoint("pointer_release_selects_and_activates_once", main_selected=40, main_cursor=40, **self.increments(changes=1, activations=1))
         self.native.command("select_disabled")
         self.checkpoint("external_disabled_selection_keeps_check_and_repairs_cursor", main_selected=30, main_cursor=40)
         self.native.command("toggle_enabled")
@@ -150,42 +132,34 @@ class RadioGroupRun:
         self.checkpoint("disabled_group_blocks_keyboard_and_pointer", enabled=0, focus_code=0)
         self.native.command("toggle_enabled")
         self.click("row20")
-        self.checkpoint("fresh_pointer_sequence_after_enable", enabled=1, focus_code=2, main_selected=20, main_cursor=20,
-            **self.increments(changes=1, activations=1))
+        self.checkpoint("fresh_pointer_sequence_after_enable", enabled=1, focus_code=2, main_selected=20, main_cursor=20, **self.increments(changes=1, activations=1))
         old_row = self.rectangle_point("row40")
         self.native.button(True, *old_row)
         self.native.command("reverse")
         self.native.button(False, *old_row)
         self.checkpoint("source_reorder_preserves_key_and_retires_old_release", reversed=1, source_revision=2)
         self.native.command("remove_selected")
-        self.checkpoint("removal_clears_selection_and_repairs_cursor", removed=20, source_revision=3,
-            main_selected=0, main_cursor=50, choice_count=4, **self.increments(changes=1))
+        self.checkpoint("removal_clears_selection_and_repairs_cursor", removed=20, source_revision=3, main_selected=0, main_cursor=50, choice_count=4, **self.increments(changes=1))
         self.click("row50")
-        self.checkpoint("fresh_keyed_release_after_removal", main_selected=50, main_cursor=50,
-            **self.increments(changes=1, activations=1))
+        self.checkpoint("fresh_keyed_release_after_removal", main_selected=50, main_cursor=50, **self.increments(changes=1, activations=1))
         self.native.key("Return", True)
         time.sleep(0.15)
         self.native.command("replace_source")
         self.native.key("Return", True, repeat=True)
         self.native.key("Return", False)
-        self.checkpoint("replacement_resets_selection_and_retires_held_submit", source_generation=1702, source_revision=4,
-            reversed=0, removed=0, choice_count=5, main_selected=0, main_cursor=10, disabled_selected=0,
-            **self.increments(changes=1, activations=1))
+        self.checkpoint("replacement_resets_selection_and_retires_held_submit", source_generation=1702, source_revision=4, reversed=0, removed=0, choice_count=5, main_selected=0, main_cursor=10, disabled_selected=0, **self.increments(changes=1, activations=1))
         physical_extent = self.point(840, 640)
         self.backend.resize_client(self.handle, *physical_extent)
         self.native.pointer(4, 4)
         time.sleep(0.3)
         self.click("row40")
-        self.checkpoint("resized_display_accepts_fresh_owned_release", extent=physical_extent,
-            extra=lambda snapshot: abs(snapshot["logical_extent"][0] - 840.0) < 1.0
-                and abs(snapshot["logical_extent"][1] - 640.0) < 1.0,
+        self.checkpoint("resized_display_accepts_fresh_owned_release", extent=physical_extent, extra=lambda snapshot: abs(snapshot["logical_extent"][0] - 840.0) < 1.0 and abs(snapshot["logical_extent"][1] - 640.0) < 1.0,
             main_selected=40, main_cursor=40, **self.increments(changes=1, activations=1))
         self.click("open")
         self.checkpoint("parent_popup_focuses_its_single_radio_host", parent=1, popup_count=1, focus_code=5, focus_scope=1)
         self.native.tap("Down")
         self.native.tap("Return", repeat_count=3)
-        self.checkpoint("popup_navigation_selects_and_held_enter_activates_once", popup_selected=20, popup_cursor=20,
-            popup_changes=1, popup_activations=1)
+        self.checkpoint("popup_navigation_selects_and_held_enter_activates_once", popup_selected=20, popup_cursor=20, popup_changes=1, popup_activations=1)
         self.native.tap("Tab")
         self.checkpoint("popup_next_tab_skips_all_owned_choices", focus_code=6)
         self.native.tap("Tab", shift=True)
@@ -193,24 +167,19 @@ class RadioGroupRun:
         self.native.button(True, *old_popup_row)
         self.native.command("close_parent")
         self.native.button(False, *old_popup_row)
-        self.checkpoint("ancestor_close_retires_popup_capture_before_release", parent=0, popup_count=0,
-            focus_code=4, focus_scope=0)
+        self.checkpoint("ancestor_close_retires_popup_capture_before_release", parent=0, popup_count=0, focus_code=4, focus_scope=0)
         self.click("open")
-        self.checkpoint("reopened_popup_publishes_focus_before_held_submit", parent=1, popup_count=1,
-            focus_code=5, focus_scope=1)
+        self.checkpoint("reopened_popup_publishes_focus_before_held_submit", parent=1, popup_count=1, focus_code=5, focus_scope=1)
         self.native.key("Return", True)
         time.sleep(0.15)
         self.native.focus_loss_and_gain()
         self.native.key("Return", True, repeat=True)
         self.native.key("Return", False)
-        self.checkpoint("native_focus_loss_closes_reopened_popup_and_retires_key", parent=0, popup_count=0,
-            focus_code=0, focus_scope=0, popup_activations=2)
+        self.checkpoint("native_focus_loss_closes_reopened_popup_and_retires_key", parent=0, popup_count=0, focus_code=0, focus_scope=0, popup_activations=2)
         self.click("open")
-        self.checkpoint("reopened_popup_publishes_geometry_before_fresh_release", parent=1, popup_count=1,
-            focus_code=5, focus_scope=1)
+        self.checkpoint("reopened_popup_publishes_geometry_before_fresh_release", parent=1, popup_count=1, focus_code=5, focus_scope=1)
         self.click("popup_row50")
-        self.checkpoint("fresh_popup_release_after_focus_loss", parent=1, popup_count=1, focus_code=5, focus_scope=1,
-            popup_selected=50, popup_cursor=50, popup_changes=2, popup_activations=3)
+        self.checkpoint("fresh_popup_release_after_focus_loss", parent=1, popup_count=1, focus_code=5, focus_scope=1, popup_selected=50, popup_cursor=50, popup_changes=2, popup_activations=3)
         self.click("popup_close")
         self.checkpoint("popup_close_button_restores_root_focus", parent=0, popup_count=0, focus_code=4, focus_scope=0)
 
@@ -260,8 +229,7 @@ def run(args):
                             radio_run.native.restore_pointer()
                     finally:
                         backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"],
-        STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
     radio_run.write_report(True)
     print(f"UI radio group: {len(radio_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
     return 0

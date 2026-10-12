@@ -26,8 +26,7 @@ namespace UiEditClickKind{
 // Editor-local policy: a released second press within 500 ms and four logical units selects a word run.
 class UiEditClickTracker final{
 public:
-    [[nodiscard]] UiEditClickKind::Enum press(const UiTextEditOwner& owner, const Ui::PopupToken& popup,
-        u64 revision, u64 externalRevision, Ui::Point position, u64 timestampMs, bool shift)noexcept;
+    [[nodiscard]] UiEditClickKind::Enum press(const UiTextEditOwner& owner, const Ui::PopupToken& popup, u64 revision, u64 externalRevision, Ui::Point position, u64 timestampMs, bool shift)noexcept;
     void move(Ui::Point position)noexcept;
     void release(const UiTextEditOwner& owner)noexcept;
     void retainFocus(const UiTextEditOwner* owner)noexcept;

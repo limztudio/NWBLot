@@ -44,11 +44,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     if(value && value->isInteger() && value->asInteger() >= 0 && static_cast<u64>(value->asInteger()) <= maximum){
         return static_cast<u32>(value->asInteger());
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': field '{}' must be an integer in 0..{}")
-        , PathToString<tchar>(path)
-        , StringConvert(field)
-        , maximum
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': field '{}' must be an integer in 0..{}"), PathToString<tchar>(path), StringConvert(field), maximum);
     return MakeUnexpected(Failure{});
 }
 
@@ -58,14 +54,8 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     if(!Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
     const bool hasBitmap = map.findField("width") != nullptr;
-    if(!Core::Assets::ValidateMetadataAssetFields(
-        path, map, s_DiagnosticPrefix,
-        [hasBitmap](const AStringView field){
-            return
-                field == "advance_units"
-                || (hasBitmap && (field == "group" || field == "channel" || field == "x" || field == "y"
-                    || field == "width" || field == "height" || field == "plane_left" || field == "plane_top"))
-            ;
+    if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, [hasBitmap](const AStringView field){
+            return field == "advance_units" || (hasBitmap && (field == "group" || field == "channel" || field == "x" || field == "y" || field == "width" || field == "height" || field == "plane_left" || field == "plane_top"));
         }
     ))
         return MakeUnexpected(Failure{});
@@ -112,8 +102,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
-    const SIMDVectorSingle size = VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height),
-        static_cast<f32>(glyph.width), static_cast<f32>(glyph.height));
+    const SIMDVectorSingle size = VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), static_cast<f32>(glyph.width), static_cast<f32>(glyph.height));
     const SIMDVectorSingle origin = VectorSet(glyph.planeLeft, glyph.planeTop, glyph.planeLeft, glyph.planeTop);
     const SIMDVectorSingle end = VectorMultiplyAddExpression(size, VectorReplicate(unitsPerPixel), origin);
     glyph.planeRight = VectorGetX(end);
@@ -132,19 +121,12 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const FontAtlasPayload& payload
-){
+Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload){
     using namespace __hidden_font_atlas_cook_glyph_metadata;
     const Value* glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, "glyphs");
     if(!glyphs)
         return MakeUnexpected(Failure{});
-    if(
-        payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount
-        || glyphs->asList().size() != payload.sourceGlyphCount
-    ){
+    if(payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || glyphs->asList().size() != payload.sourceGlyphCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': exactly one record per source glyph is required"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }

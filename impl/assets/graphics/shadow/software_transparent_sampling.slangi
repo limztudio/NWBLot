@@ -50,10 +50,7 @@ bool nwbSwTransparentSamplingGeometryMatches(const half4 current, const half4 pr
     if(!all(isfinite(float4(current))) || !all(isfinite(float4(previous))) || current.w <= 0.5h || previous.w <= 0.5h)
         return false;
     const float spacing = max(float(current.z) * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
-    return current.z >= 0.0h && previous.z >= 0.0h
-        && abs(float(current.z) - float(previous.z)) < NWB_SHADOW_TEMPORAL_PLANE_K * spacing
-        && dot(nwbOctDecodeNormal(float2(current.xy)), nwbOctDecodeNormal(float2(previous.xy))) > NWB_SHADOW_TEMPORAL_NORMAL_MIN
-    ;
+    return current.z >= 0.0h && previous.z >= 0.0h && abs(float(current.z) - float(previous.z)) < NWB_SHADOW_TEMPORAL_PLANE_K * spacing && dot(nwbOctDecodeNormal(float2(current.xy)), nwbOctDecodeNormal(float2(previous.xy))) > NWB_SHADOW_TEMPORAL_NORMAL_MIN;
 }
 
 uint nwbSwTransparentSamplingBudget(const bool geometryAccepted, const half3 previousMoments, const uint maximumSamples){

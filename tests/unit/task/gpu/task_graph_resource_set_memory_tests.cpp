@@ -53,11 +53,7 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     for(usize index = 0u; index < count; ++index){
         char text[32u] = {};
         const Name identity = DeriveName(Name("tests/resource_set_memory/resource/"), FormatDecimal(index, text));
-        const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}
-            .setIdentity(identity)
-            .setMarkerLabel("Resource Set Memory Input")
-            .setType(Core::GpuGraphResourceType::Buffer)
-        );
+        const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Input").setType(Core::GpuGraphResourceType::Buffer));
         if(!resource.valid())
             return false;
         members.push_back(resource);
@@ -65,16 +61,8 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     return true;
 }
 
-[[nodiscard]] static Core::GpuGraphResourceSetDesc SetDescription(
-    const Name& identity,
-    const ResourceIds& members,
-    const usize count
-){
-    return Core::GpuGraphResourceSetDesc{}
-        .setIdentity(identity)
-        .setMarkerLabel("Resource Set Memory Members")
-        .setMembers(members.data(), count)
-    ;
+[[nodiscard]] static Core::GpuGraphResourceSetDesc SetDescription(const Name& identity, const ResourceIds& members, const usize count){
+    return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Members").setMembers(members.data(), count);
 }
 
 static void ExpectDeclarationState(const Core::GpuTaskGraph& graph, const u64 revision, const usize setCount){
@@ -107,9 +95,7 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
             ASSERT_TRUE(declarations.valid());
             const u64 revision = declarations.declarationRevision();
             const Core::GpuTaskGraphResourceSetView last = declarations.resourceSetAt(lastSet.index);
-            EXPECT_FALSE(graph.importResourceSet(SetDescription(
-                Name("tests/resource_set_memory/blocked_large"), members, members.size()
-            )).valid());
+            EXPECT_FALSE(graph.importResourceSet(SetDescription(Name("tests/resource_set_memory/blocked_large"), members, members.size())).valid());
             EXPECT_FALSE(graph.importResourceSet(SetDescription(last.identity, members, last.memberCount)).valid());
             EXPECT_EQ(declarations.declarationRevision(), revision);
         }
@@ -175,10 +161,7 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
     EXPECT_EQ(afterDestruction.usedBytes, before.usedBytes);
     EXPECT_EQ(afterDestruction.reservedBytes, before.reservedBytes);
     EXPECT_GT(afterDestruction.allocationCount, before.allocationCount);
-    EXPECT_EQ(
-        afterDestruction.allocationCount - before.allocationCount,
-        afterDestruction.deallocationCount - before.deallocationCount
-    );
+    EXPECT_EQ(afterDestruction.allocationCount - before.allocationCount, afterDestruction.deallocationCount - before.deallocationCount);
 }
 
 TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDeclaration){
@@ -189,9 +172,7 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
         ResourceIds members(arena);
         ASSERT_TRUE(FillResources(graph, members, 1024u));
         const Core::GpuGraphResourceId saved = members.back();
-        const Core::GpuGraphResourceSetDesc rejected = SetDescription(
-            Name("tests/resource_set_memory/rejected"), members, members.size()
-        );
+        const Core::GpuGraphResourceSetDesc rejected = SetDescription(Name("tests/resource_set_memory/rejected"), members, members.size());
         u64 warmReserved = 0u;
         for(usize cycle = 0u; cycle < 16u; ++cycle){
             u64 revision = 0u;

@@ -20,8 +20,7 @@ UiEditGallery::UiEditGallery(NWB::Core::Alloc::GlobalArena& arena)
     : m_text(arena)
     , m_readOnly(arena)
 {
-    const bool configured = m_text.setText("Edit me: \xED\x95\x9C\xEA\xB8\x80")
-        && m_readOnly.setText("Read-only: copy this text");
+    const bool configured = m_text.setText("Edit me: \xED\x95\x9C\xEA\xB8\x80") && m_readOnly.setText("Read-only: copy this text");
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed edit gallery must have valid initial text"));
 }
 

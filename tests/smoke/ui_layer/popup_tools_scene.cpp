@@ -129,16 +129,11 @@ bool UiPopupToolsSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, c
 }
 
 void UiPopupToolsSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(
-        m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight
-        && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: display logical={}x{} scale={}x{}")
-        , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u64, 15u> UiPopupToolsSmokeScene::values()const{
@@ -166,12 +161,7 @@ void UiPopupToolsSmokeScene::observeState(){
     const auto& menu = m_menu.placement();
     const auto& tooltip = m_tooltip.placement();
     const auto& sentinel = m_sentinelState.placement.bounds;
-    if(
-        m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && SameSmokeRect(menu.bounds, m_lastMenu.bounds)
-        && SameSmokeRect(tooltip.bounds, m_lastTooltip.bounds)
-        && SameSmokeRect(sentinel, m_lastSentinel)
-    )
+    if(m_sequence != 0u && !m_displayChanged && current == m_lastValues && SameSmokeRect(menu.bounds, m_lastMenu.bounds) && SameSmokeRect(tooltip.bounds, m_lastTooltip.bounds) && SameSmokeRect(sentinel, m_lastSentinel))
         return;
     ++m_sequence;
     m_lastValues = current;
@@ -225,11 +215,7 @@ bool IsUiLayerPopupToolsSkinSmokeEnabled(){
 }
 
 SharedUiPopupToolsSmokeScene CreateUiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiPopupToolsSmokeScene(
-        NewArenaObject<RefCounter<UiPopupToolsSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiPopupToolsSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiPopupToolsSmokeScene(NewArenaObject<RefCounter<UiPopupToolsSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiPopupToolsSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

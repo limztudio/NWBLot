@@ -29,9 +29,7 @@ UiTextEditSession::~UiTextEditSession(){
 }
 
 
-Core::TextInputAdmission::Enum UiTextEditSession::begin(
-    const UiTextEditOwner& owner, Ui::EditModel& model, const Core::TextInputRect caret
-){
+Core::TextInputAdmission::Enum UiTextEditSession::begin(const UiTextEditOwner& owner, Ui::EditModel& model, const Core::TextInputRect caret){
     if(!m_service.isOwnerThread())
         return Core::TextInputAdmission::WrongThread;
     if(!owner.valid() || model.composition().active)
@@ -56,9 +54,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::begin(
     return Core::TextInputAdmission::Accepted;
 }
 
-Core::TextInputAdmission::Enum UiTextEditSession::refresh(
-    const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret
-){
+Core::TextInputAdmission::Enum UiTextEditSession::refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
     if(!m_service.isOwnerThread())
         return Core::TextInputAdmission::WrongThread;
     if(!m_token.valid() || !(m_owner == owner) || !m_expectedModel.matches(model))
@@ -91,8 +87,7 @@ UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::Edit
         if(poll == Core::TextInputPollResult::Pending)
             break;
         if(poll != Core::TextInputPollResult::Event){
-            result.status = poll == Core::TextInputPollResult::WrongThread
-                ? UiTextEditStatus::WrongThread : UiTextEditStatus::Cancelled;
+            result.status = poll == Core::TextInputPollResult::WrongThread ? UiTextEditStatus::WrongThread : UiTextEditStatus::Cancelled;
             model.cancelComposition();
             if(!release())
                 result.status = UiTextEditStatus::NativeFailure;
@@ -144,12 +139,8 @@ bool UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const n
     ;
 }
 
-Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(
-    const Ui::EditModel& model, const Core::TextInputChangeCause::Enum cause
-){
-    const auto admission = m_service.updateSurrounding(
-        m_token, model.text(), model.anchor(), model.caret(), cause
-    );
+Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(const Ui::EditModel& model, const Core::TextInputChangeCause::Enum cause){
+    const auto admission = m_service.updateSurrounding(m_token, model.text(), model.anchor(), model.caret(), cause);
     if(admission != Core::TextInputAdmission::Accepted)
         return admission;
     m_publishedText.assign(model.text().data(), model.text().size());

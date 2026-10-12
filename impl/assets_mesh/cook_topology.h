@@ -27,11 +27,7 @@ NWB_IMPL_BEGIN
 
 
 // Bits follow the canonical ray-triangle order. Attribute seams share position identity; coincident independent positions remain separate.
-[[nodiscard]] Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(
-    Span<const Float3U> positions,
-    Span<const u32> triangleIndices,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(Span<const Float3U> positions, Span<const u32> triangleIndices, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

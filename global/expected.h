@@ -19,16 +19,13 @@
 
 struct Failure final{};
 
-template<typename T, typename E = Failure>
-using Expected = std::expected<T, E>;
+template<typename T, typename E = Failure> using Expected = std::expected<T, E>;
 
 template<typename E>
 using Unexpected = std::unexpected<E>;
 
 template<typename E>
-[[nodiscard]] constexpr Unexpected<Decay_T<E>> MakeUnexpected(E&& error)noexcept(
-    noexcept(Unexpected<Decay_T<E>>(Forward<E>(error)))
-){
+[[nodiscard]] constexpr Unexpected<Decay_T<E>> MakeUnexpected(E&& error)noexcept(noexcept(Unexpected<Decay_T<E>>(Forward<E>(error)))){
     return Unexpected<Decay_T<E>>(Forward<E>(error));
 }
 

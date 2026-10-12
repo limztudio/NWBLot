@@ -24,19 +24,13 @@ namespace __hidden_ui_paint{
 
 
 bool HasArea(const Rect& rectangle)noexcept{
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
-        && rectangle.width > 0.0f && rectangle.height > 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-    ;
+    return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width > 0.0f && rectangle.height > 0.0f && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
 }
 
 Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     if(!HasArea(lhs) || !HasArea(rhs))
         return {};
-    const SIMDVectorSingle intersection = IntersectRectValue(
-        VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height)
-    );
+    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height));
     return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
 }
 
@@ -73,13 +67,7 @@ PaintBuilder::PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept
     , m_clips(arena)
 {}
 
-void PaintBuilder::begin(
-    const DisplayMetrics& metrics,
-    const u64 generation,
-    const u64 skinGeneration,
-    const Core::Assets::AssetRef<UiSkin>& skinRef,
-    const UiSkin& skin
-){
+void PaintBuilder::begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
     NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
     NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
     NWB_ASSERT(IsFinite(skin.referenceDensity()));
@@ -89,14 +77,7 @@ void PaintBuilder::begin(
     NWB_ASSERT(IsFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
     m_snapshot.m_generation = generation;
     m_snapshot.m_displayMetrics = metrics;
-    m_snapshot.m_skinBinding = {
-        skinRef,
-        skin.texture(),
-        skinGeneration,
-        skin.atlasWidth(),
-        skin.atlasHeight(),
-        skin.referenceDensity()
-    };
+    m_snapshot.m_skinBinding = { skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
     m_snapshot.m_vertices.clear();
     m_snapshot.m_indices.clear();
     m_snapshot.m_commands.clear();
@@ -152,8 +133,7 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
         const f32 atlasWidth = static_cast<f32>(m_snapshot.m_skinBinding.atlasWidth);
         const f32 atlasHeight = static_cast<f32>(m_snapshot.m_skinBinding.atlasHeight);
         const auto& pixels = region->rectangle;
-        const SIMDVectorSingle normalized = VectorDivide(VectorSet(static_cast<f32>(pixels.x), static_cast<f32>(pixels.y),
-            static_cast<f32>(pixels.width), static_cast<f32>(pixels.height)), VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
+        const SIMDVectorSingle normalized = VectorDivide(VectorSet(static_cast<f32>(pixels.x), static_cast<f32>(pixels.y), static_cast<f32>(pixels.width), static_cast<f32>(pixels.height)), VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
         const Rect uv{ VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
         emitQuad(rectangle, uv, tint, PaintMaterial::Skin);
     }
@@ -175,16 +155,7 @@ Rect PaintBuilder::currentClip()const{
     return m_clips.back();
 }
 
-void PaintBuilder::emitQuad(
-    const Rect& rectangle,
-    const Rect& uv,
-    const Color& color,
-    const PaintMaterial::Enum material,
-    const u32 glyphPageIndex,
-    const u32 sdfPageIndex,
-    const u32 sdfChannel,
-    const u32 textureImageIndex
-){
+void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material, const u32 glyphPageIndex, const u32 sdfPageIndex, const u32 sdfChannel, const u32 textureImageIndex){
     NWB_ASSERT(m_recording);
     NWB_ASSERT(IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a));
     NWB_ASSERT(color.a >= 0.0f && color.a <= 1.0f);
@@ -243,8 +214,7 @@ void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectang
     const auto& binding = m_snapshot.m_skinBinding;
     const auto& pixels = region.rectangle;
     const auto& borders = region.sliceInsets;
-    const SIMDVectorSingle borderSize = VectorDivide(VectorSet(static_cast<f32>(borders.left), static_cast<f32>(borders.right),
-        static_cast<f32>(borders.top), static_cast<f32>(borders.bottom)), VectorReplicate(binding.referenceDensity));
+    const SIMDVectorSingle borderSize = VectorDivide(VectorSet(static_cast<f32>(borders.left), static_cast<f32>(borders.right), static_cast<f32>(borders.top), static_cast<f32>(borders.bottom)), VectorReplicate(binding.referenceDensity));
     const f32 left = VectorGetX(borderSize);
     const f32 right = VectorGetY(borderSize);
     const f32 top = VectorGetZ(borderSize);
@@ -255,19 +225,15 @@ void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectang
     const f32 y1 = rectangle.y + (shrinkY ? rectangle.height * (top / (top + bottom)) : top);
     const f32 x[]{ rectangle.x, x1, shrinkX ? x1 : rectangle.x + rectangle.width - right, rectangle.x + rectangle.width };
     const f32 y[]{ rectangle.y, y1, shrinkY ? y1 : rectangle.y + rectangle.height - bottom, rectangle.y + rectangle.height };
-    const f32 u[]{ static_cast<f32>(pixels.x), static_cast<f32>(pixels.x + borders.left),
-        static_cast<f32>(pixels.x + pixels.width - borders.right), static_cast<f32>(pixels.x + pixels.width) };
-    const f32 v[]{ static_cast<f32>(pixels.y), static_cast<f32>(pixels.y + borders.top),
-        static_cast<f32>(pixels.y + pixels.height - borders.bottom), static_cast<f32>(pixels.y + pixels.height) };
+    const f32 u[]{ static_cast<f32>(pixels.x), static_cast<f32>(pixels.x + borders.left), static_cast<f32>(pixels.x + pixels.width - borders.right), static_cast<f32>(pixels.x + pixels.width) };
+    const f32 v[]{ static_cast<f32>(pixels.y), static_cast<f32>(pixels.y + borders.top), static_cast<f32>(pixels.y + pixels.height - borders.bottom), static_cast<f32>(pixels.y + pixels.height) };
     const f32 atlasWidth = static_cast<f32>(binding.atlasWidth);
     const f32 atlasHeight = static_cast<f32>(binding.atlasHeight);
     for(u32 row = 0u; row < 3u; ++row){
         for(u32 column = 0u; column < 3u; ++column){
-            const SIMDVectorSingle targetSize = VectorSubtract(VectorSet(x[column + 1u], y[row + 1u], x[column + 1u], y[row + 1u]),
-                VectorSet(x[column], y[row], x[column], y[row]));
+            const SIMDVectorSingle targetSize = VectorSubtract(VectorSet(x[column + 1u], y[row + 1u], x[column + 1u], y[row + 1u]), VectorSet(x[column], y[row], x[column], y[row]));
             const Rect target{ x[column], y[row], VectorGetX(targetSize), VectorGetY(targetSize) };
-            const SIMDVectorSingle textureSize = VectorSubtract(VectorSet(u[column + 1u], v[row + 1u], u[column + 1u], v[row + 1u]),
-                VectorSet(u[column], v[row], u[column], v[row]));
+            const SIMDVectorSingle textureSize = VectorSubtract(VectorSet(u[column + 1u], v[row + 1u], u[column + 1u], v[row + 1u]), VectorSet(u[column], v[row], u[column], v[row]));
             const SIMDVectorSingle textureCoordinates = VectorPermute<0, 1, 4, 5>(VectorSet(u[column], v[row], 0.0f, 0.0f), textureSize);
             const SIMDVectorSingle normalized = VectorDivide(textureCoordinates, VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
             const Rect uv{ VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };

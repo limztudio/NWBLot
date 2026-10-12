@@ -76,10 +76,7 @@ namespace Tests{
 #define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value) #Value
 #define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(Value) NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value)
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS R"(asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
+    [-0.5, -0.5, 0.0], [ 0.5, -0.5, 0.0], [ 0.0,  0.5, 0.0],];
 
 )"
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS R"(asset.normals = [
@@ -285,12 +282,7 @@ public:
 
     static constexpr AStringView s_MaterialBindMeshSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
 
-    NwbMeshGeneratedVertex nwbMeshBuildVertex(
-    uint triangleIndex,
-    uint corner,
-    NwbMeshSourceVertex source,
-    const NwbMeshInstanceData instance
-    ){
+    NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source, const NwbMeshInstanceData instance){
     NwbMeshGeneratedVertex generatedVertex;
     const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
     generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
@@ -322,10 +314,7 @@ public:
         && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 44u;
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    return nwbMakeMeshSurface(
-        materialBindConstantsValid ? half3(surface.base_color.rgb) : half3(1.0h, 0.0h, 1.0h),
-        inNormal
-    );
+    return nwbMakeMeshSurface(materialBindConstantsValid ? half3(surface.base_color.rgb) : half3(1.0h, 0.0h, 1.0h), inNormal);
     }
 
     )NWB_SLANG";
@@ -454,10 +443,7 @@ public:
     asset.two_sided = 0;
     asset.refractive = 0;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
     asset.parameters = {
@@ -526,10 +512,7 @@ public:
     asset.two_sided = 0;
     asset.refractive = 0;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
     )NWB_META";
@@ -541,10 +524,7 @@ public:
     asset.two_sided = 0;
     asset.refractive = 1;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
     )NWB_META";
@@ -552,15 +532,10 @@ public:
     #if defined(NWB_FINAL)
     static constexpr AStringView s_MissingInterfaceMaterialMeta = R"NWB_META(material asset;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
-    asset.parameters = {
-    "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
-    };
+    asset.parameters = { "base_color": "float4(0.25, 0.5, 0.75, 1.0)", };
 
     )NWB_META";
     static constexpr AStringView s_UnsupportedMaterialFieldMeta = R"NWB_META(material asset;
@@ -568,10 +543,7 @@ public:
     asset.interface = "project/material_interfaces/test_surface.bind";
     asset.compiler = "unsupported";
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
     )NWB_META";
@@ -585,10 +557,7 @@ public:
     asset.two_sided = 0;
     asset.refractive = 0;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
     asset.parameters = {
@@ -606,15 +575,10 @@ public:
     asset.two_sided = 0;
     asset.refractive = 0;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
-    asset.parameters = {
-    "runtime.fade_alpha": "float(0.75)",
-    };
+    asset.parameters = { "runtime.fade_alpha": "float(0.75)", };
 
     )NWB_META";
     static constexpr AStringView s_UntypedMaterialParameterMeta = R"NWB_META(material asset;
@@ -625,10 +589,7 @@ public:
     asset.two_sided = 0;
     asset.refractive = 0;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
     asset.parameters = {
@@ -646,10 +607,7 @@ public:
     asset.two_sided = 0;
     asset.refractive = 0;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
+    asset.shaders = { "mesh": "project/shaders/material_mesh", "ps": "project/shaders/material_ps", };
     asset.shader_variant = "default";
 
     asset.parameters = {
@@ -753,8 +711,7 @@ public:
     )NWB_BIND";
     static constexpr AStringView s_ResourceAttributeMaterialBindSource = R"NWB_BIND([material_constant]
     struct NwbTestSurfaceMaterial{
-    [texture_asset("project/textures/legacy")]
-    texture2d base_color_map;
+    [texture_asset("project/textures/legacy")] texture2d base_color_map;
     };
 
     NwbTestSurfaceMaterial surface;
@@ -987,27 +944,11 @@ public:
         EXPECT_TRUE(deserialized);
         return deserialized;
     }
-    static Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMinimalMesh(
-        TestArena& testArena,
-        const Path& outputDirectory);
-    static Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMesh(
-        TestArena& testArena,
-        const Path& outputDirectory,
-        const Name assetName);
-    static Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(
-        TestArena& testArena,
-        const Path& outputDirectory,
-        const Name assetName
-    );
-    static Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadCookedShaderArchiveRecords(
-        TestArena& testArena,
-        const Path& outputDirectory
-    );
-    static Expected<u64> FindShaderArchiveSourceChecksum(
-        const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records,
-        const Name shaderName,
-        const Name stageName
-    );
+    static Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMinimalMesh(TestArena& testArena, const Path& outputDirectory);
+    static Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMesh(TestArena& testArena, const Path& outputDirectory, const Name assetName);
+    static Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(TestArena& testArena, const Path& outputDirectory, const Name assetName);
+    static Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadCookedShaderArchiveRecords(TestArena& testArena, const Path& outputDirectory);
+    static Expected<u64> FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName);
 
 
 public:
@@ -1030,12 +971,7 @@ public:
         const bool skinRequired
     );
     template<typename CodecT>
-    static void CheckCodecRejectsBinary(
-        TestArena& testArena,
-        const CodecT& codec,
-        const Name& virtualPath,
-        const NWB::Core::Assets::AssetBytes& binary
-    ){
+    static void CheckCodecRejectsBinary(TestArena& testArena, const CodecT& codec, const Name& virtualPath, const NWB::Core::Assets::AssetBytes& binary){
         EXPECT_FALSE(codec.deserialize(testArena.arena, virtualPath, binary));
     }
 };

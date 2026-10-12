@@ -35,8 +35,7 @@ namespace __hidden_transparent_interval_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both transparent interval passes materialize the same snapshot and gate on the same
-// framebuffer, draw-buffer, CSG-resource, and material-resource readiness.
+// Both transparent interval passes materialize the same snapshot and gate on the same framebuffer, draw-buffer, CSG-resource, and material-resource readiness.
 struct TransparentIntervalReadiness{
     MaterialPassDrawItems receiverSurfaceDrawItems;
     CsgFrameGpuData csgFrameData;
@@ -49,31 +48,13 @@ struct TransparentIntervalReadiness{
 };
 
 template<typename PayloadT>
-[[nodiscard]] inline TransparentIntervalReadiness ResolveTransparentIntervalReadiness(
-    const PayloadT& payload,
-    RendererMaterialSystem& materialSystem,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] inline TransparentIntervalReadiness ResolveTransparentIntervalReadiness(const PayloadT& payload, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena){
     TransparentIntervalReadiness readiness{ scratchArena };
     payload.transparentCsgSnapshot.materialize(readiness.receiverSurfaceDrawItems, readiness.csgFrameData);
-    const bool drawBuffersReady = payload.frameBindings.frameReady(
-        payload.transparentCsgSnapshot.instanceCount,
-        payload.transparentCsgSnapshot.materialTypedByteCount
-    );
+    const bool drawBuffersReady = payload.frameBindings.frameReady(payload.transparentCsgSnapshot.instanceCount, payload.transparentCsgSnapshot.materialTypedByteCount);
     const bool csgResourcesReady = payload.csgResources.frameReady(readiness.csgFrameData);
-    const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(
-        readiness.receiverSurfaceDrawItems,
-        payload.frameBindings
-    );
-    readiness.ready =
-        payload.csgFrameBuffersUploaded
-        && payload.targets.framebuffer
-        && !readiness.receiverSurfaceDrawItems.empty()
-        && readiness.csgFrameData.hasWork()
-        && drawBuffersReady
-        && csgResourcesReady
-        && receiverSurfaceDrawResourcesReady
-    ;
+    const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(readiness.receiverSurfaceDrawItems, payload.frameBindings);
+    readiness.ready = payload.csgFrameBuffersUploaded && payload.targets.framebuffer && !readiness.receiverSurfaceDrawItems.empty() && readiness.csgFrameData.hasWork() && drawBuffersReady && csgResourcesReady && receiverSurfaceDrawResourcesReady;
     return readiness;
 }
 
@@ -104,11 +85,7 @@ AvboitCsgReceiverSpanGraphTask::Payload::Payload(
 {}
 
 
-bool AvboitCsgReceiverSpanGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.transparentCsgSnapshot.captured)
         return false;
@@ -121,15 +98,9 @@ bool AvboitCsgReceiverSpanGraphTask::Record(
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     RendererCsgSystem& csgSystem = payload.csgSystem;
-    const __hidden_transparent_interval_tasks::TransparentIntervalReadiness readiness =
-        __hidden_transparent_interval_tasks::ResolveTransparentIntervalReadiness(payload, materialSystem, scratchArena);
+    const __hidden_transparent_interval_tasks::TransparentIntervalReadiness readiness = __hidden_transparent_interval_tasks::ResolveTransparentIntervalReadiness(payload, materialSystem, scratchArena);
     if(readiness.ready){
-        csgSystem.dispatchCsgReceiverSpanBuild(
-            commandList,
-            payload.targets,
-            readiness.csgFrameData,
-            payload.csgResources
-        );
+        csgSystem.dispatchCsgReceiverSpanBuild(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
     }
     else{
         // Drop the reservation on mismatch; never feed Combine a stale image.
@@ -157,11 +128,7 @@ AvboitCsgIntervalCombineGraphTask::Payload::Payload(
 {}
 
 
-bool AvboitCsgIntervalCombineGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.transparentCsgSnapshot.captured)
         return false;
@@ -174,15 +141,9 @@ bool AvboitCsgIntervalCombineGraphTask::Record(
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     RendererCsgSystem& csgSystem = payload.csgSystem;
-    const __hidden_transparent_interval_tasks::TransparentIntervalReadiness readiness =
-        __hidden_transparent_interval_tasks::ResolveTransparentIntervalReadiness(payload, materialSystem, scratchArena);
+    const __hidden_transparent_interval_tasks::TransparentIntervalReadiness readiness = __hidden_transparent_interval_tasks::ResolveTransparentIntervalReadiness(payload, materialSystem, scratchArena);
     if(readiness.ready){
-        csgSystem.dispatchCsgIntervalCombine(
-            commandList,
-            payload.targets,
-            readiness.csgFrameData,
-            payload.csgResources
-        );
+        csgSystem.dispatchCsgIntervalCombine(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
         payload.transparentCsgIntervalsTiming.value().finishTiming(commandList);
         payload.transparentCsgIntervalsTiming.reset();
     }

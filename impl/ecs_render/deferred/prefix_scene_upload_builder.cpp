@@ -22,12 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererDeferredSystem& deferredSystem,
-    RendererMeshSystem& meshSystem,
-    Core::GraphicsRuntime& graphics
-)
+PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem, RendererMeshSystem& meshSystem, Core::GraphicsRuntime& graphics)
     : m_graph(graph)
     , m_deferredSystem(deferredSystem)
     , m_meshSystem(meshSystem)
@@ -38,9 +33,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(
-    const PrefixSceneUploadInputs& inputs
-){
+[[nodiscard]] Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(const PrefixSceneUploadInputs& inputs){
     PrefixSceneUploadResult result{};
     if(
         !inputs.meshViewState
@@ -61,10 +54,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     const ECSRenderDetail::MeshViewGpuData& meshViewState = *inputs.meshViewState;
     const bool meshViewUploadRequired = inputs.meshViewUploadRequired;
 
-    const SceneShadingBufferUploads uploads = m_deferredSystem.prepareSceneShadingBufferUploads(
-        inputs.meshViewAspectRatio,
-        inputs.rayTracingLightingInput
-    );
+    const SceneShadingBufferUploads uploads = m_deferredSystem.prepareSceneShadingBufferUploads(inputs.meshViewAspectRatio, inputs.rayTracingLightingInput);
     const auto& sceneLightData = uploads.lightData;
     const auto& sceneShadingState = uploads.sceneShadingState;
     const u32 sceneLightCount = uploads.lightCount;
@@ -78,12 +68,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     meshViewSetupScheduling.forceSubmissionBoundary = false;
     meshViewSetupScheduling.allowPacketMerge = true;
     Core::GpuTaskDesc meshViewSetupDesc;
-    meshViewSetupDesc
-        .setIdentity(Name("render.graphics_prefix.mesh_view_setup"))
-        .setMarkerLabel("Mesh View Setup")
-        .setScheduling(meshViewSetupScheduling)
-        .setDependencies(&inputs.shadowPrepareTask, 1u)
-    ;
+    meshViewSetupDesc.setIdentity(Name("render.graphics_prefix.mesh_view_setup")).setMarkerLabel("Mesh View Setup").setScheduling(meshViewSetupScheduling).setDependencies(&inputs.shadowPrepareTask, 1u);
     result.meshViewSetupTask = m_graph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
         meshViewSetupDesc,
         ECSRenderDetail::MeshViewSetupGraphTask::Payload{
@@ -105,52 +90,28 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
 
     Core::GpuTaskId meshViewUploadTask = result.meshViewSetupTask;
     if(meshViewUploadRequired){
-        const Core::GpuUploadBlobId meshViewBlob = m_graph.copyUploadData(
-            &meshViewState,
-            sizeof(meshViewState),
-            alignof(ECSRenderDetail::MeshViewGpuData)
-        );
+        const Core::GpuUploadBlobId meshViewBlob = m_graph.copyUploadData(&meshViewState, sizeof(meshViewState), alignof(ECSRenderDetail::MeshViewGpuData));
         Core::GpuTaskDesc meshViewUploadDesc;
-        meshViewUploadDesc
-            .setIdentity(Name("render.graphics_prefix.mesh_view_upload"))
-            .setMarkerLabel("Mesh View Upload")
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&result.meshViewSetupTask, 1u)
-        ;
+        meshViewUploadDesc.setIdentity(Name("render.graphics_prefix.mesh_view_upload")).setMarkerLabel("Mesh View Upload").setScheduling(immutableUploadScheduling).setDependencies(&result.meshViewSetupTask, 1u);
         meshViewUploadTask = meshViewBlob.valid()
             ? m_graph.addUploadBufferTask(
                 meshViewUploadDesc,
                 Core::GpuUploadBufferTaskDesc{
                     .source = meshViewBlob,
                     .destination = inputs.meshView,
-                    // The backing buffer deliberately restores Common when a native packet closes.  Declare that
-                    // exact graph-visible boundary here; the G-buffer consumer below owns the Common ->
-                    // ConstantBuffer transition.
-                    .finalState = Core::ResourceStates::Common,
-                }
-            )
-            : Core::GpuTaskId{}
-        ;
+                    // The backing buffer deliberately restores Common when a native packet closes.
+                    // Declare that exact graph-visible boundary here; the G-buffer consumer below owns the Common -> ConstantBuffer transition.
+                    .finalState = Core::ResourceStates::Common, }) : Core::GpuTaskId{};
         if(!meshViewUploadTask.valid())
             return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskSchedulingHint meshViewCommitScheduling = immutableUploadScheduling;
     Core::GpuTaskDesc meshViewCommitDesc;
-    meshViewCommitDesc
-        .setIdentity(Name("render.graphics_prefix.mesh_view_upload_commit"))
-        .setMarkerLabel("Mesh View Upload Commit")
-        .setScheduling(meshViewCommitScheduling)
-        .setDependencies(&meshViewUploadTask, 1u)
-    ;
+    meshViewCommitDesc.setIdentity(Name("render.graphics_prefix.mesh_view_upload_commit")).setMarkerLabel("Mesh View Upload Commit").setScheduling(meshViewCommitScheduling).setDependencies(&meshViewUploadTask, 1u);
     const Core::GpuTaskId meshViewCommitTask = m_graph.addTask<ECSRenderDetail::MeshViewUploadCommitGraphTask>(
         meshViewCommitDesc,
-        ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{
-            .meshSystem = m_meshSystem,
-            .viewState = meshViewState,
-            .uploadRequired = meshViewUploadRequired,
-            .ready = *inputs.meshViewSetupReady,
-        }
+        ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{ .meshSystem = m_meshSystem, .viewState = meshViewState, .uploadRequired = meshViewUploadRequired, .ready = *inputs.meshViewSetupReady, }
     );
     if(!meshViewCommitTask.valid())
         return MakeUnexpected(Failure{});
@@ -158,61 +119,34 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     Core::GpuTaskId sceneUploadTask = meshViewCommitTask;
     if(sceneLightUploadRequired){
         const usize sceneLightByteCount = static_cast<usize>(sceneLightCount) * sizeof(sceneLightData[0u]);
-        const Core::GpuUploadBlobId sceneLightBlob = m_graph.copyUploadData(
-            sceneLightData,
-            sceneLightByteCount,
-            alignof(ECSRenderDetail::SceneLightGpuData)
-        );
+        const Core::GpuUploadBlobId sceneLightBlob = m_graph.copyUploadData(sceneLightData, sceneLightByteCount, alignof(ECSRenderDetail::SceneLightGpuData));
         Core::GpuTaskDesc sceneLightUploadDesc;
-        sceneLightUploadDesc
-            .setIdentity(Name("render.graphics_prefix.scene_lights_upload"))
-            .setMarkerLabel("Scene Lights Upload")
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&sceneUploadTask, 1u)
-        ;
+        sceneLightUploadDesc.setIdentity(Name("render.graphics_prefix.scene_lights_upload")).setMarkerLabel("Scene Lights Upload").setScheduling(immutableUploadScheduling).setDependencies(&sceneUploadTask, 1u);
         sceneUploadTask = sceneLightBlob.valid()
             ? m_graph.addUploadBufferTask(
                 sceneLightUploadDesc,
                 Core::GpuUploadBufferTaskDesc{
                     .source = sceneLightBlob,
                     .destination = inputs.lights,
-                    // These shared frame buffers retain Common between native packets.  The first declared reader
-                    // owns the transition to ShaderResource.
-                    .finalState = Core::ResourceStates::Common,
-                }
-            )
-            : Core::GpuTaskId{}
-        ;
+                    // These shared frame buffers retain Common between native packets.
+                    // The first declared reader owns the transition to ShaderResource.
+                    .finalState = Core::ResourceStates::Common, }) : Core::GpuTaskId{};
         if(!sceneUploadTask.valid())
             return MakeUnexpected(Failure{});
     }
 
     if(sceneShadingUploadRequired){
-        const Core::GpuUploadBlobId sceneShadingBlob = m_graph.copyUploadData(
-            &sceneShadingState,
-            sizeof(sceneShadingState),
-            alignof(ECSRenderDetail::SceneShadingGpuData)
-        );
+        const Core::GpuUploadBlobId sceneShadingBlob = m_graph.copyUploadData(&sceneShadingState, sizeof(sceneShadingState), alignof(ECSRenderDetail::SceneShadingGpuData));
         Core::GpuTaskDesc sceneShadingUploadDesc;
-        sceneShadingUploadDesc
-            .setIdentity(Name("render.graphics_prefix.scene_shading_upload"))
-            .setMarkerLabel("Scene Shading Upload")
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&sceneUploadTask, 1u)
-        ;
+        sceneShadingUploadDesc.setIdentity(Name("render.graphics_prefix.scene_shading_upload")).setMarkerLabel("Scene Shading Upload").setScheduling(immutableUploadScheduling).setDependencies(&sceneUploadTask, 1u);
         sceneUploadTask = sceneShadingBlob.valid()
             ? m_graph.addUploadBufferTask(
                 sceneShadingUploadDesc,
                 Core::GpuUploadBufferTaskDesc{
                     .source = sceneShadingBlob,
                     .destination = inputs.sceneShading,
-                    // See the light upload above: preserve the resource's automatic Common boundary and let the
-                    // first declared reader lower its ConstantBuffer transition.
-                    .finalState = Core::ResourceStates::Common,
-                }
-            )
-            : Core::GpuTaskId{}
-        ;
+                    // See the light upload above: preserve the resource's automatic Common boundary and let the first declared reader lower its ConstantBuffer transition.
+                    .finalState = Core::ResourceStates::Common, }) : Core::GpuTaskId{};
         if(!sceneUploadTask.valid())
             return MakeUnexpected(Failure{});
     }
@@ -223,41 +157,18 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     sceneShadingSetupScheduling.allowPacketMerge = true;
     sceneShadingSetupScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc sceneShadingSetupDesc;
-    sceneShadingSetupDesc
-        .setIdentity(Name("render.graphics_prefix.scene_shading_setup"))
-        .setMarkerLabel("Scene Shading Setup")
-        .setScheduling(sceneShadingSetupScheduling)
-        .setDependencies(&sceneUploadTask, 1u)
-    ;
-    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload{
-        .deferredSystem = m_deferredSystem,
-        .timingTicket = *inputs.sceneShadingSetupTimingTicket,
-        .ready = *inputs.sceneShadingSetupReady,
-        .sceneShadingState = sceneShadingState,
-    };
-    NWB_MEMCPY(
-        sceneShadingSetupPayload.lightData,
-        sizeof(sceneShadingSetupPayload.lightData),
-        sceneLightData,
-        sizeof(sceneLightData)
-    );
+    sceneShadingSetupDesc.setIdentity(Name("render.graphics_prefix.scene_shading_setup")).setMarkerLabel("Scene Shading Setup").setScheduling(sceneShadingSetupScheduling).setDependencies(&sceneUploadTask, 1u);
+    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload{ .deferredSystem = m_deferredSystem, .timingTicket = *inputs.sceneShadingSetupTimingTicket, .ready = *inputs.sceneShadingSetupReady, .sceneShadingState = sceneShadingState, };
+    NWB_MEMCPY(sceneShadingSetupPayload.lightData, sizeof(sceneShadingSetupPayload.lightData), sceneLightData, sizeof(sceneLightData));
     sceneShadingSetupPayload.lightCount = sceneLightCount;
     sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;
     sceneShadingSetupPayload.sceneShadingUploadRequired = sceneShadingUploadRequired;
-    result.sceneShadingSetupTask = m_graph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(
-        sceneShadingSetupDesc,
-        Move(sceneShadingSetupPayload)
-    );
+    result.sceneShadingSetupTask = m_graph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(sceneShadingSetupDesc, Move(sceneShadingSetupPayload));
     if(!result.sceneShadingSetupTask.valid())
         return MakeUnexpected(Failure{});
     result.tailTask = result.sceneShadingSetupTask;
     result.lightingClassification = rayTracingLightingClassification;
-    NWB_MEMCPY(
-        result.lightData,
-        sizeof(result.lightData),
-        sceneLightData,
-        sizeof(sceneLightData)
-    );
+    NWB_MEMCPY(result.lightData, sizeof(result.lightData), sceneLightData, sizeof(sceneLightData));
     result.lightCount = sceneLightCount;
     return result;
 }

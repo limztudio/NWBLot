@@ -50,27 +50,17 @@ bool ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::R
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: unknown selection"));
         return false;
     }
-    if(
-        settings.traceMode != Impl::ReflectionTraceMode::Hardware || !settings.diagnosticsEnabled
-        || !settings.temporalEnabled || settings.temporalMaxSamples != 1u
-        || !settings.spatialFilterEnabled || settings.screenFeedbackEnabled
-    ){
+    if(settings.traceMode != Impl::ReflectionTraceMode::Hardware || !settings.diagnosticsEnabled || !settings.temporalEnabled || settings.temporalMaxSamples != 1u || !settings.spatialFilterEnabled || settings.screenFeedbackEnabled){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires hardware, diagnostics, spatial, temporal cap1 and feedback off"));
         return false;
     }
     settings.spatialRadius = m_radii[0];
     settings.samplingSeed = 99u;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}")
-        , StringConvert(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}"), StringConvert(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u);
     return true;
 }
 
-bool ReflectionSpatialOwnerProbe::update(
-    const Impl::ReflectionStatistics& statistics,
-    const Core::Perf::TimingView& timing,
-    Impl::ReflectionSettings& settings
-){
+bool ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings){
     if(!observeTiming(timing))
         return false;
     if(m_finalReset || statistics.sequence == 0u || !statistics.hardwareReady || !statistics.historyEligible)
@@ -104,9 +94,7 @@ bool ReflectionSpatialOwnerProbe::update(
     }
     m_finalSource = m_context.graphics.getFrameIndex();
     m_finalReset = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerCapture: radius={} graphics_frame={} seed=0")
-        , settings.spatialRadius, m_finalSource
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerCapture: radius={} graphics_frame={} seed=0"), settings.spatialRadius, m_finalSource);
     return true;
 }
 
@@ -123,28 +111,18 @@ bool ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& ti
     const Core::Perf::TimingStats& work = timing.stats(Impl::ReflectionGpuTimingScope::s_Spatial.identity);
     if(!work.valid() || (m_hasPublication && work.publishFrameIndex == m_lastPublish))
         return true;
-    if(
-        (m_hasPublication && work.publishFrameIndex < m_lastPublish)
-        || work.firstSampleFrameIndex > work.lastSampleFrameIndex
-        || work.sampleCount > work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u
-        || !IsFinite(work.seconds) || work.seconds < 0.0
-    ){
+    if((m_hasPublication && work.publishFrameIndex < m_lastPublish) || work.firstSampleFrameIndex > work.lastSampleFrameIndex || work.sampleCount > work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u || !IsFinite(work.seconds) || work.seconds < 0.0){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: invalid completed spatial window"));
         return false;
     }
     m_hasPublication = true;
     m_lastPublish = work.publishFrameIndex;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}")
-        , work.publishFrameIndex, work.firstSampleFrameIndex, work.lastSampleFrameIndex, work.sampleCount
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}"), work.publishFrameIndex, work.firstSampleFrameIndex, work.lastSampleFrameIndex, work.sampleCount);
     if(m_started && !m_finalReset && !m_phaseWork.valid() && work.firstSampleFrameIndex >= m_phaseSource)
         m_phaseWork = work;
-    // There is exactly one spatial range per rendered frame. A dense inclusive window proves the captured source
-    // owns a completed range even when several source frames are published together.
-    if(
-        m_finalReset && work.firstSampleFrameIndex <= m_finalSource && work.lastSampleFrameIndex >= m_finalSource
-        && work.sampleCount == work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u
-    )
+    // There is exactly one spatial range per rendered frame.
+    // A dense inclusive window proves the captured source owns a completed range even when several source frames are published together.
+    if(m_finalReset && work.firstSampleFrameIndex <= m_finalSource && work.lastSampleFrameIndex >= m_finalSource && work.sampleCount == work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u)
         m_captureWork = work;
     return true;
 }
@@ -159,9 +137,7 @@ bool ReflectionSpatialOwnerProbe::beginPhase(Impl::ReflectionSettings& settings)
     m_phaseSource = m_context.graphics.getFrameIndex();
     m_phaseWork = {};
     m_started = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerPhase: index={} radius={} seed={} graphics_frame={}")
-        , m_phase, settings.spatialRadius, settings.samplingSeed, m_phaseSource
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerPhase: index={} radius={} seed={} graphics_frame={}"), m_phase, settings.spatialRadius, settings.samplingSeed, m_phaseSource);
     return true;
 }
 

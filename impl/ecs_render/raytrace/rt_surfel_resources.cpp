@@ -27,14 +27,7 @@ bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets
     // Deferred lighting samples resolved surfel GI, never the writable pool.
     targets.surfelIrradianceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc surfelIrradianceDesc;
-    surfelIrradianceDesc
-        .setWidth(targets.width)
-        .setHeight(targets.height)
-        .setFormat(targets.surfelIrradianceFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        .setName("engine/gi/surfel_irradiance")
-    ;
+    surfelIrradianceDesc.setWidth(targets.width).setHeight(targets.height).setFormat(targets.surfelIrradianceFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/gi/surfel_irradiance");
     targets.surfelIrradiance = m_graphics.createTexture(surfelIrradianceDesc);
     if(!targets.surfelIrradiance){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel irradiance target"));
@@ -43,14 +36,7 @@ bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets
 
     // Transient reduced-resolution surfel resolve input.
     Core::TextureDesc surfelIrradianceHalfDesc;
-    surfelIrradianceHalfDesc
-        .setWidth(resolveSize.width)
-        .setHeight(resolveSize.height)
-        .setFormat(targets.surfelIrradianceFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/gi/surfel_irradiance_half")
-    ;
+    surfelIrradianceHalfDesc.setWidth(resolveSize.width).setHeight(resolveSize.height).setFormat(targets.surfelIrradianceFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/gi/surfel_irradiance_half");
     targets.surfelIrradianceHalf = m_graphics.createTexture(surfelIrradianceHalfDesc);
     if(!targets.surfelIrradianceHalf){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel reduced-resolution irradiance target"));
@@ -93,12 +79,7 @@ bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
 }
 
 bool RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const noexcept{
-    return hasSurfelWork()
-        && m_rayTracingState.m_surfelCounterBuffer
-        && m_rayTracingState.m_surfelCounterReadback
-        && !m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid()
-        && (m_rayTracingState.m_surfelFrameIndex % s_SurfelCountLogInterval) == 0u
-    ;
+    return hasSurfelWork() && m_rayTracingState.m_surfelCounterBuffer && m_rayTracingState.m_surfelCounterReadback && !m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid() && (m_rayTracingState.m_surfelFrameIndex % s_SurfelCountLogInterval) == 0u;
 }
 
 void RendererRayTracingSystem::markSurfelCountReadbackScheduled()noexcept{
@@ -118,11 +99,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
         return false;
 
     // GI consumes the same selector descriptor as the other current ray effects.
-    if(
-        !targets.bindless.valid()
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !ensureRayTraceMaterialContextSlotsHeapHandle()
-    ){
+    if(!targets.bindless.valid() || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer) || !ensureRayTraceMaterialContextSlotsHeapHandle()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
         return false;
     }
@@ -130,10 +107,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
     return true;
 }
 
-Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(
-    Core::GpuTaskGraph& graph,
-    const DeferredFrameTargets& targets
-)const{
+Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(Core::GpuTaskGraph& graph, const DeferredFrameTargets& targets)const{
     Core::GpuUploadBlobId blob;
     if(!hasSurfelWork())
         return blob;
@@ -143,11 +117,7 @@ Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedSurfelFr
     }
 
     const NwbSurfelConstantsGpu params = BuildSurfelFrameConstants(m_rayTracingState, targets);
-    blob = graph.copyUploadData(
-        &params,
-        sizeof(params),
-        alignof(NwbSurfelConstantsGpu)
-    );
+    blob = graph.copyUploadData(&params, sizeof(params), alignof(NwbSurfelConstantsGpu));
     if(!(blob.valid()))
         return MakeUnexpected(Failure{});
     return blob;

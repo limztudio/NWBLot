@@ -51,10 +51,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& tar
     targets = DeferredFrameTargets{};
 }
 
-Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTargets(
-    const u32 width,
-    const u32 height
-){
+Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height){
     if(width == 0 || height == 0)
         return MakeUnexpected(Failure{});
 
@@ -138,10 +135,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setFormat(createdTargets.albedoFormat)
         .setInRenderTarget(true)
         // AsyncCompute lighting samples every G-buffer attachment after Graphics AVBOIT; keep their sharing concurrent.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/deferred/gbuffer_albedo")
-        .setClearValue(ECSRenderDetail::s_ClearColor)
-    ;
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/gbuffer_albedo").setClearValue(ECSRenderDetail::s_ClearColor);
     createdTargets.albedo = m_graphics.createTexture(albedoDesc);
     if(!createdTargets.albedo){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
@@ -233,14 +227,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     }
 
     Core::TextureDesc depthDesc;
-    depthDesc
-        .setWidth(createdTargets.width)
-        .setHeight(createdTargets.height)
-        .setFormat(createdTargets.depthFormat)
-        .setInRenderTarget(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/deferred/depth")
-    ;
+    depthDesc.setWidth(createdTargets.width).setHeight(createdTargets.height).setFormat(createdTargets.depthFormat).setInRenderTarget(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/depth");
     createdTargets.depth = m_graphics.createTexture(depthDesc);
     if(!createdTargets.depth){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
@@ -248,22 +235,10 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     }
 
     Core::FramebufferAttachment gbufferAttachments[NWB_MESH_GBUFFER_TARGET_COUNT] = {};
-    gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION]
-        .setTexture(createdTargets.albedo.get())
-        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
-    ;
-    gbufferAttachments[NWB_MESH_GBUFFER_NORMAL_LOCATION]
-        .setTexture(createdTargets.normal.get())
-        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
-    ;
-    gbufferAttachments[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION]
-        .setTexture(createdTargets.worldPosition.get())
-        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
-    ;
-    gbufferAttachments[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION]
-        .setTexture(createdTargets.specularRoughness.get())
-        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
-    ;
+    gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION].setTexture(createdTargets.albedo.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
+    gbufferAttachments[NWB_MESH_GBUFFER_NORMAL_LOCATION].setTexture(createdTargets.normal.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
+    gbufferAttachments[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION].setTexture(createdTargets.worldPosition.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
+    gbufferAttachments[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION].setTexture(createdTargets.specularRoughness.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
     Core::FramebufferDesc framebufferDesc;
     for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
         framebufferDesc.addColorAttachment(attachment);
@@ -277,10 +252,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     return createdTargets;
 }
 
-bool RendererDeferredSystem::createDeferredFrameTargetResources(
-    DeferredFrameTargets& targets,
-    Core::Sampler& avboitLinearSampler
-){
+bool RendererDeferredSystem::createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler){
     if(!createDeferredBindlessFrameResources(targets, avboitLinearSampler))
         return false;
     if(createLaggedLightingHistoryResources(targets))

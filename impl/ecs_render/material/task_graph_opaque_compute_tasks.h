@@ -38,10 +38,8 @@ namespace ECSRenderDetail{
 struct OpaqueRegularComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The material system, the frame targets, the timing-ticket slot, and the setup readiness flags
-    // are required: compute emulation always generates against this frame's bindings. References (not
-    // nullable pointers) carry those bindings so a missing binding fails at declaration time instead
-    // of silently returning `false` inside Record.
+    // The material system, the frame targets, the timing-ticket slot, and the setup readiness flags are required: compute emulation always generates against this frame's bindings.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
@@ -56,21 +54,10 @@ struct OpaqueRegularComputeEmulationGraphTask{
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
 
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererMaterialSystem& materialSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const bool& meshViewSetupReadyIn,
-            const bool& sceneShadingSetupReadyIn
-        );
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const bool& meshViewSetupReadyIn, const bool& sceneShadingSetupReadyIn);
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -83,10 +70,8 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         };
     };
 
-    // The material system, the frame targets, the timing-ticket slot, the setup readiness flags, and
-    // the opaque timing slot are required: shared emulation always brackets its phase with the frame
-    // timing. References (not nullable pointers) carry those bindings so a missing binding fails at
-    // declaration time instead of silently returning `false` inside Record.
+    // The material system, the frame targets, the timing-ticket slot, the setup readiness flags, and the opaque timing slot are required: shared emulation always brackets its phase with the frame timing.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
@@ -110,11 +95,7 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);

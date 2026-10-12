@@ -142,11 +142,7 @@ bool RendererCompilerStatisticsProbe::write()const{
             }
             for(usize previous = 0u; previous < index; ++previous){
                 const Sample& prior = m_samples[previous];
-                if(
-                    prior.valid && prior.compile.graphGeneration == sample.compile.graphGeneration
-                    && prior.compile.planGeneration == sample.compile.planGeneration
-                    && prior.compile.deviceGeneration == sample.compile.deviceGeneration
-                ){
+                if(prior.valid && prior.compile.graphGeneration == sample.compile.graphGeneration && prior.compile.planGeneration == sample.compile.planGeneration && prior.compile.deviceGeneration == sample.compile.deviceGeneration){
                     status = "duplicate_plan";
                     break;
                 }
@@ -154,8 +150,7 @@ bool RendererCompilerStatisticsProbe::write()const{
         }
         if(index != 0u && sample.sourceFrame <= m_samples[index - 1u].sourceFrame)
             status = "non_monotonic_frame";
-        output << "{\"type\":\"compiler_statistics\",\"sequence\":" << index
-            << ",\"source_frame\":" << sample.sourceFrame << ",\"status\":\"" << status << '\"';
+        output << "{\"type\":\"compiler_statistics\",\"sequence\":" << index << ",\"source_frame\":" << sample.sourceFrame << ",\"status\":\"" << status << '\"';
         if(status == "valid"){
             output << ",\"identity\":{\"graph_generation\":" << sample.compile.graphGeneration
                 << ",\"plan_generation\":" << sample.compile.planGeneration
@@ -176,10 +171,7 @@ bool RendererCompilerStatisticsProbe::write()const{
                 first = false;
                 output << '\"' << field.name << "\":" << sample.compile.*field.member;
             }
-            output << "},\"submission\":{\"accepted_packets\":" << sample.acceptedPackets
-                << ",\"accepted_tasks\":" << sample.acceptedTasks
-                << ",\"rejected_packets\":" << sample.rejectedPackets
-                << ",\"rejected_tasks\":" << sample.rejectedTasks << '}';
+            output << "},\"submission\":{\"accepted_packets\":" << sample.acceptedPackets << ",\"accepted_tasks\":" << sample.acceptedTasks << ",\"rejected_packets\":" << sample.rejectedPackets << ",\"rejected_tasks\":" << sample.rejectedTasks << '}';
         }
         else
             ++invalid;
@@ -187,9 +179,7 @@ bool RendererCompilerStatisticsProbe::write()const{
     }
     const u64 overflow = m_attempts - m_samples.size();
     const bool complete = !m_samples.empty() && overflow == 0u;
-    output << "{\"type\":\"compiler_statistics_complete\",\"attempts\":" << m_attempts
-        << ",\"stored\":" << m_samples.size() << ",\"overflow\":" << overflow
-        << ",\"invalid\":" << invalid << ",\"complete\":" << (complete ? "true" : "false") << "}\n";
+    output << "{\"type\":\"compiler_statistics_complete\",\"attempts\":" << m_attempts << ",\"stored\":" << m_samples.size() << ",\"overflow\":" << overflow << ",\"invalid\":" << invalid << ",\"complete\":" << (complete ? "true" : "false") << "}\n";
     output.flush();
     return output.good() && complete;
 }

@@ -52,9 +52,7 @@ private:
         const auto hardware = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
         const bool hardwareEnabled = !hardware || *hardware != 0.0f;
         renderer.setRefractionHardwareTracingEnabled(hardwareEnabled);
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
         return world;
     }
 
@@ -74,12 +72,8 @@ private:
         }
     }
 
-    NWB::Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& tint,
-        const Float4& position, const Float4& scale
-    ){
-        const auto entity = CreateTintedStaticMeshEntity(
-            *m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale
-        );
+    NWB::Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale){
+        const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         // The plane starts in XZ with a +Y normal; face the camera along -Z.
@@ -99,42 +93,27 @@ public:
 
         const auto galleryCase = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFRACTION_SMOKE_CASE");
         if(galleryCase)
-            return CreateRefractionGalleryScene(
-                m_context, *m_world, AStringView(galleryCase->data(), galleryCase->size()),
-                ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY")
-            );
+            return CreateRefractionGalleryScene(m_context, *m_world, AStringView(galleryCase->data(), galleryCase->size()), ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY"));
 
         const auto camera = CreateSmokeCamera(*m_world, 1.4f, 6.0f, 0.0f);
-        // The production TLAS is shared with shadow preparation. A light exercises
-        // that normal preparation path; the unlit material ignores its radiance.
-        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(
-            *m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f
-        );
-        const auto glass = CreateTintedStaticMeshEntity(
-            *m_world, m_context.objectArena, s_SphereMesh, s_ClearMaterial, s_MaterialInterface,
-            Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f),
-            Float4(1.15f, 1.15f, 1.15f, 0.0f)
-        );
+        // The production TLAS is shared with shadow preparation.
+        // A light exercises that normal preparation path; the unlit material ignores its radiance.
+        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+        const auto glass = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_SphereMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f));
         NWB_FATAL_ASSERT_MSG(camera.valid() && glass.valid() && light.valid(), NWB_TEXT("RefractionSmokeProject: camera/glass/light creation failed"));
 
-        // Fixed opaque stripes make displaced edges measurable. Unlit materials
-        // keep the comparison independent of GI, shadows, and caustic histories.
+        // Fixed opaque stripes make displaced edges measurable.
+        // Unlit materials keep the comparison independent of GI, shadows, and caustic histories.
         for(u32 stripe = 0u; stripe < 20u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
-            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f),
-                Float4(-2.85f + static_cast<f32>(stripe) * 0.3f, 1.4f, 2.8f, 0.0f),
-                Float4(0.15f, 1.0f, 2.0f, 0.0f));
+            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(-2.85f + static_cast<f32>(stripe) * 0.3f, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 2.0f, 0.0f));
         }
-        // Red foreground transparency must stay straight across the glass. The
-        // blue strip is behind it and participates in the transmitted background.
-        createPanel(s_TransparentMaterial, Float4(1.0f, 0.025f, 0.025f, 0.75f),
-            Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(1.6f, 1.0f, 0.08f, 0.0f));
-        createPanel(s_TransparentMaterial, Float4(0.025f, 0.1f, 1.0f, 0.70f),
-            Float4(0.0f, 1.9f, 1.6f, 0.0f), Float4(2.0f, 1.0f, 0.12f, 0.0f));
+        // Red foreground transparency must stay straight across the glass.
+        // The blue strip is behind it and participates in the transmitted background.
+        createPanel(s_TransparentMaterial, Float4(1.0f, 0.025f, 0.025f, 0.75f), Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(1.6f, 1.0f, 0.08f, 0.0f));
+        createPanel(s_TransparentMaterial, Float4(0.025f, 0.1f, 1.0f, 0.70f), Float4(0.0f, 1.9f, 1.6f, 0.0f), Float4(2.0f, 1.0f, 0.12f, 0.0f));
 
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created")
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created"));
         return true;
     }
 

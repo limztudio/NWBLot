@@ -106,23 +106,18 @@ private:
 
 
 public:
-    UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context,
-        Core::ITextInputService& textInput, Core::IClipboardService& clipboard);
+    UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard);
     virtual ~UiEditBoxHost()override;
 
 
 public:
-    [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, Ui::EditModel& model,
-        const Ui::EditBoxOptions& options)override;
-    [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model,
-        const Ui::EditBoxOptions& options, const Ui::PopupToken& popup)override;
-    [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, Ui::EditModel& model,
-        const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions)override;
+    [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options)override;
+    [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup)override;
+    [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions)override;
     [[nodiscard]] virtual Ui::EditBoxResult editNavigated(const Ui::WidgetState& widget, Ui::EditModel& model,
         const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
         Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions)override;
-    [[nodiscard]] virtual bool publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
-        const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
+    [[nodiscard]] virtual bool publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
     void beginFrame(u64 generation, const Ui::DisplayMetrics& display);
     void finishFrame();
     void commitFrame(u64 generation);
@@ -142,15 +137,10 @@ private:
     [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
     [[nodiscard]] bool append(Event&& event);
     void discard(const UiTextEditOwner& owner);
-    [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model,
-        const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions,
-        NavigationBorrow* navigation = nullptr);
-    [[nodiscard]] bool apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-        Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
-    [[nodiscard]] bool applyNavigation(Ui::EditModel& model, const Event& event, NavigationBorrow& navigation,
-        Ui::EditNavigationDirection::Enum direction);
-    [[nodiscard]] bool applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-        Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
+    [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
+    [[nodiscard]] bool apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
+    [[nodiscard]] bool applyNavigation(Ui::EditModel& model, const Event& event, NavigationBorrow& navigation, Ui::EditNavigationDirection::Enum direction);
+    [[nodiscard]] bool applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
     [[nodiscard]] bool rejectBorrowedMutation()noexcept;
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
     void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);

@@ -51,10 +51,7 @@ void nwbSwShadowTraceSoft(const uint3 dispatchThreadID){
 #endif
         half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < sampleCount; ++s){
-            const float2 sampleJitter = nwbShadowLowDiscrepancy2D(
-                halfPixel,
-                g_NwbSwShadowPush.frameIndex * NWB_SW_SHADOW_SOFT_TRACE_SPP + s + NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT
-            );
+            const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbSwShadowPush.frameIndex * NWB_SW_SHADOW_SOFT_TRACE_SPP + s + NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT);
             accum += nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], sampleJitter);
         }
         const half3 transmittance = accum * half(1.0 / float(sampleCount));

@@ -30,11 +30,7 @@ namespace __hidden_task_graph_light_space_shadow{
 
 
 // Capture needs one simultaneous SRV/index state for each canonical buffer. Separate set uses would describe successive states.
-[[nodiscard]] bool GatherCaptureReads(
-    const Core::GpuTaskGraph& graph,
-    const LightSpaceShadowGraphInputs& inputs,
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses
-){
+[[nodiscard]] bool GatherCaptureReads(const Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses){
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!declarations.valid())
         return false;
@@ -66,10 +62,7 @@ namespace __hidden_task_graph_light_space_shadow{
         const Core::GpuTaskResourceSetUse& use = inputs.sceneReadSets[index];
         const Core::GpuTaskGraphResourceSetView members = declarations.resourceSetAt(use.resourceSet.index);
         for(usize member = 0u; member < members.memberCount; ++member){
-            appendRead(Core::GpuTaskResourceUse{
-                .resource = members.members[member], .range = use.range, .requiredState = use.requiredState,
-                .access = use.access, .hasIndependentStateSource = use.hasIndependentStateSource,
-            });
+            appendRead(Core::GpuTaskResourceUse{ .resource = members.members[member], .range = use.range, .requiredState = use.requiredState, .access = use.access, .hasIndependentStateSource = use.hasIndependentStateSource, });
         }
     }
     for(usize index = 0u; index < inputs.snapshot.casterCount; ++index){
@@ -98,9 +91,7 @@ struct ViewTask{
             return false;
         if(!payload.shadowPrepared)
             return true;
-        Core::GpuTimingMeasure timing(
-            payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowViews, payload.graphics.getDevice(), commandList
-        );
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowViews, payload.graphics.getDevice(), commandList);
 
         return RecordLightSpaceViews(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.snapshot);
     }
@@ -116,9 +107,7 @@ struct ShadeTask{
             return false;
         if(!payload.shadowPrepared)
             return true;
-        Core::GpuTimingMeasure timing(
-            payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowShade, payload.graphics.getDevice(), commandList
-        );
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowShade, payload.graphics.getDevice(), commandList);
 
         if(!RecordLightSpaceShade(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.snapshot))
             return false;
@@ -129,9 +118,7 @@ struct ShadeTask{
 };
 
 struct DiagnosticTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
-        Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
-    };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
 
     struct Payload{
         const bool& shadowPrepared;
@@ -198,9 +185,7 @@ struct CullTask{
             return false;
         if(!payload.shadowPrepared)
             return true;
-        Core::GpuTimingMeasure timing(
-            payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowCull, payload.graphics.getDevice(), commandList
-        );
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowCull, payload.graphics.getDevice(), commandList);
 
         return RecordLightSpaceCull(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.frozenSnapshot());
     }
@@ -224,14 +209,11 @@ struct CaptureTask{
         if(!payload.shadowPrepared)
             return true;
         const LightSpaceShadowSnapshot snapshot = payload.frozenSnapshot();
-        const auto& scope = payload.transparent
-            ? RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture : RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture;
+        const auto& scope = payload.transparent ? RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture : RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture;
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), scope, payload.graphics.getDevice(), commandList);
 
         for(u32 view = 0u; view < snapshot.plan.viewCount; ++view){
-            if(!RecordLightSpaceCapture(
-                commandList, payload.graphics.getDevice().getDescriptorHeap(), snapshot, view, payload.transparent
-            ))
+            if(!RecordLightSpaceCapture(commandList, payload.graphics.getDevice().getDescriptorHeap(), snapshot, view, payload.transparent))
                 return false;
         }
         return true;
@@ -248,11 +230,7 @@ struct CaptureTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(
-    Core::GpuTaskGraph& graph,
-    const LightSpaceShadowGraphInputs& inputs,
-    const Core::GpuGraphResourceId context
-){
+Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, const Core::GpuGraphResourceId context){
     using namespace RendererTaskGraphDetail;
     const auto& snapshot = inputs.snapshot;
     if(!snapshot.ready || !snapshot.diagnostics || !snapshot.diagnosticReadback || !inputs.dependency.valid() || !context.valid())
@@ -262,10 +240,7 @@ Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(
             .setInitialState(Core::ResourceStates::CopyDest).setExternalFinalState(Core::ResourceStates::CopyDest));
     if(!readback.valid())
         return {};
-    const Core::GpuTaskResourceUse uses[]{
-        ReadWriteUse(context, Core::ResourceStates::UnorderedAccess),
-        WriteUse(readback, Core::ResourceStates::CopyDest),
-    };
+    const Core::GpuTaskResourceUse uses[]{ ReadWriteUse(context, Core::ResourceStates::UnorderedAccess), WriteUse(readback, Core::ResourceStates::CopyDest), };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.allowPacketMerge = true;
@@ -282,9 +257,7 @@ Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(
         .setResourceUses(uses, LengthOf(uses))
     ;
     return graph.addTask<__hidden_task_graph_light_space_shadow::DiagnosticTask>(desc,
-        __hidden_task_graph_light_space_shadow::DiagnosticTask::Payload{
-            inputs.shadowPrepared, snapshot.csgContext, snapshot.diagnosticReadback, snapshot.diagnostics, snapshot.diagnosticFrame,
-        });
+        __hidden_task_graph_light_space_shadow::DiagnosticTask::Payload{ inputs.shadowPrepared, snapshot.csgContext, snapshot.diagnosticReadback, snapshot.diagnostics, snapshot.diagnosticFrame, });
 }
 
 
@@ -297,17 +270,14 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     if(!snapshot.ready || !inputs.dependency.valid() || !snapshot.casters || snapshot.casterCount == 0u)
         return {};
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return graph.importBuffer(buffer, BufferResourceDesc(identity, label)
-            .setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
+        return graph.importBuffer(buffer, BufferResourceDesc(identity, label).setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
     };
     LightSpaceShadowGraph result;
     result.counts = importBuffer(snapshot.counts, Name("render.light_space_shadow.counts"), "Light-Space Crossing Counts");
     result.events = importBuffer(snapshot.events, Name("render.light_space_shadow.events"), "Light-Space Crossings");
     result.views = importBuffer(snapshot.views, Name("render.light_space_shadow.views"), "Light-Space Views");
     // Opaque capture clears every layer. Unknown preserves fresh Undefined; accepted state sources retain native states.
-    result.depth = graph.importTexture(snapshot.depth,
-        TextureResourceDesc(Name("render.light_space_shadow.depth"), "Light-Space Opaque Depth")
-            .setInitialState(Core::ResourceStates::Unknown).setExternalFinalState(Core::ResourceStates::Common));
+    result.depth = graph.importTexture(snapshot.depth, TextureResourceDesc(Name("render.light_space_shadow.depth"), "Light-Space Opaque Depth").setInitialState(Core::ResourceStates::Unknown).setExternalFinalState(Core::ResourceStates::Common));
     if(!result.counts.valid() || !result.events.valid() || !result.views.valid() || !result.depth.valid())
         return {};
     const bool csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
@@ -326,9 +296,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     result.drawArguments = importBuffer(snapshot.drawArguments, Name("render.light_space_shadow.draw_arguments"), "Light-Space Draw Arguments");
     if(!result.drawArguments.valid())
         return {};
-    const Core::GpuUploadBlobId upload = graph.copyUploadData(
-        snapshot.plan.views.data(), snapshot.plan.viewCount * sizeof(LightSpaceViewGpu), alignof(u32)
-    );
+    const Core::GpuUploadBlobId upload = graph.copyUploadData(snapshot.plan.views.data(), snapshot.plan.viewCount * sizeof(LightSpaceViewGpu), alignof(u32));
     if(!upload.valid())
         return {};
     Core::GpuTaskSchedulingHint scheduling;
@@ -337,13 +305,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc uploadDesc;
-    uploadDesc
-        .setIdentity(Name("render.light_space_shadow.view_upload"))
-        .setMarkerLabel("Light-Space View Upload")
-        .setScheduling(scheduling)
-        .setDependencies(&inputs.dependency, 1u)
-        .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
-    ;
+    uploadDesc.setIdentity(Name("render.light_space_shadow.view_upload")).setMarkerLabel("Light-Space View Upload").setScheduling(scheduling).setDependencies(&inputs.dependency, 1u).setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
     Core::GpuTaskId csgUpload;
     if(csg){
         if(!snapshot.diagnostics || snapshot.csgContextByteCount < NWB_CSG_RAY_CONTEXT_BYTES)
@@ -363,42 +325,22 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         if(!initialize){
             // Retain accumulated failures across new captures until the bounded asynchronous readback observes them.
             constexpr u32 s_PayloadOffset = NWB_CSG_SHADOW_RAY_FAILURE_OFFSET + sizeof(u32);
-            const Core::GpuUploadBlobId payload = graph.copyUploadData(
-                snapshot.csgContextBytes + s_PayloadOffset, snapshot.csgContextByteCount - s_PayloadOffset, alignof(u32)
-            );
+            const Core::GpuUploadBlobId payload = graph.copyUploadData(snapshot.csgContextBytes + s_PayloadOffset, snapshot.csgContextByteCount - s_PayloadOffset, alignof(u32));
             if(!payload.valid())
                 return {};
-            uploadDesc.setIdentity(Name("render.light_space_shadow.csg_payload_upload")).setMarkerLabel("CSG Shadow Payload Upload")
-                .setDependencies(&csgUpload, 1u);
-            csgUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{
-                .source = payload, .destination = result.csgContext, .destinationOffsetBytes = s_PayloadOffset,
-                .finalState = Core::ResourceStates::Common,
-            });
+            uploadDesc.setIdentity(Name("render.light_space_shadow.csg_payload_upload")).setMarkerLabel("CSG Shadow Payload Upload").setDependencies(&csgUpload, 1u);
+            csgUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = payload, .destination = result.csgContext, .destinationOffsetBytes = s_PayloadOffset, .finalState = Core::ResourceStates::Common, });
             if(!csgUpload.valid())
                 return {};
         }
-        uploadDesc.setIdentity(Name("render.light_space_shadow.view_upload")).setMarkerLabel("Light-Space View Upload")
-            .setDependencies(&csgUpload, 1u);
+        uploadDesc.setIdentity(Name("render.light_space_shadow.view_upload")).setMarkerLabel("Light-Space View Upload").setDependencies(&csgUpload, 1u);
     }
-    result.viewUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{
-        .source = upload,
-        .destination = result.views,
-        .finalState = Core::ResourceStates::Common,
-    });
+    result.viewUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = upload, .destination = result.views, .finalState = Core::ResourceStates::Common, });
     if(!result.viewUpload.valid())
         return {};
     Core::GpuTaskDesc clearDesc;
-    clearDesc
-        .setIdentity(Name("render.light_space_shadow.counts_clear"))
-        .setMarkerLabel("Light-Space Crossing Clear")
-        .setScheduling(scheduling)
-        .setDependencies(&result.viewUpload, 1u)
-        .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
-    ;
-    result.countsClear = graph.addClearBufferTask(clearDesc, Core::GpuClearBufferTaskDesc{
-        .destination = result.counts,
-        .clearValue = 0u,
-    });
+    clearDesc.setIdentity(Name("render.light_space_shadow.counts_clear")).setMarkerLabel("Light-Space Crossing Clear").setScheduling(scheduling).setDependencies(&result.viewUpload, 1u).setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
+    result.countsClear = graph.addClearBufferTask(clearDesc, Core::GpuClearBufferTaskDesc{ .destination = result.counts, .clearValue = 0u, });
     if(!result.countsClear.valid())
         return {};
 
@@ -419,10 +361,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setResourceUses(uses.data(), uses.size())
         .setResourceSetUses(inputs.sceneReadSets, inputs.sceneReadSetCount)
     ;
-    result.viewFit = graph.addTask<__hidden_task_graph_light_space_shadow::ViewTask>(viewDesc,
-        __hidden_task_graph_light_space_shadow::ViewTask::Payload{
-            inputs.graphics, inputs.shadowPrepared, snapshot,
-        });
+    result.viewFit = graph.addTask<__hidden_task_graph_light_space_shadow::ViewTask>(viewDesc, __hidden_task_graph_light_space_shadow::ViewTask::Payload{ inputs.graphics, inputs.shadowPrepared, snapshot, });
     if(!result.viewFit.valid())
         return {};
 
@@ -460,8 +399,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setResourceUses(uses.data(), uses.size())
         .setResourceSetUses(inputs.sceneReadSets, inputs.sceneReadSetCount)
     ;
-    result.drawCull = graph.addTask<__hidden_task_graph_light_space_shadow::CullTask>(cullDesc,
-        __hidden_task_graph_light_space_shadow::CullTask::Payload(inputs));
+    result.drawCull = graph.addTask<__hidden_task_graph_light_space_shadow::CullTask>(cullDesc, __hidden_task_graph_light_space_shadow::CullTask::Payload(inputs));
     if(!result.drawCull.valid())
         return {};
 
@@ -483,8 +421,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
         .setResourceUses(uses.data(), uses.size())
     ;
-    result.opaqueCapture = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(opaqueDesc,
-        __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, false));
+    result.opaqueCapture = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(opaqueDesc, __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, false));
     if(!result.opaqueCapture.valid())
         return {};
 
@@ -501,8 +438,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
         .setResourceUses(uses.data(), uses.size())
     ;
-    result.transparentCapture = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(transparentDesc,
-        __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, true));
+    result.transparentCapture = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(transparentDesc, __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, true));
     if(!result.transparentCapture.valid())
         return {};
 
@@ -512,8 +448,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     if(csg)
         uses.push_back(ReadUse(result.csgContext, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadUse(result.views, Core::ResourceStates::ShaderResource));
-    uses.push_back(csg ? ReadWriteUse(result.counts, Core::ResourceStates::UnorderedAccess)
-        : ReadUse(result.counts, Core::ResourceStates::ShaderResource));
+    uses.push_back(csg ? ReadWriteUse(result.counts, Core::ResourceStates::UnorderedAccess) : ReadUse(result.counts, Core::ResourceStates::ShaderResource));
     if(csg)
         uses.push_back(WriteUse(result.csgOpaqueDepth, Core::ResourceStates::UnorderedAccess));
     uses.push_back(ReadWriteUse(result.events, Core::ResourceStates::UnorderedAccess));
@@ -527,10 +462,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setResourceUses(uses.data(), uses.size())
         .setResourceSetUses(inputs.sceneReadSets, inputs.sceneReadSetCount)
     ;
-    result.shade = graph.addTask<__hidden_task_graph_light_space_shadow::ShadeTask>(shadeDesc,
-        __hidden_task_graph_light_space_shadow::ShadeTask::Payload{
-            inputs.graphics, inputs.shadowPrepared, snapshot,
-        });
+    result.shade = graph.addTask<__hidden_task_graph_light_space_shadow::ShadeTask>(shadeDesc, __hidden_task_graph_light_space_shadow::ShadeTask::Payload{ inputs.graphics, inputs.shadowPrepared, snapshot, });
     result.ready = result.shade;
     return result.valid() ? result : LightSpaceShadowGraph{};
 }

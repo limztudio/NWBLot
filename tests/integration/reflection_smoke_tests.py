@@ -12,7 +12,10 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-from reflection_smoke import BUDGET_CAPTURES, DEFAULT_RAY_BUDGET, FOREGROUND_REGION, GLASS_REGION, OPAQUE_REGION, STATISTICS_FIELDS, SmokeFailure, analyze_markers, analyze_panels, capture_environment, compare_marker_motion, compare_hybrid_statistics, compare_opaque_glass, compare_panel_motion, parse_statistics, write_report, region_pixels, validate_statistics  # noqa: E402
+from reflection_smoke import (
+    BUDGET_CAPTURES, DEFAULT_RAY_BUDGET, FOREGROUND_REGION, GLASS_REGION, OPAQUE_REGION, STATISTICS_FIELDS, SmokeFailure, analyze_markers, analyze_panels, capture_environment, compare_marker_motion, compare_hybrid_statistics, compare_opaque_glass,
+    compare_panel_motion, parse_statistics, write_report, region_pixels, validate_statistics
+)  # noqa: E402
 from window_capture_smoke import write_bmp_24  # noqa: E402
 
 LIT_ONSCREEN = "onscreen"
@@ -69,8 +72,7 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
         return self.width, self.height, rows
 
     def glass_frames(self):
-        rows = [[(160, 160, 160) if x % 20 < 10 else (10, 10, 10)
-            for x in range(self.width)] for _ in range(self.height)]
+        rows = [[(160, 160, 160) if x % 20 < 10 else (10, 10, 10) for x in range(self.width)] for _ in range(self.height)]
         for x, y in region_pixels(self.width, self.height, FOREGROUND_REGION):
             rows[y][x] = (10, 20, 220)
         reflected = [list(row) for row in rows]
@@ -234,9 +236,7 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
             compare_panel_motion(self.panel_frame(), moved)
 
     def test_capture_environment_removes_inherited_fixture_controls(self):
-        with patch.dict(os.environ, {LIT_NWB_REFLECTION_SMOKE_TIMING: "1", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0",
-            LIT_NWB_REFLECTION_SMOKE_DEBUG: "source",
-            LIT_NWB_GPU_TIMING_FILE: "unexpected.txt", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1"}):
+        with patch.dict(os.environ, {LIT_NWB_REFLECTION_SMOKE_TIMING: "1", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0", LIT_NWB_REFLECTION_SMOKE_DEBUG: "source", LIT_NWB_GPU_TIMING_FILE: "unexpected.txt", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1"}):
             result = capture_environment(LIT_MOVED, LIT_HARDWARE)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_TIMING, result)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_DEBUG, result)
@@ -247,8 +247,7 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
     def test_report_resolves_escaped_log_links_to_manifest_capture_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            args = SimpleNamespace(output_directory=root, frames=16, require_hardware=True,
-                application_arg=[], suite="baseline")
+            args = SimpleNamespace(output_directory=root, frames=16, require_hardware=True, application_arg=[], suite="baseline")
             path = root / "odd&case_hybrid.bmp"
             write_bmp_24(path, 1, 1, [[(20, 40, 60)]])
             write_report(args, [("odd&case", LIT_HYBRID, DEFAULT_RAY_BUDGET)])
@@ -267,13 +266,9 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
     @staticmethod
     def sample(mode=LIT_HYBRID, budget=DEFAULT_RAY_BUDGET, sequence=1, frame=3):
         requested = mode in (LIT_HARDWARE, LIT_HYBRID)
-        value = dict(sequence=sequence, generation=1, frame=frame,
-            mode=(LIT_DISABLED, LIT_SCREEN, LIT_HARDWARE, LIT_HYBRID).index(mode), width=960, height=720,
-            requested_budget=budget, effective_budget=budget, queue_capacity=DEFAULT_RAY_BUDGET,
-            hardware_requested=int(requested), hardware_available=1, hardware_ready=int(requested),
-            token_queue=0, token_value=10 + sequence, physical_queue=0, device_generation=1,
-            candidates=0, hardware_rays=0, hardware_hits=0, opaque_pixels=0, glass_pixels=0,
-            fallback_pixels=0, screen_attempts=0, screen_hits=0)
+        value = dict(sequence=sequence, generation=1, frame=frame, mode=(LIT_DISABLED, LIT_SCREEN, LIT_HARDWARE, LIT_HYBRID).index(mode), width=960, height=720, requested_budget=budget, effective_budget=budget, queue_capacity=DEFAULT_RAY_BUDGET,
+            hardware_requested=int(requested), hardware_available=1, hardware_ready=int(requested), token_queue=0, token_value=10 + sequence, physical_queue=0, device_generation=1,
+            candidates=0, hardware_rays=0, hardware_hits=0, opaque_pixels=0, glass_pixels=0, fallback_pixels=0, screen_attempts=0, screen_hits=0)
         if mode != LIT_DISABLED:
             value[LIT_OPAQUE_PIXELS] = 1000
             value["screen_attempts"] = 1000 if mode in (LIT_SCREEN, LIT_HYBRID) else 0
@@ -291,8 +286,7 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
 
     def test_parser_rejects_missing_duplicate_and_noninteger_fields(self):
         line = self.log_line(self.sample())
-        for malformed in (line.rsplit(" ", 1)[0], line + " sequence=1",
-            line.replace(LIT_SCREEN_HITS_600, "screen_hits=nan"), line.replace(LIT_SCREEN_HITS_600, "unknown=600")):
+        for malformed in (line.rsplit(" ", 1)[0], line + " sequence=1", line.replace(LIT_SCREEN_HITS_600, "screen_hits=nan"), line.replace(LIT_SCREEN_HITS_600, "unknown=600")):
             with self.subTest(malformed=malformed), self.assertRaises(SmokeFailure):
                 parse_statistics(malformed)
         with self.assertRaisesRegex(SmokeFailure, "no completed"):
@@ -306,11 +300,8 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
 
     def test_zero_budget_omits_prepared_scene_without_relaxing_positive_budget_admission(self):
         # Actual zero-budget CSG capture: hardware was advertised at startup, while no hardware scene was prepared.
-        log = ("ReflectionSmokeStatistics: sequence=3 generation=2 frame=3 mode=2 width=960 height=720 "
-            "requested_budget=0 effective_budget=0 queue_capacity=1 hardware_requested=1 hardware_available=0 "
-            "hardware_ready=0 token_queue=0 token_value=81 physical_queue=0 device_generation=1 candidates=0 "
-            "hardware_rays=0 hardware_hits=0 opaque_pixels=217668 glass_pixels=0 fallback_pixels=217668 "
-            "screen_attempts=0 screen_hits=0")
+        log = ("ReflectionSmokeStatistics: sequence=3 generation=2 frame=3 mode=2 width=960 height=720 " "requested_budget=0 effective_budget=0 queue_capacity=1 hardware_requested=1 hardware_available=0 "
+            "hardware_ready=0 token_queue=0 token_value=81 physical_queue=0 device_generation=1 candidates=0 " "hardware_rays=0 hardware_hits=0 opaque_pixels=217668 glass_pixels=0 fallback_pixels=217668 " "screen_attempts=0 screen_hits=0")
         sample = parse_statistics(log)[0]
         validate_statistics([sample], "optical_csg_cap", LIT_HARDWARE, budget=0)
         sample["hardware_rays"] = 1
@@ -318,14 +309,12 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
             validate_statistics([sample], "optical_csg_cap", LIT_HARDWARE, budget=0)
         for available, ready in ((0, 0), (0, 1), (1, 0)):
             sample = self.sample(LIT_HARDWARE, budget=1)
-            sample.update(hardware_available=available, hardware_ready=ready, hardware_rays=0,
-                hardware_hits=0, fallback_pixels=1000)
+            sample.update(hardware_available=available, hardware_ready=ready, hardware_rays=0, hardware_hits=0, fallback_pixels=1000)
             with self.subTest(available=available, ready=ready), self.assertRaisesRegex(SmokeFailure, "ready hardware route"):
                 validate_statistics([sample], "optical_csg_cap", LIT_HARDWARE, budget=1)
 
     def test_static_capture_rejects_wrong_mode_dimensions_budget_and_generation(self):
-        for field, value in (("mode", 1), ("width", 1920), ("requested_budget", 64),
-            ("effective_budget", 64), ("queue_capacity", 0), ("generation", 2), (LIT_DEVICE_GENERATION, 2)):
+        for field, value in (("mode", 1), ("width", 1920), ("requested_budget", 64), ("effective_budget", 64), ("queue_capacity", 0), ("generation", 2), (LIT_DEVICE_GENERATION, 2)):
             second = self.sample(sequence=2, frame=4)
             second[field] = value
             with self.subTest(field=field), self.assertRaises(SmokeFailure):
@@ -354,8 +343,7 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
             validate_statistics([bad], LIT_FLOOR, LIT_HYBRID, 0)
 
     def test_missing_outcome_duplicate_count_and_impossible_population_fail(self):
-        for field, value in ((LIT_FALLBACK_PIXELS, 199), (LIT_HARDWARE_HITS, 201),
-            (LIT_SCREEN_HITS, 1001), (LIT_OPAQUE_PIXELS, 960 * 720 + 1)):
+        for field, value in ((LIT_FALLBACK_PIXELS, 199), (LIT_HARDWARE_HITS, 201), (LIT_SCREEN_HITS, 1001), (LIT_OPAQUE_PIXELS, 960 * 720 + 1)):
             sample = self.sample()
             sample[field] = value
             with self.subTest(field=field), self.assertRaises(SmokeFailure):

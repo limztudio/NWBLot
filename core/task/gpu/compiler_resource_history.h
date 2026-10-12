@@ -35,8 +35,8 @@ struct TrackedCompiledResourceState{
     usize readStateSourceIndex = Limit<usize>::s_Max;
 };
 
-// This compilation-local index retains global vector indices, never element pointers. Only append() mutates the
-// indexed history; collectors may borrow state pointers until the next append, as before.
+// This compilation-local index retains global vector indices, never element pointers.
+// Only append() mutates the indexed history; collectors may borrow state pointers until the next append, as before.
 class TrackedResourceStateHistory final : NoCopy{
 private:
     struct ResourceLinks{
@@ -51,11 +51,7 @@ private:
 
 
 public:
-    TrackedResourceStateHistory(
-        Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states,
-        usize resourceCount,
-        u64 graphGeneration,
-        Alloc::ScratchArena& scratchArena);
+    TrackedResourceStateHistory(Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states, usize resourceCount, u64 graphGeneration, Alloc::ScratchArena& scratchArena);
 
 
 public:

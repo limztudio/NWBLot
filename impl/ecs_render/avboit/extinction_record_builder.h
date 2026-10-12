@@ -66,12 +66,7 @@ struct AvboitExtinctionRecordResult{
 
 class AvboitExtinctionRecordBuilder final : NoCopy{
 public:
-    AvboitExtinctionRecordBuilder(
-        Core::GpuTaskGraph& graph,
-        Core::GraphicsRuntime& graphics,
-        RendererMaterialSystem& materialSystem,
-        RendererAvboitSystem& avboitSystem
-    );
+    AvboitExtinctionRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem);
 
 
 public:

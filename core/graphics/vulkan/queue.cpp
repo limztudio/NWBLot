@@ -42,12 +42,7 @@ u64 DecrementOrAbort(Atomic<u64>& value)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Queue::Queue(
-    const VulkanContext& context,
-    Device& device,
-    const GpuPhysicalQueueInfo& info,
-    NativeQueueState& nativeQueue
-)
+Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue)
     : m_context(context)
     , m_device(device)
     , m_nativeQueue(nativeQueue)
@@ -128,10 +123,7 @@ GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
     };
 }
 
-GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
-)const noexcept{
+GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex)const noexcept{
     if(recordingWorkerIndex == 0u){
         if(recordingWorkerDomain != 0u)
             return {};
@@ -195,11 +187,7 @@ u64 Queue::nextRecordingID()noexcept{
 }
 
 void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
-    if(
-        &commandBuffer.m_queue != this
-        || &commandBuffer.m_context != &m_context
-        || commandBuffer.m_arenaState != TrackedCommandBufferArenaState::Untracked
-    )
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context || commandBuffer.m_arenaState != TrackedCommandBufferArenaState::Untracked)
         TerminateInvariant();
     commandBuffer.m_arenaState = TrackedCommandBufferArenaState::Leased;
     const u64 currentCount = m_currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
@@ -212,10 +200,7 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
         UpdateCommandBufferHighWater(m_directHighWaterCommandBufferCount, directCurrentCount);
     }
     else{
-        WorkerCommandArena* const arena = findWorkerCommandArena(
-            commandBuffer.m_recordingWorkerDomain,
-            commandBuffer.m_recordingWorkerIndex
-        );
+        WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
         if(!arena)
             TerminateInvariant();
         const u64 workerCurrentCount = arena->currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
@@ -246,20 +231,14 @@ bool Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& com
         return false;
     }
 
-    const WorkerCommandArena* const workerArena = findWorkerCommandArena(
-        commandBuffer.m_recordingWorkerDomain,
-        commandBuffer.m_recordingWorkerIndex
-    );
+    const WorkerCommandArena* const workerArena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
     if(workerArena && workerArena->leasedCommandBufferCount.load(MemoryOrder::relaxed) != 0u)
         return true;
     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission could not validate its worker command-buffer arena"));
     return false;
 }
 
-void Queue::transitionCommandBufferState(
-    TrackedCommandBuffer& commandBuffer,
-    const TrackedCommandBufferArenaState::Enum nextState
-){
+void Queue::transitionCommandBufferState(TrackedCommandBuffer& commandBuffer, const TrackedCommandBufferArenaState::Enum nextState){
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot transition a command buffer through a foreign queue"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer arena transition owner mismatch"));
@@ -269,19 +248,13 @@ void Queue::transitionCommandBufferState(
     commitCommandBufferStateTransition(commandBuffer, nextState);
 }
 
-void Queue::commitCommandBufferStateTransition(
-    TrackedCommandBuffer& commandBuffer,
-    const TrackedCommandBufferArenaState::Enum nextState
-)noexcept{
+void Queue::commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuffer, const TrackedCommandBufferArenaState::Enum nextState)noexcept{
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context)
         TerminateInvariant();
     const TrackedCommandBufferArenaState::Enum previousState = commandBuffer.m_arenaState;
     if(previousState == nextState)
         return;
-    WorkerCommandArena* const workerArena = commandBuffer.m_recordingWorkerIndex == 0u
-        ? nullptr
-        : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex)
-    ;
+    WorkerCommandArena* const workerArena = commandBuffer.m_recordingWorkerIndex == 0u ? nullptr : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
     if(commandBuffer.m_recordingWorkerIndex != 0u && !workerArena)
         TerminateInvariant();
 
@@ -310,9 +283,7 @@ void Queue::commitCommandBufferStateTransition(
             __hidden_vulkan_queue::DecrementOrAbort(m_pendingDirectCommandBufferCount);
         }
         else{
-            const u64 previousPendingCount = __hidden_vulkan_queue::DecrementOrAbort(
-                workerArena->pendingCommandBufferCount
-            );
+            const u64 previousPendingCount = __hidden_vulkan_queue::DecrementOrAbort(workerArena->pendingCommandBufferCount);
             if(previousPendingCount == 1u)
                 __hidden_vulkan_queue::DecrementOrAbort(m_pendingWorkerEpochCount);
         }
@@ -364,47 +335,23 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
         __hidden_vulkan_queue::DecrementOrAbort(m_directCommandBufferCount);
     }
     else{
-        WorkerCommandArena* const arena = findWorkerCommandArena(
-            commandBuffer.m_recordingWorkerDomain,
-            commandBuffer.m_recordingWorkerIndex
-        );
+        WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
         if(!arena)
             TerminateInvariant();
         __hidden_vulkan_queue::DecrementOrAbort(arena->currentCommandBufferCount);
     }
 }
 
-TrackedCommandBufferPtr Queue::createCommandBuffer(
-    const VkCommandPool commandPool,
-    Futex* const sharedCommandPoolMutex,
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
-){
+TrackedCommandBufferPtr Queue::createCommandBuffer(const VkCommandPool commandPool, Futex* const sharedCommandPoolMutex, const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
     const bool ownsCommandPool = recordingWorkerIndex == 0u;
     if(!ownsCommandPool && commandPool == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Cannot create a worker command buffer without a command pool for physical queue {} worker {}"),
-            m_physicalQueue.index,
-            recordingWorkerIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot create a worker command buffer without a command pool for physical queue {} worker {}"), m_physicalQueue.index, recordingWorkerIndex);
         return nullptr;
     }
 
-    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(
-        m_context.objectArena,
-        *this,
-        m_context,
-        m_queueFamilyIndex,
-        commandPool,
-        ownsCommandPool,
-        sharedCommandPoolMutex
-    );
+    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(m_context.objectArena, *this, m_context, m_queueFamilyIndex, commandPool, ownsCommandPool, sharedCommandPoolMutex);
     if(!cmdBuf){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to allocate command-buffer tracking storage for physical queue {} worker {}"),
-            m_physicalQueue.index,
-            recordingWorkerIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command-buffer tracking storage for physical queue {} worker {}"), m_physicalQueue.index, recordingWorkerIndex);
         return nullptr;
     }
     if(!cmdBuf->m_cmdBuf){
@@ -420,33 +367,19 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(
 }
 
 
-Queue::WorkerCommandArena* Queue::findWorkerCommandArena(
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
-)const noexcept{
+Queue::WorkerCommandArena* Queue::findWorkerCommandArena(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex)const noexcept{
     if(recordingWorkerIndex == 0u)
         return nullptr;
 
-    for(
-        WorkerCommandArena* arena = m_workerCommandArenaHead.load(MemoryOrder::acquire);
-        arena;
-        arena = arena->next.load(MemoryOrder::acquire)
-    ){
-        if(
-            arena
-            && arena->recordingWorkerDomain == recordingWorkerDomain
-            && arena->recordingWorkerIndex == recordingWorkerIndex
-        )
+    for(WorkerCommandArena* arena = m_workerCommandArenaHead.load(MemoryOrder::acquire); arena; arena = arena->next.load(MemoryOrder::acquire)){
+        if(arena && arena->recordingWorkerDomain == recordingWorkerDomain && arena->recordingWorkerIndex == recordingWorkerIndex)
             return arena;
     }
     return nullptr;
 }
 
 
-Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
-){
+Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
     if(recordingWorkerIndex == 0u)
         return nullptr;
 
@@ -457,19 +390,9 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
     if(WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex))
         return arena;
 
-    auto* const arena = NewArenaObject<WorkerCommandArena>(
-        m_context.objectArena,
-        m_context.objectArena,
-        recordingWorkerDomain,
-        recordingWorkerIndex
-    );
+    auto* const arena = NewArenaObject<WorkerCommandArena>(m_context.objectArena, m_context.objectArena, recordingWorkerDomain, recordingWorkerIndex);
     if(!arena){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to allocate command-arena storage for physical queue {} worker {}:{}"),
-            m_physicalQueue.index,
-            recordingWorkerDomain,
-            recordingWorkerIndex
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command-arena storage for physical queue {} worker {}:{}"), m_physicalQueue.index, recordingWorkerDomain, recordingWorkerIndex);
         return nullptr;
     }
 
@@ -477,20 +400,9 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
     poolInfo.queueFamilyIndex = m_queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(
-        m_context.device,
-        &poolInfo,
-        m_context.allocationCallbacks,
-        &arena->commandPool
-    );
+    const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &arena->commandPool);
     if(createResult != VK_SUCCESS){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}:{}: {}"),
-            m_physicalQueue.index,
-            recordingWorkerDomain,
-            recordingWorkerIndex,
-            ResultToString(createResult)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}:{}: {}"), m_physicalQueue.index, recordingWorkerDomain, recordingWorkerIndex, ResultToString(createResult));
         DestroyArenaObjectNoexcept(m_context.objectArena, arena);
         return nullptr;
     }
@@ -550,16 +462,13 @@ TrackedCommandBufferPtr Queue::getOrCreateDirectCommandBuffer(){
 }
 
 
-TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
-){
+TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
     WorkerCommandArena* const arena = getOrCreateWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex);
     if(!arena)
         return nullptr;
 
-    // Each explicit worker owns this native pool shard. Do not take m_mutex here: submission/timeline retirement
-    // remains serialized there, while allocation and reset stay independent for ready-frontier recording workers.
+    // Each explicit worker owns this native pool shard.
+    // Do not take m_mutex here: submission/timeline retirement remains serialized there, while allocation and reset stay independent for ready-frontier recording workers.
     ScopedLock lock(arena->mutex);
 
     if(!arena->commandBuffersPool.empty()){
@@ -588,16 +497,13 @@ TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(
         return cmdBuf;
     }
 
-    // Queue timeline polling/reclamation occurs in Device::runGarbageCollection(). An empty worker shard grows
-    // instead of taking the queue submission lock and serializing parallel ready-frontier recording.
+    // Queue timeline polling/reclamation occurs in Device::runGarbageCollection().
+    // An empty worker shard grows instead of taking the queue submission lock and serializing parallel ready-frontier recording.
     return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
 }
 
 
-TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
-){
+TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
     if(recordingWorkerIndex == 0u)
         return getOrCreateDirectCommandBuffer();
 

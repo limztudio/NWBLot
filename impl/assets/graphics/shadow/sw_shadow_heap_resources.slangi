@@ -40,8 +40,7 @@ struct NwbSwShadowHeapPushConstants{
     uint receiverFactor;
 };
 
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowHeapPushConstants> g_NwbSwShadowPush;
+[[vk::push_constant]] ConstantBuffer<NwbSwShadowHeapPushConstants> g_NwbSwShadowPush;
 #endif
 
 

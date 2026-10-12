@@ -15,25 +15,15 @@ CASE = "optical_csg_cap"
 
 
 def native_log():
-    lines = ["GraphicsRuntime: created device 'fixture device'",
-        "RendererSystem: material 'fixture' selected typed mesh",
-        "RendererSystem: deferred rendering targets ready (960x720, fixture)",
-        f"ReflectionSmokeProject: case {CASE} created", "ReflectionSmokeProject: reflection mode hardware",
-        "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: hardware ray budget 1382400",
-        "ReflectionSmokeProject: screen feedback 0", "ReflectionSmokeProject: screen steps 96",
-        "ReflectionSmokeProject: optical query limit 16", "ReflectionSmokeProject: timing render unfocused 1",
-        "ReflectionSmokeProject: timing in-flight ranges 32", "ReflectionSmokeProject: timing depth mip count 10",
-        "Reflection resolve: hardware",
-        "ReflectionCpuTiming: configured case=optical_csg_cap preparation_presentations=64 warmup_seconds=5 "
-        "minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1",
-        "SmokeCpuGpuTimingProbe: enabled owner=reflection cpu=1 gpu=1 memory=0 diagnostic_only=1",
-        "ReflectionCpuTiming: preparation complete presentations=64 source_frame=60",
-        "ReflectionCpuTiming: measurement begin presentations=80 source_frame=100 warmup_seconds=5.1"]
+    lines = ["GraphicsRuntime: created device 'fixture device'", "RendererSystem: material 'fixture' selected typed mesh", "RendererSystem: deferred rendering targets ready (960x720, fixture)",
+        f"ReflectionSmokeProject: case {CASE} created", "ReflectionSmokeProject: reflection mode hardware", "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: hardware ray budget 1382400",
+        "ReflectionSmokeProject: screen feedback 0", "ReflectionSmokeProject: screen steps 96", "ReflectionSmokeProject: optical query limit 16", "ReflectionSmokeProject: timing render unfocused 1",
+        "ReflectionSmokeProject: timing in-flight ranges 32", "ReflectionSmokeProject: timing depth mip count 10", "Reflection resolve: hardware", "ReflectionCpuTiming: configured case=optical_csg_cap preparation_presentations=64 warmup_seconds=5 "
+        "minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1", "SmokeCpuGpuTimingProbe: enabled owner=reflection cpu=1 gpu=1 memory=0 diagnostic_only=1",
+        "ReflectionCpuTiming: preparation complete presentations=64 source_frame=60", "ReflectionCpuTiming: measurement begin presentations=80 source_frame=100 warmup_seconds=5.1"]
     for index in range(11):
-        lines.append(f"ReflectionCpuTiming: interval presentations=10 seconds=3 first={80+10*index} "
-            f"last={90+10*index} first_source={100+10*index} end_source={110+10*index}")
-    lines += ["SmokeCpuGpuTimingProbe: complete owner=reflection records=77 first=80 last=190 first_source=100 end_source=210",
-        "ReflectionCpuTiming: measurement complete presentations=110 seconds=33 first=80 last=190 "
+        lines.append(f"ReflectionCpuTiming: interval presentations=10 seconds=3 first={80+10*index} " f"last={90+10*index} first_source={100+10*index} end_source={110+10*index}")
+    lines += ["SmokeCpuGpuTimingProbe: complete owner=reflection records=77 first=80 last=190 first_source=100 end_source=210", "ReflectionCpuTiming: measurement complete presentations=110 seconds=33 first=80 last=190 "
         "positive_intervals=11 end_source=210 diagnostic_only=1", "ReflectionSmokeProject: shutdown"]
     return "\n".join(lines) + "\n"
 
@@ -47,8 +37,7 @@ def raw_publications():
         observation = 110 + 10 * interval
         for domain, index, name in names:
             seconds = 0.002 if domain == 0 else 0.05
-            lines.append(f"sample {domain} {index} 1 {observation} {90+10*interval} {observation} "
-                f"{observation-10} {observation-1} 10 {seconds*10} {seconds} {seconds} {seconds}")
+            lines.append(f"sample {domain} {index} 1 {observation} {90+10*interval} {observation} " f"{observation-10} {observation-1} 10 {seconds*10} {seconds} {seconds} {seconds}")
     return "\n".join(lines + ["complete 77 7"]) + "\n"
 
 
@@ -70,8 +59,7 @@ class ReflectionCpuTimingTests(unittest.TestCase):
             replay(native_log().replace(" warmup_seconds=5.1", ""))
 
     def test_missing_measurement_or_changed_window_fails(self):
-        for replacement in ("", "ReflectionCpuTiming: measurement complete presentations=110 seconds=33 first=81 last=190 "
-                "positive_intervals=11 end_source=210 diagnostic_only=1"):
+        for replacement in ("", "ReflectionCpuTiming: measurement complete presentations=110 seconds=33 first=81 last=190 " "positive_intervals=11 end_source=210 diagnostic_only=1"):
             lines = native_log().splitlines()
             lines = [replacement if line.startswith("ReflectionCpuTiming: measurement complete") else line for line in lines]
             with self.subTest(replacement=replacement), self.assertRaises(SmokeFailure):
@@ -107,29 +95,24 @@ class ReflectionCpuTimingTests(unittest.TestCase):
             replay(raw=raw)
 
     def test_wrong_owner_or_stale_generation_fail(self):
-        for log, raw in ((native_log().replace("owner=reflection", "owner=stress"), raw_publications()),
-                (native_log(), raw_publications().replace("sample 1 0 1 ", "sample 1 0 2 "))):
+        for log, raw in ((native_log().replace("owner=reflection", "owner=stress"), raw_publications()), (native_log(), raw_publications().replace("sample 1 0 1 ", "sample 1 0 2 "))):
             with self.subTest(log=log[-150:]), self.assertRaises(SmokeFailure):
                 replay(log, raw)
 
     def test_repeated_publication_or_overlapping_source_window_fails(self):
-        for before, after in (("1 120 100 120 110 119", "1 120 100 110 110 119"),
-                ("1 120 100 120 110 119", "1 120 100 120 109 118")):
+        for before, after in (("1 120 100 120 110 119", "1 120 100 110 110 119"), ("1 120 100 120 110 119", "1 120 100 120 109 118")):
             with self.subTest(before=before), self.assertRaises(SmokeFailure):
                 replay(raw=raw_publications().replace(before, after))
 
     def test_inherited_capture_and_diagnostic_controls_are_removed(self):
-        env = smoke.launch_environment({"NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
-            "NWB_GPU_TIMING_FILE": "old.txt", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1",
-            "NWB_REFLECTION_CPU_GPU_TIMING_FILE": "old.txt"}, CASE, Path("new.txt"))
+        env = smoke.launch_environment({"NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp", "NWB_GPU_TIMING_FILE": "old.txt", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1", "NWB_REFLECTION_CPU_GPU_TIMING_FILE": "old.txt"}, CASE, Path("new.txt"))
         self.assertNotIn("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", env)
         self.assertNotIn("NWB_GPU_TIMING_FILE", env)
         self.assertEqual(env["NWB_REFLECTION_SMOKE_DIAGNOSTICS"], "0")
         self.assertEqual(env["NWB_REFLECTION_CPU_GPU_TIMING_FILE"], "new.txt")
 
     def test_contradictory_scene_hardware_extent_and_warning_fail(self):
-        for extra in ("ReflectionSmokeProject: hardware unavailable", "ReflectionSmokeProject: case optical_clear created",
-                "[WARNING] unsupported source", "ReflectionSmokeStatistics: unexpected diagnostics",
+        for extra in ("ReflectionSmokeProject: hardware unavailable", "ReflectionSmokeProject: case optical_clear created", "[WARNING] unsupported source", "ReflectionSmokeStatistics: unexpected diagnostics",
                 "RendererSystem: deferred rendering targets ready (1280x900, fixture)"):
             with self.subTest(extra=extra), self.assertRaises(SmokeFailure):
                 replay(native_log() + extra + "\n")

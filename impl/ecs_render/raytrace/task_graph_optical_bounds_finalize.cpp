@@ -53,11 +53,7 @@ struct FinalizeTask{
         if(!payload.source || !payload.finalize || !inputs || context.commandIrCapture)
             return false;
         const auto& resources = *payload.finalize;
-        if(
-            context.queue != resources.queue || !resources.pipeline
-            || !resources.inputBuffer || !resources.outputBuffer
-            || inputs->size() != resources.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu)
-        )
+        if(context.queue != resources.queue || !resources.pipeline || !resources.inputBuffer || !resources.outputBuffer || inputs->size() != resources.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu))
             return false;
         commandList.endRenderPass();
         commandList.setBufferState(payload.source.get(), Core::ResourceStates::ShaderResource);
@@ -74,10 +70,7 @@ struct FinalizeTask{
         state.setPipeline(resources.pipeline.get());
         commandList.setComputeState(state);
         resources.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.pipeline);
-        const PushConstants push{
-            resources.sourceDescriptor.slot(), resources.inputDescriptor.slot(), resources.outputDescriptor.slot(),
-            resources.instanceCount, static_cast<u32>(resources.inputs.size()), resources.staticBoundsComplete ? 1u : 0u,
-        };
+        const PushConstants push{ resources.sourceDescriptor.slot(), resources.inputDescriptor.slot(), resources.outputDescriptor.slot(), resources.instanceCount, static_cast<u32>(resources.inputs.size()), resources.staticBoundsComplete ? 1u : 0u, };
         commandList.setPushConstants(&push, sizeof(push));
         {
             Core::GpuTimingMeasure timing(resources.graphics.gpuTiming(), RendererGpuTimingScope::s_OpticalBoundsFinalize, resources.graphics.getDevice(), commandList);
@@ -102,28 +95,16 @@ struct FinalizeTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(
-    Core::GpuTaskGraph& graph,
-    const RayTracingOpticalSceneSnapshot& resources,
-    const Core::GpuGraphResourceId source,
-    Core::Alloc::ScratchArena& scratchArena
-){
+RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, const Core::GpuGraphResourceId source, Core::Alloc::ScratchArena& scratchArena){
     if(!resources.finalize || !resources.uploadBuffer || !source.valid())
         return {};
     const auto& finalize = *resources.finalize;
     if(finalize.inputs.empty() || finalize.inputs.size() != finalize.boundsBuffers.size())
         return {};
     const auto importCommon = [&](const Core::BufferHandle& buffer, const AStringView label){
-        if(
-            !buffer || !buffer->getCreationDescription().keepInitialState
-            || buffer->getCreationDescription().initialState != Core::ResourceStates::Common
-        )
+        if(!buffer || !buffer->getCreationDescription().keepInitialState || buffer->getCreationDescription().initialState != Core::ResourceStates::Common)
             return Core::GpuGraphResourceId{};
-        return graph.importBuffer(
-            buffer,
-            RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, label)
-                .setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common)
-        );
+        return graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, label).setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
     };
     const Core::GpuGraphResourceId inputs = importCommon(finalize.inputBuffer, "Ray Optical Runtime Inputs");
     RayTracingOpticalSceneGraphBuffer result;
@@ -162,9 +143,7 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(
         if(found == uses.end())
             uses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
-    const Core::GpuUploadBlobId upload = graph.copyUploadData(
-        finalize.inputs.data(), finalize.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu), alignof(u32)
-    );
+    const Core::GpuUploadBlobId upload = graph.copyUploadData(finalize.inputs.data(), finalize.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu), alignof(u32));
     if(!upload.valid())
         return {};
     Core::GpuTaskSchedulingHint scheduling;
@@ -174,15 +153,8 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.raytrace.optical_bounds_finalize"))
-        .setMarkerLabel("Ray Optical Bounds Finalize")
-        .setScheduling(scheduling)
-        .setResourceUses(uses.data(), uses.size())
-    ;
-    result.uploadTask = graph.addTask<__hidden_task_graph_optical_bounds_finalize::FinalizeTask>(
-        desc, __hidden_task_graph_optical_bounds_finalize::FinalizeTask::Payload{ resources.uploadBuffer, resources.finalize, upload }
-    );
+    desc.setIdentity(Name("render.raytrace.optical_bounds_finalize")).setMarkerLabel("Ray Optical Bounds Finalize").setScheduling(scheduling).setResourceUses(uses.data(), uses.size());
+    result.uploadTask = graph.addTask<__hidden_task_graph_optical_bounds_finalize::FinalizeTask>(desc, __hidden_task_graph_optical_bounds_finalize::FinalizeTask::Payload{ resources.uploadBuffer, resources.finalize, upload });
     return result.valid() ? result : RayTracingOpticalSceneGraphBuffer{};
 }
 

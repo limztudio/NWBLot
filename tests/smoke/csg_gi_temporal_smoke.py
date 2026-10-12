@@ -13,8 +13,7 @@ import statistics
 import subprocess
 import sys
 
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure,
-    read_bmp_24_rows, validate_expected_log_text)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text)
 
 
 SAMPLE_COUNT = 32
@@ -22,21 +21,14 @@ MINIMUM_FRAME = 360
 WARMUP_SECONDS = 30
 FRAME_INTERVAL = 8
 EXPECTED_EXTENT = (1280, 900)
-REGIONS = {"plane": (454, 324, 32, 32), "box": (826, 324, 32, 32), "sphere": (454, 576, 32, 32),
-    "capsule": (826, 576, 32, 32), "box_upper_band": (836, 290, 40, 8),
-    "sphere_upper_band": (414, 552, 40, 16), "capsule_stripes": (805, 576, 32, 40),
+REGIONS = {"plane": (454, 324, 32, 32), "box": (826, 324, 32, 32), "sphere": (454, 576, 32, 32), "capsule": (826, 576, 32, 32), "box_upper_band": (836, 290, 40, 8), "sphere_upper_band": (414, 552, 40, 16), "capsule_stripes": (805, 576, 32, 40),
     "background": (640, 450, 32, 32)}
-STATIC_EXTERIOR_REGIONS = {"sphere_exterior": (502, 578, 6, 24),
-    "capsule_exterior": (882, 576, 6, 24), "box_exterior": (896, 324, 3, 20)}
+STATIC_EXTERIOR_REGIONS = {"sphere_exterior": (502, 578, 6, 24), "capsule_exterior": (882, 576, 6, 24), "box_exterior": (896, 324, 3, 20)}
 ANIMATED_INTERIOR_REGIONS = {"box_inner_wall": (832, 316, 24, 8)}
-QUALITY_LIMITS = {"channel_jump": 20, "max_frame_jump_fraction": .10, "static_p95_temporal_range": 6,
-    "colored_core_minimum": 32, "tint_margin": 4, "direct_core_minimum": 16,
-    "direct_background_separation": 8, "background_tolerance": 2}
-# Analytical ray/cutter intersections for the static camera (0,.75,-6.5), default near=.001/far=10000,
-# 1280x900 extent, and shape yaw phases 0/.18/.36/.54. These distinguish physical caps from enclosing faces.
-GEOMETRY_PROBES = {
-    "plane": {"pixel": (430, 320), "normal": (0., 0., -1.), "position": (-1.747126065, 1.829965754, 0.)},
-    "box": {"pixel": (835, 315), "normal": (-.179029573, 0., -.983843693), "position": (1.721953360, 1.934668680, .365114160)},
+QUALITY_LIMITS = {"channel_jump": 20, "max_frame_jump_fraction": .10, "static_p95_temporal_range": 6, "colored_core_minimum": 32, "tint_margin": 4, "direct_core_minimum": 16, "direct_background_separation": 8, "background_tolerance": 2}
+# Analytical ray/cutter intersections for the static camera (0,.75,-6.5), default near=.001/far=10000, 1280x900 extent, and shape yaw phases 0/.18/.36/.54.
+# These distinguish physical caps from enclosing faces.
+GEOMETRY_PROBES = { "plane": {"pixel": (430, 320), "normal": (0., 0., -1.), "position": (-1.747126065, 1.829965754, 0.)}, "box": {"pixel": (835, 315), "normal": (-.179029573, 0., -.983843693), "position": (1.721953360, 1.934668680, .365114160)},
     "sphere": {"pixel": (415, 570), "normal": (.318619304, -.078551107, -.944622392), "position": (-1.881587477, -.259938935, .032526944)},
     "capsule": {"pixel": (805, 570), "normal": (-.177317767, 0., -.984153651), "position": (1.361729587, -.241470787, -.086929462)}}
 GEOMETRY_LIMITS = {"normal_l2_error": .04, "position_component_max": .06, "position_arithmetic_allowance": .005}
@@ -45,18 +37,13 @@ CAP_STATE_REQUIRED_PROBES = {name: probe["pixel"] for name, probe in GEOMETRY_PR
 CAP_STATE_REQUIRED_PROBES.update({f"capsule_{x}_{y}": (x, y) for y in range(604, 608) for x in range(784, 787)})
 CAP_STATE_PROBES = dict(CAP_STATE_REQUIRED_PROBES)
 CAP_STATE_PROBES.update({f"capsule_{x}_{y}": (x, y) for y in range(604, 608) for x in (783, 787)})
-STATE_CHANNELS = {"cap_state": ("raw_removed_count", "nearest_cap_visible", "owns_gbuffer_depth"),
-    "interval_state": ("receiver_span_count", "peel_id_present", "peel_cap_coverage"),
-    "event_state": ("raw_count", "front_count", "back_count"),
-    "event_data": ("span_present", "matching_event_pair", "ordered_event_depths"),
-    "event_order": ("span_present", "first_front", "second_front"),
-    "span_state": ("span_count", "span_flags", "event_count")}
+STATE_CHANNELS = {"cap_state": ("raw_removed_count", "nearest_cap_visible", "owns_gbuffer_depth"), "interval_state": ("receiver_span_count", "peel_id_present", "peel_cap_coverage"), "event_state": ("raw_count", "front_count", "back_count"),
+    "event_data": ("span_present", "matching_event_pair", "ordered_event_depths"), "event_order": ("span_present", "first_front", "second_front"), "span_state": ("span_count", "span_flags", "event_count")}
 EVENT_DATA_FLAGS_MARKER = "CsgVisibleSmokeProject: event-data red stores missing-span flags divided by 33"
 EVENT_ORDER_MARKER = "CsgVisibleSmokeProject: event-order RGB stores span/flags and validated raw FRONT=1 BACK=0.5"
 SPAN_STATE_MARKER = "CsgVisibleSmokeProject: span-state RGB stores span count, flags, raw event count divided by 33"
 OVERLAPPING_MARKER = "CsgVisibleSmokeProject: overlapping plane receiver created z_offset=0.125"
-SPAN_EXPECTATIONS = {name: {"span_count": 2 if name == "plane" else 1, "span_flags": 0,
-    "event_count": 4 if name == "plane" else 2} for name in GEOMETRY_PROBES}
+SPAN_EXPECTATIONS = {name: {"span_count": 2 if name == "plane" else 1, "span_flags": 0, "event_count": 4 if name == "plane" else 2} for name in GEOMETRY_PROBES}
 
 
 def sample_path(directory, sample):
@@ -87,29 +74,18 @@ def capture_series(args):
         elif args.gpu_timing_output.exists():
             raise SmokeFailure("temporal acquisition requires a fresh GPU timing file")
         environment["NWB_GPU_TIMING_FILE"] = str(args.gpu_timing_output.resolve())
-    environment.update({"NWB_CSG_GI_TEMPORAL": "1", "NWB_CSG_GI_TEMPORAL_VIEW": args.view,
-        "NWB_CSG_GI_TEMPORAL_ANIMATED": str(int(args.motion == "animated")),
-        "NWB_CSG_GI_TEMPORAL_INTERVAL": str(args.frame_interval),
-        "NWB_CSG_GI_TEMPORAL_LAGGED": str(int(args.lagged_lighting)),
-        "NWB_CSG_GI_TEMPORAL_OVERLAPPING": str(int(args.overlapping))})
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1",
-        "--timeout", str(args.timeout), "--log-output", str(args.output_directory / "runtime.log"),
+    environment.update({"NWB_CSG_GI_TEMPORAL": "1", "NWB_CSG_GI_TEMPORAL_VIEW": args.view, "NWB_CSG_GI_TEMPORAL_ANIMATED": str(int(args.motion == "animated")), "NWB_CSG_GI_TEMPORAL_INTERVAL": str(args.frame_interval),
+        "NWB_CSG_GI_TEMPORAL_LAGGED": str(int(args.lagged_lighting)), "NWB_CSG_GI_TEMPORAL_OVERLAPPING": str(int(args.overlapping))})
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", "--timeout", str(args.timeout), "--log-output", str(args.output_directory / "runtime.log"),
         "--expect-log-message", f"CsgVisibleSmokeProject: temporal scene animated={int(args.motion == 'animated')} view={args.view} minimum_frame=360 warmup_seconds=30 interval={args.frame_interval} samples=32",
-        "--expect-log-message", "CsgVisibleSmokeProject: temporal warmup started graphics frame",
-        "--expect-log-message", "CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=",
-        "--expect-log-message", "CsgVisibleSmokeProject: temporal series complete samples=32",
-        "--expect-log-message", "CsgVisibleSmokeProject: shutdown",
-        "--expect-log-message", "RendererSystem: dispatched surfel GI resolve",
+        "--expect-log-message", "CsgVisibleSmokeProject: temporal warmup started graphics frame", "--expect-log-message", "CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=",
+        "--expect-log-message", "CsgVisibleSmokeProject: temporal series complete samples=32", "--expect-log-message", "CsgVisibleSmokeProject: shutdown", "--expect-log-message", "RendererSystem: dispatched surfel GI resolve",
         "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
     if args.route == "software":
-        command += ["--application-arg=--disable-hardware-ray-tracing",
-            "--expect-log-message", "Loader: hardware ray tracing disabled before device creation",
-            "--reject-log-message", "RendererSystem: created surfel HW trace compute pipeline"]
+        command += ["--application-arg=--disable-hardware-ray-tracing", "--expect-log-message", "Loader: hardware ray tracing disabled before device creation", "--reject-log-message", "RendererSystem: created surfel HW trace compute pipeline"]
     if args.lagged_lighting:
-        command += ["--expect-log-message", "RendererSystem: frame-lagged async lighting bootstrap accepted",
-            "--expect-log-message", "RendererSystem: frame-lagged async lighting active history accepted",
+        command += ["--expect-log-message", "RendererSystem: frame-lagged async lighting bootstrap accepted", "--expect-log-message", "RendererSystem: frame-lagged async lighting active history accepted",
             "--skip-log-message", "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"]
     if args.view == "event_data":
         command += ["--expect-log-message", EVENT_DATA_FLAGS_MARKER]
@@ -148,36 +124,30 @@ def measure_region_frame(rows, region):
                     horizontal_jumps += abs(value - rows[y][x - 1][channel]) > QUALITY_LIMITS["channel_jump"]
                 if y > center_y - half_height:
                     vertical_jumps += abs(value - rows[y - 1][x][channel]) > QUALITY_LIMITS["channel_jump"]
-    return {"mean_rgb": [value / (4 * half_width * half_height) for value in total],
-        "horizontal_jump_fraction": horizontal_jumps / ((2 * half_width - 1) * 2 * half_height * 3),
+    return {"mean_rgb": [value / (4 * half_width * half_height) for value in total], "horizontal_jump_fraction": horizontal_jumps / ((2 * half_width - 1) * 2 * half_height * 3),
         "vertical_jump_fraction": vertical_jumps / ((2 * half_height - 1) * 2 * half_width * 3)}
 
 
 def decode_diagnostic(rgb, view):
-    display_linear = [value / 255 / 12.92 if value / 255 <= .04045 else ((value / 255 + .055) / 1.055) ** 2.4
-        for value in rgb]
+    display_linear = [value / 255 / 12.92 if value / 255 <= .04045 else ((value / 255 + .055) / 1.055) ** 2.4 for value in rgb]
     # The fixture preserves the renderer's exposure=1, Reinhard shoulder=0.65 presentation defaults.
     if any(value >= 1 for value in display_linear):
         raise SmokeFailure("diagnostic color cannot invert saturated Reinhard presentation")
     encoded = [.65 * value / (1 - value) for value in display_linear]
     if view in STATE_CHANNELS:
         return encoded
-    return [value * scale - offset for value, scale, offset in zip(encoded,
-        (2, 2, 2) if view == "normal" else (6, 6, 2), (1, 1, 1) if view == "normal" else (3, 3, 1))]
+    return [value * scale - offset for value, scale, offset in zip(encoded, (2, 2, 2) if view == "normal" else (6, 6, 2), (1, 1, 1) if view == "normal" else (3, 3, 1))]
 
 
 def position_quantization_tolerance(rgb, decoded):
     lower = decode_diagnostic([max(value - .5, 0) for value in rgb], "position")
     upper = decode_diagnostic([min(value + .5, 254.5) for value in rgb], "position")
-    return [min(GEOMETRY_LIMITS["position_component_max"],
-        max(value - low, high - value) + GEOMETRY_LIMITS["position_arithmetic_allowance"])
-        for value, low, high in zip(decoded, lower, upper)]
+    return [min(GEOMETRY_LIMITS["position_component_max"], max(value - low, high - value) + GEOMETRY_LIMITS["position_arithmetic_allowance"]) for value, low, high in zip(decoded, lower, upper)]
 
 
 def measure_series(directory, frame_interval=FRAME_INTERVAL):
     log = (directory / "runtime.log").read_text(encoding="utf-8")
-    validate_expected_log_text(log, ("CsgVisibleSmokeProject: temporal series complete samples=32",
-        "CsgVisibleSmokeProject: shutdown", "RendererSystem: dispatched surfel GI resolve"), STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(log, ("CsgVisibleSmokeProject: temporal series complete samples=32", "CsgVisibleSmokeProject: shutdown", "RendererSystem: dispatched surfel GI resolve"), STRICT_LOG_FAILURE_MESSAGES)
     setups = re.findall(r"CsgVisibleSmokeProject: temporal scene animated=([01]) view=(full|indirect|direct|normal|position|cap_state|interval_state|event_state|event_data|event_order|span_state) minimum_frame=(\d+) warmup_seconds=(\d+) interval=(\d+) samples=(\d+)", log)
     if len(setups) != 1:
         raise SmokeFailure("temporal series must have exactly one logged scene setup")
@@ -191,29 +161,23 @@ def measure_series(directory, frame_interval=FRAME_INTERVAL):
     overlap_count = log.count(OVERLAPPING_MARKER)
     if overlap_count > 1 or (overlap_count and animated != "0"):
         raise SmokeFailure("overlapping receiver series requires exactly one static duplicate")
-    if (int(minimum_frame), int(warmup_seconds), int(logged_interval), int(sample_count)) != (
-        MINIMUM_FRAME, WARMUP_SECONDS, frame_interval, SAMPLE_COUNT):
+    if (int(minimum_frame), int(warmup_seconds), int(logged_interval), int(sample_count)) != (MINIMUM_FRAME, WARMUP_SECONDS, frame_interval, SAMPLE_COUNT):
         raise SmokeFailure("logged temporal setup differs from the requested sample schedule")
     warmup_starts = re.findall(r"CsgVisibleSmokeProject: temporal warmup started graphics frame (\d+)", log)
-    warmup_completions = re.findall(
-        r"CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=(\d+\.\d+) first_frame=(\d+)", log)
+    warmup_completions = re.findall(r"CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=(\d+\.\d+) first_frame=(\d+)", log)
     if len(warmup_starts) != 1 or len(warmup_completions) != 1:
         raise SmokeFailure("temporal series must identify one live warmup start and completion")
     warmup_start_frame = int(warmup_starts[0])
     elapsed, first_frame = warmup_completions[0]
     warmup_elapsed_seconds = float(elapsed)
     first_frame = int(first_frame)
-    if (warmup_start_frame < MINIMUM_FRAME or first_frame <= warmup_start_frame
-        or not math.isfinite(warmup_elapsed_seconds) or warmup_elapsed_seconds < WARMUP_SECONDS):
+    if (warmup_start_frame < MINIMUM_FRAME or first_frame <= warmup_start_frame or not math.isfinite(warmup_elapsed_seconds) or warmup_elapsed_seconds < WARMUP_SECONDS):
         raise SmokeFailure("temporal series must render at least 360 frames before a 30-second live warmup")
-    captured = [(int(sample), int(frame)) for sample, frame in re.findall(
-        r"CsgVisibleSmokeProject: temporal sample (\d+) graphics frame (\d+)", log)]
+    captured = [(int(sample), int(frame)) for sample, frame in re.findall(r"CsgVisibleSmokeProject: temporal sample (\d+) graphics frame (\d+)", log)]
     expected = [(sample, first_frame + frame_interval * sample) for sample in range(SAMPLE_COUNT)]
     if captured != expected:
         raise SmokeFailure(f"temporal source-frame sequence differs from its deterministic schedule: {captured}")
-    if not (log.index("CsgVisibleSmokeProject: temporal warmup started graphics frame")
-        < log.index("CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=")
-        < log.index("CsgVisibleSmokeProject: temporal sample 0 graphics frame")):
+    if not (log.index("CsgVisibleSmokeProject: temporal warmup started graphics frame") < log.index("CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=") < log.index("CsgVisibleSmokeProject: temporal sample 0 graphics frame")):
         raise SmokeFailure("temporal capture must follow the completed live warmup")
     if len(re.findall(r"FramebufferCapture: capture ready", log)) != SAMPLE_COUNT:
         raise SmokeFailure("temporal series did not complete all accepted framebuffer readbacks")
@@ -240,9 +204,7 @@ def measure_series(directory, frame_interval=FRAME_INTERVAL):
                 for x in range(center_x - half_width, center_x + half_width, 2):
                     samples.extend(rows[y][x])
             regions[name].append(samples)
-        files.append({"sample": index, "graphics_frame": frame, "file": path.name,
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-            "regions": {name: measure_region_frame(rows, region) for name, region in region_bounds.items()}})
+        files.append({"sample": index, "graphics_frame": frame, "file": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "regions": {name: measure_region_frame(rows, region) for name, region in region_bounds.items()}})
         if view in ("normal", "position"):
             points = {}
             for name, probe in GEOMETRY_PROBES.items():
@@ -269,9 +231,7 @@ def measure_series(directory, frame_interval=FRAME_INTERVAL):
                         points[name]["failed_span_flags"] = round(decoded[0] * 33)
                 elif view == "event_order":
                     valid_pair = decoded[1] > .25 and decoded[2] > .25
-                    points[name].update({"span_present": decoded[0] > .5, "validated_pair": valid_pair,
-                        "first_front": decoded[1] > .75 if valid_pair else None,
-                        "second_front": decoded[2] > .75 if valid_pair else None})
+                    points[name].update({"span_present": decoded[0] > .5, "validated_pair": valid_pair, "first_front": decoded[1] > .75 if valid_pair else None, "second_front": decoded[2] > .75 if valid_pair else None})
                     if not points[name]["span_present"]:
                         points[name]["failed_span_flags"] = round(decoded[0] * 33)
                 else:
@@ -292,18 +252,12 @@ def measure_series(directory, frame_interval=FRAME_INTERVAL):
         for frame in frames:
             for pixel in range(len(frame) // 3):
                 if pixel % row_width:
-                    horizontal_changes.extend(abs(frame[pixel * 3 + channel] - frame[(pixel - 1) * 3 + channel])
-                        for channel in range(3))
-        metrics[name] = {"sampled_pixels": len(frames[0]) // 3,
-            "mean_rgb": [statistics.fmean(value for frame in frames for value in frame[channel::3]) for channel in range(3)],
-            "mean_temporal_range": statistics.fmean(ranges), "p95_temporal_range": percentile(ranges, .95),
-            "max_temporal_range": max(ranges), "mean_temporal_standard_deviation": statistics.fmean(deviations),
-            "mean_adjacent_change": statistics.fmean(changes), "p95_adjacent_change": percentile(changes, .95),
-            "max_adjacent_change": max(changes), "mean_horizontal_change": statistics.fmean(horizontal_changes),
-            "p95_horizontal_change": percentile(horizontal_changes, .95),
-            "large_horizontal_change_fraction": sum(change > QUALITY_LIMITS["channel_jump"] for change in horizontal_changes) / len(horizontal_changes),
-            "max_frame_horizontal_jump_fraction": max(frame["regions"][name]["horizontal_jump_fraction"] for frame in files),
-            "max_frame_vertical_jump_fraction": max(frame["regions"][name]["vertical_jump_fraction"] for frame in files),
+                    horizontal_changes.extend(abs(frame[pixel * 3 + channel] - frame[(pixel - 1) * 3 + channel]) for channel in range(3))
+        metrics[name] = {"sampled_pixels": len(frames[0]) // 3, "mean_rgb": [statistics.fmean(value for frame in frames for value in frame[channel::3]) for channel in range(3)],
+            "mean_temporal_range": statistics.fmean(ranges), "p95_temporal_range": percentile(ranges, .95), "max_temporal_range": max(ranges), "mean_temporal_standard_deviation": statistics.fmean(deviations),
+            "mean_adjacent_change": statistics.fmean(changes), "p95_adjacent_change": percentile(changes, .95), "max_adjacent_change": max(changes), "mean_horizontal_change": statistics.fmean(horizontal_changes),
+            "p95_horizontal_change": percentile(horizontal_changes, .95), "large_horizontal_change_fraction": sum(change > QUALITY_LIMITS["channel_jump"] for change in horizontal_changes) / len(horizontal_changes),
+            "max_frame_horizontal_jump_fraction": max(frame["regions"][name]["horizontal_jump_fraction"] for frame in files), "max_frame_vertical_jump_fraction": max(frame["regions"][name]["vertical_jump_fraction"] for frame in files),
             "min_frame_mean_rgb": [min(frame["regions"][name]["mean_rgb"][channel] for frame in files) for channel in range(3)]}
         if animated == "1" and bounded_motion:
             peers = {}
@@ -313,21 +267,14 @@ def measure_series(directory, frame_interval=FRAME_INTERVAL):
                 pose_tick = min(phase, 240 - phase)
                 for previous in peers.get(pose_tick, ()):
                     differences = [abs(current - prior) for current, prior in zip(frames[sample], frames[previous])]
-                    pairs.append({"samples": [previous, sample],
-                        "graphics_frames": [captured[previous][1], graphics_frame], "pose_tick": pose_tick,
-                        "mean_difference": statistics.fmean(differences), "p95_difference": percentile(differences, .95),
+                    pairs.append({"samples": [previous, sample], "graphics_frames": [captured[previous][1], graphics_frame], "pose_tick": pose_tick, "mean_difference": statistics.fmean(differences), "p95_difference": percentile(differences, .95),
                         "max_difference": max(differences)})
                 peers.setdefault(pose_tick, []).append(sample)
             metrics[name]["equal_pose_differences"] = pairs
-    return {"frames": files, "regions": metrics, "region_bounds": region_bounds, "dimensions": list(EXPECTED_EXTENT),
-        "view": view, "motion": "animated" if animated == "1" else "static", "frame_interval": frame_interval,
-        "warmup_start_graphics_frame": warmup_start_frame, "warmup_elapsed_seconds": warmup_elapsed_seconds,
-        "first_capture_graphics_frame": first_frame,
-        "overlapping": bool(overlap_count),
-        "route": "software" if "Loader: hardware ray tracing disabled before device creation" in log else "natural",
-        "lagged_lighting": "RendererSystem: frame-lagged async lighting active history accepted" in log,
-        "pose_contract": ("Static initial phase; unchanged camera and light." if animated == "0" else
-            "Front-facing triangle-wave time min(frame%240,240-frame%240)*.3/120; unchanged camera and light."
+    return {"frames": files, "regions": metrics, "region_bounds": region_bounds, "dimensions": list(EXPECTED_EXTENT), "view": view, "motion": "animated" if animated == "1" else "static", "frame_interval": frame_interval,
+        "warmup_start_graphics_frame": warmup_start_frame, "warmup_elapsed_seconds": warmup_elapsed_seconds, "first_capture_graphics_frame": first_frame, "overlapping": bool(overlap_count),
+        "route": "software" if "Loader: hardware ray tracing disabled before device creation" in log else "natural", "lagged_lighting": "RendererSystem: frame-lagged async lighting active history accepted" in log,
+        "pose_contract": ("Static initial phase; unchanged camera and light." if animated == "0" else "Front-facing triangle-wave time min(frame%240,240-frame%240)*.3/120; unchanged camera and light."
             if bounded_motion else "Unidentified archived animated pose; equal-pose comparison omitted.")}
 
 
@@ -340,8 +287,7 @@ def check_quality(result):
     for frame in result["frames"]:
         prefix = f"frame {frame['graphics_frame']}"
         background = frame["regions"]["background"]["mean_rgb"]
-        if any(abs(value - expected) > QUALITY_LIMITS["background_tolerance"]
-            for value, expected in zip(background, (88, 98, 113))):
+        if any(abs(value - expected) > QUALITY_LIMITS["background_tolerance"] for value, expected in zip(background, (88, 98, 113))):
             failures.append(f"{prefix}: background differs from the fixed scene")
         for name, metrics in frame["regions"].items():
             if max(metrics["horizontal_jump_fraction"], metrics["vertical_jump_fraction"]) > QUALITY_LIMITS["max_frame_jump_fraction"]:
@@ -351,14 +297,12 @@ def check_quality(result):
             if result["view"] == "direct":
                 if max(red, green, blue) < QUALITY_LIMITS["direct_core_minimum"]:
                     failures.append(f"{prefix} {name}: direct control cap is nearly black")
-                if name in ("box", "capsule") and max(abs(value - backdrop)
-                    for value, backdrop in zip((red, green, blue), background)) < QUALITY_LIMITS["direct_background_separation"]:
+                if name in ("box", "capsule") and max(abs(value - backdrop) for value, backdrop in zip((red, green, blue), background)) < QUALITY_LIMITS["direct_background_separation"]:
                     failures.append(f"{prefix} {name}: direct control cap is indistinguishable from background")
                 continue
             dominant = green if name == "sphere" else red
             margin = QUALITY_LIMITS["tint_margin"]
-            valid_tint = (red >= green + margin and green >= blue + margin) if name == "box" else (
-                green >= max(red, blue) + margin if name == "sphere" else red >= max(green, blue) + margin)
+            valid_tint = (red >= green + margin and green >= blue + margin) if name == "box" else (green >= max(red, blue) + margin if name == "sphere" else red >= max(green, blue) + margin)
             if dominant < QUALITY_LIMITS["colored_core_minimum"] or not valid_tint:
                 failures.append(f"{prefix} {name}: expected colored GI contribution is missing")
     return failures
@@ -418,8 +362,7 @@ def main():
     parser.add_argument("--route", choices=("natural", "software"), default="natural")
     parser.add_argument("--view", choices=("full", "indirect", "direct", "normal", "position", *STATE_CHANNELS), default="full")
     parser.add_argument("--motion", choices=("static", "animated"), default="static")
-    parser.add_argument("--frame-interval", type=int, default=FRAME_INTERVAL,
-        help="Use 1 for consecutive frames with serialized readbacks, or 8 for asynchronous longer-term sampling.")
+    parser.add_argument("--frame-interval", type=int, default=FRAME_INTERVAL, help="Use 1 for consecutive frames with serialized readbacks, or 8 for asynchronous longer-term sampling.")
     parser.add_argument("--lagged-lighting", action="store_true")
     parser.add_argument("--overlapping", action="store_true", help="Add a static plane receiver at z+0.125 with the same cutter group.")
     parser.add_argument("--gpu-validation", action="store_true")
@@ -454,8 +397,7 @@ def main():
         for control in ("view", "motion", "route", "lagged_lighting", "overlapping"):
             if result[control] != getattr(args, control):
                 raise SmokeFailure(f"logged temporal {control} differs from its requested value")
-        result.update({
-            "readback_contract": "Interval 1 waits for the accepted readback before advancing; other intervals poll asynchronously.",
+        result.update({ "readback_contract": "Interval 1 waits for the accepted readback before advancing; other intervals poll asynchronously.",
             "warmup_contract": "After at least 360 graphics frames, render for at least 30 steady-clock seconds before selecting the first capture frame.",
             "timing_contract": "Interval 1 serializes readbacks for functional coverage; GPU timings describe only the matched capture workload.",
             "control_contract": "Direct view omits displayed GI; identical GI computation and direct lighting remain active."})

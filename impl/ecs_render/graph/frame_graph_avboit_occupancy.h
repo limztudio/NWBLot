@@ -78,11 +78,7 @@ struct FrameGraphAvboitOccupancyUploadResult{
 
 class FrameGraphAvboitOccupancyUploadChain final : NoCopy{
 public:
-    FrameGraphAvboitOccupancyUploadChain(
-        Core::GpuTaskGraph& graph,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem
-    );
+    FrameGraphAvboitOccupancyUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
 
 
 public:

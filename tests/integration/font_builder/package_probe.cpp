@@ -76,9 +76,7 @@ inline constexpr int s_EntryFailure = -1;
     StripUtf8Bom(metadata);
     if(!document.parse(metadata))
         return false;
-    auto expanded = NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
-        sourcePath.parentPath(), "probe", sourcePath, document, scratch
-    );
+    auto expanded = NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(sourcePath.parentPath(), "probe", sourcePath, document, scratch);
     if(!expanded || expanded->size() != 2u)
         return false;
 
@@ -114,10 +112,7 @@ inline constexpr int s_EntryFailure = -1;
         else
             return false;
     }
-    return foundFont && foundAtlas
-        && NWB::Impl::ValidateFontAtlasSourceMatch(atlas.payload(), font)
-        && ExportPayload(destinationPath, atlas.payload())
-        && WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
+    return foundFont && foundAtlas && NWB::Impl::ValidateFontAtlasSourceMatch(atlas.payload(), font) && ExportPayload(destinationPath, atlas.payload()) && WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
 }
 
 int Run(const int argc, char** argv){

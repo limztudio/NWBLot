@@ -41,10 +41,7 @@ namespace __hidden_auto_registration{
 
 
 bool AssetCodecAutoRegistrar::initialize(){
-    ::RegisterAutoFactory(
-        __hidden_auto_registration::QueryAutoCodecFactoryQueue(),
-        m_factory
-    );
+    ::RegisterAutoFactory(__hidden_auto_registration::QueryAutoCodecFactoryQueue(), m_factory);
     return true;
 }
 
@@ -54,8 +51,7 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     __hidden_auto_registration::QueryAutoCodecFactoryQueue().copyTo(codecFactories);
 
     ::RegisterAutoFactoryProducts(
-        codecFactories,
-        [](const AssetCodecFactory factory){ return factory(); },
+        codecFactories, [](const AssetCodecFactory factory){ return factory(); },
         [&](UniquePtr<IAssetCodec> codec){ return outRegistry.registerCodec(Move(codec)); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: codec factory returned null codec")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: failed to register codec")); }

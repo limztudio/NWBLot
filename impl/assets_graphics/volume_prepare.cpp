@@ -61,42 +61,21 @@ struct GraphicsVolumeMetadata{
         , materialBindEntries(arena)
         , csgShapeEntries(arena)
         , preparedPlan(arena)
-        , seenShaderIdentityKeys(
-            0,
-            AssetsGraphicsCookDetail::ShaderStageKeyHasher(),
-            EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(),
-            arena
-        )
+        , seenShaderIdentityKeys(0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), arena)
     {}
 };
 
 static GraphicsVolumeMetadata& GraphicsMetadata(Core::Assets::ParsedAssetMetadata& metadata){
-    return Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(
-        metadata,
-        s_GraphicsVolumeMetadataExtensionName,
-        metadata.arena
-    );
+    return Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(metadata, s_GraphicsVolumeMetadataExtensionName, metadata.arena);
 }
 
-static bool AppendUniqueShaderEntry(
-    ShaderCook::ShaderEntry& shaderEntry,
-    const Path& nwbFilePath,
-    GraphicsVolumeMetadata& graphicsMetadata,
-    AssetsGraphicsCookDetail::ShaderEntryVector& outShaderEntries
-){
+static bool AppendUniqueShaderEntry(ShaderCook::ShaderEntry& shaderEntry, const Path& nwbFilePath, GraphicsVolumeMetadata& graphicsMetadata, AssetsGraphicsCookDetail::ShaderEntryVector& outShaderEntries){
     if(shaderEntry.name.empty())
         return true;
 
-    const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{
-        ToName(shaderEntry.name),
-        ToName(shaderEntry.archiveStage.view())
-    };
+    const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ ToName(shaderEntry.name), ToName(shaderEntry.archiveStage.view()) };
     if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader identity '{}' for stage '{}' from meta '{}'")
-            , StringConvert(shaderEntry.name)
-            , StringConvert(shaderEntry.archiveStage.view())
-            , PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader identity '{}' for stage '{}' from meta '{}'"), StringConvert(shaderEntry.name), StringConvert(shaderEntry.archiveStage.view()), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -104,9 +83,7 @@ static bool AppendUniqueShaderEntry(
     return true;
 }
 
-static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadata(
-    Core::Assets::AssetDocumentMetadataParseContext& context
-){
+static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadata(Core::Assets::AssetDocumentMetadataParseContext& context){
     using namespace Core::Assets;
 
     if(ShaderAssetTypes::ShaderTypeFromAssetType(context.assetType) != Core::ShaderType::Invalid){
@@ -116,12 +93,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             return AssetMetadataParseResult::Error;
         ShaderCook::ShaderEntry& shaderEntry = *shaderEntryResult;
 
-        auto shaderName = Core::Assets::BuildDerivedAssetVirtualPath(
-            context.cookArena,
-            context.discoveredNwbFile.assetRoot,
-            context.discoveredNwbFile.virtualRoot.view(),
-            Path(context.cookArena, shaderEntry.source)
-        );
+        auto shaderName = Core::Assets::BuildDerivedAssetVirtualPath(context.cookArena, context.discoveredNwbFile.assetRoot, context.discoveredNwbFile.virtualRoot.view(), Path(context.cookArena, shaderEntry.source));
         if(!shaderName)
             return AssetMetadataParseResult::Error;
         shaderEntry.name = Move(*shaderName);
@@ -155,9 +127,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             CanonicalizeTextInPlace(key);
             CookString cookKey(key, context.cookArena);
             if(!graphicsMetadata.includeMetadata.emplace(Move(cookKey), Move(includeEntry)).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate include metadata for source '{}'")
-                    , PathToString<tchar>(absSource)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate include metadata for source '{}'"), PathToString<tchar>(absSource));
                 return AssetMetadataParseResult::Error;
             }
         }
@@ -167,9 +137,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 
     if(context.assetType == AssetsCsgCook::s_CsgShapeAssetTypeName){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
-        auto csgShapeEntryResult = AssetsCsgCook::ParseCsgShapeCookMetadata(
-            context.cookArena, context.discoveredNwbFile.filePath, context.doc, context.scratchArena
-        );
+        auto csgShapeEntryResult = AssetsCsgCook::ParseCsgShapeCookMetadata(context.cookArena, context.discoveredNwbFile.filePath, context.doc, context.scratchArena);
         if(!csgShapeEntryResult)
             return AssetMetadataParseResult::Error;
 
@@ -181,12 +149,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 }
 
 static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
-    const auto bindFiles = Core::Assets::DiscoverFilesWithExtension(
-        context.arena,
-        context.resolvedPaths.assetRoots,
-        MaterialBindNames::SourceExtensionText(),
-        context.scratchArena
-    );
+    const auto bindFiles = Core::Assets::DiscoverFilesWithExtension(context.arena, context.resolvedPaths.assetRoots, MaterialBindNames::SourceExtensionText(), context.scratchArena);
     if(!bindFiles)
         return false;
 
@@ -197,12 +160,7 @@ static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVo
             return false;
         MaterialBindEntry& bindEntry = *bindResult;
 
-        auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(
-            context.arena,
-            discoveredBindFile.assetRoot,
-            discoveredBindFile.virtualRoot.view(),
-            discoveredBindFile.filePath
-        );
+        auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(context.arena, discoveredBindFile.assetRoot, discoveredBindFile.virtualRoot.view(), discoveredBindFile.filePath);
         if(!virtualPath)
             return false;
         bindEntry.virtualPath = Move(*virtualPath);
@@ -214,10 +172,7 @@ static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVo
 }
 
 static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
-    const GraphicsVolumeMetadata* selectedGraphics = Core::Assets::FindParsedMetadataExtension<GraphicsVolumeMetadata>(
-        context.parsedMetadata,
-        s_GraphicsVolumeMetadataExtensionName
-    );
+    const GraphicsVolumeMetadata* selectedGraphics = Core::Assets::FindParsedMetadataExtension<GraphicsVolumeMetadata>(context.parsedMetadata, s_GraphicsVolumeMetadataExtensionName);
     const Core::Assets::ICookEntryBucket* materialBucket = context.parsedMetadata.entryRegistry.find(Material::AssetTypeName());
     // Only selected graphics metadata or materials require generated modules and the shader index.
     if(!selectedGraphics && (!materialBucket || materialBucket->size() == 0u))
@@ -238,34 +193,19 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
         return false;
 
-    auto materialBindIncludeRootResult = EmitMaterialBindIncludes(
-        context.arena,
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        graphicsMetadata.materialBindEntries,
-        context.scratchArena
-    );
+    auto materialBindIncludeRootResult = EmitMaterialBindIncludes(context.arena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, context.scratchArena);
     if(!materialBindIncludeRootResult)
         return false;
     const Path& materialBindIncludeRoot = *materialBindIncludeRootResult;
 
-    // Resolve each CSG `eval` virtual path to its absolute source (cross-asset phase; verbatim #include in the
-    // generated module, checksum-covered). Runs before EmitCsgShapeModuleIncludes.
+    // Resolve each CSG `eval` virtual path to its absolute source (cross-asset phase; verbatim #include in the generated module, checksum-covered). Runs before EmitCsgShapeModuleIncludes.
     for(auto& csgShapeEntry : graphicsMetadata.csgShapeEntries){
         if(csgShapeEntry.evalInclude.empty())
             continue;
 
-        auto resolvedEvalSourceResult = Core::Assets::ResolveVirtualAssetPath(
-            context.arena,
-            context.resolvedPaths.assetRoots,
-            AStringView(csgShapeEntry.evalInclude),
-            context.scratchArena
-        );
+        auto resolvedEvalSourceResult = Core::Assets::ResolveVirtualAssetPath(context.arena, context.resolvedPaths.assetRoots, AStringView(csgShapeEntry.evalInclude), context.scratchArena);
         if(!resolvedEvalSourceResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shape '{}' eval '{}' does not resolve against any asset root")
-                , StringConvert(csgShapeEntry.shapeName.resolvedText())
-                , StringConvert(AStringView(csgShapeEntry.evalInclude))
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shape '{}' eval '{}' does not resolve against any asset root"), StringConvert(csgShapeEntry.shapeName.resolvedText()), StringConvert(AStringView(csgShapeEntry.evalInclude)));
             return false;
         }
 
@@ -277,36 +217,21 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         csgShapeEntry.evalInclude.assign(AStringView(resolvedEvalText));
     }
 
-    auto csgShapeIncludeRootResult = AssetsCsgCook::EmitCsgShapeModuleIncludes(
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        graphicsMetadata.csgShapeEntries,
-        context.scratchArena
-    );
+    auto csgShapeIncludeRootResult = AssetsCsgCook::EmitCsgShapeModuleIncludes(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.csgShapeEntries, context.scratchArena);
     if(!csgShapeIncludeRootResult)
         return false;
     Path& csgShapeIncludeRoot = *csgShapeIncludeRootResult;
 
-    // Resolve each material `bxdf`/`surface` virtual path to its absolute source (verbatim #include, checksum-covered,
-    // mirroring `interface` -> .bind resolution).
+    // Resolve each material `bxdf`/`surface` virtual path to its absolute source (verbatim #include, checksum-covered, mirroring `interface` -> .bind resolution).
     static constexpr AStringView s_BxdfSourceLabel = "bxdf";
     static constexpr AStringView s_SurfaceSourceLabel = "surface";
     const auto resolveMaterialVirtualSource = [&context](auto& virtualSource, const AStringView label, const AStringView materialName) -> bool {
         if(virtualSource.empty())
             return true;
 
-        const auto resolvedSource = Core::Assets::ResolveVirtualAssetPath(
-            context.arena,
-            context.resolvedPaths.assetRoots,
-            AStringView(virtualSource),
-            context.scratchArena
-        );
+        const auto resolvedSource = Core::Assets::ResolveVirtualAssetPath(context.arena, context.resolvedPaths.assetRoots, AStringView(virtualSource), context.scratchArena);
         if(!resolvedSource){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material '{}' {} '{}' does not resolve against any asset root")
-                , StringConvert(materialName)
-                , StringConvert(label)
-                , StringConvert(AStringView(virtualSource))
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material '{}' {} '{}' does not resolve against any asset root"), StringConvert(materialName), StringConvert(label), StringConvert(AStringView(virtualSource)));
             return false;
         }
 
@@ -330,72 +255,35 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     if(!AssignMaterialShadingModelIds(materialEntries, context.scratchArena))
         return false;
 
-    auto deferredBxdfIncludeRootResult = EmitDeferredBxdfDispatchModule(
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        materialEntries,
-        context.scratchArena
-    );
+    auto deferredBxdfIncludeRootResult = EmitDeferredBxdfDispatchModule(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
     if(!deferredBxdfIncludeRootResult)
         return false;
     const Path& deferredBxdfIncludeRoot = *deferredBxdfIncludeRootResult;
 
     // Trace dispatch also needs assigned surface ids and must participate in shader dependency checksums.
-    auto shadowSurfaceIncludeRootResult = EmitShadowSurfaceDispatchModule(
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        graphicsMetadata.materialBindEntries,
-        materialEntries,
-        context.scratchArena
-    );
+    auto shadowSurfaceIncludeRootResult = EmitShadowSurfaceDispatchModule(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena);
     if(!shadowSurfaceIncludeRootResult)
         return false;
     const Path& shadowSurfaceIncludeRoot = *shadowSurfaceIncludeRootResult;
 
-    // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored
-    // ones. Before shader prep + ValidateMaterials.
+    // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
     static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
-    auto generatedPixelShadersResult = EmitMaterialPixelShaders(
-        materialCookArena,
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        s_SharedMeshProgramName,
-        materialEntries,
-        context.scratchArena
-    );
+    auto generatedPixelShadersResult = EmitMaterialPixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_SharedMeshProgramName, materialEntries, context.scratchArena);
     if(!generatedPixelShadersResult)
         return false;
 
     // Generate AVBOIT accumulation from the same surface hook before shader preparation and material validation.
-    auto generatedAvboitAccumulatePixelShadersResult = EmitMaterialAvboitAccumulatePixelShaders(
-        materialCookArena,
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        materialEntries,
-        context.scratchArena
-    );
+    auto generatedAvboitAccumulatePixelShadersResult = EmitMaterialAvboitAccumulatePixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
     if(!generatedAvboitAccumulatePixelShadersResult)
         return false;
 
     // Occupancy, extinction, and accumulation must share the surface hook so renderCoverage agrees across passes.
-    auto generatedAvboitOccupancyPixelShadersResult = EmitMaterialAvboitOccupancyPixelShaders(
-        materialCookArena,
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        materialEntries,
-        context.scratchArena
-    );
+    auto generatedAvboitOccupancyPixelShadersResult = EmitMaterialAvboitOccupancyPixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
     if(!generatedAvboitOccupancyPixelShadersResult)
         return false;
 
-    auto generatedAvboitExtinctionPixelShadersResult = EmitMaterialAvboitExtinctionPixelShaders(
-        materialCookArena,
-        context.resolvedPaths.cacheDirectory,
-        context.configurationSafeName,
-        materialEntries,
-        context.scratchArena
-    );
+    auto generatedAvboitExtinctionPixelShadersResult = EmitMaterialAvboitExtinctionPixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
     if(!generatedAvboitExtinctionPixelShadersResult)
         return false;
 
@@ -404,10 +292,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
-        if(
-            !pixelShaderEntry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage))
-            || !pixelShaderEntry.archiveStage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage))
-        ){
+        if(!pixelShaderEntry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage)) || !pixelShaderEntry.archiveStage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage))){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to allocate generated pixel shader entry"));
             return false;
         }
@@ -415,14 +300,9 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(s_EngineGraphicsIncludeRoot, shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;
 
-        const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{
-            ToName(pixelShaderEntry.name),
-            ToName(pixelShaderEntry.archiveStage.view())
-        };
+        const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ ToName(pixelShaderEntry.name), ToName(pixelShaderEntry.archiveStage.view()) };
         if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate generated pixel shader identity '{}'")
-                , StringConvert(pixelShaderEntry.name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate generated pixel shader identity '{}'"), StringConvert(pixelShaderEntry.name));
             return false;
         }
         graphicsMetadata.shaderEntries.push_back(Move(pixelShaderEntry));
@@ -462,21 +342,12 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
     graphicsMetadata.preparedPlan = Move(*preparedPlan);
 
-    if(!AssetsGraphicsCookDetail::ValidateMaterials(
-        graphicsMetadata.shaderCook,
-        graphicsMetadata.preparedPlan.preparedEntries,
-        materialEntries,
-        context.scratchArena
-    ))
+    if(!AssetsGraphicsCookDetail::ValidateMaterials(graphicsMetadata.shaderCook, graphicsMetadata.preparedPlan.preparedEntries, materialEntries, context.scratchArena))
         return false;
     if(!Core::Assets::AddPlannedFileCount(graphicsMetadata.preparedPlan.plannedFileCount, context.plannedFileCount))
         return false;
 
-    context.manifestCookers.emplace_back([&context](
-        Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-        Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes,
-        Core::Assets::ScratchArena& writeScratchArena
-    ){
+    context.manifestCookers.emplace_back([&context](Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes, Core::Assets::ScratchArena& writeScratchArena){
         return AssetsGraphicsCookDetail::AppendPreparedShadersToManifest(
             context.arena,
             GraphicsMetadata(context.parsedMetadata).shaderCook,
@@ -496,10 +367,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
 
 Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
-Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(
-    &ParseGraphicsDocumentMetadata,
-    nullptr
-);
+Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -43,11 +43,7 @@ bool UiImageSmokeScene::paint(Impl::UiPaintContext& context){
     const f32 width = Max(300.0f, context.display.logicalWidth * 0.5f - 40.0f);
     const f32 right = 24.0f + width + 32.0f;
     const f32 otherWidth = Max(220.0f, context.display.logicalWidth - right - 24.0f);
-    if(
-        !paintMain(ui, { 24.0f, 24.0f, width, 392.0f })
-        || !paintFrozen(ui, { right, 24.0f, otherWidth, 120.0f })
-        || !paintExternal(context, { right, 176.0f, otherWidth, 84.0f }) || !paintPopups(ui, right) || ui.failed()
-    )
+    if(!paintMain(ui, { 24.0f, 24.0f, width, 392.0f }) || !paintFrozen(ui, { right, 24.0f, otherWidth, 120.0f }) || !paintExternal(context, { right, 176.0f, otherWidth, 84.0f }) || !paintPopups(ui, right) || ui.failed())
         return false;
     observeState(context);
     paintMarkers(context);
@@ -151,8 +147,7 @@ bool UiImageSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl:
     ImageOptions options;
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    const bool painted = ui.beginPanel("image_external", bounds)
-        && ui.image("external", Name("progress.fill"), options) && ui.endPanel();
+    const bool painted = ui.beginPanel("image_external", bounds) && ui.image("external", Name("progress.fill"), options) && ui.endPanel();
     const bool popped = context.paint.popClip();
     return painted && popped;
 }
@@ -210,11 +205,7 @@ bool IsUiLayerImageSkinSmokeEnabled(){
 }
 
 SharedUiImageSmokeScene CreateUiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiImageSmokeScene(
-        NewArenaObject<RefCounter<UiImageSmokeScene>>(arena, arena, input),
-        ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedUiImageSmokeScene(NewArenaObject<RefCounter<UiImageSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

@@ -68,12 +68,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 #if NWB_GI_CSG_ENABLED
-void nwbGiHwCsgClosest(
-    const float3 origin,
-    const float3 direction,
-    const float minimum,
-    inout NwbGiGeometryHit closest
-){
+void nwbGiHwCsgClosest(const float3 origin, const float3 direction, const float minimum, inout NwbGiGeometryHit closest){
     const uint contextSlot = g_NwbGiHwMaterialContextSlots.materialSlots.w;
     const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
     const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
@@ -84,9 +79,7 @@ void nwbGiHwCsgClosest(
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, closest.distance))
             continue;
-        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(
-            contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, closest.distance
-        );
+        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, closest.distance);
         if(geometry.hit)
             closest = geometry;
         if(closest.failure != 0u)
@@ -104,9 +97,7 @@ bool nwbGiHwCsgOccluded(const float3 origin, const float3 direction, const float
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, maximum))
             continue;
-        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(
-            contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, maximum
-        );
+        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, maximum);
         if(geometry.hit)
             return true;
     }
@@ -179,13 +170,9 @@ bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax)
     ray.TMax = tMax;
     RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
 #if NWB_GI_CSG_ENABLED
-    query.TraceRayInline(
-        nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray
-    );
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
 #else
-    query.TraceRayInline(
-        nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray
-    );
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
 #endif
     while(query.Proceed()){}
     if(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT)

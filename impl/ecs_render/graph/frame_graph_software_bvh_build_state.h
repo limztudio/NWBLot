@@ -45,17 +45,11 @@ struct FrameGraphSoftwareBvhBuildStateResult{
 
 class FrameGraphSoftwareBvhBuildStateImporter final : NoCopy{
 public:
-    FrameGraphSoftwareBvhBuildStateImporter(
-        Core::GpuTaskGraph& graph,
-        RendererMeshSystem& meshSystem
-    );
+    FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem);
 
 
 public:
-    [[nodiscard]] Expected<FrameGraphSoftwareBvhBuildStateResult> declare(
-        const FrameGraphSoftwareBvhBuildStateInputs& inputs,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] Expected<FrameGraphSoftwareBvhBuildStateResult> declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

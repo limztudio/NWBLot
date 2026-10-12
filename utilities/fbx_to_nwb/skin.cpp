@@ -45,24 +45,9 @@ bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
 
 JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
     JointMatrix result{};
-    result.rows[0] = Vec4{
-        static_cast<f32>(matrix.m00),
-        static_cast<f32>(matrix.m01),
-        static_cast<f32>(matrix.m02),
-        static_cast<f32>(matrix.m03),
-    };
-    result.rows[1] = Vec4{
-        static_cast<f32>(matrix.m10),
-        static_cast<f32>(matrix.m11),
-        static_cast<f32>(matrix.m12),
-        static_cast<f32>(matrix.m13),
-    };
-    result.rows[2] = Vec4{
-        static_cast<f32>(matrix.m20),
-        static_cast<f32>(matrix.m21),
-        static_cast<f32>(matrix.m22),
-        static_cast<f32>(matrix.m23),
-    };
+    result.rows[0] = Vec4{ static_cast<f32>(matrix.m00), static_cast<f32>(matrix.m01), static_cast<f32>(matrix.m02), static_cast<f32>(matrix.m03), };
+    result.rows[1] = Vec4{ static_cast<f32>(matrix.m10), static_cast<f32>(matrix.m11), static_cast<f32>(matrix.m12), static_cast<f32>(matrix.m13), };
+    result.rows[2] = Vec4{ static_cast<f32>(matrix.m20), static_cast<f32>(matrix.m21), static_cast<f32>(matrix.m22), static_cast<f32>(matrix.m23), };
     return result;
 }
 
@@ -92,20 +77,12 @@ ufbx_matrix BuildMeshFromOutputMatrix(const MeshInstance& instance, const Import
     return ufbx_matrix_mul(&nodeMeshToWorldInverse, &scaleInverse);
 }
 
-ufbx_matrix BuildOutputInverseBindMatrix(
-    const ufbx_skin_cluster& cluster,
-    const MeshInstance& instance,
-    const ImportOptions& options
-){
+ufbx_matrix BuildOutputInverseBindMatrix(const ufbx_skin_cluster& cluster, const MeshInstance& instance, const ImportOptions& options){
     const ufbx_matrix meshFromOutput = BuildMeshFromOutputMatrix(instance, options);
     return ufbx_matrix_mul(&cluster.geometry_to_bone, &meshFromOutput);
 }
 
-Expected<u16> FindOrAddJoint(
-    ExportContext& context,
-    ufbx_skin_cluster* cluster,
-    const ufbx_matrix& inverseBind
-){
+Expected<u16> FindOrAddJoint(ExportContext& context, ufbx_skin_cluster* cluster, const ufbx_matrix& inverseBind){
     if(!cluster || !cluster->bone_node){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
         return MakeUnexpected(Failure{});
@@ -129,9 +106,7 @@ Expected<u16> FindOrAddJoint(
         NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
         NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
         if(!NearlyEqualJointMatrices(LoadFloat(context.inverseBindMatrices[jointIndex]), convertedMatrixValue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices")
-                , StringConvert(NodeDisplayName(cluster->bone_node))
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), StringConvert(NodeDisplayName(cluster->bone_node)));
             return MakeUnexpected(Failure{});
         }
 
@@ -151,12 +126,7 @@ Expected<u16> FindOrAddJoint(
     return joint;
 }
 
-Expected<UtilityVector<u16>> BuildClusterJointMap(
-    const MeshInstance& instance,
-    const ImportOptions& options,
-    ufbx_skin_deformer* skin,
-    ExportContext& context
-){
+Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context){
     UtilityVector<u16> outClusterJoints;
     if(!skin){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
@@ -198,11 +168,7 @@ Expected<UtilityVector<u16>> BuildClusterJointMap(
     return outClusterJoints;
 }
 
-Expected<SkinInfluenceResult> BuildInfluence(
-    ufbx_skin_deformer* skin,
-    const UtilityVector<u16>& clusterJoints,
-    const u32 logicalVertex
-){
+Expected<SkinInfluenceResult> BuildInfluence(ufbx_skin_deformer* skin, const UtilityVector<u16>& clusterJoints, const u32 logicalVertex){
     SkinInfluenceResult result;
     result.weights = VectorZero();
     if(!skin || logicalVertex >= skin->vertices.count){
@@ -211,10 +177,7 @@ Expected<SkinInfluenceResult> BuildInfluence(
     }
 
     const ufbx_skin_vertex skinVertex = skin->vertices.data[logicalVertex];
-    if(
-        skinVertex.weight_begin > skin->weights.count
-        || skinVertex.num_weights > skin->weights.count - skinVertex.weight_begin
-    ){
+    if(skinVertex.weight_begin > skin->weights.count || skinVertex.num_weights > skin->weights.count - skinVertex.weight_begin){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin vertex weight range is out of bounds"));
         return MakeUnexpected(Failure{});
     }

@@ -18,7 +18,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - Do not `#undef` the include guard or the public macros declared by the header.
 - Separate major file sections with the 128-slash separator and optional section comments.
   - Keep exactly two blank lines before and after every file-scope separator line, including banner-adjacent separators (after the banner separator, before/after `#pragma once`, include groups, `NWB_*_BEGIN`/`NWB_*_END`, section comments, and the final separator).
-  - Keep comments on one line when the full sentence still scans easily; do not hard-wrap a short comment into two lines.
+  - Split multiline prose comments only at sentence boundaries: a sentence-ending period (`.`) is a split point; a continuing sentence must remain on one physical comment line, even when it exceeds the soft code-line width. Join existing wrapped continuations of the same sentence. Do not mistake decimal points, abbreviations, filenames, URLs, or member access for sentence endings. Preserve paragraphs, code examples, tables, licenses, banners, and machine-readable/tooling directives.
   - Use comments for non-obvious intent, contracts, ownership, lifetimes, layouts, numerical assumptions, or external API constraints. Remove code narration, redundant headings, tutorial annotations, and obsolete change history; compact repeated explanations.
   - Preserve required banners, license notices, machine-readable/tooling directives, and comments that identify regression scenarios.
 - String literals that embed the file separator for bounds searches must use exactly the same 128-slash run; do not lengthen or shorten the literal.
@@ -74,6 +74,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - If a class or virtual function can reasonably be `final`, use `final` to help devirtualization/unrolling opportunities.
 
 ## 4. Formatting conventions
+- Use 260 characters, including indentation, as the soft code-line width. This is a readability guide, not a hard maximum: a line may exceed 260 characters when keeping it intact reads better. Consider splitting substantially longer lines at logical boundaries. The 128-slash section separator is independent of this code-line width.
+- Keep each logical function signature, call, control condition, initialization, assignment, return expression, or fluent chain on one line when it fits within 260 characters and remains readable. Join existing continuations that fit; do not wrap merely because of argument count or the separator width. Preserve structural statement/body boundaries, constructor initializer-list layout, comments, directives, and meaningful data/table layout. Repeat the scan after edits until no unnecessary continuations remain.
 - Indentation is 4 spaces (no tabs observed in sampled files).
 - Braces are generally K&R style (`if(...) {`, `switch(...) {`, `class X{`).
 - No space between closing `)` and trailing qualifiers (`const`, `override`, `final`, `noexcept`):
@@ -122,8 +124,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `    , arg0`
   - `    , arg1`
   - `);`
-- Split function arguments only when the line would exceed the long separator width (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) or when argument count is too high.
-- Prefer single-line function signatures/definitions when the parameter list is still readable. For signatures, treat the long-separator width as a soft readability cue, not a hard split point; do not split a short signature just because it is modestly long.
+- Consider splitting function arguments when the complete line is substantially longer than 260 characters or a logical boundary improves readability; argument count alone does not require a split.
+- Prefer single-line function signatures/definitions when the parameter list is still readable. Use the 260-character soft code-line width; do not use the 128-character separator as a signature split point.
 - For a function definition whose parameter list spans multiple lines, put the closing `)` on its own line, aligned with the function opener. Keep the opening body brace on that closing line, after any existing qualifiers, exception specification, or trailing return type. If the exception specification or trailing return type itself spans multiple lines, preserve its continuation lines and attach the body brace to its final line. Never attach the parameter-list closing `)` to the final parameter. Apply this to free/member/static functions, operators, constructors, lambdas, and shader functions. Keep constructor initializer lists on their existing continuation lines; do not move the body brace ahead of an initializer list. Preserve readable single-line signatures.
   - Correct:
   - `void Foo(`

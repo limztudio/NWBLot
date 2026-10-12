@@ -29,11 +29,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool GbufferGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.opaqueDrawSnapshot.captured)
         return false;
@@ -51,88 +47,39 @@ namespace ECSRenderDetail{
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
-        payload.meshViewSetupReady,
-        payload.sceneShadingSetupReady
-    );
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(frameSetupReady)
         payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
 
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
-    const bool deferredResourcesReady =
-        hasDeferredDrawItems
-        && payload.materialDrawBuffersUploaded
-        && payload.frameBindings.frameReady(
-            payload.opaqueDrawSnapshot.instanceCount,
-            payload.opaqueDrawSnapshot.materialTypedByteCount
-        )
-    ;
-    const bool regularDrawResourcesReady =
-        deferredResourcesReady
-        && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings)
-    ;
+    const bool deferredResourcesReady = hasDeferredDrawItems && payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.instanceCount, payload.opaqueDrawSnapshot.materialTypedByteCount);
+    const bool regularDrawResourcesReady = deferredResourcesReady && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings);
     MaterialPassDrawItems regularMeshDrawItems{ scratchArena };
     const MaterialPassDrawItems* regularDrawItemsForGbuffer = &opaqueDrawItems.regular;
     if(payload.regularSharedComputeEmulationDrawsGraphOwned){
         regularMeshDrawItems.meshDrawItems.reserve(opaqueDrawItems.regular.meshDrawItems.size());
-        regularMeshDrawItems.meshDrawItems.assign(
-            opaqueDrawItems.regular.meshDrawItems.begin(),
-            opaqueDrawItems.regular.meshDrawItems.end()
-        );
+        regularMeshDrawItems.meshDrawItems.assign(opaqueDrawItems.regular.meshDrawItems.begin(), opaqueDrawItems.regular.meshDrawItems.end());
         regularMeshDrawItems.indexedDrawItems.reserve(opaqueDrawItems.regular.indexedDrawItems.size());
-        regularMeshDrawItems.indexedDrawItems.assign(
-            opaqueDrawItems.regular.indexedDrawItems.begin(),
-            opaqueDrawItems.regular.indexedDrawItems.end()
-        );
+        regularMeshDrawItems.indexedDrawItems.assign(opaqueDrawItems.regular.indexedDrawItems.begin(), opaqueDrawItems.regular.indexedDrawItems.end());
         regularDrawItemsForGbuffer = &regularMeshDrawItems;
     }
-    const bool csgResourcesReady =
-        deferredResourcesReady
-        && (
-            !csgFrameData.hasWork()
-            || (
-                payload.csgFrameBuffersUploaded
-                && payload.csgResources.frameReady(csgFrameData)
-                && payload.frameBindings.bindingValid()
-            )
-        )
-    ;
-    const bool csgReceiverSurfaceDrawResourcesReady =
-        csgResourcesReady
-        && (opaqueDrawItems.csgReceiverSurface.empty()
-            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
-    ;
-    if(
-        regularDrawResourcesReady
-        && payload.regularSharedComputeEmulationDrawsGraphOwned
-        && (
-            !payload.regularSharedComputeEmulationTiming
-            || payload.regularSharedComputeEmulationTiming->has_value()
-        )
-    )
+    const bool csgResourcesReady = deferredResourcesReady && (!csgFrameData.hasWork() || (payload.csgFrameBuffersUploaded && payload.csgResources.frameReady(csgFrameData) && payload.frameBindings.bindingValid()));
+    const bool csgReceiverSurfaceDrawResourcesReady = csgResourcesReady && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
+    if(regularDrawResourcesReady && payload.regularSharedComputeEmulationDrawsGraphOwned && (!payload.regularSharedComputeEmulationTiming || payload.regularSharedComputeEmulationTiming->has_value()))
         return false;
 
     const bool csgSampleStateReady = csgResourcesReady;
     if(deferredResourcesReady && csgSampleStateReady && csgFrameData.hasWork()){
         // Graph uploads are immutable; native recording consumes them as-is.
-        csgSystem.dispatchCsgIntervalPeels(
-            commandList,
-            deferredTargets,
-            csgFrameData,
-            payload.csgResources,
-            payload.frameBindings
-        );
+        csgSystem.dispatchCsgIntervalPeels(commandList, deferredTargets, csgFrameData, payload.csgResources, payload.frameBindings);
     }
 
     // Clears begin the first segment; continuations resume with LOAD.
     Core::RenderPassParameters renderPassParameters;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION] = ECSRenderDetail::s_ClearColor;
-    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] =
-        ECSRenderDetail::s_GBufferNormalClearColor;
-    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] =
-        ECSRenderDetail::s_GBufferWorldPositionClearColor;
-    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION] =
-        ECSRenderDetail::s_GBufferSpecularRoughnessClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] = ECSRenderDetail::s_GBufferNormalClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] = ECSRenderDetail::s_GBufferWorldPositionClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION] = ECSRenderDetail::s_GBufferSpecularRoughnessClearColor;
     for(u32 attachmentIndex = 0u; attachmentIndex < NWB_MESH_GBUFFER_TARGET_COUNT; ++attachmentIndex)
         renderPassParameters.colorAttachmentActions[attachmentIndex].loadAction = Core::RenderPassLoadAction::Clear;
     renderPassParameters.depthAttachmentActions.loadAction = Core::RenderPassLoadAction::Clear;
@@ -151,49 +98,24 @@ namespace ECSRenderDetail{
             payload.materialGeometryStatesGraphOwned,
             payload.regularComputeEmulationOutputStatesGraphOwned
         };
-        if(
-            regularDrawResourcesReady
-            && (
-                payload.regularSharedComputeEmulationDrawsGraphOwned
-                || !regularDrawItemsForGbuffer->empty()
-            )
-        ){
+        if(regularDrawResourcesReady && (payload.regularSharedComputeEmulationDrawsGraphOwned || !regularDrawItemsForGbuffer->empty())){
             if(payload.regularSharedComputeEmulationDrawsGraphOwned){
-                payload.regularSharedComputeEmulationTiming->emplace(
-                    graphics.gpuTiming(),
-                    RendererGpuTimingScope::s_OpaqueRegular,
-                    graphics.getDevice(),
-                    commandList
-                );
+                payload.regularSharedComputeEmulationTiming->emplace(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
                 // Close the marker before finalizing this command list.
                 if(!Core::FinishSplitGpuTimingMarker(payload.regularSharedComputeEmulationTiming))
                     return false;
                 if(!regularDrawItemsForGbuffer->empty()){
-                    materialSystem.renderMaterialPassDrawItems(
-                        opaqueDrawContext,
-                        *regularDrawItemsForGbuffer
-                    );
+                    materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, *regularDrawItemsForGbuffer);
                 }
             }
             else{
-                Core::GpuTimingMeasure timing(
-                    graphics.gpuTiming(),
-                    RendererGpuTimingScope::s_OpaqueRegular,
-                    graphics.getDevice(),
-                    commandList
-                );
-                materialSystem.renderMaterialPassDrawItems(
-                    opaqueDrawContext,
-                    *regularDrawItemsForGbuffer
-                );
+                Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
+                materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, *regularDrawItemsForGbuffer);
             }
         }
 
         Core::ViewportState csgIntervalViewportState;
-        csgIntervalViewportState
-            .addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport())
-            .addScissorRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height))
-        ;
+        csgIntervalViewportState.addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height));
         const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
             commandList,
             deferredTargets.framebuffer.get(),
@@ -207,16 +129,8 @@ namespace ECSRenderDetail{
             payload.csgReceiverComputeEmulationOutputStatesGraphOwned
         };
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
-            Core::GpuTimingMeasure timing(
-                graphics.gpuTiming(),
-                RendererGpuTimingScope::s_OpaqueCsgReceiverSurface,
-                graphics.getDevice(),
-                commandList
-            );
-            materialSystem.renderMaterialPassDrawItems(
-                csgReceiverSurfaceDrawContext,
-                opaqueDrawItems.csgReceiverSurface
-            );
+            Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, graphics.getDevice(), commandList);
+            materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
         }
     }
     commandList.endRenderPass();

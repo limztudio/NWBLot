@@ -82,12 +82,7 @@ public:
 
 public:
     void reset(u16 deviceGeneration)noexcept;
-    [[nodiscard]] ReflectionFeedbackPlan plan(
-        const ReflectionSceneContentStamp& stamp,
-        const ReflectionSettings& settings,
-        bool enabled,
-        u64 graphicsFrameIndex
-    )noexcept;
+    [[nodiscard]] ReflectionFeedbackPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, bool enabled, u64 graphicsFrameIndex)noexcept;
     [[nodiscard]] bool reserve(const ReflectionFeedbackPlan& plan)noexcept;
     void discard(const ReflectionFeedbackPlan& plan)noexcept;
     [[nodiscard]] bool accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
@@ -114,9 +109,7 @@ private:
 };
 
 using ReflectionFeedbackControl = RefCounter<ReflectionFeedbackState>;
-using ReflectionFeedbackControlHandle = RefCountPtr<
-    ReflectionFeedbackControl, ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>
->;
+using ReflectionFeedbackControlHandle = RefCountPtr< ReflectionFeedbackControl, ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration);
 

@@ -16,20 +16,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningStateBufferCollector::MeshSkinningStateBufferCollector(
-    Core::Alloc::ScratchArena& scratchArena,
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers
-)
+MeshSkinningStateBufferCollector::MeshSkinningStateBufferCollector(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)
     : m_buffers(outBuffers)
     , m_scratchArena(scratchArena)
 {
     m_buffers.clear();
 }
 
-void MeshSkinningStateBufferCollector::collect(
-    const MeshSkinningRuntimeInstance* const instance,
-    const MeshSkinningStateBufferResources& resources
-){
+void MeshSkinningStateBufferCollector::collect(const MeshSkinningRuntimeInstance* const instance, const MeshSkinningStateBufferResources& resources){
     if(!instance || !instance->valid())
         return;
 

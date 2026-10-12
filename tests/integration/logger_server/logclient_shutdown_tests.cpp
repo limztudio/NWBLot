@@ -32,16 +32,7 @@ inline constexpr u32 s_FirstRequestDelayMilliseconds = 250u;
 
 class ShutdownCaptureServer final : NoCopy{
 private:
-    static MHD_Result RequestCallback(
-        void* serverContext,
-        MHD_Connection* connection,
-        const char* url,
-        const char* method,
-        const char* version,
-        const char* uploadData,
-        size_t* uploadDataSize,
-        void** connectionContext
-    );
+    static MHD_Result RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSize, void** connectionContext);
 
 
 public:
@@ -122,18 +113,7 @@ bool ShutdownCaptureServer::start(){
     sockaddr_in listenAddress = {};
     listenAddress.sin_family = AF_INET;
     listenAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    m_daemon = MHD_start_daemon(
-        MHD_USE_INTERNAL_POLLING_THREAD,
-        0u,
-        nullptr,
-        nullptr,
-        &ShutdownCaptureServer::RequestCallback,
-        this,
-        MHD_OPTION_SOCK_ADDR_LEN,
-        static_cast<socklen_t>(sizeof(listenAddress)),
-        &listenAddress,
-        MHD_OPTION_END
-    );
+    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, 0u, nullptr, nullptr, &ShutdownCaptureServer::RequestCallback, this, MHD_OPTION_SOCK_ADDR_LEN, static_cast<socklen_t>(sizeof(listenAddress)), &listenAddress, MHD_OPTION_END);
     if(!m_daemon)
         return false;
 
@@ -143,11 +123,7 @@ bool ShutdownCaptureServer::start(){
     if(
         !daemonInfo
         || daemonInfo->listen_fd == MHD_INVALID_SOCKET
-        || ::getsockname(
-            daemonInfo->listen_fd,
-            reinterpret_cast<sockaddr*>(&boundAddress),
-            &boundAddressSize
-        ) != 0
+        || ::getsockname(daemonInfo->listen_fd, reinterpret_cast<sockaddr*>(&boundAddress), &boundAddressSize) != 0
         || boundAddressSize != static_cast<socklen_t>(sizeof(boundAddress))
         || boundAddress.sin_family != AF_INET
         || boundAddress.sin_port == 0u
@@ -175,11 +151,7 @@ TEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins){
         ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
 
         for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex){
-            client.enqueue(StringFormat(
-                client.arena(),
-                NWB_TEXT("Log client shutdown payload {}"),
-                messageIndex
-            ));
+            client.enqueue(StringFormat(client.arena(), NWB_TEXT("Log client shutdown payload {}"), messageIndex));
         }
     }
 

@@ -37,18 +37,11 @@ using TaskGraphTestUtils::TestArena;
     return DeriveName(prefix, FormatDecimal(index, text));
 }
 
-[[nodiscard]] static Graphics::GpuTaskResourceUse BufferUse(
-    const Graphics::GpuGraphResourceId resource,
-    const u64 offset,
-    const u64 size,
-    const Graphics::GpuTaskResourceAccess::Enum access
-){
+[[nodiscard]] static Graphics::GpuTaskResourceUse BufferUse(const Graphics::GpuGraphResourceId resource, const u64 offset, const u64 size, const Graphics::GpuTaskResourceAccess::Enum access){
     return Graphics::GpuTaskResourceUse{
         .resource = resource,
         .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(offset, size) },
-        .requiredState = access == Graphics::GpuTaskResourceAccess::Read
-            ? Graphics::ResourceStates::ShaderResource
-            : Graphics::ResourceStates::UnorderedAccess,
+        .requiredState = access == Graphics::GpuTaskResourceAccess::Read ? Graphics::ResourceStates::ShaderResource : Graphics::ResourceStates::UnorderedAccess,
         .access = access,
     };
 }
@@ -79,15 +72,7 @@ TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
     };
     Graphics::GpuTaskId tasks[LengthOf(uses)];
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        tasks[index] = AddTask(
-            graph,
-            IndexedName(Name("tests/hazard_tracking/task"), index),
-            "Task",
-            nullptr,
-            0u,
-            &uses[index],
-            1u
-        );
+        tasks[index] = AddTask(graph, IndexedName(Name("tests/hazard_tracking/task"), index), "Task", nullptr, 0u, &uses[index], 1u);
         ASSERT_TRUE(tasks[index].valid());
     }
     struct ExpectedHazard{
@@ -140,20 +125,10 @@ TEST(GpuTaskGraph, HazardTrackingRetiresOnlyCoveredReadersAndPreservesAppendOrde
     };
     Graphics::GpuTaskId tasks[LengthOf(uses)];
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        tasks[index] = AddTask(
-            graph,
-            IndexedName(Name("tests/hazard_tracking/read_task"), index),
-            "Read Task",
-            nullptr,
-            0u,
-            &uses[index],
-            1u
-        );
+        tasks[index] = AddTask(graph, IndexedName(Name("tests/hazard_tracking/read_task"), index), "Read Task", nullptr, 0u, &uses[index], 1u);
         ASSERT_TRUE(tasks[index].valid());
     }
-    const usize expectedPairs[][2u] = {
-        { 1u, 3u }, { 3u, 5u }, { 0u, 5u }, { 2u, 5u }, { 4u, 5u }, { 5u, 6u }, { 5u, 7u }, { 6u, 7u },
-    };
+    const usize expectedPairs[][2u] = { { 1u, 3u }, { 3u, 5u }, { 0u, 5u }, { 2u, 5u }, { 4u, 5u }, { 5u, 6u }, { 5u, 7u }, { 6u, 7u }, };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     ASSERT_EQ(analysis.inferredEdges().size(), LengthOf(expectedPairs));
@@ -175,35 +150,11 @@ TEST(GpuTaskGraph, HazardTrackingPreservesSameTaskAccessAndResetSemantics){
             BufferUse(buffer, 0u, 16u, Graphics::GpuTaskResourceAccess::Read),
             BufferUse(buffer, 32u, 16u, Graphics::GpuTaskResourceAccess::Read),
         };
-        const auto first = AddTask(
-            graph,
-            Name("tests/hazard_tracking/first"),
-            "First",
-            nullptr,
-            0u,
-            firstUses,
-            LengthOf(firstUses)
-        );
+        const auto first = AddTask(graph, Name("tests/hazard_tracking/first"), "First", nullptr, 0u, firstUses, LengthOf(firstUses));
         const auto secondUse = BufferUse(buffer, 0u, 48u, Graphics::GpuTaskResourceAccess::Write);
-        const auto second = AddTask(
-            graph,
-            Name("tests/hazard_tracking/second"),
-            "Second",
-            nullptr,
-            0u,
-            &secondUse,
-            1u
-        );
+        const auto second = AddTask(graph, Name("tests/hazard_tracking/second"), "Second", nullptr, 0u, &secondUse, 1u);
         const auto thirdUse = BufferUse(buffer, 0u, 48u, Graphics::GpuTaskResourceAccess::ReadWrite);
-        const auto third = AddTask(
-            graph,
-            Name("tests/hazard_tracking/third"),
-            "Third",
-            nullptr,
-            0u,
-            &thirdUse,
-            1u
-        );
+        const auto third = AddTask(graph, Name("tests/hazard_tracking/third"), "Third", nullptr, 0u, &thirdUse, 1u);
         ASSERT_TRUE(first.valid());
         ASSERT_TRUE(second.valid());
         ASSERT_TRUE(third.valid());

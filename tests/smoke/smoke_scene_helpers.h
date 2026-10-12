@@ -57,14 +57,7 @@ struct SmokeTintedEntitySetup{
     Name materialInterface;
 };
 
-[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(
-    Core::ECS::World& world,
-    Core::Alloc::GlobalArena& arena,
-    const SmokeMaterialRef& material,
-    const AStringView materialInterfacePath,
-    const Float4& position,
-    const Float4& scale
-){
+[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const SmokeMaterialRef& material, const AStringView materialInterfacePath, const Float4& position, const Float4& scale){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
     transform.position = position;
@@ -78,19 +71,8 @@ struct SmokeTintedEntitySetup{
     return { entity.id(), materialInterface };
 }
 
-[[nodiscard]] inline bool ApplySmokeMaterialTint(
-    Core::ECS::World& world,
-    const SmokeTintedEntitySetup& setup,
-    const Float4& colorTint,
-    const AStringView tintParameterPath = "runtime.color_tint"
-){
-    return Impl::SetMaterialMutableHalf4(
-        world,
-        setup.entity,
-        setup.materialInterface,
-        tintParameterPath,
-        colorTint
-    );
+[[nodiscard]] inline bool ApplySmokeMaterialTint(Core::ECS::World& world, const SmokeTintedEntitySetup& setup, const Float4& colorTint, const AStringView tintParameterPath = "runtime.color_tint"){
+    return Impl::SetMaterialMutableHalf4(world, setup.entity, setup.materialInterface, tintParameterPath, colorTint);
 }
 
 [[nodiscard]] inline Core::ECS::EntityID CreateTintedStaticMeshEntity(
@@ -104,14 +86,7 @@ struct SmokeTintedEntitySetup{
     const Float4& scale,
     const AStringView tintParameterPath = "runtime.color_tint"
 ){
-    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(
-        world,
-        arena,
-        material,
-        materialInterfacePath,
-        position,
-        scale
-    );
+    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, arena, material, materialInterfacePath, position, scale);
 
     auto& meshComponent = world.entity(setup.entity).addComponent<Impl::MeshComponent>();
     meshComponent.mesh = mesh;
@@ -127,41 +102,17 @@ struct SmokeRenderSystems{
     Impl::RendererSystem& renderer;
 };
 
-[[nodiscard]] inline SmokeRenderSystems CreateSmokeRenderSystems(
-    Core::ECS::World& world,
-    ProjectRuntimeContext& context,
-    const SmokeRenderQualitySettings& baseSettings = {}
-){
+[[nodiscard]] inline SmokeRenderSystems CreateSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context, const SmokeRenderQualitySettings& baseSettings = {}){
     auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
-    auto& rendererSystem = world.addSystem<Impl::RendererSystem>(
-        world,
-        context.graphics,
-        context.assetManager,
-        context.shaderPathResolver
-    );
-    NWB_FATAL_ASSERT_MSG(
-        ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.caustic),
-        NWB_TEXT("Invalid caustic quality smoke settings")
-    );
-    NWB_FATAL_ASSERT_MSG(
-        ApplySurfelGiQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.surfelGi),
-        NWB_TEXT("Invalid surfel GI quality smoke settings")
-    );
-    NWB_FATAL_ASSERT_MSG(
-        ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena, baseSettings.softwareShadow),
-        NWB_TEXT("Invalid software shadow smoke settings")
-    );
-    NWB_FATAL_ASSERT_MSG(
-        ApplyShadowQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.shadow),
-        NWB_TEXT("Invalid shadow quality smoke settings")
-    );
+    auto& rendererSystem = world.addSystem<Impl::RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
+    NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.caustic), NWB_TEXT("Invalid caustic quality smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.surfelGi), NWB_TEXT("Invalid surfel GI quality smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena, baseSettings.softwareShadow), NWB_TEXT("Invalid software shadow smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.shadow), NWB_TEXT("Invalid shadow quality smoke settings"));
     return { meshSystem, rendererSystem };
 }
 
-inline Impl::RendererSystem& AddSmokeRenderSystems(
-    Core::ECS::World& world,
-    ProjectRuntimeContext& context
-){
+inline Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context);
 
     context.graphics.addRenderPassToBack(systems.renderer);
@@ -169,24 +120,15 @@ inline Impl::RendererSystem& AddSmokeRenderSystems(
     return systems.renderer;
 }
 
-inline void FinishDestroyingSmokeWorld(
-    ProjectRuntimeContext& context,
-    NotNullUniquePtr<Core::ECS::World>& world
-){
+inline void FinishDestroyingSmokeWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){
     const bool deviceIdle = context.graphics.waitForIdle();
-    NWB_FATAL_ASSERT_MSG(
-        deviceIdle || context.graphics.isDeviceLost(),
-        NWB_TEXT("Smoke-world destruction requires either a completed device join or terminal device loss")
-    );
+    NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("Smoke-world destruction requires either a completed device join or terminal device loss"));
 
     world->clear();
     world.owner().reset();
 }
 
-inline void RemoveSmokeRendererSystem(
-    ProjectRuntimeContext& context,
-    Core::ECS::World& world
-){
+inline void RemoveSmokeRendererSystem(ProjectRuntimeContext& context, Core::ECS::World& world){
     auto* rendererSystemPtr = world.getSystem<Impl::RendererSystem>();
     NWB_ASSERT(rendererSystemPtr);
     Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
@@ -194,10 +136,7 @@ inline void RemoveSmokeRendererSystem(
     context.graphics.removeRenderPass(rendererSystem);
 }
 
-inline void DestroySmokeRenderWorld(
-    ProjectRuntimeContext& context,
-    NotNullUniquePtr<Core::ECS::World>& world
-){
+inline void DestroySmokeRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){
     if(!world.owner())
         return;
 

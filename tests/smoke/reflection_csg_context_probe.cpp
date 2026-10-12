@@ -28,17 +28,13 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer,
-    const u32 rayCapacity, const u64 sourceFrame, const bool csg
-){
+void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, const u32 rayCapacity, const u64 sourceFrame, const bool csg){
     NWB::Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
     NWB::Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
-    NWB::Core::Telemetry::FrameGraphBuilder builder(
-        nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame
-    );
+    NWB::Core::Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
     const bool graphAvailable = renderer.appendFrameGraph(builder);
     const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
     u64 planGeneration = 0u;
@@ -93,13 +89,10 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
         }
         if(unique)
             uniquePackets.push_back(node.compiledTask.packetIndex);
-        if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid()
-            || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
+        if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
             continue;
         for(const auto& packet : packetStatistics){
-            if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration
-                || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u
-                || packet.recoverySubmission)
+            if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
                 continue;
             ++acceptedPackets;
             if(packet.taskCount == 1u)
@@ -126,9 +119,7 @@ bool ReflectionCsgContextProbe::ShouldCapture(void* owner, const u64 sourceFrame
     return sourceFrame == static_cast<ReflectionCsgContextProbe*>(owner)->m_targetSource;
 }
 
-ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world,
-    Impl::RendererSystem& renderer, const u32 rayCapacity
-)
+ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer, const u32 rayCapacity)
     : m_context(context)
     , m_world(world)
     , m_renderer(renderer)
@@ -161,22 +152,13 @@ bool ReflectionCsgContextProbe::beginPhase(){
     m_phaseSource = m_context.graphics.getFrameIndex();
     m_completed = 0u;
     m_targetSource = Limit<u64>::s_Max;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}")
-        , m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u
-    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
     return startCapture();
 }
 
 bool ReflectionCsgContextProbe::startCapture(){
-    const auto path = m_phase == 4u ? SmokeEnvironmentString(m_output, m_context.objectArena)
-        : StringFormat(m_context.objectArena, "{}.{}.bmp", m_output, m_phase);
-    const FramebufferCaptureOptions options{
-        .shouldCapture = ShouldCapture,
-        .predicateContext = this,
-        .requiredWidth = 960u,
-        .requiredHeight = 720u,
-        .quitWhenReady = false,
-    };
+    const auto path = m_phase == 4u ? SmokeEnvironmentString(m_output, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", m_output, m_phase);
+    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
     m_capture = MakeUnique<FramebufferCapture>(m_context, AStringView(path), 1u, options);
     return m_capture && m_capture->start();
 }
@@ -210,14 +192,10 @@ bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionSt
         if(statistics.graphicsFrameIndex < source)
             return true;
         if(statistics.graphicsFrameIndex != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}")
-                , source, statistics.graphicsFrameIndex, statistics.sequence, statistics.generation
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"), source, statistics.graphicsFrameIndex, statistics.sequence, statistics.generation);
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}")
-            , m_phase, source, m_completed
-        );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"), m_phase, source, m_completed);
         if(m_phase == 4u){
             m_done = true;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: complete captures=5"));

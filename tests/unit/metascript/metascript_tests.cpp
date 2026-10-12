@@ -328,16 +328,13 @@ TEST(Metascript, BindDeclarationsKeepFirstAssetAcrossDeclarationReallocation){
 }
 
 TEST(Metascript, BindStyleStructDuplicateRejections){
-    const AString duplicateFieldSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data()
-        + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data();
+    const AString duplicateFieldSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data() + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data();
     CheckImplicitMaterialBindParseFailsWithMessage(duplicateFieldSource, LiteralView("duplicate struct field declaration"));
 
-    const AString duplicateInstanceSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data()
-        + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data() + s_NWB_DUP_RUNTIME.data();
+    const AString duplicateInstanceSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data() + s_NWB_DUP_RUNTIME.data();
     CheckImplicitMaterialBindParseFailsWithMessage(duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
 
-    const AString existingInstanceSource = AString("asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n")
-        + s_STRUCT_NWB_DUP.data() + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data();
+    const AString existingInstanceSource = AString("asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n") + s_STRUCT_NWB_DUP.data() + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data();
     CheckImplicitMaterialBindParseFailsWithMessage(existingInstanceSource, LiteralView("duplicate struct instance declaration"));
 }
 

@@ -87,7 +87,9 @@ static ACompactString CanonicalAssetType(const Metascript::Document& doc){
 
 
 template <typename VisitedSet>
-static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, Alloc::ScratchArena& scratchArena){
+static bool CollectDependencies(
+    const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, Alloc::ScratchArena& scratchArena
+){
 
     Deque<Path, Alloc::ScratchArena> pending{scratchArena};
     pending.push_back(startPath);
@@ -99,10 +101,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
         auto absolutePathResult = AbsolutePath(dependencyPath);
         if(!absolutePathResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}")
-                , PathToString<tchar>(dependencyPath)
-                , StringConvert(absolutePathResult.error().message())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependencyPath), StringConvert(absolutePathResult.error().message()));
             return false;
         }
         const Path absolutePath = absolutePathResult->lexicallyNormal();
@@ -138,26 +137,19 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
                 const AStringView includeName = include->name;
                 const auto includeKind = include->kind;
                 if(includeKind == ShaderSourceDependencies::IncludeKind::Macro || includeKind == ShaderSourceDependencies::IncludeKind::Unsupported){
-                    const bool plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro
-                        && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
+                    const bool plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
                             return name == includeName;
                         }) != externallyPlannedMacroIncludes.end();
                     if(plannedMacro){
                         lineBegin = lineEnd + 1u;
                         continue;
                     }
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'")
-                        , StringConvert(TrimView(line))
-                        , PathToString<tchar>(absolutePath)
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'"), StringConvert(TrimView(line)), PathToString<tchar>(absolutePath));
                     return false;
                 }
                 auto includePath = ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories);
                 if(!includePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'")
-                        , StringConvert(includeName)
-                        , PathToString<tchar>(absolutePath)
-                    );
+                    NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'"), StringConvert(includeName), PathToString<tchar>(absolutePath));
                     return false;
                 }
 
@@ -189,10 +181,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
     }
 
     if(defineValues.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' requires defines to be specified")
-            , StringConvert(contextLabel)
-            , StringConvert(variantSignature)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' requires defines to be specified"), StringConvert(contextLabel), StringConvert(variantSignature));
         return false;
     }
 
@@ -201,11 +190,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
     seenDefines.reserve(defineValues.size());
     usize begin = 0;
     const auto logInvalidAssignment = [&](const AStringView segment){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid assignment '{}'")
-            , StringConvert(contextLabel)
-            , StringConvert(variantSignature)
-            , StringConvert(segment)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid assignment '{}'"), StringConvert(contextLabel), StringConvert(variantSignature), StringConvert(segment));
     };
     while(begin < variantSignature.size()){
         usize segmentEnd = variantSignature.find(';', begin);
@@ -214,10 +199,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 
         const AStringView segment = TrimView(variantSignature.substr(begin, segmentEnd - begin));
         if(segment.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid empty segment")
-                , StringConvert(contextLabel)
-                , StringConvert(variantSignature)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid empty segment"), StringConvert(contextLabel), StringConvert(variantSignature));
             return false;
         }
 
@@ -237,11 +219,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
         CookString lookupDefineName(defineName, defineValues.get_allocator().arena());
         const auto defineIt = defineValues.find(lookupDefineName);
         if(defineIt == defineValues.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' references unknown define '{}'")
-                , StringConvert(contextLabel)
-                , StringConvert(variantSignature)
-                , StringConvert(defineName)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' references unknown define '{}'"), StringConvert(contextLabel), StringConvert(variantSignature), StringConvert(defineName));
             return false;
         }
 
@@ -253,21 +231,12 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
             }
         }
         if(!valueFound){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has unsupported value '{}' for define '{}'")
-                , StringConvert(contextLabel)
-                , StringConvert(variantSignature)
-                , StringConvert(defineValue)
-                , StringConvert(defineName)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has unsupported value '{}' for define '{}'"), StringConvert(contextLabel), StringConvert(variantSignature), StringConvert(defineValue), StringConvert(defineName));
             return false;
         }
 
         if(!seenDefines.insert(defineName).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' assigns define '{}' more than once")
-                , StringConvert(contextLabel)
-                , StringConvert(variantSignature)
-                , StringConvert(defineName)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' assigns define '{}' more than once"), StringConvert(contextLabel), StringConvert(variantSignature), StringConvert(defineName));
             return false;
         }
 
@@ -275,10 +244,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
     }
 
     if(seenDefines.size() != defineValues.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' must assign all defines")
-            , StringConvert(contextLabel)
-            , StringConvert(variantSignature)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' must assign all defines"), StringConvert(contextLabel), StringConvert(variantSignature));
         return false;
     }
 
@@ -289,30 +255,19 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<bool> ParseOptionalIntegerFlagField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    const bool defaultValue
-){
+static Expected<bool> ParseOptionalIntegerFlagField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView fieldName, const bool defaultValue){
     const Metascript::Value* fieldValue = asset.findField(fieldName);
     if(!fieldValue)
         return defaultValue;
 
     if(!fieldValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be 0 or 1")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be 0 or 1"), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
 
     const i64 value = fieldValue->asInteger();
     if(value != 0 && value != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be 0 or 1")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be 0 or 1"), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
         return MakeUnexpected(Failure{});
     }
 
@@ -335,9 +290,7 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
     defines.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
         if(AStringView(key.data(), key.size()) == "NWB_BINDLESS_TLAS"){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define 'NWB_BINDLESS_TLAS' is an engine transport feature selected in shader source")
-                , PathToString<tchar>(nwbFilePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define 'NWB_BINDLESS_TLAS' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         CookString defineName(key.data(), key.size(), arena);
@@ -348,10 +301,7 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
             || (defineNameView.front() >= '0' && defineNameView.front() <= '9')
             || FindIf(defineNameView.begin(), defineNameView.end(), [](const char ch)noexcept{ return !IsAsciiIdentifierChar(ch); }) != defineNameView.end()
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(defineName)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
             return MakeUnexpected(Failure{});
         }
 
@@ -361,25 +311,15 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
             return MakeUnexpected(Failure{});
         }
         if(defineValues.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must provide at least one value")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(defineName)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must provide at least one value"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
             return MakeUnexpected(Failure{});
         }
         for(const CookString& defineValue : defineValues){
             const AStringView valueView(defineValue);
-            if(
-                valueView.empty()
-                || TrimView(valueView) != valueView
-                || FindIf(valueView.begin(), valueView.end(), [](const char ch)noexcept{
+            if(valueView.empty() || TrimView(valueView) != valueView || FindIf(valueView.begin(), valueView.end(), [](const char ch)noexcept{
                     return ch == ';' || ch == '\0' || ch == '\r' || ch == '\n';
-                }) != valueView.end()
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace")
-                    , PathToString<tchar>(nwbFilePath)
-                    , StringConvert(defineName)
-                );
+                }) != valueView.end()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
                 return MakeUnexpected(Failure{});
             }
         }
@@ -400,21 +340,14 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(
-    const Path& nwbFilePath,
-    const Metascript::Document& doc,
-    Alloc::ScratchArena& scratchArena
-){
+Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
     ShaderEntry entry(m_memoryArena);
 
     const auto declaredAssetType = doc.assetType();
     const AStringView assetTypeText(declaredAssetType.data(), declaredAssetType.size());
     const Core::ShaderType::Enum shaderType = ShaderAssetTypes::ShaderTypeFromAssetTypeText(assetTypeText);
     if(shaderType == Core::ShaderType::Invalid){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported shader asset type '{}'")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(assetTypeText)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported shader asset type '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(assetTypeText));
         return MakeUnexpected(Failure{});
     }
 
@@ -427,13 +360,7 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(
     if(!pairedSource)
         return MakeUnexpected(Failure{});
     entry.source = Move(*pairedSource);
-    if(!Assets::CheckPairedSourceExtension(
-        nwbFilePath,
-        entry.source,
-        __hidden_shader_cook::s_SlangSourceExtension,
-        "Shader",
-        scratchArena
-    ))
+    if(!Assets::CheckPairedSourceExtension(nwbFilePath, entry.source, __hidden_shader_cook::s_SlangSourceExtension, "Shader", scratchArena))
         return MakeUnexpected(Failure{});
 
     if(!entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(shaderType))){
@@ -441,15 +368,8 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(
         return MakeUnexpected(Failure{});
     }
     entry.archiveStage = entry.stage;
-    if(!Assets::ValidateMetadataAssetFields(
-        nwbFilePath,
-        asset,
-        "Shader meta",
-        [isMesh = shaderType == Core::ShaderType::MeshStage](const AStringView field)noexcept{
-            return
-                field == "ray_query" || field == "optimization_level" || field == "entry_point"
-                || field == "include_roots" || field == "defines" || (isMesh && field == "emit_mesh_compute_shadow")
-            ;
+    if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Shader meta", [isMesh = shaderType == Core::ShaderType::MeshStage](const AStringView field)noexcept{
+            return field == "ray_query" || field == "optimization_level" || field == "entry_point" || field == "include_roots" || field == "defines" || (isMesh && field == "emit_mesh_compute_shadow");
         }
     ))
         return MakeUnexpected(Failure{});
@@ -463,10 +383,7 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(
     if(optimizationLevelText->present){
         const auto optimizationLevel = __hidden_shader_cook::TryParseShaderOptimizationLevel(optimizationLevelText->text);
         if(!optimizationLevel){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(optimizationLevelText->text)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(optimizationLevelText->text));
             return MakeUnexpected(Failure{});
         }
         entry.optimizationLevel = *optimizationLevel;
@@ -508,11 +425,7 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(
     return entry;
 }
 
-Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(
-    const Path& nwbFilePath,
-    const Metascript::Document& doc,
-    Alloc::ScratchArena& scratchArena
-){
+Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
     IncludeEntry entry(m_memoryArena);
 
     if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeInclude)
@@ -522,13 +435,7 @@ Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(
     if(!pairedSource)
         return MakeUnexpected(Failure{});
     entry.source = Move(*pairedSource);
-    if(!Assets::CheckPairedSourceExtension(
-        nwbFilePath,
-        entry.source,
-        __hidden_shader_cook::s_SlangIncludeExtension,
-        "Include",
-        scratchArena
-    ))
+    if(!Assets::CheckPairedSourceExtension(nwbFilePath, entry.source, __hidden_shader_cook::s_SlangIncludeExtension, "Include", scratchArena))
         return MakeUnexpected(Failure{});
 
     const Metascript::Value* assetValue = Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(nwbFilePath, doc, "Include");
@@ -546,12 +453,7 @@ Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(
     return entry;
 }
 
-bool ShaderCook::validateVariantSignature(
-    const AStringView contextLabel,
-    const AStringView variantSignature,
-    const CookMap<CookString, DefineEntry>& defineValues,
-    Alloc::ScratchArena& scratchArena
-){
+bool ShaderCook::validateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena){
     return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
 
@@ -590,29 +492,14 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
     }
 }
 
-bool ShaderCook::gatherShaderDependencies(
-    const Path& sourcePath,
-    const CookVector<Path>& includeDirectories,
-    const Span<const AStringView> externallyPlannedMacroIncludes,
-    CookVector<Path>& outDependencies,
-    Alloc::ScratchArena& scratchArena
-){
+bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, CookVector<Path>& outDependencies, Alloc::ScratchArena& scratchArena){
     outDependencies.clear();
 
-    __hidden_shader_cook::ScratchHashSet<__hidden_shader_cook::ScratchString> visited{
-        0,
-        Hasher<__hidden_shader_cook::ScratchString>(),
-        EqualTo<__hidden_shader_cook::ScratchString>(),
-        scratchArena
-    };
+    __hidden_shader_cook::ScratchHashSet<__hidden_shader_cook::ScratchString> visited{ 0, Hasher<__hidden_shader_cook::ScratchString>(), EqualTo<__hidden_shader_cook::ScratchString>(), scratchArena };
     return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, externallyPlannedMacroIncludes, visited, outDependencies, scratchArena);
 }
 
-bool ShaderCook::expandDefineCombinations(
-    const CookMap<CookString, DefineEntry>& defineValues,
-    CookVector<DefineCombo>& outCombinations,
-    Alloc::ScratchArena& scratchArena
-){
+bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations, Alloc::ScratchArena& scratchArena){
     outCombinations.clear();
     DefineCombo initialCombo{0, Hasher<CookString>(), EqualTo<CookString>(), m_memoryArena};
     initialCombo.reserve(defineValues.size());

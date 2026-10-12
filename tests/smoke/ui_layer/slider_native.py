@@ -8,14 +8,7 @@ from guarded_native import GuardedNativeInput
 from window_capture_smoke import SmokeFailure
 
 
-COMMAND_KEYS = {
-    "fence_value": "F4",
-    "toggle_range": "F5",
-    "toggle_step": "F6",
-    "toggle_enabled": "F7",
-    "set_quarter": "F8",
-    "close_parent": "F9",
-}
+COMMAND_KEYS = { "fence_value": "F4", "toggle_range": "F5", "toggle_step": "F6", "toggle_enabled": "F7", "set_quarter": "F8", "close_parent": "F9", }
 
 
 class SliderNativeInput(GuardedNativeInput):
@@ -28,8 +21,7 @@ class SliderNativeInput(GuardedNativeInput):
             backend.user32.ScreenToClient.restype = ctypes.c_int
 
     def record(self, action, **details):
-        observation = {"time": round(time.monotonic() - self.trace_started, 6), "action": action,
-            "native_window": self.observe_window(), **details}
+        observation = {"time": round(time.monotonic() - self.trace_started, 6), "action": action, "native_window": self.observe_window(), **details}
         self.actions.append(observation)
         del self.actions[:-128]
 

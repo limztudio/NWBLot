@@ -34,8 +34,7 @@ Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassB
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::All)
             // Every material pass uses this push-only layout; transparent consumes the full payload.
-            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
-        ;
+            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
         m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
         if(!m_materialState.m_materialPassBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
@@ -69,60 +68,21 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         return false;
 
     if(!m_materialState.m_emulationVertexShader){
-        if(!m_shaderSystem.loadShader<VertexShader>(
-            m_materialState.m_emulationVertexShader,
-            AssetsGraphicsMesh::s_EmulationVertexShaderName,
-            Core::ShaderArchive::s_DefaultVariant,
-            "ECSRender_MeshEmulationVS"
-        ))
+        if(!m_shaderSystem.loadShader<VertexShader>(m_materialState.m_emulationVertexShader, AssetsGraphicsMesh::s_EmulationVertexShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_MeshEmulationVS"))
             return false;
     }
 
     if(!m_materialState.m_emulationInputLayout){
         Core::VertexAttributeDesc attributes[NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT];
-        ECSRenderDetail::SetEmulatedVertexAttribute(
-            attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION],
-            Core::Format::RGBA32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET,
-            "POSITION"
-        );
-        ECSRenderDetail::SetEmulatedVertexAttribute(
-            attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION],
-            Core::Format::RGBA16_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET,
-            "NORMAL"
-        );
-        ECSRenderDetail::SetEmulatedVertexAttribute(
-            attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION],
-            Core::Format::RGBA16_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET,
-            "TANGENT"
-        );
-        ECSRenderDetail::SetEmulatedVertexAttribute(
-            attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION],
-            Core::Format::RG32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET,
-            "TEXCOORD"
-        );
-        ECSRenderDetail::SetEmulatedVertexAttribute(
-            attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION],
-            Core::Format::RGBA16_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET,
-            "COLOR"
-        );
-        ECSRenderDetail::SetEmulatedVertexAttribute(
-            attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION],
-            Core::Format::RGBA32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET,
-            "POSITION1"
-        );
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION], Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "POSITION");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION], Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "NORMAL");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION], Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "TANGENT");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION], Core::Format::RG32_FLOAT, NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "TEXCOORD");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION], Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "COLOR");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION], Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "POSITION1");
 
         auto& device = m_graphics.getDevice();
-        m_materialState.m_emulationInputLayout = device.createInputLayout(
-            attributes,
-            NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT,
-            m_materialState.m_emulationVertexShader.get()
-        );
+        m_materialState.m_emulationInputLayout = device.createInputLayout(attributes, NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT, m_materialState.m_emulationVertexShader.get());
         if(!m_materialState.m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
@@ -133,11 +93,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
 }
 
 bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems){
-    return
-        prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems)
-        && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems)
-        && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems)
-    ;
+    return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
 }
 
 bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
@@ -148,10 +104,7 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
     return prepareMaterialPassResourceBindingsImpl(drawItems, true);
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
-    const MaterialPassDrawItemVector& drawItems,
-    const bool computeEmulation
-){
+bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, const bool computeEmulation){
     if(drawItems.empty())
         return true;
 
@@ -164,9 +117,7 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
         const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
 
         if(!computeEmulation){
-            ready = pipelineResources.meshletPipeline
-                && mesh.valid()
-            ;
+            ready = pipelineResources.meshletPipeline && mesh.valid();
             continue;
         }
 
@@ -255,42 +206,26 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     return true;
 }
 
-bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(
-    const InstanceGpuDataVector& instanceData,
-    const MaterialTypedByteDataVector& materialTypedBytes
-){
+bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes){
     const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
 }
 
-bool RendererMaterialSystem::materialPassDrawBuffersReady(
-    const InstanceGpuDataVector& instanceData,
-    const MaterialTypedByteDataVector& materialTypedBytes
-)const{
+bool RendererMaterialSystem::materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const{
     const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return materialPassDrawBuffersReady(instanceData.size(), uploadBytes);
 }
 
-bool RendererMaterialSystem::materialPassDrawBuffersReady(
-    const usize instanceCount,
-    const usize materialTypedByteCount
-)const{
-    if(
-        materialTypedByteCount == 0u
-        || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u
-    )
+bool RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCount, const usize materialTypedByteCount)const{
+    if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
         return false;
 
     const usize requiredMaterialTypedBytes = Max<usize>(materialTypedByteCount, sizeof(u32));
     NWB_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
 
-    return
-        (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount))
-        && m_materialState.m_materialTypedBuffer
-        && m_materialState.m_materialTypedBufferCapacity >= requiredMaterialTypedBytes
-    ;
+    return (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)) && m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= requiredMaterialTypedBytes;
 }
 
 ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const noexcept{
@@ -302,10 +237,7 @@ ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPass
     };
 }
 
-void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(
-    InstanceGpuDataVector& instanceData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-){
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
     // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
     const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
     for(InstanceGpuData& instance : instanceData)

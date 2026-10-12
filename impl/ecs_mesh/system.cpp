@@ -40,9 +40,7 @@ const MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)const
     return m_world.tryGetComponent<MeshComponent>(entity);
 }
 
-Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(
-    const Core::ECS::EntityID entity
-)const{
+Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(const Core::ECS::EntityID entity)const{
     const MeshComponent* mesh = findMesh(entity);
     if(!mesh || !mesh->mesh.valid())
         return MakeUnexpected(Failure{});
@@ -50,9 +48,7 @@ Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(
     return mesh->mesh;
 }
 
-Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolveRenderableMeshStatus(
-    const Core::ECS::EntityID entity
-)const{
+Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolveRenderableMeshStatus(const Core::ECS::EntityID entity)const{
     RenderableMeshDesc mesh;
 
     for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
@@ -93,11 +89,7 @@ void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
 }
 
 void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    if(
-        FindIf(
-            m_runtimeMeshProviders.begin(),
-            m_runtimeMeshProviders.end(),
-            [&provider](IRuntimeMeshProvider* item){ return item == &provider; }
+    if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item){ return item == &provider; }
         ) != m_runtimeMeshProviders.end()
     )
         return;
@@ -106,10 +98,7 @@ void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){
 }
 
 void MeshSystem::unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    const auto found = FindIf(
-        m_runtimeMeshProviders.begin(),
-        m_runtimeMeshProviders.end(),
-        [&provider](IRuntimeMeshProvider* item){ return item == &provider; }
+    const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item){ return item == &provider; }
     );
     if(found == m_runtimeMeshProviders.end())
         return;

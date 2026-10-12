@@ -24,12 +24,7 @@ namespace __hidden_frame_graph_registry{
 
 using FrameGraphNodeIndexLookup = HashMap<Name, u32, TelemetryArena, Hasher<Name>, EqualTo<Name>>;
 
-static void ResolvePendingNameEdges(
-    TelemetryArena& arena,
-    const FrameGraphNodeDescs& nodes,
-    FrameGraphEdgeDescs& edges,
-    const FrameGraphPendingNameEdges& pendingNameEdges
-){
+static void ResolvePendingNameEdges(TelemetryArena& arena, const FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, const FrameGraphPendingNameEdges& pendingNameEdges){
     if(nodes.empty() || pendingNameEdges.empty())
         return;
 
@@ -44,12 +39,7 @@ static void ResolvePendingNameEdges(
         if(foundNode == nodeIndices.end())
             continue;
 
-        edges.push_back(FrameGraphEdgeDesc{
-            .fromNodeIndex = pending.fromNodeIndex,
-            .toNodeIndex = foundNode.value(),
-            .kind = pending.kind,
-            .flags = pending.flags,
-        });
+        edges.push_back(FrameGraphEdgeDesc{ .fromNodeIndex = pending.fromNodeIndex, .toNodeIndex = foundNode.value(), .kind = pending.kind, .flags = pending.flags, });
     }
 }
 
@@ -88,14 +78,7 @@ bool FrameGraphRegistry::record(CaptureSession& session){
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(arena);
 
-    FrameGraphBuilder builder(
-        nodes,
-        edges,
-        pendingNameEdges,
-        physicalQueueRuntimeStatistics,
-        packetSubmissionStatistics,
-        session.frameIndex()
-    );
+    FrameGraphBuilder builder(nodes, edges, pendingNameEdges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, session.frameIndex());
     bool hasGraph = false;
     for(auto* contributor : m_contributors){
         if(contributor->appendFrameGraph(builder))
@@ -107,12 +90,7 @@ bool FrameGraphRegistry::record(CaptureSession& session){
 
     __hidden_frame_graph_registry::ResolvePendingNameEdges(arena, nodes, edges, pendingNameEdges);
 
-    return session.recordFrameGraph(
-        nodes,
-        edges,
-        physicalQueueRuntimeStatistics,
-        packetSubmissionStatistics
-    );
+    return session.recordFrameGraph(nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 }
 
 

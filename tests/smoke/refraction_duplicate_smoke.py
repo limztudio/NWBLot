@@ -33,26 +33,13 @@ LIT_STORE_TRUE = "store_true"
 LIT_APPEND = "append"
 
 
-REFERENCES = (
-    LIT_DUPLICATE_SINGLE_COOL, LIT_DUPLICATE_SINGLE_WARM,
-    LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_DUPLICATE_SINGLE_WARM_TINTED,
-)
-MATCHES = {
-    "coincident": LIT_DUPLICATE_SINGLE_COOL,
-    "coincident_reversed": LIT_DUPLICATE_SINGLE_COOL,
-    "coincident_priority_swap": LIT_DUPLICATE_SINGLE_WARM,
-    "coincident_identical": LIT_DUPLICATE_SINGLE_COOL,
-    LIT_COINCIDENT_TINTED: LIT_DUPLICATE_SINGLE_COOL_TINTED,
-    "coincident_tinted_reversed": LIT_DUPLICATE_SINGLE_COOL_TINTED,
-    "coincident_tinted_priority_swap": LIT_DUPLICATE_SINGLE_WARM_TINTED,
-    LIT_COINCIDENT_TINTED_IDENTICAL: LIT_DUPLICATE_SINGLE_COOL_TINTED,
+REFERENCES = (LIT_DUPLICATE_SINGLE_COOL, LIT_DUPLICATE_SINGLE_WARM, LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_DUPLICATE_SINGLE_WARM_TINTED,)
+MATCHES = { "coincident": LIT_DUPLICATE_SINGLE_COOL, "coincident_reversed": LIT_DUPLICATE_SINGLE_COOL, "coincident_priority_swap": LIT_DUPLICATE_SINGLE_WARM, "coincident_identical": LIT_DUPLICATE_SINGLE_COOL,
+    LIT_COINCIDENT_TINTED: LIT_DUPLICATE_SINGLE_COOL_TINTED, "coincident_tinted_reversed": LIT_DUPLICATE_SINGLE_COOL_TINTED, "coincident_tinted_priority_swap": LIT_DUPLICATE_SINGLE_WARM_TINTED, LIT_COINCIDENT_TINTED_IDENTICAL: LIT_DUPLICATE_SINGLE_COOL_TINTED,
 }
 RETAINED_CASES = ("near_coincident", LIT_COINCIDENT_PRESERVED)
 OPTICAL_CASES = REFERENCES + tuple(MATCHES) + RETAINED_CASES
-DISABLED_CASES = (
-    LIT_DUPLICATE_SINGLE_COOL, LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_COINCIDENT_TINTED_IDENTICAL,
-    LIT_COINCIDENT_TINTED, LIT_COINCIDENT_PRESERVED,
-)
+DISABLED_CASES = (LIT_DUPLICATE_SINGLE_COOL, LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_COINCIDENT_TINTED_IDENTICAL, LIT_COINCIDENT_TINTED, LIT_COINCIDENT_PRESERVED,)
 MAXIMUM_CHANNEL_ERROR = 2
 MAXIMUM_MEAN_ERROR = 0.02
 MINIMUM_DISTINCT_PIXELS = 64
@@ -75,12 +62,7 @@ def pixel_difference(reference, output):
             maximum = max(maximum, largest)
             changed += largest > MAXIMUM_CHANNEL_ERROR
             total += sum(deltas)
-    return {
-        "pixels": width * height,
-        LIT_PIXELS_OVER_CHANNEL_TOLERANCE: changed,
-        LIT_MAXIMUM_CHANNEL_DIFFERENCE: maximum,
-        LIT_MEAN_ABSOLUTE_RGB_DIFFERENCE: total / (width * height * 3),
-    }
+    return { "pixels": width * height, LIT_PIXELS_OVER_CHANNEL_TOLERANCE: changed, LIT_MAXIMUM_CHANNEL_DIFFERENCE: maximum, LIT_MEAN_ABSOLUTE_RGB_DIFFERENCE: total / (width * height * 3), }
 
 
 def require_match(reference, output, label):
@@ -105,8 +87,7 @@ def validate_captures(directory, variants):
         second = read_bmp_24_rows(directory / f"{second_case}_{second_variant}.bmp")
         label = f"{second_case}/{second_variant} vs {first_case}/{first_variant}"
         metrics = (require_match if equal else require_distinct)(first, second, label)
-        results.append({"reference": f"{first_case}_{first_variant}", "candidate": f"{second_case}_{second_variant}",
-            "expectation": "match" if equal else "distinct", **metrics})
+        results.append({"reference": f"{first_case}_{first_variant}", "candidate": f"{second_case}_{second_variant}", "expectation": "match" if equal else "distinct", **metrics})
 
     for variant in variants:
         compare(LIT_DUPLICATE_SINGLE_COOL, LIT_DISABLED, LIT_DUPLICATE_SINGLE_COOL, variant, False)
@@ -128,8 +109,7 @@ def parse_args(argv):
     parser.add_argument("--working-directory", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--variants", type=lambda value: parse_selection(value, (LIT_AUTOMATIC, LIT_SCREEN), LIT_VARIANTS),
-        default=(LIT_AUTOMATIC, LIT_SCREEN), help="Optical routes to verify; defaults to automatic,screen.")
+    parser.add_argument("--variants", type=lambda value: parse_selection(value, (LIT_AUTOMATIC, LIT_SCREEN), LIT_VARIANTS), default=(LIT_AUTOMATIC, LIT_SCREEN), help="Optical routes to verify; defaults to automatic,screen.")
     parser.add_argument("--require-hardware", action=LIT_STORE_TRUE)
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--timeout", type=float, default=60.0)
@@ -160,15 +140,12 @@ def main(argv):
         labels = dict(VARIANT_LABELS)
         if args.require_hardware:
             labels[LIT_AUTOMATIC] = "Hardware RT (per-pixel fallback allowed)"
-        manifest = {"captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-            "frames": args.frames, "hardware_required": args.require_hardware, "application_args": args.application_arg,
-            LIT_VARIANTS: list(args.variants) + [LIT_DISABLED], "variant_labels": labels, "limits": COMMON_LIMIT,
-            "image_count": sum(len(entry[LIT_CAPTURES]) for entry in entries.values()), "cases": list(entries.values()),
+        manifest = {"captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "frames": args.frames, "hardware_required": args.require_hardware, "application_args": args.application_arg,
+            LIT_VARIANTS: list(args.variants) + [LIT_DISABLED], "variant_labels": labels, "limits": COMMON_LIMIT, "image_count": sum(len(entry[LIT_CAPTURES]) for entry in entries.values()), "cases": list(entries.values()),
             "validation": "Matched single-volume comparisons, insertion-order and priority checks, authored coincidence modes, and independent-layer controls."}
         write_gallery(args.output_directory, manifest)
         results = validate_captures(args.output_directory, args.variants)
-        report = {"maximum_channel_error": MAXIMUM_CHANNEL_ERROR, "maximum_mean_error": MAXIMUM_MEAN_ERROR,
-            "minimum_distinct_pixels": MINIMUM_DISTINCT_PIXELS, "comparisons": results}
+        report = {"maximum_channel_error": MAXIMUM_CHANNEL_ERROR, "maximum_mean_error": MAXIMUM_MEAN_ERROR, "minimum_distinct_pixels": MINIMUM_DISTINCT_PIXELS, "comparisons": results}
         (args.output_directory / "duplicate_comparisons.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
         print(f"PASS: {len(results)} duplicate/control comparisons; gallery: {args.output_directory / 'gallery.html'}", flush=True)
         return 0

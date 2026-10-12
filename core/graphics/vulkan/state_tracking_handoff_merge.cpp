@@ -28,8 +28,8 @@ namespace __hidden_command_list_state_handoff_merge{
 using TextureStateKey = GraphicsBackend::TextureSubresourceStateKey;
 
 
-// ScratchArena reclaims one most-recent allocation per alignment bucket. Keep each temporary index in one fixed
-// allocation so destruction rewinds exactly; hash containers can leave non-LIFO storage and grow the arena per query.
+// ScratchArena reclaims one most-recent allocation per alignment bucket.
+// Keep each temporary index in one fixed allocation so destruction rewinds exactly; hash containers can leave non-LIFO storage and grow the arena per query.
 template<typename Key, typename Hash, typename Equal>
 class ScratchStateIndexMap final : NoCopy{
 private:
@@ -41,12 +41,7 @@ private:
 
 
 public:
-    ScratchStateIndexMap(
-        Alloc::ScratchArena& arena,
-        const usize maximumEntryCount,
-        const Hash& hash = Hash(),
-        const Equal& equal = Equal()
-    )
+    ScratchStateIndexMap(Alloc::ScratchArena& arena, const usize maximumEntryCount, const Hash& hash = Hash(), const Equal& equal = Equal())
         : m_slots(arena)
         , m_hash(hash)
         , m_equal(equal)
@@ -119,11 +114,7 @@ private:
 };
 
 
-using TextureStateIndexMap = ScratchStateIndexMap<
-    TextureStateKey,
-    GraphicsBackend::TextureSubresourceStateKeyHasher,
-    GraphicsBackend::TextureSubresourceStateKeyEqualTo
->;
+using TextureStateIndexMap = ScratchStateIndexMap< TextureStateKey, GraphicsBackend::TextureSubresourceStateKeyHasher, GraphicsBackend::TextureSubresourceStateKeyEqualTo >;
 using BufferStateIndexMap = ScratchStateIndexMap<Buffer*, Hasher<Buffer*>, EqualTo<Buffer*>>;
 using PermanentTextureStateIndexMap = ScratchStateIndexMap<Texture*, Hasher<Texture*>, EqualTo<Texture*>>;
 
@@ -137,20 +128,11 @@ using PermanentTextureStateIndexMap = ScratchStateIndexMap<Texture*, Hasher<Text
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandListResourceStateHandoff::buildFanIn(
-    const CommandListResourceStateHandoff& base,
-    const CommandListResourceStateHandoff* const* branches,
-    const usize branchCount,
-    Alloc::ScratchArena& scratchArena
-){
+bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, const usize branchCount, Alloc::ScratchArena& scratchArena){
     if(this == &base)
         return false;
 
-    if(
-        !base.valid()
-        || base.m_deviceGeneration == 0u
-        || (branchCount != 0u && !branches)
-    ){
+    if(!base.valid() || base.m_deviceGeneration == 0u || (branchCount != 0u && !branches)){
         reset();
         return false;
     }
@@ -160,11 +142,7 @@ bool CommandListResourceStateHandoff::buildFanIn(
         if(branch == this)
             return false;
 
-        if(
-            !branch
-            || !branch->valid()
-            || branch->m_deviceGeneration != base.m_deviceGeneration
-        ){
+        if(!branch || !branch->valid() || branch->m_deviceGeneration != base.m_deviceGeneration){
             reset();
             return false;
         }
@@ -201,28 +179,13 @@ bool CommandListResourceStateHandoff::buildFanIn(
 
     using namespace __hidden_command_list_state_handoff_merge;
     const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs){
-        return
-            lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
+        return lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
     const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs){
-        return
-            lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
+        return lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
     const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs){
-        return
-            lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
+        return lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
 
     m_textureStates.reserve(textureStateCapacity);
@@ -231,12 +194,7 @@ bool CommandListResourceStateHandoff::buildFanIn(
     m_permanentBufferStates.reserve(permanentBufferStateCapacity);
 
     {
-        TextureStateIndexMap resultIndices(
-            scratchArena,
-            textureStateCapacity,
-            GraphicsBackend::TextureSubresourceStateKeyHasher(),
-            GraphicsBackend::TextureSubresourceStateKeyEqualTo()
-        );
+        TextureStateIndexMap resultIndices(scratchArena, textureStateCapacity, GraphicsBackend::TextureSubresourceStateKeyHasher(), GraphicsBackend::TextureSubresourceStateKeyEqualTo());
         if(!resultIndices.valid()){
             reset();
             return false;
@@ -261,10 +219,7 @@ bool CommandListResourceStateHandoff::buildFanIn(
                 return resultIndices.insertOrAssign(key, index);
             }
 
-            const TextureState* const baseState = *resultIndex < baseStateCount
-                ? &base.m_textureStates[*resultIndex]
-                : nullptr
-            ;
+            const TextureState* const baseState = *resultIndex < baseStateCount ? &base.m_textureStates[*resultIndex] : nullptr;
             TextureState& resultState = m_textureStates[*resultIndex];
             if(
                 GraphicsBackend::AreTextureReadStatesCompatible(resultState.state, state.state)
@@ -352,8 +307,8 @@ bool CommandListResourceStateHandoff::buildFanIn(
             return lhs.beginning < rhs.beginning;
         });
 
-        // Sweep the union of interval boundaries. A branch retaining the base state contributes no change;
-        // independent changes must agree only where their byte ranges overlap.
+        // Sweep the union of interval boundaries.
+        // A branch retaining the base state contributes no change; independent changes must agree only where their byte ranges overlap.
         usize previousBufferIndex = 0u;
         u64 previousOffset = 0u;
         for(const BufferRangeEvent& event : events){
@@ -368,21 +323,14 @@ bool CommandListResourceStateHandoff::buildFanIn(
                     const BufferState* const state = activeStates[branchIndex];
                     if(!state || (baseState && sameBufferState(*state, *baseState)))
                         continue;
-                    if(
-                        mergedState
-                        && mergedState != baseState
-                        && !sameBufferState(*mergedState, *state)
-                    ){
+                    if(mergedState && mergedState != baseState && !sameBufferState(*mergedState, *state)){
                         reset();
                         return false;
                     }
                     mergedState = state;
                 }
                 if(mergedState){
-                    if(
-                        mergedState->releaseDestinationQueue.valid()
-                        && (mergedState->range.byteOffset != previousOffset || mergedState->range.end() != event.offset)
-                    ){
+                    if(mergedState->releaseDestinationQueue.valid() && (mergedState->range.byteOffset != previousOffset || mergedState->range.end() != event.offset)){
                         reset();
                         return false;
                     }
@@ -439,10 +387,7 @@ bool CommandListResourceStateHandoff::buildFanIn(
                 return resultIndices.insertOrAssign(state.texture, index);
             }
 
-            const PermanentTextureState* const baseState = *resultIndex < baseStateCount
-                ? &base.m_permanentTextureStates[*resultIndex]
-                : nullptr
-            ;
+            const PermanentTextureState* const baseState = *resultIndex < baseStateCount ? &base.m_permanentTextureStates[*resultIndex] : nullptr;
             if(baseState && samePermanentTextureState(state, *baseState))
                 return true;
 
@@ -488,10 +433,7 @@ bool CommandListResourceStateHandoff::buildFanIn(
                 return resultIndices.insertOrAssign(state.buffer, index);
             }
 
-            const BufferState* const baseState = *resultIndex < baseStateCount
-                ? &base.m_permanentBufferStates[*resultIndex]
-                : nullptr
-            ;
+            const BufferState* const baseState = *resultIndex < baseStateCount ? &base.m_permanentBufferStates[*resultIndex] : nullptr;
             if(baseState && sameBufferState(state, *baseState))
                 return true;
 

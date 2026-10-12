@@ -115,11 +115,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool prepareOverlapMetric(
-        const Name& firstScope,
-        const Name& secondScope,
-        const Name& outputScope
-    );
+    [[nodiscard]] bool prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope);
     [[nodiscard]] bool preparePacketEnvelopeMetrics(
         u64 sourceFrameIndex,
         NotNull<const GpuPacketEnvelopeMetricScope*> scopeInputs,
@@ -129,13 +125,7 @@ public:
         usize queueOutputCount
     );
     // Stages completed derived samples without invoking the timing sink. The caller owns the observer-publication boundary.
-    void recordTimestampRange(
-        const Name& scopeName,
-        u64 frameIndex,
-        const GpuComparableTimestampRange& range,
-        GpuTimingSinkSampleVector& performanceSamples,
-        Alloc::ScratchArena& scratchArena
-    );
+    void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool hasOutputRole(const Name& scopeName)const noexcept;
     void discardPendingRanges()noexcept;
     void reset()noexcept;

@@ -18,11 +18,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplySurfelGiQualitySmokeSettings(
-    Impl::RendererSystem& renderer,
-    Core::Alloc::GlobalArena& arena,
-    const Impl::SurfelGiQualitySettings& baseSettings
-){
+bool ApplySurfelGiQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::SurfelGiQualitySettings& baseSettings){
     Impl::SurfelGiQualitySettings settings = baseSettings;
     const auto value = ReadSmokeEnvironmentText(arena, "NWB_SURFEL_GI_RESOLVE_RESOLUTION");
     if(value){

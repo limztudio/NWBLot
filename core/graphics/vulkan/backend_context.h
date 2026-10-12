@@ -96,18 +96,14 @@ private:
 
 
 private:
-    static constexpr StringView s_EnabledInstanceExts[] = {
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-    };
-    static constexpr StringView s_DebugRequiredInstanceExts[] = {
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-    };
+    static constexpr StringView s_EnabledInstanceExts[] = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, };
+    static constexpr StringView s_DebugRequiredInstanceExts[] = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME, };
 
 private:
     static constexpr ExtEntry s_EnabledDeviceExts[] = {
         { VK_KHR_MAINTENANCE1_EXTENSION_NAME, DeviceExtensionFeature::None },
-        // Descriptor buffers are the renderer's only descriptor transport. A device without this extension
-        // does not meet the renderer's minimum requirements.
+        // Descriptor buffers are the renderer's only descriptor transport.
+        // A device without this extension does not meet the renderer's minimum requirements.
         { VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, DeviceExtensionFeature::DescriptorBuffer },
     };
     static constexpr ExtEntry s_OptionalDeviceExts[] = {
@@ -124,20 +120,15 @@ private:
         { VK_EXT_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
         { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DEVICE_FAULT_EXTENSION_NAME, DeviceExtensionFeature::DeviceFault },
-        // UASTC HDR 4x4 blocks are directly valid ASTC HDR blocks. Keep this optional so
-        // the texture loader can select BC6H or RGBA16_FLOAT on hardware without it.
+        // UASTC HDR 4x4 blocks are directly valid ASTC HDR blocks.
+        // Keep this optional so the texture loader can select BC6H or RGBA16_FLOAT on hardware without it.
         { VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME, DeviceExtensionFeature::TextureCompressionAstcHdr },
         { VK_AMD_BUFFER_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
 
 
 public:
-    BackendContext(
-        const DeviceCreationParameters& params,
-        SwapChainRuntimeState& swapChainState,
-        GraphicsAllocator& allocator,
-        CpuTaskScheduler& cpuScheduler
-    );
+    BackendContext(const DeviceCreationParameters& params, SwapChainRuntimeState& swapChainState, GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler);
 
 
 public:
@@ -165,28 +156,22 @@ public:
     bool createDevice();
     bool createSwapChain();
     [[nodiscard]] bool destroy();
-    [[nodiscard]] Expected<SwapChainTransitionTicket> prepareSwapChainTransition(
-        SwapChainTransitionKind::Enum kind
-    );
+    [[nodiscard]] Expected<SwapChainTransitionTicket> prepareSwapChainTransition(SwapChainTransitionKind::Enum kind);
     [[nodiscard]] bool commitSwapChainResize(SwapChainTransitionTicket&& ticket);
     [[nodiscard]] bool commitDestroy(SwapChainTransitionTicket&& ticket)noexcept;
     [[nodiscard]] BeginFrameResult beginFrame();
-    // Idempotently retires synchronization for a healthy aborted frame. The acquired WSI image stays quarantined
-    // until swap-chain or device teardown; an already-resolved frame is a successful no-op.
+    // Idempotently retires synchronization for a healthy aborted frame.
+    // The acquired WSI image stays quarantined until swap-chain or device teardown; an already-resolved frame is a successful no-op.
     [[nodiscard]] bool abandonAcquiredFrame();
-    // The return value retains continuation/retirement status. The output reports native presentation acceptance
-    // independently: it can be true even if later synchronization fails, and is false for out-of-date surfaces.
+    // The return value retains continuation/retirement status.
+    // The output reports native presentation acceptance independently: it can be true even if later synchronization fails, and is false for out-of-date surfaces.
     [[nodiscard]] Expected<bool, PresentationFailure> present();
-    // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
-    // direct transition-submit path in present() active.
+    // Claims the acquired image's completion semaphore for one exact graph packet.
+    // A null hook leaves the direct transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
-    [[nodiscard]] bool confirmFramePresentationSignal(
-        const QueueSubmissionPreSubmitHook& claim,
-        const QueueSubmissionToken& token
-    )noexcept;
-    // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal
-    // before the next frame instead of allowing it to leak into another present.
+    [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
+    // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal before the next frame instead of allowing it to leak into another present.
     [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
 private:
@@ -224,38 +209,15 @@ private:
     [[nodiscard]] bool createFrameSyncQueries();
     [[nodiscard]] bool ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue);
     void resetDirectPresentCommandList()noexcept;
-    [[nodiscard]] bool recordDirectPresentTransition(
-        const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy,
-        Texture* backbufferTexture
-    );
-    [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(
-        void* context,
-        u64 identity,
-        const GpuPhysicalQueueId& executionQueue
-    );
-    [[nodiscard]] Expected<QueueSubmissionNativeSignal> prepareFramePresentationSignal(
-        u64 identity,
-        const GpuPhysicalQueueId& executionQueue
-    )noexcept;
-    [[nodiscard]] static bool InvokeFramePresentationSignalResolution(
-        void* context,
-        u64 identity,
-        const QueueSubmissionToken& token
-    )noexcept;
-    [[nodiscard]] bool resolveFramePresentationSignal(
-        u64 identity,
-        const QueueSubmissionToken& token
-    )noexcept;
+    [[nodiscard]] bool recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture);
+    [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
+    [[nodiscard]] Expected<QueueSubmissionNativeSignal> prepareFramePresentationSignal(u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept;
+    [[nodiscard]] static bool InvokeFramePresentationSignalResolution(void* context, u64 identity, const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] bool resolveFramePresentationSignal(u64 identity, const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle();
     void resetFramePresentationSignal()noexcept;
-    [[nodiscard]] bool cancelFramePresentationSignalDeferred(
-        const QueueSubmissionPreSubmitHook* claim,
-        UniqueLock<Futex>& lifecycleLock
-    );
-    [[nodiscard]] bool validPreparedTicket(
-        const SwapChainTransitionTicket& ticket,
-        SwapChainTransitionKind::Enum kind
-    )const noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* claim, UniqueLock<Futex>& lifecycleLock);
+    [[nodiscard]] bool validPreparedTicket(const SwapChainTransitionTicket& ticket, SwapChainTransitionKind::Enum kind)const noexcept;
 
 
 private:
@@ -281,15 +243,13 @@ private:
 
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
     i32 m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
-    // Family selected for the optional auxiliary Graphics queue; it differs from the primary only for explicitly
-    // enabled cross-family routing.
+    // Family selected for the optional auxiliary Graphics queue; it differs from the primary only for explicitly enabled cross-family routing.
     i32 m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
-    // Optional offload family is distinct from the required Compute role, which aliases Graphics on universal
-    // hardware and remains mandatory on split Graphics-only/Compute-only hardware.
+    // Optional offload family is distinct from the required Compute role, which aliases Graphics on universal hardware and remains mandatory on split Graphics-only/Compute-only hardware.
     i32 m_asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
-    // Dedicated Compute and Transfer paths may likewise expose one cross-family auxiliary transport. Device
-    // registration is opt-in, and task-level scheduling must separately select the resulting route.
+    // Dedicated Compute and Transfer paths may likewise expose one cross-family auxiliary transport.
+    // Device registration is opt-in, and task-level scheduling must separately select the resulting route.
     i32 m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
@@ -304,19 +264,19 @@ private:
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
 
     GraphicsVector<SwapChainImage> m_swapChainImages;
-    // One construction entry per VkQueue created from m_vulkanDevice. Device owns the corresponding synchronized
-    // states; physical scheduling queues and the present role retain only canonical indices.
+    // One construction entry per VkQueue created from m_vulkanDevice.
+    // Device owns the corresponding synchronized states; physical scheduling queues and the present role retain only canonical indices.
     GraphicsVector<VulkanNativeQueueDesc> m_nativeQueues;
     DeviceHandle m_rhiDevice;
-    // Exact opt-in same-class transports registered after their class primary. The first entry for each class
-    // populates the per-class auxiliary family fields above; graph packets use this complete physical registry.
+    // Exact opt-in same-class transports registered after their class primary.
+    // The first entry for each class populates the per-class auxiliary family fields above; graph packets use this complete physical registry.
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
     u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
 
     AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
-    // Swap-chain-lifetime direct transition list. Created once with swap-chain resources and
-    // reopened per use; present() never creates a command list so the frame path stays allocation-free.
+    // Swap-chain-lifetime direct transition list.
+    // Created once with swap-chain resources and reopened per use; present() never creates a command list so the frame path stays allocation-free.
     CommandListHandle m_directPresentCommandList;
     GpuPhysicalQueueId m_directPresentQueue;
 

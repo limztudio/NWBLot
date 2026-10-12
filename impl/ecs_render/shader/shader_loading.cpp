@@ -19,26 +19,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererShaderSystem::loadShaderForStage(
-    Core::ShaderHandle& outShader,
-    const Name& shaderName,
-    const AStringView variantName,
-    const Core::ShaderType::Mask shaderType,
-    const Name& debugName,
-    const Name* archiveStageName
-){
-    return ShaderAssetLoader::LoadForStage(
-        outShader,
-        shaderName,
-        variantName,
-        shaderType,
-        debugName,
-        m_graphics,
-        m_assetManager,
-        m_shaderPathResolver,
-        NWB_TEXT("RendererSystem"),
-        archiveStageName
-    );
+bool RendererShaderSystem::loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderName, const AStringView variantName, const Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName){
+    return ShaderAssetLoader::LoadForStage(outShader, shaderName, variantName, shaderType, debugName, m_graphics, m_assetManager, m_shaderPathResolver, NWB_TEXT("RendererSystem"), archiveStageName);
 }
 
 
@@ -48,12 +30,7 @@ bool RendererShaderSystem::hasShaderArchiveStage(const Name& shaderName, const A
 
 
 bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
-    return loadShader<VertexShader>(
-        m_deferredCompositeVertexShader,
-        AssetsGraphicsDeferred::s_CompositeVertexShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        "ECSRender_DeferredCompositeVS"
-    );
+    return loadShader<VertexShader>(m_deferredCompositeVertexShader, AssetsGraphicsDeferred::s_CompositeVertexShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeVS");
 }
 
 

@@ -92,12 +92,7 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input, const float3 incidentDirecti
     bool csgPixelDiscard = nwbCsgReceiverPixelDiscardWithWorldTolerance(receiverIndex, inWorldPosition, csgWorldDistanceTolerance);
 #if NWB_CSG_INTERVAL_SAMPLE_ENABLED
     if(!csgPixelDiscard){
-        csgPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(
-            input.position,
-            receiverIndex,
-            inWorldPosition,
-            csgWorldDistanceTolerance
-        );
+        csgPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(input.position, receiverIndex, inWorldPosition, csgWorldDistanceTolerance);
     }
 #endif
     if(csgPixelDiscard){

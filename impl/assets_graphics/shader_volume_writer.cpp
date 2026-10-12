@@ -50,30 +50,17 @@ namespace CacheReadStatus{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Path BuildVariantCachePath(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const AStringView sourceChecksumHex,
-    ScratchArena& scratchArena
-){
+static Path BuildVariantCachePath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
     ScratchString bytecodeFileName(sourceChecksumHex, scratchArena);
     bytecodeFileName += ".spv";
     return cacheDirectory / configurationSafeName / bytecodeFileName;
 }
 
-static CacheReadStatus::Enum TryReadCachedBytecode(
-    const ShaderCook::ShaderEntry& entry,
-    const Path& bytecodePath,
-    Core::GraphicsBytes& outBytecode
-){
+static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry& entry, const Path& bytecodePath, Core::GraphicsBytes& outBytecode){
     const auto read = ReadBinaryFile(bytecodePath, outBytecode);
     if(read){
         const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(entry.stage.view()));
-        if(Core::ResolveSpirvEntryPointName(
-            BinaryByteView{ outBytecode.data(), outBytecode.size() },
-            AStringView(entry.entryPoint),
-            Core::ShaderType::ToMask(shaderType)
-        ))
+        if(Core::ResolveSpirvEntryPointName(BinaryByteView{ outBytecode.data(), outBytecode.size() }, AStringView(entry.entryPoint), Core::ShaderType::ToMask(shaderType)))
             return CacheReadStatus::Hit;
 
         outBytecode.clear();
@@ -81,11 +68,7 @@ static CacheReadStatus::Enum TryReadCachedBytecode(
     }
 
     if(!IsMissingPathError(read.error())){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read bytecode cache '{}' for entry '{}': {}")
-            , PathToString<tchar>(bytecodePath)
-            , StringConvert(entry.name)
-            , StringConvert(read.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read bytecode cache '{}' for entry '{}': {}"), PathToString<tchar>(bytecodePath), StringConvert(entry.name), StringConvert(read.error().message()));
         return CacheReadStatus::Error;
     }
 
@@ -118,12 +101,7 @@ static bool GetVariantBytecode(
     if(bytecodeCacheStatus == CacheReadStatus::Hit)
         return true;
 
-    HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>> mergedDefines(
-        0,
-        Hasher<AStringView>(),
-        EqualTo<AStringView>(),
-        scratchArena
-    );
+    HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>> mergedDefines(0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
     if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: define count overflow for entry '{}'"), StringConvert(entry.name));
         return false;
@@ -138,9 +116,7 @@ static bool GetVariantBytecode(
 
     Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: entry '{}' has too many merged defines for shader compilation")
-            , StringConvert(entry.name)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: entry '{}' has too many merged defines for shader compilation"), StringConvert(entry.name));
         return false;
     }
     compileDefines.reserve(mergedDefines.size());
@@ -152,10 +128,7 @@ static bool GetVariantBytecode(
 
     auto ensureDirectoriesResult = EnsureDirectories(bytecodeCachePath.parentPath());
     if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
-            , PathToString<tchar>(bytecodeCachePath.parentPath())
-            , StringConvert(ensureDirectoriesResult.error().message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}"), PathToString<tchar>(bytecodeCachePath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
         return false;
     }
 
@@ -179,10 +152,7 @@ static bool GetVariantBytecode(
 }
 
 
-static Expected<usize> ReserveShaderIndexRecords(
-    const PreparedShaderVector& preparedEntries,
-    Core::GraphicsVector<Core::ShaderArchive::Record>& inOutShaderIndexRecords
-){
+static Expected<usize> ReserveShaderIndexRecords(const PreparedShaderVector& preparedEntries, Core::GraphicsVector<Core::ShaderArchive::Record>& inOutShaderIndexRecords){
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
@@ -210,9 +180,7 @@ static bool AppendShaderIndexToManifest(
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"),
-            StringConvert(shaderIndexVirtualPath.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"), StringConvert(shaderIndexVirtualPath.resolvedText()));
         return false;
     }
 
@@ -228,11 +196,7 @@ static bool AppendShaderIndexToManifest(
     return false;
 }
 
-static u64 BuildShaderVariantCookKeyHash(
-    const NameHash& virtualPathHash,
-    const u64 sourceChecksum,
-    const u64 bytecodeChecksum
-){
+static u64 BuildShaderVariantCookKeyHash(const NameHash& virtualPathHash, const u64 sourceChecksum, const u64 bytecodeChecksum){
     static constexpr u32 s_ShaderVariantCookKeyVersion = 2u;
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_ShaderVariantCookKeyVersion);
@@ -291,32 +255,17 @@ bool AppendPreparedShadersToManifest(
         const Name shaderName = ToName(entry.name);
         const Name stageName = ToName(entry.archiveStage.view());
         if(!shaderName || !stageName || entry.entryPoint.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'")
-                , StringConvert(entry.name)
-                , StringConvert(entry.archiveStage.view())
-                , StringConvert(entry.entryPoint)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage.view()), StringConvert(entry.entryPoint));
             return false;
         }
 
         auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> bool{
             const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
 
-            const u64 sourceChecksum = shaderCook.computeSourceChecksum(
-                entry,
-                generatedVariantName,
-                preparedEntry.dependencyChecksum,
-                compilerFingerprint,
-                scratchArena
-            );
+            const u64 sourceChecksum = shaderCook.computeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
             const CookString sourceChecksumHex = FormatHex64A(cookArena, sourceChecksum);
 
-            const Path bytecodeCachePath = __hidden_shader_volume_writer::BuildVariantCachePath(
-                cacheDirectory,
-                configurationSafeName,
-                sourceChecksumHex,
-                scratchArena
-            );
+            const Path bytecodeCachePath = __hidden_shader_volume_writer::BuildVariantCachePath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
             if(!__hidden_shader_volume_writer::GetVariantBytecode(
                 entry,
                 generatedVariantName,
@@ -333,40 +282,21 @@ bool AppendPreparedShadersToManifest(
 
             const Name virtualPath = Core::ShaderArchive::BuildVirtualPathName(shaderName, generatedVariantName, stageName);
             if(!virtualPath){
-                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'")
-                    , StringConvert(entry.name)
-                    , StringConvert(entry.archiveStage.view())
-                    , StringConvert(generatedVariantName)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage.view()), StringConvert(generatedVariantName));
                 return false;
             }
 
             const NameHash virtualPathHash = virtualPath.hash();
             if(!inOutSeenVirtualPathHashes.insert(virtualPathHash).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')")
-                    , StringConvert(virtualPath.resolvedText())
-                    , StringConvert(entry.name)
-                    , StringConvert(generatedVariantName)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')"), StringConvert(virtualPath.resolvedText()), StringConvert(entry.name), StringConvert(generatedVariantName));
                 return false;
             }
 
             const u64 bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
-            const u64 cookKeyHash = __hidden_shader_volume_writer::BuildShaderVariantCookKeyHash(
-                virtualPathHash,
-                sourceChecksum,
-                bytecodeChecksum
-            );
-            const ShaderBinaryPayload::AssetPayloadEncodeFailure::Enum payloadFailure = ShaderBinaryPayload::EncodeAssetPayload(
-                AStringView(entry.entryPoint),
-                cookedBytecode,
-                shaderAssetPayload
-            );
+            const u64 cookKeyHash = __hidden_shader_volume_writer::BuildShaderVariantCookKeyHash(virtualPathHash, sourceChecksum, bytecodeChecksum);
+            const ShaderBinaryPayload::AssetPayloadEncodeFailure::Enum payloadFailure = ShaderBinaryPayload::EncodeAssetPayload(AStringView(entry.entryPoint), cookedBytecode, shaderAssetPayload);
             if(payloadFailure != ShaderBinaryPayload::AssetPayloadEncodeFailure::None){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to package shader payload '{}' (failure {})")
-                    , StringConvert(virtualPath.resolvedText())
-                    , static_cast<u32>(payloadFailure)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to package shader payload '{}' (failure {})"), StringConvert(virtualPath.resolvedText()), static_cast<u32>(payloadFailure));
                 return false;
             }
             if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, shaderAssetPayload, cookKeyHash)){
@@ -390,9 +320,7 @@ bool AppendPreparedShadersToManifest(
         };
 
         if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations, scratchArena)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: variant combination count exceeds runtime limits for entry '{}'")
-                , StringConvert(entry.name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: variant combination count exceeds runtime limits for entry '{}'"), StringConvert(entry.name));
             return false;
         }
         if(defineCombinations.empty())
@@ -417,12 +345,7 @@ bool AppendPreparedShadersToManifest(
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count mismatch after cook"));
         return false;
     }
-    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(
-        cookArena,
-        shaderIndexRecords,
-        manifest,
-        inOutSeenVirtualPathHashes
-    );
+    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(cookArena, shaderIndexRecords, manifest, inOutSeenVirtualPathHashes);
 }
 
 

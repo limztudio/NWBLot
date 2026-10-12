@@ -67,8 +67,7 @@ TEST_F(UiEditGraphemeTests, PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCa
 }
 
 TEST_F(UiEditGraphemeTests, RegionalIndicatorsPairAndEmojiModifierZwjSequencesRemainWhole){
-    const AStringView flags("\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8"
-        "\xF0\x9F\x87\xAF");
+    const AStringView flags("\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8" "\xF0\x9F\x87\xAF");
     auto boundaries = GraphemeSegmentation::Build(m_arena, flags);
     ASSERT_TRUE(boundaries);
     ASSERT_EQ(boundaries->size(), 4u);

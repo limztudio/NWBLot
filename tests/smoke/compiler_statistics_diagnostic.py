@@ -43,21 +43,14 @@ LIT_APPEND = "append"
 CAPACITY = 1024
 U64_MAX = (1 << 64) - 1
 IDENTITY_FIELDS = (LIT_GRAPH_GENERATION, LIT_PLAN_GENERATION, LIT_DEVICE_GENERATION, "recording_attempt_generation")
-SECONDS_FIELDS = ("declaration", "analysis", "validation", "dependency_analysis", "hazard_analysis",
-                  "topological_order", "queue_assignment", "planning", "total", "packetization",
-                  "resource_state_planning", "packet_dependency_planning")
-COUNT_FIELDS = ("task", "resource", "resource_use", "resource_version", "resource_version_edge",
-                "explicit_dependency", "inferred_dependency", "external_dependency", "packet",
-                "packet_dependency", "packet_external_dependency", "cross_queue_packet_dependency",
-                "prologue_state_seed", "prologue_barrier", "epilogue_barrier", "state_export_barrier",
-                "resource_set", "direct_resource_use", "expanded_resource_set_member_use")
+SECONDS_FIELDS = ("declaration", "analysis", "validation", "dependency_analysis", "hazard_analysis", "topological_order", "queue_assignment", "planning", "total", "packetization", "resource_state_planning", "packet_dependency_planning")
+COUNT_FIELDS = ("task", "resource", "resource_use", "resource_version", "resource_version_edge", "explicit_dependency", "inferred_dependency", "external_dependency", "packet", "packet_dependency", "packet_external_dependency", "cross_queue_packet_dependency",
+                "prologue_state_seed", "prologue_barrier", "epilogue_barrier", "state_export_barrier", "resource_set", "direct_resource_use", "expanded_resource_set_member_use")
 SUBMISSION_FIELDS = ("accepted_packets", "accepted_tasks", "rejected_packets", "rejected_tasks")
 INVALID_STATUSES = ("invalid_snapshot", "invalid_duration", LIT_DUPLICATE_PLAN, LIT_NON_MONOTONIC_FRAME)
 BASE_ROW_FIELDS = (LIT_TYPE, LIT_SEQUENCE, LIT_SOURCE_FRAME, LIT_STATUS)
-LIMITS = ("Diagnostic attribution only. Phase timings may be nested/overlapping and must not be summed. "
-          "A coherent compiler snapshot is not presentation success; the owning gather validator establishes "
-          "the successful measured-frame source IDs used in this join. No gain, statistical gate, GPU-control "
-          "equivalence, or optimization-retention claim is made; prior campaign results remain unchanged.")
+LIMITS = ("Diagnostic attribution only. Phase timings may be nested/overlapping and must not be summed. " "A coherent compiler snapshot is not presentation success; the owning gather validator establishes "
+          "the successful measured-frame source IDs used in this join. No gain, statistical gate, GPU-control " "equivalence, or optimization-retention claim is made; prior campaign results remain unchanged.")
 
 
 def require(condition, message):
@@ -103,10 +96,8 @@ def validate_compiler_rows(rows):
     configuration, footer = rows[0], rows[-1]
     exact_fields(configuration, (LIT_TYPE, LIT_SCHEMA, LIT_CAPACITY), "compiler configuration")
     require(configuration[LIT_TYPE] == "compiler_statistics_configuration", "compiler configuration must be first")
-    require(type(configuration[LIT_SCHEMA]) is int and configuration[LIT_SCHEMA] == 1,
-            "unsupported compiler schema")
-    require(type(configuration[LIT_CAPACITY]) is int and configuration[LIT_CAPACITY] == CAPACITY,
-            "compiler capture capacity changed")
+    require(type(configuration[LIT_SCHEMA]) is int and configuration[LIT_SCHEMA] == 1, "unsupported compiler schema")
+    require(type(configuration[LIT_CAPACITY]) is int and configuration[LIT_CAPACITY] == CAPACITY, "compiler capture capacity changed")
     exact_fields(footer, (LIT_TYPE, LIT_ATTEMPTS, LIT_STORED, LIT_OVERFLOW, LIT_INVALID, LIT_COMPLETE), "compiler footer")
     require(footer[LIT_TYPE] == "compiler_statistics_complete", "compiler complete footer must be last")
     for key in (LIT_ATTEMPTS, LIT_STORED, LIT_OVERFLOW, LIT_INVALID):
@@ -114,8 +105,7 @@ def validate_compiler_rows(rows):
     require(type(footer[LIT_COMPLETE]) is bool, "footer complete flag must be boolean")
     captures = rows[1:-1]
     require(len(captures) <= CAPACITY, "compiler capture exceeds fixed capacity")
-    require(footer[LIT_STORED] == len(captures) == min(footer[LIT_ATTEMPTS], CAPACITY),
-            "footer attempt/stored counts differ from raw rows")
+    require(footer[LIT_STORED] == len(captures) == min(footer[LIT_ATTEMPTS], CAPACITY), "footer attempt/stored counts differ from raw rows")
     require(footer[LIT_ATTEMPTS] == footer[LIT_STORED] + footer[LIT_OVERFLOW], "footer overflow accounting differs")
     previous_frame, plans, invalid = None, set(), []
     for index, row in enumerate(captures):
@@ -140,8 +130,7 @@ def validate_compiler_rows(rows):
         plans.add(plan)
         exact_fields(row[LIT_SECONDS], SECONDS_FIELDS, "compiler seconds")
         for key, value in row[LIT_SECONDS].items():
-            require(type(value) in (int, float) and math.isfinite(value) and value >= 0,
-                    "invalid finite nonnegative duration: " + key)
+            require(type(value) in (int, float) and math.isfinite(value) and value >= 0, "invalid finite nonnegative duration: " + key)
         exact_fields(row[LIT_COUNTS], COUNT_FIELDS, "compiler counts")
         exact_fields(row[LIT_SUBMISSION], SUBMISSION_FIELDS, "compiler submission")
         for key, value in (*row[LIT_COUNTS].items(), *row[LIT_SUBMISSION].items()):
@@ -150,8 +139,7 @@ def validate_compiler_rows(rows):
     complete = bool(captures) and footer[LIT_OVERFLOW] == 0
     require(footer[LIT_COMPLETE] == complete, "footer complete flag contradicts raw capture")
     require(complete, "compiler capture is incomplete: " + json.dumps({LIT_OVERFLOW: footer[LIT_OVERFLOW], LIT_INVALID: invalid}))
-    require(not any(row[LIT_STATUS] in (LIT_DUPLICATE_PLAN, LIT_NON_MONOTONIC_FRAME) for row in invalid),
-            "structural compiler identity/order status is invalid")
+    require(not any(row[LIT_STATUS] in (LIT_DUPLICATE_PLAN, LIT_NON_MONOTONIC_FRAME) for row in invalid), "structural compiler identity/order status is invalid")
     return captures
 
 
@@ -168,23 +156,17 @@ def analyze_rows(compiler_rows, gather_rows, workload):
         require(source in by_source, "missing compiler snapshot for successful measured source frame " + str(source))
         compiler = by_source[source]
         require(compiler[LIT_STATUS] == LIT_VALID, "invalid compiler snapshot for successful measured source frame " + str(source))
-        joined.append({LIT_SOURCE_FRAME: source, "gather_publish_frame": frame["publish_frame"],
-                       "compiler_sequence": compiler[LIT_SEQUENCE], LIT_IDENTITY: compiler[LIT_IDENTITY],
+        joined.append({LIT_SOURCE_FRAME: source, "gather_publish_frame": frame["publish_frame"], "compiler_sequence": compiler[LIT_SEQUENCE], LIT_IDENTITY: compiler[LIT_IDENTITY],
                        LIT_SECONDS: compiler[LIT_SECONDS], LIT_COUNTS: compiler[LIT_COUNTS], LIT_SUBMISSION: compiler[LIT_SUBMISSION]})
     summaries = {}
     for phase in SECONDS_FIELDS:
         values = [row[LIT_SECONDS][phase] for row in joined]
-        summaries[phase] = {"samples": len(values), "mean_seconds": math.fsum(values) / len(values),
-                            "minimum_seconds": min(values), "maximum_seconds": max(values)}
+        summaries[phase] = {"samples": len(values), "mean_seconds": math.fsum(values) / len(values), "minimum_seconds": min(values), "maximum_seconds": max(values)}
     measured_ids = {row[LIT_SOURCE_FRAME] for row in measured}
     invalid = [row for row in captures if row[LIT_STATUS] != LIT_VALID]
-    return {LIT_STATUS: "clean_joined_diagnostic" if not invalid else "joined_diagnostic_with_invalid_unmeasured",
-            "clean": not invalid, "raw_invalid_count": len(invalid), "invalid_unmeasured_rows": invalid,
-            "workload": workload,
-            "raw_attempts": compiler_rows[-1][LIT_ATTEMPTS], "raw_stored": len(captures),
-            "joined_frames": len(joined), LIT_SOURCE_WINDOW: validated_gather[LIT_SOURCE_WINDOW],
-            "unjoined_source_frames": [row[LIT_SOURCE_FRAME] for row in captures if row[LIT_SOURCE_FRAME] not in measured_ids],
-            "phase_seconds": summaries, "joined": joined, "validated_gather": validated_gather,
+    return {LIT_STATUS: "clean_joined_diagnostic" if not invalid else "joined_diagnostic_with_invalid_unmeasured", "clean": not invalid, "raw_invalid_count": len(invalid), "invalid_unmeasured_rows": invalid, "workload": workload,
+            "raw_attempts": compiler_rows[-1][LIT_ATTEMPTS], "raw_stored": len(captures), "joined_frames": len(joined), LIT_SOURCE_WINDOW: validated_gather[LIT_SOURCE_WINDOW],
+            "unjoined_source_frames": [row[LIT_SOURCE_FRAME] for row in captures if row[LIT_SOURCE_FRAME] not in measured_ids], "phase_seconds": summaries, "joined": joined, "validated_gather": validated_gather,
             "raw_compiler_rows": compiler_rows, LIT_LIMITS: LIMITS}
 
 
@@ -199,8 +181,7 @@ def main(argv=None):
     parser.add_argument("--compiler-statistics", type=Path, required=True)
     parser.add_argument("--gather-result", type=Path, required=True)
     parser.add_argument("--workload", choices=gather.WORKLOADS, required=True)
-    parser.add_argument("--evidence", type=Path, action=LIT_APPEND, default=[],
-                        help="Optional frozen build/source identity evidence; hashed, not inferred as provenance")
+    parser.add_argument("--evidence", type=Path, action=LIT_APPEND, default=[], help="Optional frozen build/source identity evidence; hashed, not inferred as provenance")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     output = args.output.resolve()
@@ -208,8 +189,7 @@ def main(argv=None):
     try:
         require(not output.exists(), "output must be new; existing reports are preserved")
         paths = [args.compiler_statistics, args.gather_result, Path(__file__), *args.evidence]
-        for name in ("renderer_gather_benchmark", "renderer_ab_benchmark", "reflection_benchmark",
-                     "window_capture_smoke", "smoke_volume_identity", "gpu_timing_parse", "name_symbols"):
+        for name in ("renderer_gather_benchmark", "renderer_ab_benchmark", "reflection_benchmark", "window_capture_smoke", "smoke_volume_identity", "gpu_timing_parse", "name_symbols"):
             paths.append(Path(sys.modules[name].__file__))
         require(all(output != path.resolve() for path in paths), "output aliases an input")
         snapshots = [file_snapshot(path) for path in paths]

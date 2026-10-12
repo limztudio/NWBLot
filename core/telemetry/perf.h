@@ -134,73 +134,17 @@ struct PerfSessionRecordResult{
 
 
 [[nodiscard]] bool IsValidPerfTimingSource(PerfTimingSource::Enum source)noexcept;
-[[nodiscard]] bool BuildPerfTimingPayload(
-    TelemetryArena& arena,
-    PerfTimingSource::Enum source,
-    const Name& scopeName,
-    AStringView scopeText,
-    const Perf::TimingStats& stats,
-    TelemetryBytes& outPayload
-);
-[[nodiscard]] bool BuildPerfTimingPayload(
-    TelemetryArena& arena,
-    PerfTimingSource::Enum source,
-    const Name& scopeName,
-    const Perf::TimingStats& stats,
-    TelemetryBytes& outPayload
-);
+[[nodiscard]] bool BuildPerfTimingPayload(TelemetryArena& arena, PerfTimingSource::Enum source, const Name& scopeName, AStringView scopeText, const Perf::TimingStats& stats, TelemetryBytes& outPayload);
+[[nodiscard]] bool BuildPerfTimingPayload(TelemetryArena& arena, PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<PerfTimingPayload> ParsePerfTimingPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordPerfTiming(
-    Recorder& recorder,
-    PerfTimingSource::Enum source,
-    const Name& scopeName,
-    AStringView scopeText,
-    const Perf::TimingStats& stats,
-    u32 streamId = 0u
-);
-[[nodiscard]] bool RecordPerfTiming(
-    Recorder& recorder,
-    PerfTimingSource::Enum source,
-    const Name& scopeName,
-    const Perf::TimingStats& stats,
-    u32 streamId = 0u
-);
-[[nodiscard]] bool BuildPerfMemoryPayload(
-    TelemetryArena& arena,
-    const Name& scopeName,
-    AStringView scopeText,
-    const Perf::MemorySnapshot& snapshot,
-    const Perf::MemoryDelta& delta,
-    TelemetryBytes& outPayload
-);
-[[nodiscard]] bool BuildPerfMemoryPayload(
-    TelemetryArena& arena,
-    const Name& scopeName,
-    const Perf::MemorySnapshot& snapshot,
-    const Perf::MemoryDelta& delta,
-    TelemetryBytes& outPayload
-);
+[[nodiscard]] bool RecordPerfTiming(Recorder& recorder, PerfTimingSource::Enum source, const Name& scopeName, AStringView scopeText, const Perf::TimingStats& stats, u32 streamId = 0u);
+[[nodiscard]] bool RecordPerfTiming(Recorder& recorder, PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, u32 streamId = 0u);
+[[nodiscard]] bool BuildPerfMemoryPayload(TelemetryArena& arena, const Name& scopeName, AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload);
+[[nodiscard]] bool BuildPerfMemoryPayload(TelemetryArena& arena, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<PerfMemoryPayload> ParsePerfMemoryPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordPerfMemory(
-    Recorder& recorder,
-    const Name& scopeName,
-    AStringView scopeText,
-    const Perf::MemorySnapshot& snapshot,
-    const Perf::MemoryDelta& delta,
-    u32 streamId = 0u
-);
-[[nodiscard]] bool RecordPerfMemory(
-    Recorder& recorder,
-    const Name& scopeName,
-    const Perf::MemorySnapshot& snapshot,
-    const Perf::MemoryDelta& delta,
-    u32 streamId = 0u
-);
-[[nodiscard]] PerfSessionRecordResult RecordPerfSessionReport(
-    Recorder& recorder,
-    const Perf::SessionReport& report,
-    u32 streamId = 0u
-);
+[[nodiscard]] bool RecordPerfMemory(Recorder& recorder, const Name& scopeName, AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, u32 streamId = 0u);
+[[nodiscard]] bool RecordPerfMemory(Recorder& recorder, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, u32 streamId = 0u);
+[[nodiscard]] PerfSessionRecordResult RecordPerfSessionReport(Recorder& recorder, const Perf::SessionReport& report, u32 streamId = 0u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

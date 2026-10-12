@@ -41,9 +41,7 @@ bool EditBoxView::snapshot(const EditModel& model){
     else if(!committed.empty())
         display.assign(committed.data(), committed.size());
     const AStringView candidateText(display.data(), display.size());
-    const bool admitted = model.textMode() == EditTextMode::Multiline
-        ? ValidateMultilineText(candidateText) : GraphemeSegmentation::Validate(candidateText, true)
-    ;
+    const bool admitted = model.textMode() == EditTextMode::Multiline ? ValidateMultilineText(candidateText) : GraphemeSegmentation::Validate(candidateText, true);
     if(!admitted)
         return false;
     PaintVector<EditCaretMapping> stops(*m_arena);
@@ -57,12 +55,9 @@ bool EditBoxView::snapshot(const EditModel& model){
     m_display = Move(display);
     m_mapping = Move(stops);
     m_composing = composition.active;
-    m_preedit = composition.active ? EditBoxRange{ composition.replacementStart, composition.replacementStart + preeditBytes }
-        : EditBoxRange{};
+    m_preedit = composition.active ? EditBoxRange{ composition.replacementStart, composition.replacementStart + preeditBytes } : EditBoxRange{};
     m_replacement = composition.active ? EditBoxRange{ composition.replacementStart, composition.replacementEnd } : EditBoxRange{};
-    m_selection = composition.active ? EditBoxRange{ m_preedit.begin + Min(composition.anchor, composition.caret),
-        m_preedit.begin + Max(composition.anchor, composition.caret) }
-        : EditBoxRange{ model.selectionStart(), model.selectionEnd() };
+    m_selection = composition.active ? EditBoxRange{ m_preedit.begin + Min(composition.anchor, composition.caret), m_preedit.begin + Max(composition.anchor, composition.caret) } : EditBoxRange{ model.selectionStart(), model.selectionEnd() };
     m_caret = composition.active ? m_preedit.begin + composition.caret : model.caret();
     m_committedBytes = committed.size();
     m_revision = model.revision();

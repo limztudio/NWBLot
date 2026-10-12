@@ -33,14 +33,7 @@ namespace Win32MessagePumpResult{
 };
 
 template<typename OnDestroyFunc, typename SetActiveFunc>
-[[nodiscard]] inline bool HandleWin32FrameLifecycleMessage(
-    HWND hwnd,
-    UINT message,
-    WPARAM wParam,
-    OnDestroyFunc&& onDestroy,
-    SetActiveFunc&& setActive,
-    LRESULT& outResult
-){
+[[nodiscard]] inline bool HandleWin32FrameLifecycleMessage(HWND hwnd, UINT message, WPARAM wParam, OnDestroyFunc&& onDestroy, SetActiveFunc&& setActive, LRESULT& outResult){
     switch(message){
     case WM_DESTROY:
         onDestroy();
@@ -85,11 +78,7 @@ template<typename IsActiveFunc>
 }
 
 template<typename IsActiveFunc, typename BeforeUpdateFunc, typename UpdateFunc>
-[[nodiscard]] inline bool RunWin32TimedFrameLoop(
-    IsActiveFunc&& isActive,
-    BeforeUpdateFunc&& beforeUpdate,
-    UpdateFunc&& update
-){
+[[nodiscard]] inline bool RunWin32TimedFrameLoop(IsActiveFunc&& isActive, BeforeUpdateFunc&& beforeUpdate, UpdateFunc&& update){
     Timer lateTime(TimerNow());
 
     for(;;){

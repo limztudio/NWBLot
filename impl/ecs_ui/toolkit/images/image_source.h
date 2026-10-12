@@ -26,10 +26,7 @@ NWB_IMPL_UI_BEGIN
 
 class ImageSource;
 
-using SharedImageSource = RefCountPtr<
-    RefCounter<ImageSource>,
-    ArenaRefDeleter<RefCounter<ImageSource>, Core::Alloc::GlobalArena>
->;
+using SharedImageSource = RefCountPtr< RefCounter<ImageSource>, ArenaRefDeleter<RefCounter<ImageSource>, Core::Alloc::GlobalArena> >;
 
 
 // Each immutable version owns its exact texture payload; the caller's arena outlives every retained reference.

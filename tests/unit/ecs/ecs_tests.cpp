@@ -101,8 +101,7 @@ public:
         ++updates;
         lastDelta = delta;
 
-        world.view<PositionComponent>().each(
-            [](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
+        world.view<PositionComponent>().each([](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
                 ++position.x;
             }
         );
@@ -117,12 +116,7 @@ public:
 
 class ScheduledSystem final : public NWB::Core::ECS::ISystem{
 public:
-    ScheduledSystem(
-        NWB::Core::Alloc::GlobalArena& arena,
-        InitializerList<NWB::Core::ECS::ComponentAccess> accesses,
-        Function<void()> update,
-        NWB::Core::CpuTaskOptions options = {}
-    )
+    ScheduledSystem(NWB::Core::Alloc::GlobalArena& arena, InitializerList<NWB::Core::ECS::ComponentAccess> accesses, Function<void()> update, NWB::Core::CpuTaskOptions options = {})
         : NWB::Core::ECS::ISystem(arena)
         , m_update(Move(update))
         , m_options(options)
@@ -168,25 +162,19 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     usize singleViewCount = 0;
     usize multiViewCount = 0;
 
-    testWorld.world.view<PositionComponent>().each(
-        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
+    testWorld.world.view<PositionComponent>().each([&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
             ++singleViewCount;
         }
     );
-    testWorld.world.view<PositionComponent, VelocityComponent>().each(
-        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
+    testWorld.world.view<PositionComponent, VelocityComponent>().each([&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
             ++multiViewCount;
         }
     );
-    testWorld.world.view<PositionComponent>().parallelEach(
-        testWorld.world.taskScope(),
-        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
+    testWorld.world.view<PositionComponent>().parallelEach(testWorld.world.taskScope(), [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
             ++singleViewCount;
         }
     );
-    testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(
-        testWorld.world.taskScope(),
-        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
+    testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(testWorld.world.taskScope(), [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
             ++multiViewCount;
         }
     );
@@ -326,8 +314,7 @@ TEST(Ecs, DuplicateComponentAddIsStable){
     EXPECT_EQ(second.y, 4);
 
     usize viewCount = 0u;
-    testWorld.world.view<PositionComponent>().each(
-        [&viewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
+    testWorld.world.view<PositionComponent>().each([&viewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
             ++viewCount;
         }
     );
@@ -349,15 +336,9 @@ TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     }
 
     Atomic<u32> visits{ 0u };
-    world.taskScope().parallelFor(
-        static_cast<usize>(0),
-        s_OuterCount,
-        [&](usize outerIndex){
+    world.taskScope().parallelFor(static_cast<usize>(0), s_OuterCount, [&](usize outerIndex){
             static_cast<void>(outerIndex);
-            world.view<PositionComponent>().parallelEach(
-                world.taskScope(),
-                1u,
-                [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
+            world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
                     static_cast<void>(position);
                     visits.fetch_add(1u, MemoryOrder::relaxed);
                 }

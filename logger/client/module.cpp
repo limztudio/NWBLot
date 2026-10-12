@@ -144,11 +144,7 @@ bool Client::internalUpdate(){
                 return true;
 
             if(!BuildMessagePayload(msg, m_pendingPayload)){
-                const MessageType fallbackMsg = MakeTuple(
-                    Timer{},
-                    Core::Common::LogType::Error,
-                    LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena())
-                );
+                const MessageType fallbackMsg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena()));
                 if(!BuildMessagePayload(fallbackMsg, m_pendingPayload))
                     return true;
             }
@@ -177,13 +173,7 @@ bool Client::internalUpdate(){
         return true;
     }
 
-    curlResult = curl_easy_setopt(
-        curlHandle,
-        CURLOPT_URL,
-        m_pendingPayloadKind == ClientPayloadKind::Telemetry
-            ? m_telemetryUrl.c_str()
-            : m_messageUrl.c_str()
-    );
+    curlResult = curl_easy_setopt(curlHandle, CURLOPT_URL, m_pendingPayloadKind == ClientPayloadKind::Telemetry ? m_telemetryUrl.c_str() : m_messageUrl.c_str());
     if(curlResult != CURLE_OK)
         return scheduleRetry();
 

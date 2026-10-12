@@ -14,8 +14,8 @@ namespace __hidden_surfel_spawn_policy_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Compile and exercise the same predicate used by the spawn shader. The hash/list test must additionally cover
-// atomic publication on GPU; these cases pin the geometric decision before any allocation is attempted.
+// Compile and exercise the same predicate used by the spawn shader.
+// The hash/list test must additionally cover atomic publication on GPU; these cases pin the geometric decision before any allocation is attempted.
 #include <impl/assets/graphics/gi/surfel/surfel_spawn_policy.slangi>
 
 

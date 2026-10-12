@@ -25,9 +25,7 @@ TEST_F(PaintImageFixture, CropAndNestedClipTrimFullImageGeometryAndUv){
     ASSERT_TRUE(image);
     m_builder.pushClip({ 10.0f, 8.0f, 60.0f, 35.0f });
     m_builder.pushClip({ 20.0f, 10.0f, 25.0f, 20.0f });
-    ASSERT_TRUE(m_builder.drawImage(
-        image, { 0.0f, 0.0f, 80.0f, 40.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 2.0f, 0.5f, 0.25f, 0.5f }
-    ));
+    ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 80.0f, 40.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 2.0f, 0.5f, 0.25f, 0.5f }));
     ASSERT_TRUE(m_builder.popClip());
     ASSERT_TRUE(m_builder.popClip());
     const DrawSnapshot snapshot = m_builder.freeze();
@@ -196,9 +194,7 @@ TEST_F(PaintImageFixture, InvisibleAndTransparentDrawsRemainValidAtCapacityWitho
     ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 0.0f, 1.0f }));
     ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 1.0f, 0.0f }));
     ASSERT_TRUE(m_builder.drawImage(image, { 1.0f, 1.0f, BitCast<f32>(u32{ 1u }), 1.0f }));
-    ASSERT_TRUE(m_builder.drawImage(
-        image, { 1.0f, 1.0f, 5.0f, 5.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 0.0f }
-    ));
+    ASSERT_TRUE(m_builder.drawImage(image, { 1.0f, 1.0f, 5.0f, 5.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 0.0f }));
     m_builder.pushClip({ 250.0f, 0.0f, 1.0f, 1.0f });
     ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 20.0f, 20.0f }));
     EXPECT_FALSE(m_builder.drawImage({}, { 0.0f, 0.0f, 20.0f, 20.0f }));

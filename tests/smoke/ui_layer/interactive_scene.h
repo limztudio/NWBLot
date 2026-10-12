@@ -44,9 +44,7 @@ private:
     bool m_enabled = true;
 };
 
-using SharedUiInteractiveSmokeScene = RefCountPtr<
-    RefCounter<UiInteractiveSmokeScene>, ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiInteractiveSmokeScene = RefCountPtr< RefCounter<UiInteractiveSmokeScene>, ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerInteractionSmokeEnabled();
 [[nodiscard]] SharedUiInteractiveSmokeScene CreateUiInteractiveSmokeScene(Core::Alloc::GlobalArena& arena);

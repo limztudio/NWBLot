@@ -64,11 +64,7 @@ public:
 
 public:
     void reset(u16 deviceGeneration)noexcept;
-    [[nodiscard]] ReflectionHistoryPlan plan(
-        const ReflectionSceneContentStamp& stamp,
-        const ReflectionSettings& settings,
-        u64 graphicsFrameIndex
-    )noexcept;
+    [[nodiscard]] ReflectionHistoryPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)noexcept;
     [[nodiscard]] bool reserve(const ReflectionHistoryPlan& plan)noexcept;
     void discard(const ReflectionHistoryPlan& plan)noexcept;
     void accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
@@ -93,9 +89,7 @@ private:
 };
 
 using ReflectionHistoryControl = RefCounter<ReflectionHistoryState>;
-using ReflectionHistoryControlHandle = RefCountPtr<
-    ReflectionHistoryControl, ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena>
->;
+using ReflectionHistoryControlHandle = RefCountPtr< ReflectionHistoryControl, ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] ReflectionHistoryControlHandle CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration);
 

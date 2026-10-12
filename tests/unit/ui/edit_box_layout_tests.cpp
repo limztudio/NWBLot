@@ -335,8 +335,7 @@ TEST_F(EditBoxLayoutTests, EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSk
 
 TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales){
     Font font(m_arena, Name("tests/ui/edit_box/font"));
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-        / "latin.font";
+    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
     Core::Assets::AssetBytes bytes(m_arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
     ASSERT_TRUE(bytesResult);

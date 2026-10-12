@@ -80,12 +80,7 @@ struct MaterialParameterType{
 
 [[nodiscard]] Expected<MaterialLayoutFieldType::Enum> ParseMaterialBindResourceFieldTypeText(AStringView typeText)noexcept;
 
-Expected<MaterialBindEntry> ParseMaterialBindSource(
-    const Path& bindFilePath,
-    const Metascript::Document& doc,
-    MaterialCookArena& arena,
-    ScratchArena& scratchArena
-);
+Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, ScratchArena& scratchArena);
 
 bool ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
@@ -96,19 +91,9 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     Material::ResourceReferenceVector& outResourceReferences
 );
 
-Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(
-    const MaterialBindEntry& bindEntry,
-    const Name& contextName,
-    MaterialCookArena& arena,
-    ScratchArena& scratchArena
-);
+Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, ScratchArena& scratchArena);
 
-Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayoutImpl(
-    const Name& materialInterface,
-    const MaterialBindEntry& bindEntry,
-    MaterialBindTypedLayoutCache& inOutCache,
-    ScratchArena& scratchArena
-);
+Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

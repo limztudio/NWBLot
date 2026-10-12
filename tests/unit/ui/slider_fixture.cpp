@@ -64,9 +64,7 @@ StringView SliderCallbackSource::text(const u64 index)const{
     return "Later callback";
 }
 
-void SliderCallbackSource::arm(const SliderCallbackMutation::Enum mutation, SliderState* state,
-    Builder* builder, PopupState* popup
-){
+void SliderCallbackSource::arm(const SliderCallbackMutation::Enum mutation, SliderState* state, Builder* builder, PopupState* popup){
     m_mutation = mutation;
     m_state = state;
     m_builder = builder;
@@ -142,10 +140,7 @@ void SliderFixture::configureSliderSkin(){
 }
 
 bool SliderFixture::declare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
-    return
-        begin(generation) && m_builder.beginPanel("panel", bounds)
-        && m_builder.slider("slider", m_state, settings)
-    ;
+    return begin(generation) && m_builder.beginPanel("panel", bounds) && m_builder.slider("slider", m_state, settings);
 }
 
 bool SliderFixture::prepare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
@@ -174,8 +169,7 @@ WidgetId SliderFixture::thumb()const{
 
 Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const{
     const SliderPlacement& placement = state.placement();
-    return { placement.centerTravel.x + static_cast<f32>(normalized) * placement.centerTravel.width,
-        placement.track.y + placement.track.height * 0.5f };
+    return { placement.centerTravel.x + static_cast<f32>(normalized) * placement.centerTravel.width, placement.track.y + placement.track.height * 0.5f };
 }
 
 Point SliderFixture::thumbPoint()const{

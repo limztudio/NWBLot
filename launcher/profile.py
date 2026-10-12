@@ -9,28 +9,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 from launcher.models import LaunchSettings, ProfileSession
-from launcher.constants import (
-    CWD_PREFIX,
-    EMPTY_STRING,
-    LOGSERVER_LABEL,
-    LOG_PREFIX,
-    MSG_LAUNCHED_LOGSERVER,
-    MSG_LOGSERVER_EXITED,
-    MSG_LOGSERVER_NO_ACCEPT,
-    MSG_LOGSERVER_TIMEOUT_SUFFIX,
-    MSG_PORT_BUSY,
-    MSG_PORT_RANGE,
-    MSG_POSITIVE_TIMEOUT,
-    PROFILE_CLIENT_ADDRESS_FLAG,
-    PROFILE_CLIENT_PORT_FLAG,
-    PROFILE_LOG_CONNECT_TIMEOUT_SECONDS,
-    PROFILE_LOG_DRY_RUN_PORT,
-    PROFILE_LOG_HOST,
-    PROFILE_LOG_PORT_AUTO,
-    PROFILE_LOG_PORT_MAX,
-    PROFILE_LOG_PORT_MIN,
-    PROFILE_LOG_READY_POLL_SECONDS,
-)
+from launcher.constants import (CWD_PREFIX, EMPTY_STRING, LOGSERVER_LABEL, LOG_PREFIX, MSG_LAUNCHED_LOGSERVER, MSG_LOGSERVER_EXITED, MSG_LOGSERVER_NO_ACCEPT, MSG_LOGSERVER_TIMEOUT_SUFFIX, MSG_PORT_BUSY, MSG_PORT_RANGE, MSG_POSITIVE_TIMEOUT,
+    PROFILE_CLIENT_ADDRESS_FLAG, PROFILE_CLIENT_PORT_FLAG, PROFILE_LOG_CONNECT_TIMEOUT_SECONDS, PROFILE_LOG_DRY_RUN_PORT, PROFILE_LOG_HOST, PROFILE_LOG_PORT_AUTO, PROFILE_LOG_PORT_MAX, PROFILE_LOG_PORT_MIN, PROFILE_LOG_READY_POLL_SECONDS,)
 
 
 class ProfileSessionController:
@@ -89,12 +69,7 @@ class ProfileSessionController:
         return [PROFILE_CLIENT_ADDRESS_FLAG, args.profile_log_address, PROFILE_CLIENT_PORT_FLAG, str(profile_session.log_port)]
 
     @staticmethod
-    def start_profile_session(
-        args,
-        settings: LaunchSettings,
-        working_directory: Path,
-        env: Dict[str, str],
-    ) -> Optional[ProfileSession]:
+    def start_profile_session(args, settings: LaunchSettings, working_directory: Path, env: Dict[str, str],) -> Optional[ProfileSession]:
         import launcher as _facade
         if not args.with_profile:
             return None
@@ -103,13 +78,7 @@ class ProfileSessionController:
             raise SystemExit(MSG_POSITIVE_TIMEOUT)
 
         log_port = _facade.resolve_profile_log_port(args)
-        logserver_executable = _facade.resolve_executable_path(
-            settings,
-            args.profile_logserver_target,
-            args.profile_logserver_executable,
-            args.profile_logserver_name,
-            args.dry_run,
-        )
+        logserver_executable = _facade.resolve_executable_path(settings, args.profile_logserver_target, args.profile_logserver_executable, args.profile_logserver_name, args.dry_run,)
         _facade.validate_launch_paths(logserver_executable, working_directory, args.dry_run)
 
         command = [str(logserver_executable), PROFILE_CLIENT_PORT_FLAG, str(log_port)] + list(args.profile_logserver_args)

@@ -61,10 +61,7 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display){
     using namespace __hidden_testbed_ui_gallery;
     const f32 height = NumericSimd::Add(NumericSimd::Add(s_SelectorHeight, s_ContentGap), s_ContentHeight);
-    const SIMDVectorSingle available = VectorSubtract(
-        VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f), VectorSet(s_SelectorWidth, height, 0.0f, 0.0f)),
-        VectorReplicate(s_Margin)
-    );
+    const SIMDVectorSingle available = VectorSubtract(VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f), VectorSet(s_SelectorWidth, height, 0.0f, 0.0f)), VectorReplicate(s_Margin));
     const SIMDVectorSingle preferredTop = VectorSet(0.0f, s_PreferredTop, 0.0f, 0.0f);
     const SIMDVectorSingle topLimit = VectorAndInt(VectorLess(preferredTop, available), VectorSelectControl(0u, 1u, 0u, 0u));
     const SIMDVectorSingle capped = VectorSelect(available, preferredTop, topLimit);
@@ -77,9 +74,7 @@ NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiWidgetGallery::UiWidgetGallery(
-    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets
-)
+UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
     : m_edits(arena)
     , m_searchCombos(arena)
     , m_nestedPopups(arena)
@@ -111,13 +106,7 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
     valid = ui.endContainer() && valid;
     const u32 selected = m_selectedGallery;
     NWB::Core::Alloc::ScratchArena scratchArena(s_SelectorArena);
-    const auto caption = StringFormat(
-        scratchArena,
-        "UI samples {}/{}: {}",
-        selected + 1u,
-        static_cast<u32>(Section::kCount),
-        s_SectionNames[selected]
-    );
+    const auto caption = StringFormat(scratchArena, "UI samples {}/{}: {}", selected + 1u, static_cast<u32>(Section::kCount), s_SectionNames[selected]);
     valid = ui.label("section", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid){
@@ -128,11 +117,7 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
 
     const f32 width = selected == Section::TextArea ? s_SelectorWidth : s_OrdinaryGalleryWidth;
-    const SIMDVectorSingle centeredOrigin = VectorMultiplyAddExpression(
-        VectorSubtract(VectorSet(bounds.width, s_SelectorHeight, 0.0f, 0.0f), VectorSet(width, 0.0f, 0.0f, 0.0f)),
-        VectorSet(0.5f, 1.0f, 0.0f, 0.0f),
-        VectorSet(bounds.x, bounds.y, 0.0f, 0.0f)
-    );
+    const SIMDVectorSingle centeredOrigin = VectorMultiplyAddExpression(VectorSubtract(VectorSet(bounds.width, s_SelectorHeight, 0.0f, 0.0f), VectorSet(width, 0.0f, 0.0f, 0.0f)), VectorSet(0.5f, 1.0f, 0.0f, 0.0f), VectorSet(bounds.x, bounds.y, 0.0f, 0.0f));
     const SIMDVectorSingle contentOrigin = VectorAdd(centeredOrigin, VectorSet(0.0f, s_ContentGap, 0.0f, 0.0f));
     const f32 x = VectorGetX(centeredOrigin);
     const f32 y = VectorGetY(contentOrigin);

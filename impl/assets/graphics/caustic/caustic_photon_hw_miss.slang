@@ -14,8 +14,7 @@
 
 
 // Clear hit even when raygen seeds the payload, so an escaped segment always drops its photon.
-[shader("miss")]
-void main(inout NwbCausticHwPayload payload){
+[shader("miss")] void main(inout NwbCausticHwPayload payload){
     payload.hit = 0u;
 }
 

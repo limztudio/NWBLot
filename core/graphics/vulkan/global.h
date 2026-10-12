@@ -63,8 +63,8 @@ inline constexpr usize s_SpirvWordAlignmentBytes = sizeof(u32);
 inline constexpr usize s_SpirvWordAlignmentMask = s_SpirvWordAlignmentBytes - 1u;
 inline constexpr u32 s_VulkanMemoryTypeBitCount = sizeof(u32) * 8u;
 
-// Fixed-size, pre-reserved arena for GPU crash reports. Captured on device-lost, so it must
-// not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
+// Fixed-size, pre-reserved arena for GPU crash reports.
+// Captured on device-lost, so it must not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
 inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u;
 inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // aggregate cap across all queues and fault sections
 inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker truncation so one deep label cannot blow the budget

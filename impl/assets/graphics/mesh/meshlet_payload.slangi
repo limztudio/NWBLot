@@ -76,12 +76,7 @@ uint nwbMeshletRefEncodingWidth(const uint encoding, const uint shift){
 }
 
 uint nwbMeshletRefDeltaByteWidth(const uint width){
-    return width == NWB_MESHLET_REF_WIDTH_U8
-        ? 1u
-        : width == NWB_MESHLET_REF_WIDTH_U16
-            ? 2u
-            : 4u
-    ;
+    return width == NWB_MESHLET_REF_WIDTH_U8 ? 1u : width == NWB_MESHLET_REF_WIDTH_U16 ? 2u : 4u;
 }
 
 uint nwbMeshletDecodeRefByte(ByteAddressBuffer buffer, const uint byteOffset){
@@ -103,17 +98,8 @@ uint nwbMeshletDecodeRefDelta(ByteAddressBuffer buffer, const uint byteOffset, c
     return delta;
 }
 
-uint nwbMeshletDecodeRefDelta(
-    ByteAddressBuffer buffer,
-    const uint channelByteOffset,
-    const uint localIndex,
-    const uint width
-){
-    return nwbMeshletDecodeRefDelta(
-        buffer,
-        channelByteOffset + localIndex * nwbMeshletRefDeltaByteWidth(width),
-        width
-    );
+uint nwbMeshletDecodeRefDelta(ByteAddressBuffer buffer, const uint channelByteOffset, const uint localIndex, const uint width){
+    return nwbMeshletDecodeRefDelta(buffer, channelByteOffset + localIndex * nwbMeshletRefDeltaByteWidth(width), width);
 }
 
 NwbMeshletRefDecodeInfo nwbMeshletBuildRefDecodeInfo(const NwbMeshletDesc meshlet){
@@ -136,40 +122,19 @@ NwbMeshletRefDecodeInfo nwbMeshletBuildRefDecodeInfo(const NwbMeshletDesc meshle
     return info;
 }
 
-NwbMeshletPositionStreamRef nwbMeshletDecodePositionRef(
-    ByteAddressBuffer buffer,
-    const NwbMeshletDesc meshlet,
-    const NwbMeshletRefDecodeInfo decodeInfo,
-    const uint localPositionIndex,
-    const bool skinRequired
-){
-    const uint positionDelta = nwbMeshletDecodeRefDelta(
-        buffer,
-        decodeInfo.positionByteOffset,
-        localPositionIndex,
-        decodeInfo.positionWidth
-    );
+NwbMeshletPositionStreamRef nwbMeshletDecodePositionRef(ByteAddressBuffer buffer, const NwbMeshletDesc meshlet, const NwbMeshletRefDecodeInfo decodeInfo, const uint localPositionIndex, const bool skinRequired){
+    const uint positionDelta = nwbMeshletDecodeRefDelta(buffer, decodeInfo.positionByteOffset, localPositionIndex, decodeInfo.positionWidth);
     NwbMeshletPositionStreamRef ref;
     ref.position = meshlet.positionBase + positionDelta;
     ref.skin = NWB_MESH_MISSING_STREAM_INDEX;
     if(!skinRequired)
         return ref;
 
-    ref.skin = meshlet.skinBase + nwbMeshletDecodeRefDelta(
-        buffer,
-        decodeInfo.skinByteOffset,
-        localPositionIndex,
-        decodeInfo.skinWidth
-    );
+    ref.skin = meshlet.skinBase + nwbMeshletDecodeRefDelta(buffer, decodeInfo.skinByteOffset, localPositionIndex, decodeInfo.skinWidth);
     return ref;
 }
 
-NwbMeshletAttributeStreamRef nwbMeshletDecodeAttributeRef(
-    ByteAddressBuffer buffer,
-    const NwbMeshletDesc meshlet,
-    const NwbMeshletRefDecodeInfo decodeInfo,
-    const uint localAttributeIndex
-){
+NwbMeshletAttributeStreamRef nwbMeshletDecodeAttributeRef(ByteAddressBuffer buffer, const NwbMeshletDesc meshlet, const NwbMeshletRefDecodeInfo decodeInfo, const uint localAttributeIndex){
     NwbMeshletAttributeStreamRef ref;
     ref.normal = meshlet.normalBase + nwbMeshletDecodeRefDelta(buffer, decodeInfo.normalByteOffset, localAttributeIndex, decodeInfo.normalWidth);
     ref.tangent = meshlet.tangentBase + nwbMeshletDecodeRefDelta(buffer, decodeInfo.tangentByteOffset, localAttributeIndex, decodeInfo.tangentWidth);
@@ -219,10 +184,7 @@ uint nwbMeshPackConeOct16(float3 axis){
 }
 
 float3 nwbMeshUnpackConeOct16Axis(const uint conePacked){
-    const float2 oct = float2(
-        nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_X_SHIFT),
-        nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_Y_SHIFT)
-    ) * 2.0 - 1.0;
+    const float2 oct = float2(nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_X_SHIFT), nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_Y_SHIFT)) * 2.0 - 1.0;
     float3 axis = float3(oct.x, oct.y, 1.0 - abs(oct.x) - abs(oct.y));
     if(axis.z < 0.0){
         const float2 signValue = float2(axis.x < 0.0 ? -1.0 : 1.0, axis.y < 0.0 ? -1.0 : 1.0);
@@ -247,16 +209,11 @@ uint nwbMeshPackCone(const float3 axis, const float cutoff){
         return 0u;
 
     const uint packedAxis = nwbMeshPackConeOct16(axis);
-    const uint packedCutoff = nwbMeshPackConeCutoffUnorm8(
-        half(nwbMeshConservativePackedConeCutoff(axis, cutoff, packedAxis))
-    );
+    const uint packedCutoff = nwbMeshPackConeCutoffUnorm8(half(nwbMeshConservativePackedConeCutoff(axis, cutoff, packedAxis)));
     if(packedCutoff == 0u)
         return 0u;
 
-    return packedAxis
-        | (packedCutoff << NWB_MESHLET_CONE_CUTOFF_SHIFT)
-        | (NWB_MESHLET_CONE_FLAG_ENABLED << NWB_MESHLET_CONE_FLAG_SHIFT)
-    ;
+    return packedAxis | (packedCutoff << NWB_MESHLET_CONE_CUTOFF_SHIFT) | (NWB_MESHLET_CONE_FLAG_ENABLED << NWB_MESHLET_CONE_FLAG_SHIFT);
 }
 
 float3 nwbMeshUnpackConeAxis(const uint conePacked){
@@ -264,10 +221,7 @@ float3 nwbMeshUnpackConeAxis(const uint conePacked){
 }
 
 float nwbMeshUnpackConeCutoff(const uint conePacked){
-    return ((conePacked >> NWB_MESHLET_CONE_FLAG_SHIFT) & NWB_MESHLET_CONE_FLAG_ENABLED) != 0u
-        ? nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_CUTOFF_SHIFT)
-        : -1.0
-    ;
+    return ((conePacked >> NWB_MESHLET_CONE_FLAG_SHIFT) & NWB_MESHLET_CONE_FLAG_ENABLED) != 0u ? nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_CUTOFF_SHIFT) : -1.0;
 }
 
 

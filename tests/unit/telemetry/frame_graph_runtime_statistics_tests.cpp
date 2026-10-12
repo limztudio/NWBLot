@@ -25,8 +25,7 @@ using namespace TelemetryTestDetail;
 
 using FrameGraphRuntimeStatisticsMutation = void(*)(Telemetry::FrameGraphRuntimeStatistics&);
 
-static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisticsCountMutations[] = {
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
+static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisticsCountMutations[] = { [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.packetCount = statistics.compile.taskCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
@@ -45,34 +44,22 @@ static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisti
         statistics.compile.payloadObjectCount = statistics.compile.taskCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.logicalOwnershipTransferSignatureCount =
-            statistics.compile.logicalOwnershipTransferCount + 1u
-        ;
+        statistics.compile.logicalOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.repeatedOwnershipTransferSignatureCount =
-            statistics.compile.logicalOwnershipTransferSignatureCount + 1u
-        ;
+        statistics.compile.repeatedOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferSignatureCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.concurrentSharingCouldAvoidTransferCount =
-            statistics.compile.logicalOwnershipTransferCount + 1u
-        ;
+        statistics.compile.concurrentSharingCouldAvoidTransferCount = statistics.compile.logicalOwnershipTransferCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.concurrentSharingAdviceResourceCount = statistics.compile.resourceCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.logicalOwnershipTransferInternalCount =
-            statistics.compile.logicalOwnershipTransferCount + 1u
-        ;
+        statistics.compile.logicalOwnershipTransferInternalCount = statistics.compile.logicalOwnershipTransferCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.logicalOwnershipTransferExternalImportCount =
-            statistics.compile.logicalOwnershipTransferCount
-            - statistics.compile.logicalOwnershipTransferInternalCount
-            + 1u
-        ;
+        statistics.compile.logicalOwnershipTransferExternalImportCount = statistics.compile.logicalOwnershipTransferCount - statistics.compile.logicalOwnershipTransferInternalCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         ++statistics.compile.logicalOwnershipTransferExternalExportCount;
@@ -99,17 +86,13 @@ static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisti
         statistics.submission.acceptedPacketCount = statistics.compile.packetCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedPacketCount = statistics.compile.packetCount
-            - statistics.submission.acceptedPacketCount + 1u
-        ;
+        statistics.submission.rejectedPacketCount = statistics.compile.packetCount - statistics.submission.acceptedPacketCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedTaskCount = statistics.compile.taskCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedTaskCount = statistics.compile.taskCount
-            - statistics.submission.acceptedTaskCount + 1u
-        ;
+        statistics.submission.rejectedTaskCount = statistics.compile.taskCount - statistics.submission.acceptedTaskCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedTaskCount = statistics.submission.acceptedPacketCount - 1u;
@@ -142,15 +125,10 @@ static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisti
         statistics.submission.sameQueueWaitElisionCount = statistics.submission.plannedWaitTokenCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.mergedTimelineWaitCount = statistics.submission.plannedWaitTokenCount
-            - statistics.submission.sameQueueWaitElisionCount + 1u
-        ;
+        statistics.submission.mergedTimelineWaitCount = statistics.submission.plannedWaitTokenCount - statistics.submission.sameQueueWaitElisionCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.inheritedTimelineWaitElisionCount = statistics.submission.plannedWaitTokenCount
-            - statistics.submission.sameQueueWaitElisionCount
-            - statistics.submission.mergedTimelineWaitCount + 1u
-        ;
+        statistics.submission.inheritedTimelineWaitElisionCount = statistics.submission.plannedWaitTokenCount - statistics.submission.sameQueueWaitElisionCount - statistics.submission.mergedTimelineWaitCount + 1u;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
@@ -184,42 +162,22 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
     const auto loadRuntimeStatistics = [&]()->bool{
         if(!Telemetry::BuildFrameGraphPayload(testArena.arena, 911u, nodes, edges, payload))
             return false;
-        NWB_MEMCPY(
-            &first,
-            sizeof(first),
-            payload.data() + runtimeStatisticsOffset,
-            sizeof(first)
-        );
-        NWB_MEMCPY(
-            &second,
-            sizeof(second),
-            payload.data() + runtimeStatisticsOffset + sizeof(first),
-            sizeof(second)
-        );
+        NWB_MEMCPY(&first, sizeof(first), payload.data() + runtimeStatisticsOffset, sizeof(first));
+        NWB_MEMCPY(&second, sizeof(second), payload.data() + runtimeStatisticsOffset + sizeof(first), sizeof(second));
         return true;
     };
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
 
     ASSERT_TRUE(loadRuntimeStatistics());
     second.nodeIndex = first.nodeIndex;
-    NWB_MEMCPY(
-        payload.data() + runtimeStatisticsOffset + sizeof(first),
-        payload.size() - runtimeStatisticsOffset - sizeof(first),
-        &second,
-        sizeof(second)
-    );
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset + sizeof(first), payload.size() - runtimeStatisticsOffset - sizeof(first), &second, sizeof(second));
     EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.nodeIndex = s_ExpectedDualCount;
     second.nodeIndex = 0u;
     NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-    NWB_MEMCPY(
-        payload.data() + runtimeStatisticsOffset + sizeof(first),
-        payload.size() - runtimeStatisticsOffset - sizeof(first),
-        &second,
-        sizeof(second)
-    );
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset + sizeof(first), payload.size() - runtimeStatisticsOffset - sizeof(first), &second, sizeof(second));
     EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
 
     ASSERT_TRUE(loadRuntimeStatistics());
@@ -320,11 +278,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
 
     BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
-    nodes[1u].compiledTask = MakeFrameGraphCompiledTask(
-        41u,
-        7u,
-        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
-    );
+    nodes[1u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, Telemetry::FrameGraphTaskPacketizationDecision::FirstTask);
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
@@ -356,10 +310,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
 TEST(Telemetry, FrameGraphDurationTailsRejectInvalidValuesAndPreserveSignedZeroSubnormals){
     // The final submission durations are scalar tails after four-lane validation blocks.
     const f64 minimumSubnormal = BitCast<f64>(u64{ 1u });
-    const f64 invalidDurations[]{
-        -1.0, -minimumSubnormal, Limit<f64>::s_Infinity,
-        Limit<f64>::s_QuietNaN, BitCast<f64>(u64{ 0x7FF0000000000001ull })
-    };
+    const f64 invalidDurations[]{ -1.0, -minimumSubnormal, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, BitCast<f64>(u64{ 0x7FF0000000000001ull }) };
     for(const f64 duration : invalidDurations){
         Telemetry::FrameGraphRuntimeStatistics owner = MakeFrameGraphRuntimeStatistics();
         Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queue = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);

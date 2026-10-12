@@ -63,13 +63,7 @@ void ReflectionStatisticsState::discard(const ReflectionStatisticsReservationKey
         *slot = {};
 }
 
-void ReflectionStatisticsState::accept(
-    const ReflectionStatisticsReservationKey& key,
-    const Core::QueueSubmissionToken& token,
-    const bool hardwareReady,
-    const ReflectionHistoryOutcome* history,
-    const ReflectionFeedbackOutcome* feedback
-)noexcept{
+void ReflectionStatisticsState::accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const bool hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -102,9 +96,7 @@ void ReflectionStatisticsState::accept(
     // Never recycle memory whose GPU completion is unproved.
 }
 
-Expected<ReflectionStatisticsPendingReadback> ReflectionStatisticsState::pending(
-    const u32 index
-)const noexcept{
+Expected<ReflectionStatisticsPendingReadback> ReflectionStatisticsState::pending(const u32 index)const noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(index >= s_SlotCount)
@@ -113,28 +105,17 @@ Expected<ReflectionStatisticsPendingReadback> ReflectionStatisticsState::pending
     const Core::QueueSubmissionToken& token = slot.metadata.acceptedToken;
     if(!slot.inFlight || !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration)
         return MakeUnexpected(Failure{});
-    return ReflectionStatisticsPendingReadback{
-        .key = {slot.metadata.sequence, slot.metadata.generation, index},
-        .token = token,
-    };
+    return ReflectionStatisticsPendingReadback{ .key = {slot.metadata.sequence, slot.metadata.generation, index}, .token = token, };
 }
 
-void ReflectionStatisticsState::complete(
-    const ReflectionStatisticsReservationKey& key,
-    const Core::QueueSubmissionToken& token,
-    const u32* counters
-)noexcept{
+void ReflectionStatisticsState::complete(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
     if(!slot || !slot->inFlight)
         return;
     const Core::QueueSubmissionToken& accepted = slot->metadata.acceptedToken;
-    if(
-        !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration
-        || accepted.queue != token.queue || accepted.value != token.value
-        || !accepted.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration)
-    )
+    if(!token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration || accepted.queue != token.queue || accepted.value != token.value || !accepted.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration))
         return;
     if(counters && slot->metadata.sequence > m_latest.sequence){
         m_latest = slot->metadata;
@@ -148,9 +129,7 @@ void ReflectionStatisticsState::complete(
         m_latest.screenAttempts = counters[NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS / sizeof(u32)];
         m_latest.screenHits = counters[NWB_REFLECTION_COUNTER_SCREEN_HITS / sizeof(u32)];
         m_latest.queryBudgetUnits = counters[NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS / sizeof(u32)];
-        m_latest.physicalQueries = slot->metadata.csgHardwareEnabled
-            ? counters[NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES / sizeof(u32)] : m_latest.queryBudgetUnits
-        ;
+        m_latest.physicalQueries = slot->metadata.csgHardwareEnabled ? counters[NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES / sizeof(u32)] : m_latest.queryBudgetUnits;
         m_latest.bootstrapEvents = counters[NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS / sizeof(u32)];
         m_latest.transparentPaths = counters[NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS / sizeof(u32)];
         m_latest.unsupportedPaths = counters[NWB_REFLECTION_COUNTER_UNSUPPORTED_PATHS / sizeof(u32)];
@@ -163,9 +142,7 @@ void ReflectionStatisticsState::complete(
         m_latest.feedbackBypassedPixels = counters[NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS / sizeof(u32)];
         m_latest.feedbackProbeTiles = counters[NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES / sizeof(u32)];
         constexpr u32 s_CounterHighWordShiftBits = 32u;
-        m_latest.screenIterations = static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW / sizeof(u32)])
-            | (static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]) << s_CounterHighWordShiftBits)
-        ;
+        m_latest.screenIterations = static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW / sizeof(u32)]) | (static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]) << s_CounterHighWordShiftBits);
         m_latest.screenLimitMisses = counters[NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES / sizeof(u32)];
     }
     *slot = {};
@@ -191,21 +168,14 @@ ReflectionStatisticsState::Slot* ReflectionStatisticsState::matchingSlot(const R
 
 
 ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration){
-    return ReflectionStatisticsControlHandle(
-        NewArenaObject<ReflectionStatisticsControl>(arena, deviceGeneration),
-        ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return ReflectionStatisticsControlHandle(NewArenaObject<ReflectionStatisticsControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionStatisticsReservation::ReflectionStatisticsReservation(
-    ReflectionStatisticsControlHandle control,
-    const ReflectionStatistics& metadata
-)
+ReflectionStatisticsReservation::ReflectionStatisticsReservation(ReflectionStatisticsControlHandle control, const ReflectionStatistics& metadata)
     : m_control(Move(control))
 {
     if(m_control)
@@ -233,12 +203,7 @@ ReflectionStatisticsReservation& ReflectionStatisticsReservation::operator=(Refl
     return *this;
 }
 
-void ReflectionStatisticsReservation::accept(
-    const Core::QueueSubmissionToken& token,
-    const bool hardwareReady,
-    const ReflectionHistoryOutcome* history,
-    const ReflectionFeedbackOutcome* feedback
-)noexcept{
+void ReflectionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const bool hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
     if(m_control && m_key.valid())
         m_control->accept(m_key, token, hardwareReady, history, feedback);
     m_key = {};
@@ -278,21 +243,11 @@ bool ReflectionStatisticsReadback::prepareResources(){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection statistics: failed to allocate readback control"));
         return false;
     }
-    static constexpr Name s_Names[] = {
-        Name("engine/reflection/statistics_readback_0"),
-        Name("engine/reflection/statistics_readback_1"),
-        Name("engine/reflection/statistics_readback_2"),
-    };
+    static constexpr Name s_Names[] = { Name("engine/reflection/statistics_readback_0"), Name("engine/reflection/statistics_readback_1"), Name("engine/reflection/statistics_readback_2"), };
     Core::BufferHandle buffers[ReflectionStatisticsState::s_SlotCount];
     for(u32 index = 0u; index < ReflectionStatisticsState::s_SlotCount; ++index){
         Core::BufferDesc desc;
-        desc
-            .setByteSize(NWB_REFLECTION_COUNTER_SIZE)
-            .setCpuAccess(Core::CpuAccessMode::Read)
-            .setDebugName(s_Names[index])
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
-        ;
+        desc.setByteSize(NWB_REFLECTION_COUNTER_SIZE).setCpuAccess(Core::CpuAccessMode::Read).setDebugName(s_Names[index]).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         buffers[index] = m_graphics.createBuffer(desc);
         if(!buffers[index])
             return false;

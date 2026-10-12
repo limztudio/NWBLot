@@ -40,8 +40,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-            / "latin.font";
+        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
         auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
         ASSERT_TRUE(bytesResult);
@@ -113,12 +112,8 @@ protected:
             for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-                if(
-                    Abs(first.texCoord.x - left) < 1e-6f && Abs(last.texCoord.x - right) < 1e-6f
-                    && Abs(first.texCoord.y) < 1e-6f && Abs(last.texCoord.y - 0.5f) < 1e-6f
-                ){
-                    return Rect{ first.position.x, first.position.y,
-                        last.position.x - first.position.x, last.position.y - first.position.y };
+                if(Abs(first.texCoord.x - left) < 1e-6f && Abs(last.texCoord.x - right) < 1e-6f && Abs(first.texCoord.y) < 1e-6f && Abs(last.texCoord.y - 0.5f) < 1e-6f){
+                    return Rect{ first.position.x, first.position.y, last.position.x - first.position.x, last.position.y - first.position.y };
                 }
             }
         }

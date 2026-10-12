@@ -83,18 +83,12 @@ template<typename T>
     constexpr bool signedType = static_cast<T>(-1) < static_cast<T>(0);
     if constexpr(signedType){
         constexpr usize bitCount = sizeof(T) * s_BitsPerByte;
-        constexpr u64 maxValue = bitCount >= s_BitsPerU64
-            ? (Limit<u64>::s_Max >> 1u)
-            : ((u64(1) << (bitCount - 1u)) - 1u)
-        ;
+        constexpr u64 maxValue = bitCount >= s_BitsPerU64 ? (Limit<u64>::s_Max >> 1u) : ((u64(1) << (bitCount - 1u)) - 1u);
         return value <= maxValue;
     }
     else{
         constexpr usize bitCount = sizeof(T) * s_BitsPerByte;
-        constexpr u64 maxValue = bitCount >= s_BitsPerU64
-            ? Limit<u64>::s_Max
-            : ((u64(1) << bitCount) - 1u)
-        ;
+        constexpr u64 maxValue = bitCount >= s_BitsPerU64 ? Limit<u64>::s_Max : ((u64(1) << bitCount) - 1u);
         return value <= maxValue;
     }
 }

@@ -63,10 +63,7 @@ struct GeneratedGeometryEquivalenceKey{
     key.materialConstantByteOffset = drawItem.materialConstantByteOffset;
     key.shadingModelId = drawItem.shadingModelId;
     key.outputBuffer = drawItem.meshResources.emulationVertexBuffer.get();
-    key.outputHeapSlot = drawItem.meshResources.emulationVertexHeapHandle.valid()
-        ? drawItem.meshResources.emulationVertexHeapHandle.slot()
-        : 0u
-    ;
+    key.outputHeapSlot = drawItem.meshResources.emulationVertexHeapHandle.valid() ? drawItem.meshResources.emulationVertexHeapHandle.slot() : 0u;
     key.emulationIndexByteOffset = drawItem.meshResources.emulationIndexByteOffset;
     key.indexedGeometryOutput = drawItem.pipelineResources.indexedGeometryOutput;
     return key;
@@ -91,16 +88,9 @@ struct RegularSharedComputeEmulationGraphPlan{
         captured = false;
     }
 
-    [[nodiscard]] bool capture(
-        const MaterialPassDrawItems& sourceDrawItems,
-        const usize allowedMaxDrawCount
-    )noexcept{
+    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems, const usize allowedMaxDrawCount)noexcept{
         reset();
-        if(
-            !IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount)
-            || sourceDrawItems.computeDrawItems.size() < s_SharedComputeEmulationMinimumDrawCount
-            || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount
-        )
+        if(!IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount) || sourceDrawItems.computeDrawItems.size() < s_SharedComputeEmulationMinimumDrawCount || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount)
             return false;
 
         drawCount = sourceDrawItems.computeDrawItems.size();
@@ -110,20 +100,14 @@ struct RegularSharedComputeEmulationGraphPlan{
                 return false;
 
             const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-            )
+            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid())
                 return false;
 
             if(drawIndex == 0u){
                 outputBuffer = mesh.emulationVertexBuffer;
                 outputHeapSlot = mesh.emulationVertexHeapHandle.slot();
             }
-            else if(
-                mesh.emulationVertexBuffer.get() != outputBuffer.get()
-                || mesh.emulationVertexHeapHandle.slot() != outputHeapSlot
-            )
+            else if(mesh.emulationVertexBuffer.get() != outputBuffer.get() || mesh.emulationVertexHeapHandle.slot() != outputHeapSlot)
                 return false;
 
             drawItems[drawIndex] = drawItem;
@@ -139,12 +123,7 @@ struct RegularSharedComputeEmulationGraphPlan{
 
         const MaterialPassDrawItem& drawItem = drawItems[drawIndex];
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-        return mesh.emulationVertexBuffer
-            && mesh.emulationVertexHeapHandle.valid()
-            && mesh.emulationVertexBuffer.get() == outputBuffer.get()
-            && mesh.emulationVertexHeapHandle.slot() == outputHeapSlot
-            && equivalenceKeys[drawIndex].matches(drawItem)
-        ;
+        return mesh.emulationVertexBuffer && mesh.emulationVertexHeapHandle.valid() && mesh.emulationVertexBuffer.get() == outputBuffer.get() && mesh.emulationVertexHeapHandle.slot() == outputHeapSlot && equivalenceKeys[drawIndex].matches(drawItem);
     }
 
     void materialize(const usize drawIndex, MaterialPassDrawItems& outDrawItems)const{

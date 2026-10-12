@@ -14,9 +14,7 @@ import renderer_ab_benchmark as ab
 import reflection_benchmark as reflection
 import smoke_cpu_gpu_timing as timing
 from smoke_volume_identity import file_identity
-from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment,
-    launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect,
-    terminate_process, validate_expected_log_text)
+from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text)
 
 CASES = ("optical_csg_reference", "optical_csg_cap")
 REQUIRED_GPU = ("render.frame", "render.reflection_hardware")
@@ -48,31 +46,22 @@ def _one(lines, prefix, pattern):
 def parse_runtime_log(text, case):
     if case not in CASES:
         raise SmokeFailure("unsupported reflection CPU diagnostic fixture")
-    validate_expected_log_text(text, [f"ReflectionSmokeProject: case {case} created",
-        "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: shutdown"],
-        [*STRICT_LOG_FAILURE_MESSAGES, "FramebufferCapture:", "ReflectionSmokeStatistics:",
-         "ReflectionSmokeHistory:", "ReflectionSmokeOptics:", "ReflectionSmokeSlicePackets:",
-         "ReflectionSmokeProject: fps avg=", "render submission suspended"])
+    validate_expected_log_text(text, [f"ReflectionSmokeProject: case {case} created", "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: shutdown"], [*STRICT_LOG_FAILURE_MESSAGES, "FramebufferCapture:", "ReflectionSmokeStatistics:",
+         "ReflectionSmokeHistory:", "ReflectionSmokeOptics:", "ReflectionSmokeSlicePackets:", "ReflectionSmokeProject: fps avg=", "render submission suspended"])
     args = SimpleNamespace(family=case, ray_budget=1382400, optical_queries=16, screen_steps=96, mip_count=10, width=960, height=720, require_hardware=True)
     reflection.validate_trial_log(text, args, reflection.Variant("diagnostic", "hardware", temporal=False, spatial=False, feedback=False))
     lines = text.replace("\r\n", "\n").splitlines()
     extents = set(ab.DIMENSIONS.findall(text))
     if extents != {("960", "720")}:
         raise SmokeFailure("reflection diagnostic extent differs from 960x720")
-    availability = [line for line in lines if line.startswith("ReflectionSmokeProject: hardware ")
-        and line.endswith((" available", " unavailable"))]
+    availability = [line for line in lines if line.startswith("ReflectionSmokeProject: hardware ") and line.endswith((" available", " unavailable"))]
     if availability != ["ReflectionSmokeProject: hardware available"]:
         raise SmokeFailure("reflection diagnostic has contradictory hardware availability")
-    configured, configured_index = _one(lines, "ReflectionCpuTiming: configured ",
-        re.escape(f"ReflectionCpuTiming: configured case={case} preparation_presentations=64 warmup_seconds=5 "
+    configured, configured_index = _one(lines, "ReflectionCpuTiming: configured ", re.escape(f"ReflectionCpuTiming: configured case={case} preparation_presentations=64 warmup_seconds=5 "
         "minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"))
-    preparation, preparation_index = _one(lines, "ReflectionCpuTiming: preparation complete ",
-        r"ReflectionCpuTiming: preparation complete presentations=(\d+) source_frame=(\d+)")
-    begin, begin_index = _one(lines, "ReflectionCpuTiming: measurement begin ",
-        r"ReflectionCpuTiming: measurement begin presentations=(\d+) source_frame=(\d+) warmup_seconds=(" + NUMBER + r")")
-    end, end_index = _one(lines, "ReflectionCpuTiming: measurement complete ",
-        r"ReflectionCpuTiming: measurement complete presentations=(\d+) seconds=(" + NUMBER + r") first=(\d+) last=(\d+) "
-        r"positive_intervals=(\d+) end_source=(\d+) diagnostic_only=1")
+    preparation, preparation_index = _one(lines, "ReflectionCpuTiming: preparation complete ", r"ReflectionCpuTiming: preparation complete presentations=(\d+) source_frame=(\d+)")
+    begin, begin_index = _one(lines, "ReflectionCpuTiming: measurement begin ", r"ReflectionCpuTiming: measurement begin presentations=(\d+) source_frame=(\d+) warmup_seconds=(" + NUMBER + r")")
+    end, end_index = _one(lines, "ReflectionCpuTiming: measurement complete ", r"ReflectionCpuTiming: measurement complete presentations=(\d+) seconds=(" + NUMBER + r") first=(\d+) last=(\d+) " r"positive_intervals=(\d+) end_source=(\d+) diagnostic_only=1")
     if not configured_index < preparation_index < begin_index < end_index:
         raise SmokeFailure("reflection diagnostic lifecycle order is invalid")
     prepared, prepared_source = map(int, preparation.groups())
@@ -92,8 +81,7 @@ def parse_runtime_log(text, case):
     for index, line in enumerate(lines):
         if not line.startswith("ReflectionCpuTiming: interval"):
             continue
-        match = re.fullmatch(r"ReflectionCpuTiming: interval presentations=(\d+) seconds=(" + NUMBER
-            + r") first=(\d+) last=(\d+) first_source=(\d+) end_source=(\d+)", line)
+        match = re.fullmatch(r"ReflectionCpuTiming: interval presentations=(\d+) seconds=(" + NUMBER + r") first=(\d+) last=(\d+) first_source=(\d+) end_source=(\d+)", line)
         if match is None or not begin_index < index < end_index:
             raise SmokeFailure("reflection diagnostic interval is malformed or outside measurement")
         admitted, wall, start, finish, frame_start, frame_end = match.groups()
@@ -103,25 +91,21 @@ def parse_runtime_log(text, case):
             raise SmokeFailure("reflection diagnostic interval endpoints do not form one continuous window")
         if admitted != finish - start:
             raise SmokeFailure("reflection diagnostic interval count differs from its endpoints")
-        intervals.append(dict(presentations=admitted, seconds=wall, first=start, last=finish,
-            first_source=frame_start, end_source=frame_end))
+        intervals.append(dict(presentations=admitted, seconds=wall, first=start, last=finish, first_source=frame_start, end_source=frame_end))
         previous_presentation, previous_source = finish, frame_end
     actual_positive = sum(row["presentations"] > 0 for row in intervals)
     if (previous_presentation, previous_source) != (last, source_end) or positive != actual_positive:
         raise SmokeFailure("reflection diagnostic final endpoints or positive interval count disagree")
     if not math.isclose(sum(row["seconds"] for row in intervals), seconds, rel_tol=1e-7, abs_tol=1e-6):
         raise SmokeFailure("reflection diagnostic interval duration sum differs from the actual window")
-    return dict(case=case, first=first, last=last, seconds=seconds, presentations=count,
-        first_source=source_first, end_source=source_end, warmup_seconds=warmup, preparation_presentations=prepared,
-        positive_intervals=positive, intervals=intervals, accepted_wall_frame_ms=1000 * seconds / count,
-        diagnostic_only=True, performance_qualification=False, runtime_signature=ab.device_material_signature(text))
+    return dict(case=case, first=first, last=last, seconds=seconds, presentations=count, first_source=source_first, end_source=source_end, warmup_seconds=warmup, preparation_presentations=prepared,
+        positive_intervals=positive, intervals=intervals, accepted_wall_frame_ms=1000 * seconds / count, diagnostic_only=True, performance_qualification=False, runtime_signature=ab.device_material_signature(text))
 
 
 def validate_publications(log_text, raw_path, measurement):
     result = timing.verify_capture(log_text, raw_path, measurement, True, "reflection")
     window = result["window"]
-    if (window["first_source_frame"], window["end_source_frame_exclusive"]) != (
-            measurement["first_source"], measurement["end_source"]):
+    if (window["first_source_frame"], window["end_source_frame_exclusive"]) != (measurement["first_source"], measurement["end_source"]):
         raise SmokeFailure("reflection publication source window disagrees with native measurement")
     coverage = {}
     for domain, names in (("cpu", REQUIRED_CPU), ("gpu", REQUIRED_GPU)):
@@ -145,9 +129,7 @@ def validate_publications(log_text, raw_path, measurement):
                         break
             if len(seen_intervals) < MINIMUM_INTERVALS:
                 raise SmokeFailure(f"reflection diagnostic has fewer than 11 positive completed publication intervals: {name}")
-            coverage[f"{domain}:{name}"] = dict(positive_publication_intervals=len(seen_intervals),
-                completed_samples=sum(row["samples"] for row in rows), first_source=rows[0]["first_source_frame"],
-                last_source=rows[-1]["last_source_frame"])
+            coverage[f"{domain}:{name}"] = dict(positive_publication_intervals=len(seen_intervals), completed_samples=sum(row["samples"] for row in rows), first_source=rows[0]["first_source_frame"], last_source=rows[-1]["last_source_frame"])
     result["required_publication_coverage"] = coverage
     return result
 
@@ -166,8 +148,7 @@ def launch_environment(base, case, raw_path):
 def identities(args):
     helpers = sorted(Path(__file__).resolve().parent.glob("*.py"))
     helpers += sorted((Path(__file__).resolve().parents[1] / "ab").glob("*.py"))
-    return dict(renderer=ab.binary_identity(args.executable), logger=ab.binary_identity(args.logserver_executable),
-        runtime=ab.runtime_identity(args.working_directory), python=file_identity(Path(sys.executable)),
+    return dict(renderer=ab.binary_identity(args.executable), logger=ab.binary_identity(args.logserver_executable), runtime=ab.runtime_identity(args.working_directory), python=file_identity(Path(sys.executable)),
         helpers={str(path): file_identity(path) for path in helpers})
 
 
@@ -177,14 +158,12 @@ def write_json(path, value):
 
 def acquire(args):
     output = args.output_directory
-    if output.exists() or any(output == protected or output in protected.parents or protected in output.parents
-            for protected in (args.working_directory, args.executable.parent, args.logserver_executable.parent)):
+    if output.exists() or any(output == protected or output in protected.parents or protected in output.parents for protected in (args.working_directory, args.executable.parent, args.logserver_executable.parent)):
         raise SmokeFailure("reflection diagnostic requires a fresh, separate output directory")
     output.mkdir(parents=True)
     before = identities(args)
     env = launch_environment(build_launch_environment(args), args.case, output / RAW_NAME)
-    write_json(output / "launch.json", dict(argv=sys.argv, application_args=args.application_arg,
-        executable=str(args.executable), runtime=str(args.working_directory), case=args.case,
+    write_json(output / "launch.json", dict(argv=sys.argv, application_args=args.application_arg, executable=str(args.executable), runtime=str(args.working_directory), case=args.case,
         environment={key: value for key, value in env.items() if key.startswith(("NWB_", "VK_"))}, identity_before=before))
     process = logger = log_directory = None
     baseline, pattern, collected = {}, "", False
@@ -208,9 +187,7 @@ def acquire(args):
         after = identities(args)
         if before != after:
             raise SmokeFailure("reflection diagnostic executable, dependencies, resources or Python closure changed")
-        result = dict(schema=1, passed=True, diagnostic_only=True, performance_qualification=False, exit_code=code,
-            case=args.case, measurement=measurement, cpu_gpu_diagnostics=publications,
-            identity_before=before, identity_after=after,
+        result = dict(schema=1, passed=True, diagnostic_only=True, performance_qualification=False, exit_code=code, case=args.case, measurement=measurement, cpu_gpu_diagnostics=publications, identity_before=before, identity_after=after,
             artifacts={name: file_identity(output / name) for name in ("runtime.log", "process_tail.txt", RAW_NAME, "cpu_gpu_summary.json")},
             interpretation="Same final renderer and resource contract; scopes overlap and are not summed. This is CPU/frame diagnostic evidence, not an FPS or speed qualification.")
         write_json(output / "result.json", result)

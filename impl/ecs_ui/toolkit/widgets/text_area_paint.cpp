@@ -28,22 +28,15 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
     TextAreaState& state = *frame.state;
     const Rect clip = visibleClip(box.clip);
     const f32 caretWidth = NumericSimd::Divide(1.0f, m_paint.displayMetrics().pixelScaleX);
-    const auto viewport = ScrollbarLayout::Calculate(
-        box.rectangle, clip, item.padding, item.editView.layout().measure(), caretWidth,
-        state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb
-    );
+    const auto viewport = ScrollbarLayout::Calculate(box.rectangle, clip, item.padding, item.editView.layout().measure(), caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
     if(!viewport)
         return false;
     const f32 lineHeight = item.editView.layout().lines().empty() ? item.editView.layout().fontSize() : item.editView.layout().lines().front().height;
-    const SIMDVectorSingle wheelStep = VectorScale(VectorSet(item.editView.layout().fontSize(), lineHeight,
-        item.editView.layout().fontSize(), lineHeight), frame.wheelLines);
+    const SIMDVectorSingle wheelStep = VectorScale(VectorSet(item.editView.layout().fontSize(), lineHeight, item.editView.layout().fontSize(), lineHeight), frame.wheelLines);
     const Point step{ VectorGetX(wheelStep), VectorGetY(wheelStep) };
     if(!IsFinite(step.x) || !IsFinite(step.y) || step.x <= 0.0f || step.y <= 0.0f)
         return false;
-    const ControlToken token = state.m_scrollInput.prepare(
-        item.state, m_context.popupToken(), state.instanceGeneration(), state.revision(), *frame.model,
-        item.editOptions.enabled, item.editOptions.readOnly, *viewport, step
-    );
+    const ControlToken token = state.m_scrollInput.prepare(item.state, m_context.popupToken(), state.instanceGeneration(), state.revision(), *frame.model, item.editOptions.enabled, item.editOptions.readOnly, *viewport, step);
     m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
     if(!applyTextAreaScrollInput(item, frame, token))
         return false;

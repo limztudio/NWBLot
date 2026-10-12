@@ -217,13 +217,8 @@ char* MutableB(){{ return g_MutableB; }}
         mismatch[mismatch.index("--llvm-version") + 1] = "0.0.0"
         unsupported_lto = [*base, "/clang:-flto" if self.clang_cl else "-flto"]
         multiple_sources = [*base, str(invalid)]
-        cases = (
-            ("frontend", self.compiler_command(invalid, output), "error:"),
-            ("llvm_version", mismatch, "differs from compiler"),
-            ("recursive_response", recursive, "Recursive response file"),
-            ("unsupported_lto", unsupported_lto, "Unsupported string-literal compilation mode"),
-            ("multiple_sources", multiple_sources, "single C/C++ object compilation"),
-        )
+        cases = (("frontend", self.compiler_command(invalid, output), "error:"), ("llvm_version", mismatch, "differs from compiler"), ("recursive_response", recursive, "Recursive response file"),
+            ("unsupported_lto", unsupported_lto, "Unsupported string-literal compilation mode"), ("multiple_sources", multiple_sources, "single C/C++ object compilation"),)
         for name, command, diagnostic in cases:
             output.write_bytes(PREVIOUS_OBJECT)
             result = run(command, self.directory)

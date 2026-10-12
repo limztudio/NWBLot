@@ -29,34 +29,19 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshViewSetupGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
-    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(
-        context,
-        payload.shadowVisibilityTask
-    );
+bool MeshViewSetupGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
     if(!shadowVisibilityQueue)
         return false;
 
-    const bool shadowVisibilityRunsOnCompute =
-        shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
+    const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool recordsGraphicsFrameMarker =
-        !shadowVisibilityRunsOnCompute && RendererGpuTimingScope::s_Frame.valid()
-    ;
+    const bool recordsGraphicsFrameMarker = !shadowVisibilityRunsOnCompute && RendererGpuTimingScope::s_Frame.valid();
     if(recordsGraphicsFrameMarker)
         commandList.beginMarker(RendererGpuTimingScope::s_Frame.markerLabel);
 
     if(shadowVisibilityRunsOnCompute && payload.asyncPrefixTimingSpansOnePacket){
-        payload.asyncPrefixTiming.emplace(
-            payload.graphics.gpuTiming(),
-            RendererGpuTimingScope::s_AsyncPrefix,
-            payload.graphics.getDevice(),
-            commandList
-        );
+        payload.asyncPrefixTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncPrefix, payload.graphics.getDevice(), commandList);
         if(!Core::FinishSplitGpuTimingMarker(&payload.asyncPrefixTiming))
             return false;
     }
@@ -67,11 +52,7 @@ bool MeshViewSetupGraphTask::Record(
 }
 
 
-bool MeshViewUploadCommitGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-)noexcept{
+bool MeshViewUploadCommitGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
     static_cast<void>(commandList);
     static_cast<void>(context);
     payload.ready = true;

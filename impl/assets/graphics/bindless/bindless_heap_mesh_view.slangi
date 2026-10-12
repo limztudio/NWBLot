@@ -20,8 +20,7 @@
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // The mesh view is a typed alias of the uniform descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbHeapMeshViewBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbHeapMeshViewBuffers[];
 #pragma warning(pop)
 
 

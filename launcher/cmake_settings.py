@@ -11,68 +11,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from launcher.models import CMakeTargetInfo, LaunchSettings
-from launcher.constants import (
-    ARCH_X64,
-    ARG_JOIN_SEPARATOR,
-    CACHE_ENTRY_SEPARATOR,
-    CACHE_FILE_ENCODING,
-    CACHE_FILE_ERRORS,
-    CACHE_FILE_MODE,
-    CACHE_KEY_SEPARATOR,
-    CACHE_LINE_END,
-    CMAKE_BINARY_FLAG,
-    CMAKE_BOOL_FALSE_TOKENS,
-    CMAKE_BOOL_TRUE_TOKENS,
-    CMAKE_BUILD_ROOT_DIR,
-    CMAKE_BUILD_SUBDIR,
-    CMAKE_CACHE_FILE,
-    CMAKE_COMMAND_ENV,
-    CMAKE_DEFAULT_EXECUTABLE,
-    CMAKE_DEFINE_EQUALS,
-    CMAKE_DEFINE_PREFIX,
-    CMAKE_LOCAL_BIN_POSIX,
-    CMAKE_LOCAL_BIN_WINDOWS,
-    CMAKE_OUTPUT_DOMAIN_KEY,
-    CMAKE_PRESET_FLAG,
-    CMAKE_SOURCE_FLAG,
-    CMAKE_TOOL_VENV_DIR,
-    CONFIGURE_ALWAYS,
-    CONFIGURE_NEVER,
-    DEFAULT_DOMAIN,
-    DEFAULT_DOMAIN_FALLBACK,
-    EMPTY_STRING,
-    FILE_API_ARTIFACTS_KEY,
-    FILE_API_CODEMODEL,
-    FILE_API_CODEMODEL_VERSION,
-    FILE_API_CONFIGURATIONS_KEY,
-    FILE_API_DIR_API,
-    FILE_API_DIR_CMAKE,
-    FILE_API_DIR_QUERY,
-    FILE_API_DIR_REPLY,
-    FILE_API_DIR_V1,
-    FILE_API_INDEX_GLOB,
-    FILE_API_JSON_FILE_KEY,
-    FILE_API_KIND_CODEMODEL,
-    FILE_API_KIND_KEY,
-    FILE_API_NAME_KEY,
-    FILE_API_OBJECTS_KEY,
-    FILE_API_PATH_KEY,
-    FILE_API_TARGETS_KEY,
-    FILE_API_TYPE_KEY,
-    FILE_API_VERSION_KEY,
-    FILE_API_VERSION_MAJOR,
-    LOG_PREFIX,
-    MSG_ARCH_PRESET_CONFLICT,
-    MSG_CMAKE_DEFINE_EMPTY,
-    MSG_CMAKE_DEFINE_USAGE,
-    MSG_CONFIGURE_REQUIRED,
-    OS_WINDOWS,
-    PLATFORM_WINDOWS,
-    PRESET_ARCH_SEPARATOR,
-    PRESET_PREFIX_FORMAT,
-    PRESET_TOOLCHAIN,
-    PROFILE_REQUIRED_DEFINES,
-)
+from launcher.constants import (ARCH_X64, ARG_JOIN_SEPARATOR, CACHE_ENTRY_SEPARATOR, CACHE_FILE_ENCODING, CACHE_FILE_ERRORS, CACHE_FILE_MODE, CACHE_KEY_SEPARATOR, CACHE_LINE_END, CMAKE_BINARY_FLAG, CMAKE_BOOL_FALSE_TOKENS, CMAKE_BOOL_TRUE_TOKENS,
+    CMAKE_BUILD_ROOT_DIR, CMAKE_BUILD_SUBDIR, CMAKE_CACHE_FILE, CMAKE_COMMAND_ENV, CMAKE_DEFAULT_EXECUTABLE, CMAKE_DEFINE_EQUALS, CMAKE_DEFINE_PREFIX, CMAKE_LOCAL_BIN_POSIX, CMAKE_LOCAL_BIN_WINDOWS, CMAKE_OUTPUT_DOMAIN_KEY, CMAKE_PRESET_FLAG,
+    CMAKE_SOURCE_FLAG, CMAKE_TOOL_VENV_DIR, CONFIGURE_ALWAYS, CONFIGURE_NEVER, DEFAULT_DOMAIN, DEFAULT_DOMAIN_FALLBACK, EMPTY_STRING, FILE_API_ARTIFACTS_KEY, FILE_API_CODEMODEL, FILE_API_CODEMODEL_VERSION, FILE_API_CONFIGURATIONS_KEY, FILE_API_DIR_API,
+    FILE_API_DIR_CMAKE, FILE_API_DIR_QUERY, FILE_API_DIR_REPLY, FILE_API_DIR_V1, FILE_API_INDEX_GLOB, FILE_API_JSON_FILE_KEY, FILE_API_KIND_CODEMODEL, FILE_API_KIND_KEY, FILE_API_NAME_KEY, FILE_API_OBJECTS_KEY, FILE_API_PATH_KEY, FILE_API_TARGETS_KEY,
+    FILE_API_TYPE_KEY, FILE_API_VERSION_KEY, FILE_API_VERSION_MAJOR, LOG_PREFIX, MSG_ARCH_PRESET_CONFLICT, MSG_CMAKE_DEFINE_EMPTY, MSG_CMAKE_DEFINE_USAGE, MSG_CONFIGURE_REQUIRED, OS_WINDOWS, PLATFORM_WINDOWS, PRESET_ARCH_SEPARATOR, PRESET_PREFIX_FORMAT,
+    PRESET_TOOLCHAIN, PROFILE_REQUIRED_DEFINES,)
 
 
 class CmakeSettings:
@@ -280,11 +224,7 @@ class CmakeSettings:
                     artifact_path = build_dir / artifact_path
                 artifacts.append(artifact_path)
 
-            return _facade.CMakeTargetInfo(
-                name=target.get(FILE_API_NAME_KEY, target_name),
-                target_type=target.get(FILE_API_TYPE_KEY, EMPTY_STRING),
-                artifacts=tuple(artifacts),
-            )
+            return _facade.CMakeTargetInfo(name=target.get(FILE_API_NAME_KEY, target_name), target_type=target.get(FILE_API_TYPE_KEY, EMPTY_STRING), artifacts=tuple(artifacts),)
 
         return None
 
@@ -303,9 +243,7 @@ class CmakeSettings:
         requested_build_dir = _facade.resolve_path(root, args.build_dir) if args.build_dir is not None else None
         preset_arch = _facade.configure_preset_architecture(args.configure_preset) if args.configure_preset else None
         if args.arch and preset_arch and args.arch != preset_arch:
-            raise SystemExit(
-                MSG_ARCH_PRESET_CONFLICT.format(args=args, preset_arch=preset_arch)
-            )
+            raise SystemExit(MSG_ARCH_PRESET_CONFLICT.format(args=args, preset_arch=preset_arch))
         arch = args.arch or preset_arch or (_facade.host_arch_name() if platform_name == PLATFORM_WINDOWS else ARCH_X64)
         if args.configure_preset:
             configure_preset = args.configure_preset
@@ -315,16 +253,7 @@ class CmakeSettings:
             configure_preset = _facade.default_configure_preset_name(platform_name, requested_domain, arch)
             build_dir = requested_build_dir or _facade.default_build_dir(root, platform_name, requested_domain, arch)
         domain = args.domain or _facade.infer_output_domain(build_dir, platform_name, arch, configure_preset)
-        return _facade.LaunchSettings(
-            root=root,
-            platform_name=platform_name,
-            arch=arch,
-            domain=domain,
-            config=args.config,
-            configure_preset=configure_preset,
-            build_dir=build_dir,
-            cmake=_facade.cmake_command(root, args.cmake, platform_name),
-        )
+        return _facade.LaunchSettings(root=root, platform_name=platform_name, arch=arch, domain=domain, config=args.config, configure_preset=configure_preset, build_dir=build_dir, cmake=_facade.cmake_command(root, args.cmake, platform_name),)
 
     @staticmethod
     def refresh_launch_settings(settings: LaunchSettings, explicit_domain: Optional[str]) -> LaunchSettings:
@@ -356,13 +285,7 @@ class CmakeSettings:
         extra_defines = _facade.parse_define_entries(args.defines)
         extra_defines.update(required_defines)
 
-        needs_configure = (
-            args.configure == CONFIGURE_ALWAYS
-            or bool(args.defines)
-            or not build_dir_was_configured
-            or not _facade.file_api_has_reply(settings.build_dir)
-            or not _facade.cache_matches_required_defines(settings.build_dir, required_defines)
-        )
+        needs_configure = (args.configure == CONFIGURE_ALWAYS or bool(args.defines) or not build_dir_was_configured or not _facade.file_api_has_reply(settings.build_dir) or not _facade.cache_matches_required_defines(settings.build_dir, required_defines))
         if not needs_configure:
             return
 

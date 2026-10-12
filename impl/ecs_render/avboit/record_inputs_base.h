@@ -76,14 +76,7 @@ struct AvboitRecordInputsBase{
     // Reuse requires the regular emulation plan and excludes CSG/shared plans.
     [[nodiscard]] bool generatedGeometryReusePlansValid()const noexcept{
         const bool generatedGeometryReused = reusedGeometryProducer.valid();
-        if(
-            (generatedGeometryReused || producesReusableGeometry)
-            && (
-                !regularComputeEmulationPlanCaptured
-                || csgComputeEmulationPlanCaptured
-                || sharedComputeEmulationPlanCaptured
-            )
-        )
+        if((generatedGeometryReused || producesReusableGeometry) && (!regularComputeEmulationPlanCaptured || csgComputeEmulationPlanCaptured || sharedComputeEmulationPlanCaptured))
             return false;
         return true;
     }

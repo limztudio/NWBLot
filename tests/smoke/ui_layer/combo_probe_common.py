@@ -35,16 +35,14 @@ class ComboProbe:
         state = states[-1]
         sequence = int(state[1])
         values = tuple(map(int, state[2].split(",")))
-        rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in self.geometry.finditer(text)
-            if int(match[1]) == sequence}
+        rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in self.geometry.finditer(text) if int(match[1]) == sequence}
         if any(name not in rectangles for name in self.rectangles):
             return None
         display = tuple(map(float, displays[-1].groups()))
         geometry_values = (value for rectangle in rectangles.values() for value in rectangle)
         if not all(math.isfinite(value) for value in (*display, *geometry_values)) or not all(value > 0.0 for value in display):
             raise SmokeFailure("combo fixture reported invalid geometry or display metrics")
-        return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(self.fields, values)),
-            "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
+        return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(self.fields, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
 
     def observe(self, frame, snapshot, expected, *, extent=None, skin="default", row_height=24.0, extra=None):
         width, height, rows = frame
@@ -58,14 +56,12 @@ class ComboProbe:
             pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
             observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
             error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-            probes.append({"name": name, "position": [x, y], "expected": list(color), "observed": list(observed),
-                "error": error, "passed": error <= tolerance})
+            probes.append({"name": name, "position": [x, y], "expected": list(color), "observed": list(observed), "error": error, "passed": error <= tolerance})
 
         for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
             for part in range(2):
                 marker = index * 2 + part
-                probe(f"model_{index}_{part}", (self.marker_origin + marker * self.marker_stride, height / scale_y - 14.0),
-                    encoded_marker(value >> (part * 12)))
+                probe(f"model_{index}_{part}", (self.marker_origin + marker * self.marker_stride, height / scale_y - 14.0), encoded_marker(value >> (part * 12)))
         first, past = snapshot["first"], snapshot["past"]
         viewport = snapshot["rectangles"]["viewport"]
         bounded = snapshot["label_reads"] <= 2
@@ -91,14 +87,11 @@ class ComboProbe:
             if track_w > 0.0 and track_h > sh + 8.0:
                 free_top, free_bottom = sy - track_y, track_y + track_h - sy - sh
                 clear_y = track_y + free_top / 2.0 if free_top > free_bottom else sy + sh + free_bottom / 2.0
-                probe("scroll_track_skin", (track_x + track_w / 2.0, clear_y),
-                    (39, 63, 34) if skin == "alternate" else (24, 29, 37), 8)
-                probe("scroll_thumb_skin", (sx + sw / 2.0, sy + sh / 2.0),
-                    (49, 100, 63) if skin == "alternate" else (45, 60, 80), 8)
+                probe("scroll_track_skin", (track_x + track_w / 2.0, clear_y), (39, 63, 34) if skin == "alternate" else (24, 29, 37), 8)
+                probe("scroll_thumb_skin", (sx + sw / 2.0, sy + sh / 2.0), (49, 100, 63) if skin == "alternate" else (45, 60, 80), 8)
             rx, ry, rw, rh = snapshot["rectangles"]["cursor_row"]
             if rw > 40.0 and rh > 8.0 and viewport[1] + 4.0 <= ry + rh / 2.0 <= viewport[1] + viewport[3] - 4.0:
-                row_color = (38, 80, 123) if snapshot["cursor"] == snapshot["selected"] else (
-                    (49, 100, 63) if skin == "alternate" else (45, 60, 80))
+                row_color = (38, 80, 123) if snapshot["cursor"] == snapshot["selected"] else ((49, 100, 63) if skin == "alternate" else (45, 60, 80))
                 probe("preview_row_committed_skin", (rx + rw - 20.0, ry + rh / 2.0), row_color, 8)
         if self.searchable or snapshot["visible"]:
             tx, ty, tw, th = snapshot["rectangles"]["trigger"]
@@ -124,12 +117,8 @@ class ComboProbe:
                 geometry_matches = geometry_matches and sw > 1.0 and sh > 1.0
                 if sw > 1.0 and sh > 1.0:
                     linear_background = linear_channels(background)
-                    color = tuple(foreground * 0.75 + backdrop * 0.25
-                        for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
-                    probe("search_query_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, content[1] + content[3]) - 2.0),
-                        linear_rgb_bytes(color))
+                    color = tuple(foreground * 0.75 + backdrop * 0.25 for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
+                    probe("search_query_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, content[1] + content[3]) - 2.0), linear_rgb_bytes(color))
         model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
-        return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes,
-            "bounded": bounded, "geometry_matches": geometry_matches,
-            "passed": model_matches and bounded and geometry_matches and (extent is None or (width, height) == extent)
-                and (extra is None or extra(snapshot)) and all(item["passed"] for item in probes)}
+        return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes, "bounded": bounded, "geometry_matches": geometry_matches,
+            "passed": model_matches and bounded and geometry_matches and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot)) and all(item["passed"] for item in probes)}

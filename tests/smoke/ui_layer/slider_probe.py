@@ -14,16 +14,11 @@ DISPLAY = re.compile(rf"UiSliderSmoke: display logical=({NUMBER})x({NUMBER}) sca
 STATE = re.compile(r"UiSliderSmoke: state sequence=(\d+) values=((?:\d+,){15}\d+) bits=((?:\d+,){3}\d+)")
 GEOMETRY = re.compile(rf"UiSliderSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 SKIN = re.compile(r"UiSliderSmoke: skin=(default|alternate)")
-FIELDS = (
-    "focus_code", "changes", "popup_changes", "before_clicks", "after_clicks", "enabled", "range_code", "step_code",
-    "parent", "popup_count", "focus_scope", "main_valid", "main_dragging", "popup_valid", "popup_dragging",
-    "external_intents",
-)
+FIELDS = ("focus_code", "changes", "popup_changes", "before_clicks", "after_clicks", "enabled", "range_code", "step_code", "parent", "popup_count", "focus_scope", "main_valid", "main_dragging", "popup_valid", "popup_dragging", "external_intents",)
 BIT_FIELDS = ("main_bits", "disabled_bits", "constant_bits", "popup_bits")
 PREFIXES = ("main", "disabled", "constant", "popup")
 PARTS = ("bounds", "clip", "travel", "track", "center", "thumb")
-RECTANGLES = ("before", "after", "open", "parent", "popup_close") + tuple(
-    f"{prefix}_{part}" for prefix in PREFIXES for part in PARTS)
+RECTANGLES = ("before", "after", "open", "parent", "popup_close") + tuple(f"{prefix}_{part}" for prefix in PREFIXES for part in PARTS)
 TRACK = ((20, 29, 41), (63, 80, 101))
 NORMAL = ((69, 131, 185), (130, 193, 238))
 HOVER = ((86, 164, 221), (166, 221, 255))
@@ -49,8 +44,7 @@ def snapshot_from_logs(text):
         return None
     state = states[-1]
     sequence, values, bits = int(state[1]), tuple(map(int, state[2].split(","))), tuple(map(int, state[3].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text)
-        if int(match[1]) == sequence}
+    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
     if any(name not in rectangles for name in RECTANGLES):
         return None
     display = tuple(map(float, displays[-1].groups()))
@@ -63,10 +57,7 @@ def snapshot_from_logs(text):
         raise SmokeFailure("slider fixture exceeds its displayed marker schema")
     if not all(math.isfinite(bits_value(value)) for value in bits):
         raise SmokeFailure("slider fixture reported a nonfinite typed value")
-    return {
-        "sequence": sequence, "skin": skins[-1][1], "values": values, "bits": bits, **dict(zip(FIELDS, values)),
-        **dict(zip(BIT_FIELDS, bits)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles,
-    }
+    return { "sequence": sequence, "skin": skins[-1][1], "values": values, "bits": bits, **dict(zip(FIELDS, values)), **dict(zip(BIT_FIELDS, bits)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles, }
 
 
 def center(rectangle):
@@ -87,20 +78,15 @@ def observe_slider(frame, snapshot, expected, *, extent=None, skin="default", ex
             raise SmokeFailure(f"slider probe '{name}' falls outside {width}x{height}: ({x},{y})")
         observed = rows[y][x]
         error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({
-            "name": name, "position": [x, y], "expected": list(color), "observed": list(observed),
-            "error": error, "passed": error <= tolerance,
-        })
+        probes.append({ "name": name, "position": [x, y], "expected": list(color), "observed": list(observed), "error": error, "passed": error <= tolerance, })
 
     def pixel(point):
         return round(point[0] * scale[0]), round(point[1] * scale[1])
 
     marker = 0
-    for value, parts in (*((value, 2) for value in snapshot["values"]),
-            *((value, 6) for value in snapshot["bits"]), (snapshot["sequence"], 2)):
+    for value, parts in (*((value, 2) for value in snapshot["values"]), *((value, 6) for value in snapshot["bits"]), (snapshot["sequence"], 2)):
         for part in range(parts):
-            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot["logical_extent"][1] - 14.0)),
-                encoded_marker(value >> (part * 12)), MARKER_TOLERANCE)
+            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot["logical_extent"][1] - 14.0)), encoded_marker(value >> (part * 12)), MARKER_TOLERANCE)
             marker += 1
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     bounds = rectangles["main_bounds"]
@@ -133,9 +119,7 @@ def observe_slider(frame, snapshot, expected, *, extent=None, skin="default", ex
         geometry_matches = geometry_matches and close(center(thumb)[0], centers[0] + normalized * centers[2])
         geometry_matches = geometry_matches and close(center(thumb)[1], center(bounds)[1])
         mode = modes.get(prefix, "normal")
-        tint = (0.55, 0.55, 0.55, 0.6) if not enabled else (
-            (0.85, 0.85, 0.85, 1.0) if mode == "pressed" else (
-                (1.08, 1.08, 1.08, 1.0) if mode == "hover" else (1.0, 1.0, 1.0, 1.0)))
+        tint = (0.55, 0.55, 0.55, 0.6) if not enabled else ((0.85, 0.85, 0.85, 1.0) if mode == "pressed" else ((1.08, 1.08, 1.08, 1.0) if mode == "hover" else (1.0, 1.0, 1.0, 1.0)))
         track_tint = (0.55, 0.55, 0.55, 0.6) if not enabled else (1.0, 1.0, 1.0, 1.0)
         fill, border = HOVER if enabled and mode == "hover" else NORMAL
         # Pick the track half opposite the thumb, inside the opaque middle slice.
@@ -170,8 +154,7 @@ def observe_slider(frame, snapshot, expected, *, extent=None, skin="default", ex
             probes.append({"name": f"{prefix}_thumb_border", "passed": False})
 
     main_maximum = 0.5 if snapshot["range_code"] else 1.0
-    control("main", min(1.0, max(0.0, bits_value(snapshot["main_bits"]) / main_maximum)),
-        bool(snapshot["enabled"]), panel)
+    control("main", min(1.0, max(0.0, bits_value(snapshot["main_bits"]) / main_maximum)), bool(snapshot["enabled"]), panel)
     control("disabled", 0.75, False, panel)
     control("constant", 0.0, False, panel)
     if snapshot["parent"]:
@@ -182,9 +165,5 @@ def observe_slider(frame, snapshot, expected, *, extent=None, skin="default", ex
         for name in ("parent", "popup_close", *(f"popup_{part}" for part in PARTS)):
             geometry_matches = geometry_matches and rectangles[name][2:] == (0.0, 0.0)
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
-    return {
-        "extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes,
-        "geometry_matches": geometry_matches, "passed": model_matches and geometry_matches
-            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot))
-            and all(probe["passed"] for probe in probes),
-    }
+    return { "extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes, "geometry_matches": geometry_matches, "passed": model_matches and geometry_matches
+            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot)) and all(probe["passed"] for probe in probes), }

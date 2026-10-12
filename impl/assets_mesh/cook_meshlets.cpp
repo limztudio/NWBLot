@@ -19,22 +19,8 @@ SIMDVectorSingle MeshCookMeshlets::MakeMeshletPositionVector(const SIMDVectorSin
 }
 
 
-MeshletTriangleVectors MeshCookMeshlets::MakeMeshletTriangleVectors(
-    const SIMDVectorSingle position0,
-    const SIMDVectorSingle position1,
-    const SIMDVectorSingle position2,
-    const SIMDVectorSingle centroid,
-    const SIMDVectorSingle areaNormal
-)noexcept{
-    return MeshletTriangleVectors{
-        {
-            position0,
-            position1,
-            position2,
-        },
-        centroid,
-        areaNormal
-    };
+MeshletTriangleVectors MeshCookMeshlets::MakeMeshletTriangleVectors(const SIMDVectorSingle position0, const SIMDVectorSingle position1, const SIMDVectorSingle position2, const SIMDVectorSingle centroid, const SIMDVectorSingle areaNormal)noexcept{
+    return MeshletTriangleVectors{ { position0, position1, position2, }, centroid, areaNormal };
 }
 
 
@@ -43,10 +29,7 @@ SIMDVectorSingle MeshCookMeshlets::NormalizeMeshletDirectionOrZero(const SIMDVec
 }
 
 
-usize MeshCookMeshlets::EstimateMeshletSourceBytes(
-    const Core::Assets::AssetVector<u32>& indices,
-    const MeshCookEntry& entry
-)noexcept{
+usize MeshCookMeshlets::EstimateMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const MeshCookEntry& entry)noexcept{
     return EstimateCommonMeshletSourceBytes(indices, entry);
 }
 
@@ -68,19 +51,12 @@ void MeshCookMeshlets::ResetMeshletScoreState(MeshletScoreState& state)noexcept{
 }
 
 
-void MeshCookMeshlets::AccumulateMeshletScoreBounds(
-    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount],
-    SIMDVectorSingle& minBounds,
-    SIMDVectorSingle& maxBounds
-)noexcept{
+void MeshCookMeshlets::AccumulateMeshletScoreBounds(const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount], SIMDVectorSingle& minBounds, SIMDVectorSingle& maxBounds)noexcept{
     AabbTests::ExpandTriangle(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u], minBounds, maxBounds);
 }
 
 
-f32 MeshCookMeshlets::PredictMeshletScoreRadius(
-    const MeshletScoreState& state,
-    const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount]
-)noexcept{
+f32 MeshCookMeshlets::PredictMeshletScoreRadius(const MeshletScoreState& state, const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount])noexcept{
     SIMDVectorSingle minBounds = state.minBounds;
     SIMDVectorSingle maxBounds = state.maxBounds;
     AccumulateMeshletScoreBounds(trianglePositions, minBounds, maxBounds);
@@ -107,12 +83,7 @@ f32 MeshCookMeshlets::MeshletScoreNormalCoherence(const MeshletScoreState& state
 }
 
 
-void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(
-    const SIMDVectorSingle axis,
-    const SIMDVectorSingle triangleAreaNormal,
-    bool& hasNormal,
-    f32& coneCutoff
-)noexcept{
+void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, f32& coneCutoff)noexcept{
     const SIMDVectorSingle faceNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!::FrameValidDirection(faceNormal))
         return;
@@ -123,10 +94,7 @@ void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(
 }
 
 
-Expected<u32> MeshCookMeshlets::FindNextUnvisitedMeshletTriangle(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchOffset
-)noexcept{
+Expected<u32> MeshCookMeshlets::FindNextUnvisitedMeshletTriangle(const MeshletTrianglePrecompute& trianglePrecompute, const usize searchOffset)noexcept{
     for(usize triangleIndex = searchOffset; triangleIndex < trianglePrecompute.triangles.size(); ++triangleIndex){
         if(trianglePrecompute.visitedTriangles[triangleIndex] != 0u)
             continue;
@@ -138,24 +106,11 @@ Expected<u32> MeshCookMeshlets::FindNextUnvisitedMeshletTriangle(
 }
 
 
-void MeshCookMeshlets::UpdateBestMeshletCandidateFromResult(
-    const MeshletCandidateSearchResult& candidate,
-    bool& found,
-    MeshletFrontierCandidate& outCandidate
-)noexcept{
+void MeshCookMeshlets::UpdateBestMeshletCandidateFromResult(const MeshletCandidateSearchResult& candidate, bool& found, MeshletFrontierCandidate& outCandidate)noexcept{
     if(!candidate.found)
         return;
 
-    if(
-        found
-        && (
-            candidate.candidate.score < outCandidate.score
-            || (
-                candidate.candidate.score == outCandidate.score
-                && candidate.candidate.triangleIndex > outCandidate.triangleIndex
-            )
-        )
-    )
+    if(found && (candidate.candidate.score < outCandidate.score || (candidate.candidate.score == outCandidate.score && candidate.candidate.triangleIndex > outCandidate.triangleIndex)))
         return;
 
     found = true;
@@ -209,61 +164,21 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
 ){
     while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
         if(frontier.empty()){
-            const auto disconnectedCandidate = FindBestDisconnectedMeshletCandidate(
-                trianglePrecompute,
-                seedSearchOffset + 1u,
-                localTriangleIndices,
-                scoreState,
-                meshlet,
-                localSourceVertexRefs,
-                cpuScheduler,
-                parallelCandidates
-            );
+            const auto disconnectedCandidate = FindBestDisconnectedMeshletCandidate(trianglePrecompute, seedSearchOffset + 1u, localTriangleIndices, scoreState, meshlet, localSourceVertexRefs, cpuScheduler, parallelCandidates);
             if(!disconnectedCandidate)
                 break;
 
-            if(!AddVisitedMeshletTriangle(
-                nwbFilePath,
-                metaKind,
-                trianglePrecompute,
-                disconnectedCandidate->triangleIndex,
-                localSourceVertexRefs,
-                localTriangleIndices,
-                meshlet,
-                primitiveIndices,
-                scoreState,
-                frontier,
-                frontierFlags
-            ))
+            if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, trianglePrecompute, disconnectedCandidate->triangleIndex, localSourceVertexRefs, localTriangleIndices, meshlet, primitiveIndices, scoreState, frontier, frontierFlags))
                 return false;
             continue;
         }
 
-        const auto bestCandidate = FindBestMeshletFrontierCandidate(
-            trianglePrecompute,
-            frontier,
-            localTriangleIndices,
-            scoreState,
-            meshlet,
-            localSourceVertexRefs
-        );
+        const auto bestCandidate = FindBestMeshletFrontierCandidate(trianglePrecompute, frontier, localTriangleIndices, scoreState, meshlet, localSourceVertexRefs);
         if(!bestCandidate)
             break;
 
         RemoveMeshletFrontierCandidate(frontier, frontierFlags, bestCandidate->frontierOffset);
-        if(!AddVisitedMeshletTriangle(
-            nwbFilePath,
-            metaKind,
-            trianglePrecompute,
-            bestCandidate->triangleIndex,
-            localSourceVertexRefs,
-            localTriangleIndices,
-            meshlet,
-            primitiveIndices,
-            scoreState,
-            frontier,
-            frontierFlags
-        ))
+        if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, trianglePrecompute, bestCandidate->triangleIndex, localSourceVertexRefs, localTriangleIndices, meshlet, primitiveIndices, scoreState, frontier, frontierFlags))
             return false;
     }
 

@@ -20,19 +20,12 @@ NWB_VULKAN_BEGIN
 
 
 usize GpuDescriptorHeap::SlotAllocator::RequiredBytes(const u32 capacity){
-    return AddSize(
-        AddSize(FixedTable<u32>::RequiredBytes(capacity), FixedTable<SlotState>::RequiredBytes(capacity)),
-        FixedTable<u8>::RequiredBytes(capacity)
-    );
+    return AddSize(AddSize(FixedTable<u32>::RequiredBytes(capacity), FixedTable<SlotState>::RequiredBytes(capacity)), FixedTable<u8>::RequiredBytes(capacity));
 }
 
 bool GpuDescriptorHeap::SlotAllocator::initialize(Alloc::PersistentArena& arena, const u32 newCapacity){
     clear();
-    if(
-        !freeList.initialize(arena, newCapacity)
-        || !slotStates.initialize(arena, newCapacity)
-        || !allocatedClasses.initialize(arena, newCapacity)
-    )
+    if(!freeList.initialize(arena, newCapacity) || !slotStates.initialize(arena, newCapacity) || !allocatedClasses.initialize(arena, newCapacity))
         return false;
     for(u32 slot = 0u; slot < newCapacity; ++slot){
         slotStates[slot] = SlotState::Free;

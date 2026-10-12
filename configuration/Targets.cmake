@@ -9,10 +9,7 @@ function(nwb_apply_internal_target_defaults target)
     nwb_apply_codegen(${target})
     nwb_apply_basic_include(${target})
 
-    target_link_libraries(${target} PUBLIC
-        nwb::tsl_headers
-        nwb_internal_headers
-    )
+    target_link_libraries(${target} PUBLIC nwb::tsl_headers nwb_internal_headers)
 
     if(WIN32)
         nwb_apply_unicode_char(${target})
@@ -31,10 +28,7 @@ endfunction()
 
 function(nwb_declare_interface_library target)
     add_library(${target} INTERFACE)
-    target_link_libraries(${target} INTERFACE
-        nwb::tsl_headers
-        nwb_internal_headers
-    )
+    target_link_libraries(${target} INTERFACE nwb::tsl_headers nwb_internal_headers)
 
     if(WIN32)
         target_compile_definitions(${target} INTERFACE UNICODE _UNICODE)
@@ -61,8 +55,5 @@ function(nwb_target_link_libraries_whole_archive target)
 endfunction()
 
 function(nwb_target_sources_standalone_runtime target)
-    target_sources(${target} PRIVATE
-        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.cpp"
-        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.h"
-    )
+    target_sources(${target} PRIVATE "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.cpp" "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.h")
 endfunction()

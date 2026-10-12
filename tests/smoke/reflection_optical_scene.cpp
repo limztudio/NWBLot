@@ -59,9 +59,7 @@ static constexpr Float4 s_Tinted(0.55f, 0.8f, 1.f, 0.f);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Core::ECS::EntityID CreatePanel(ProjectRuntimeContext& context, Core::ECS::World& world,
-    const Float4& color, const Float4& position, const Float4& scale, const f32 f0 = 0.f
-){
+static Core::ECS::EntityID CreatePanel(ProjectRuntimeContext& context, Core::ECS::World& world, const Float4& color, const Float4& position, const Float4& scale, const f32 f0 = 0.f){
     const auto entity = CreateTintedStaticMeshEntity(world, context.objectArena, s_Plane, s_Opaque, s_SurfaceInterface, color, position, scale);
     if(!entity.valid())
         return entity;
@@ -69,15 +67,9 @@ static Core::ECS::EntityID CreatePanel(ProjectRuntimeContext& context, Core::ECS
     StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(0.f);
-    if(!Impl::SetMaterialMutableParameter(
-        world, entity, Name(s_SurfaceInterface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3,
-        Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)
-    ))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
         return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(
-        world, entity, Name(s_SurfaceInterface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half,
-        Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))
-    ))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
         return Core::ECS::s_InvalidEntityId;
     return entity;
 }
@@ -87,10 +79,7 @@ static Core::ECS::EntityID CreateBoundary(ProjectRuntimeContext& context, Core::
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested,
     const i32 priority = 0, const f32 coverage = 0.f, const bool pane = false
 ){
-    const auto entity = CreateTintedStaticMeshEntity(
-        world, context.objectArena, mesh, pane ? s_Pane : s_Volume, s_OpticalInterface,
-        Float4(0.9f, 0.6f, 0.f, coverage), position, scale
-    );
+    const auto entity = CreateTintedStaticMeshEntity(world, context.objectArena, mesh, pane ? s_Pane : s_Volume, s_OpticalInterface, Float4(0.9f, 0.6f, 0.f, coverage), position, scale);
     if(!entity.valid())
         return entity;
     auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
@@ -98,15 +87,9 @@ static Core::ECS::EntityID CreateBoundary(ProjectRuntimeContext& context, Core::
     renderer.opticalMediumPriority = priority;
     const Half packedIor = ConvertFloatToHalf(ior);
     const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
-    if(!Impl::SetMaterialMutableParameter(
-        world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::Half,
-        Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))
-    ))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))))
         return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(
-        world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::Half3,
-        Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)
-    ))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)))
         return Core::ECS::s_InvalidEntityId;
     return entity;
 }
@@ -116,31 +99,19 @@ static Core::ECS::EntityID CreateBox(ProjectRuntimeContext& context, Core::ECS::
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested, const i32 priority = 0,
     const f32 xyScale = 1.f
 ){
-    return CreateBoundary(
-        context, world, s_Box, Float4(0.f, 1.4f, centerZ, 0.f), Float4(24.f * xyScale, 18.f * xyScale, thickness, 0.f),
-        ior, transmission, mode, priority
-    );
+    return CreateBoundary(context, world, s_Box, Float4(0.f, 1.4f, centerZ, 0.f), Float4(24.f * xyScale, 18.f * xyScale, thickness, 0.f), ior, transmission, mode, priority);
 }
 
 static Expected<OpticalReceiverEntities> CreateDenseReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const bool csg){
     // One opaque receiver has eighteen distinct closed crossings; an admitted cutter leaves its nearest surface intact.
-    const auto receiver = CreateTintedStaticMeshEntity(
-        world, context.objectArena, s_Dense, s_Opaque, s_SurfaceInterface, Float4(0.9f, 0.2f, 0.05f, 1.f),
-        Float4(0.f, 1.4f, -8.5f, 0.f), Float4(1.f, 1.f, 1.f, 0.f)
-    );
+    const auto receiver = CreateTintedStaticMeshEntity(world, context.objectArena, s_Dense, s_Opaque, s_SurfaceInterface, Float4(0.9f, 0.2f, 0.05f, 1.f), Float4(0.f, 1.4f, -8.5f, 0.f), Float4(1.f, 1.f, 1.f, 0.f));
     if(!receiver.valid())
         return MakeUnexpected(Failure{});
     const Half4U packedF0 = MakeHalf4U(0.f, 0.f, 0.f, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(1.f);
-    if(!Impl::SetMaterialMutableParameter(
-        world, receiver, Name(s_SurfaceInterface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3,
-        Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)
-    ))
+    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
         return MakeUnexpected(Failure{});
-    if(!Impl::SetMaterialMutableParameter(
-        world, receiver, Name(s_SurfaceInterface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half,
-        Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))
-    ))
+    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
         return MakeUnexpected(Failure{});
     if(!csg)
         return OpticalReceiverEntities{ .receiver = receiver };
@@ -157,15 +128,9 @@ static Expected<OpticalReceiverEntities> CreateDenseReceiver(ProjectRuntimeConte
     return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutterEntity.id() };
 }
 
-static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(
-    ProjectRuntimeContext& context, Core::ECS::World& world, const SmokeMeshRef& mesh, const bool cavity,
-    const f32 ior, const Float4& transmission, const Impl::OpticalBoundaryMode::Enum mode
-){
+static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const SmokeMeshRef& mesh, const bool cavity, const f32 ior, const Float4& transmission, const Impl::OpticalBoundaryMode::Enum mode){
     // Both retain [-10,-9]; the cavity case starts the reflected ray inside the removed receiver volume.
-    const auto receiver = CreateBoundary(
-        context, world, mesh, Float4(0.f, 1.4f, cavity ? -3.f : -9.f, 0.f),
-        Float4(24.f, 18.f, cavity ? 14.f : 2.f, 0.f), ior, transmission, mode
-    );
+    const auto receiver = CreateBoundary(context, world, mesh, Float4(0.f, 1.4f, cavity ? -3.f : -9.f, 0.f), Float4(24.f, 18.f, cavity ? 14.f : 2.f, 0.f), ior, transmission, mode);
     if(!receiver.valid())
         return MakeUnexpected(Failure{});
     const Name group("smoke/reflection/csg_optics");
@@ -193,10 +158,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
     if(caseName == "optical_group_entry" || caseName == "optical_csg_group_entry"){
         // The cutter replaces the final grouped entry with a cap while the preceding positive thin solid remains retained.
         const bool ordinary = caseName == "optical_group_entry";
-        const auto receiver = CreateBoundary(
-            context, world, ordinary ? s_GroupEntry : s_CsgGroupEntry,
-            Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted
-        );
+        const auto receiver = CreateBoundary(context, world, ordinary ? s_GroupEntry : s_CsgGroupEntry, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted);
         if(!receiver.valid())
             return false;
         if(ordinary)
@@ -216,10 +178,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
     const bool groupGapSubUlp = caseName == "optical_group_gap_sub_ulp" || caseName == "optical_csg_group_gap_sub_ulp";
     if(groupGapSubUlp || caseName == "optical_group_gap" || caseName == "optical_csg_group_gap"){
         // Three closed components hide a positive gap inside a grouped 1 -> 0 -> 1 -> 2 winding sequence.
-        const auto receiver = CreateBoundary(
-            context, world, groupGapSubUlp ? s_GroupGapSubUlp : s_GroupGap,
-            Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted
-        );
+        const auto receiver = CreateBoundary(context, world, groupGapSubUlp ? s_GroupGapSubUlp : s_GroupGap, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted);
         if(!receiver.valid())
             return false;
         if(caseName == "optical_group_gap" || caseName == "optical_group_gap_sub_ulp")
@@ -270,9 +229,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
             return false;
         if(caseName == "optical_inside")
             return true;
-        return CreateBox(
-            context, world, -3.f, 10.f, 1.33f, s_Clear, Impl::OpticalBoundaryMode::ClosedNested, 0, 0.7f
-        ).valid();
+        return CreateBox(context, world, -3.f, 10.f, 1.33f, s_Clear, Impl::OpticalBoundaryMode::ClosedNested, 0, 0.7f).valid();
     }
     if(caseName == "optical_same_mesh")
         return CreateBoundary(context, world, s_Disconnected, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted).valid();
@@ -281,15 +238,10 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
     if(caseName == "optical_union_single")
         return CreateBox(context, world, -9.f, 0.8f, 1.5f, s_Tinted).valid();
     if(caseName == "optical_disconnected"){
-        return
-            CreateBox(context, world, -8.f, 0.5f, 1.5f, s_Tinted).valid()
-            && CreateBox(context, world, -10.f, 0.5f, 1.5f, s_Tinted).valid()
-        ;
+        return CreateBox(context, world, -8.f, 0.5f, 1.5f, s_Tinted).valid() && CreateBox(context, world, -10.f, 0.5f, 1.5f, s_Tinted).valid();
     }
     if(caseName == "optical_torus"){
-        const auto entity = CreateBoundary(
-            context, world, s_Torus, Float4(0.f, 1.4f, -9.5f, 0.f), Float4(2.f, 2.f, 2.f, 0.f), 1.5f, s_Tinted
-        );
+        const auto entity = CreateBoundary(context, world, s_Torus, Float4(0.f, 1.4f, -9.5f, 0.f), Float4(2.f, 2.f, 2.f, 0.f), 1.5f, s_Tinted);
         if(!entity.valid())
             return false;
         auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
@@ -300,10 +252,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
         const bool reverse = caseName == "optical_priority_tie_b";
         for(u32 index = 0u; index < 2u; ++index){
             const bool firstMedium = reverse ? index == 1u : index == 0u;
-            if(!CreateBox(
-                context, world, firstMedium ? -8.5f : -9.5f, 2.f, firstMedium ? 1.5f : 1.33f,
-                firstMedium ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f), Impl::OpticalBoundaryMode::ClosedPriority, 10
-            ).valid())
+            if(!CreateBox(context, world, firstMedium ? -8.5f : -9.5f, 2.f, firstMedium ? 1.5f : 1.33f, firstMedium ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f), Impl::OpticalBoundaryMode::ClosedPriority, 10).valid())
                 return false;
         }
         return true;
@@ -312,11 +261,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
         const bool firstWins = caseName == "optical_priority_a";
         return
             CreateBox(context, world, -8.5f, 2.f, 1.5f, s_Tinted, Impl::OpticalBoundaryMode::ClosedPriority, firstWins ? 20 : 10).valid()
-            && CreateBox(
-                context, world, -9.5f, 2.f, 1.33f, Float4(1.f, 0.7f, 0.45f, 0.f),
-                caseName == "optical_mixed" ? Impl::OpticalBoundaryMode::ClosedNested : Impl::OpticalBoundaryMode::ClosedPriority,
-                firstWins ? 10 : 20
-            ).valid()
+            && CreateBox(context, world, -9.5f, 2.f, 1.33f, Float4(1.f, 0.7f, 0.45f, 0.f), caseName == "optical_mixed" ? Impl::OpticalBoundaryMode::ClosedNested : Impl::OpticalBoundaryMode::ClosedPriority, firstWins ? 10 : 20).valid()
         ;
     }
     if(caseName == "optical_nested2" || caseName == "optical_nested3" || caseName == "optical_overflow"){
@@ -325,10 +270,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
             const f32 thickness = count == 5u ? 4.f - 0.6f * static_cast<f32>(index) : 3.f / static_cast<f32>(1u << index);
             const f32 ior = index == 0u ? 1.5f : index == 1u ? 1.33f : 1.1f + 0.02f * static_cast<f32>(index - 2u);
             const Float4 transmission = index == 0u ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f);
-            if(!CreateBox(
-                context, world, -9.f, thickness, ior, transmission, Impl::OpticalBoundaryMode::ClosedNested,
-                0, 1.f - 0.1f * static_cast<f32>(index)
-            ).valid())
+            if(!CreateBox(context, world, -9.f, thickness, ior, transmission, Impl::OpticalBoundaryMode::ClosedNested, 0, 1.f - 0.1f * static_cast<f32>(index)).valid())
                 return false;
         }
         return true;
@@ -351,24 +293,16 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
         }
         return true;
     }
-    const bool duplicate = caseName == "optical_duplicate_identical" || caseName == "optical_duplicate_group"
-        || caseName == "optical_duplicate_reverse";
+    const bool duplicate = caseName == "optical_duplicate_identical" || caseName == "optical_duplicate_group" || caseName == "optical_duplicate_reverse";
     const bool independent = caseName == "optical_coincident_independent";
-    if(
-        !duplicate && !independent && caseName != "optical_clear" && caseName != "optical_tinted" && caseName != "optical_tilted"
-        && caseName != "optical_mirrored" && caseName != "optical_unspecified"
-    )
+    if(!duplicate && !independent && caseName != "optical_clear" && caseName != "optical_tinted" && caseName != "optical_tilted" && caseName != "optical_mirrored" && caseName != "optical_unspecified")
         return false;
     const u32 count = duplicate || independent ? 2u : 1u;
     for(u32 index = 0u; index < count; ++index){
         const bool sameInputs = caseName == "optical_duplicate_identical";
         const bool selected = caseName == "optical_duplicate_reverse" ? index == 1u : index == 0u;
-        const Float4 transmission = caseName == "optical_clear" ? s_Clear
-            : !duplicate || sameInputs || selected ? s_Tinted : Float4(1.f, 0.5f, 0.2f, 0.f);
-        const auto entity = CreateBox(
-            context, world, -9.f, 2.f, 1.5f, transmission,
-            caseName == "optical_unspecified" ? Impl::OpticalBoundaryMode::Unspecified : Impl::OpticalBoundaryMode::ClosedNested
-        );
+        const Float4 transmission = caseName == "optical_clear" ? s_Clear : !duplicate || sameInputs || selected ? s_Tinted : Float4(1.f, 0.5f, 0.2f, 0.f);
+        const auto entity = CreateBox(context, world, -9.f, 2.f, 1.5f, transmission, caseName == "optical_unspecified" ? Impl::OpticalBoundaryMode::Unspecified : Impl::OpticalBoundaryMode::ClosedNested);
         if(!entity.valid())
             return false;
         auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
@@ -378,8 +312,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
             StoreFloat(QuaternionRotationRollPitchYaw(0.f, 0.2f, 0.f), transform.rotation);
         if(duplicate){
             auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
-            renderer.opticalVolumeCoincidence = sameInputs ? Impl::OpticalVolumeCoincidence::IdenticalMaterial
-                : Impl::OpticalVolumeCoincidence::SharedGroup;
+            renderer.opticalVolumeCoincidence = sameInputs ? Impl::OpticalVolumeCoincidence::IdenticalMaterial : Impl::OpticalVolumeCoincidence::SharedGroup;
             renderer.opticalVolumeGroup = Name("smoke/reflection/optical_duplicate");
             renderer.opticalVolumePriority = selected ? 20 : 10;
         }
@@ -407,20 +340,13 @@ Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(ProjectRu
     using namespace __hidden_reflection_optical_scene;
     if(!CreateReflectionOpticalScene(context, world, "optical_reference"))
         return MakeUnexpected(Failure{});
-    const auto small = CreateCsgBoundaryReceiver(
-        context, world, s_Box, false, 1.5f, s_Tinted, Impl::OpticalBoundaryMode::ClosedNested
-    );
+    const auto small = CreateCsgBoundaryReceiver(context, world, s_Box, false, 1.5f, s_Tinted, Impl::OpticalBoundaryMode::ClosedNested);
     if(!small)
         return MakeUnexpected(small.error());
     const auto dense = CreateDenseReceiver(context, world, true);
     if(!dense)
         return MakeUnexpected(dense.error());
-    return ReflectionCsgContextEntities{
-        .smallReceiver = small->receiver,
-        .denseReceiver = dense->receiver,
-        .smallCutter = small->cutter,
-        .denseCutter = dense->cutter,
-    };
+    return ReflectionCsgContextEntities{ .smallReceiver = small->receiver, .denseReceiver = dense->receiver, .smallCutter = small->cutter, .denseCutter = dense->cutter, };
 }
 
 bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName){
@@ -431,12 +357,8 @@ bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::Wor
         return false;
     if(caseName != "optical_tir"){
         for(u32 stripe = 0u; stripe < 31u; ++stripe){
-            const Float4 color = stripe == 15u ? Float4(0.9f, 0.9f, 0.9f, 1.f)
-                : Float4(stripe % 3u == 0u ? 0.9f : 0.f, stripe % 3u == 1u ? 0.9f : 0.f, stripe % 3u == 2u ? 0.9f : 0.f, 1.f);
-            if(!CreatePanel(
-                context, world, color, Float4((static_cast<f32>(stripe) - 15.f) * 0.8f, 1.4f, -14.f, 0.f),
-                Float4(0.4f, 1.f, 8.f, 0.f)
-            ).valid())
+            const Float4 color = stripe == 15u ? Float4(0.9f, 0.9f, 0.9f, 1.f) : Float4(stripe % 3u == 0u ? 0.9f : 0.f, stripe % 3u == 1u ? 0.9f : 0.f, stripe % 3u == 2u ? 0.9f : 0.f, 1.f);
+            if(!CreatePanel(context, world, color, Float4((static_cast<f32>(stripe) - 15.f) * 0.8f, 1.4f, -14.f, 0.f), Float4(0.4f, 1.f, 8.f, 0.f)).valid())
                 return false;
         }
     }

@@ -30,10 +30,7 @@ class LlvmApi:
         try:
             self.library = ctypes.CDLL(str(self.library_path))
         except OSError as error:
-            raise RuntimeError(
-                "Cannot load LLVM C library with the Python process architecture: "
-                f"{self.library_path}: {error}"
-            ) from error
+            raise RuntimeError("Cannot load LLVM C library with the Python process architecture: " f"{self.library_path}: {error}") from error
         self._bind("LLVMGetVersion", None, UINT_OUT, UINT_OUT, UINT_OUT)
         components = (UINT(), UINT(), UINT())
         self.LLVMGetVersion(*(ctypes.byref(component) for component in components))
@@ -41,77 +38,19 @@ class LlvmApi:
         if self.version != tuple(expected_version):
             raise RuntimeError(f"LLVM C library version {self.version} differs from compiler {expected_version}")
 
-        functions = (
-            ("LLVMContextCreate", REF, ()),
-            ("LLVMContextDispose", None, (REF,)),
-            ("LLVMDisposeMessage", None, (REF,)),
-            ("LLVMCreateMemoryBufferWithContentsOfFile", BOOL, (TEXT, REF_OUT, REF_OUT)),
-            ("LLVMDisposeMemoryBuffer", None, (REF,)),
-            ("LLVMParseBitcodeInContext2", BOOL, (REF, REF, REF_OUT)),
-            ("LLVMDisposeModule", None, (REF,)),
-            ("LLVMVerifyModule", BOOL, (REF, UINT, REF_OUT)),
-            ("LLVMWriteBitcodeToFile", BOOL, (REF, TEXT)),
-            ("LLVMGetTarget", TEXT, (REF,)),
-            ("LLVMGetDataLayoutStr", TEXT, (REF,)),
-            ("LLVMCreateTargetData", REF, (TEXT,)),
-            ("LLVMDisposeTargetData", None, (REF,)),
-            ("LLVMByteOrder", UINT, (REF,)),
-            ("LLVMABIAlignmentOfType", UINT, (REF, REF)),
-            ("LLVMABISizeOfType", U64, (REF, REF)),
-            ("LLVMGetFirstGlobal", REF, (REF,)),
-            ("LLVMGetNextGlobal", REF, (REF,)),
-            ("LLVMGetNamedGlobal", REF, (REF, TEXT)),
-            ("LLVMGlobalGetValueType", REF, (REF,)),
-            ("LLVMGetInitializer", REF, (REF,)),
-            ("LLVMIsGlobalConstant", BOOL, (REF,)),
-            ("LLVMGetUnnamedAddress", UINT, (REF,)),
-            ("LLVMGetLinkage", UINT, (REF,)),
-            ("LLVMGetThreadLocalMode", UINT, (REF,)),
-            ("LLVMIsExternallyInitialized", BOOL, (REF,)),
-            ("LLVMGetDLLStorageClass", UINT, (REF,)),
-            ("LLVMGetSection", TEXT, (REF,)),
-            ("LLVMGetAlignment", UINT, (REF,)),
-            ("LLVMTypeOf", REF, (REF,)),
-            ("LLVMGetPointerAddressSpace", UINT, (REF,)),
-            ("LLVMGetValueName2", REF, (REF, SIZE_OUT)),
-            ("LLVMGetTypeKind", UINT, (REF,)),
-            ("LLVMGetElementType", REF, (REF,)),
-            ("LLVMGetIntTypeWidth", UINT, (REF,)),
-            ("LLVMGetArrayLength2", U64, (REF,)),
-            ("LLVMIsAConstantDataArray", REF, (REF,)),
-            ("LLVMIsAConstantArray", REF, (REF,)),
-            ("LLVMIsAConstantStruct", REF, (REF,)),
-            ("LLVMIsAConstantExpr", REF, (REF,)),
-            ("LLVMIsAGlobalVariable", REF, (REF,)),
-            ("LLVMIsAConstantInt", REF, (REF,)),
-            ("LLVMGetNumOperands", BOOL, (REF,)),
-            ("LLVMGetOperand", REF, (REF, UINT)),
-            ("LLVMIsNull", BOOL, (REF,)),
-            ("LLVMGetRawDataValues", REF, (REF, SIZE_OUT)),
-            ("LLVMGetAggregateElement", REF, (REF, UINT)),
-            ("LLVMConstIntGetZExtValue", U64, (REF,)),
-            ("LLVMIntTypeInContext", REF, (REF, UINT)),
-            ("LLVMArrayType2", REF, (REF, U64)),
-            ("LLVMStructTypeInContext", REF, (REF, REF_OUT, UINT, BOOL)),
-            ("LLVMConstInt", REF, (REF, U64, BOOL)),
-            ("LLVMConstNull", REF, (REF,)),
-            ("LLVMConstDataArray", REF, (REF, TEXT, SIZE)),
-            ("LLVMConstStructInContext", REF, (REF, REF_OUT, UINT, BOOL)),
-            ("LLVMAddGlobal", REF, (REF, REF, TEXT)),
-            ("LLVMSetInitializer", None, (REF, REF)),
-            ("LLVMSetGlobalConstant", None, (REF, BOOL)),
-            ("LLVMSetLinkage", None, (REF, UINT)),
-            ("LLVMSetVisibility", None, (REF, UINT)),
-            ("LLVMSetAlignment", None, (REF, UINT)),
-            ("LLVMSetUnnamedAddress", None, (REF, UINT)),
-            ("LLVMSetSection", None, (REF, TEXT)),
-            ("LLVMGetOrInsertComdat", REF, (REF, TEXT)),
-            ("LLVMSetComdatSelectionKind", None, (REF, UINT)),
-            ("LLVMSetComdat", None, (REF, REF)),
-            ("LLVMConstInBoundsGEP2", REF, (REF, REF, REF_OUT, UINT)),
-            ("LLVMReplaceAllUsesWith", None, (REF, REF)),
-            ("LLVMDeleteGlobal", None, (REF,)),
-        )
+        functions = (("LLVMContextCreate", REF, ()), ("LLVMContextDispose", None, (REF,)), ("LLVMDisposeMessage", None, (REF,)), ("LLVMCreateMemoryBufferWithContentsOfFile", BOOL, (TEXT, REF_OUT, REF_OUT)), ("LLVMDisposeMemoryBuffer", None, (REF,)),
+            ("LLVMParseBitcodeInContext2", BOOL, (REF, REF, REF_OUT)), ("LLVMDisposeModule", None, (REF,)), ("LLVMVerifyModule", BOOL, (REF, UINT, REF_OUT)), ("LLVMWriteBitcodeToFile", BOOL, (REF, TEXT)), ("LLVMGetTarget", TEXT, (REF,)),
+            ("LLVMGetDataLayoutStr", TEXT, (REF,)), ("LLVMCreateTargetData", REF, (TEXT,)), ("LLVMDisposeTargetData", None, (REF,)), ("LLVMByteOrder", UINT, (REF,)), ("LLVMABIAlignmentOfType", UINT, (REF, REF)), ("LLVMABISizeOfType", U64, (REF, REF)),
+            ("LLVMGetFirstGlobal", REF, (REF,)), ("LLVMGetNextGlobal", REF, (REF,)), ("LLVMGetNamedGlobal", REF, (REF, TEXT)), ("LLVMGlobalGetValueType", REF, (REF,)), ("LLVMGetInitializer", REF, (REF,)), ("LLVMIsGlobalConstant", BOOL, (REF,)),
+            ("LLVMGetUnnamedAddress", UINT, (REF,)), ("LLVMGetLinkage", UINT, (REF,)), ("LLVMGetThreadLocalMode", UINT, (REF,)), ("LLVMIsExternallyInitialized", BOOL, (REF,)), ("LLVMGetDLLStorageClass", UINT, (REF,)), ("LLVMGetSection", TEXT, (REF,)),
+            ("LLVMGetAlignment", UINT, (REF,)), ("LLVMTypeOf", REF, (REF,)), ("LLVMGetPointerAddressSpace", UINT, (REF,)), ("LLVMGetValueName2", REF, (REF, SIZE_OUT)), ("LLVMGetTypeKind", UINT, (REF,)), ("LLVMGetElementType", REF, (REF,)),
+            ("LLVMGetIntTypeWidth", UINT, (REF,)), ("LLVMGetArrayLength2", U64, (REF,)), ("LLVMIsAConstantDataArray", REF, (REF,)), ("LLVMIsAConstantArray", REF, (REF,)), ("LLVMIsAConstantStruct", REF, (REF,)), ("LLVMIsAConstantExpr", REF, (REF,)),
+            ("LLVMIsAGlobalVariable", REF, (REF,)), ("LLVMIsAConstantInt", REF, (REF,)), ("LLVMGetNumOperands", BOOL, (REF,)), ("LLVMGetOperand", REF, (REF, UINT)), ("LLVMIsNull", BOOL, (REF,)), ("LLVMGetRawDataValues", REF, (REF, SIZE_OUT)),
+            ("LLVMGetAggregateElement", REF, (REF, UINT)), ("LLVMConstIntGetZExtValue", U64, (REF,)), ("LLVMIntTypeInContext", REF, (REF, UINT)), ("LLVMArrayType2", REF, (REF, U64)), ("LLVMStructTypeInContext", REF, (REF, REF_OUT, UINT, BOOL)),
+            ("LLVMConstInt", REF, (REF, U64, BOOL)), ("LLVMConstNull", REF, (REF,)), ("LLVMConstDataArray", REF, (REF, TEXT, SIZE)), ("LLVMConstStructInContext", REF, (REF, REF_OUT, UINT, BOOL)), ("LLVMAddGlobal", REF, (REF, REF, TEXT)),
+            ("LLVMSetInitializer", None, (REF, REF)), ("LLVMSetGlobalConstant", None, (REF, BOOL)), ("LLVMSetLinkage", None, (REF, UINT)), ("LLVMSetVisibility", None, (REF, UINT)), ("LLVMSetAlignment", None, (REF, UINT)),
+            ("LLVMSetUnnamedAddress", None, (REF, UINT)), ("LLVMSetSection", None, (REF, TEXT)), ("LLVMGetOrInsertComdat", REF, (REF, TEXT)), ("LLVMSetComdatSelectionKind", None, (REF, UINT)), ("LLVMSetComdat", None, (REF, REF)),
+            ("LLVMConstInBoundsGEP2", REF, (REF, REF, REF_OUT, UINT)), ("LLVMReplaceAllUsesWith", None, (REF, REF)), ("LLVMDeleteGlobal", None, (REF,)),)
         for name, result, arguments in functions:
             self._bind(name, result, *arguments)
 

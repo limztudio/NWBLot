@@ -41,9 +41,7 @@ void* FontSource::Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize,
         Release(memory, block);
         return nullptr;
     }
-    return
-        static_cast<Core::Assets::AssetArena*>(memory->user)->reallocate(block, alignof(MaxAlign), static_cast<usize>(newSize))
-    ;
+    return static_cast<Core::Assets::AssetArena*>(memory->user)->reallocate(block, alignof(MaxAlign), static_cast<usize>(newSize));
 }
 
 FontSource::FontSource(Core::Assets::AssetArena& arena)
@@ -78,11 +76,7 @@ bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payloa
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: native face admission failed"));
         return false;
     }
-    if(
-        m_face->num_glyphs <= 0
-        || static_cast<u64>(m_face->num_glyphs) > Impl::s_FontAtlasMaxGlyphCount
-        || m_face->units_per_EM == 0u
-    ){
+    if(m_face->num_glyphs <= 0 || static_cast<u64>(m_face->num_glyphs) > Impl::s_FontAtlasMaxGlyphCount || m_face->units_per_EM == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unsupported glyph count or units per em"));
         return false;
     }

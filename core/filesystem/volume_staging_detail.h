@@ -26,12 +26,7 @@ namespace FilesystemVolumeStagingDetail{
 inline constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
 StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, AStringView volumeName);
-bool PromoteStagedVolume(
-    const StagedDirectoryPaths& stagedPaths,
-    const Path& outputDirectory,
-    AStringView volumeName,
-    usize segmentCount
-);
+bool PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount);
 bool RemoveExistingVolumeSegments(const Path& outputDirectory, AStringView volumeName);
 
 

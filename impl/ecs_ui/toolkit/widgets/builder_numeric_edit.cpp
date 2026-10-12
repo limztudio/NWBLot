@@ -82,9 +82,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NumericEditBoxResult Builder::integerEdit(const AStringView stableKey, IntegerEditModel& model,
-    EditBoxState& state, const IntegerEditOptions& options
-){
+NumericEditBoxResult Builder::integerEdit(const AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options){
     NumericEditBoxResult result;
     result.numeric.valid = true;
     if(declarationBlocked() || !ValidateIntegerBounds(options.bounds)){
@@ -107,9 +105,7 @@ NumericEditBoxResult Builder::integerEdit(const AStringView stableKey, IntegerEd
     return result;
 }
 
-NumericEditBoxResult Builder::floatEdit(const AStringView stableKey, FloatEditModel& model,
-    EditBoxState& state, const FloatEditOptions& options
-){
+NumericEditBoxResult Builder::floatEdit(const AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options){
     NumericEditBoxResult result;
     result.numeric.valid = true;
     if(declarationBlocked() || !ValidateFloatBounds(options.bounds)){

@@ -39,12 +39,8 @@ private:
 public:
     void synchronizeSession(TextInputSessionToken session)noexcept;
     void recordFiltered(u32 keycode, bool released, u32 timestamp, u32 serial, u64 receivedAtMs)noexcept;
-    [[nodiscard]] bool isForwardedDuplicate(
-        u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs
-    )const noexcept;
-    [[nodiscard]] bool isRetiredDuplicate(
-        u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs
-    )const noexcept;
+    [[nodiscard]] bool isForwardedDuplicate(u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs)const noexcept;
+    [[nodiscard]] bool isRetiredDuplicate(u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs)const noexcept;
     void reset()noexcept;
 
 

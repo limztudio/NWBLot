@@ -39,10 +39,8 @@ namespace ECSRenderDetail{
 struct AvboitCsgReceiverSpanGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot
-    // are required: the transparent interval passes always bracket their dispatches with the frame
-    // timing. References (not nullable pointers) carry those bindings so a missing binding fails at
-    // declaration time instead of silently returning `false` inside Record.
+    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         RendererCsgSystem& csgSystem;
@@ -64,11 +62,7 @@ struct AvboitCsgReceiverSpanGraphTask{
         );
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
@@ -80,10 +74,8 @@ struct AvboitCsgReceiverSpanGraphTask{
 struct AvboitCsgIntervalCombineGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot
-    // are required: the transparent interval passes always bracket their dispatches with the frame
-    // timing. References (not nullable pointers) carry those bindings so a missing binding fails at
-    // declaration time instead of silently returning `false` inside Record.
+    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
+    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         RendererCsgSystem& csgSystem;
@@ -105,11 +97,7 @@ struct AvboitCsgIntervalCombineGraphTask{
         );
     };
 
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);

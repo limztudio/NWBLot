@@ -27,9 +27,7 @@ namespace GpuTaskGraphClearDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<GraphicsBackend::TextureClearValueKind::Enum> TryMapTextureClearValueKind(
-    const GpuClearTextureTaskValueType::Enum valueType
-)noexcept{
+[[nodiscard]] inline Expected<GraphicsBackend::TextureClearValueKind::Enum> TryMapTextureClearValueKind(const GpuClearTextureTaskValueType::Enum valueType)noexcept{
     switch(valueType){
     case GpuClearTextureTaskValueType::Float:
         return GraphicsBackend::TextureClearValueKind::Float;

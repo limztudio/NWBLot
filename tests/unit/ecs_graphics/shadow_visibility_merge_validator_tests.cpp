@@ -44,24 +44,14 @@ struct ShadowPacketPlan{
         , compiledGraph(testArena.arena){
     }
 
-    [[nodiscard]] bool build(
-        const bool combinedUpsample,
-        const bool temporalMerge,
-        const u32 splitStage = Limit<u32>::s_Max,
-        const bool combinedWavelet = false,
-        const bool combinedTemporal = false,
-        const bool diagnostics = false
-    ){
+    [[nodiscard]] bool build(const bool combinedUpsample, const bool temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const bool combinedWavelet = false, const bool combinedTemporal = false, const bool diagnostics = false){
         const Name identities[] = {
             Name("tests/shadow_packet/opaque"), Name("tests/shadow_packet/opaque_wavelet"),
             Name("tests/shadow_packet/opaque_upsample"), Name("tests/shadow_packet/transparent_trace"),
             Name("tests/shadow_packet/transparent_temporal"), Name("tests/shadow_packet/transparent_wavelet"),
             Name("tests/shadow_packet/terminal"), Name("tests/shadow_packet/diagnostics")
         };
-        constexpr AStringView s_Labels[] = {
-            "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace",
-            "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics"
-        };
+        constexpr AStringView s_Labels[] = { "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace", "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics" };
         static_assert(LengthOf(s_Labels) == LengthOf(identities));
         Core::GpuTaskId stages[LengthOf(identities)]{};
         Core::GpuTaskId previous;
@@ -98,9 +88,7 @@ struct ShadowPacketPlan{
             .queueIndex = 0u,
             .id = { .index = 0u, .deviceGeneration = 1u },
             .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = static_cast<Core::GpuQueueCapability::Mask>(
-                Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer
-            ),
+            .capabilities = static_cast<Core::GpuQueueCapability::Mask>(Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer),
         };
         const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Core::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -111,8 +99,7 @@ struct ShadowPacketPlan{
         Core::GpuTaskGraphCompileOptions options;
         options.allowMetadataOnlyTasks = true;
         if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options)){
-            ADD_FAILURE() << "analysis status=" << static_cast<u32>(analysis.diagnostic().status)
-                << ", queue status=" << static_cast<u32>(assignments.diagnostic().status);
+            ADD_FAILURE() << "analysis status=" << static_cast<u32>(analysis.diagnostic().status) << ", queue status=" << static_cast<u32>(assignments.diagnostic().status);
             return false;
         }
         return true;

@@ -68,11 +68,7 @@ Expected<RayTracingHandleLayout> ComputeRayTracingHandleLayout(const VulkanConte
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingPipeline::RayTracingPipeline(
-    const VulkanContext& context,
-    Device& device,
-    const bool allowClusterAccelerationStructures
-)
+RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device, const bool allowClusterAccelerationStructures)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_shaderGroupHandles(context.objectArena)
@@ -105,10 +101,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
     if(desc.maxRecursionDepth > m_context.rayTracingPipelineProperties.maxRayRecursionDepth){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}")
-            , desc.maxRecursionDepth
-            , m_context.rayTracingPipelineProperties.maxRayRecursionDepth
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}"), desc.maxRecursionDepth, m_context.rayTracingPipelineProperties.maxRayRecursionDepth);
         return nullptr;
     }
     if(desc.allowSpheres && !queryFeatureSupport(Feature::Spheres)){
@@ -120,14 +113,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    constexpr ShaderType::Mask s_GeneralShaderTypes = static_cast<ShaderType::Mask>(
-        ShaderType::RayGeneration | ShaderType::Miss | ShaderType::Callable
-    );
-    const auto validateShader = [this](
-        Shader* const shader,
-        const ShaderType::Mask allowedShaderTypes,
-        const TStringView stageName
-    ){
+    constexpr ShaderType::Mask s_GeneralShaderTypes = static_cast<ShaderType::Mask>(ShaderType::RayGeneration | ShaderType::Miss | ShaderType::Callable);
+    const auto validateShader = [this](Shader* const shader, const ShaderType::Mask allowedShaderTypes, const TStringView stageName){
         if(!shader){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader is null"), stageName);
             return false;
@@ -136,10 +123,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader belongs to another device"), stageName);
             return false;
         }
-        if(
-            shader->m_shaderModule == VK_NULL_HANDLE
-            || !VulkanDetail::IsRayTracingShaderTypeAllowed(shader->m_desc.shaderType, allowedShaderTypes)
-        ){
+        if(shader->m_shaderModule == VK_NULL_HANDLE || !VulkanDetail::IsRayTracingShaderTypeAllowed(shader->m_desc.shaderType, allowedShaderTypes)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader has an invalid module or stage"), stageName);
             return false;
         }
@@ -172,12 +156,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    auto* pso = NewArenaObject<RayTracingPipeline>(
-        m_context.objectArena,
-        m_context,
-        *this,
-        desc.allowClusterAccelerationStructures
-    );
+    auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this, desc.allowClusterAccelerationStructures);
     if(!pso){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: object allocation failed"));
         return nullptr;
@@ -324,21 +303,14 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         hitGroup.exportName = hitGroup.exportName.empty() ? AStringView{} : AStringView(pso->m_shaderGroups[groupIndex].exportName);
     }
 
-    if(!configurePipelineBindingsOrDestroy(
-        desc.globalBindingLayouts,
-        NWB_TEXT("ray tracing pipeline"),
-        *pso,
-        scratchArena
-    ))
+    if(!configurePipelineBindingsOrDestroy(desc.globalBindingLayouts, NWB_TEXT("ray tracing pipeline"), *pso, scratchArena))
         return nullptr;
 
     const bool enablePipelineFlags2 = desc.allowSpheres || desc.allowLinearSweptSpheres;
     auto pipelineFlags2 = VulkanDetail::MakeVkStruct<VkPipelineCreateFlags2CreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO);
     pipelineFlags2.flags = VulkanDetail::ComputeRayTracingPipelineCreateFlags(desc);
 
-    auto clusterCreateInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineClusterAccelerationStructureCreateInfoNV>(
-        VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CLUSTER_ACCELERATION_STRUCTURE_CREATE_INFO_NV
-    );
+    auto clusterCreateInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineClusterAccelerationStructureCreateInfoNV>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CLUSTER_ACCELERATION_STRUCTURE_CREATE_INFO_NV);
     clusterCreateInfo.allowClusterAccelerationStructure = pso->allowsClusterAccelerationStructures() ? VK_TRUE : VK_FALSE;
 
     void* createInfoPNext = nullptr;
@@ -385,14 +357,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     const usize shaderGroupHandleBytes = static_cast<usize>(groupCount) * static_cast<usize>(handleSize);
     pso->m_shaderGroupHandles.resize(shaderGroupHandleBytes);
-    res = m_context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR(
-        m_context.device,
-        pso->m_pipeline,
-        0,
-        groupCount,
-        pso->m_shaderGroupHandles.size(),
-        pso->m_shaderGroupHandles.data()
-    );
+    res = m_context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->m_pipeline, 0, groupCount, pso->m_shaderGroupHandles.size(), pso->m_shaderGroupHandles.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve ray tracing shader group handles: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pso);

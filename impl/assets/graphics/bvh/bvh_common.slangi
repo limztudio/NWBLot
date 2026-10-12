@@ -15,8 +15,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Binary LBVH node (2N-1 nodes for N prims; 0 = root). Leaf: NWB_BVH_LEAF_FLAG + prim index/count in children.
-// Decode rightChild via nwbBvhNodeRightChildIndex() (transparent-subtree tag). 32 bytes / 2 float4 lanes.
+// Binary LBVH node (2N-1 nodes for N prims; 0 = root).
+// Leaf: NWB_BVH_LEAF_FLAG + prim index/count in children.
+// Decode rightChild via nwbBvhNodeRightChildIndex() (transparent-subtree tag).
+// 32 bytes / 2 float4 lanes.
 struct NwbBvhNode{
     float3 aabbMin;
     uint leftChild;
@@ -54,10 +56,7 @@ uint nwbBvhLeafPrimitive(const NwbBvhNode node){
 
 // Preserve the all-bits invalid sentinel while stripping the CPU scene-BVH transparent-subtree tag from a valid right-child link. Per-mesh GPU BVHs never set the tag, so this is also their identity decode.
 uint nwbBvhNodeRightChildIndex(const NwbBvhNode node){
-    return node.rightChild == NWB_BVH_INVALID
-        ? NWB_BVH_INVALID
-        : (node.rightChild & NWB_BVH_CHILD_INDEX_MASK)
-    ;
+    return node.rightChild == NWB_BVH_INVALID ? NWB_BVH_INVALID : (node.rightChild & NWB_BVH_CHILD_INDEX_MASK);
 }
 
 bool nwbBvhNodeContainsTransparentOccluder(const NwbBvhNode node){

@@ -45,21 +45,14 @@ OpaqueRegularComputeEmulationGraphTask::Payload::Payload(
 {}
 
 
-bool OpaqueRegularComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
-        payload.meshViewSetupReady,
-        payload.sceneShadingSetupReady
-    );
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady)
         return true;
 
@@ -69,42 +62,18 @@ bool OpaqueRegularComputeEmulationGraphTask::Record(
     // Reject corrupted streams instead of dispatching outside the imported handle set.
     if(!payload.plan.matches(drawItems.computeDrawItems))
         return false;
-    if(
-        !payload.materialDrawBuffersUploaded
-        || !payload.frameBindings.frameReady(
-            payload.instanceCount,
-            payload.materialTypedByteCount
-        )
-        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
-    )
+    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return true;
 
     Core::ViewportState deferredViewportState;
-    deferredViewportState.addViewportAndScissorRect(
-        payload.targets.framebuffer->getFramebufferInfo().getViewport()
-    );
-    const MaterialPassDrawContext drawContext{
-        commandList,
-        nullptr,
-        nullptr,
-        deferredViewportState,
-        nullptr,
-        payload.frameBindings,
-        MaterialPipelinePass::Opaque,
-        payload.materialFrameStatesGraphOwned,
-        payload.materialGeometryStatesGraphOwned,
-        true
-    };
+    deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
+    const MaterialPassDrawContext drawContext{ commandList, nullptr, nullptr, deferredViewportState, nullptr, payload.frameBindings, MaterialPipelinePass::Opaque, payload.materialFrameStatesGraphOwned, payload.materialGeometryStatesGraphOwned, true };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 
 
-bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+bool OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
@@ -118,24 +87,14 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
     }
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
-        payload.meshViewSetupReady,
-        payload.sceneShadingSetupReady
-    );
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady || !payload.plan.matches(payload.drawIndex))
         return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     payload.plan.materialize(payload.drawIndex, drawItems);
-    if(
-        !payload.materialDrawBuffersUploaded
-        || !payload.frameBindings.frameReady(
-            payload.instanceCount,
-            payload.materialTypedByteCount
-        )
-        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
-    ){
+    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)){
         Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
         if(payload.phase == Phase::Raster)
             commandList.endRenderPass();
@@ -143,9 +102,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
     }
 
     Core::ViewportState deferredViewportState;
-    deferredViewportState.addViewportAndScissorRect(
-        payload.targets.framebuffer->getFramebufferInfo().getViewport()
-    );
+    deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext drawContext{
         commandList,
         payload.phase == Phase::Raster ? payload.targets.framebuffer.get() : nullptr,
@@ -161,10 +118,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
     if(payload.phase == Phase::Generate)
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     else{
-        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(
-            drawContext,
-            drawItems.computeDrawItems
-        );
+        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems.computeDrawItems);
         if(payload.finishTiming){
             payload.opaqueRegularTiming.value().finishTiming(commandList);
             payload.opaqueRegularTiming.reset();

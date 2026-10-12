@@ -68,12 +68,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     PipelineShaderStageVector shaderStages{ scratchArena };
     shaderStages.push_back(shaderStage);
 
-    if(!configurePipelineBindingsOrDestroy(
-        desc.bindingLayouts,
-        NWB_TEXT("compute pipeline"),
-        *pso,
-        scratchArena
-    ))
+    if(!configurePipelineBindingsOrDestroy(desc.bindingLayouts, NWB_TEXT("compute pipeline"), *pso, scratchArena))
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
@@ -102,34 +97,14 @@ void CommandList::setComputeState(const ComputeState& state){
         return;
     }
     if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->m_pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(
-            VulkanArenaScope::s_SetComputeStateCommandLabel,
-            NWB_TEXT("compute pipeline has no valid native pipeline or layout")
-        );
+        rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, NWB_TEXT("compute pipeline has no valid native pipeline or layout"));
         return;
     }
-    if(
-        state.indirectParams
-        && (
-            state.indirectParams->m_buffer == VK_NULL_HANDLE
-            || !state.indirectParams->m_creationDesc.isDrawIndirectArgs
-        )
-    ){
-        rejectCommandRecording(
-            VulkanArenaScope::s_SetComputeStateCommandLabel,
-            NWB_TEXT("indirect buffer has no valid native buffer or indirect-argument usage")
-        );
+    if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs)){
+        rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, NWB_TEXT("indirect buffer has no valid native buffer or indirect-argument usage"));
         return;
     }
-    if(
-        state.indirectParams
-        && !validateBufferForGpuState(
-            state.indirectParams,
-            ResourceStates::IndirectArgument,
-            VulkanArenaScope::s_SetComputeStateCommandLabel,
-            VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
-        )
-    )
+    if(state.indirectParams && !validateBufferForGpuState(state.indirectParams, ResourceStates::IndirectArgument, VulkanArenaScope::s_SetComputeStateCommandLabel, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT))
         return;
 
     endActiveRenderPass();

@@ -155,21 +155,14 @@ LIT_MAIN = "__main__"
 
 
 def scopes(workload, frames=200, frame_ms=5.0):
-    return {name: {LIT_TOTAL_MS: (frame_ms if name == benchmark.FRAME else .5) * frames * multiplier,
-        LIT_GPU_SAMPLES: frames * multiplier, LIT_REPORTS: 6,
-        LIT_MEAN_MS: frame_ms if name == benchmark.FRAME else .5}
+    return {name: {LIT_TOTAL_MS: (frame_ms if name == benchmark.FRAME else .5) * frames * multiplier, LIT_GPU_SAMPLES: frames * multiplier, LIT_REPORTS: 6, LIT_MEAN_MS: frame_ms if name == benchmark.FRAME else .5}
         for name, multiplier in workload.scope_multipliers}
 
 
 def log_text(route=LIT_HARDWARE):
     natural = next(message for message, name in benchmark.SHADOW_ROUTES.items() if name == route)
-    return "\n".join((natural, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE
-        else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32,
-        LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
-        "TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created",
-        LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
-        LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU,
-        LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
+    return "\n".join((natural, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
+        "TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
         LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
 
 
@@ -178,8 +171,7 @@ def source_manifest(directory, text=LIT_SOURCE, revision=LIT_REVISION):
     source = directory / LIT_SOURCE_CPP
     source.write_text(text, encoding=LIT_UTF_8)
     manifest = directory / LIT_SOURCE_JSON
-    manifest.write_text(json.dumps({LIT_REVISION: revision,
-        LIT_FILES: {source.name: hashlib.sha256(source.read_bytes()).hexdigest()}}), encoding=LIT_UTF_8)
+    manifest.write_text(json.dumps({LIT_REVISION: revision, LIT_FILES: {source.name: hashlib.sha256(source.read_bytes()).hexdigest()}}), encoding=LIT_UTF_8)
     return manifest
 
 
@@ -195,8 +187,7 @@ def make_arm(directory, name):
 
 def trial_matrix(frame_delta=-.5):
     workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
-    arms = (benchmark.Arm(LIT_BASELINE, Path("a"), Path("a_runtime"), Path("a.json")),
-        benchmark.Arm(LIT_CANDIDATE, Path("b"), Path("b_runtime"), Path("b.json")))
+    arms = (benchmark.Arm(LIT_BASELINE, Path("a"), Path("a_runtime"), Path("a.json")), benchmark.Arm(LIT_CANDIDATE, Path("b"), Path("b_runtime"), Path("b.json")))
     orders = [[arm.name for arm in row] for row in benchmark.balanced_orders(arms, 8, 0)]
     trials = []
     for block, row in enumerate(orders):
@@ -208,18 +199,14 @@ def trial_matrix(frame_delta=-.5):
 
 class CoverageTests(unittest.TestCase):
     def test_actual_gpu_counts_ignore_cpu_frame_and_displayed_average_fields(self):
-        text = ("=== interval: 99999 frames / 0.5s ===\n"
-            "  render.frame: window_avg_ms=123 window_min_ms=123 window_max_ms=123 published_windows=1 total_ms=90 gpu_samples=10 sample_avg_ms=9\n"
-            "=== interval: 1 frames / 0.5s ===\n"
+        text = ("=== interval: 99999 frames / 0.5s ===\n" "  render.frame: window_avg_ms=123 window_min_ms=123 window_max_ms=123 published_windows=1 total_ms=90 gpu_samples=10 sample_avg_ms=9\n" "=== interval: 1 frames / 0.5s ===\n"
             "  render.frame: window_avg_ms=456 window_min_ms=456 window_max_ms=456 published_windows=1 total_ms=100 gpu_samples=100 sample_avg_ms=1\n")
         result = benchmark.summarize_intervals(benchmark.parse_intervals(text, finalized=True))
         self.assertEqual(result[benchmark.FRAME][LIT_GPU_SAMPLES], 110)
         self.assertAlmostEqual(result[benchmark.FRAME][LIT_MEAN_MS], 190 / 110)
 
     def test_partial_live_tail_is_not_counted(self):
-        text = ("=== interval: 1 frames / 0.5s ===\n"
-            "  render.frame: window_avg_ms=4 window_min_ms=4 window_max_ms=4 published_windows=1 total_ms=4 gpu_samples=1 sample_avg_ms=4\n"
-            "=== interval: 1 frames / 0.5s ===\n  render.frame: total_ms=")
+        text = ("=== interval: 1 frames / 0.5s ===\n" "  render.frame: window_avg_ms=4 window_min_ms=4 window_max_ms=4 published_windows=1 total_ms=4 gpu_samples=1 sample_avg_ms=4\n" "=== interval: 1 frames / 0.5s ===\n  render.frame: total_ms=")
         self.assertEqual(len(benchmark.parse_intervals(text)), 1)
 
     def test_all_avboit_and_control_ranges_are_required(self):
@@ -264,8 +251,7 @@ class WallFrameEvidenceTests(unittest.TestCase):
         gpu = []
         for frames, seconds in intervals:
             average = seconds * 1000 / frames
-            fps.append(f"ReflectionSmokeProject: fps avg={frames / seconds:.17g} frame_ms avg={average:.17g} "
-                f"min={average / 2:.17g} max={average * 2:.17g} frames={frames} seconds={seconds:.17g}")
+            fps.append(f"ReflectionSmokeProject: fps avg={frames / seconds:.17g} frame_ms avg={average:.17g} " f"min={average / 2:.17g} max={average * 2:.17g} frames={frames} seconds={seconds:.17g}")
             gpu.append(f"=== interval: {frames} frames / {seconds:.4f}s ===")
         return "\n".join(fps), "\n".join(gpu)
 
@@ -307,11 +293,8 @@ class WallFrameEvidenceTests(unittest.TestCase):
     def test_missing_malformed_nonfinite_and_inconsistent_reports_are_refused(self):
         workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
         text, timing = self.reports(((30, .5), (30, .5), (100, .5), (100, .5)))
-        for changed in ("\n".join(text.splitlines()[:-1]), text.replace("fps avg=200", "fps avg=nan", 1),
-            text.replace("frame_ms avg=5", "frame_ms avg=inf", 1), text.replace("frames=100", "frames=0", 1),
-            text.replace("fps avg=200", "fps avg=100", 1), text.replace(" min=2.5", "", 1),
-            text.replace("max=10", "max=4", 1), text.replace("max=10", "max=0", 1),
-            text.replace("min=2.5", "min=-2.5", 1), text.replace("seconds=0.5", "seconds=0", 1)):
+        for changed in ("\n".join(text.splitlines()[:-1]), text.replace("fps avg=200", "fps avg=nan", 1), text.replace("frame_ms avg=5", "frame_ms avg=inf", 1), text.replace("frames=100", "frames=0", 1),
+            text.replace("fps avg=200", "fps avg=100", 1), text.replace(" min=2.5", "", 1), text.replace("max=10", "max=4", 1), text.replace("max=10", "max=0", 1), text.replace("min=2.5", "min=-2.5", 1), text.replace("seconds=0.5", "seconds=0", 1)):
             with self.subTest(text=changed), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.summarize_wall_frames(changed, timing, workload, [2, 4])
 
@@ -319,8 +302,7 @@ class WallFrameEvidenceTests(unittest.TestCase):
         workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
         text, timing = self.reports(((30, .5), (30, .5), (100, .500049), (100, .5)))
         benchmark.summarize_wall_frames(text, timing, workload, [2, 4])
-        for changed in (timing.replace("100 frames", "101 frames", 1),
-            timing.replace("100 frames / 0.5000", "100 frames / 0.5002", 1)):
+        for changed in (timing.replace("100 frames", "101 frames", 1), timing.replace("100 frames / 0.5000", "100 frames / 0.5002", 1)):
             with self.subTest(timing=changed), self.assertRaisesRegex(benchmark.SmokeFailure, "windows do not match"):
                 benchmark.summarize_wall_frames(text, changed, workload, [2, 4])
 
@@ -361,13 +343,10 @@ class WallFrameEvidenceTests(unittest.TestCase):
 class WorkloadPolicyTests(unittest.TestCase):
     def test_inherited_smoke_capture_diagnostics_and_pose_are_cleared(self):
         workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
-        inherited = {LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1",
-            LIT_NWB_CAUSTIC_SMOKE_ENABLED: "1", "NWB_TRANSPARENT_CSG_DISABLE_CUTTER": "1",
-            LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: "2", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "5",
-            LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_PRESERVED: LIT_YES}
+        inherited = {LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_CAUSTIC_SMOKE_ENABLED: "1", "NWB_TRANSPARENT_CSG_DISABLE_CUTTER": "1",
+            LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: "2", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "5", LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_PRESERVED: LIT_YES}
         env, overrides = benchmark.configure_environment(inherited, workload, Path(LIT_TIMING_TXT))
-        self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **dict(workload.environment_overrides),
-            LIT_NWB_GPU_TIMING_FILE: LIT_TIMING_TXT})
+        self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **dict(workload.environment_overrides), LIT_NWB_GPU_TIMING_FILE: LIT_TIMING_TXT})
         self.assertEqual(overrides[LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE], "0")
         self.assertEqual(inherited[LIT_NWB_GPU_TIMING_FILE], LIT_OLD_TXT)
 
@@ -378,8 +357,7 @@ class WorkloadPolicyTests(unittest.TestCase):
                 benchmark.configure_environment({key: LIT_VK_LAYER_KHRONOS_VALIDATION}, workload, Path("t"))
 
     def test_logs_require_actual_route_extent_policy_device_and_shutdown(self):
-        self.assertEqual(benchmark.device_material_signature(log_text()),
-            benchmark.device_material_signature(log_text().replace("\n", "\r\n")))
+        self.assertEqual(benchmark.device_material_signature(log_text()), benchmark.device_material_signature(log_text().replace("\n", "\r\n")))
         workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
         expected = benchmark.transparent_multi_log(log_text(), workload, True)
         self.assertEqual(expected[LIT_SHADOW_ROUTE], LIT_HARDWARE)
@@ -388,11 +366,8 @@ class WorkloadPolicyTests(unittest.TestCase):
         self.assertEqual(software[LIT_SHADOW_ROUTE], LIT_SOFTWARE)
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.transparent_multi_log(log_text(LIT_SOFTWARE), workload, True)
-        for altered in (log_text().replace(LIT_N_1280X900, LIT_N_960X720),
-            log_text().replace(LIT_IN_FLIGHT_RANGES_32, LIT_IN_FLIGHT_RANGES_2),
-            log_text().replace("render unfocused 1", "render unfocused 0"),
-            log_text().replace(LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN, ""),
-            log_text() + "\nAvboitTimingProbe: in-flight ranges 32", log_text() + "\n[ERROR]: rejected",
+        for altered in (log_text().replace(LIT_N_1280X900, LIT_N_960X720), log_text().replace(LIT_IN_FLIGHT_RANGES_32, LIT_IN_FLIGHT_RANGES_2), log_text().replace("render unfocused 1", "render unfocused 0"),
+            log_text().replace(LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN, ""), log_text() + "\nAvboitTimingProbe: in-flight ranges 32", log_text() + "\n[ERROR]: rejected",
             log_text() + "\nFramebufferCapture: capture ready", log_text().replace("GraphicsRuntime: created device", "device")):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
@@ -412,8 +387,7 @@ class WorkloadPolicyTests(unittest.TestCase):
     def test_current_hardware_route_requires_dispatch_and_rejects_retired_routes(self):
         workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
         marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
-        for altered in (log_text().replace(marker, ""),
-            log_text() + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
+        for altered in (log_text().replace(marker, ""), log_text() + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
         retired = log_text().replace("natural hardware shadow route", "natural hybrid shadow route")
@@ -424,24 +398,19 @@ class WorkloadPolicyTests(unittest.TestCase):
                     benchmark.transparent_multi_log(altered, workload, require_hardware)
 
     def test_cli_rejects_lower_coverage_and_unbalanced_plans(self):
-        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
-            LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        for extra in ((LIT_BLOCKS, "7"), (LIT_BLOCKS, "6"), ("--warmup-intervals", "1"),
-            ("--sample-intervals", "5"), ("--minimum-frame-samples", "99"), ("--timeout", LIT_NAN),
-            ("--application-arg=--gpudbg",)):
+        for extra in ((LIT_BLOCKS, "7"), (LIT_BLOCKS, "6"), ("--warmup-intervals", "1"), ("--sample-intervals", "5"), ("--minimum-frame-samples", "99"), ("--timeout", LIT_NAN), ("--application-arg=--gpudbg",)):
             with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(common + list(extra))
 
 
 class WorkloadControlSelectionTests(unittest.TestCase):
-    SHADOW_CONTROLS = (LIT_RENDER_OPAQUE_REGULAR, "render.deferred_lighting",
-        LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT)
+    SHADOW_CONTROLS = (LIT_RENDER_OPAQUE_REGULAR, "render.deferred_lighting", LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT)
 
     def shadow_workload(self, **changes):
         from dataclasses import replace
-        values = {"name": "test-shadow-controls", LIT_SECONDARY_SCOPE: LIT_RENDER_SHADOW_VISIBILITY,
-            "control_scopes": self.SHADOW_CONTROLS}
+        values = {"name": "test-shadow-controls", LIT_SECONDARY_SCOPE: LIT_RENDER_SHADOW_VISIBILITY, "control_scopes": self.SHADOW_CONTROLS}
         values.update(changes)
         return replace(benchmark.workloads()[LIT_TRANSPARENT_MULTI], **values)
 
@@ -504,24 +473,18 @@ class WorkloadControlSelectionTests(unittest.TestCase):
 
 def soft_shadow_log_text(workload, route=LIT_HARDWARE):
     values = dict(workload.environment_overrides)
-    return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1",
-        "ShadowTimingProbe: caustic emission 0", LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE,
-        f"ShadowTimingProbe: natural shadow route {route}",
+    return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1", "ShadowTimingProbe: caustic emission 0", LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE, f"ShadowTimingProbe: natural shadow route {route}",
         LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA,
         f"ShadowTimingProbe: source extents angular={values['NWB_SOFT_SHADOW_TEST_ANGLE']} radius={values['NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS']}",
-        "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad",
-        LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
-        LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
+        "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
         LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN))
 
 
 class ShadowWorkloadPolicyTests(unittest.TestCase):
     def test_shadow_environment_clears_inherited_capture_and_extent_policy(self):
         workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
-        env, overrides = benchmark.configure_environment({LIT_NWB_SOFT_SHADOW_TEST_ANGLE: "0.2",
-            LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS: "1", LIT_NWB_SOFT_SHADOW_TEST_TIMING: "0",
-            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "360", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP,
-            LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_PRESERVED: LIT_YES}, workload, Path(LIT_TIMING_TXT))
+        env, overrides = benchmark.configure_environment({LIT_NWB_SOFT_SHADOW_TEST_ANGLE: "0.2", LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS: "1", LIT_NWB_SOFT_SHADOW_TEST_TIMING: "0",
+            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "360", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_PRESERVED: LIT_YES}, workload, Path(LIT_TIMING_TXT))
         self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **dict(workload.environment_overrides), LIT_NWB_GPU_TIMING_FILE: LIT_TIMING_TXT})
 
     def test_shadow_logs_require_actual_policy_route_extent_and_lifecycle(self):
@@ -530,10 +493,8 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
             text = soft_shadow_log_text(workload)
             expected = benchmark.soft_shadow_log(text, workload, True)
             self.assertEqual(expected, benchmark.soft_shadow_log(text.replace("\n", "\r\n"), workload, True))
-            for altered in (text.replace(LIT_IN_FLIGHT_RANGES_32, LIT_IN_FLIGHT_RANGES_2),
-                text.replace("caustic emission 0", "caustic emission 1"), text.replace(LIT_N_1280X900, LIT_N_960X720),
-                text.replace(LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN, ""), text + "\nShadowTimingProbe: render unfocused 0",
-                text.replace("natural shadow route hardware", "natural shadow route software")):
+            for altered in (text.replace(LIT_IN_FLIGHT_RANGES_32, LIT_IN_FLIGHT_RANGES_2), text.replace("caustic emission 0", "caustic emission 1"), text.replace(LIT_N_1280X900, LIT_N_960X720),
+                text.replace(LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN, ""), text + "\nShadowTimingProbe: render unfocused 0", text.replace("natural shadow route hardware", "natural shadow route software")):
                 with self.subTest(name=name, text=altered), self.assertRaises(benchmark.SmokeFailure):
                     benchmark.soft_shadow_log(altered, workload, True)
 
@@ -561,8 +522,7 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
         text = soft_shadow_log_text(workload)
         marker = LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE
         self.assertEqual(benchmark.soft_shadow_log(text, workload, True)["indirect_response"], "hemi-ambient")
-        for altered in (text.replace(marker, ""), text.replace(marker, "ShadowTimingProbe: indirect response surfel"),
-            text + "\n" + marker, text + "\nShadowTimingProbe: indirect response surfel"):
+        for altered in (text.replace(marker, ""), text.replace(marker, "ShadowTimingProbe: indirect response surfel"), text + "\n" + marker, text + "\nShadowTimingProbe: indirect response surfel"):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.soft_shadow_log(altered, workload, True)
 
@@ -575,8 +535,7 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
 
     def test_shadow_logs_reject_validation_capture_and_fallback_emission(self):
         workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
-        for marker in ("FramebufferCapture: ready", "Vulkan: enabled validation layer", LIT_VK_LAYER_KHRONOS_VALIDATION,
-            "render submission suspended", "retaining all-lit visibility", "preserving opaque visibility"):
+        for marker in ("FramebufferCapture: ready", "Vulkan: enabled validation layer", LIT_VK_LAYER_KHRONOS_VALIDATION, "render submission suspended", "retaining all-lit visibility", "preserving opaque visibility"):
             with self.subTest(marker=marker), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.soft_shadow_log(soft_shadow_log_text(workload) + "\n" + marker, workload, True)
 
@@ -696,17 +655,9 @@ class PairedInferenceTests(unittest.TestCase):
 def reflection_log_text(workload):
     policy = workload.reflection_policy
     route = "screen-space" if policy.variant.mode == LIT_SCREEN else LIT_HARDWARE
-    lines = [f"ReflectionSmokeProject: case {policy.family} created",
-        f"ReflectionSmokeProject: reflection mode {policy.variant.mode}",
-        f"ReflectionSmokeProject: hardware ray budget {policy.ray_budget}",
-        "ReflectionSmokeProject: screen feedback 0",
-        f"ReflectionSmokeProject: screen steps {policy.screen_steps}",
-        "ReflectionSmokeProject: timing render unfocused 1",
-        "ReflectionSmokeProject: timing in-flight ranges 32",
-        "ReflectionSmokeProject: timing depth mip count 10",
-        "ReflectionSmokeProject: hardware available", LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN,
-        f"Reflection resolve: {route}", LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU,
-        "RendererSystem: material 'receiver' selected CS + PS through compute emulation",
+    lines = [f"ReflectionSmokeProject: case {policy.family} created", f"ReflectionSmokeProject: reflection mode {policy.variant.mode}", f"ReflectionSmokeProject: hardware ray budget {policy.ray_budget}", "ReflectionSmokeProject: screen feedback 0",
+        f"ReflectionSmokeProject: screen steps {policy.screen_steps}", "ReflectionSmokeProject: timing render unfocused 1", "ReflectionSmokeProject: timing in-flight ranges 32", "ReflectionSmokeProject: timing depth mip count 10",
+        "ReflectionSmokeProject: hardware available", LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN, f"Reflection resolve: {route}", LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, "RendererSystem: material 'receiver' selected CS + PS through compute emulation",
         "RendererSystem: deferred rendering targets ready (960x720, samples=1)"]
     if policy.family.startswith("optical_"):
         lines.append(f"ReflectionSmokeProject: optical query limit {policy.optical_queries}")
@@ -715,8 +666,7 @@ def reflection_log_text(workload):
 
 class ReflectionWorkloadTests(unittest.TestCase):
     def test_reflection_environment_reuses_fixed_production_controls_after_clearing_inheritance(self):
-        inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES: "1",
-            LIT_NWB_AVBOIT_SMOKE_TIMING: "1", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP,
+        inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES: "1", LIT_NWB_AVBOIT_SMOKE_TIMING: "1", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP,
             LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO: "5", LIT_PRESERVED: LIT_YES}
         for workload in benchmark.workloads().values():
             if workload.reflection_policy is None:
@@ -761,8 +711,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
     def test_inactive_ranges_are_rejected_even_outside_the_retained_window(self):
         for workload in benchmark.workloads().values():
             for inactive in workload.inactive_scopes:
-                with self.subTest(workload=workload.name, scope=inactive), self.assertRaisesRegex(
-                    benchmark.SmokeFailure, LIT_INACTIVE_REFLECTION_SCOPES):
+                with self.subTest(workload=workload.name, scope=inactive), self.assertRaisesRegex(benchmark.SmokeFailure, LIT_INACTIVE_REFLECTION_SCOPES):
                     benchmark.validate_inactive_scopes({inactive: {LIT_GPU_SAMPLES: 1}}, workload)
 
     def test_inactive_hashed_scope_is_decoded_and_rejected(self):
@@ -784,29 +733,23 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 self.assertEqual(signature["reflection_route"], workload.reflection_policy.variant.mode)
                 self.assertEqual(signature["reflection_policy"]["roughness"], workload.reflection_policy.roughness)
                 self.assertEqual(signature, workload.validate_log(text.replace("\n", "\r\n"), workload, True))
-                for altered in (text.replace(LIT_N_960X720, LIT_N_1280X900),
-                    text.replace("timing in-flight ranges 32", "timing in-flight ranges 2"),
-                    text + "\nReflectionSmokeProject: screen steps 16", text + "\nVUID-rejected",
-                    text + "\nFramebufferCapture: capture ready", text.replace("hardware available", "hardware unavailable"),
-                    text.replace(LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN, "")):
+                for altered in (text.replace(LIT_N_960X720, LIT_N_1280X900), text.replace("timing in-flight ranges 32", "timing in-flight ranges 2"), text + "\nReflectionSmokeProject: screen steps 16", text + "\nVUID-rejected",
+                    text + "\nFramebufferCapture: capture ready", text.replace("hardware available", "hardware unavailable"), text.replace(LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN, "")):
                     with self.assertRaises(benchmark.SmokeFailure):
                         workload.validate_log(altered, workload, True)
 
     def test_inside_query_cap_is_strict_despite_shared_benchmark_only_checking_clear(self):
         workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_INSIDE]
         text = reflection_log_text(workload)
-        for changed in (text.replace("optical query limit 16", "optical query limit 8"),
-            text + "\nReflectionSmokeProject: optical query limit 16"):
+        for changed in (text.replace("optical query limit 16", "optical query limit 8"), text + "\nReflectionSmokeProject: optical query limit 16"):
             with self.assertRaisesRegex(benchmark.SmokeFailure, "optical query limit"):
                 workload.validate_log(changed, workload, True)
 
     def test_declared_native_dispatch_count_never_changes_range_coverage(self):
-        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
-            LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         for count in (2, 169):
-            args = benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap",
-                LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, str(count)])
+            args = benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap", LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, str(count)])
             workload = benchmark.workloads()[args.workload]
             value = scopes(workload)
             benchmark.validate_coverage(value, workload, 6, 100)
@@ -815,8 +758,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 benchmark.validate_coverage(value, workload, 6, 100)
         for invalid in ("0", "-1", "1382401"):
             with self.subTest(native_calls=invalid), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap",
-                    LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, invalid])
+                benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap", LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, invalid])
         for name in (LIT_TRANSPARENT_MULTI, LIT_REFLECTION_SCREEN_DEPTH, LIT_REFLECTION_ROUGH_FILTERED):
             with self.subTest(workload=name), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(common + [LIT_WORKLOAD, name, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, "2"])
@@ -857,24 +799,11 @@ class ReflectionWorkloadTests(unittest.TestCase):
 
 def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
     distance = benchmark.caustic.PRESETS[preset]
-    text = "\n".join((
-        LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU,
-        LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
-        "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware",
-        LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA,
-        LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
-        "AvboitTimingProbe: caustic in-flight ranges 32",
-        "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
-        "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else LIT_DISABLED),
-        "CausticTimingProbe: reflection diagnostics false temporal false spatial false feedback false",
-        "CausticTimingProbe: scene single-static-sphere-ground-v1",
-        f"CausticTimingProbe: camera {preset} distance {distance} height 0.85",
-        "CausticTimingProbe: fixed delta 0.016666667 yaw 0 sphere scale 0.7",
-        "CausticTimingProbe: directional pitch 0.9 yaw 0.65 intensity 2",
-        "CausticTimingProbe: vertical FOV radians 1.0471976",
-        "CausticTimingProbe: photon phases bootstrap 2 converged 4 warmup 8",
-        LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
-        LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
+    text = "\n".join((LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED, "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware", LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA,
+        LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1, "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
+        "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else LIT_DISABLED), "CausticTimingProbe: reflection diagnostics false temporal false spatial false feedback false", "CausticTimingProbe: scene single-static-sphere-ground-v1",
+        f"CausticTimingProbe: camera {preset} distance {distance} height 0.85", "CausticTimingProbe: fixed delta 0.016666667 yaw 0 sphere scale 0.7", "CausticTimingProbe: directional pitch 0.9 yaw 0.65 intensity 2",
+        "CausticTimingProbe: vertical FOV radians 1.0471976", "CausticTimingProbe: photon phases bootstrap 2 converged 4 warmup 8", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
     if enabled:
         text += "\nRendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, 262144 full-grid budget, 1 caustic lights, 1 refractive instances)"
     if capture:
@@ -897,8 +826,7 @@ class CausticMeasurementTests(unittest.TestCase):
                 benchmark.validate_coverage(wrong, workload, 6, 100)
 
     def test_warmup_is_actual_completed_gpu_work_not_publication_count(self):
-        values = {name: {LIT_GPU_SAMPLES: 12, LIT_TOTAL_MS: 1, LIT_REPORTS: 2}
-            for name in (benchmark.FRAME, benchmark.caustic.PHOTONS)}
+        values = {name: {LIT_GPU_SAMPLES: 12, LIT_TOTAL_MS: 1, LIT_REPORTS: 2} for name in (benchmark.FRAME, benchmark.caustic.PHOTONS)}
         benchmark.caustic.validate_warmup(values)
         for name in values:
             changed = copy.deepcopy(values)
@@ -912,13 +840,9 @@ class CausticMeasurementTests(unittest.TestCase):
             workload = benchmark.workloads()[LIT_CAUSTIC + preset]
             text = caustic_log_text(preset)
             workload.validate_log(text, workload, True)
-            for changed in (text.replace("131072 photons", "65536 photons"),
-                text.replace("262144 full-grid", "131072 full-grid"), text.replace("1 refractive", "2 refractive"),
-                text.replace("height 0.85", "height 0.7"), text.replace("sphere scale 0.7", "sphere scale 0.35"),
-                text.replace("intensity 2", "intensity 4"), text.replace("radians 1.0471976", "radians 0.7"),
-                text.replace("warmup 8", "warmup 16"), text.replace("yaw 0", "yaw 1"),
-                text.replace("hardware caustic producer", "software caustic producer"),
-                text + "\nCausticSphereSmokeProject: reflection mode 2",
+            for changed in (text.replace("131072 photons", "65536 photons"), text.replace("262144 full-grid", "131072 full-grid"), text.replace("1 refractive", "2 refractive"),
+                text.replace("height 0.85", "height 0.7"), text.replace("sphere scale 0.7", "sphere scale 0.35"), text.replace("intensity 2", "intensity 4"), text.replace("radians 1.0471976", "radians 0.7"),
+                text.replace("warmup 8", "warmup 16"), text.replace("yaw 0", "yaw 1"), text.replace("hardware caustic producer", "software caustic producer"), text + "\nCausticSphereSmokeProject: reflection mode 2",
                 text + "\nAvboitTimingProbe: caustic in-flight ranges 2"):
                 with self.subTest(preset=preset, changed=changed[-120:]), self.assertRaises(benchmark.SmokeFailure):
                     workload.validate_log(changed, workload, True)
@@ -928,16 +852,14 @@ class CausticMeasurementTests(unittest.TestCase):
         settings = dict(workload.environment_overrides)
         text = caustic_log_text()
         hardware_marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
-        legacy = text.replace("natural hardware shadow route", "natural hybrid shadow route").replace(
-            hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
+        legacy = text.replace("natural hardware shadow route", "natural hybrid shadow route").replace(hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.caustic.validate_log(legacy, settings)
         retired_route = next(line for line in legacy.splitlines() if "natural hybrid shadow route" in line)
         for altered in (legacy, text + "\n" + retired_route):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 workload.validate_log(altered, workload, True)
-        for altered in (text.replace(hardware_marker, ""),
-            text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
+        for altered in (text.replace(hardware_marker, ""), text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.caustic.validate_log(altered, settings)
 
@@ -975,8 +897,7 @@ class CausticMeasurementTests(unittest.TestCase):
         self.assertEqual(benchmark.caustic.footprint(off, off, 2.2)[LIT_POSITIVE_PIXELS], 0)
 
     def test_visible_pixel_and_tile_reduction_are_independent_qualification_gates(self):
-        good = {LIT_POPULATED: {LIT_POSITIVE_PIXELS: 1000, LIT_POSITIVE_TILES: 100, LIT_POSITIVE_CHANNEL_GAIN: 60000},
-            LIT_SPARSE: {LIT_POSITIVE_PIXELS: 250, LIT_POSITIVE_TILES: 30, LIT_POSITIVE_CHANNEL_GAIN: 15000}}
+        good = {LIT_POPULATED: {LIT_POSITIVE_PIXELS: 1000, LIT_POSITIVE_TILES: 100, LIT_POSITIVE_CHANNEL_GAIN: 60000}, LIT_SPARSE: {LIT_POSITIVE_PIXELS: 250, LIT_POSITIVE_TILES: 30, LIT_POSITIVE_CHANNEL_GAIN: 15000}}
         benchmark.caustic.validate_metrics(good)
         for key, value in ((LIT_POSITIVE_PIXELS, 99), (LIT_POSITIVE_CHANNEL_GAIN, 1499), (LIT_POSITIVE_TILES, 81)):
             changed = copy.deepcopy(good)
@@ -987,8 +908,7 @@ class CausticMeasurementTests(unittest.TestCase):
             benchmark.caustic.validate_metrics({LIT_POPULATED: good[LIT_POPULATED], LIT_SPARSE: good[LIT_POPULATED]})
 
     def test_caustic_cli_requires_both_frozen_arm_qualification_reports(self):
-        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
-            LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         proofs = ["--baseline-caustic-qualification", "aqual.json", "--candidate-caustic-qualification", "bqual.json"]
         for partial in ([], proofs[:2], proofs[2:]):
@@ -1001,10 +921,8 @@ class CausticMeasurementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / LIT_QUALIFICATION_JSON
             identity = {LIT_FROZEN: "actual-arm"}
-            document = {LIT_SCHEMA: benchmark.caustic.SCHEMA, LIT_POLICY: benchmark.caustic.POLICY,
-                LIT_ARM: identity, LIT_CAPTURES: {}}
-            for changed in ({**document, LIT_ARM: {LIT_FROZEN: "other-arm"}},
-                {**document, LIT_POLICY: {}}, document):
+            document = {LIT_SCHEMA: benchmark.caustic.SCHEMA, LIT_POLICY: benchmark.caustic.POLICY, LIT_ARM: identity, LIT_CAPTURES: {}}
+            for changed in ({**document, LIT_ARM: {LIT_FROZEN: "other-arm"}}, {**document, LIT_POLICY: {}}, document):
                 path.write_text(json.dumps(changed), encoding=LIT_UTF_8)
                 with self.assertRaises(benchmark.SmokeFailure):
                     benchmark.caustic.validate_report(path, identity)
@@ -1016,8 +934,7 @@ class CausticMeasurementTests(unittest.TestCase):
             output.mkdir()
             saved = output / LIT_FAILURE_JSON
             saved.write_bytes(b"original failure evidence")
-            argv = ["--executable", str(directory / "bin" / LIT_FIXTURE_EXE),
-                "--runtime", str(directory / LIT_RUNTIME), "--source-manifest", str(directory / LIT_SOURCE / LIT_SOURCE_JSON),
+            argv = ["--executable", str(directory / "bin" / LIT_FIXTURE_EXE), "--runtime", str(directory / LIT_RUNTIME), "--source-manifest", str(directory / LIT_SOURCE / LIT_SOURCE_JSON),
                 LIT_LOGSERVER_EXECUTABLE, str(directory / LIT_LOGGER / LIT_LOGGER_EXE), LIT_OUTPUT_DIRECTORY, str(output)]
             with patch.object(benchmark.caustic.subprocess, "run") as launch, contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(benchmark.caustic.main(argv), 1)
@@ -1059,23 +976,18 @@ class CausticMeasurementTests(unittest.TestCase):
                     launcher.parent.mkdir(parents=True)
                     launcher.write_bytes(launcher_bytes)
                     manifest = arm_root / LIT_SOURCE_JSON
-                    manifest.write_text(json.dumps({LIT_REVISION: name, LIT_FILES: {
-                        launcher.relative_to(arm_root).as_posix(): hashlib.sha256(launcher_bytes).hexdigest()}}), encoding=LIT_UTF_8)
+                    manifest.write_text(json.dumps({LIT_REVISION: name, LIT_FILES: { launcher.relative_to(arm_root).as_posix(): hashlib.sha256(launcher_bytes).hexdigest()}}), encoding=LIT_UTF_8)
                     launchers[name] = launcher
                     sources[name] = benchmark.source_identity(manifest)
-                identity = {"executable": str(directory / LIT_FIXTURE_EXE), LIT_RUNTIME: str(directory / LIT_RUNTIME),
-                    LIT_SOURCE: sources[LIT_CANDIDATE]}
+                identity = {"executable": str(directory / LIT_FIXTURE_EXE), LIT_RUNTIME: str(directory / LIT_RUNTIME), LIT_SOURCE: sources[LIT_CANDIDATE]}
                 logger = directory / LIT_LOGGER_EXE
                 logger.write_bytes(b"synthetic logger identity")
                 (directory / "crash_handler.exe").write_bytes(b"synthetic crash helper identity")
                 logger_dependency = directory / "logger_dependency.dll"
                 logger_dependency.write_bytes(b"synthetic logger dependency identity")
                 args = SimpleNamespace(**identity, logserver_executable=logger, timeout=90.0, application_arg=[])
-                document = {LIT_SCHEMA: utility.SCHEMA, LIT_POLICY: policy, LIT_ARM: identity, LIT_CAPTURES: {},
-                    LIT_METRICS: {}, LIT_QUALIFICATION_TOOL: benchmark.file_identity(Path(utility.__file__)),
-                    "launcher": benchmark.file_identity(Path(utility.__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)),
-                    "logserver": benchmark.file_identity(logger), "logserver_path": str(logger),
-                    "logserver_binaries": benchmark.binary_identity(logger),
+                document = {LIT_SCHEMA: utility.SCHEMA, LIT_POLICY: policy, LIT_ARM: identity, LIT_CAPTURES: {}, LIT_METRICS: {}, LIT_QUALIFICATION_TOOL: benchmark.file_identity(Path(utility.__file__)),
+                    "launcher": benchmark.file_identity(Path(utility.__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)), "logserver": benchmark.file_identity(logger), "logserver_path": str(logger), "logserver_binaries": benchmark.binary_identity(logger),
                     "timeout_seconds": 90.0, "application_args": []}
                 for preset, distance in utility.PRESETS.items():
                     frames = {}
@@ -1092,11 +1004,8 @@ class CausticMeasurementTests(unittest.TestCase):
                         image.write_bytes(header + pixels)
                         log.write_text(caustic_log_text(preset, enabled, capture=True).replace(LIT_N_1280X900, "160x120"), encoding=LIT_UTF_8)
                         settings = utility.environment(preset, enabled)
-                        document[LIT_CAPTURES][key] = {"settings": settings,
-                            LIT_RUNTIME: utility.validate_log(log.read_text(encoding=LIT_UTF_8), settings, capture=True),
-                            LIT_COMMAND: utility.capture_command(args, image, launcher=launchers[LIT_CANDIDATE]),
-                            LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: benchmark.file_identity(image)},
-                            LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: benchmark.file_identity(log)}}
+                        document[LIT_CAPTURES][key] = {"settings": settings, LIT_RUNTIME: utility.validate_log(log.read_text(encoding=LIT_UTF_8), settings, capture=True), LIT_COMMAND: utility.capture_command(args, image, launcher=launchers[LIT_CANDIDATE]),
+                            LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: benchmark.file_identity(image)}, LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: benchmark.file_identity(log)}}
                         frames[enabled] = utility.read_bmp_24_rows(image)
                     document[LIT_METRICS][preset] = utility.footprint(frames[True], frames[False], distance)
                 report = directory / LIT_QUALIFICATION_JSON
@@ -1109,8 +1018,7 @@ class CausticMeasurementTests(unittest.TestCase):
                 baseline_document = copy.deepcopy(document)
                 baseline_document[LIT_ARM] = baseline_identity
                 for key, record in baseline_document[LIT_CAPTURES].items():
-                    record[LIT_COMMAND] = utility.capture_command(args, directory / (key + LIT_BMP),
-                        launcher=launchers[LIT_BASELINE])
+                    record[LIT_COMMAND] = utility.capture_command(args, directory / (key + LIT_BMP), launcher=launchers[LIT_BASELINE])
                 report.write_text(json.dumps(baseline_document), encoding=LIT_UTF_8)
                 baseline_result, _ = utility.validate_report(report, baseline_identity)
                 self.assertEqual(baseline_result[LIT_METRICS], document[LIT_METRICS])

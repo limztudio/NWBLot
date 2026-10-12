@@ -31,41 +31,21 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitExtinctionComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitExtinctionComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitComputeEmulationRecordTrait trait{
-        &RendererGpuTimingScope::s_AvboitExtinction,
-        MaterialPipelinePass::AvboitExtinction,
-        &AvboitFrameTargets::lowFramebuffer,
-    };
+    const AvboitComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
     return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &payload.extinctionTiming, trait);
 }
 
-[[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitSharedComputeEmulationRecordTrait trait{
-        &RendererGpuTimingScope::s_AvboitExtinction,
-        MaterialPipelinePass::AvboitExtinction,
-        &AvboitFrameTargets::lowFramebuffer,
-    };
+    const AvboitSharedComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
     return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &payload.extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
-[[nodiscard]] bool AvboitExtinctionGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitExtinctionGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     return RecordAvboitRasterPassFromPayload(
         payload,
@@ -76,13 +56,7 @@ namespace RendererTaskGraphDetail{
         &Payload::extinctionComputeEmulationOutputStatesGraphOwned,
         &Payload::extinctionCsgComputeEmulationOutputStatesGraphOwned,
         payload.extinctionComputeEmulationTiming,
-        [&](
-            Core::CommandList& dispatchCommandList,
-            const MaterialPassDrawItemPartitions& dispatchDrawItems,
-            const CsgFrameGpuData& dispatchCsgFrameData,
-            const usize dispatchInstanceCount,
-            const usize dispatchMaterialTypedByteCount
-        ){
+        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitExtinctionPass(
                 dispatchCommandList,
                                 payload.targets,
@@ -103,20 +77,11 @@ namespace RendererTaskGraphDetail{
     );
 }
 
-[[nodiscard]] bool AvboitIntegrationGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] bool AvboitIntegrationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     bool timingRecorded = false;
     payload.timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
-    payload.avboitSystem.dispatchAvboitIntegration(
-        commandList,
-        payload.targets,
-        payload.timingAttribution,
-        &timingRecorded
-    );
+    payload.avboitSystem.dispatchAvboitIntegration(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
     if(!timingRecorded && payload.timingFeedback){
         payload.timingFeedback->discardRecording(payload.timingAttribution);
         payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

@@ -10,12 +10,8 @@ import time
 from guarded_native import GuardedNativeInput
 from image_probe import center, observe_image, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
-    collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
-    validate_expected_log_text, wait_for_log_message,
-)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
 
@@ -28,11 +24,7 @@ class ImageRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = {
-            "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0,
-            "parent": 0, "child": 0, "popup_count": 0, "image_targets": 0,
-            "declared_region": 1, "post_declaration_region": 2,
-        }
+        self.expected = { "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0, "parent": 0, "child": 0, "popup_count": 0, "image_targets": 0, "declared_region": 1, "post_declaration_region": 2, }
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -68,8 +60,7 @@ class ImageRun:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
-            report = observe_image(read_bmp_24_rows(path), snapshot, self.expected,
-                extent=extent, skin=self.args.skin, extra=extra)
+            report = observe_image(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
@@ -77,19 +68,13 @@ class ImageRun:
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(),
-            "observation": report}
+        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"image displayed-state gate '{name}' failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {
-            "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "failure": self.failure_report,
-            "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
-                if self.native.windows else "X11 XSendEvent keys/buttons and XSetInputFocus",
-            "runtime_limit": "No native Wayland, physical button injection, or live IME qualification.",
-        }
+        report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
+                if self.native.windows else "X11 XSendEvent keys/buttons and XSetInputFocus", "runtime_limit": "No native Wayland, physical button injection, or live IME qualification.", }
         (self.args.output_directory / "image.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     def execute(self):
@@ -109,9 +94,7 @@ class ImageRun:
         target_extent = round(old_extent[0]) + 96, round(old_extent[1]) + 64
         physical_extent = self.point(*target_extent)
         self.backend.resize_client(self.handle, *physical_extent)
-        self.checkpoint("resize_recomputes_stretch_and_preserves_retained_images", extent=physical_extent,
-            extra=lambda snapshot: snapshot["rectangles"]["stretch"][2] != old_width
-                and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0
+        self.checkpoint("resize_recomputes_stretch_and_preserves_retained_images", extent=physical_extent, extra=lambda snapshot: snapshot["rectangles"]["stretch"][2] != old_width and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0
                 and abs(snapshot["logical_extent"][1] - target_extent[1]) < 1.0)
         self.native.tap("F5")
         self.checkpoint("both_popups_publish_images_before_child_input", parent=1, child=1, popup_count=2, focus_code=4)
@@ -168,8 +151,7 @@ def run(args):
                             image_run.native.restore_pointer()
                     finally:
                         backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"],
-        STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
     image_run.write_report(True)
     print(f"UI image: {len(image_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
     return 0

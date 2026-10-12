@@ -25,7 +25,9 @@ void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
 
 bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const{
     return
-        popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->m_owner == frame.widget.id && frame.state->m_ownerDeclaration == frame.widget.declarationGeneration && frame.state->m_anchorWidget == frame.anchor.id && frame.state->m_anchorDeclaration == frame.anchor.declarationGeneration
+        popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
+        && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->m_owner == frame.widget.id
+        && frame.state->m_ownerDeclaration == frame.widget.declarationGeneration && frame.state->m_anchorWidget == frame.anchor.id && frame.state->m_anchorDeclaration == frame.anchor.declarationGeneration
     ;
 }
 
@@ -45,8 +47,7 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
     if(input.consumePopupDismissal(frame.popupToken))
         state.close();
     while(auto trigger = input.consumeContextMenu(frame.anchor.id, frame.anchor.declarationGeneration)){
-        if(frame.options.enabled && trigger->popup == m_context.popupToken()
-            && !state.open({ trigger->position.x, trigger->position.y, 0.0f, 0.0f }))
+        if(frame.options.enabled && trigger->popup == m_context.popupToken() && !state.open({ trigger->position.x, trigger->position.y, 0.0f, 0.0f }))
             return false;
     }
     if(!frame.options.enabled)

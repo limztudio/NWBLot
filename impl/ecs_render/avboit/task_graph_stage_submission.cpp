@@ -32,20 +32,11 @@ bool RendererAvboitSystem::appendTaskGraphTimingTickets(
         if(m_taskGraphStage.m_accumulationComputeEmulationTask.valid())
             ++requiredBindingCount;
     }
-    if(
-        requiredBindingCount > s_AvboitTaskGraphTimingTicketCapacity
-        || requiredBindingCount > bindingCapacity - bindingCount
-    )
+    if(requiredBindingCount > s_AvboitTaskGraphTimingTicketCapacity || requiredBindingCount > bindingCapacity - bindingCount)
         return false;
 
-    const auto appendTimingTicket = [bindings, &bindingCount](
-        const Core::GpuTaskId task,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    ){
-        bindings[bindingCount++] = Core::GpuTaskGraphTaskTimingTicket{
-            .task = task,
-            .timingTicket = &timingTicket,
-        };
+    const auto appendTimingTicket = [bindings, &bindingCount](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket){
+        bindings[bindingCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
     };
 
     appendTimingTicket(m_taskGraphStage.m_preTask, timingTickets.m_pre);

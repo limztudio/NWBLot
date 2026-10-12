@@ -59,12 +59,7 @@ void nwbCsgAnalyticUnionConvexPart(const float2 part, inout float2 interval){
         interval = float2(min(interval.x, part.x), max(interval.y, part.y));
 }
 
-bool nwbCsgAnalyticPlaneInterval(
-    const float3 origin,
-    const float3 direction,
-    const float4 normalDistance,
-    out float2 interval
-){
+bool nwbCsgAnalyticPlaneInterval(const float3 origin, const float3 direction, const float4 normalDistance, out float2 interval){
     interval = float2(1.0, 0.0);
     const float distance = dot(origin, normalDistance.xyz) + normalDistance.w;
     const float slope = dot(direction, normalDistance.xyz);
@@ -83,12 +78,7 @@ bool nwbCsgAnalyticPlaneInterval(
     return true;
 }
 
-bool nwbCsgAnalyticBoxInterval(
-    const float3 origin,
-    const float3 direction,
-    const float3 halfExtents,
-    out float2 interval
-){
+bool nwbCsgAnalyticBoxInterval(const float3 origin, const float3 direction, const float3 halfExtents, out float2 interval){
     interval = float2(1.0, 0.0);
     if(any(halfExtents < 0.0))
         return false;
@@ -105,13 +95,7 @@ bool nwbCsgAnalyticBoxInterval(
     return true;
 }
 
-bool nwbCsgAnalyticCapsuleInterval(
-    const float3 origin,
-    const float3 direction,
-    const float radius,
-    const float halfHeight,
-    out float2 interval
-){
+bool nwbCsgAnalyticCapsuleInterval(const float3 origin, const float3 direction, const float radius, const float halfHeight, out float2 interval){
     interval = float2(1.0, 0.0);
     if(radius < 0.0 || halfHeight < 0.0)
         return false;

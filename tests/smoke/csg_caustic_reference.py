@@ -28,8 +28,7 @@ def measure(frame):
     output = {}
     for region in REGIONS:
         pixels = region_pixels(region, width, height, spacing=0.045)
-        output[region[0]] = tuple(sum(decode_srgb(rows[y][x][channel]) for x, y in pixels) / len(pixels)
-            for channel in range(3))
+        output[region[0]] = tuple(sum(decode_srgb(rows[y][x][channel]) for x, y in pixels) / len(pixels) for channel in range(3))
     return output
 
 
@@ -54,11 +53,9 @@ def analyze_route(frames):
         if max(measurements["disabled"][region[0]]) > 0.001:
             raise SmokeFailure("disabled capture contains non-photon lighting")
     for region in REGIONS:
-        relative_match(measurements["cut"][region[0]], measurements["reference"][region[0]], 0.15,
-            "cut/reference " + region[0])
+        relative_match(measurements["cut"][region[0]], measurements["reference"][region[0]], 0.15, "cut/reference " + region[0])
     for arm in ("reference", "cut"):
-        relative_match(measurements[arm]["control"], measurements["uncut"]["control"], 0.15,
-            arm + "/unchanged control")
+        relative_match(measurements[arm]["control"], measurements["uncut"]["control"], 0.15, arm + "/unchanged control")
         observed = tuple(a / b for a, b in zip(measurements[arm]["split"], measurements["uncut"]["split"]))
         relative_match(observed, expected_split_ratio(), 0.15, arm + "/four-interface Beer-Fresnel ratio")
     return {"linear_irradiance": measurements, "expected_split_uncut_ratio": expected_split_ratio()}
@@ -67,6 +64,4 @@ def analyze_route(frames):
 def compare_routes(results):
     for arm in ("reference", "cut", "uncut"):
         for region in REGIONS:
-            relative_match(results["hardware"]["linear_irradiance"][arm][region[0]],
-                results["software"]["linear_irradiance"][arm][region[0]], 0.18,
-                "hardware/software " + arm + "/" + region[0])
+            relative_match(results["hardware"]["linear_irradiance"][arm][region[0]], results["software"]["linear_irradiance"][arm][region[0]], 0.18, "hardware/software " + arm + "/" + region[0])

@@ -34,11 +34,7 @@
 void nwbCausticAccumulate(const int2 pixel, const uint channel, const uint value){
     if(value == 0u)
         return;
-    if(
-        pixel.x < 0 || pixel.y < 0
-        || pixel.x >= (int)NWB_CAUSTIC_SPLAT_PUSH.width
-        || pixel.y >= (int)NWB_CAUSTIC_SPLAT_PUSH.height
-    )
+    if(pixel.x < 0 || pixel.y < 0 || pixel.x >= (int)NWB_CAUSTIC_SPLAT_PUSH.width || pixel.y >= (int)NWB_CAUSTIC_SPLAT_PUSH.height)
         return;
     InterlockedAdd(NWB_CAUSTIC_SPLAT_ACCUMULATOR[uint3(uint2(pixel), channel)], value);
 }
@@ -55,16 +51,9 @@ void nwbCausticSplat(const float3 worldPos, const half3 flux){
         return;
 
     const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    const float2 screen = uv * float2(
-        (float)NWB_CAUSTIC_SPLAT_PUSH.width,
-        (float)NWB_CAUSTIC_SPLAT_PUSH.height
-    ) - 0.5;
+    const float2 screen = uv * float2((float)NWB_CAUSTIC_SPLAT_PUSH.width, (float)NWB_CAUSTIC_SPLAT_PUSH.height) - 0.5;
     const int2 baseTexel = int2(floor(screen));
-    if(
-        baseTexel.x < 0 || baseTexel.y < 0
-        || baseTexel.x >= (int)NWB_CAUSTIC_SPLAT_PUSH.width
-        || baseTexel.y >= (int)NWB_CAUSTIC_SPLAT_PUSH.height
-    )
+    if(baseTexel.x < 0 || baseTexel.y < 0 || baseTexel.x >= (int)NWB_CAUSTIC_SPLAT_PUSH.width || baseTexel.y >= (int)NWB_CAUSTIC_SPLAT_PUSH.height)
         return;
 
     // Receiver identity is validated in world space so the tolerance follows scene scale and grazing-angle gradients.
@@ -75,10 +64,7 @@ void nwbCausticSplat(const float3 worldPos, const half3 flux){
     // Both caustic backends bind the deferred RGBA16F world-position G-buffer here. Preserve that compact payload until the FP32 receiver-distance test so the shared HW/SW splat path has the same mobile-friendly transport.
     const half3 sceneWorldPosSample = half3(NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(baseTexel, 0)).xyz);
     const float3 sceneWorldPos = float3(sceneWorldPosSample);
-    const int2 rightTexel = int2(
-        min(baseTexel.x + 1, (int)NWB_CAUSTIC_SPLAT_PUSH.width - 1),
-        baseTexel.y
-    );
+    const int2 rightTexel = int2(min(baseTexel.x + 1, (int)NWB_CAUSTIC_SPLAT_PUSH.width - 1), baseTexel.y);
     const half3 sceneWorldPosRightSample = half3(NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(rightTexel, 0)).xyz);
     const float3 sceneWorldPosRight = float3(sceneWorldPosRightSample);
     const float rejectTolerance = max(length(sceneWorldPosRight - sceneWorldPos) * 4.0, 0.05);

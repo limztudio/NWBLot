@@ -337,9 +337,7 @@ TEST(AssetBunchOwnership, RegisteredExpanderDistinguishesUnsupportedDocumentsFro
     Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     BunchFixture fixture;
     ASSERT_TRUE(fixture.document.parse("probe first;"));
-    const AssetBunchExpandContext context{
-        fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena
-    };
+    const AssetBunchExpandContext context{ fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena };
     const auto unsupported = TryAutoCollectedAssetBunchExpanders(context);
     ASSERT_FALSE(unsupported);
     EXPECT_EQ(unsupported.error(), AssetBunchExpandFailure::Unsupported);
@@ -365,9 +363,7 @@ asset_bunch bunch = [model];
     Impl::ModelCookEntry entry(fixture.outputArena);
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
-        AssetBunchExpandContext context{
-            fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena
-        };
+        AssetBunchExpandContext context{ fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena };
         auto expandedResult = TryAutoCollectedAssetBunchExpanders(context);
         ASSERT_TRUE(expandedResult);
         output = Move(*expandedResult);
@@ -392,9 +388,7 @@ TEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContr
     Impl::ModelCookEntry entry(fixture.outputArena);
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
-        AssetBunchExpandContext context{
-            fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena
-        };
+        AssetBunchExpandContext context{ fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena };
         auto expandedResult = TryAutoCollectedAssetBunchExpanders(context);
         ASSERT_TRUE(expandedResult);
         output = Move(*expandedResult);
@@ -487,10 +481,7 @@ asset_bunch bunch = [asset];
 }
 
 TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup){
-    const AStringView metadataCases[] = {
-        "asset_bunch bunch; bunch = [bunch];",
-        "probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];",
-    };
+    const AStringView metadataCases[] = { "asset_bunch bunch; bunch = [bunch];", "probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];", };
     for(const usize unusedDeclarations : { 0u, 32u }){
         for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
             Tests::CapturingLogger logger;
@@ -501,19 +492,13 @@ TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceL
             EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u
-                ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'bunch'"))
-                : TStringView(NWB_TEXT("reference 'bunch' does not target a declared asset"))
-            ));
+            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'bunch'")) : TStringView(NWB_TEXT("reference 'bunch' does not target a declared asset"))));
         }
     }
 }
 
 TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems){
-    const AStringView metadataCases[] = {
-        "metadata known; probe asset; asset_bunch bunch = [known.missing, asset];",
-        "probe asset; asset_bunch bunch = [\"asset\", asset];",
-    };
+    const AStringView metadataCases[] = { "metadata known; probe asset; asset_bunch bunch = [known.missing, asset];", "probe asset; asset_bunch bunch = [\"asset\", asset];", };
     for(const usize unusedDeclarations : { 0u, 32u }){
         for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
             Tests::CapturingLogger logger;
@@ -522,10 +507,7 @@ TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
             ASSERT_TRUE(ParseLookupFixture(fixture, metadataCases[caseIndex], unusedDeclarations));
             EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u
-                ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'known.missing'"))
-                : TStringView(NWB_TEXT("item 0 must be a declared asset reference"))
-            ));
+            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'known.missing'")) : TStringView(NWB_TEXT("item 0 must be a declared asset reference"))));
         }
     }
 }

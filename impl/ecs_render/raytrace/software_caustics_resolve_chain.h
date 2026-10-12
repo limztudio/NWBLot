@@ -55,17 +55,11 @@ struct SoftwareCausticsResolveChainResult{
 
 class SoftwareCausticsResolveChainBuilder final : NoCopy{
 public:
-    SoftwareCausticsResolveChainBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererRayTracingSystem& raytracingSystem
-    );
+    SoftwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
 
 
 public:
-    [[nodiscard]] Expected<SoftwareCausticsResolveChainResult> declare(
-        const SoftwareCausticsResolveChainInputs& inputs,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] Expected<SoftwareCausticsResolveChainResult> declare(const SoftwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

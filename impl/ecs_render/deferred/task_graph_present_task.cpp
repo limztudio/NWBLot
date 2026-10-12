@@ -26,22 +26,10 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool DeferredPresentGraphTask::Record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
-    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(
-        context,
-        payload.shadowVisibilityTask
-    );
-    const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue
-        && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
-    if(
-        !payload.presentationFrame.valid()
-        || !payload.backBuffer.valid()
-        || !shadowVisibilityQueue
-    )
+[[nodiscard]] bool DeferredPresentGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
+    const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
+    if(!payload.presentationFrame.valid() || !payload.backBuffer.valid() || !shadowVisibilityQueue)
         return false;
     const Core::Framebuffer& presentationFramebuffer = *payload.presentationFrame.framebuffer;
     const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
@@ -54,22 +42,12 @@ namespace RendererTaskGraphDetail{
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     if(shadowVisibilityRunsOnCompute){
-        payload.asyncFinalTiming.emplace(
-            payload.graphics.gpuTiming(),
-            RendererGpuTimingScope::s_AsyncFinal,
-            payload.graphics.getDevice(),
-            commandList
-        );
+        payload.asyncFinalTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncFinal, payload.graphics.getDevice(), commandList);
         if(!Core::FinishSplitGpuTimingMarker(&payload.asyncFinalTiming))
             return false;
     }
 
-    const bool presentRecorded = payload.deferredSystem.renderDeferredPresent(
-        commandList,
-        payload.targets,
-        payload.presentationFrame,
-        payload.outputLayer.sampledImage
-    );
+    const bool presentRecorded = payload.deferredSystem.renderDeferredPresent(commandList, payload.targets, payload.presentationFrame, payload.outputLayer.sampledImage);
     if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming.has_value()){
         payload.asyncFinalTiming.value().finishTiming(commandList);
         payload.asyncFinalTiming.reset();
@@ -83,11 +61,7 @@ void DeferredPresentGraphTask::Accepted(Payload& payload, const Core::QueueSubmi
 }
 
 
-void DeferredPresentGraphTask::AcceptOutputLayer(
-    Core::IGpuTaskGraphOutputLayerContributor* contributor,
-    const u64 frameGeneration,
-    const Core::QueueSubmissionToken& token
-){
+void DeferredPresentGraphTask::AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token){
     if(contributor && frameGeneration != 0u && token.valid())
         contributor->acceptTaskGraphOutputLayer(frameGeneration, token);
 }

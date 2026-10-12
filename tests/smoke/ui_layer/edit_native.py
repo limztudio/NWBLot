@@ -12,12 +12,8 @@ from contextlib import contextmanager
 from interaction_smoke import NativeInput, WinInput, WinKeyboardInput
 from window_capture_smoke import LinuxXEvent, SmokeFailure, SmokeSkip, WinPoint
 
-KEYS = {
-    "Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B,
-    "BackSpace": 0x08, "Insert": 0x2D, "Delete": 0x2E, "Left": 0x25, "Right": 0x27,
-    "Home": 0x24, "End": 0x23, "F5": 0x74, "F6": 0x75, "F7": 0x76,
-    **{letter: ord(letter.upper()) for letter in "abcdefghijklmnopqrstuvwxyz"},
-}
+KEYS = { "Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B, "BackSpace": 0x08, "Insert": 0x2D, "Delete": 0x2E, "Left": 0x25, "Right": 0x27, "Home": 0x24, "End": 0x23, "F5": 0x74, "F6": 0x75, "F7": 0x76,
+    **{letter: ord(letter.upper()) for letter in "abcdefghijklmnopqrstuvwxyz"}, }
 
 
 class EditNativeInput(NativeInput):

@@ -63,15 +63,9 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         TaskGraphTestUtils::TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
         for(usize index = 0u; index < prefixCount; ++index){
-            ASSERT_TRUE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(IndexedIdentity(Name("tests/import_scaling/completion_prefix/"), index))
-                .setMarkerLabel("Completion Prefix")
-            ).valid());
+            ASSERT_TRUE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(IndexedIdentity(Name("tests/import_scaling/completion_prefix/"), index)).setMarkerLabel("Completion Prefix")).valid());
         }
-        const Graphics::GpuExternalCompletionDesc metadata = Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/import_scaling/upgraded_completion"))
-            .setMarkerLabel("Original Completion")
-        ;
+        const Graphics::GpuExternalCompletionDesc metadata = Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/import_scaling/upgraded_completion")).setMarkerLabel("Original Completion");
         const Graphics::GpuExternalCompletionId id = graph.importExternalCompletion(metadata);
         ASSERT_TRUE(id.valid());
         u64 metadataRevision = 0u;
@@ -81,12 +75,7 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         }
         Graphics::GpuExternalCompletionDesc upgraded = metadata;
         upgraded.markerLabel = "Token Upgrade Label";
-        upgraded.token = {
-            .value = 31u,
-            .physicalQueueIndex = 0u,
-            .deviceGeneration = 17u,
-            .queue = Graphics::CommandQueue::Graphics,
-        };
+        upgraded.token = { .value = 31u, .physicalQueueIndex = 0u, .deviceGeneration = 17u, .queue = Graphics::CommandQueue::Graphics, };
         EXPECT_EQ(graph.importExternalCompletion(upgraded), id);
         u64 upgradedRevision = 0u;
         {

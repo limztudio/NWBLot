@@ -16,16 +16,7 @@ LIT_MAIN = "__main__"
 
 def texture_pixel(x: int, y: int) -> Tuple[int, int, int, int]:
     # Red-biased texels make indirect bounce measurable on white; green/blue still verify UV sampling.
-    palette = (
-        (244, 42, 42),
-        (244, 42, 42),
-        (244, 42, 42),
-        (244, 42, 42),
-        (240, 84, 42),
-        (240, 84, 42),
-        (52, 218, 104),
-        (56, 112, 246),
-    )
+    palette = ((244, 42, 42), (244, 42, 42), (244, 42, 42), (244, 42, 42), (240, 84, 42), (240, 84, 42), (52, 218, 104), (56, 112, 246),)
     tile_size = 8
     if x % tile_size == 0 or y % tile_size == 0:
         return (22, 24, 30, 255)

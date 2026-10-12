@@ -122,12 +122,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void BuildTaskDependencyAdjacency(
-    const GraphicsVector<GpuTaskDependencyEdge>& edges,
-    const usize taskCount,
-    TaskDependencyAdjacency& outAdjacency,
-    Alloc::ScratchArena& scratchArena
-){
+void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& edges, const usize taskCount, TaskDependencyAdjacency& outAdjacency, Alloc::ScratchArena& scratchArena){
     outAdjacency.offsets.clear();
     outAdjacency.offsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : edges)
@@ -171,8 +166,7 @@ bool BuildTopologicalOrder(
     outOrder.reserve(taskCount);
     usize firstReadyCandidate = 0u;
     constexpr usize s_ScanBudgetMultiplier = 2u;
-    usize scanBudget = taskCount > Limit<usize>::s_Max / s_ScanBudgetMultiplier
-        ? Limit<usize>::s_Max : taskCount * s_ScanBudgetMultiplier;
+    usize scanBudget = taskCount > Limit<usize>::s_Max / s_ScanBudgetMultiplier ? Limit<usize>::s_Max : taskCount * s_ScanBudgetMultiplier;
     TopologicalReadyIndex readyIndex(scratchArena);
     for(usize emittedCount = 0u; emittedCount < taskCount; ++emittedCount){
         if(scanBudget == 0u && readyIndex.m_levelCount == 0u)
@@ -196,11 +190,7 @@ bool BuildTopologicalOrder(
         indegrees[nextTask] = Limit<u32>::s_Max;
         firstReadyCandidate = nextTask + 1u;
         outOrder.push_back(graph.taskAt(nextTask).id);
-        for(
-            usize adjacencyIndex = adjacency.offsets[nextTask];
-            adjacencyIndex < adjacency.offsets[nextTask + 1u];
-            ++adjacencyIndex
-        ){
+        for(usize adjacencyIndex = adjacency.offsets[nextTask]; adjacencyIndex < adjacency.offsets[nextTask + 1u]; ++adjacencyIndex){
             const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
             NWB_ASSERT(indegrees[edge.consumer.index] > 0u);
             if(--indegrees[edge.consumer.index] == 0u){
@@ -221,11 +211,7 @@ bool BuildTopologicalOrder(
     visitStack.reserve(taskCount);
 
     const auto appendCycleEdge = [&](const u32 producerIndex, const u32 consumerIndex){
-        for(
-            usize adjacencyIndex = adjacency.offsets[producerIndex];
-            adjacencyIndex < adjacency.offsets[producerIndex + 1u];
-            ++adjacencyIndex
-        ){
+        for(usize adjacencyIndex = adjacency.offsets[producerIndex]; adjacencyIndex < adjacency.offsets[producerIndex + 1u]; ++adjacencyIndex){
             const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
             if(edge.consumer.index == consumerIndex){
                 outCycleEdges.push_back(edge);
@@ -240,10 +226,7 @@ bool BuildTopologicalOrder(
             continue;
 
         visitState[taskIndex] = 1u;
-        visitStack.push_back(TaskCycleTraversalFrame{
-            .nextAdjacencyIndex = adjacency.offsets[taskIndex],
-            .taskIndex = taskIndex,
-        });
+        visitStack.push_back(TaskCycleTraversalFrame{ .nextAdjacencyIndex = adjacency.offsets[taskIndex], .taskIndex = taskIndex, });
         while(!visitStack.empty()){
             TaskCycleTraversalFrame& frame = visitStack.back();
             if(frame.nextAdjacencyIndex >= adjacency.offsets[frame.taskIndex + 1u]){
@@ -263,10 +246,7 @@ bool BuildTopologicalOrder(
                 for(usize cycleIndex = cycleStart; cycleIndex < visitStack.size(); ++cycleIndex){
                     outCyclePath.push_back(graph.taskAt(visitStack[cycleIndex].taskIndex).id);
                     if(cycleIndex + 1u < visitStack.size()){
-                        appendCycleEdge(
-                            visitStack[cycleIndex].taskIndex,
-                            visitStack[cycleIndex + 1u].taskIndex
-                        );
+                        appendCycleEdge(visitStack[cycleIndex].taskIndex, visitStack[cycleIndex + 1u].taskIndex);
                     }
                 }
                 outCyclePath.push_back(graph.taskAt(consumerIndex).id);
@@ -276,10 +256,7 @@ bool BuildTopologicalOrder(
             }
             if(visitState[consumerIndex] == 0u){
                 visitState[consumerIndex] = 1u;
-                visitStack.push_back(TaskCycleTraversalFrame{
-                    .nextAdjacencyIndex = adjacency.offsets[consumerIndex],
-                    .taskIndex = consumerIndex,
-                });
+                visitStack.push_back(TaskCycleTraversalFrame{ .nextAdjacencyIndex = adjacency.offsets[consumerIndex], .taskIndex = consumerIndex, });
             }
         }
         if(foundCycle)
@@ -311,7 +288,8 @@ void BuildSchedulingEdges(
     candidates.reserve(maximumConsumerCount);
     pending.reserve(taskCount);
 
-    // Visit direct consumers in topological order. A consumer already reached through an earlier one is redundant.
+    // Visit direct consumers in topological order.
+    // A consumer already reached through an earlier one is redundant.
     // Each descendant is visited at most once per producer, while retained edges still leave in raw diagnostic order.
     for(u32 producerIndex = 0u; producerIndex < taskCount; ++producerIndex){
         const usize firstEdge = adjacency.offsets[producerIndex];
@@ -342,10 +320,7 @@ void BuildSchedulingEdges(
             pending.clear();
             pending.push_back(consumerIndex);
             reached[consumerIndex] = producerIndex;
-            while(
-                firstUnreachedCandidate < candidates.size()
-                && reached[rawEdges[candidates[firstUnreachedCandidate]].consumer.index] == producerIndex
-            )
+            while(firstUnreachedCandidate < candidates.size() && reached[rawEdges[candidates[firstUnreachedCandidate]].consumer.index] == producerIndex)
                 ++firstUnreachedCandidate;
             if(firstUnreachedCandidate == candidates.size())
                 break;
@@ -360,10 +335,7 @@ void BuildSchedulingEdges(
                     if(descendantIndex == rawEdges[candidates[firstUnreachedCandidate]].consumer.index){
                         do{
                             ++firstUnreachedCandidate;
-                        }while(
-                            firstUnreachedCandidate < candidates.size()
-                            && reached[rawEdges[candidates[firstUnreachedCandidate]].consumer.index] == producerIndex
-                        );
+                        }while(firstUnreachedCandidate < candidates.size() && reached[rawEdges[candidates[firstUnreachedCandidate]].consumer.index] == producerIndex);
                         if(firstUnreachedCandidate == candidates.size())
                             break;
                     }
@@ -403,15 +375,7 @@ void BuildSchedulingEdges(
     outOutgoingOffsets.resize(taskCount + 1u, 0u);
     outIncomingOffsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : schedulingEdges){
-        if(
-            !edge.producer.valid()
-            || !edge.consumer.valid()
-            || edge.producer.generation != graphGeneration
-            || edge.consumer.generation != graphGeneration
-            || edge.producer.index >= taskCount
-            || edge.consumer.index >= taskCount
-            || edge.producer == edge.consumer
-        )
+        if(!edge.producer.valid() || !edge.consumer.valid() || edge.producer.generation != graphGeneration || edge.consumer.generation != graphGeneration || edge.producer.index >= taskCount || edge.consumer.index >= taskCount || edge.producer == edge.consumer)
             return false;
         ++outOutgoingOffsets[edge.producer.index + 1u];
         ++outIncomingOffsets[edge.consumer.index + 1u];

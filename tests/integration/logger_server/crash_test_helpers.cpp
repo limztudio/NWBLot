@@ -231,14 +231,7 @@ static bool ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const C
     return Contains(manifest, AStringView(needle.data(), needle.size()));
 }
 
-static bool TriggerPackageContains(
-    Core::Alloc::GlobalArena& arena,
-    const CrashTestPath& packageDirectory,
-    const AStringView category,
-    const AStringView expression,
-    const AStringView message,
-    const AStringView file
-){
+static bool TriggerPackageContains(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     CrashTestText manifest(arena);
     if(!ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest))
         return false;
@@ -255,14 +248,7 @@ static bool TriggerPackageContains(
     return true;
 }
 
-static Expected<CrashTestPath> FindTriggerPackage(
-    Core::Alloc::GlobalArena& arena,
-    const CrashTestPath& pendingDirectory,
-    const AStringView category,
-    const AStringView expression,
-    const AStringView message,
-    const AStringView file
-){
+static Expected<CrashTestPath> FindTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     const auto directory = DirectoryIterator<Core::Alloc::GlobalArena>::Create(pendingDirectory);
     if(!directory)
         return MakeUnexpected(Failure{});
@@ -278,14 +264,7 @@ static Expected<CrashTestPath> FindTriggerPackage(
     return MakeUnexpected(Failure{});
 }
 
-Expected<CrashTestPath> WaitForTriggerPackage(
-    Core::Alloc::GlobalArena& arena,
-    const CrashTestPath& pendingDirectory,
-    const AStringView category,
-    const AStringView expression,
-    const AStringView message,
-    const AStringView file
-){
+Expected<CrashTestPath> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     constexpr u32 s_TimeoutMilliseconds = 3000u;
     constexpr u32 s_PollMilliseconds = 10u;
     for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= s_TimeoutMilliseconds; elapsedMilliseconds += s_PollMilliseconds){

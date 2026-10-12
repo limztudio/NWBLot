@@ -54,13 +54,9 @@ Expected<MeshSkinningSystem::RestToSkinnedCopyByteCounts> MeshSkinningSystem::Re
     return RestToSkinnedCopyByteCounts{ *positionBytes, *normalBytes, *tangentBytes };
 }
 
-void MeshSkinningSystem::collectLiveSkinningStateBuffers(
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers,
-    Core::Alloc::ScratchArena& scratchArena
-)const{
+void MeshSkinningSystem::collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const{
     MeshSkinningStateBufferCollector collector(scratchArena, outBuffers);
-    m_world.view<SkinnedMeshBindingComponent>().each(
-        [&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
+    m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
             if(!binding.runtimeMesh.valid())
                 return;
 
@@ -83,10 +79,7 @@ void MeshSkinningSystem::collectLiveSkinningStateBuffers(
     );
 }
 
-bool MeshSkinningSystem::replaceAcceptedSkinningState(
-    const Core::CommandListResourceStateHandoff& state,
-    Core::Alloc::ScratchArena& scratchArena
-){
+bool MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena){
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     ScopeExit releaseLiveBuffers([&]()noexcept{ liveBuffers.clear(); });
 

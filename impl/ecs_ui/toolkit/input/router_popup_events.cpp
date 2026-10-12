@@ -29,11 +29,7 @@ bool InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
     if(m_popups.empty() || reason <= PopupDismissReason::None || reason > PopupDismissReason::FocusLost)
         return false;
     auto& top = m_popups.back();
-    if(
-        top.closing || (reason == PopupDismissReason::Cancel && !top.scope.dismissCancel)
-        || (reason == PopupDismissReason::OutsideClick && !top.scope.dismissOutside)
-        || (reason == PopupDismissReason::FocusTraversal && !top.scope.dismissFocusTraversal)
-    )
+    if(top.closing || (reason == PopupDismissReason::Cancel && !top.scope.dismissCancel) || (reason == PopupDismissReason::OutsideClick && !top.scope.dismissOutside) || (reason == PopupDismissReason::FocusTraversal && !top.scope.dismissFocusTraversal))
         return false;
     if(m_popupDismissals.size() == s_InputMaxPopups)
         return false;

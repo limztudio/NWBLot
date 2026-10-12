@@ -24,12 +24,10 @@ Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry
     const auto coordinate = [](const f32 value)noexcept{
         return static_cast<i32>(NumericSimd::Clamp(static_cast<f64>(value), static_cast<f64>(Limit<i32>::s_Min), static_cast<f64>(Limit<i32>::s_Max)));
     };
-    const SIMDVectorSingle physical = VectorMultiply(VectorSet(caret.x, caret.y, caret.width, caret.height),
-        VectorSet(m_display.pixelScaleX, m_display.pixelScaleY, m_display.pixelScaleX, m_display.pixelScaleY));
+    const SIMDVectorSingle physical = VectorMultiply(VectorSet(caret.x, caret.y, caret.width, caret.height), VectorSet(m_display.pixelScaleX, m_display.pixelScaleY, m_display.pixelScaleX, m_display.pixelScaleY));
     const SIMDVectorSingle origin = VectorFloor(VectorSwizzle<0, 1, 0, 1>(physical));
     const SIMDVectorSingle size = VectorCeiling(VectorSwizzle<2, 3, 2, 3>(physical));
-    return { coordinate(VectorGetX(origin)), coordinate(VectorGetY(origin)),
-        Max(1, coordinate(VectorGetX(size))), Max(1, coordinate(VectorGetY(size))) };
+    return { coordinate(VectorGetX(origin)), coordinate(VectorGetY(origin)), Max(1, coordinate(VectorGetX(size))), Max(1, coordinate(VectorGetY(size))) };
 }
 
 Expected<usize> UiEditBoxHost::hit(const Entry& entry, const Ui::Point position)const noexcept{
@@ -41,9 +39,7 @@ Expected<usize> UiEditBoxHost::hit(const Entry& entry, const Ui::Point position)
         || (geometry.textMode == Ui::EditTextMode::SingleLine && geometry.lines.size() != 1u)
     )
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle localPosition = VectorSubtract(VectorSet(position.x, position.y, position.x, position.y),
-        VectorSet(geometry.placement.textOrigin.x, geometry.placement.textOrigin.y,
-            geometry.placement.textOrigin.x, geometry.placement.textOrigin.y));
+    const SIMDVectorSingle localPosition = VectorSubtract(VectorSet(position.x, position.y, position.x, position.y), VectorSet(geometry.placement.textOrigin.x, geometry.placement.textOrigin.y, geometry.placement.textOrigin.x, geometry.placement.textOrigin.y));
     const Ui::Point local{ VectorGetX(localPosition), VectorGetY(localPosition) };
     return Ui::HitEditCaretGeometry(geometry.lines, geometry.stops, local);
 }
@@ -53,9 +49,7 @@ Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point posit
     if(!byte)
         return MakeUnexpected(byte.error());
     const UiEditBoxGeometry& geometry = entry.displayed;
-    const SIMDVectorSingle localPosition = VectorSubtract(VectorSet(position.x, position.y, position.x, position.y),
-        VectorSet(geometry.placement.textOrigin.x, geometry.placement.textOrigin.y,
-            geometry.placement.textOrigin.x, geometry.placement.textOrigin.y));
+    const SIMDVectorSingle localPosition = VectorSubtract(VectorSet(position.x, position.y, position.x, position.y), VectorSet(geometry.placement.textOrigin.x, geometry.placement.textOrigin.y, geometry.placement.textOrigin.x, geometry.placement.textOrigin.y));
     const Ui::Point local{ VectorGetX(localPosition), VectorGetY(localPosition) };
     u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
     for(u32 index = 0u; index < geometry.lines.size(); ++index){

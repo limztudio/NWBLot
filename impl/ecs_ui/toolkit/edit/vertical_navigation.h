@@ -75,8 +75,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual EditNavigationResult resolve(const EditModel& model, EditNavigationDirection::Enum direction,
-        const EditNavigationSnapshot& preferred, f32 viewportHeight) = 0;
+    [[nodiscard]] virtual EditNavigationResult resolve(const EditModel& model, EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, f32 viewportHeight) = 0;
 };
 
 [[nodiscard]] Expected<EditNavigationDirection::Enum> TranslateEditNavigation(const InputCommandIntent& intent)noexcept;

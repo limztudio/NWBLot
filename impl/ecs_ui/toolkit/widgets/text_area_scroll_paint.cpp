@@ -19,9 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement,
-    const Rect& clip, const ControlToken& token
-){
+bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token){
     const bool enabled = item.editOptions.enabled;
     m_paint.pushClip(clip);
     bool painted = true;
@@ -33,8 +31,7 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const WidgetId thumbId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb");
         const bool hovered = m_context.input().hover() == thumbId;
         const bool pressed = m_context.input().capture() == thumbId;
-        const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed
-            : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
+        const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
         const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback);
         const UiSkinRegion* thumb = region(thumbName, item.scrollbarStyle.thumbFallback);
         if(track)
@@ -67,8 +64,7 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const f32 trackExtent = horizontal ? bar.track.width : bar.track.height;
         const f32 thumbExtent = horizontal ? bar.thumb.width : bar.thumb.height;
         const f32 afterStart = NumericSimd::Subtract(NumericSimd::Add(start, trackExtent), thumbStart);
-        const SIMDVectorSingle extent = VectorSubtract(VectorSet(thumbStart, afterStart, thumbStart, afterStart),
-            VectorSet(start, thumbExtent, start, thumbExtent));
+        const SIMDVectorSingle extent = VectorSubtract(VectorSet(thumbStart, afterStart, thumbStart, afterStart), VectorSet(start, thumbExtent, start, thumbExtent));
         const SIMDVectorSingle visible = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
         const f32 before = VectorGetX(visible);
         const f32 after = VectorGetY(visible);

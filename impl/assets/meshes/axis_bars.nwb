@@ -262,9 +262,4 @@ model.static_meshes = {
 };
 
 
-asset_bunch bunch = [
-    x,
-    y,
-    z,
-    model,
-];
+asset_bunch bunch = [x, y, z, model,];

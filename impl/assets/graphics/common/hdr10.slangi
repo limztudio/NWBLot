@@ -39,21 +39,9 @@
 
 float3 nwbHdr10Rec709ToRec2020(float3 value){
     return float3(
-        dot(value, float3(
-            NWB_HDR10_REC709_TO_REC2020_ROW0_R,
-            NWB_HDR10_REC709_TO_REC2020_ROW0_G,
-            NWB_HDR10_REC709_TO_REC2020_ROW0_B
-        )),
-        dot(value, float3(
-            NWB_HDR10_REC709_TO_REC2020_ROW1_R,
-            NWB_HDR10_REC709_TO_REC2020_ROW1_G,
-            NWB_HDR10_REC709_TO_REC2020_ROW1_B
-        )),
-        dot(value, float3(
-            NWB_HDR10_REC709_TO_REC2020_ROW2_R,
-            NWB_HDR10_REC709_TO_REC2020_ROW2_G,
-            NWB_HDR10_REC709_TO_REC2020_ROW2_B
-        ))
+        dot(value, float3(NWB_HDR10_REC709_TO_REC2020_ROW0_R, NWB_HDR10_REC709_TO_REC2020_ROW0_G, NWB_HDR10_REC709_TO_REC2020_ROW0_B)),
+        dot(value, float3(NWB_HDR10_REC709_TO_REC2020_ROW1_R, NWB_HDR10_REC709_TO_REC2020_ROW1_G, NWB_HDR10_REC709_TO_REC2020_ROW1_B)),
+        dot(value, float3(NWB_HDR10_REC709_TO_REC2020_ROW2_R, NWB_HDR10_REC709_TO_REC2020_ROW2_G, NWB_HDR10_REC709_TO_REC2020_ROW2_B))
     );
 }
 
@@ -61,10 +49,7 @@ float3 nwbHdr10PqEncodeNits(float3 luminanceNits){
     // SMPTE ST.2084 constants. PQ is defined against an absolute 10,000-nit range, independent of the mastering display's peak value.
     const float3 normalized = saturate(max(luminanceNits, float3(0.0)) / NWB_HDR10_PQ_ABSOLUTE_PEAK_NITS);
     const float3 raised = pow(normalized, NWB_HDR10_PQ_M1);
-    return pow(
-        (NWB_HDR10_PQ_C1 + NWB_HDR10_PQ_C2 * raised) / (1.0 + NWB_HDR10_PQ_C3 * raised),
-        NWB_HDR10_PQ_M2
-    );
+    return pow((NWB_HDR10_PQ_C1 + NWB_HDR10_PQ_C2 * raised) / (1.0 + NWB_HDR10_PQ_C3 * raised), NWB_HDR10_PQ_M2);
 }
 
 float3 nwbHdr10SceneToNits(float3 linearRec709){
@@ -94,11 +79,7 @@ float3 nwbOutputLayerOver(float3 background, float3 premultipliedForeground, flo
 }
 
 float3 nwbHdr10EncodeSceneWithUi(float3 sceneLinearRec709, float3 uiPremultipliedLinearRec709, float uiAlpha){
-    return nwbHdr10PqEncodeNits(nwbOutputLayerOver(
-        nwbHdr10SceneToNits(sceneLinearRec709),
-        nwbHdr10UiLinearToNits(uiPremultipliedLinearRec709),
-        uiAlpha
-    ));
+    return nwbHdr10PqEncodeNits(nwbOutputLayerOver(nwbHdr10SceneToNits(sceneLinearRec709), nwbHdr10UiLinearToNits(uiPremultipliedLinearRec709), uiAlpha));
 }
 
 

@@ -57,18 +57,10 @@ LIT_MAIN = "__main__"
 LIT_APPEND = "append"
 
 
-SELECTIONS = {
-    "fresh1": (1,), "fresh2": (2,), "fresh3": (3,),
-    "sequence3": (1, 3), "sequence2": (1, 3, 2), "sequence1": (1, 3, 2, 1),
-}
+SELECTIONS = { "fresh1": (1,), "fresh2": (2,), "fresh3": (3,), "sequence3": (1, 3), "sequence2": (1, 3, 2), "sequence1": (1, 3, 2, 1), }
 GPU_DEBUG_MARKERS = ("Loader: GPU debug validation enabled",)
-FIELDS = {
-    LIT_PHASE: {LIT_INDEX, LIT_RADIUS, LIT_SEED, LIT_GRAPHICS_FRAME},
-    LIT_WARM: {LIT_INDEX, LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_EPOCH, LIT_START_GRAPHICS_FRAME,
-        LIT_SAMPLE_INDEX, LIT_SEED, LIT_WORK_PUBLISH, LIT_WORK_FIRST, LIT_WORK_LAST, LIT_WORK_SAMPLES},
-    LIT_WORK: {LIT_PUBLISH, LIT_FIRST, LIT_LAST, LIT_SAMPLES},
-    LIT_CAPTURE: {LIT_RADIUS, LIT_GRAPHICS_FRAME, LIT_SEED},
-}
+FIELDS = { LIT_PHASE: {LIT_INDEX, LIT_RADIUS, LIT_SEED, LIT_GRAPHICS_FRAME}, LIT_WARM: {LIT_INDEX, LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_EPOCH, LIT_START_GRAPHICS_FRAME,
+        LIT_SAMPLE_INDEX, LIT_SEED, LIT_WORK_PUBLISH, LIT_WORK_FIRST, LIT_WORK_LAST, LIT_WORK_SAMPLES}, LIT_WORK: {LIT_PUBLISH, LIT_FIRST, LIT_LAST, LIT_SAMPLES}, LIT_CAPTURE: {LIT_RADIUS, LIT_GRAPHICS_FRAME, LIT_SEED}, }
 
 
 def validate_gpu_debug(text, application_args):
@@ -130,11 +122,9 @@ def validate_owner_evidence(text, selection, history, statistics):
         raise SmokeFailure("no actual completed spatial work")
     previous_warm = None
     for index, (phase, warm, radius) in enumerate(zip(phases, warmed, expected)):
-        if phase != {LIT_INDEX: index, LIT_RADIUS: radius, LIT_SEED: 101 + index,
-                LIT_GRAPHICS_FRAME: phase[LIT_GRAPHICS_FRAME]} or warm[LIT_INDEX] != index:
+        if phase != {LIT_INDEX: index, LIT_RADIUS: radius, LIT_SEED: 101 + index, LIT_GRAPHICS_FRAME: phase[LIT_GRAPHICS_FRAME]} or warm[LIT_INDEX] != index:
             raise SmokeFailure("missing, reordered or wrong-radius owner phase")
-        if previous_warm is not None and (phase[LIT_GRAPHICS_FRAME] <= previous_warm[LIT_GRAPHICS_FRAME]
-                or warm[LIT_EPOCH] <= previous_warm[LIT_EPOCH]):
+        if previous_warm is not None and (phase[LIT_GRAPHICS_FRAME] <= previous_warm[LIT_GRAPHICS_FRAME] or warm[LIT_EPOCH] <= previous_warm[LIT_EPOCH]):
             raise SmokeFailure("radius changed before the preceding phase completed")
         key = (warm[LIT_SEQUENCE], warm[LIT_GENERATION])
         sample, counters = by_history.get(key), by_statistics.get(key)
@@ -147,27 +137,21 @@ def validate_owner_evidence(text, selection, history, statistics):
                 or sample[LIT_SAMPLE_INDEX] < 2 or sample[LIT_COUNT] != 1 or sample[LIT_ELIGIBLE] != 1:
             raise SmokeFailure("phase did not complete three accepted samples from its exact reset boundary")
         work = by_publish.get(warm[LIT_WORK_PUBLISH])
-        expected_work = {LIT_PUBLISH: warm[LIT_WORK_PUBLISH], LIT_FIRST: warm[LIT_WORK_FIRST],
-            LIT_LAST: warm[LIT_WORK_LAST], LIT_SAMPLES: warm[LIT_WORK_SAMPLES]}
+        expected_work = {LIT_PUBLISH: warm[LIT_WORK_PUBLISH], LIT_FIRST: warm[LIT_WORK_FIRST], LIT_LAST: warm[LIT_WORK_LAST], LIT_SAMPLES: warm[LIT_WORK_SAMPLES]}
         if work != expected_work or work[LIT_FIRST] < phase[LIT_GRAPHICS_FRAME] or work[LIT_LAST] > sample[LIT_GRAPHICS_FRAME]:
             raise SmokeFailure("warm phase spatial work is missing, stale or not completed")
         previous_warm = warm
     source = capture[LIT_GRAPHICS_FRAME]
     if source <= previous_warm[LIT_GRAPHICS_FRAME]:
         raise SmokeFailure("capture reset precedes completion of the last prepared radius")
-    coverage = [work for work in windows if work[LIT_FIRST] <= source <= work[LIT_LAST]
-        and work[LIT_SAMPLES] == work[LIT_LAST] - work[LIT_FIRST] + 1]
+    coverage = [work for work in windows if work[LIT_FIRST] <= source <= work[LIT_LAST] and work[LIT_SAMPLES] == work[LIT_LAST] - work[LIT_FIRST] + 1]
     if not coverage:
         raise SmokeFailure("captured source has no dense completed spatial-range coverage")
-    covering = [sample for sample in history if sample[LIT_START_GRAPHICS_FRAME] == source
-        and sample[LIT_GRAPHICS_FRAME] >= max(source, coverage[0][LIT_LAST]) and sample[LIT_SEED] == 0
-        and sample[LIT_ELIGIBLE] == 1 and sample[LIT_COUNT] == 1 and sample[LIT_EPOCH] > previous_warm[LIT_EPOCH]
-        and by_statistics[(sample[LIT_SEQUENCE], sample[LIT_GENERATION])][LIT_HARDWARE_READY]]
+    covering = [sample for sample in history if sample[LIT_START_GRAPHICS_FRAME] == source and sample[LIT_GRAPHICS_FRAME] >= max(source, coverage[0][LIT_LAST]) and sample[LIT_SEED] == 0
+        and sample[LIT_ELIGIBLE] == 1 and sample[LIT_COUNT] == 1 and sample[LIT_EPOCH] > previous_warm[LIT_EPOCH] and by_statistics[(sample[LIT_SEQUENCE], sample[LIT_GENERATION])][LIT_HARDWARE_READY]]
     if not covering:
         raise SmokeFailure("captured image is not the first frame of its completed seed-zero epoch")
-    return {"radii": list(expected), "phases": phases, "warm": warmed,
-        "captured_graphics_frame": source, "capture_work": coverage[0], "covering_history": covering[0],
-        "completed_spatial_windows": windows}
+    return {"radii": list(expected), "phases": phases, "warm": warmed, "captured_graphics_frame": source, "capture_work": coverage[0], "covering_history": covering[0], "completed_spatial_windows": windows}
 
 
 def compare_images(frames):
@@ -191,22 +175,17 @@ def compare_images(frames):
         raise SmokeFailure("empty projected mirror footprint")
     for first, second in ((1, 2), (1, 3), (2, 3)):
         a, b = frames[LIT_FRESH + str(first)][2], frames[LIT_FRESH + str(second)][2]
-        changed = sum(max(abs(x - y) for x, y in zip(a[row][column], b[row][column])) > 2
-            for row in range(top, bottom) for column in range(left, right))
+        changed = sum(max(abs(x - y) for x, y in zip(a[row][column], b[row][column])) > 2 for row in range(top, bottom) for column in range(left, right))
         minimum = max(32, int(area * .001))
         if changed < minimum:
             raise SmokeFailure("fresh radius references do not discriminate wrong-radius bank selection")
-        result[LIT_RADIUS_DISCRIMINATION][str(first) + "_" + str(second)] = {
-            "projected_mirror_pixels": area, "pixels_differing_by_more_than_two": changed,
-            "minimum_discriminating_pixels": minimum}
+        result[LIT_RADIUS_DISCRIMINATION][str(first) + "_" + str(second)] = { "projected_mirror_pixels": area, "pixels_differing_by_more_than_two": changed, "minimum_discriminating_pixels": minimum}
     return result
 
 
 def capture_environment_for(selection):
     env = capture_environment(LIT_ROUGH, LIT_HARDWARE)
-    for suffix, value in {"SPATIAL_OWNER": selection, "ROUGHNESS": ".4", "TEMPORAL": "1",
-            "SPATIAL": "1", "HISTORY_SAMPLES": "1", "DIAGNOSTICS": "1", "FEEDBACK": "0",
-            "SEED": "99", "EXTENT": "native", "OPTICAL_QUERIES": "16"}.items():
+    for suffix, value in {"SPATIAL_OWNER": selection, "ROUGHNESS": ".4", "TEMPORAL": "1", "SPATIAL": "1", "HISTORY_SAMPLES": "1", "DIAGNOSTICS": "1", "FEEDBACK": "0", "SEED": "99", "EXTENT": "native", "OPTICAL_QUERIES": "16"}.items():
         env["NWB_REFLECTION_SMOKE_" + suffix] = value
     return env
 
@@ -214,13 +193,9 @@ def capture_environment_for(selection):
 def capture(args, selection):
     output = args.output_directory / (selection + ".bmp")
     log = output.with_suffix(".log")
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--logserver-executable", str(args.logserver_executable), "--output", str(output),
-        "--application-capture", "--application-capture-frame-count", "1",
-        LIT_TIMEOUT, str(args.timeout), "--log-output", str(log)]
-    for expected in ("ReflectionSmokeProject: case rough created", "ReflectionSmokeProject: shutdown",
-            "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: reflection mode hardware",
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        "--logserver-executable", str(args.logserver_executable), "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout), "--log-output", str(log)]
+    for expected in ("ReflectionSmokeProject: case rough created", "ReflectionSmokeProject: shutdown", "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: reflection mode hardware",
             "Reflection resolve: hardware", "ReflectionSpatialOwnerCapture:", "ReflectionSpatialOwnerWork:"):
         command += [LIT_EXPECT_LOG_MESSAGE, expected]
     if any(value == LIT_GPUDBG or value.startswith(LIT_GPUDBG_2) for value in args.application_arg):
@@ -240,8 +215,7 @@ def capture(args, selection):
     statistics = parse_statistics(text)
     validate_statistics(statistics, LIT_ROUGH, LIT_HARDWARE, allow_zero_samples=True)
     evidence = validate_owner_evidence(text, selection, parse_history(text), statistics)
-    return frame, {"selection": selection, "image": file_identity(output), "log": file_identity(log),
-        "command": command, "evidence": evidence, "gpu_debug": gpu_debug}
+    return frame, {"selection": selection, "image": file_identity(output), "log": file_identity(log), "command": command, "evidence": evidence, "gpu_debug": gpu_debug}
 
 
 def main(argv=None):
@@ -258,16 +232,13 @@ def main(argv=None):
             setattr(args, key, value.resolve())
     if args.output_directory.exists():
         parser.error("output directory must be new")
-    for protected in (args.executable.parent, args.working_directory,
-            args.source_manifest.parent, args.logserver_executable.parent):
+    for protected in (args.executable.parent, args.working_directory, args.source_manifest.parent, args.logserver_executable.parent):
         if args.output_directory == protected or args.output_directory.is_relative_to(protected) \
                 or protected.is_relative_to(args.output_directory):
             parser.error("output must not overlap frozen source, binary, runtime or logger inputs")
     arm = ab.Arm("qualification", args.executable, args.working_directory, args.source_manifest)
     identity = ab.freeze_arm(arm)
-    shared = {str(Path(module.__file__).resolve()): file_identity(Path(module.__file__))
-        for module in (sys.modules[__name__], ab, sys.modules["reflection_smoke"],
-            sys.modules["reflection_roughness_smoke"], sys.modules["reflection_roughness_reference"],
+    shared = {str(Path(module.__file__).resolve()): file_identity(Path(module.__file__)) for module in (sys.modules[__name__], ab, sys.modules["reflection_smoke"], sys.modules["reflection_roughness_smoke"], sys.modules["reflection_roughness_reference"],
             sys.modules["window_capture_smoke"], sys.modules["smoke_volume_identity"])}
     logger_identity = ab.binary_identity(args.logserver_executable)
     for name, saved in logger_identity.items():
@@ -293,8 +264,7 @@ def main(argv=None):
         report["error"] = str(error)
         print("FAIL: " + str(error), file=sys.stderr)
     finally:
-        (args.output_directory / "owner_qualification.json").write_text(
-            json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding=LIT_UTF_8)
+        (args.output_directory / "owner_qualification.json").write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding=LIT_UTF_8)
     if report[LIT_STATUS] != LIT_PASSED:
         return 1
     print("PASS: six production-owner captures, accepted phases and exact fresh/transition pixels")

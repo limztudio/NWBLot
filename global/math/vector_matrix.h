@@ -159,15 +159,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4TransformTransposed(SIMDVectorS
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorTransformStreamImpl(
-    OutputT* outputStream,
-    usize outputStride,
-    const InputT* inputStream,
-    usize inputStride,
-    usize vectorCount,
-    const SIMDMatrix& matrix,
-    TransformT transform
-)noexcept{
+NWB_INLINE OutputT* NWB_SIMD_CALL VectorTransformStreamImpl(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix, TransformT transform)noexcept{
     NWB_ASSERT(outputStream != nullptr);
     NWB_ASSERT(inputStream != nullptr);
     NWB_ASSERT(inputStride >= sizeof(InputT));
@@ -327,15 +319,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDV
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDoubleTransformStreamImpl(
-    OutputT* outputStream,
-    usize outputStride,
-    const InputT* inputStream,
-    usize inputStride,
-    usize vectorCount,
-    const SIMDMatrixDouble& matrix,
-    TransformT transform
-)noexcept{
+NWB_INLINE OutputT* NWB_SIMD_CALL VectorDoubleTransformStreamImpl(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix, TransformT transform)noexcept{
     NWB_ASSERT(outputStream != nullptr);
     NWB_ASSERT(inputStream != nullptr);
     NWB_ASSERT(inputStride >= sizeof(InputT));

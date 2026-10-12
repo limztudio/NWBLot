@@ -18,11 +18,7 @@ struct NwbDeferredCompositeVertexOutput{
 
 
 NwbDeferredCompositeVertexOutput main(uint vertexIndex : SV_VertexID){
-    const float2 positions[3] = float2[3](
-        float2(-1.0, -1.0),
-        float2( 3.0, -1.0),
-        float2(-1.0,  3.0)
-    );
+    const float2 positions[3] = float2[3](float2(-1.0, -1.0), float2( 3.0, -1.0), float2(-1.0,  3.0));
 
     const float2 position = positions[vertexIndex];
     NwbDeferredCompositeVertexOutput output;

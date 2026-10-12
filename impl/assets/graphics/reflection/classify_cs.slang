@@ -82,14 +82,7 @@ uint nwbReflectionNextFeedbackState(const NwbReflectionFeedbackTile tile, const 
     return NWB_REFLECTION_FEEDBACK_ACTIVE;
 }
 
-bool nwbReflectionClassifySurface(
-    const uint2 pixel,
-    const bool glass,
-    const NwbReflectionFeedbackTile tile,
-    out float4 result,
-    out uint observations,
-    out uint screenWork
-){
+bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const NwbReflectionFeedbackTile tile, out float4 result, out uint observations, out uint screenWork){
     result = float4(0.0);
     observations = 0u;
     screenWork = 0u;
@@ -128,7 +121,8 @@ bool nwbReflectionClassifySurface(
             screenWork = iterations | (limited ? 1u << 16u : 0u);
             if(returned){
                 observations |= NWB_REFLECTION_RETURN_OBSERVATION;
-                // Even provisional low-confidence radiance keeps the tile active. Hardware replaces it only through the ordinary fallback route; feedback never drops a useful screen return.
+                // Even provisional low-confidence radiance keeps the tile active.
+                // Hardware replaces it only through the ordinary fallback route; feedback never drops a useful screen return.
                 // Weighted blend is half color math: weight/environment/radiance/confidence all fit FP16.
                 // Widen only at the float4 store and the float threshold compare.
                 result = float4(float3(half3(surface.weight) * lerp(half3(environment), radiance, confidence)), 2.0 + 0.5 * float(confidence));
@@ -183,8 +177,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
     }
 
     if(sharedWork){
-        // Main owns the entire synchronization network. Tail lanes participate even on diagnostic-only Screen or
-        // Disabled routes. A zero hardware budget still counts candidates; diagnostics never determine routing.
+        // Main owns the entire synchronization network. Tail lanes participate even on diagnostic-only Screen or Disabled routes. A zero hardware budget still counts candidates; diagnostics never determine routing.
         GroupMemoryBarrierWithGroupSync();
         const uint maskIndex = groupIndex >> 5u;
         const uint bit = 1u << (groupIndex & 31u);

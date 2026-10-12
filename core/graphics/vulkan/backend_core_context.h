@@ -48,8 +48,8 @@ struct VulkanContext{
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
-    // These are the feature bits actually enabled through vkCreateDevice's pNext chain.  Extension names alone
-    // are not capability answers because an enabled extension may have had its feature bit disabled.
+    // These are the feature bits actually enabled through vkCreateDevice's pNext chain.
+    // Extension names alone are not capability answers because an enabled extension may have had its feature bit disabled.
     bool accelerationStructureFeatureEnabled = false;
     bool rayTracingPipelineFeatureEnabled = false;
     bool rayQueryFeatureEnabled = false;
@@ -57,8 +57,8 @@ struct VulkanContext{
     bool clusterAccelerationStructureFeatureEnabled = false;
     bool rayTracingInvocationReorderFeatureEnabled = false;
     bool rayTracingInvocationReorderExtFeatureEnabled = false;
-    // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair
-    // completes a device-domain probe. It is immutable after Device construction.
+    // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair completes a device-domain probe.
+    // It is immutable after Device construction.
     bool comparableGpuTimestamps = false;
     bool hostQueryResetFeatureEnabled = false;
     bool textureCompressionBcFeatureEnabled = false;
@@ -81,8 +81,8 @@ struct VulkanContext{
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorBufferManager* descriptorBufferManager = nullptr;
 
-    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing. Every auxiliary family is
-    // invalid unless the optional cross-family same-class route registered that physical transport on this Device.
+    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing.
+    // Every auxiliary family is invalid unless the optional cross-family same-class route registered that physical transport on this Device.
     i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 auxiliaryGraphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
@@ -160,10 +160,7 @@ struct QueueFamilySharingInfo{
     [[nodiscard]] const u32* data()const noexcept{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
 };
 
-inline QueueFamilySharingInfo ResolveQueueFamilySharing(
-    const ResourceQueueSharing::Mask sharing,
-    const VulkanContext& context
-){
+inline QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context){
     QueueFamilySharingInfo result;
     const u8 sharingBits = static_cast<u8>(sharing);
     const auto appendFamily = [&result](const i32 familyIndex){
@@ -182,17 +179,11 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(
         appendFamily(context.graphicsQueueFamilyIndex);
         appendFamily(context.auxiliaryGraphicsQueueFamilyIndex);
     }
-    if(
-        (sharingBits & static_cast<u8>(ResourceQueueSharing::AsyncCompute))
-        && context.asyncComputeLaneEnabled
-    ){
+    if((sharingBits & static_cast<u8>(ResourceQueueSharing::AsyncCompute)) && context.asyncComputeLaneEnabled){
         appendFamily(context.asyncComputeQueueFamilyIndex);
         appendFamily(context.auxiliaryAsyncComputeQueueFamilyIndex);
     }
-    if(
-        (sharingBits & static_cast<u8>(ResourceQueueSharing::Transfer))
-        && context.transferQueueEnabled
-    ){
+    if((sharingBits & static_cast<u8>(ResourceQueueSharing::Transfer)) && context.transferQueueEnabled){
         appendFamily(context.transferQueueFamilyIndex);
         appendFamily(context.auxiliaryTransferQueueFamilyIndex);
     }
@@ -206,10 +197,7 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(
     return result;
 }
 
-inline bool UsesConcurrentQueueSharing(
-    const ResourceQueueSharing::Mask sharing,
-    const VulkanContext& context
-){
+inline bool UsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context){
     return ResolveQueueFamilySharing(sharing, context).mode == VK_SHARING_MODE_CONCURRENT;
 }
 

@@ -40,49 +40,16 @@ namespace __hidden_task_timing_feedback_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
 
 
-[[nodiscard]] static Core::QueueSubmissionToken AcceptedToken(
-    const Core::GpuTaskTimingKey& key,
-    const Core::GpuPhysicalQueueId& queue
-){
-    return Core::QueueSubmissionToken{
-        .value = 1u,
-        .physicalQueueIndex = queue.index,
-        .deviceGeneration = queue.deviceGeneration,
-        .queue = key.queue,
-    };
+[[nodiscard]] static Core::QueueSubmissionToken AcceptedToken(const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& queue){
+    return Core::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = queue.index, .deviceGeneration = queue.deviceGeneration, .queue = key.queue, };
 }
 
-[[nodiscard]] static Core::GpuTimingSample PublishedSample(
-    const Core::GpuTimingSampleAttribution attribution,
-    const Name& scopeName,
-    const Core::GpuPhysicalQueueId& queue,
-    const u64 sourceFrameIndex,
-    const f64 durationSeconds
-){
-    return Core::GpuTimingSample{
-        .sourceFrameIndex = sourceFrameIndex,
-        .durationSeconds = durationSeconds,
-        .scopeName = scopeName,
-        .attribution = attribution,
-        .comparableRange = {},
-        .physicalQueue = queue,
-        .published = true,
-    };
+[[nodiscard]] static Core::GpuTimingSample PublishedSample(const Core::GpuTimingSampleAttribution attribution, const Name& scopeName, const Core::GpuPhysicalQueueId& queue, const u64 sourceFrameIndex, const f64 durationSeconds){
+    return Core::GpuTimingSample{ .sourceFrameIndex = sourceFrameIndex, .durationSeconds = durationSeconds, .scopeName = scopeName, .attribution = attribution, .comparableRange = {}, .physicalQueue = queue, .published = true, };
 }
 
-[[nodiscard]] static Core::GpuTimingSample RetiredSample(
-    const Core::GpuTimingSampleAttribution attribution,
-    const Core::GpuPhysicalQueueId& queue
-){
-    return Core::GpuTimingSample{
-        .sourceFrameIndex = 0u,
-        .durationSeconds = 0.0,
-        .scopeName = s_NameNone,
-        .attribution = attribution,
-        .comparableRange = {},
-        .physicalQueue = queue,
-        .published = false,
-    };
+[[nodiscard]] static Core::GpuTimingSample RetiredSample(const Core::GpuTimingSampleAttribution attribution, const Core::GpuPhysicalQueueId& queue){
+    return Core::GpuTimingSample{ .sourceFrameIndex = 0u, .durationSeconds = 0.0, .scopeName = s_NameNone, .attribution = attribution, .comparableRange = {}, .physicalQueue = queue, .published = false, };
 }
 
 static void ExpectArenaMemoryUnchanged(const ArenaMemoryStats& before, const ArenaMemoryStats& after){
@@ -94,10 +61,7 @@ static void ExpectArenaMemoryUnchanged(const ArenaMemoryStats& before, const Are
     EXPECT_EQ(after.deallocationCount, before.deallocationCount);
 }
 
-static void ExpectPolicyEqual(
-    const Core::GpuTaskTimingFeedbackPolicy& actual,
-    const Core::GpuTaskTimingFeedbackPolicy& expected
-){
+static void ExpectPolicyEqual(const Core::GpuTaskTimingFeedbackPolicy& actual, const Core::GpuTaskTimingFeedbackPolicy& expected){
     EXPECT_EQ(actual.enabled, expected.enabled);
     EXPECT_EQ(actual.minimumSampleCount, expected.minimumSampleCount);
     EXPECT_EQ(actual.calibrationIntervalFrames, expected.calibrationIntervalFrames);
@@ -119,12 +83,7 @@ TEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssig
     Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
     const Name scopeName("tests.renderer_timing.sample_first");
     const Core::GpuPhysicalQueueId queue{ .index = s_ExpectedDualCount, .deviceGeneration = 7u };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.sample_first.task"),
-        .variant = 3u,
-        .resolutionClass = 4u,
-        .queue = Core::CommandQueue::Compute,
-    };
+    const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.sample_first.task"), .variant = 3u, .resolutionClass = 4u, .queue = Core::CommandQueue::Compute, };
     const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 42u, false));
     state.completeSample(PublishedSample(attribution, scopeName, queue, 42u, 0.004), true);
@@ -144,9 +103,7 @@ TEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssig
 
     history.snapshot(snapshot);
     ASSERT_TRUE(snapshot.valid());
-    const Core::GpuTaskTimingAssignmentState* const assignment = snapshot.findAssignment(
-        Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key)
-    );
+    const Core::GpuTaskTimingAssignmentState* const assignment = snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key));
     const Core::GpuTaskTimingHistory* const timing = snapshot.find(key, queue);
     ASSERT_NE(assignment, nullptr);
     ASSERT_NE(timing, nullptr);
@@ -156,34 +113,18 @@ TEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssig
 }
 
 TEST(RendererTaskTimingFeedbackState, FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy){
-    const Core::GpuTaskTimingFeedbackPolicy enabledPolicy{
-        .minimumAbsoluteBenefitSeconds = 0.002,
-        .minimumRelativeBenefit = 0.3,
-        .minimumFramesBetweenSwitches = 13u,
-        .minimumSampleCount = 7u,
-        .calibrationIntervalFrames = 9u,
-        .enabled = true,
-    };
-    const Core::GpuTaskTimingFeedbackPolicy disabledPolicy{
-        .minimumAbsoluteBenefitSeconds = 0.004,
-        .minimumRelativeBenefit = 0.4,
-        .minimumFramesBetweenSwitches = 23u,
-        .minimumSampleCount = 17u,
-        .calibrationIntervalFrames = 19u,
-        .enabled = false,
-    };
+    const Core::GpuTaskTimingFeedbackPolicy enabledPolicy{ .minimumAbsoluteBenefitSeconds = 0.002, .minimumRelativeBenefit = 0.3, .minimumFramesBetweenSwitches = 13u, .minimumSampleCount = 7u, .calibrationIntervalFrames = 9u, .enabled = true, };
+    const Core::GpuTaskTimingFeedbackPolicy disabledPolicy{ .minimumAbsoluteBenefitSeconds = 0.004, .minimumRelativeBenefit = 0.4, .minimumFramesBetweenSwitches = 23u, .minimumSampleCount = 17u, .calibrationIntervalFrames = 19u, .enabled = false, };
     Core::GpuTaskTimingFeedbackPolicy currentPolicy = disabledPolicy;
 
-    const Impl::RendererTaskTimingFeedbackPolicyTransition failedEnableTransition =
-        Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, enabledPolicy, true);
+    const Impl::RendererTaskTimingFeedbackPolicyTransition failedEnableTransition = Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, enabledPolicy, true);
     EXPECT_EQ(failedEnableTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::Enable);
     ExpectPolicyEqual(currentPolicy, disabledPolicy);
     Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(currentPolicy, failedEnableTransition, false);
     ExpectPolicyEqual(currentPolicy, disabledPolicy);
 
     currentPolicy = enabledPolicy;
-    const Impl::RendererTaskTimingFeedbackPolicyTransition failedDisableTransition =
-        Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, disabledPolicy, true);
+    const Impl::RendererTaskTimingFeedbackPolicyTransition failedDisableTransition = Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, disabledPolicy, true);
     EXPECT_EQ(failedDisableTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::Disable);
     ExpectPolicyEqual(currentPolicy, disabledPolicy);
     Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(currentPolicy, failedDisableTransition, false);
@@ -197,10 +138,7 @@ TEST(RendererTaskTimingFeedbackState, RejectedAndDiscardedCallbacksDoNotAllocate
     Impl::RendererTaskTimingFeedbackState state(testArena.arena);
     const Name scopeName("tests.renderer_timing.callback_allocation");
     const Core::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = s_ExpectedDualCount };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.callback_allocation.task"),
-        .queue = Core::CommandQueue::Compute,
-    };
+    const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.callback_allocation.task"), .queue = Core::CommandQueue::Compute, };
     const Core::GpuTimingSampleAttribution rejectedAttribution = timingRecorder.allocateSampleAttribution();
     const Core::GpuTimingSampleAttribution discardedAttribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(rejectedAttribution, scopeName, key, queue, 1u, false));
@@ -226,12 +164,7 @@ TEST(RendererTaskTimingFeedbackState, AcceptancePublishesAssignmentBeforeLateDur
     Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
     const Name scopeName("tests.renderer_timing.accept_first");
     const Core::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 5u };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.accept_first.task"),
-        .variant = 1u,
-        .resolutionClass = s_ExpectedDualCount,
-        .queue = Core::CommandQueue::Compute,
-    };
+    const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.accept_first.task"), .variant = 1u, .resolutionClass = s_ExpectedDualCount, .queue = Core::CommandQueue::Compute, };
     const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 18u, false));
 
@@ -259,9 +192,7 @@ TEST(RendererTaskTimingFeedbackState, AcceptancePublishesAssignmentBeforeLateDur
     EXPECT_EQ(sampleDrain.recordedSampleCount, 1u);
     EXPECT_EQ(sampleDrain.retiredSampleCount, 1u);
     history.snapshot(snapshot);
-    const Core::GpuTaskTimingAssignmentState* const assignment = snapshot.findAssignment(
-        Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key)
-    );
+    const Core::GpuTaskTimingAssignmentState* const assignment = snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key));
     const Core::GpuTaskTimingHistory* const timing = snapshot.find(key, queue);
     ASSERT_NE(assignment, nullptr);
     ASSERT_NE(timing, nullptr);
@@ -280,14 +211,8 @@ TEST(RendererTaskTimingFeedbackState, UnpublishedSamplesRetireInEitherRaceOrderW
     const Core::GpuPhysicalQueueId queue{ .index = 0u, .deviceGeneration = 3u };
     const Name firstScope("tests.renderer_timing.unpublished_first");
     const Name secondScope("tests.renderer_timing.unpublished_second");
-    const Core::GpuTaskTimingKey firstKey{
-        .task = Name("tests.renderer_timing.unpublished_first.task"),
-        .queue = Core::CommandQueue::Compute,
-    };
-    const Core::GpuTaskTimingKey secondKey{
-        .task = Name("tests.renderer_timing.unpublished_second.task"),
-        .queue = Core::CommandQueue::Compute,
-    };
+    const Core::GpuTaskTimingKey firstKey{ .task = Name("tests.renderer_timing.unpublished_first.task"), .queue = Core::CommandQueue::Compute, };
+    const Core::GpuTaskTimingKey secondKey{ .task = Name("tests.renderer_timing.unpublished_second.task"), .queue = Core::CommandQueue::Compute, };
     const Core::GpuTimingSampleAttribution firstAttribution = timingRecorder.allocateSampleAttribution();
     const Core::GpuTimingSampleAttribution secondAttribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(firstAttribution, firstScope, firstKey, queue, 10u, false));
@@ -319,10 +244,7 @@ TEST(RendererTaskTimingFeedbackState, InvalidPublishedMetadataIsTerminalButKeeps
     Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
     const Name scopeName("tests.renderer_timing.invalid_metadata");
     const Core::GpuPhysicalQueueId queue{ .index = 3u, .deviceGeneration = 9u };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.invalid_metadata.task"),
-        .queue = Core::CommandQueue::Graphics,
-    };
+    const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.invalid_metadata.task"), .queue = Core::CommandQueue::Graphics, };
     const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 70u, false));
     state.completeSample(PublishedSample(attribution, Name("tests.renderer_timing.wrong_scope"), queue, 70u, 0.002), true);
@@ -352,10 +274,7 @@ TEST(RendererTaskTimingFeedbackState, NonFiniteDurationIsTerminalButKeepsAccepte
     Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
     const Name scopeName("tests.renderer_timing.non_finite_duration");
     const Core::GpuPhysicalQueueId queue{ .index = s_ExpectedDualCount, .deviceGeneration = 10u };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.non_finite_duration.task"),
-        .queue = Core::CommandQueue::Compute,
-    };
+    const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.non_finite_duration.task"), .queue = Core::CommandQueue::Compute, };
     const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 80u, false));
     state.completeSample(PublishedSample(attribution, scopeName, queue, 80u, Limit<f64>::s_QuietNaN), true);
@@ -381,19 +300,13 @@ TEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsAcceptedEntryAw
     Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
     const Name scopeName("tests.renderer_timing.device_change");
     const Core::GpuPhysicalQueueId oldQueue{ .index = 0u, .deviceGeneration = 6u };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.device_change.task"),
-        .queue = Core::CommandQueue::Compute,
-    };
+    const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.device_change.task"), .queue = Core::CommandQueue::Compute, };
     const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, oldQueue, 31u, false));
     state.acceptSubmission(attribution, AcceptedToken(key, oldQueue), true);
 
     history.resetForDeviceGeneration(oldQueue.deviceGeneration);
-    const Impl::RendererTaskTimingFeedbackDrainResult assignmentDrain = state.drain(
-        history,
-        oldQueue.deviceGeneration
-    );
+    const Impl::RendererTaskTimingFeedbackDrainResult assignmentDrain = state.drain(history, oldQueue.deviceGeneration);
     EXPECT_EQ(assignmentDrain.acceptedAssignmentCount, 1u);
     EXPECT_EQ(assignmentDrain.retiredSampleCount, 0u);
 
@@ -423,10 +336,7 @@ TEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsEntryBeforeSubm
     Core::GpuTaskTimingHistoryStore history(testArena.arena);
     const Name scopeName("tests.renderer_timing.unresolved_device_change");
     const Core::GpuPhysicalQueueId oldQueue{ .index = 0u, .deviceGeneration = 12u };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.unresolved_device_change.task"),
-        .queue = Core::CommandQueue::Compute,
-    };
+    const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.unresolved_device_change.task"), .queue = Core::CommandQueue::Compute, };
     const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, oldQueue, 40u, false));
 

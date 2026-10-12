@@ -31,12 +31,7 @@ namespace ECSRenderDetail{
     const Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>& outputLayouts,
     const Vector<u32, Core::Alloc::GlobalArena>& outputHeapSlots
 ){
-    if(
-        !captured
-        || outputBuffers.size() != drawItems.size()
-        || outputLayouts.size() != drawItems.size()
-        || outputHeapSlots.size() != drawItems.size()
-    )
+    if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || outputHeapSlots.size() != drawItems.size())
         return false;
     for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
         const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;

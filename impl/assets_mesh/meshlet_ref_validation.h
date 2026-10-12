@@ -25,19 +25,8 @@ NWB_IMPL_BEGIN
 
 class MeshMeshletRefValidation final : NoCopy{
 public:
-    [[nodiscard]] static bool MeshletPositionRefInRange(
-    const MeshletPositionStreamRef& ref,
-    const usize positionCount,
-    const usize skinCount,
-    const bool skinRequired
-    )noexcept;
-    [[nodiscard]] static bool MeshletAttributeRefInRange(
-    const MeshletAttributeStreamRef& ref,
-    const usize normalCount,
-    const usize tangentCount,
-    const usize uv0Count,
-    const usize colorCount
-    )noexcept;
+    [[nodiscard]] static bool MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const bool skinRequired)noexcept;
+    [[nodiscard]] static bool MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept;
     template<
     typename MeshletContainer,
     typename LocalVertexRefContainer,
@@ -155,12 +144,7 @@ template<
     ConflictHandler onConflict,
     UnreferencedHandler onUnreferenced
 ){
-    return ResolveMeshletAttributeSkinsFromLocalVertices(
-        meshlets,
-        localVertexRefs,
-        attributeCount,
-        outAttributeSkins,
-        [&](const usize, const MeshletDesc&, const usize meshletPositionBase, const u32 localPositionIndex)->Expected<u32>{
+    return ResolveMeshletAttributeSkinsFromLocalVertices(meshlets, localVertexRefs, attributeCount, outAttributeSkins, [&](const usize, const MeshletDesc&, const usize meshletPositionBase, const u32 localPositionIndex)->Expected<u32>{
             return positionRefs[meshletPositionBase + localPositionIndex].skin;
         },
         onConflict,

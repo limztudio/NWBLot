@@ -22,10 +22,7 @@ namespace __hidden_avboit_target_bindings{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(
-    Core::GpuDescriptorHeap& heap,
-    Core::Buffer* buffer
-){
+static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer* buffer){
     if(!buffer)
         return MakeUnexpected(Failure{});
 
@@ -42,11 +39,7 @@ static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(
     return handle;
 }
 
-static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(
-    Core::GpuDescriptorHeap& heap,
-    Core::Texture* texture,
-    const Core::Format::Enum format
-){
+static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(Core::GpuDescriptorHeap& heap, Core::Texture* texture, const Core::Format::Enum format){
     if(!texture)
         return MakeUnexpected(Failure{});
 
@@ -55,13 +48,7 @@ static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(
         return MakeUnexpected(Failure{});
     ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
 
-    if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(
-        0u,
-        texture,
-        format,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture3D
-    ))){
+    if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(0u, texture, format, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D))){
         return MakeUnexpected(Failure{});
     }
 
@@ -94,10 +81,7 @@ static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
-    DeferredFrameTargets& createdTargets,
-    AvboitFrameTargets& avboitTargets
-){
+bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -121,46 +105,27 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
     NWB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
 
     const auto targetResourcesRegistered = [&]() -> Expected<void>{
-        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
-            heap,
-            avboitTargets.coverageBuffer.get()
-        ); descriptor)
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.coverageBuffer.get()); descriptor)
             avboitTargets.coverageBufferDescriptor = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
-            heap,
-            avboitTargets.depthWarpBuffer.get()
-        ); descriptor)
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.depthWarpBuffer.get()); descriptor)
             avboitTargets.depthWarpBufferDescriptor = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
-            heap,
-            avboitTargets.controlBuffer.get()
-        ); descriptor)
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.controlBuffer.get()); descriptor)
             avboitTargets.controlBufferDescriptor = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
-            heap,
-            avboitTargets.extinctionBuffer.get()
-        ); descriptor)
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.extinctionBuffer.get()); descriptor)
             avboitTargets.extinctionBufferDescriptor = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
-            heap,
-            avboitTargets.extinctionOverflowBuffer.get()
-        ); descriptor)
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.extinctionOverflowBuffer.get()); descriptor)
             avboitTargets.extinctionOverflowBufferDescriptor = *descriptor;
         else
             return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterTransmittanceStorageTexture(
-            heap,
-            avboitTargets.transmittanceTexture.get(),
-            avboitTargets.transmittanceFormat
-        ); descriptor)
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterTransmittanceStorageTexture(heap, avboitTargets.transmittanceTexture.get(), avboitTargets.transmittanceFormat); descriptor)
             avboitTargets.transmittanceTextureStorageDescriptor = *descriptor;
         else
             return MakeUnexpected(Failure{});

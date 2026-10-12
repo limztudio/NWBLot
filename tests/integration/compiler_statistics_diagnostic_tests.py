@@ -66,28 +66,20 @@ gather = diagnostic.gather
 def compiler_rows(count=384, offset=0):
     values = [{LIT_TYPE: "compiler_statistics_configuration", LIT_SCHEMA: 1, LIT_CAPACITY: 1024}]
     for sequence in range(count):
-        values.append({LIT_TYPE: "compiler_statistics", LIT_SEQUENCE: sequence, LIT_SOURCE_FRAME: offset + sequence,
-            LIT_STATUS: "valid", LIT_IDENTITY: {LIT_GRAPH_GENERATION: 7, "plan_generation": sequence + 1,
-                LIT_DEVICE_GENERATION: 2, LIT_RECORDING_ATTEMPT_GENERATION: sequence + 100},
-            LIT_SECONDS: {field: (index + 1) * .001 for index, field in enumerate(diagnostic.SECONDS_FIELDS)},
-            LIT_COUNTS: {field: index + 1 for index, field in enumerate(diagnostic.COUNT_FIELDS)},
-            LIT_SUBMISSION: {"accepted_packets": 2, LIT_ACCEPTED_TASKS: 12, LIT_REJECTED_PACKETS: 0, "rejected_tasks": 0}})
-    values.append({LIT_TYPE: "compiler_statistics_complete", LIT_ATTEMPTS: count, LIT_STORED: count,
-                   LIT_OVERFLOW: 0, LIT_INVALID: 0, LIT_COMPLETE: count > 0})
+        values.append({LIT_TYPE: "compiler_statistics", LIT_SEQUENCE: sequence, LIT_SOURCE_FRAME: offset + sequence, LIT_STATUS: "valid", LIT_IDENTITY: {LIT_GRAPH_GENERATION: 7, "plan_generation": sequence + 1,
+                LIT_DEVICE_GENERATION: 2, LIT_RECORDING_ATTEMPT_GENERATION: sequence + 100}, LIT_SECONDS: {field: (index + 1) * .001 for index, field in enumerate(diagnostic.SECONDS_FIELDS)},
+            LIT_COUNTS: {field: index + 1 for index, field in enumerate(diagnostic.COUNT_FIELDS)}, LIT_SUBMISSION: {"accepted_packets": 2, LIT_ACCEPTED_TASKS: 12, LIT_REJECTED_PACKETS: 0, "rejected_tasks": 0}})
+    values.append({LIT_TYPE: "compiler_statistics_complete", LIT_ATTEMPTS: count, LIT_STORED: count, LIT_OVERFLOW: 0, LIT_INVALID: 0, LIT_COMPLETE: count > 0})
     return values
 
 
 def gather_rows(offset=0):
-    values = [dict(gather.FROZEN_SETTINGS, type="configuration", schema=1, workload=LIT_UNIQUE, mode=LIT_TIMING,
-        successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0, transparent_renderers=64)]
+    values = [dict(gather.FROZEN_SETTINGS, type="configuration", schema=1, workload=LIT_UNIQUE, mode=LIT_TIMING, successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0, transparent_renderers=64)]
     for source in range(offset + 96, offset + 352):
-        values.append({LIT_TYPE: "cpu", LIT_SOURCE_FRAME: source, LIT_PUBLISH_FRAME: source + 1, "scopes_ms": {
-            "graphics.frame": 8., "graphics.frame_preamble": .05, "graphics.prepare_resources": 2.,
-            "graphics.render_passes": 2., "graphics.render": 5., "frame.project_update": .1,
-            "graphics.present": .2, "graphics.begin_frame": .4}})
+        values.append({LIT_TYPE: "cpu", LIT_SOURCE_FRAME: source, LIT_PUBLISH_FRAME: source + 1, "scopes_ms": { "graphics.frame": 8., "graphics.frame_preamble": .05, "graphics.prepare_resources": 2.,
+            "graphics.render_passes": 2., "graphics.render": 5., "frame.project_update": .1, "graphics.present": .2, "graphics.begin_frame": .4}})
     for scope in gather.GPU_BASE + gather.GPU_TRANSPARENT:
-        values.append({LIT_TYPE: "gpu", LIT_SCOPE: scope, "first_source_frame": offset + 96,
-            "last_source_frame": offset + 351, LIT_PUBLISH_FRAME: offset + 353, "total_ms": 256., LIT_SAMPLES: 256})
+        values.append({LIT_TYPE: "gpu", LIT_SCOPE: scope, "first_source_frame": offset + 96, "last_source_frame": offset + 351, LIT_PUBLISH_FRAME: offset + 353, "total_ms": 256., LIT_SAMPLES: 256})
     values.append({LIT_TYPE: LIT_COMPLETE})
     return values
 
@@ -97,8 +89,7 @@ def encode(rows):
 
 
 def cli_arguments(compiler, result, output):
-    return [LIT_COMPILER_STATISTICS, str(compiler), "--gather-result", str(result),
-            LIT_WORKLOAD, LIT_UNIQUE, "--output", str(output)]
+    return [LIT_COMPILER_STATISTICS, str(compiler), "--gather-result", str(result), LIT_WORKLOAD, LIT_UNIQUE, "--output", str(output)]
 
 
 class CompilerStatisticsDiagnosticTests(unittest.TestCase):
@@ -219,8 +210,7 @@ class CompilerStatisticsDiagnosticTests(unittest.TestCase):
             diagnostic.validate_compiler_rows(values)
 
     def test_footer_is_exact_consistent_and_complete(self):
-        for field, bad in ((LIT_ATTEMPTS, 385), (LIT_STORED, 383), (LIT_OVERFLOW, 1), (LIT_INVALID, 1),
-                           (LIT_COMPLETE, False), (LIT_COMPLETE, 1)):
+        for field, bad in ((LIT_ATTEMPTS, 385), (LIT_STORED, 383), (LIT_OVERFLOW, 1), (LIT_INVALID, 1), (LIT_COMPLETE, False), (LIT_COMPLETE, 1)):
             values = compiler_rows()
             values[-1][field] = bad
             with self.subTest(field=field), self.assertRaises(diagnostic.SmokeFailure):

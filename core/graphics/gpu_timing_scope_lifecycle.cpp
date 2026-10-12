@@ -23,13 +23,7 @@ thread_local GpuTimingSubmissionTicket* GpuTimingRecorder::s_ActiveSubmissionTic
 
 class GpuTimingRecorder::BeginQueryPublicationUnwindScope final : NoCopy{
 public:
-    BeginQueryPublicationUnwindScope(
-        GpuTimingRecorder& recorder,
-        GpuTimingSubmissionTicket& ticket,
-        GpuTimingAccumulator& accumulator,
-        GpuTimingScope& scope,
-        const usize publicationIndex
-    )noexcept
+    BeginQueryPublicationUnwindScope(GpuTimingRecorder& recorder, GpuTimingSubmissionTicket& ticket, GpuTimingAccumulator& accumulator, GpuTimingScope& scope, const usize publicationIndex)noexcept
         : m_recorder(recorder)
         , m_ticket(ticket)
         , m_accumulator(accumulator)
@@ -42,10 +36,7 @@ public:
 
         m_ticket.cancelScopePublication(m_publicationIndex);
         if(m_scope.valid()){
-            if(m_accumulator.abandonQuery(
-                m_scope,
-                m_recorder.m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-            ))
+            if(m_accumulator.abandonQuery(m_scope, m_recorder.m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
                 m_recorder.m_pendingAttributionRetirements = true;
             m_scope = {};
         }
@@ -97,13 +88,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuTimingScope> GpuTimingRecorder::beginScope(
-    const Name& scopeName,
-    Device& device,
-    CommandList& commandList,
-    const GpuTimingSampleAttribution attribution,
-    const bool requiresComparableTimestamps
-){
+Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution, const bool requiresComparableTimestamps){
     GpuTimingScope scope;
     GpuTimingSubmissionTicket* ticket = nullptr;
     QueueSubmissionToken resetSubmission;
@@ -113,10 +98,7 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(
         if(!scopeName)
             return scope;
         ++m_statistics.scopeAttemptCount;
-        if(
-            !m_performanceCollectionActive
-            && (!attribution.valid() || !feedbackScopeDemandedLocked(scopeName))
-        ){
+        if(!m_performanceCollectionActive && (!attribution.valid() || !feedbackScopeDemandedLocked(scopeName))){
             noteSkippedScope(GpuTimingScopeSkipReason::CollectionInactive);
             return scope;
         }
@@ -160,20 +142,8 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(
         }
 
         GpuTimingAccumulator& accumulator = *found.value();
-        BeginQueryPublicationUnwindScope publicationUnwind(
-            *this,
-            *ticket,
-            accumulator,
-            scope,
-            publicationIndex
-        );
-        const auto began = accumulator.beginQuery(
-            commandList,
-            m_currentFrameIndex,
-            m_epoch,
-            m_performanceCaptureEpoch,
-            attribution
-        );
+        BeginQueryPublicationUnwindScope publicationUnwind(*this, *ticket, accumulator, scope, publicationIndex);
+        const auto began = accumulator.beginQuery(commandList, m_currentFrameIndex, m_epoch, m_performanceCaptureEpoch, attribution);
         if(!began)
             return MakeUnexpected(Failure{});
         scope = began->scope;
@@ -205,17 +175,12 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(
     return scope;
 }
 
-Expected<GpuTimingScope> GpuTimingRecorder::beginDeferredScope(
-    const Name& scopeName,
-    Device& device,
-    CommandList& commandList,
-    const GpuTimingSampleAttribution attribution
-){
+Expected<GpuTimingScope> GpuTimingRecorder::beginDeferredScope(const Name& scopeName, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution){
     auto scope = beginScope(scopeName, device, commandList, attribution, false);
     if(!scope)
         return MakeUnexpected(Failure{});
-    // The frame transaction owns this reservation until the accepted end packet. The begin ticket has no rollback
-    // handle: a recovery endpoint may be needed after that begin already executed on the device timeline.
+    // The frame transaction owns this reservation until the accepted end packet.
+    // The begin ticket has no rollback handle: a recovery endpoint may be needed after that begin already executed on the device timeline.
     if(scope->submissionTicket)
         scope->submissionTicket->cancelScopePublication(scope->submissionPublicationIndex);
     scope->submissionTicket = nullptr;

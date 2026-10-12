@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reduced-res to full-res joint-bilateral upsample gated by surface similarity (distance + normal; distance-only misses creases like the Cornell corner). Mirrors caustic stage-2 plus a normal gate; plain bilinear would smear coverage.
+// Reduced-res to full-res joint-bilateral upsample gated by surface similarity (distance + normal; distance-only misses creases like the Cornell corner).
+// Mirrors caustic stage-2 plus a normal gate; plain bilinear would smear coverage.
 // Output: rgb = normalized HDR irradiance (no [0,1] clamp), a = continuous ambient-blend coverage.
 
 
@@ -79,10 +80,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     float3 irradianceSum = float3(0.0, 0.0, 0.0);
     float compatibleWeightSum = 0.0;
     float coveredWeightSum = 0.0;
-    [unroll]
-    for(int j = 0; j < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++j){
-        [unroll]
-        for(int i = 0; i < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++i){
+    [unroll] for(int j = 0; j < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++j){
+        [unroll] for(int i = 0; i < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
             // The resolve target is RGBA16F. Keep its irradiance/coverage payload native-half while it is only transported through this filter; geometry and the weighted accumulation remain FP32 below.
             const half4 tapValue = half4(nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0)));

@@ -44,31 +44,14 @@ protected:
     [[nodiscard]] SharedGlyphPage makeCoverage(){
         GlyphPage::Pixels pixels(m_arena);
         pixels.resize(4u, 128u);
-        const GlyphPageBinding binding{
-            .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
-            .fontGeneration = 9u,
-            .atlasIdentity = 11u,
-            .generation = 1u,
-            .width = 2u,
-            .height = 2u,
-        };
+        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = 11u, .generation = 1u, .width = 2u, .height = 2u, };
         return CreateGlyphPage(m_arena, binding, Move(pixels));
     }
 
     [[nodiscard]] SharedSdfAtlasPage makeDistance(){
         SdfAtlasPage::Pixels pixels(m_arena);
         pixels.resize(4u * 4u * 4u, 128u);
-        const SdfAtlasPageBinding binding{
-            .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
-            .fontSha256 = {},
-            .pixelsSha256 = {},
-            .fontGeneration = 9u,
-            .atlasIdentity = 22u,
-            .generation = 1u,
-            .width = 4u,
-            .height = 4u,
-            .spreadPixels = 2u,
-        };
+        const SdfAtlasPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontSha256 = {}, .pixelsSha256 = {}, .fontGeneration = 9u, .atlasIdentity = 22u, .generation = 1u, .width = 4u, .height = 4u, .spreadPixels = 2u, };
         return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
     }
 

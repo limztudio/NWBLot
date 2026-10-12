@@ -42,12 +42,7 @@ Graphics::GpuCommandIrRasterStateDesc RasterState(){
     state.blendConstantColor = Graphics::Color(0.25f, 0.5f, 0.75f, 1.f);
     state.dynamicStencilRefValue = 7u;
     state.hasScissor = true;
-    state.vertexBuffers.push_back(Graphics::GpuCommandIrRasterVertexOwner{
-        .resource = s_CommandIrSource,
-        .buffer = {},
-        .slot = 3u,
-        .offset = 16u,
-    });
+    state.vertexBuffers.push_back(Graphics::GpuCommandIrRasterVertexOwner{ .resource = s_CommandIrSource, .buffer = {}, .slot = 3u, .offset = 16u, });
     state.indexResource = Graphics::GpuGraphResourceId{ .generation = s_CommandIrTask.generation, .index = 9u };
     state.indexFormat = Graphics::Format::R32_UINT;
     state.indexOffset = 4u;
@@ -64,8 +59,7 @@ TEST(GpuCommandIrRasterStream, PreservesCapturedPushBytesAfterCallerMutationAcro
     draw.setVertexCount(6u).setInstanceCount(2u).setStartIndexLocation(5u).setStartVertexLocation(3u).setStartInstanceLocation(1u);
 
     ASSERT_TRUE(capture.captureSetGraphicsState(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, state));
-    ASSERT_TRUE(capture.capturePushConstants(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue,
-        BinaryByteView{ pushBytes, sizeof(pushBytes) }));
+    ASSERT_TRUE(capture.capturePushConstants(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, BinaryByteView{ pushBytes, sizeof(pushBytes) }));
     for(u8& value : pushBytes)
         value = 0u;
     ASSERT_TRUE(capture.captureDraw(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, draw, true));
@@ -94,23 +88,17 @@ TEST(GpuCommandIrRasterStream, RejectsLateOutOfBlobPushAndEarlierVersion){
     const Graphics::GpuCommandIrRasterStateDesc state = RasterState();
     const u8 pushBytes[] = { 0x31u, 0x41u, 0x59u, 0x26u };
     ASSERT_TRUE(capture.captureSetGraphicsState(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, state));
-    ASSERT_TRUE(capture.capturePushConstants(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue,
-        BinaryByteView{ pushBytes, sizeof(pushBytes) }));
+    ASSERT_TRUE(capture.capturePushConstants(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, BinaryByteView{ pushBytes, sizeof(pushBytes) }));
     Graphics::GraphicsBytes malformed(testArena.arena);
     CopyCommandIrBytes(malformed, capture.commandBytes());
-    const usize secondRecord = sizeof(Graphics::GpuCommandIrStreamHeader)
-        + sizeof(Graphics::GpuCommandIrSetGraphicsStateRecord);
-    WriteCommandIrPod(malformed,
-        secondRecord + offsetof(Graphics::GpuCommandIrSetPushConstantsRecord, blobOffsetBytes),
-        Limit<u64>::s_Max);
-    const Graphics::GpuCommandIrStreamValidationResult invalid = Graphics::ValidateGpuCommandIrStream(
-        BinaryByteView{ malformed.data(), malformed.size() });
+    const usize secondRecord = sizeof(Graphics::GpuCommandIrStreamHeader) + sizeof(Graphics::GpuCommandIrSetGraphicsStateRecord);
+    WriteCommandIrPod(malformed, secondRecord + offsetof(Graphics::GpuCommandIrSetPushConstantsRecord, blobOffsetBytes), Limit<u64>::s_Max);
+    const Graphics::GpuCommandIrStreamValidationResult invalid = Graphics::ValidateGpuCommandIrStream(BinaryByteView{ malformed.data(), malformed.size() });
     EXPECT_EQ(invalid.error, Graphics::GpuCommandIrStreamValidationError::InvalidBlobRange);
     EXPECT_EQ(invalid.recordIndex, 1u);
 
     WriteCommandIrPod(malformed, offsetof(Graphics::GpuCommandIrStreamHeader, version), static_cast<u16>(4u));
-    const Graphics::GpuCommandIrStreamValidationResult oldVersion = Graphics::ValidateGpuCommandIrStream(
-        BinaryByteView{ malformed.data(), malformed.size() });
+    const Graphics::GpuCommandIrStreamValidationResult oldVersion = Graphics::ValidateGpuCommandIrStream(BinaryByteView{ malformed.data(), malformed.size() });
     EXPECT_EQ(oldVersion.error, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);
 }
 
@@ -121,8 +109,7 @@ TEST(GpuCommandIrRasterStream, RejectsCorruptedViewportBeforeExposingRasterRecor
     ASSERT_TRUE(capture.captureSetGraphicsState(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, state));
     Graphics::GraphicsBytes malformed(testArena.arena);
     CopyCommandIrBytes(malformed, capture.commandBytes());
-    const usize maxXOffset = sizeof(Graphics::GpuCommandIrStreamHeader)
-        + offsetof(Graphics::GpuCommandIrSetGraphicsStateRecord, viewportMaxX);
+    const usize maxXOffset = sizeof(Graphics::GpuCommandIrStreamHeader) + offsetof(Graphics::GpuCommandIrSetGraphicsStateRecord, viewportMaxX);
     WriteCommandIrPod(malformed, maxXOffset, 0.f);
     Graphics::GpuCommandIrStreamReader reader(BinaryByteView{ malformed.data(), malformed.size() });
 

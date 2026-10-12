@@ -17,12 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId packet,
-    PacketRecordingLease& lease
-)const noexcept{
+bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, PacketRecordingLease& lease)const noexcept{
     const auto packetView = ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease);
     if(!packetView)
         return false;
@@ -34,12 +29,7 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
         return false;
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        if(
-            task.lifecycleState != TaskLifecycleState::Recording
-            || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
-            || task.recordingClaimGeneration != lease.m_claimGeneration
-            || task.recordThunkInProgress
-        )
+        if(task.lifecycleState != TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration || task.recordingClaimGeneration != lease.m_claimGeneration || task.recordThunkInProgress)
             return false;
     }
     discardPacketTasksWithinLock(packetPlan, tasks);
@@ -48,11 +38,7 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
     return true;
 }
 
-bool GpuTaskGraph::abandonPacketRecordingAbortWithoutCallbacks(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    PacketRecordingAbort& abort
-)const noexcept{
+bool GpuTaskGraph::abandonPacketRecordingAbortWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, PacketRecordingAbort& abort)const noexcept{
     if(!abort.valid())
         return false;
 

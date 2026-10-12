@@ -42,10 +42,7 @@ template<UiRectPrecision::Enum Precision>
         return MakeUnexpected(Failure{});
     if constexpr(Precision != UiRectPrecision::RoundedEndpoints){
         const SIMDVectorDouble end = SIMDVectorDouble{ x, y } + SIMDVectorDouble{ width, height };
-        if(
-            end.x < -Limit<f32>::s_Max || end.x > Limit<f32>::s_Max
-            || end.y < -Limit<f32>::s_Max || end.y > Limit<f32>::s_Max
-        )
+        if(end.x < -Limit<f32>::s_Max || end.x > Limit<f32>::s_Max || end.y < -Limit<f32>::s_Max || end.y > Limit<f32>::s_Max)
             return MakeUnexpected(Failure{});
     }
     Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
@@ -61,10 +58,7 @@ template<UiRectPrecision::Enum Precision>
         if(!IsValidUiRect(candidate))
             return MakeUnexpected(Failure{});
         if constexpr(Precision == UiRectPrecision::PreciseExtents){
-            if(
-                (width > 0.0 && NumericSimd::Add(candidate.x, candidate.width) <= candidate.x)
-                || (height > 0.0 && NumericSimd::Add(candidate.y, candidate.height) <= candidate.y)
-            )
+            if((width > 0.0 && NumericSimd::Add(candidate.x, candidate.width) <= candidate.x) || (height > 0.0 && NumericSimd::Add(candidate.y, candidate.height) <= candidate.y))
                 return MakeUnexpected(Failure{});
         }
     }

@@ -42,10 +42,7 @@ void Session::ensureMemoryScopes(){
     while(owner){
         ArenaMemoryOwnerIdentity identity;
         owner = ReadArenaMemoryOwnerIdentity(*owner, identity);
-        const MemorySource::Enum source = identity.source == ArenaMemorySource::HeapBacking
-            ? MemorySource::HeapBacking
-            : MemorySource::Arena
-        ;
+        const MemorySource::Enum source = identity.source == ArenaMemorySource::HeapBacking ? MemorySource::HeapBacking : MemorySource::Arena;
         const MemoryScopeId scope = m_memory.registerScope(identity.ownerName, source);
         if(!scope.valid()){
             NWB_ASSERT(false);
@@ -65,10 +62,7 @@ void Session::publishFrame(){
     while(owner){
         ArenaMemoryOwnerSnapshot snapshot;
         owner = ReadArenaMemoryOwnerRecord(*owner, snapshot);
-        const MemorySource::Enum source = snapshot.source == ArenaMemorySource::HeapBacking
-            ? MemorySource::HeapBacking
-            : MemorySource::Arena
-        ;
+        const MemorySource::Enum source = snapshot.source == ArenaMemorySource::HeapBacking ? MemorySource::HeapBacking : MemorySource::Arena;
         m_memory.recordSnapshot(snapshot.ownerName, snapshot.stats, m_frameIndex, source);
     }
 }

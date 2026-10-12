@@ -25,9 +25,7 @@ WidgetStateStore::WidgetStateStore(Core::Alloc::GlobalArena& arena)
     m_index.reserve(s_RetainedCapacity);
 }
 
-WidgetState* WidgetStateStore::touch(
-    const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration
-){
+WidgetState* WidgetStateStore::touch(const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
     if(!id.valid() || root.generation == 0u || frameGeneration == 0u || kind > WidgetKind::Image)
         return nullptr;
     const usize index = findIndex(id);

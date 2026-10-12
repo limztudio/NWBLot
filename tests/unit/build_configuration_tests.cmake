@@ -24,17 +24,8 @@ if(DEFINED NWB_TEST_CONFIGURATION_CASE)
 endif()
 
 function(nwb_check_configuration_admission case_name configuration expected_configuration accepted)
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}"
-            "-DNWB_TEST_SOURCE_DIR=${NWB_TEST_SOURCE_DIR}"
-            "-DNWB_TEST_CONFIGURATION_CASE=${case_name}"
-            "-DNWB_TEST_REQUESTED_CONFIGURATION=${configuration}"
-            "-DNWB_TEST_EXPECTED_CONFIGURATION=${expected_configuration}"
-            -P "${CMAKE_CURRENT_LIST_FILE}"
-        RESULT_VARIABLE result
-        OUTPUT_VARIABLE stdout
-        ERROR_VARIABLE stderr
-    )
+    execute_process(COMMAND "${CMAKE_COMMAND}" "-DNWB_TEST_SOURCE_DIR=${NWB_TEST_SOURCE_DIR}" "-DNWB_TEST_CONFIGURATION_CASE=${case_name}" "-DNWB_TEST_REQUESTED_CONFIGURATION=${configuration}" "-DNWB_TEST_EXPECTED_CONFIGURATION=${expected_configuration}"
+            -P "${CMAKE_CURRENT_LIST_FILE}" RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
     if(accepted)
         if(NOT result EQUAL 0 OR NOT stdout MATCHES "configuration-boundary-admitted")
             message(FATAL_ERROR "Canonical configuration control '${case_name}' failed:\n${stdout}\n${stderr}")

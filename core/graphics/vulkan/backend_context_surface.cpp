@@ -85,20 +85,14 @@ bool BackendContext::createWindowSurface(){
 
 bool BackendContext::prepareSwapChainImageRevocation(){
     for(SwapChainImage& swapChainImage : m_swapChainImages){
-        if(
-            swapChainImage.rhiHandle
-            && !swapChainImage.rhiHandle->canRevokeUnmanagedNativeImage(swapChainImage.image)
-        ){
+        if(swapChainImage.rhiHandle && !swapChainImage.rhiHandle->canRevokeUnmanagedNativeImage(swapChainImage.image)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity is not revocable."));
             return false;
         }
     }
 
     for(SwapChainImage& swapChainImage : m_swapChainImages){
-        if(
-            swapChainImage.rhiHandle
-            && !swapChainImage.rhiHandle->prepareRevokeUnmanagedNativeImage(swapChainImage.image)
-        ){
+        if(swapChainImage.rhiHandle && !swapChainImage.rhiHandle->prepareRevokeUnmanagedNativeImage(swapChainImage.image)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity could not be prepared for revocation."));
             return false;
         }
@@ -178,12 +172,7 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    const auto surfaceFormatSelection = VulkanDetail::SelectSurfaceFormat(
-        surfaceFormats.data(),
-        surfaceFormatCount,
-        requestedSdrFormat,
-        hdr10Allowed
-    );
+    const auto surfaceFormatSelection = VulkanDetail::SelectSurfaceFormat(surfaceFormats.data(), surfaceFormatCount, requestedSdrFormat, hdr10Allowed);
     if(!surfaceFormatSelection){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes neither HDR10 nor a compatible SDR swapchain format."));
         return false;
@@ -193,10 +182,7 @@ bool BackendContext::createVulkanSwapChain(){
     m_swapChainState.backBufferFormat = surfaceFormatSelection->backBufferFormat;
     m_swapChainState.outputMode = surfaceFormatSelection->outputMode;
     if(m_deviceParams.enableHDR10Output && m_swapChainState.outputMode != SwapChainOutputMode::HDR10){
-        const TStringView reason = hdr10ExtensionEnabled
-            ? NWB_TEXT("the active surface does not advertise a HDR10/PQ format")
-            : NWB_TEXT("VK_EXT_swapchain_colorspace is unavailable")
-        ;
+        const TStringView reason = hdr10ExtensionEnabled ? NWB_TEXT("the active surface does not advertise a HDR10/PQ format") : NWB_TEXT("VK_EXT_swapchain_colorspace is unavailable");
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: HDR10 presentation unavailable; using SDR because {}."), reason);
     }
 
@@ -212,14 +198,9 @@ bool BackendContext::createVulkanSwapChain(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: surface lacks required color-attachment image usage"));
         return false;
     }
-    const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback
-        && (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u
-    ;
+    const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback && (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     if(m_deviceParams.enableSwapChainReadback){
-        const TStringView status = swapChainReadbackAvailable
-            ? NWB_TEXT("enabled")
-            : NWB_TEXT("unavailable because the surface lacks transfer-source image usage")
-        ;
+        const TStringView status = swapChainReadbackAvailable ? NWB_TEXT("enabled") : NWB_TEXT("unavailable because the surface lacks transfer-source image usage");
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: Swapchain readback {}."), status);
     }
 
@@ -284,19 +265,11 @@ bool BackendContext::createVulkanSwapChain(){
         selectedImageCountLanes = VectorMin(selectedImageCountLanes, VectorSplatZ(imageCountBounds));
     uint32_t selectedImageCount = static_cast<uint32_t>(VectorGetX(selectedImageCountLanes));
 
-    const VkSurfaceTransformFlagBitsKHR selectedPreTransform = (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
-        ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
-        : surfaceCaps.currentTransform
-    ;
+    const VkSurfaceTransformFlagBitsKHR selectedPreTransform = (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfaceCaps.currentTransform;
 
     VkCompositeAlphaFlagBitsKHR selectedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     bool compositeAlphaFound = false;
-    const VkCompositeAlphaFlagBitsKHR compositeAlphaCandidates[] = {
-        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
-        VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
-        VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
-    };
+    const VkCompositeAlphaFlagBitsKHR compositeAlphaCandidates[] = { VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR, VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR, VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR };
     for(const auto candidate : compositeAlphaCandidates){
         if(surfaceCaps.supportedCompositeAlpha & candidate){
             selectedCompositeAlpha = candidate;
@@ -376,10 +349,7 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    if(
-        m_swapChainState.outputMode == SwapChainOutputMode::HDR10
-        && isDeviceExtensionEnabled(VK_EXT_HDR_METADATA_EXTENSION_NAME)
-    )
+    if(m_swapChainState.outputMode == SwapChainOutputMode::HDR10 && isDeviceExtensionEnabled(VK_EXT_HDR_METADATA_EXTENSION_NAME))
         VulkanDetail::SetHdr10Metadata(m_deviceDispatch, m_vulkanDevice, m_swapChain);
 
     uint32_t imageCount = 0;
@@ -407,10 +377,7 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    const VkImageCreateFlags swapChainImageFlags = (desc.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0u
-        ? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT
-        : 0u
-    ;
+    const VkImageCreateFlags swapChainImageFlags = (desc.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0u ? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT : 0u;
     m_swapChainImages.reserve(imageCount);
     for(uint32_t imageIndex = 0; imageIndex < imageCount; ++imageIndex){
         const VkImage image = images[imageIndex];
@@ -435,12 +402,7 @@ bool BackendContext::createVulkanSwapChain(){
             .initialStateKnown = false,
         };
 
-        sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(
-            ObjectTypes::s_Image,
-            Object(sci.image),
-            textureDesc,
-            nativeProvenance
-        );
+        sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(ObjectTypes::s_Image, Object(sci.image), textureDesc, nativeProvenance);
         if(!sci.rhiHandle){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
             if(!destroySwapChainAfterCreateFailure())

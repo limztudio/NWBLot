@@ -109,11 +109,7 @@ struct StreamSortEntry{
 }
 
 template<typename Value>
-[[nodiscard]] Expected<UtilityVector<u32>> DeduplicateStream(
-    UtilityVector<Value>& stream,
-    Core::CpuTaskScheduler& cpuScheduler,
-    const AStringView streamName
-){
+[[nodiscard]] Expected<UtilityVector<u32>> DeduplicateStream(UtilityVector<Value>& stream, Core::CpuTaskScheduler& cpuScheduler, const AStringView streamName){
     UtilityVector<u32> outRemap;
     outRemap.reserve(stream.size());
     outRemap.resize(stream.size());
@@ -130,10 +126,7 @@ template<typename Value>
     };
     cpuScheduler.parallelFor(static_cast<usize>(0), stream.size(), s_DeduplicateParallelGrainSize, fillEntry);
 
-    Sort(
-        sortedEntries.begin(),
-        sortedEntries.end(),
-        [](const StreamSortEntry<Value>& lhs, const StreamSortEntry<Value>& rhs){
+    Sort(sortedEntries.begin(), sortedEntries.end(), [](const StreamSortEntry<Value>& lhs, const StreamSortEntry<Value>& rhs){
             if(LessValue(lhs.value, rhs.value))
                 return true;
             if(LessValue(rhs.value, lhs.value))
@@ -223,11 +216,7 @@ template<typename Value>
     return true;
 }
 
-[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(
-    SourceMeshStreams& mesh,
-    UtilityVector<MeshSkinInfluence>& skinInfluences,
-    Core::CpuTaskScheduler& cpuScheduler
-){
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(SourceMeshStreams& mesh, UtilityVector<MeshSkinInfluence>& skinInfluences, Core::CpuTaskScheduler& cpuScheduler){
     if(mesh.positions.size() != skinInfluences.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
         return MakeUnexpected(Failure{});
@@ -278,22 +267,13 @@ template<typename Value>
     return outText;
 }
 
-[[nodiscard]] Expected<Core::Metascript::Document> ParseMetascriptDocument(
-    const Path& nwbFilePath,
-    const AStringView text,
-    Core::Metascript::MetaArena& arena
-){
+[[nodiscard]] Expected<Core::Metascript::Document> ParseMetascriptDocument(const Path& nwbFilePath, const AStringView text, Core::Metascript::MetaArena& arena){
     Core::Metascript::Document outDoc(arena);
     if(outDoc.parse(text))
         return outDoc;
 
     for(const Core::Metascript::ParseError& error : outDoc.errors()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}")
-            , PathToString<tchar>(nwbFilePath)
-            , error.line
-            , error.column
-            , StringConvert(AStringView(error.message.data(), error.message.size()))
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), error.line, error.column, StringConvert(AStringView(error.message.data(), error.message.size())));
     }
     return MakeUnexpected(Failure{});
 }
@@ -429,13 +409,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
             itemReport = *canonicalized;
             if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, before, mesh))
                 return MakeUnexpected(Failure{});
-            if(itemReport.before.skin != itemReport.after.skin && !MeshRefreshTextDetail::AddReplacement(
-                replacements,
-                source,
-                skinVariableName,
-                "influences",
-                MeshRefreshTextDetail::WriteSkinInfluenceList(skinInfluences)
-            )){
+            if(itemReport.before.skin != itemReport.after.skin && !MeshRefreshTextDetail::AddReplacement(replacements, source, skinVariableName, "influences", MeshRefreshTextDetail::WriteSkinInfluenceList(skinInfluences))){
                 return MakeUnexpected(Failure{});
             }
         }

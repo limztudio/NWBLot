@@ -104,25 +104,17 @@ PRESETS = {LIT_POPULATED: 2.2, LIT_SPARSE: 4.4}
 FRAME_COUNT = 360
 WIDTH, HEIGHT = 1280, 900
 SCHEMA = "caustic-visible-footprint-v1"
-PRODUCER = re.compile(r"^RendererSystem: dispatched hardware caustic producer \((\d+) photons/frame, "
-    r"(\d+) temporal phases, (\d+) full-grid budget, (\d+) caustic lights, (\d+) refractive instances\)$", re.MULTILINE)
-POLICY = {"width": WIDTH, "height": HEIGHT, "presentation_count": FRAME_COUNT, LIT_CAMERA_HEIGHT: .85,
-    "camera_pitch": 0, LIT_VERTICAL_FOV_DEGREES: 60, "sphere_center": [0, .85, 0], LIT_SPHERE_RADIUS: .7,
-    LIT_SPHERE_EXCLUSION_MARGIN: .001,
-    LIT_GROUND_Y: -.08, LIT_GROUND_X: [-1.75, 1.75], LIT_GROUND_Z: [-1.47, 1.63], LIT_RECEIVER_EDGE_MARGIN: .02,
-    LIT_POSITIVE_CHANNEL_SUM_THRESHOLD: 24, LIT_MINIMUM_POSITIVE_PIXELS: 100, LIT_MINIMUM_CHANNEL_GAIN: 1500,
-    LIT_TILE_EXTENT: 16, LIT_MAXIMUM_SPARSE_PIXEL_RATIO: .8, LIT_MAXIMUM_SPARSE_TILE_RATIO: .8,
-    "scope": "visible caustic contribution on unoccluded ground; no internal wavelet occupancy claim"}
+PRODUCER = re.compile(r"^RendererSystem: dispatched hardware caustic producer \((\d+) photons/frame, " r"(\d+) temporal phases, (\d+) full-grid budget, (\d+) caustic lights, (\d+) refractive instances\)$", re.MULTILINE)
+POLICY = {"width": WIDTH, "height": HEIGHT, "presentation_count": FRAME_COUNT, LIT_CAMERA_HEIGHT: .85, "camera_pitch": 0, LIT_VERTICAL_FOV_DEGREES: 60, "sphere_center": [0, .85, 0], LIT_SPHERE_RADIUS: .7, LIT_SPHERE_EXCLUSION_MARGIN: .001,
+    LIT_GROUND_Y: -.08, LIT_GROUND_X: [-1.75, 1.75], LIT_GROUND_Z: [-1.47, 1.63], LIT_RECEIVER_EDGE_MARGIN: .02, LIT_POSITIVE_CHANNEL_SUM_THRESHOLD: 24, LIT_MINIMUM_POSITIVE_PIXELS: 100, LIT_MINIMUM_CHANNEL_GAIN: 1500,
+    LIT_TILE_EXTENT: 16, LIT_MAXIMUM_SPARSE_PIXEL_RATIO: .8, LIT_MAXIMUM_SPARSE_TILE_RATIO: .8, "scope": "visible caustic contribution on unoccluded ground; no internal wavelet occupancy claim"}
 
 
 def environment(preset, enabled=True):
     if preset not in PRESETS:
         raise SmokeFailure("unknown caustic camera preset")
-    return {"NWB_CAUSTIC_SMOKE_TIMING": "1", "NWB_AVBOIT_SMOKE_TIMING": "1",
-        LIT_NWB_CAUSTIC_SMOKE_CAMERA_PRESET: preset, LIT_NWB_CAUSTIC_SMOKE_ENABLED: "1" if enabled else "0",
-        "NWB_REFRACTION_SMOKE_ENABLED": "0", "NWB_REFRACTION_SMOKE_HARDWARE": "1",
-        "NWB_REFLECTION_SMOKE_MODE": LIT_DISABLED, "NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON": "0",
-        "NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0", "NWB_TRANSPARENT_MULTI_SPIN_SPEED": "0",
+    return {"NWB_CAUSTIC_SMOKE_TIMING": "1", "NWB_AVBOIT_SMOKE_TIMING": "1", LIT_NWB_CAUSTIC_SMOKE_CAMERA_PRESET: preset, LIT_NWB_CAUSTIC_SMOKE_ENABLED: "1" if enabled else "0", "NWB_REFRACTION_SMOKE_ENABLED": "0", "NWB_REFRACTION_SMOKE_HARDWARE": "1",
+        "NWB_REFLECTION_SMOKE_MODE": LIT_DISABLED, "NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON": "0", "NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0", "NWB_TRANSPARENT_MULTI_SPIN_SPEED": "0",
         "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "0", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "0.016666667"}
 
 
@@ -140,48 +132,36 @@ def validate_log(text, settings, capture=False):
     enabled = settings[LIT_NWB_CAUSTIC_SMOKE_ENABLED] == "1"
     if settings != environment(preset, enabled):
         raise SmokeFailure("caustic settings differ from the complete fixed policy")
-    required = ("AvboitTimingProbe: in-flight ranges 32", "AvboitTimingProbe: render unfocused 1",
-        "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0",
-        "CausticSphereSmokeProject: camera refraction disabled",
-        LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS + ("enabled" if enabled else LIT_DISABLED),
-        "CausticTimingProbe: scene single-static-sphere-ground-v1", LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN)
+    required = ("AvboitTimingProbe: in-flight ranges 32", "AvboitTimingProbe: render unfocused 1", "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
+        LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS + ("enabled" if enabled else LIT_DISABLED), "CausticTimingProbe: scene single-static-sphere-ground-v1", LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN)
     for marker in required:
         if lines.count(marker) != 1:
             raise SmokeFailure("missing or repeated caustic lifecycle/policy: " + marker)
-    route_messages = {
-        "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": LIT_HARDWARE,
-    }
-    routes = [route_messages.get(line) for line in lines
-        if line.startswith("TransparentMultiSmokeProject: natural ") and " shadow route " in line]
+    route_messages = { "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": LIT_HARDWARE, }
+    routes = [route_messages.get(line) for line in lines if line.startswith("TransparentMultiSmokeProject: natural ") and " shadow route " in line]
     if len(routes) != 1 or routes[0] != LIT_HARDWARE:
         raise SmokeFailure("one supported caustic shadow route is required")
     validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
     # Reject contradictory values as well as requiring the selected value once.
-    for prefix in ("AvboitTimingProbe: in-flight ranges ", "AvboitTimingProbe: render unfocused ",
-        "AvboitTimingProbe: caustic in-flight ranges ", "CausticSphereSmokeProject: reflection mode ",
-        "CausticSphereSmokeProject: camera refraction ", LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS,
-        "CausticTimingProbe: scene "):
+    for prefix in ("AvboitTimingProbe: in-flight ranges ", "AvboitTimingProbe: render unfocused ", "AvboitTimingProbe: caustic in-flight ranges ", "CausticSphereSmokeProject: reflection mode ",
+        "CausticSphereSmokeProject: camera refraction ", LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS, "CausticTimingProbe: scene "):
         if sum(line.startswith(prefix) for line in lines) != 1:
             raise SmokeFailure("contradictory caustic policy: " + prefix)
-    disabled = single_match(r"^CausticTimingProbe: reflection diagnostics (\S+) temporal (\S+) spatial (\S+) feedback (\S+)$",
-        text, "reflection auxiliary settings")
+    disabled = single_match(r"^CausticTimingProbe: reflection diagnostics (\S+) temporal (\S+) spatial (\S+) feedback (\S+)$", text, "reflection auxiliary settings")
     if any(value not in ("0", "false") for value in disabled):
         raise SmokeFailure("reflection diagnostics/history/filter/feedback must be disabled")
     camera = single_match(r"^CausticTimingProbe: camera (\S+) distance (\S+) height (\S+)$", text, "camera setting")
     pose = single_match(r"^CausticTimingProbe: fixed delta (\S+) yaw (\S+) sphere scale (\S+)$", text, "fixed scene pose")
     expected = (PRESETS[preset], .85, .016666667, 0.0, .7)
     actual = tuple(float(value) for value in (*camera[1:], *pose))
-    if camera[0] != preset or any(not math.isfinite(a) or not math.isclose(a, b, rel_tol=1e-6, abs_tol=1e-8)
-        for a, b in zip(actual, expected)):
+    if camera[0] != preset or any(not math.isfinite(a) or not math.isclose(a, b, rel_tol=1e-6, abs_tol=1e-8) for a, b in zip(actual, expected)):
         raise SmokeFailure("camera/pose/geometry differs from its fixed workload")
-    light = tuple(float(value) for value in single_match(
-        r"^CausticTimingProbe: directional pitch (\S+) yaw (\S+) intensity (\S+)$", text, "directional light"))
+    light = tuple(float(value) for value in single_match(r"^CausticTimingProbe: directional pitch (\S+) yaw (\S+) intensity (\S+)$", text, "directional light"))
     fov = float(single_match(r"^CausticTimingProbe: vertical FOV radians (\S+)$", text, "camera vertical FOV"))
     if not math.isclose(fov, math.pi / 3, rel_tol=1e-6) \
         or any(not math.isclose(a, b, rel_tol=1e-6) for a, b in zip(light, (.9, .65, 2.0))):
         raise SmokeFailure("actual camera projection or light changed")
-    phase = single_match(r"^CausticTimingProbe: photon phases bootstrap (\d+) converged (\d+) warmup (\d+)$",
-        text, "photon temporal schedule")
+    phase = single_match(r"^CausticTimingProbe: photon phases bootstrap (\d+) converged (\d+) warmup (\d+)$", text, "photon temporal schedule")
     if tuple(map(int, phase)) != (2, 4, 8):
         raise SmokeFailure("photon temporal schedule changed")
     producers = [tuple(map(int, row)) for row in PRODUCER.findall(text)]
@@ -194,17 +174,13 @@ def validate_log(text, settings, capture=False):
     dimensions = {(int(w), int(h)) for w, h in re.findall(r"deferred rendering targets ready \((\d+)x(\d+),", text)}
     if dimensions != {(WIDTH, HEIGHT)}:
         raise SmokeFailure("caustic render extent changed")
-    forbidden = (*STRICT_LOG_FAILURE_MESSAGES, "software caustic producer (", "Reflection resolve: hardware",
-        "Reflection resolve: screen-space", "AVBOIT refraction resolve:", "ReflectionSmokeStatistics:",
-        "ReflectionSmokeHistory:", "ReflectionSmokeFeedback:", "render submission suspended",
-        "FrameLaggedAsyncLightingSmoke:", "natural software-only shadow route", "retaining all-lit visibility")
+    forbidden = (*STRICT_LOG_FAILURE_MESSAGES, "software caustic producer (", "Reflection resolve: hardware", "Reflection resolve: screen-space", "AVBOIT refraction resolve:", "ReflectionSmokeStatistics:",
+        "ReflectionSmokeHistory:", "ReflectionSmokeFeedback:", "render submission suspended", "FrameLaggedAsyncLightingSmoke:", "natural software-only shadow route", "retaining all-lit visibility")
     if not capture:
         forbidden += ("FramebufferCapture:", "VK_LAYER_KHRONOS_validation", "Vulkan: enabled validation layer")
     validate_expected_log_text(text, [], forbidden)
-    result = {"camera_preset": preset, "camera_distance": actual[0], LIT_CAMERA_HEIGHT: actual[1],
-        "fixed_delta_seconds": actual[2], "yaw": actual[3], "sphere_scale": actual[4], "extent": [WIDTH, HEIGHT],
-        "shadow_route": routes[0], "reflection_mode": LIT_DISABLED, "camera_refraction": False,
-        "caustics": enabled, "photon_schedule": list(map(int, phase)), "initial_producer": list(producers[0]) if producers else None,
+    result = {"camera_preset": preset, "camera_distance": actual[0], LIT_CAMERA_HEIGHT: actual[1], "fixed_delta_seconds": actual[2], "yaw": actual[3], "sphere_scale": actual[4], "extent": [WIDTH, HEIGHT],
+        "shadow_route": routes[0], "reflection_mode": LIT_DISABLED, "camera_refraction": False, "caustics": enabled, "photon_schedule": list(map(int, phase)), "initial_producer": list(producers[0]) if producers else None,
         "timing_in_flight_ranges": 32, "directional_light": list(light), "vertical_fov_radians": fov}
     if capture:
         if lines.count("FramebufferCapture: capture ready") != 1:
@@ -257,8 +233,7 @@ def footprint(on, off, distance):
             changed += 1
             gain += delta
             tiles.add((x // POLICY[LIT_TILE_EXTENT], y // POLICY[LIT_TILE_EXTENT]))
-    return {"receiver_pixels": receiver_count, LIT_POSITIVE_PIXELS: changed,
-        LIT_POSITIVE_CHANNEL_GAIN: gain, LIT_POSITIVE_TILES: len(tiles)}
+    return {"receiver_pixels": receiver_count, LIT_POSITIVE_PIXELS: changed, LIT_POSITIVE_CHANNEL_GAIN: gain, LIT_POSITIVE_TILES: len(tiles)}
 
 
 def validate_metrics(metrics):
@@ -324,8 +299,7 @@ def validate_report(path, identity):
         actual = validate_log(text, record[LIT_SETTINGS], capture=True)
         if actual != record[LIT_RUNTIME]:
             raise SmokeFailure("qualification runtime metadata does not match its actual log")
-        args = SimpleNamespace(executable=identity[LIT_EXECUTABLE], runtime=identity[LIT_RUNTIME],
-            logserver_executable=logger, timeout=report[LIT_TIMEOUT_SECONDS], application_arg=report[LIT_APPLICATION_ARGS])
+        args = SimpleNamespace(executable=identity[LIT_EXECUTABLE], runtime=identity[LIT_RUNTIME], logserver_executable=logger, timeout=report[LIT_TIMEOUT_SECONDS], application_arg=report[LIT_APPLICATION_ARGS])
         if record.get(LIT_COMMAND) != capture_command(args, files[LIT_IMAGE], launcher=launcher):
             raise SmokeFailure("qualification launch command changed its exact capture contract")
         frames[key] = read_bmp_24_rows(files[LIT_IMAGE])
@@ -336,19 +310,14 @@ def validate_report(path, identity):
     validate_metrics(metrics)
     if metrics != report.get(LIT_METRICS):
         raise SmokeFailure("qualification metrics differ from raw image analysis")
-    return {"report": str(path), LIT_IDENTITY: file_identity(path), LIT_METRICS: metrics,
-        LIT_POLICY: POLICY, LIT_CAPTURES: report[LIT_CAPTURES]}, paths
+    return {"report": str(path), LIT_IDENTITY: file_identity(path), LIT_METRICS: metrics, LIT_POLICY: POLICY, LIT_CAPTURES: report[LIT_CAPTURES]}, paths
 
 
 def capture_command(args, image, *, launcher=None):
     if launcher is None:
         launcher = Path(__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)
-    command = [sys.executable, str(launcher),
-        "--executable", str(args.executable), "--working-directory", str(args.runtime),
-        "--logserver-executable", str(args.logserver_executable), "--output", str(image),
-        "--log-output", str(image.with_suffix(LIT_LOG_2)), "--application-capture",
-        "--application-capture-frame-count", str(FRAME_COUNT), LIT_TIMEOUT, str(args.timeout),
-        LIT_EXPECT_LOG_MESSAGE, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN]
+    command = [sys.executable, str(launcher), "--executable", str(args.executable), "--working-directory", str(args.runtime), "--logserver-executable", str(args.logserver_executable), "--output", str(image),
+        "--log-output", str(image.with_suffix(LIT_LOG_2)), "--application-capture", "--application-capture-frame-count", str(FRAME_COUNT), LIT_TIMEOUT, str(args.timeout), LIT_EXPECT_LOG_MESSAGE, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     if any(value == LIT_GPUDBG or value.startswith(LIT_GPUDBG_2) for value in args.application_arg):
         for marker in GPU_DEBUG_MARKERS:
@@ -374,19 +343,15 @@ def main(argv=None):
     output = args.output_directory
     owns_output = False
     try:
-        validate_output_path(output, (args.executable.parent, args.runtime, args.source_manifest.parent,
-            args.logserver_executable.parent, Path(__file__).resolve().parent))
+        validate_output_path(output, (args.executable.parent, args.runtime, args.source_manifest.parent, args.logserver_executable.parent, Path(__file__).resolve().parent))
         if not args.logserver_executable.is_file():
             raise SmokeFailure("explicit logserver executable is missing")
         identity = benchmark.freeze_arm(arm)
         logger_binaries = benchmark.binary_identity(args.logserver_executable)
         output.mkdir(parents=True, exist_ok=False)
         owns_output = True
-        report = {LIT_SCHEMA: SCHEMA, LIT_POLICY: POLICY, LIT_ARM: identity, LIT_CAPTURES: {}, LIT_METRICS: {},
-            LIT_APPLICATION_ARGS: args.application_arg, LIT_LAUNCHER: file_identity(Path(__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)),
-            LIT_QUALIFICATION_TOOL: file_identity(Path(__file__)), LIT_LOGSERVER: file_identity(args.logserver_executable),
-            LIT_LOGSERVER_PATH: str(args.logserver_executable), LIT_LOGSERVER_BINARIES: logger_binaries,
-            LIT_TIMEOUT_SECONDS: args.timeout}
+        report = {LIT_SCHEMA: SCHEMA, LIT_POLICY: POLICY, LIT_ARM: identity, LIT_CAPTURES: {}, LIT_METRICS: {}, LIT_APPLICATION_ARGS: args.application_arg, LIT_LAUNCHER: file_identity(Path(__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)),
+            LIT_QUALIFICATION_TOOL: file_identity(Path(__file__)), LIT_LOGSERVER: file_identity(args.logserver_executable), LIT_LOGSERVER_PATH: str(args.logserver_executable), LIT_LOGSERVER_BINARIES: logger_binaries, LIT_TIMEOUT_SECONDS: args.timeout}
         benchmark.write_json(output / "plan.json", report)
         frames = {}
         for preset in PRESETS:
@@ -414,12 +379,9 @@ def main(argv=None):
                 frames[key] = read_bmp_24_rows(image)
                 if frames[key][:2] != (WIDTH, HEIGHT):
                     raise SmokeFailure("actual caustic framebuffer has the wrong native extent")
-                report[LIT_CAPTURES][key] = {LIT_SETTINGS: settings, LIT_RUNTIME: runtime, LIT_COMMAND: command,
-                    LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: file_identity(image)},
-                    LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: file_identity(log)}}
+                report[LIT_CAPTURES][key] = {LIT_SETTINGS: settings, LIT_RUNTIME: runtime, LIT_COMMAND: command, LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: file_identity(image)}, LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: file_identity(log)}}
                 benchmark.write_json(output / "captures.json", report[LIT_CAPTURES])
-        report[LIT_METRICS] = {preset: footprint(frames[preset + LIT_ON_2], frames[preset + LIT_OFF], distance)
-            for preset, distance in PRESETS.items()}
+        report[LIT_METRICS] = {preset: footprint(frames[preset + LIT_ON_2], frames[preset + LIT_OFF], distance) for preset, distance in PRESETS.items()}
         benchmark.write_json(output / "measured_metrics.json", report[LIT_METRICS])
         validate_metrics(report[LIT_METRICS])
         benchmark.write_json(output / "qualification.json", report)

@@ -67,14 +67,8 @@ struct ObjectGeometryCacheSnapshot{
     [[nodiscard]] bool valid()const noexcept;
 };
 
-[[nodiscard]] Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(
-    u64 localVertexRefByteSize,
-    u32 primitiveIndexCount)noexcept;
-[[nodiscard]] bool AcceptObjectGeometryCacheWrite(
-    MeshResources& mesh,
-    const RuntimeMeshBuffers& sourceBuffers,
-    const ObjectGeometryCacheSnapshot& expected,
-    bool runtimeMesh)noexcept;
+[[nodiscard]] Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(u64 localVertexRefByteSize, u32 primitiveIndexCount)noexcept;
+[[nodiscard]] bool AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, bool runtimeMesh)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -60,8 +60,7 @@ TEST_F(UiWindowSkinTests, ReplacingAtlasChangesMetricsAndBindingsWithoutChanging
             region.minimumWidth = 26.0f;
             region.minimumHeight = 28.0f;
         }
-        else if(region.name == Name("button.normal") || region.name == Name("button.hover")
-            || region.name == Name("button.pressed") || region.name == Name("button.disabled")){
+        else if(region.name == Name("button.normal") || region.name == Name("button.hover") || region.name == Name("button.pressed") || region.name == Name("button.disabled")){
             region.padding = { 13.0f, 14.0f, 15.0f, 16.0f };
             region.minimumWidth = 120.0f;
             region.minimumHeight = 60.0f;

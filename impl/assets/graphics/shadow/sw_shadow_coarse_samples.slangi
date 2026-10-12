@@ -61,12 +61,7 @@ half3 nwbSwShadowInterpolateCoarse(const NwbSwShadowCoarseSamples samples, const
 }
 
 // Both adaptive paths classify the same coarse data for one scene-light entry. The caller owns the different edge action (full-resolution trace versus compact-list append), while this helper owns slot filtering and threshold math.
-bool nwbSwShadowLoadCoarseLight(
-    const NwbSwShadowCoarseLocation location,
-    const uint lightIndex,
-    const half edgeThreshold,
-    out NwbSwShadowCoarseLight outLight
-){
+bool nwbSwShadowLoadCoarseLight(const NwbSwShadowCoarseLocation location, const uint lightIndex, const half edgeThreshold, out NwbSwShadowCoarseLight outLight){
     const float slotF = g_NwbSceneLights[lightIndex].params.z;
     if(slotF < 0.0){
         // Callers ignore this value when false, but every out path must still be initialized for Slang.

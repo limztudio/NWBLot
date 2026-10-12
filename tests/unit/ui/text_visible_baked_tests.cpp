@@ -26,10 +26,7 @@ using namespace NWB::UiTextVisibleTests;
 class TextVisibleBakedTests : public TextVisibleFixture{
 protected:
     [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin){
-        return
-            Rect{ origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y,
-                glyph.ink.width, glyph.ink.height }
-        ;
+        return Rect{ origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
     }
 
     [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin){
@@ -41,11 +38,7 @@ protected:
         const BakedFontAtlas& atlas = *glyph.face->bakedAtlas();
         const FontAtlasGlyph& record = *atlas.glyph(glyph.glyphId);
         const f32 scale = 32.0f / static_cast<f32>(atlas.unitsPerEm());
-        return
-            Rect{ origin.x + glyph.position.x + record.planeLeft * scale,
-                origin.y + glyph.position.y + record.planeTop * scale,
-                (record.planeRight - record.planeLeft) * scale, (record.planeBottom - record.planeTop) * scale }
-        ;
+        return Rect{ origin.x + glyph.position.x + record.planeLeft * scale, origin.y + glyph.position.y + record.planeTop * scale, (record.planeRight - record.planeLeft) * scale, (record.planeBottom - record.planeTop) * scale };
     }
 
 
@@ -67,10 +60,7 @@ protected:
         payload.font = Core::Assets::AssetRef<Font>("tests/ui/fonts/latin");
         const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
         payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
-        hb_blob_t* blob = hb_blob_create(
-            reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()),
-            HB_MEMORY_MODE_READONLY, nullptr, nullptr
-        );
+        hb_blob_t* blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
         hb_face_t* face = hb_face_create(blob, 0u);
         payload.unitsPerEm = hb_face_get_upem(face);
         payload.sourceGlyphCount = hb_face_get_glyph_count(face);

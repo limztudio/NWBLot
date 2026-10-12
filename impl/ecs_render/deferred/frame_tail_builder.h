@@ -51,9 +51,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<DeferredFrameTailResult> declare(
-        const DeferredFrameTailInputs& inputs
-    );
+    [[nodiscard]] Expected<DeferredFrameTailResult> declare(const DeferredFrameTailInputs& inputs);
 
 
 private:

@@ -17,9 +17,7 @@ macro(nwb_require_supported_architecture)
     elseif(_nwb_requested_arch MATCHES "^(arm64|aarch64)$")
         set(_nwb_resolved_arch "arm64")
     else()
-        message(FATAL_ERROR
-            "Unsupported NWB_TARGET_ARCH '${_nwb_requested_arch}'. Expected x64 or arm64."
-        )
+        message(FATAL_ERROR "Unsupported NWB_TARGET_ARCH '${_nwb_requested_arch}'. Expected x64 or arm64.")
     endif()
 
     set(NWB_TARGET_ARCH "${_nwb_resolved_arch}" CACHE STRING "NWBLot target architecture" FORCE)

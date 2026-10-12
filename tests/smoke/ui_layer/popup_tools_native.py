@@ -57,8 +57,7 @@ class PopupToolsNativeInput(ComboNativeInput):
             return {}
         position = self.backend.POINT()
         cursor_known = bool(self.backend.user32.GetCursorPos(ctypes.byref(position)))
-        return {"cursor_screen": [position.x, position.y] if cursor_known else None,
-            "foreground_is_fixture": self.backend.user32.GetForegroundWindow() == self.handle}
+        return {"cursor_screen": [position.x, position.y] if cursor_known else None, "foreground_is_fixture": self.backend.user32.GetForegroundWindow() == self.handle}
 
     def key(self, name, down, *, repeat=False, shift=False, control=False):
         if self.windows and name == "Menu":
@@ -70,8 +69,7 @@ class PopupToolsNativeInput(ComboNativeInput):
     def right_button(self, down, x, y):
         self.pointer(x, y)
         if self.windows:
-            self._post(0x0204 if down else 0x0205, 2 if down else 0,
-                ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF))
+            self._post(0x0204 if down else 0x0205, 2 if down else 0, ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF))
         else:
             event = LinuxXEvent()
             event.xbutton.type = self.backend.BUTTON_PRESS if down else self.backend.BUTTON_RELEASE

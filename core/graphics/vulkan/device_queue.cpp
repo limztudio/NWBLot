@@ -69,28 +69,15 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::registerPhysicalQueue(
-    const VulkanPhysicalQueueDesc& desc,
-    NativeQueueState& nativeQueue
-){
+bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue){
     const u32 queueClassIndex = static_cast<u32>(desc.queueClass);
     const u8 requiredCapabilities = static_cast<u8>(VulkanDetail::DeviceMinimumQueueCapabilities(desc.queueClass));
     const u8 providedCapabilities = static_cast<u8>(desc.capabilities);
-    const u8 knownCapabilities = static_cast<u8>(
-        static_cast<u8>(GpuQueueCapability::Graphics)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Transfer)
-    );
-    const u8 graphicsOrComputeCapabilities = static_cast<u8>(
-        static_cast<u8>(GpuQueueCapability::Graphics)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-    );
+    const u8 knownCapabilities = static_cast<u8>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer));
+    const u8 graphicsOrComputeCapabilities = static_cast<u8>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute));
     constexpr u32 s_MinTimestampValidBits = 36u;
     constexpr u32 s_MaxTimestampValidBits = 64u;
-    const bool missingRequiredTransferCapability =
-        (providedCapabilities & graphicsOrComputeCapabilities) != 0u
-        && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
-    ;
+    const bool missingRequiredTransferCapability = (providedCapabilities & graphicsOrComputeCapabilities) != 0u && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u;
     if(
         nativeQueue.queue == VK_NULL_HANDLE
         || nativeQueue.familyIndex == Limit<u32>::s_Max
@@ -122,10 +109,7 @@ bool Device::registerPhysicalQueue(
         .familyIndex = nativeQueue.familyIndex,
         .queueIndex = nativeQueue.queueIndex,
         .timestampValidBits = desc.timestampValidBits,
-        .id = GpuPhysicalQueueId{
-            .index = static_cast<u16>(m_physicalQueueInfos.size()),
-            .deviceGeneration = m_deviceGeneration,
-        },
+        .id = GpuPhysicalQueueId{ .index = static_cast<u16>(m_physicalQueueInfos.size()), .deviceGeneration = m_deviceGeneration, },
         .queueClass = desc.queueClass,
         .capabilities = desc.capabilities,
         .dedicated = desc.dedicated,
@@ -158,83 +142,42 @@ void Device::configureQueueSharingContext(){
         if(!primaryQueue)
             return s_InvalidQueueFamilyIndex;
         for(const Queue* const physicalQueue : m_physicalQueues){
-            if(
-                physicalQueue
-                && physicalQueue->m_queueID == queueClass
-                && physicalQueue->m_queueFamilyIndex != primaryQueue->m_queueFamilyIndex
-            )
+            if(physicalQueue && physicalQueue->m_queueID == queueClass && physicalQueue->m_queueFamilyIndex != primaryQueue->m_queueFamilyIndex)
                 return static_cast<i32>(physicalQueue->m_queueFamilyIndex);
         }
         return s_InvalidQueueFamilyIndex;
     };
 
-    m_context.graphicsQueueFamilyIndex = graphicsQueue
-        ? static_cast<i32>(graphicsQueue->m_queueFamilyIndex)
-        : s_InvalidQueueFamilyIndex
-    ;
+    m_context.graphicsQueueFamilyIndex = graphicsQueue ? static_cast<i32>(graphicsQueue->m_queueFamilyIndex) : s_InvalidQueueFamilyIndex;
     m_context.auxiliaryGraphicsQueueFamilyIndex = resolveAuxiliaryFamily(graphicsQueue, CommandQueue::Graphics);
-    m_context.asyncComputeQueueFamilyIndex = computeQueue
-        ? static_cast<i32>(computeQueue->m_queueFamilyIndex)
-        : s_InvalidQueueFamilyIndex
-    ;
+    m_context.asyncComputeQueueFamilyIndex = computeQueue ? static_cast<i32>(computeQueue->m_queueFamilyIndex) : s_InvalidQueueFamilyIndex;
     m_context.auxiliaryAsyncComputeQueueFamilyIndex = resolveAuxiliaryFamily(computeQueue, CommandQueue::Compute);
-    m_context.transferQueueFamilyIndex = transferQueue
-        ? static_cast<i32>(transferQueue->m_queueFamilyIndex)
-        : s_InvalidQueueFamilyIndex
-    ;
+    m_context.transferQueueFamilyIndex = transferQueue ? static_cast<i32>(transferQueue->m_queueFamilyIndex) : s_InvalidQueueFamilyIndex;
     m_context.auxiliaryTransferQueueFamilyIndex = resolveAuxiliaryFamily(transferQueue, CommandQueue::Transfer);
     // Cross-family async Compute stays an explicit sharing capability.
-    m_context.asyncComputeLaneEnabled = graphicsQueue
-        && computeQueue
-        && computeQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex
-    ;
-    m_context.transferQueueEnabled = transferQueue
-        && (!graphicsQueue || transferQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex)
-        && (!computeQueue || transferQueue->m_queueFamilyIndex != computeQueue->m_queueFamilyIndex)
-    ;
+    m_context.asyncComputeLaneEnabled = graphicsQueue && computeQueue && computeQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex;
+    m_context.transferQueueEnabled = transferQueue && (!graphicsQueue || transferQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex) && (!computeQueue || transferQueue->m_queueFamilyIndex != computeQueue->m_queueFamilyIndex);
 }
 
 
 bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
-    if(
-        !token.valid()
-        || !token.hasPhysicalQueueIdentity()
-        || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)
-        || token.physicalQueueIndex >= m_physicalQueues.size()
-    )
+    if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
         return false;
 
     Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
-    if(
-        !producerQueue
-        || producerQueue->m_queueID != token.queue
-        || !token.matchesPhysicalQueue(
-            producerQueue->m_physicalQueue.index,
-            producerQueue->m_physicalQueue.deviceGeneration
-        )
-    )
+    if(!producerQueue || producerQueue->m_queueID != token.queue || !token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration))
         return false;
 
     NothrowScopedLock producerLock(producerQueue->m_mutex);
-    return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE
-        && token.value <= producerQueue->m_lastSubmittedID
-    ;
+    return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_lastSubmittedID;
 }
 
 bool Device::waitForSubmissionToken(const QueueSubmissionToken& token){
     return waitForSubmissionTokenInternal(token, DeviceLossDiagnosticPolicy::Capture);
 }
 
-bool Device::waitForSubmissionTokenInternal(
-    const QueueSubmissionToken& token,
-    const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
-){
-    if(
-        !token.valid()
-        || !token.hasPhysicalQueueIdentity()
-        || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)
-        || token.physicalQueueIndex >= m_physicalQueues.size()
-    )
+bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy){
+    if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
         return false;
 
     Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
@@ -244,11 +187,7 @@ bool Device::waitForSubmissionTokenInternal(
     VkResult result = VK_SUCCESS;
     {
         ScopedLock producerLock(producerQueue->m_mutex);
-        if(
-            producerQueue->m_trackingSemaphore == VK_NULL_HANDLE
-            || producerQueue->m_queueID != token.queue
-            || token.value > producerQueue->m_lastSubmittedID
-        )
+        if(producerQueue->m_trackingSemaphore == VK_NULL_HANDLE || producerQueue->m_queueID != token.queue || token.value > producerQueue->m_lastSubmittedID)
             return false;
         if(token.value <= producerQueue->m_lastFinishedID)
             return true;
@@ -303,35 +242,15 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-Expected<QueueSubmissionReceipt> Device::executeCommandLists(
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const CommandQueue::Enum executionQueue,
-    const QueueSubmissionDesc& submitDesc
-){
-    return executeCommandLists(
-        pCommandLists,
-        numCommandLists,
-        getPrimaryPhysicalQueue(executionQueue),
-        submitDesc
-    );
+Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
+    return executeCommandLists(pCommandLists, numCommandLists, getPrimaryPhysicalQueue(executionQueue), submitDesc);
 }
 
-Expected<QueueSubmissionReceipt> Device::executeCommandLists(
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const GpuPhysicalQueueId& executionQueue,
-    const QueueSubmissionDesc& submitDesc
-){
+Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
     return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, false);
 }
 
-void Device::prepareSubmissionCommandListWorkspaceLocked(
-    Queue& queue,
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const bool graphSubmissionAuthorized
-){
+void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* pCommandLists, const usize numCommandLists, const bool graphSubmissionAuthorized){
     auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     auto& submittedOwners = queue.m_executeSubmittedOwners;
     expectedCommandLists.clear();
@@ -346,9 +265,7 @@ void Device::prepareSubmissionCommandListWorkspaceLocked(
                 .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
                 .nativeRecordingID = commandList->m_nativeRecordingID,
                 .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
-                .graphRecordingOwnershipSerial = graphSubmissionAuthorized
-                    ? commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
-                    : 0u,
+                .graphRecordingOwnershipSerial = graphSubmissionAuthorized ? commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) : 0u,
                 .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
                 .graphSubmissionAuthorized = graphSubmissionAuthorized,
             });
@@ -365,33 +282,14 @@ void Device::prepareSubmissionCommandListWorkspaceLocked(
 
 }
 
-void Device::finalizeSubmissionCommandListResourcesLocked(
-    Queue& queue,
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const GpuPhysicalQueueId& executionQueue,
-    const u64 submittedID,
-    const bool submissionAccepted
-){
+void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* pCommandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const bool submissionAccepted){
     const auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     if(expectedCommandLists.empty())
         return;
 
     if(submissionAccepted){
-        m_uploadManager.submitChunks(
-            executionQueue,
-            submittedID,
-            expectedCommandLists.data(),
-            expectedCommandLists.size(),
-            queue.m_executeSubmittedOwners
-        );
-        m_scratchManager.submitChunks(
-            executionQueue,
-            submittedID,
-            expectedCommandLists.data(),
-            expectedCommandLists.size(),
-            queue.m_executeSubmittedOwners
-        );
+        m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
+        m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
         return;
     }
 
@@ -400,11 +298,7 @@ void Device::finalizeSubmissionCommandListResourcesLocked(
             return false;
         for(usize i = 0u; i < numCommandLists; ++i){
             CommandList* const commandList = pCommandLists[i];
-            if(
-                commandList
-                && commandList->m_currentCmdBuf.get() == expected.owner
-                && commandList->m_nativeRecordingID == expected.nativeRecordingID
-            )
+            if(commandList && commandList->m_currentCmdBuf.get() == expected.owner && commandList->m_nativeRecordingID == expected.nativeRecordingID)
                 return true;
         }
         return false;
@@ -414,27 +308,12 @@ void Device::finalizeSubmissionCommandListResourcesLocked(
     for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
         if(ownerStillRecorded(expected))
             continue;
-        m_uploadManager.discardChunks(
-            executionQueue,
-            expected.owner,
-            expected.nativeRecordingID,
-            reusableVersion
-        );
-        m_scratchManager.discardChunks(
-            executionQueue,
-            expected.owner,
-            expected.nativeRecordingID,
-            reusableVersion
-        );
+        m_uploadManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, reusableVersion);
+        m_scratchManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, reusableVersion);
     }
 }
 
-Expected<QueueSubmissionReceipt> Device::executeGraphCommandLists(
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const GpuPhysicalQueueId& executionQueue,
-    const QueueSubmissionDesc& submitDesc
-){
+Expected<QueueSubmissionReceipt> Device::executeGraphCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
     return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, true);
 }
 
@@ -477,9 +356,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
             return MakeUnexpected(Failure{});
         }
         if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, graphSubmissionAuthorized)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue")
-                , i
-            );
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
             return MakeUnexpected(Failure{});
         }
         if(!commandList->hasCommandBufferUnchecked()){
@@ -540,12 +417,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         }
     }
 
-    prepareSubmissionCommandListWorkspaceLocked(
-        *queue,
-        pCommandLists,
-        numCommandLists,
-        graphSubmissionAuthorized
-    );
+    prepareSubmissionCommandListWorkspaceLocked(*queue, pCommandLists, numCommandLists, graphSubmissionAuthorized);
 
     // Hook runs after waits validate; its signal stays submission-local.
     Queue::SubmissionSignal hookSignal = {};
@@ -553,11 +425,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     usize localSignalCount = 0u;
     __hidden_vulkan_device_queue::ScopedSubmissionHookResolution hookResolution(submitDesc.preSubmitHook);
     if(submitDesc.preSubmitHook.valid()){
-        const auto nativeSignal = submitDesc.preSubmitHook.invoke(
-            submitDesc.preSubmitHook.context,
-            submitDesc.preSubmitHook.identity,
-            executionQueue
-        );
+        const auto nativeSignal = submitDesc.preSubmitHook.invoke(submitDesc.preSubmitHook.context, submitDesc.preSubmitHook.identity, executionQueue);
         if(nativeSignal)
             hookResolution.arm();
         if(!nativeSignal || !nativeSignal->valid()){
@@ -589,23 +457,11 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     const u64 submittedID = submission ? submission->submittedID : submission.error().lastSubmittedID;
     const VkResult nativeSubmissionResult = submission ? VK_SUCCESS : submission.error().nativeResult;
     const QueueSubmissionToken submissionToken = submissionAccepted
-        ? QueueSubmissionToken{
-            .value = submittedID,
-            .physicalQueueIndex = executionQueue.index,
-            .deviceGeneration = executionQueue.deviceGeneration,
-            .queue = queue->m_queueID,
-        }
+        ? QueueSubmissionToken{ .value = submittedID, .physicalQueueIndex = executionQueue.index, .deviceGeneration = executionQueue.deviceGeneration, .queue = queue->m_queueID, }
         : QueueSubmissionToken{}
     ;
 
-    finalizeSubmissionCommandListResourcesLocked(
-        *queue,
-        pCommandLists,
-        numCommandLists,
-        executionQueue,
-        submittedID,
-        submissionAccepted
-    );
+    finalizeSubmissionCommandListResourcesLocked(*queue, pCommandLists, numCommandLists, executionQueue, submittedID, submissionAccepted);
     hookResolution.resolve(submissionToken);
 
     submissionWorkspaceLock.unlock();

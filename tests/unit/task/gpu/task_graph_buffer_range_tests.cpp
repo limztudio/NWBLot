@@ -46,36 +46,16 @@ using TaskGraphTestUtils::TestArena;
     const Graphics::ResourceStates::Mask state,
     const Graphics::GpuTaskResourceAccess::Enum access = Graphics::GpuTaskResourceAccess::Write
 ){
-    return Graphics::GpuTaskResourceUse{
-        .resource = resource,
-        .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(offset, size) },
-        .requiredState = state,
-        .access = access,
-    };
+    return Graphics::GpuTaskResourceUse{ .resource = resource, .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(offset, size) }, .requiredState = state, .access = access, };
 }
 
-[[nodiscard]] static Graphics::GpuTaskId AddRangeTask(
-    Graphics::GpuTaskGraph& graph,
-    const Name& identity,
-    const Graphics::GpuTaskResourceUse* const uses,
-    const usize useCount,
-    const bool compute = false
-){
+[[nodiscard]] static Graphics::GpuTaskId AddRangeTask(Graphics::GpuTaskGraph& graph, const Name& identity, const Graphics::GpuTaskResourceUse* const uses, const usize useCount, const bool compute = false){
     Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(identity)
-        .setMarkerLabel("Buffer Range Task")
-        .setResourceUses(uses, useCount)
-    ;
+    desc.setIdentity(identity).setMarkerLabel("Buffer Range Task").setResourceUses(uses, useCount);
     return graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ compute ? Graphics::GpuQueueCapability::Compute : Graphics::GpuQueueCapability::Graphics });
 }
 
-[[nodiscard]] static const Graphics::GpuCompiledBarrier* FindRangeBarrier(
-    const Graphics::GpuCompiledBarrier* const barriers,
-    const u32 count,
-    const Graphics::BufferRange& range,
-    const Graphics::GpuCompiledBarrierType::Enum type
-){
+[[nodiscard]] static const Graphics::GpuCompiledBarrier* FindRangeBarrier(const Graphics::GpuCompiledBarrier* const barriers, const u32 count, const Graphics::BufferRange& range, const Graphics::GpuCompiledBarrierType::Enum type){
     for(u32 index = 0u; index < count; ++index){
         if(barriers[index].type == type && barriers[index].range.bufferRange == range)
             return &barriers[index];
@@ -90,18 +70,9 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraphBufferRange, IndependentIntervalsKeepSeparateInitialStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
-        graph,
-        Name("tests/buffer_range/independent"),
-        "Independent Bytes"
-    );
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(graph, Name("tests/buffer_range/independent"), "Independent Bytes");
     const Graphics::GpuTaskResourceUse firstUse = BufferUse(buffer, 0u, 32u, Graphics::ResourceStates::CopyDest);
-    const Graphics::GpuTaskResourceUse tailUse = BufferUse(
-        buffer,
-        32u,
-        Graphics::BufferRange::s_AllBytes,
-        Graphics::ResourceStates::UnorderedAccess
-    );
+    const Graphics::GpuTaskResourceUse tailUse = BufferUse(buffer, 32u, Graphics::BufferRange::s_AllBytes, Graphics::ResourceStates::UnorderedAccess);
     const Graphics::GpuTaskId first = AddRangeTask(graph, Name("tests/buffer_range/first"), &firstUse, 1u);
     const Graphics::GpuTaskId tail = AddRangeTask(graph, Name("tests/buffer_range/tail"), &tailUse, 1u);
     ASSERT_TRUE(first.valid());
@@ -131,13 +102,7 @@ TEST(GpuTaskGraphBufferRange, WideConsumerCollectsOlderPrefixAndTailAfterPartial
     const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(graph, Name("tests/buffer_range/fan_in"), "Byte Fan In");
     const Graphics::GpuTaskResourceUse wholeUse = BufferUse(buffer, 0u, 128u, Graphics::ResourceStates::CopyDest);
     const Graphics::GpuTaskResourceUse middleUse = BufferUse(buffer, 32u, 32u, Graphics::ResourceStates::UnorderedAccess);
-    const Graphics::GpuTaskResourceUse readUse = BufferUse(
-        buffer,
-        0u,
-        128u,
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
+    const Graphics::GpuTaskResourceUse readUse = BufferUse(buffer, 0u, 128u, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
     const Graphics::GpuTaskId whole = AddRangeTask(graph, Name("tests/buffer_range/whole"), &wholeUse, 1u);
     const Graphics::GpuTaskId middle = AddRangeTask(graph, Name("tests/buffer_range/middle"), &middleUse, 1u);
     const Graphics::GpuTaskId reader = AddRangeTask(graph, Name("tests/buffer_range/reader"), &readUse, 1u);
@@ -161,17 +126,9 @@ TEST(GpuTaskGraphBufferRange, WideConsumerCollectsOlderPrefixAndTailAfterPartial
     ASSERT_EQ(readerView.plan->prologueStateSeedCount, 3u);
     const Graphics::BufferRange ranges[] = { { 0u, 32u }, { 64u, 64u }, { 32u, 32u } };
     for(usize index = 0u; index < LengthOf(ranges); ++index){
-        const Graphics::GpuCompiledBarrier* const barrier = FindRangeBarrier(
-            readerView.prologueBarriers,
-            readerView.plan->prologueBarrierCount,
-            ranges[index],
-            Graphics::GpuCompiledBarrierType::BufferTransition
-        );
+        const Graphics::GpuCompiledBarrier* const barrier = FindRangeBarrier(readerView.prologueBarriers, readerView.plan->prologueBarrierCount, ranges[index], Graphics::GpuCompiledBarrierType::BufferTransition);
         ASSERT_NE(barrier, nullptr);
-        EXPECT_EQ(
-            barrier->before,
-            index == s_ExpectedDualCount ? Graphics::ResourceStates::UnorderedAccess : Graphics::ResourceStates::CopyDest
-        );
+        EXPECT_EQ(barrier->before, index == s_ExpectedDualCount ? Graphics::ResourceStates::UnorderedAccess : Graphics::ResourceStates::CopyDest);
         EXPECT_EQ(barrier->after, Graphics::ResourceStates::ShaderResource);
         const Graphics::GpuSubmissionPacketId producerPacket = plan.findTask(index == s_ExpectedDualCount ? middle : whole).plan->packet;
         bool foundSeed = false;
@@ -187,18 +144,9 @@ TEST(GpuTaskGraphBufferRange, SameTaskOverlappingDeclarationsSeedOnlyNewBytes){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(graph, Name("tests/buffer_range/local"), "Local Byte Ranges");
-    const Graphics::GpuTaskResourceUse uses[] = {
-        BufferUse(buffer, 32u, 32u, Graphics::ResourceStates::CopyDest),
-        BufferUse(buffer, 0u, 128u, Graphics::ResourceStates::UnorderedAccess),
-    };
+    const Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 32u, 32u, Graphics::ResourceStates::CopyDest), BufferUse(buffer, 0u, 128u, Graphics::ResourceStates::UnorderedAccess), };
     const Graphics::GpuTaskId task = AddRangeTask(graph, Name("tests/buffer_range/local_writer"), uses, LengthOf(uses));
-    const Graphics::GpuTaskResourceUse readUse = BufferUse(
-        buffer,
-        0u,
-        128u,
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
+    const Graphics::GpuTaskResourceUse readUse = BufferUse(buffer, 0u, 128u, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
     const Graphics::GpuTaskId reader = AddRangeTask(graph, Name("tests/buffer_range/local_reader"), &readUse, 1u);
     ASSERT_TRUE(task.valid());
     ASSERT_TRUE(reader.valid());
@@ -216,12 +164,7 @@ TEST(GpuTaskGraphBufferRange, SameTaskOverlappingDeclarationsSeedOnlyNewBytes){
     ASSERT_EQ(taskView.plan->prologueBarrierCount, 3u);
     const Graphics::BufferRange ranges[] = { { 32u, 32u }, { 0u, 32u }, { 64u, 64u } };
     for(usize index = 0u; index < LengthOf(ranges); ++index){
-        const Graphics::GpuCompiledBarrier* const barrier = FindRangeBarrier(
-            taskView.prologueBarriers,
-            taskView.plan->prologueBarrierCount,
-            ranges[index],
-            Graphics::GpuCompiledBarrierType::BufferTransition
-        );
+        const Graphics::GpuCompiledBarrier* const barrier = FindRangeBarrier(taskView.prologueBarriers, taskView.plan->prologueBarrierCount, ranges[index], Graphics::GpuCompiledBarrierType::BufferTransition);
         ASSERT_NE(barrier, nullptr);
         EXPECT_EQ(barrier->before, Graphics::ResourceStates::Common);
         EXPECT_EQ(barrier->after, index == 0u ? Graphics::ResourceStates::CopyDest : Graphics::ResourceStates::UnorderedAccess);
@@ -247,12 +190,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
             .setExternalFinalReleaseDestinationQueue(queues[s_ThirdElementIndex].id)
     );
-    const Graphics::GpuTaskResourceUse wholeUse = BufferUse(
-        buffer,
-        0u,
-        Graphics::BufferRange::s_AllBytes,
-        Graphics::ResourceStates::CopyDest
-    );
+    const Graphics::GpuTaskResourceUse wholeUse = BufferUse(buffer, 0u, Graphics::BufferRange::s_AllBytes, Graphics::ResourceStates::CopyDest);
     const Graphics::GpuTaskResourceUse middleUse = BufferUse(buffer, 32u, 32u, Graphics::ResourceStates::UnorderedAccess);
     const Graphics::GpuTaskId whole = AddRangeTask(graph, Name("tests/buffer_range/export_whole"), &wholeUse, 1u);
     const Graphics::GpuTaskId middle = AddRangeTask(graph, Name("tests/buffer_range/export_middle"), &middleUse, 1u, true);
@@ -272,20 +210,10 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
         const Graphics::GpuTaskId producer = index == s_ExpectedDualCount ? middle : whole;
         const Graphics::GpuCompiledTaskView taskView = plan.findTask(producer);
         ASSERT_TRUE(taskView.valid());
-        const Graphics::GpuCompiledBarrier* const stateExport = FindRangeBarrier(
-            taskView.epilogueBarriers,
-            taskView.plan->epilogueBarrierCount,
-            ranges[index],
-            Graphics::GpuCompiledBarrierType::BufferStateExport
-        );
+        const Graphics::GpuCompiledBarrier* const stateExport = FindRangeBarrier(taskView.epilogueBarriers, taskView.plan->epilogueBarrierCount, ranges[index], Graphics::GpuCompiledBarrierType::BufferStateExport);
         ASSERT_NE(stateExport, nullptr);
         EXPECT_EQ(stateExport->after, Graphics::ResourceStates::ShaderResource);
-        EXPECT_NE(FindRangeBarrier(
-            taskView.epilogueBarriers,
-            taskView.plan->epilogueBarrierCount,
-            ranges[index],
-            Graphics::GpuCompiledBarrierType::BufferOwnershipRelease
-        ), nullptr);
+        EXPECT_NE(FindRangeBarrier(taskView.epilogueBarriers, taskView.plan->epilogueBarrierCount, ranges[index], Graphics::GpuCompiledBarrierType::BufferOwnershipRelease), nullptr);
         bool foundSource = false;
         for(u32 sourceIndex = 0u; sourceIndex < exportView.plan->sourceCount; ++sourceIndex){
             const Graphics::GpuCompiledExternalResourceExportSource& source = exportView.sources[sourceIndex];
@@ -300,20 +228,10 @@ TEST(GpuTaskGraphBufferRange, CrossQueueFanInTransfersOnlyIntersectingBytes){
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
-        graph,
-        Name("tests/buffer_range/cross_queue"),
-        "Cross Queue Bytes"
-    );
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(graph, Name("tests/buffer_range/cross_queue"), "Cross Queue Bytes");
     const Graphics::GpuTaskResourceUse graphicsUse = BufferUse(buffer, 0u, 64u, Graphics::ResourceStates::CopyDest);
     const Graphics::GpuTaskResourceUse computeUse = BufferUse(buffer, 64u, 64u, Graphics::ResourceStates::UnorderedAccess);
-    const Graphics::GpuTaskResourceUse readUse = BufferUse(
-        buffer,
-        32u,
-        64u,
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
+    const Graphics::GpuTaskResourceUse readUse = BufferUse(buffer, 32u, 64u, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
     const Graphics::GpuTaskId graphics = AddRangeTask(graph, Name("tests/buffer_range/graphics"), &graphicsUse, 1u);
     const Graphics::GpuTaskId compute = AddRangeTask(graph, Name("tests/buffer_range/compute"), &computeUse, 1u, true);
     const Graphics::GpuTaskId reader = AddRangeTask(graph, Name("tests/buffer_range/join"), &readUse, 1u);
@@ -338,18 +256,8 @@ TEST(GpuTaskGraphBufferRange, CrossQueueFanInTransfersOnlyIntersectingBytes){
     EXPECT_EQ(transfer->range.bufferRange, Graphics::BufferRange(64u, 32u));
     EXPECT_EQ(transfer->sourceTask, compute);
     EXPECT_EQ(transfer->destinationTask, reader);
-    EXPECT_NE(FindRangeBarrier(
-        computeView.epilogueBarriers,
-        computeView.plan->epilogueBarrierCount,
-        Graphics::BufferRange(64u, 32u),
-        Graphics::GpuCompiledBarrierType::BufferOwnershipRelease
-    ), nullptr);
-    EXPECT_NE(FindRangeBarrier(
-        readerView.prologueBarriers,
-        readerView.plan->prologueBarrierCount,
-        Graphics::BufferRange(64u, 32u),
-        Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire
-    ), nullptr);
+    EXPECT_NE(FindRangeBarrier(computeView.epilogueBarriers, computeView.plan->epilogueBarrierCount, Graphics::BufferRange(64u, 32u), Graphics::GpuCompiledBarrierType::BufferOwnershipRelease), nullptr);
+    EXPECT_NE(FindRangeBarrier(readerView.prologueBarriers, readerView.plan->prologueBarrierCount, Graphics::BufferRange(64u, 32u), Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire), nullptr);
 }
 
 
@@ -377,24 +285,16 @@ TEST(GpuTaskGraphBufferRange, GroupsLateOwnershipAndTerminalExportsInTaskAndDisc
     }
     for(usize offset = 0u; offset < resources.size(); ++offset){
         const usize index = resources.size() - offset - 1u;
-        const Graphics::GpuTaskResourceUse use = BufferUse(
-            resources[index], ranges[index].byteOffset, ranges[index].byteSize, Graphics::ResourceStates::CopyDest
-        );
+        const Graphics::GpuTaskResourceUse use = BufferUse(resources[index], ranges[index].byteOffset, ranges[index].byteSize, Graphics::ResourceStates::CopyDest);
         writers[index] = AddRangeTask(graph, DeriveName(identities[index], AStringView("writer")), &use, 1u);
         ASSERT_TRUE(writers[index].valid());
     }
     for(usize index = 0u; index < resources.size(); ++index){
-        const Graphics::GpuTaskResourceUse use = BufferUse(
-            resources[index], ranges[index].byteOffset, ranges[index].byteSize,
-            Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read
-        );
+        const Graphics::GpuTaskResourceUse use = BufferUse(resources[index], ranges[index].byteOffset, ranges[index].byteSize, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
         consumers[index] = AddRangeTask(graph, DeriveName(identities[index], AStringView("consumer")), &use, 1u, true);
         ASSERT_TRUE(consumers[index].valid());
     }
-    const Graphics::GpuTaskId empty = graph.addTask(Graphics::GpuTaskDesc{}
-        .setIdentity(Name("tests/buffer_range/grouped_empty"))
-        .setMarkerLabel("No Epilogue Task")
-    );
+    const Graphics::GpuTaskId empty = graph.addTask(Graphics::GpuTaskDesc{}.setIdentity(Name("tests/buffer_range/grouped_empty")).setMarkerLabel("No Epilogue Task"));
     ASSERT_TRUE(empty.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);

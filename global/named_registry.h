@@ -19,14 +19,7 @@ template<
     typename CreateScope,
     typename ConfigureScope
 >
-[[nodiscard]] ScopeId RegisterNamedScope(
-    ScopeVector& scopes,
-    ScopeMap& scopeMap,
-    const u32 generation,
-    const Name& scopeName,
-    CreateScope&& createScope,
-    ConfigureScope&& configureScope
-){
+[[nodiscard]] ScopeId RegisterNamedScope(ScopeVector& scopes, ScopeMap& scopeMap, const u32 generation, const Name& scopeName, CreateScope&& createScope, ConfigureScope&& configureScope){
     if(!scopeName)
         return {};
 
@@ -59,10 +52,7 @@ template<
 
 
 template<
-    typename ScopeId,
-    typename ScopeVector
->
-[[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope) -> decltype(scopes[scope.index].get()){
+    typename ScopeId, typename ScopeVector > [[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope) -> decltype(scopes[scope.index].get()){
     if(!scope.valid() || scope.index >= scopes.size())
         return nullptr;
 

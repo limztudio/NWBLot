@@ -24,13 +24,7 @@ namespace __hidden_frame_state{
     return cutter.active && cutter.shapeType != s_NameNone;
 }
 
-[[nodiscard]] bool ReceiverVisible(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    const CsgReceiverKind::Enum receiverKind,
-    const CsgReceiverComponent& receiver,
-    const CsgFrameBuildDesc& desc
-){
+[[nodiscard]] bool ReceiverVisible(Core::ECS::World& world, const Core::ECS::EntityID entity, const CsgReceiverKind::Enum receiverKind, const CsgReceiverComponent& receiver, const CsgFrameBuildDesc& desc){
     if(!desc.receiverVisible)
         return true;
 
@@ -51,43 +45,24 @@ template<typename ComponentT>
 }
 
 template<typename ReceiverT>
-void GatherReceiverState(
-    Core::ECS::World& world,
-    const CsgReceiverKind::Enum receiverKind,
-    const CsgFrameReceiverLookup& receiverLookup,
-    const CsgFrameBuildDesc& desc,
-    CsgFrameState& inOutState
-){
+void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum receiverKind, const CsgFrameReceiverLookup& receiverLookup, const CsgFrameBuildDesc& desc, CsgFrameState& inOutState){
     auto receiverView = world.view<ReceiverT>();
-    receiverView.each(
-        [&](const Core::ECS::EntityID entity, ReceiverT& typedReceiver){
+    receiverView.each([&](const Core::ECS::EntityID entity, ReceiverT& typedReceiver){
             const CsgReceiverComponent& receiver = typedReceiver;
             if(!receiver.enabled)
                 return;
             if(!ReceiverVisible(world, entity, receiverKind, receiver, desc))
                 return;
 
-            const auto opaqueState = desc.includeOpaquePass
-                ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Opaque)
-                : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}))
-            ;
-            const auto transparentState = desc.includeTransparentPass
-                ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Transparent)
-                : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}))
-            ;
+            const auto opaqueState = desc.includeOpaquePass ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Opaque) : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}));
+            const auto transparentState = desc.includeTransparentPass ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Transparent) : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}));
             const bool opaqueWork = opaqueState && opaqueState->receiverKind == receiverKind;
             const bool transparentWork = transparentState && transparentState->receiverKind == receiverKind;
             if(!opaqueWork && !transparentWork)
                 return;
 
             const CsgReceiverDrawState& receiverState = opaqueWork ? *opaqueState : *transparentState;
-            AddCsgFrameReceiverWork(
-                inOutState,
-                receiverKind,
-                opaqueWork,
-                transparentWork,
-                receiverState.cutterCount
-            );
+            AddCsgFrameReceiverWork(inOutState, receiverKind, opaqueWork, transparentWork, receiverState.cutterCount);
         }
     );
 }
@@ -110,8 +85,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
     auto cutterView = m_world.view<CsgCutterComponent>();
     m_cutterRanges.reserve(cutterView.candidateCount());
 
-    cutterView.each(
-        [&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
+    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
             static_cast<void>(entity);
             if(!__hidden_frame_state::ActiveCutter(cutter))
                 return;
@@ -134,8 +108,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
 
     m_cutterRefs.resize(static_cast<usize>(firstCutter));
 
-    cutterView.each(
-        [&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
+    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
             if(!__hidden_frame_state::ActiveCutter(cutter))
                 return;
 
@@ -158,10 +131,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
 }
 
 
-Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(
-    const Core::ECS::EntityID entity,
-    const CsgReceiverPass::Enum receiverPass
-)const{
+Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(const Core::ECS::EntityID entity, const CsgReceiverPass::Enum receiverPass)const{
     if(m_cutterRanges.empty())
         return MakeUnexpected(Failure{});
 
@@ -184,9 +154,7 @@ Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(
     return state;
 }
 
-Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(
-    const Core::ECS::EntityID entity
-)const{
+Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(const Core::ECS::EntityID entity)const{
     if(m_cutterRanges.empty())
         return MakeUnexpected(Failure{});
 
@@ -209,13 +177,7 @@ Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange
 
 
 bool HasCsgFrameCandidates(Core::ECS::World& world){
-    return
-        __hidden_frame_state::HasComponentCandidates<CsgCutterComponent>(world)
-        && (
-            __hidden_frame_state::HasComponentCandidates<StaticCsgMeshComponent>(world)
-            || __hidden_frame_state::HasComponentCandidates<SkinnedCsgMeshComponent>(world)
-        )
-    ;
+    return __hidden_frame_state::HasComponentCandidates<CsgCutterComponent>(world) && (__hidden_frame_state::HasComponentCandidates<StaticCsgMeshComponent>(world) || __hidden_frame_state::HasComponentCandidates<SkinnedCsgMeshComponent>(world));
 }
 
 Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity){
@@ -226,13 +188,7 @@ Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& worl
     return MakeUnexpected(Failure{});
 }
 
-void AddCsgFrameReceiverWork(
-    CsgFrameState& inOutState,
-    const CsgReceiverKind::Enum receiverKind,
-    const bool opaqueWork,
-    const bool transparentWork,
-    const u32 cutterCount
-){
+void AddCsgFrameReceiverWork(CsgFrameState& inOutState, const CsgReceiverKind::Enum receiverKind, const bool opaqueWork, const bool transparentWork, const u32 cutterCount){
     inOutState.receiverCount = AddSaturating<u32>(inOutState.receiverCount, 1u);
     inOutState.cutterCount = AddSaturating<u32>(inOutState.cutterCount, cutterCount);
 
@@ -247,19 +203,10 @@ void AddCsgFrameReceiverWork(
 }
 
 void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept{
-    inOutState.hasAnyWork =
-        inOutState.hasOpaqueStaticWork
-        || inOutState.hasOpaqueSkinnedWork
-        || inOutState.hasTransparentStaticWork
-        || inOutState.hasTransparentSkinnedWork
-    ;
+    inOutState.hasAnyWork = inOutState.hasOpaqueStaticWork || inOutState.hasOpaqueSkinnedWork || inOutState.hasTransparentStaticWork || inOutState.hasTransparentSkinnedWork;
 }
 
-CsgFrameState BuildCsgFrameState(
-    Core::ECS::World& world,
-    Core::Alloc::ScratchArena& scratchArena,
-    const CsgFrameBuildDesc& desc
-){
+CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc){
     CsgFrameState state;
 
     if(!HasCsgFrameCandidates(world))
@@ -269,20 +216,8 @@ CsgFrameState BuildCsgFrameState(
     if(receiverLookup.empty())
         return state;
 
-    __hidden_frame_state::GatherReceiverState<StaticCsgMeshComponent>(
-        world,
-        CsgReceiverKind::Static,
-        receiverLookup,
-        desc,
-        state
-    );
-    __hidden_frame_state::GatherReceiverState<SkinnedCsgMeshComponent>(
-        world,
-        CsgReceiverKind::Skinned,
-        receiverLookup,
-        desc,
-        state
-    );
+    __hidden_frame_state::GatherReceiverState<StaticCsgMeshComponent>(world, CsgReceiverKind::Static, receiverLookup, desc, state);
+    __hidden_frame_state::GatherReceiverState<SkinnedCsgMeshComponent>(world, CsgReceiverKind::Skinned, receiverLookup, desc, state);
 
     FinalizeCsgFrameState(state);
     return state;

@@ -31,12 +31,7 @@ static constexpr usize s_TableRecordBytes = 16u;
 }
 
 [[nodiscard]] static u32 ReadBigU32(const u8* data)noexcept{
-    return
-        (static_cast<u32>(data[0u]) << 24u)
-        | (static_cast<u32>(data[1u]) << 16u)
-        | (static_cast<u32>(data[2u]) << 8u)
-        | static_cast<u32>(data[3u])
-    ;
+    return (static_cast<u32>(data[0u]) << 24u) | (static_cast<u32>(data[1u]) << 16u) | (static_cast<u32>(data[2u]) << 8u) | static_cast<u32>(data[3u]);
 }
 
 
@@ -53,10 +48,7 @@ Expected<FontSfntDirectory> FontSfntDirectory::Read(const Span<const u8> bytes)n
     if(bytes.size() < s_FontSfntHeaderBytes)
         return MakeUnexpected(Failure{});
     const u16 tableCount = __hidden_font_source_directory::ReadBigU16(bytes.data() + 4u);
-    if(
-        tableCount == 0u || tableCount > s_FontMaxTableCount
-        || static_cast<usize>(tableCount) * __hidden_font_source_directory::s_TableRecordBytes > bytes.size() - s_FontSfntHeaderBytes
-    )
+    if(tableCount == 0u || tableCount > s_FontMaxTableCount || static_cast<usize>(tableCount) * __hidden_font_source_directory::s_TableRecordBytes > bytes.size() - s_FontSfntHeaderBytes)
         return MakeUnexpected(Failure{});
     return FontSfntDirectory(bytes, tableCount);
 }
@@ -96,10 +88,7 @@ Expected<u32> FontSfntDirectory::tableTag(const usize index)const noexcept{
 Expected<Span<const u8>> FontSfntDirectory::record(const usize index)const noexcept{
     if(index >= m_tableCount)
         return MakeUnexpected(Failure{});
-    return Span<const u8>{
-        m_bytes.data() + s_FontSfntHeaderBytes + index * __hidden_font_source_directory::s_TableRecordBytes,
-        __hidden_font_source_directory::s_TableRecordBytes
-    };
+    return Span<const u8>{ m_bytes.data() + s_FontSfntHeaderBytes + index * __hidden_font_source_directory::s_TableRecordBytes, __hidden_font_source_directory::s_TableRecordBytes };
 }
 
 

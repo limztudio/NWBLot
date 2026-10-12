@@ -28,21 +28,8 @@ namespace __hidden_assets_sampler_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<SamplerCookEntry> ParseSamplerDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseSamplerCookMetadata(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        doc,
-        context.cookArena,
-        context.scratchArena
-    );
+static Expected<SamplerCookEntry> ParseSamplerDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+    return ParseSamplerCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
 static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){

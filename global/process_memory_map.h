@@ -84,11 +84,7 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
 
     const auto begin = ParseVariableHexU64(AStringView(line.data(), split));
     const auto end = ParseVariableHexU64(AStringView(line.data() + split + 1u, rangeEnd - split - 1u));
-    if(
-        !begin
-        || !end
-        || *begin >= *end
-    )
+    if(!begin || !end || *begin >= *end)
         return MakeUnexpected(Failure{});
 
     usize cursor = 0u;
@@ -106,12 +102,7 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
 
     // File-offset is optional in /proc maps; failures keep the default of 0.
     const auto fileOffset = ParseVariableHexU64(AStringView(line.data() + offsetBegin, cursor - offsetBegin));
-    return LinuxProcessMemoryMapEntry{
-        .begin = *begin,
-        .end = *end,
-        .fileOffset = fileOffset.value_or(0u),
-        .path = ProcessMemoryMapDetail::ProcMapPathField(line),
-    };
+    return LinuxProcessMemoryMapEntry{ .begin = *begin, .end = *end, .fileOffset = fileOffset.value_or(0u), .path = ProcessMemoryMapDetail::ProcMapPathField(line), };
 }
 
 template<typename EntryVectorT>
@@ -127,10 +118,7 @@ inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT
 }
 
 template<typename EntryRangeT>
-[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(
-    const EntryRangeT& entries,
-    const u64 address
-){
+[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(const EntryRangeT& entries, const u64 address){
     for(const LinuxProcessMemoryMapEntry& entry : entries){
         if(address < entry.begin || address >= entry.end)
             continue;

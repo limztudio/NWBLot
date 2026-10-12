@@ -32,10 +32,7 @@ using MaterialBindInterfaceLookup = HashMap<Name, const MaterialBindEntry*, Core
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void BuildMaterialBindInterfaceLookup(
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    MaterialBindInterfaceLookup& outLookup
-){
+static void BuildMaterialBindInterfaceLookup(const CookVector<MaterialBindEntry>& materialBindEntries, MaterialBindInterfaceLookup& outLookup){
     outLookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries)
         outLookup.emplace(Name(AStringView(bindEntry.virtualPath)), &bindEntry);
@@ -45,17 +42,8 @@ static void BuildMaterialBindInterfaceLookup(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterialCookInterfaces(
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
-){
-    MaterialBindInterfaceLookup materialBindLookup(
-        0,
-        Hasher<Name>(),
-        EqualTo<Name>(),
-        scratchArena
-    );
+bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materialBindEntries, CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
+    MaterialBindInterfaceLookup materialBindLookup(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
     BuildMaterialBindInterfaceLookup(materialBindEntries, materialBindLookup);
 
     const usize cacheReserveCount = Min(materialBindEntries.size(), materialEntries.size());
@@ -70,61 +58,30 @@ bool ValidateMaterialCookInterfaces(
         materialEntry.resourceReferences.clear();
 
         if(materialEntry.materialInterface.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' is missing required material interface")
-                , StringConvert(AStringView(materialEntry.virtualPath))
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' is missing required material interface"), StringConvert(AStringView(materialEntry.virtualPath)));
             return false;
         }
 
         const Name materialInterfaceName(AStringView(materialEntry.materialInterface));
         const auto bindEntryIt = materialBindLookup.find(materialInterfaceName);
         if(bindEntryIt == materialBindLookup.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown material interface '{}'")
-                , StringConvert(AStringView(materialEntry.virtualPath))
-                , StringConvert(AStringView(materialEntry.materialInterface))
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown material interface '{}'"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(AStringView(materialEntry.materialInterface)));
             return false;
         }
         const MaterialBindEntry* bindEntry = bindEntryIt.value();
 
-        const auto layoutResult = FindOrBuildMaterialBindTypedLayout(
-            materialInterfaceName,
-            *bindEntry,
-            layoutCache,
-            scratchArena
-        );
+        const auto layoutResult = FindOrBuildMaterialBindTypedLayout(materialInterfaceName, *bindEntry, layoutCache, scratchArena);
         if(!layoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'")
-                , StringConvert(AStringView(materialEntry.virtualPath))
-                , StringConvert(AStringView(materialEntry.materialInterface))
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(AStringView(materialEntry.materialInterface)));
             return false;
         }
 
         const MaterialBindTypedLayout* layout = *layoutResult;
-        CopyMaterialBindTypedLayoutDefaults(
-            *layout,
-            materialEntry.typedLayoutHash,
-            materialEntry.typedLayoutBlocks,
-            materialEntry.typedLayoutFields,
-            materialEntry.typedBlockBytes
-        );
-        if(!ApplyMaterialBindTypedLayoutParameters(
-            *layout,
-            Name(AStringView(materialEntry.virtualPath)),
-            materialEntry.parameters,
-            materialEntry.typedBlockBytes,
-            materialEntry.resourceReferences
-        ))
+        CopyMaterialBindTypedLayoutDefaults(*layout, materialEntry.typedLayoutHash, materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.typedBlockBytes);
+        if(!ApplyMaterialBindTypedLayoutParameters(*layout, Name(AStringView(materialEntry.virtualPath)), materialEntry.parameters, materialEntry.typedBlockBytes, materialEntry.resourceReferences))
             return false;
-        if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(
-            materialEntry.typedLayoutBlocks,
-            materialEntry.typedLayoutFields,
-            materialEntry.resourceReferences
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters")
-                , StringConvert(AStringView(materialEntry.virtualPath))
-            );
+        if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.resourceReferences)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters"), StringConvert(AStringView(materialEntry.virtualPath)));
             return false;
         }
     }

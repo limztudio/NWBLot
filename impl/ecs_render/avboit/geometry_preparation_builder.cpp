@@ -19,11 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitGeometryPreparationBuilder::AvboitGeometryPreparationBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererMaterialSystem& materialSystem,
-    Core::Alloc::ScratchArena& scratchArena
-)
+AvboitGeometryPreparationBuilder::AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_scratchArena(scratchArena){
@@ -84,23 +80,12 @@ struct PhaseIdentities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::declare(
-    const AvboitGeometryPreparationInputs& inputs
-){
+[[nodiscard]] Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::declare(const AvboitGeometryPreparationInputs& inputs){
     AvboitGeometryPreparationResult result{};
     if(!inputs.drawItemSets || inputs.drawItemSetCount == 0u)
         return MakeUnexpected(Failure{});
-    const __hidden_geometry_preparation::PhaseIdentities identities =
-        __hidden_geometry_preparation::IdentitiesForPhase(inputs.phase)
-    ;
-    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(
-        m_graph,
-        inputs.drawItemSets,
-        inputs.drawItemSetCount,
-        m_scratchArena,
-        Name(identities.geometryIdentity),
-        identities.geometryLabel
-    );
+    const __hidden_geometry_preparation::PhaseIdentities identities = __hidden_geometry_preparation::IdentitiesForPhase(inputs.phase);
+    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(m_graph, inputs.drawItemSets, inputs.drawItemSetCount, m_scratchArena, Name(identities.geometryIdentity), identities.geometryLabel);
     result.geometryOwned = materialGeometrySetResult.has_value();
     if(materialGeometrySetResult)
         result.materialGeometrySet = *materialGeometrySetResult;

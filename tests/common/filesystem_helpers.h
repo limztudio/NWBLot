@@ -55,14 +55,8 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool WaitForDirectory(
-    const ::Path<ArenaT>& path,
-    const u32 timeoutMilliseconds,
-    const u32 pollMilliseconds = FilesystemTestDetail::s_DefaultDirectoryPollMilliseconds
-){
-    const u32 stepMilliseconds = pollMilliseconds == 0u
-        ? FilesystemTestDetail::s_MinimumDirectoryPollMilliseconds
-        : pollMilliseconds;
+[[nodiscard]] inline bool WaitForDirectory(const ::Path<ArenaT>& path, const u32 timeoutMilliseconds, const u32 pollMilliseconds = FilesystemTestDetail::s_DefaultDirectoryPollMilliseconds){
+    const u32 stepMilliseconds = pollMilliseconds == 0u ? FilesystemTestDetail::s_MinimumDirectoryPollMilliseconds : pollMilliseconds;
     for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= timeoutMilliseconds; elapsedMilliseconds += stepMilliseconds){
         if(PathIsDirectory(path))
             return true;

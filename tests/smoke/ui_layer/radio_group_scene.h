@@ -65,14 +65,11 @@ private:
     bool m_enabled = true;
 };
 
-using SharedUiRadioGroupSmokeScene = RefCountPtr<
-    RefCounter<UiRadioGroupSmokeScene>, ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiRadioGroupSmokeScene = RefCountPtr< RefCounter<UiRadioGroupSmokeScene>, ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerRadioGroupSmokeEnabled();
 [[nodiscard]] bool IsUiLayerRadioGroupSkinSmokeEnabled();
-[[nodiscard]] SharedUiRadioGroupSmokeScene CreateUiRadioGroupSmokeScene(
-    Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+[[nodiscard]] SharedUiRadioGroupSmokeScene CreateUiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

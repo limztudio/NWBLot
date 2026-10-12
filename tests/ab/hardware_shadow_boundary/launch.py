@@ -52,12 +52,7 @@ LIT_MAIN = "__main__"
 RUNNER_SCRIPT = Path("tests") / "ab" / "hardware_shadow_boundary" / "run.py"
 HEALTHY_TARGET = "nwb_hardware_shadow_boundary_healthy_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
-REQUIRED_DEFINES = {
-    "NWB_BUILD_LOADER": LIT_ON,
-    "NWB_BUILD_LOGSERVER": LIT_ON,
-    "NWB_BUILD_PIPELINE": LIT_ON,
-    "NWB_BUILD_TESTS": LIT_ON,
-}
+REQUIRED_DEFINES = { "NWB_BUILD_LOADER": LIT_ON, "NWB_BUILD_LOGSERVER": LIT_ON, "NWB_BUILD_PIPELINE": LIT_ON, "NWB_BUILD_TESTS": LIT_ON, }
 DIAGNOSTIC_CONFIGURATIONS = (LIT_DBG, LIT_OPT)
 
 
@@ -76,41 +71,18 @@ def default_output_directory(root: Path) -> Path:
 
 def require_diagnostic_configuration(config: str) -> None:
     if config not in DIAGNOSTIC_CONFIGURATIONS:
-        raise SystemExit(
-            "hardware-shadow-boundary requires --config dbg or --config opt because fin omits the warning "
-            "diagnostics used to reject transient hardware-shadow route degradation"
-        )
+        raise SystemExit("hardware-shadow-boundary requires --config dbg or --config opt because fin omits the warning " "diagnostics used to reject transient hardware-shadow route degradation")
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> BoundaryPaths:
-    healthy_executable = ROOT_LAUNCHER.resolve_executable_path(
-        settings,
-        HEALTHY_TARGET,
-        args.healthy_executable,
-        None,
-        args.dry_run,
-    )
+    healthy_executable = ROOT_LAUNCHER.resolve_executable_path(settings, HEALTHY_TARGET, args.healthy_executable, None, args.dry_run,)
     baseline_executable = args.baseline_executable
     if baseline_executable is None:
         baseline_executable = healthy_executable
     else:
-        baseline_executable = ROOT_LAUNCHER.resolve_executable_path(
-            settings,
-            HEALTHY_TARGET,
-            baseline_executable,
-            None,
-            args.dry_run,
-        )
-    runtime_directory = (
-        ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir)
-        if args.runtime_dir is not None
-        else settings.build_dir / RUNTIME_DIRECTORY / settings.config
-    )
-    output_directory = (
-        ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir)
-        if args.output_dir is not None
-        else default_output_directory(settings.root)
-    )
+        baseline_executable = ROOT_LAUNCHER.resolve_executable_path(settings, HEALTHY_TARGET, baseline_executable, None, args.dry_run,)
+    runtime_directory = (ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / RUNTIME_DIRECTORY / settings.config)
+    output_directory = (ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir) if args.output_dir is not None else default_output_directory(settings.root))
     return BoundaryPaths(healthy_executable, baseline_executable, runtime_directory, output_directory)
 
 
@@ -118,32 +90,14 @@ def build_benchmark_targets(args: argparse.Namespace, settings, environment) -> 
     if args.skip_build:
         return
 
-    command: List[object] = list(settings.cmake) + [
-        "--build",
-        str(settings.build_dir),
-        "--target",
-        HEALTHY_TARGET,
-        "--config",
-        settings.config,
-    ]
+    command: List[object] = list(settings.cmake) + ["--build", str(settings.build_dir), "--target", HEALTHY_TARGET, "--config", settings.config,]
     if args.jobs:
         command += ["--parallel", str(args.jobs)]
     ROOT_LAUNCHER.run_checked(command, settings.root, environment, args.dry_run)
 
 
 def runner_command(args: argparse.Namespace, paths: BoundaryPaths) -> List[object]:
-    command: List[object] = [
-        sys.executable,
-        REPO / RUNNER_SCRIPT,
-        LIT_HEALTHY_EXECUTABLE,
-        paths.healthy_executable,
-        LIT_BASELINE_EXECUTABLE,
-        paths.baseline_executable,
-        LIT_RUNTIME_DIR,
-        paths.runtime_directory,
-        LIT_OUTPUT_DIR,
-        paths.output_directory,
-    ]
+    command: List[object] = [sys.executable, REPO / RUNNER_SCRIPT, LIT_HEALTHY_EXECUTABLE, paths.healthy_executable, LIT_BASELINE_EXECUTABLE, paths.baseline_executable, LIT_RUNTIME_DIR, paths.runtime_directory, LIT_OUTPUT_DIR, paths.output_directory,]
     if args.gpu_validation:
         command.append(LIT_GPU_VALIDATION)
     if args.no_logserver:
@@ -167,29 +121,14 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
     parser.add_argument(LIT_HEALTHY_EXECUTABLE, type=Path, help="Override the healthy hardware transparent-shadow executable.")
-    parser.add_argument(
-        LIT_BASELINE_EXECUTABLE,
-        dest="baseline_executable",
-        type=Path,
-        help="Override the executable reused for the opaque baseline arm.",
-    )
+    parser.add_argument(LIT_BASELINE_EXECUTABLE, dest="baseline_executable", type=Path, help="Override the executable reused for the opaque baseline arm.",)
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked stress-scene runtime directory.")
     parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for boundary timing, logs, captures, and reports.")
     parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
     parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
-    validation_group.add_argument(
-        LIT_GPU_VALIDATION,
-        dest=LIT_GPU_VALIDATION_2,
-        action=LIT_STORE_TRUE,
-        help="Enable GPU validation for a correctness-oriented run.",
-    )
-    validation_group.add_argument(
-        "--no-gpu-validation",
-        dest=LIT_GPU_VALIDATION_2,
-        action="store_false",
-        help="Measure without --gpudbg layer overhead (the default).",
-    )
+    validation_group.add_argument(LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable GPU validation for a correctness-oriented run.",)
+    validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Measure without --gpudbg layer overhead (the default).",)
     parser.set_defaults(gpu_validation=False)
     parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Check diagnostic-configuration rejection without starting a graphics application.")
     return parser

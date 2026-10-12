@@ -17,11 +17,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ApplyShadowQualitySmokeSettings(
-    Impl::RendererSystem& renderer,
-    Core::Alloc::GlobalArena& arena,
-    const Impl::ShadowQualitySettings& baseSettings = {}
-);
+[[nodiscard]] bool ApplyShadowQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::ShadowQualitySettings& baseSettings = {});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

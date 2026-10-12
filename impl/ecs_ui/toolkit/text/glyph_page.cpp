@@ -15,10 +15,7 @@ NWB_IMPL_UI_BEGIN
 
 
 bool operator==(const GlyphPageBinding& lhs, const GlyphPageBinding& rhs)noexcept{
-    return
-        lhs.font == rhs.font && lhs.fontGeneration == rhs.fontGeneration && lhs.atlasIdentity == rhs.atlasIdentity
-        && lhs.generation == rhs.generation && lhs.index == rhs.index && lhs.width == rhs.width && lhs.height == rhs.height
-    ;
+    return lhs.font == rhs.font && lhs.fontGeneration == rhs.fontGeneration && lhs.atlasIdentity == rhs.atlasIdentity && lhs.generation == rhs.generation && lhs.index == rhs.index && lhs.width == rhs.width && lhs.height == rhs.height;
 }
 
 
@@ -44,11 +41,7 @@ SharedGlyphPage CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPage
         || pixels.size() != static_cast<usize>(binding.width) * binding.height
     )
         return {};
-    return SharedGlyphPage(
-        NewArenaObject<RefCounter<GlyphPage>>(arena, arena, binding, Move(pixels)),
-        ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    return SharedGlyphPage(NewArenaObject<RefCounter<GlyphPage>>(arena, arena, binding, Move(pixels)), ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

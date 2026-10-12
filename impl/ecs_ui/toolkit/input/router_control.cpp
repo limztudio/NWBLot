@@ -35,10 +35,7 @@ bool InputRouter::validControlTargets()const{
                 return false;
             continue;
         }
-        if(
-            target.owner == target.id || target.ownerDeclarationGeneration == 0u || !target.control.valid()
-            || target.focusable || target.navigable || target.scrollable || target.focusOnCommit || target.horizontalNavigation
-        )
+        if(target.owner == target.id || target.ownerDeclarationGeneration == 0u || !target.control.valid() || target.focusable || target.navigable || target.scrollable || target.focusOnCommit || target.horizontalNavigation)
             return false;
         usize begin = 0u;
         usize end = m_stagedLookup.size();
@@ -52,11 +49,7 @@ bool InputRouter::validControlTargets()const{
         if(begin == m_stagedLookup.size() || m_stagedLookup[begin].value != target.owner.value)
             return false;
         const auto& host = m_stagedTargets[m_stagedLookup[begin].index];
-        if(
-            !host.enabled || !host.focusable || host.owner.valid()
-            || host.declarationGeneration != target.ownerDeclarationGeneration
-            || host.control != target.control || host.popup != target.popup || host.layer != target.layer
-        )
+        if(!host.enabled || !host.focusable || host.owner.valid() || host.declarationGeneration != target.ownerDeclarationGeneration || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
             return false;
     }
     return true;
@@ -64,14 +57,9 @@ bool InputRouter::validControlTargets()const{
 
 const HitTarget* InputRouter::controlHost(const HitTarget& target)const{
     const HitTarget* host = target.owner.valid() ? findTarget(target.owner, target.ownerDeclarationGeneration) : &target;
-    if(
-        host == nullptr || !host->enabled || !host->focusable || host->owner.valid() || !host->control.valid()
-        || host->control != target.control || host->popup != target.popup || !allowedByPopup(*host)
-    )
+    if(host == nullptr || !host->enabled || !host->focusable || host->owner.valid() || !host->control.valid() || host->control != target.control || host->popup != target.popup || !allowedByPopup(*host))
         return nullptr;
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(
-        VectorSet(host->rectangle.x, host->rectangle.y, host->rectangle.width, host->rectangle.height), VectorSet(host->clip.x, host->clip.y, host->clip.width, host->clip.height)
-    );
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(host->rectangle.x, host->rectangle.y, host->rectangle.width, host->rectangle.height), VectorSet(host->clip.x, host->clip.y, host->clip.width, host->clip.height));
     if((VectorMoveMask(VectorLessOrEqual(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) != 0u)
         return nullptr;
     return host;
@@ -79,26 +67,17 @@ const HitTarget* InputRouter::controlHost(const HitTarget& target)const{
 
 bool InputRouter::currentControlAction(const ControlAction& action)const{
     const HitTarget* host = findTarget(action.id.target, action.id.declarationGeneration);
-    if(
-        host == nullptr || !isInteractive(*host) || !host->focusable || host->owner.valid()
-        || !action.control.valid() || host->control != action.control || host->popup != action.popup
-    )
+    if(host == nullptr || !isInteractive(*host) || !host->focusable || host->owner.valid() || !action.control.valid() || host->control != action.control || host->popup != action.popup)
         return false;
     if(action.kind == ControlActionKind::Wheel)
         return host->scrollable;
     if(action.kind != ControlActionKind::Activate){
-        if(
-            !host->navigable
-            || ((action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right) && !host->horizontalNavigation)
-        )
+        if(!host->navigable || ((action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right) && !host->horizontalNavigation))
             return false;
         if(action.source == host->id)
             return true;
         const HitTarget* source = findTarget(action.source, action.sourceDeclarationGeneration);
-        return
-            source != nullptr && isInteractive(*source) && source->control == action.sourceControl
-            && keyboardHost(*source) == host
-        ;
+        return source != nullptr && isInteractive(*source) && source->control == action.sourceControl && keyboardHost(*source) == host;
     }
     const HitTarget* source = findTarget(action.source, action.sourceDeclarationGeneration);
     return
@@ -108,21 +87,13 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
     ;
 }
 
-Expected<ControlAction> InputRouter::consumeControlAction(
-    const WidgetId host, const u64 declarationGeneration, const ControlToken& token
-){
+Expected<ControlAction> InputRouter::consumeControlAction(const WidgetId host, const u64 declarationGeneration, const ControlToken& token){
     const HitTarget* target = findTarget(host, declarationGeneration);
-    if(
-        declarationGeneration == 0u || !token.valid() || target == nullptr || !isInteractive(*target)
-        || target->control != token || target->owner.valid() || !target->focusable
-    )
+    if(declarationGeneration == 0u || !token.valid() || target == nullptr || !isInteractive(*target) || target->control != token || target->owner.valid() || !target->focusable)
         return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_controlActions.size(); ++index){
         const auto& candidate = m_controlActions[index];
-        if(
-            candidate.id.target != host || candidate.id.declarationGeneration != declarationGeneration
-            || candidate.control != token || !currentControlAction(candidate)
-        )
+        if(candidate.id.target != host || candidate.id.declarationGeneration != declarationGeneration || candidate.control != token || !currentControlAction(candidate))
             continue;
         const ControlAction action = candidate;
         m_controlActions.erase(m_controlActions.begin() + static_cast<isize>(index));
@@ -135,8 +106,7 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
     const HitTarget* accepted = findTarget(host);
     if(accepted == nullptr || (accepted->declarationGeneration == declarationGeneration && accepted->control == token))
         return;
-    const bool preserveText = accepted->declarationGeneration == declarationGeneration
-        && accepted->textEditable && !accepted->owner.valid() && (accepted->scrollable || accepted->control.empty());
+    const bool preserveText = accepted->declarationGeneration == declarationGeneration && accepted->textEditable && !accepted->owner.valid() && (accepted->scrollable || accepted->control.empty());
     for(auto& target : m_targets){
         if(target.id == host){
             if(preserveText){
@@ -166,18 +136,12 @@ void InputRouter::reconcileControlActions(){
         if(!currentControlKeyOwner(source.controlOwner))
             source.controlOwner = {};
         const HitTarget* focused = findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration);
-        if(
-            !focused || !focused->textEditable || !isInteractive(*focused)
-            || focused->popup != source.focusOwner.popup || focused->control != source.focusOwner.control
-        )
+        if(!focused || !focused->textEditable || !isInteractive(*focused) || focused->popup != source.focusOwner.popup || focused->control != source.focusOwner.control)
             source.focusOwner = {};
     }
 }
 
-void InputRouter::appendControlAction(
-    const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta,
-    InputRoutingResult& result, const f64 deltaX
-){
+void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, InputRoutingResult& result, const f64 deltaX){
     if(m_controlActions.size() == s_InputMaxControlActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
@@ -208,20 +172,14 @@ void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result
     updateHover();
     const HitTarget* hit = findTarget(m_hover);
     result.pointerConsumed |= wantsPointer();
-    if(
-        (m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed)
-        || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0)
-    )
+    if((m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed) || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0))
         return;
     const HitTarget* host = controlHost(*hit);
     if(host != nullptr && host->scrollable && (event.scrollY != 0.0 || host->scrollStepX > 0.0))
         appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, result, event.scrollX);
 }
 
-bool InputRouter::routeControlKey(
-    const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, const bool alreadyPressed,
-    InputRoutingResult& result
-){
+bool InputRouter::routeControlKey(const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, const bool alreadyPressed, InputRoutingResult& result){
     ControlActionKind::Enum kind;
     switch(event.command){
     case InputCommand::Left:
@@ -250,9 +208,7 @@ bool InputRouter::routeControlKey(
     default: return false;
     }
     if(!alreadyPressed && !event.repeat)
-        owner = { host.id, host.declarationGeneration, host.popup, host.control,
-            source.id, source.declarationGeneration, source.control,
-            kind == ControlActionKind::Left || kind == ControlActionKind::Right };
+        owner = { host.id, host.declarationGeneration, host.popup, host.control, source.id, source.declarationGeneration, source.control, kind == ControlActionKind::Left || kind == ControlActionKind::Right };
     if(
         owner.host == host.id && owner.declarationGeneration == host.declarationGeneration
         && owner.popup == host.popup && owner.control == host.control

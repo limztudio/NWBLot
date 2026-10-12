@@ -29,9 +29,7 @@ struct GraphClearTimingRecordState{
 };
 
 
-[[nodiscard]] inline Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(
-    const GraphClearTimingRecordState& state
-)noexcept{
+[[nodiscard]] inline Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(const GraphClearTimingRecordState& state)noexcept{
     return state.rebindableTimingTicket ? *state.rebindableTimingTicket : state.timingTicket;
 }
 
@@ -46,20 +44,11 @@ struct GraphClearTimingRecordState{
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*timingTicket);
-    timing->emplace(
-        graphics->gpuTiming(),
-        scope,
-        graphics->getDevice(),
-        commandList
-    );
+    timing->emplace(graphics->gpuTiming(), scope, graphics->getDevice(), commandList);
     return Core::FinishSplitGpuTimingMarker(timing);
 }
 
-[[nodiscard]] inline bool EndGraphClearTiming(
-    Optional<Core::GpuTimingMeasure>* const timing,
-    Core::GpuTimingSubmissionTicket* const timingTicket,
-    Core::CommandList& commandList
-){
+[[nodiscard]] inline bool EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* const timing, Core::GpuTimingSubmissionTicket* const timingTicket, Core::CommandList& commandList){
     if(!timing || !*timing || !timingTicket)
         return false;
 
@@ -69,29 +58,15 @@ struct GraphClearTimingRecordState{
     return true;
 }
 
-[[nodiscard]] inline bool BeginGraphClearTimingRecord(
-    void* const rawState,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] inline bool BeginGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)
         return false;
-    return BeginGraphClearTiming(
-        state->graphics,
-        state->timing,
-        ResolveGraphClearTimingTicket(*state),
-        state->scope,
-        commandList
-    );
+    return BeginGraphClearTiming(state->graphics, state->timing, ResolveGraphClearTimingTicket(*state), state->scope, commandList);
 }
 
-[[nodiscard]] inline bool EndGraphClearTimingRecord(
-    void* const rawState,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
+[[nodiscard]] inline bool EndGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)

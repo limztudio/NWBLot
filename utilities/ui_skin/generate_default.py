@@ -21,58 +21,18 @@ REGION_SIZE = 24
 GUTTER = 4
 
 # Name, fill RGB, border RGB; RGB is authored in sRGB and alpha is straight coverage.
-PANELS = [
-    ("panel.normal", (24, 29, 37), (63, 77, 93)),
-    ("window.normal", (27, 34, 44), (71, 86, 105)),
-    ("window.title", (34, 47, 64), (71, 86, 105)),
-    ("button.normal", (45, 60, 80), (79, 101, 126)),
-    ("button.hover", (60, 84, 112), (107, 147, 188)),
-    ("button.pressed", (33, 47, 65), (88, 128, 171)),
-    ("button.disabled", (37, 43, 52), (58, 65, 75)),
-    ("edit.normal", (15, 20, 28), (65, 80, 100)),
-    ("edit.focused", (18, 26, 37), (97, 174, 240)),
-    ("edit.disabled", (29, 33, 40), (54, 61, 70)),
-    ("checkbox.normal", (20, 27, 36), (81, 103, 129)),
-    ("checkbox.hover", (34, 48, 65), (109, 163, 211)),
-    ("checkbox.checked", (40, 102, 164), (110, 186, 245)),
-    ("checkbox.disabled", (32, 37, 45), (57, 65, 76)),
-    ("radio.normal", (20, 27, 36), (81, 103, 129)),
-    ("radio.checked", (40, 102, 164), (110, 186, 245)),
-    ("list.normal", (17, 23, 31), (62, 77, 95)),
-    ("list.row.hover", (39, 58, 80), (39, 58, 80)),
-    ("list.row.selected", (38, 80, 123), (59, 113, 168)),
-    ("popup.normal", (26, 34, 45), (81, 101, 126)),
-    ("tooltip.normal", (39, 48, 61), (95, 112, 133)),
-    ("scrollbar.track", (17, 23, 31), (40, 50, 63)),
-    ("scrollbar.thumb.normal", (65, 82, 103), (82, 104, 130)),
-    ("scrollbar.thumb.hover", (88, 119, 151), (116, 153, 190)),
-    ("slider.track", (20, 29, 41), (63, 80, 101)),
-    ("slider.thumb.normal", (69, 131, 185), (130, 193, 238)),
-    ("slider.thumb.hover", (86, 164, 221), (166, 221, 255)),
-    ("progress.track", (20, 29, 41), (63, 80, 101)),
-    ("progress.fill", (53, 131, 192), (97, 176, 233)),
-    ("focus.overlay", None, (124, 194, 251)),
-    ("separator", (65, 80, 99), (65, 80, 99)),
-]
-ICONS = [
-    ("checkbox.mark", "check"),
-    ("radio.mark", "dot"),
-    ("combo.arrow", "down"),
-    ("window.close", "cross"),
-    ("window.collapse", "down"),
-    ("scrollbar.arrow.up", "up"),
-    ("scrollbar.arrow.down", "down"),
-    ("scrollbar.arrow.left", "left"),
-    ("scrollbar.arrow.right", "right"),
-    ("white", "white"),
-]
+PANELS = [("panel.normal", (24, 29, 37), (63, 77, 93)), ("window.normal", (27, 34, 44), (71, 86, 105)), ("window.title", (34, 47, 64), (71, 86, 105)), ("button.normal", (45, 60, 80), (79, 101, 126)), ("button.hover", (60, 84, 112), (107, 147, 188)),
+    ("button.pressed", (33, 47, 65), (88, 128, 171)), ("button.disabled", (37, 43, 52), (58, 65, 75)), ("edit.normal", (15, 20, 28), (65, 80, 100)), ("edit.focused", (18, 26, 37), (97, 174, 240)), ("edit.disabled", (29, 33, 40), (54, 61, 70)),
+    ("checkbox.normal", (20, 27, 36), (81, 103, 129)), ("checkbox.hover", (34, 48, 65), (109, 163, 211)), ("checkbox.checked", (40, 102, 164), (110, 186, 245)), ("checkbox.disabled", (32, 37, 45), (57, 65, 76)), ("radio.normal", (20, 27, 36), (81, 103, 129)),
+    ("radio.checked", (40, 102, 164), (110, 186, 245)), ("list.normal", (17, 23, 31), (62, 77, 95)), ("list.row.hover", (39, 58, 80), (39, 58, 80)), ("list.row.selected", (38, 80, 123), (59, 113, 168)), ("popup.normal", (26, 34, 45), (81, 101, 126)),
+    ("tooltip.normal", (39, 48, 61), (95, 112, 133)), ("scrollbar.track", (17, 23, 31), (40, 50, 63)), ("scrollbar.thumb.normal", (65, 82, 103), (82, 104, 130)), ("scrollbar.thumb.hover", (88, 119, 151), (116, 153, 190)),
+    ("slider.track", (20, 29, 41), (63, 80, 101)), ("slider.thumb.normal", (69, 131, 185), (130, 193, 238)), ("slider.thumb.hover", (86, 164, 221), (166, 221, 255)), ("progress.track", (20, 29, 41), (63, 80, 101)),
+    ("progress.fill", (53, 131, 192), (97, 176, 233)), ("focus.overlay", None, (124, 194, 251)), ("separator", (65, 80, 99), (65, 80, 99)),]
+ICONS = [("checkbox.mark", "check"), ("radio.mark", "dot"), ("combo.arrow", "down"), ("window.close", "cross"), ("window.collapse", "down"), ("scrollbar.arrow.up", "up"), ("scrollbar.arrow.down", "down"), ("scrollbar.arrow.left", "left"),
+    ("scrollbar.arrow.right", "right"), ("white", "white"),]
 
 # Linear RGB and straight alpha, in UiSkinColorRole order.
-COLOR_ROLES = [
-    {"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]},
-    {"name": "text.disabled", "rgba": [0.48, 0.50, 0.55, 1.0]},
-    {"name": "text.tooltip", "rgba": [1.0, 1.0, 1.0, 1.0]},
-    {"name": "edit.background", "rgba": [0.08, 0.10, 0.14, 1.0]},
+COLOR_ROLES = [{"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]}, {"name": "text.disabled", "rgba": [0.48, 0.50, 0.55, 1.0]}, {"name": "text.tooltip", "rgba": [1.0, 1.0, 1.0, 1.0]}, {"name": "edit.background", "rgba": [0.08, 0.10, 0.14, 1.0]},
     {"name": "edit.selection", "rgba": [0.20, 0.40, 0.78, 0.75]},
     {"name": "edit.inactive_selection", "rgba": [0.28, 0.31, 0.38, 0.55]},
     {"name": "edit.caret", "rgba": [0.95, 0.97, 1.0, 1.0]},
@@ -85,8 +45,7 @@ COLOR_ROLES = [
     {"name": "control.pressed_tint", "rgba": [0.85, 0.85, 0.85, 1.0]},
     {"name": "control.disabled_tint", "rgba": [0.55, 0.55, 0.55, 0.6]},
     {"name": "progress.track_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
-    {"name": "progress.fill_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
-]
+    {"name": "progress.fill_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},]
 
 
 def rounded_distance(x: float, y: float, radius: float = 5.0) -> float:
@@ -168,22 +127,15 @@ def generate(directory: Path) -> None:
     (directory / "source.png").write_bytes(png)
     # Semantic aliases share atlas artwork.
     parts = {region["name"]: region for region in regions}
-    for name, source in (("list.background", "edit.normal"), ("list.row.normal", "button.normal"),
-        ("list.row.disabled", "button.disabled"), ("scroll.track", "panel.normal"), ("scroll.thumb", "button.normal"),
-        ("combo.normal", "button.normal"), ("combo.hover", "button.hover"), ("combo.open", "button.pressed"),
-        ("combo.focused", "edit.focused"), ("combo.disabled", "button.disabled")):
+    for name, source in (("list.background", "edit.normal"), ("list.row.normal", "button.normal"), ("list.row.disabled", "button.disabled"), ("scroll.track", "panel.normal"), ("scroll.thumb", "button.normal"),
+        ("combo.normal", "button.normal"), ("combo.hover", "button.hover"), ("combo.open", "button.pressed"), ("combo.focused", "edit.focused"), ("combo.disabled", "button.disabled")):
         alias = {"name": name, "rect": parts[source]["rect"], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]}
         if name == "list.background":
             alias.update(padding=[8.0, 8.0, 8.0, 8.0], minimum_size=[12.0, 12.0])
         if name.startswith("combo."):
             alias.update(padding=[8.0, 6.0, 8.0, 6.0], minimum_size=[12.0, 12.0])
         regions.append(alias)
-    lines = [
-        "ui_skin asset;", "",
-        'asset.texture = "engine/ui/skins/default/texture";',
-        f"asset.atlas_extent = [{ATLAS_SIZE}, {ATLAS_SIZE}];",
-        "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets\";", "asset.regions = [",
-    ]
+    lines = ["ui_skin asset;", "", 'asset.texture = "engine/ui/skins/default/texture";', f"asset.atlas_extent = [{ATLAS_SIZE}, {ATLAS_SIZE}];", "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets\";", "asset.regions = [",]
     lines.extend("    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions)
     lines.extend(["];", "asset.colors = ["])
     lines.extend("    " + json.dumps(color, separators=(", ", ": ")) + "," for color in COLOR_ROLES)

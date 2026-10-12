@@ -16,11 +16,7 @@ else:
     from compiler import driver_response_quoting, expand_response_files, run_tool
 
 
-LINK_VALUE_OPTIONS = {
-    "-o", "-L", "-F", "-l", "-arch", "-target", "--target", "-isysroot", "--sysroot",
-    "-syslibroot", "-u", "-e", "-T", "-Xlinker", "-framework", "-weak_framework",
-    "-rpath", "-install_name", "-compatibility_version", "-current_version",
-}
+LINK_VALUE_OPTIONS = { "-o", "-L", "-F", "-l", "-arch", "-target", "--target", "-isysroot", "--sysroot", "-syslibroot", "-u", "-e", "-T", "-Xlinker", "-framework", "-weak_framework", "-rpath", "-install_name", "-compatibility_version", "-current_version", }
 LINK_INPUT_SUFFIXES = {".o", ".obj", ".a", ".lib", ".so", ".dylib", ".bc", ".lo"}
 
 

@@ -4,12 +4,7 @@
 from __future__ import annotations
 
 from typing import Sequence
-from launcher.constants import (
-    COMMAND_HELP_LONG,
-    COMMAND_HELP_SHORT,
-    COMMAND_SEPARATOR,
-    DEFAULT_DOMAIN,
-)
+from launcher.constants import (COMMAND_HELP_LONG, COMMAND_HELP_SHORT, COMMAND_SEPARATOR, DEFAULT_DOMAIN,)
 
 
 class DispatchRouter:
@@ -28,19 +23,8 @@ class DispatchRouter:
             return 0
 
         executable = _facade.resolve_executable_path(settings, args.target, args.executable, args.executable_name, args.dry_run)
-        working_directory = _facade.resolve_working_directory(
-            settings,
-            args.working_directory,
-            _facade.output_root(settings.root, settings.platform_name, settings.arch, settings.domain),
-        )
-        return _facade.launch_with_optional_profile(
-            args,
-            settings,
-            executable,
-            working_directory,
-            env,
-            args.application_args,
-        )
+        working_directory = _facade.resolve_working_directory(settings, args.working_directory, _facade.output_root(settings.root, settings.platform_name, settings.arch, settings.domain),)
+        return _facade.launch_with_optional_profile(args, settings, executable, working_directory, env, args.application_args,)
 
     @staticmethod
     def is_help_request(args: Sequence[str]) -> bool:

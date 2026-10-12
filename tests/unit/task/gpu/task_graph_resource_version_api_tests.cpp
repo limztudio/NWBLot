@@ -35,17 +35,10 @@ namespace TaskGraphResourceVersionTestUtils{
 TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOnReset){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId resource = AddBuffer(
-        graph,
-        Name("tests/task_graph_resource_version/storage_resource")
-    );
+    const Graphics::GpuGraphResourceId resource = AddBuffer(graph, Name("tests/task_graph_resource_version/storage_resource"));
     ASSERT_TRUE(resource.valid());
     const Graphics::GpuTaskResourceRange range = BufferRange(16u, 32u);
-    const Graphics::GpuGraphResourceVersionDesc desc = Graphics::GpuGraphResourceVersionDesc{}
-        .setResource(resource)
-        .setRange(range)
-        .setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot)
-    ;
+    const Graphics::GpuGraphResourceVersionDesc desc = Graphics::GpuGraphResourceVersionDesc{}.setResource(resource).setRange(range).setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
 
     const u64 initialRevision = Graphics::GpuTaskGraph::DeclarationReadView(graph).declarationRevision();
     const Graphics::GpuGraphResourceVersionId first = graph.declareResourceVersion(desc);
@@ -58,24 +51,9 @@ TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOn
     EXPECT_NE(firstRevision, initialRevision);
     EXPECT_NE(Graphics::GpuTaskGraph::DeclarationReadView(graph).declarationRevision(), firstRevision);
 
-    const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(
-        resource,
-        range,
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
-    Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(
-        first,
-        Graphics::GpuTaskResourceVersionRole::Consume
-    );
-    const Graphics::GpuTaskId task = AddTask(
-        graph,
-        Name("tests/task_graph_resource_version/storage_task"),
-        &resourceUse,
-        1u,
-        &versionUse,
-        1u
-    );
+    const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(resource, range, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
+    Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(first, Graphics::GpuTaskResourceVersionRole::Consume);
+    const Graphics::GpuTaskId task = AddTask(graph, Name("tests/task_graph_resource_version/storage_task"), &resourceUse, 1u, &versionUse, 1u);
     ASSERT_TRUE(task.valid());
     versionUse.version = second;
     versionUse.role = Graphics::GpuTaskResourceVersionRole::Produce;
@@ -109,42 +87,17 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/missing_producer_resource")
-        );
-        const Graphics::GpuGraphResourceVersionId version = AddVersion(
-            graph,
-            resource,
-            Graphics::GpuGraphResourceVersionOrigin::TaskProduced
-        );
+        const Graphics::GpuGraphResourceId resource = AddBuffer(graph, Name("tests/task_graph_resource_version/missing_producer_resource"));
+        const Graphics::GpuGraphResourceVersionId version = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::TaskProduced);
         ASSERT_TRUE(resource.valid());
         ASSERT_TRUE(version.valid());
-        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(
-            resource,
-            BufferRange(0u, 64u),
-            Graphics::ResourceStates::ShaderResource,
-            Graphics::GpuTaskResourceAccess::Read
-        );
-        const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(
-            version,
-            Graphics::GpuTaskResourceVersionRole::Consume
-        );
-        ASSERT_TRUE(AddTask(
-            graph,
-            Name("tests/task_graph_resource_version/missing_producer_consumer"),
-            &resourceUse,
-            1u,
-            &versionUse,
-            1u
-        ).valid());
+        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
+        const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume);
+        ASSERT_TRUE(AddTask(graph, Name("tests/task_graph_resource_version/missing_producer_consumer"), &resourceUse, 1u, &versionUse, 1u).valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         EXPECT_FALSE(Analyze(graph, analysis));
-        EXPECT_EQ(
-            analysis.diagnostic().status,
-            Graphics::GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer
-        );
+        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
     }
@@ -152,52 +105,20 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/duplicate_producer_resource")
-        );
-        const Graphics::GpuGraphResourceVersionId version = AddVersion(
-            graph,
-            resource,
-            Graphics::GpuGraphResourceVersionOrigin::TaskProduced
-        );
+        const Graphics::GpuGraphResourceId resource = AddBuffer(graph, Name("tests/task_graph_resource_version/duplicate_producer_resource"));
+        const Graphics::GpuGraphResourceVersionId version = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::TaskProduced);
         ASSERT_TRUE(resource.valid());
         ASSERT_TRUE(version.valid());
-        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(
-            resource,
-            BufferRange(0u, 64u),
-            Graphics::ResourceStates::UnorderedAccess,
-            Graphics::GpuTaskResourceAccess::Write
-        );
-        const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(
-            version,
-            Graphics::GpuTaskResourceVersionRole::Produce
-        );
-        const Graphics::GpuTaskId first = AddTask(
-            graph,
-            Name("tests/task_graph_resource_version/duplicate_producer_first"),
-            &resourceUse,
-            1u,
-            &versionUse,
-            1u
-        );
-        const Graphics::GpuTaskId second = AddTask(
-            graph,
-            Name("tests/task_graph_resource_version/duplicate_producer_second"),
-            &resourceUse,
-            1u,
-            &versionUse,
-            1u
-        );
+        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Graphics::ResourceStates::UnorderedAccess, Graphics::GpuTaskResourceAccess::Write);
+        const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Produce);
+        const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph_resource_version/duplicate_producer_first"), &resourceUse, 1u, &versionUse, 1u);
+        const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph_resource_version/duplicate_producer_second"), &resourceUse, 1u, &versionUse, 1u);
         ASSERT_TRUE(first.valid());
         ASSERT_TRUE(second.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         EXPECT_FALSE(Analyze(graph, analysis));
-        EXPECT_EQ(
-            analysis.diagnostic().status,
-            Graphics::GpuTaskGraphAnalysisStatus::DuplicateResourceVersionProducer
-        );
+        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::DuplicateResourceVersionProducer);
         EXPECT_EQ(analysis.diagnostic().task, second);
         EXPECT_EQ(analysis.diagnostic().relatedTask, first);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
@@ -209,16 +130,9 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/invalid_origin_resource")
-        );
+        const Graphics::GpuGraphResourceId resource = AddBuffer(graph, Name("tests/task_graph_resource_version/invalid_origin_resource"));
         ASSERT_TRUE(resource.valid());
-        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(
-            Graphics::GpuGraphResourceVersionDesc{}
-                .setResource(resource)
-                .setRange(BufferRange(0u, 64u))
-        );
+        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(resource).setRange(BufferRange(0u, 64u)));
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         EXPECT_FALSE(Analyze(graph, analysis));
@@ -230,17 +144,10 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId staleResource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/stale_version_resource")
-        );
+        const Graphics::GpuGraphResourceId staleResource = AddBuffer(graph, Name("tests/task_graph_resource_version/stale_version_resource"));
         ASSERT_TRUE(staleResource.valid());
         graph.reset();
-        const Graphics::GpuGraphResourceVersionId version = AddVersion(
-            graph,
-            staleResource,
-            Graphics::GpuGraphResourceVersionOrigin::ImportedRoot
-        );
+        const Graphics::GpuGraphResourceVersionId version = AddVersion(graph, staleResource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         EXPECT_FALSE(Analyze(graph, analysis));
@@ -252,17 +159,9 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/invalid_range_resource")
-        );
+        const Graphics::GpuGraphResourceId resource = AddBuffer(graph, Name("tests/task_graph_resource_version/invalid_range_resource"));
         ASSERT_TRUE(resource.valid());
-        const Graphics::GpuGraphResourceVersionId version = AddVersion(
-            graph,
-            resource,
-            Graphics::GpuGraphResourceVersionOrigin::ImportedRoot,
-            BufferRange(0u, 0u)
-        );
+        const Graphics::GpuGraphResourceVersionId version = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot, BufferRange(0u, 0u));
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         EXPECT_FALSE(Analyze(graph, analysis));
@@ -284,12 +183,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
         ASSERT_TRUE(resource.valid());
         Graphics::GpuTaskResourceRange invalidRange;
         invalidRange.textureSubresources = Graphics::TextureSubresourceSet(0u, 0u, 0u, 0u);
-        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(
-            Graphics::GpuGraphResourceVersionDesc{}
-                .setResource(resource)
-                .setRange(invalidRange)
-                .setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot)
-        );
+        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(resource).setRange(invalidRange).setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot));
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         EXPECT_FALSE(Analyze(graph, analysis));
@@ -303,40 +197,15 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId oldResource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/stale_use_old_resource")
-        );
-        const Graphics::GpuGraphResourceVersionId staleVersion = AddVersion(
-            graph,
-            oldResource,
-            Graphics::GpuGraphResourceVersionOrigin::ImportedRoot
-        );
+        const Graphics::GpuGraphResourceId oldResource = AddBuffer(graph, Name("tests/task_graph_resource_version/stale_use_old_resource"));
+        const Graphics::GpuGraphResourceVersionId staleVersion = AddVersion(graph, oldResource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
         ASSERT_TRUE(oldResource.valid());
         ASSERT_TRUE(staleVersion.valid());
         graph.reset();
-        const Graphics::GpuGraphResourceId resource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/stale_use_resource")
-        );
-        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(
-            resource,
-            BufferRange(0u, 64u),
-            Graphics::ResourceStates::ShaderResource,
-            Graphics::GpuTaskResourceAccess::Read
-        );
-        const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(
-            staleVersion,
-            Graphics::GpuTaskResourceVersionRole::Consume
-        );
-        const Graphics::GpuTaskId task = AddTask(
-            graph,
-            Name("tests/task_graph_resource_version/stale_use_task"),
-            &resourceUse,
-            1u,
-            &versionUse,
-            1u
-        );
+        const Graphics::GpuGraphResourceId resource = AddBuffer(graph, Name("tests/task_graph_resource_version/stale_use_resource"));
+        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
+        const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(staleVersion, Graphics::GpuTaskResourceVersionRole::Consume);
+        const Graphics::GpuTaskId task = AddTask(graph, Name("tests/task_graph_resource_version/stale_use_task"), &resourceUse, 1u, &versionUse, 1u);
         ASSERT_TRUE(resource.valid());
         ASSERT_TRUE(task.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -351,48 +220,22 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         SCOPED_TRACE(bindingCount);
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = AddBuffer(
-            graph,
-            Name("tests/task_graph_resource_version/duplicate_binding_resource")
-        );
+        const Graphics::GpuGraphResourceId resource = AddBuffer(graph, Name("tests/task_graph_resource_version/duplicate_binding_resource"));
         ASSERT_TRUE(resource.valid());
         Graphics::GpuTaskResourceVersionUse versionUses[10u];
         ASSERT_LE(bindingCount, LengthOf(versionUses));
         for(usize index = 0u; index + 1u < bindingCount; ++index){
-            const Graphics::GpuGraphResourceVersionId version = AddVersion(
-                graph,
-                resource,
-                Graphics::GpuGraphResourceVersionOrigin::ImportedRoot
-            );
+            const Graphics::GpuGraphResourceVersionId version = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
             ASSERT_TRUE(version.valid());
             versionUses[index] = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume);
         }
         versionUses[bindingCount - 1u] = versionUses[0u];
-        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(
-            resource,
-            BufferRange(0u, 64u),
-            Graphics::ResourceStates::ShaderResource,
-            Graphics::GpuTaskResourceAccess::Read
-        );
+        const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
         if(bindingCount == LengthOf(versionUses)){
-            const Graphics::GpuTaskId precedingTask = AddTask(
-                graph,
-                Name("tests/task_graph_resource_version/valid_bindings_before_duplicate"),
-                &resourceUse,
-                1u,
-                versionUses,
-                bindingCount - 1u
-            );
+            const Graphics::GpuTaskId precedingTask = AddTask(graph, Name("tests/task_graph_resource_version/valid_bindings_before_duplicate"), &resourceUse, 1u, versionUses, bindingCount - 1u);
             ASSERT_TRUE(precedingTask.valid());
         }
-        const Graphics::GpuTaskId task = AddTask(
-            graph,
-            Name("tests/task_graph_resource_version/duplicate_binding_task"),
-            &resourceUse,
-            1u,
-            versionUses,
-            bindingCount
-        );
+        const Graphics::GpuTaskId task = AddTask(graph, Name("tests/task_graph_resource_version/duplicate_binding_task"), &resourceUse, 1u, versionUses, bindingCount);
         ASSERT_TRUE(task.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);

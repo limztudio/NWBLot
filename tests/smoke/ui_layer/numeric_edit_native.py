@@ -13,8 +13,7 @@ from window_capture_smoke import SmokeFailure
 
 
 class NumericSelectionEvent(ctypes.Structure):
-    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p), ("requestor", ctypes.c_ulong), ("selection", ctypes.c_ulong),
+    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int), ("display", ctypes.c_void_p), ("requestor", ctypes.c_ulong), ("selection", ctypes.c_ulong),
         ("target", ctypes.c_ulong), ("property", ctypes.c_ulong), ("time", ctypes.c_ulong)]
 
 
@@ -43,23 +42,19 @@ class NumericEditNativeInput(PopupToolsNativeInput):
             self.kernel32.GlobalSize.restype = ctypes.c_size_t
         else:
             x11 = backend.x11
-            x11.XCreateSimpleWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int,
-                ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_ulong]
+            x11.XCreateSimpleWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_ulong]
             x11.XCreateSimpleWindow.restype = ctypes.c_ulong
             x11.XDestroyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
             x11.XDestroyWindow.restype = ctypes.c_int
             x11.XGetSelectionOwner.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
             x11.XGetSelectionOwner.restype = ctypes.c_ulong
-            x11.XConvertSelection.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong,
-                ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong]
+            x11.XConvertSelection.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong]
             x11.XConvertSelection.restype = ctypes.c_int
-            x11.XCheckTypedWindowEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int,
-                ctypes.POINTER(NumericClipboardEvent)]
+            x11.XCheckTypedWindowEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.POINTER(NumericClipboardEvent)]
             x11.XCheckTypedWindowEvent.restype = ctypes.c_int
 
     def key(self, name, down, *, repeat=False, shift=False, control=False):
-        numeric_keys = {"minus": 0xBD, "period": 0xBE, "plus": 0xBB,
-            **{digit: ord(digit) for digit in "0123456789"}}
+        numeric_keys = {"minus": 0xBD, "period": 0xBE, "plus": 0xBB, **{digit: ord(digit) for digit in "0123456789"}}
         if self.windows and name in numeric_keys:
             flags = 1 | ((1 << 30) if repeat or not down else 0) | ((1 << 31) if not down else 0)
             self._post(0x0100 if down else 0x0101, numeric_keys[name], flags)
@@ -73,8 +68,7 @@ class NumericEditNativeInput(PopupToolsNativeInput):
         if self.windows:
             super().text(value, settle=settle)
             return
-        punctuation = {"-": ("minus", False), ".": ("period", False), "+": ("plus", True),
-            " ": ("space", False)}
+        punctuation = {"-": ("minus", False), ".": ("period", False), "+": ("plus", True), " ": ("space", False)}
         for character in value:
             name, shift = punctuation.get(character, (character.lower(), character.isupper()))
             self.key(name, True, shift=shift)
@@ -148,9 +142,7 @@ class NumericEditNativeInput(PopupToolsNativeInput):
                 return None
             actual_type, actual_format = ctypes.c_ulong(), ctypes.c_int()
             count, remaining, data = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.POINTER(ctypes.c_ubyte)()
-            status = x11.XGetWindowProperty(display, requestor, property_atom, 0, (max_bytes + 3) // 4, True,
-                target, ctypes.byref(actual_type), ctypes.byref(actual_format), ctypes.byref(count),
-                ctypes.byref(remaining), ctypes.byref(data))
+            status = x11.XGetWindowProperty(display, requestor, property_atom, 0, (max_bytes + 3) // 4, True, target, ctypes.byref(actual_type), ctypes.byref(actual_format), ctypes.byref(count), ctypes.byref(remaining), ctypes.byref(data))
             try:
                 if status != 0 or actual_type.value != target or actual_format.value != 8:
                     raise SmokeFailure("X11 numeric clipboard did not return UTF8_STRING bytes")

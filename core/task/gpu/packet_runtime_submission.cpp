@@ -42,11 +42,7 @@ namespace GpuPacketRuntimeDetail{
 }
 
 // Ordinary external completions may originate on any current-device queue. A completion paired with an imported ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the consumer could wait an unrelated timeline and race the Vulkan acquire.
-[[nodiscard]] bool ValidateInitialOwnershipCompletions(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId& packetID
-){
+[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID){
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     if(!packetView.valid())
         return false;
@@ -65,11 +61,7 @@ namespace GpuPacketRuntimeDetail{
             const GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(!barrier.isInitialOwnerHandoff)
                 continue;
-            if(
-                barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire
-                && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire
-                && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire
-            )
+            if(barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire)
                 return false;
 
             const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
@@ -80,21 +72,14 @@ namespace GpuPacketRuntimeDetail{
             if(!token)
                 return false;
             const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
-            if(!sourceQueue || !ValidateInitialOwnershipCompletionToken(
-                *source, barrier, *sourceQueue, *token, planAccess.deviceGeneration()
-            ))
+            if(!sourceQueue || !ValidateInitialOwnershipCompletionToken(*source, barrier, *sourceQueue, *token, planAccess.deviceGeneration()))
                 return false;
         }
     }
     return true;
 }
 
-[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(
-    const GpuPhysicalQueueId queue,
-    const QueueSubmissionToken* const waitTokens,
-    const usize waitTokenCount,
-    Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(const GpuPhysicalQueueId queue, const QueueSubmissionToken* const waitTokens, const usize waitTokenCount, Alloc::ScratchArena& scratchArena){
     constexpr usize s_InlineQueueCount = 8u;
     Array<GpuPhysicalQueueId, s_InlineQueueCount> inlineQueues;
     usize inlineQueueCount = 0u;
@@ -108,10 +93,7 @@ namespace GpuPacketRuntimeDetail{
             continue;
         }
 
-        const GpuPhysicalQueueId waitQueue{
-            .index = waitToken.physicalQueueIndex,
-            .deviceGeneration = waitToken.deviceGeneration,
-        };
+        const GpuPhysicalQueueId waitQueue{ .index = waitToken.physicalQueueIndex, .deviceGeneration = waitToken.deviceGeneration, };
         const GpuPhysicalQueueId* const distinctQueues = overflowQueues.empty() ? inlineQueues.data() : overflowQueues.data();
         const usize distinctQueueCount = overflowQueues.empty() ? inlineQueueCount : overflowQueues.size();
         bool merged = false;

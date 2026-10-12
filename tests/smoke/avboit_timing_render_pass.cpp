@@ -70,10 +70,7 @@ bool AvboitTimingRenderPass::start(const bool includeCaustics){
         }
     }
     if(includeCaustics){
-        const Name causticScopes[] = {
-            Impl::RendererGpuTimingScope::s_CausticPhotons.identity,
-            Impl::RendererGpuTimingScope::s_CausticResolve.identity,
-        };
+        const Name causticScopes[] = { Impl::RendererGpuTimingScope::s_CausticPhotons.identity, Impl::RendererGpuTimingScope::s_CausticResolve.identity, };
         for(const Name& scope : causticScopes){
             if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
                 NWB_LOGGER_ERROR(NWB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));

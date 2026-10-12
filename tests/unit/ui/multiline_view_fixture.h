@@ -141,8 +141,7 @@ protected:
     }
 
     [[nodiscard]] bool loadFont(){
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-            / "latin.font";
+        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
         auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
         if(!bytesResult)

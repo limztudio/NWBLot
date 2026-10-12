@@ -59,14 +59,11 @@ private:
     bool m_phase = false;
 };
 
-using SharedUiImageSmokeScene = RefCountPtr<
-    RefCounter<UiImageSmokeScene>, ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiImageSmokeScene = RefCountPtr< RefCounter<UiImageSmokeScene>, ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerImageSmokeEnabled();
 [[nodiscard]] bool IsUiLayerImageSkinSmokeEnabled();
-[[nodiscard]] SharedUiImageSmokeScene CreateUiImageSmokeScene(
-    Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+[[nodiscard]] SharedUiImageSmokeScene CreateUiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -32,16 +32,11 @@ using Candidate = CoincidentOpticalVolumeCandidate;
 using CandidatePointer = NotNull<const Candidate*>;
 
 [[nodiscard]] bool ValidCandidateLanes(SIMDVectorSingle positionVec, SIMDVectorSingle rotationVec, SIMDVectorSingle scaleVec)noexcept{
-    if(
-        !VectorIsFinite(positionVec, VectorComponentMask::s_XYZ)
-        || !VectorIsFinite(rotationVec, VectorComponentMask::s_XYZW)
-        || !VectorIsFinite(scaleVec, VectorComponentMask::s_XYZ)
-    )
+    if(!VectorIsFinite(positionVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(rotationVec, VectorComponentMask::s_XYZW) || !VectorIsFinite(scaleVec, VectorComponentMask::s_XYZ))
         return false;
     const bool scaleNonzero = (VectorMoveMask(VectorEqual(scaleVec, VectorZero())) & VectorComponentMask::s_XYZ) == 0u;
     const bool rotationNonzero = (VectorMoveMask(VectorNotEqual(rotationVec, VectorZero())) & VectorComponentMask::s_XYZW) != 0u;
-    return scaleNonzero && rotationNonzero
-    ;
+    return scaleNonzero && rotationNonzero;
 }
 
 [[nodiscard]] bool ValidCandidate(const Candidate& candidate){
@@ -84,9 +79,7 @@ struct CandidateHasher{
 
 struct CandidateEqual{
     bool equalTransformLanes(SIMDVectorSingle lhsPosition, SIMDVectorSingle lhsRotation, SIMDVectorSingle lhsScale, SIMDVectorSingle rhsPosition, SIMDVectorSingle rhsRotation, SIMDVectorSingle rhsScale)const noexcept{
-        return Vector3Equal(lhsPosition, rhsPosition)
-            && Vector4Equal(lhsRotation, rhsRotation)
-            && Vector3Equal(lhsScale, rhsScale);
+        return Vector3Equal(lhsPosition, rhsPosition) && Vector4Equal(lhsRotation, rhsRotation) && Vector3Equal(lhsScale, rhsScale);
     }
 
     bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{
@@ -99,8 +92,7 @@ struct CandidateEqual{
         return lhs->group != s_NameNone || (
             lhs->boundaryMode == rhs->boundaryMode && lhs->mediumPriority == rhs->mediumPriority
             && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
-            && (lhs->mutableTypedByteCount == 0u
-                || NWB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
+            && (lhs->mutableTypedByteCount == 0u || NWB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
         );
     }
 };
@@ -119,11 +111,7 @@ RendererOpticalVolumeSelection::RendererOpticalVolumeSelection(Core::Alloc::Glob
     : m_suppressed(0u, Hasher<Core::ECS::EntityID>{}, EqualTo<Core::ECS::EntityID>{}, arena)
 {}
 
-void RendererOpticalVolumeSelection::prepare(
-    Core::ECS::World& world,
-    RendererMaterialSystem& materials,
-    Core::Alloc::ScratchArena& scratchArena
-){
+void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena){
     auto rendererView = world.view<RendererComponent>();
     const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
     if(!meshSystemPtr || rendererView.candidateCount() < 2u){
@@ -132,10 +120,7 @@ void RendererOpticalVolumeSelection::prepare(
     }
 
     const auto mergingEnabled = [](const RendererComponent& renderer){
-        return renderer.visible && (
-            renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial
-            || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone)
-        );
+        return renderer.visible && (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone));
     };
     // Count opt-ins first; opaque-heavy worlds need no candidate allocation.
     usize candidateCapacity = 0u;
@@ -153,8 +138,7 @@ void RendererOpticalVolumeSelection::prepare(
         if(!mergingEnabled(renderer))
             continue;
         const auto materialResult = materials.findMaterialSurfaceInfo(renderer.material);
-        const bool closed = renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedNested
-            || renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedPriority;
+        const bool closed = renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedNested || renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedPriority;
         if(!materialResult)
             continue;
         MaterialSurfaceInfo* const material = *materialResult;
@@ -166,11 +150,7 @@ void RendererOpticalVolumeSelection::prepare(
             continue;
         const auto& mesh = *meshResult;
         // Runtime providers and CSG can change boundaries; skip them here.
-        if(
-            world.tryGetComponent<StaticCsgMeshComponent>(entity)
-            || world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
-            || world.tryGetComponent<CsgReceiverComponent>(entity)
-        )
+        if(world.tryGetComponent<StaticCsgMeshComponent>(entity) || world.tryGetComponent<SkinnedCsgMeshComponent>(entity) || world.tryGetComponent<CsgReceiverComponent>(entity))
             continue;
 
         const auto* materialInstance = world.tryGetComponent<MaterialInstanceComponent>(entity);
@@ -182,8 +162,7 @@ void RendererOpticalVolumeSelection::prepare(
         candidate.entity = entity;
         candidate.mesh = mesh.mesh;
         candidate.material = renderer.material;
-        candidate.group = renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup
-            ? renderer.opticalVolumeGroup : s_NameNone;
+        candidate.group = renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup ? renderer.opticalVolumeGroup : s_NameNone;
         candidate.priority = renderer.opticalVolumePriority;
         candidate.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
         candidate.mediumPriority = renderer.opticalMediumPriority;
@@ -199,11 +178,7 @@ void RendererOpticalVolumeSelection::prepare(
     select(candidates.data(), candidates.size(), scratchArena);
 }
 
-void RendererOpticalVolumeSelection::select(
-    const CoincidentOpticalVolumeCandidate* candidates,
-    const usize candidateCount,
-    Core::Alloc::ScratchArena& scratchArena
-){
+void RendererOpticalVolumeSelection::select(const CoincidentOpticalVolumeCandidate* candidates, const usize candidateCount, Core::Alloc::ScratchArena& scratchArena){
     reset();
     if(!candidates || candidateCount < 2u)
         return;
@@ -223,8 +198,7 @@ void RendererOpticalVolumeSelection::select(
             continue;
 
         const Candidate& previous = *entry.value();
-        const bool replace = candidate.priority > previous.priority
-            || (candidate.priority == previous.priority && candidate.entity < previous.entity);
+        const bool replace = candidate.priority > previous.priority || (candidate.priority == previous.priority && candidate.entity < previous.entity);
         const Core::ECS::EntityID suppressed = replace ? previous.entity : candidate.entity;
         if(replace)
             entry.value() = current;

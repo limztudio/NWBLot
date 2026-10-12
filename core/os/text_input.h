@@ -115,13 +115,17 @@ struct TextInputEvent{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Construct, update, native dispatch, poll and destroy on the owning OS/event thread. No UI callback or model is borrowed.
-// begin/update copy valid UTF-8 without embedded NUL. All text positions are UTF-8 byte boundaries, never code-point counts.
+// Construct, update, native dispatch, poll and destroy on the owning OS/event thread.
+// No UI callback or model is borrowed.
+// begin/update copy valid UTF-8 without embedded NUL.
+// All text positions are UTF-8 byte boundaries, never code-point counts.
 // Preedit positions index event.text; deletion addresses the snapshot at surroundingRevision.
 // Caret distances address the caret; Selection distances skip the selected range and preserve its bytes.
-// poll consumes an event and copies its text into the caller's arena. A service admits only one active session.
+// poll consumes an event and copies its text into the caller's arena.
+// A service admits only one active session.
 // Focus loss or event overflow discards pending events and leaves one terminal Cancelled event for that token.
-// A cancelled token can poll that event once; end or a new begin invalidates it. Stale/foreign native delivery is rejected.
+// A cancelled token can poll that event once; end or a new begin invalidates it.
+// Stale/foreign native delivery is rejected.
 interface ITextInputService : private NoCopy{
 public:
     virtual ~ITextInputService() = default;
@@ -135,16 +139,14 @@ public:
     [[nodiscard]] virtual TextInputBeginResult begin(const TextInputSessionDesc& desc) = 0;
     [[nodiscard]] virtual bool end(TextInputSessionToken token) = 0;
     [[nodiscard]] virtual TextInputAdmission::Enum updateCaret(TextInputSessionToken token, TextInputRect caret) = 0;
-    [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(
-        TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte,
-        TextInputChangeCause::Enum cause = TextInputChangeCause::Other
-    ) = 0;
+    [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, TextInputChangeCause::Enum cause = TextInputChangeCause::Other) = 0;
     [[nodiscard]] virtual TextInputPollResult::Enum poll(TextInputSessionToken token, TextInputEvent& event) = 0;
     // Called by Frame's native focus path before ordinary input focus dispatch. Initially unfocused.
     [[nodiscard]] virtual bool setFocused(bool focused) = 0;
 };
 
-// The native HWND is borrowed until service destruction. nullptr returns an explicit unsupported service.
+// The native HWND is borrowed until service destruction.
+// nullptr returns an explicit unsupported service.
 // Native Linux factories and event bridges belong to their X11/Wayland domains.
 [[nodiscard]] GlobalUniquePtr<ITextInputService> CreateTextInputService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
 

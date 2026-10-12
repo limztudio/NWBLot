@@ -50,8 +50,7 @@ private:
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
     [[nodiscard]] Array<u64, 29u> values()const;
-    [[nodiscard]] Impl::Ui::Rect rowBounds(const Impl::Ui::ListState& state,
-        const Impl::Ui::IListDataSource& source, u64 key, f32 rowHeight)const;
+    [[nodiscard]] Impl::Ui::Rect rowBounds(const Impl::Ui::ListState& state, const Impl::Ui::IListDataSource& source, u64 key, f32 rowHeight)const;
 
 
 private:
@@ -89,14 +88,11 @@ private:
     bool m_displayChanged = false;
 };
 
-using SharedUiNestedPopupSmokeScene = RefCountPtr<
-    RefCounter<UiNestedPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiNestedPopupSmokeScene>, Core::Alloc::GlobalArena>
->;
+using SharedUiNestedPopupSmokeScene = RefCountPtr< RefCounter<UiNestedPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiNestedPopupSmokeScene>, Core::Alloc::GlobalArena> >;
 
 [[nodiscard]] bool IsUiLayerNestedPopupSmokeEnabled();
 [[nodiscard]] bool IsUiLayerNestedPopupSkinSmokeEnabled();
-[[nodiscard]] SharedUiNestedPopupSmokeScene CreateUiNestedPopupSmokeScene(
-    Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+[[nodiscard]] SharedUiNestedPopupSmokeScene CreateUiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

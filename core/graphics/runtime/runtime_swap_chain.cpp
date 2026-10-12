@@ -61,11 +61,7 @@ Expected<SwapChainTransitionTicket> GraphicsRuntime::backBufferResizing(){
     return Move(*ticket);
 }
 
-bool GraphicsRuntime::resizeBackBuffer(
-    const u32 width,
-    const u32 height,
-    const bool vsyncEnabled
-){
+bool GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height, const bool vsyncEnabled){
     auto transitionTicket = backBufferResizing();
     if(!transitionTicket)
         return false;
@@ -92,9 +88,7 @@ bool GraphicsRuntime::backBufferResized(){
     m_swapChainFramebuffers.clear();
     m_swapChainFramebuffers.reserve(backBufferCount);
     for(u32 index = 0u; index < backBufferCount; ++index){
-        FramebufferHandle framebuffer = getDevice().createFramebuffer(
-            FramebufferDesc().addColorAttachment(getBackBuffer(index))
-        );
+        FramebufferHandle framebuffer = getDevice().createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
         if(!framebuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to rebuild swap-chain framebuffer {}"), index);
             m_swapChainFramebuffers.clear();

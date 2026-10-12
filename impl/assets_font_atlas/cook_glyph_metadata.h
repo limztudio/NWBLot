@@ -25,11 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const FontAtlasPayload& payload
-);
+[[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,10 +8,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from csg_shadow_reference import (  # noqa: E402
-    ANALYTIC_ARMS, ANALYTIC_REGIONS, ANALYTIC_REGION_SPACING, ARMS, REGIONS, analytic_optical_length,
-    clipped_union_length, compare_analytic_frames, compare_frames, expected_rgb, expected_sample_rgb, ray_box,
-    receiver_pixel_world, reference_optical_length, region_pixels,
-)
+    ANALYTIC_ARMS, ANALYTIC_REGIONS, ANALYTIC_REGION_SPACING, ARMS, REGIONS, analytic_optical_length, clipped_union_length, compare_analytic_frames, compare_frames, expected_rgb, expected_sample_rgb, ray_box,
+    receiver_pixel_world, reference_optical_length, region_pixels,)
 from csg_shadow_smoke import capture_environment, parse_args  # noqa: E402
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
@@ -121,8 +119,7 @@ class CsgShadowImageTests(unittest.TestCase):
             compare_frames(frames)
 
     def test_capture_policy_overrides_inherited_quality_and_freeze(self):
-        with patch.dict(LIT_OS_ENVIRON, {LIT_NWB_SOFTWARE_SHADOW_BACKEND: "trace", LIT_NWB_SHADOW_TRANSPARENT_SAMPLING: "temporal_one",
-            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "8", LIT_NWB_CSG_SHADOW_LIGHT_SOURCE: LIT_FINITE,
+        with patch.dict(LIT_OS_ENVIRON, {LIT_NWB_SOFTWARE_SHADOW_BACKEND: "trace", LIT_NWB_SHADOW_TRANSPARENT_SAMPLING: "temporal_one", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "8", LIT_NWB_CSG_SHADOW_LIGHT_SOURCE: LIT_FINITE,
             LIT_NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH: LIT_CENTER1}, clear=True):
             environment = capture_environment(LIT_MOVED, LIT_POINT)
         self.assertEqual(environment[LIT_NWB_SOFTWARE_SHADOW_BACKEND], "automatic")
@@ -181,8 +178,7 @@ class CsgAnalyticShadowImageTests(unittest.TestCase):
 
     def test_missing_curvature_axis_length_or_union_cannot_pass(self):
         self.assertTrue(compare_analytic_frames(self.frames()))
-        for name, incorrect_length in (("ellipsoid_center", 1.0), (LIT_CAPSULE_ENDCAP, 1.3),
-            ("axial_capsule_center", 1.4), ("sphere_union_center", 0.0), (LIT_UNCUT_CONTROL, 0.0)):
+        for name, incorrect_length in (("ellipsoid_center", 1.0), (LIT_CAPSULE_ENDCAP, 1.3), ("axial_capsule_center", 1.4), ("sphere_union_center", 0.0), (LIT_UNCUT_CONTROL, 0.0)):
             with self.subTest(name=name):
                 frames = self.frames()
                 region = next(region for region in ANALYTIC_REGIONS if region[0] == name)

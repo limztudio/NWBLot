@@ -31,12 +31,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool NWB_CSG_TRY_EVAL_SHAPE_FUNCTION(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    out NwbCsgSample outSample
-){
+bool NWB_CSG_TRY_EVAL_SHAPE_FUNCTION(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter, out NwbCsgSample outSample){
     if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
         outSample = NWB_CSG_SHAPE_EVAL_FUNCTION(shapePosition, cutter);
         return true;

@@ -64,13 +64,7 @@ public:
 
 
 public:
-    void validate(
-        const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        Core::GpuTaskId causticsTask,
-        Core::GpuTaskId terminalPresentationTask,
-        bool captureLaggedLightingHistory,
-        SurfelCausticsMergeValidationResult& outResult
-    )const;
+    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, bool captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const;
 
 
 private:

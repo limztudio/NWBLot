@@ -125,9 +125,7 @@ protected:
         m_menuOptions.size = { 240.0f, 220.0f };
     }
 
-    [[nodiscard]] bool declareTools(const u64 generation, const bool tooltip = true, const bool menu = true,
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }
-    ){
+    [[nodiscard]] bool declareTools(const u64 generation, const bool tooltip = true, const bool menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
             return false;
         m_builder.setDeltaSeconds(m_deltaSeconds);
@@ -143,15 +141,11 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool prepareTools(const u64 generation, const bool tooltip = true, const bool menu = true,
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }
-    ){
+    [[nodiscard]] bool prepareTools(const u64 generation, const bool tooltip = true, const bool menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         return declareTools(generation, tooltip, menu, bounds) && finishPanel();
     }
 
-    [[nodiscard]] bool acceptTools(const u64 generation, const bool tooltip = true, const bool menu = true,
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }
-    ){
+    [[nodiscard]] bool acceptTools(const u64 generation, const bool tooltip = true, const bool menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
     }
 
@@ -165,8 +159,7 @@ protected:
         if(!m_builder.beginPopup("plain", m_plainPopup, options))
             return false;
         m_anchorActivated = m_builder.button("anchor", "Popup anchor", m_anchorOptions);
-        return m_builder.tooltip("tip", "anchor", "Overlay help", m_tooltip, m_tooltipOptions)
-            && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
+        return m_builder.tooltip("tip", "anchor", "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
     [[nodiscard]] WidgetId anchor(const AStringView parent = "panel")const{ return id("anchor", parent); }
@@ -191,8 +184,7 @@ protected:
         const HitTarget* accepted = target(anchor(parent));
         if(!accepted)
             return false;
-        const Point point{ accepted->rectangle.x + accepted->rectangle.width * 0.5f,
-            accepted->rectangle.y + accepted->rectangle.height * 0.5f };
+        const Point point{ accepted->rectangle.x + accepted->rectangle.width * 0.5f, accepted->rectangle.y + accepted->rectangle.height * 0.5f };
         return send({ InputEventType::PointerMove, point }).hover == anchor(parent);
     }
 
@@ -215,8 +207,7 @@ protected:
         const HitTarget* accepted = target(anchor());
         if(!accepted)
             return false;
-        const Point point{ accepted->rectangle.x + accepted->rectangle.width * 0.5f,
-            accepted->rectangle.y + accepted->rectangle.height * 0.5f };
+        const Point point{ accepted->rectangle.x + accepted->rectangle.width * 0.5f, accepted->rectangle.y + accepted->rectangle.height * 0.5f };
         secondaryClick(point);
         return acceptTools(generation, false) && m_menu.isOpen();
     }

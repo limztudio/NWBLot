@@ -47,13 +47,7 @@ inline constexpr int s_LoggerServerExitFailure = -1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int MainLogic(
-    u16 logPort,
-    AStringView crashSymbolStoreDirectory,
-    NWB::Log::CrashRetentionConfig crashRetentionConfig,
-    AStringView crashUploadToken,
-    void* inst
-){
+static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Log::CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken, void* inst){
     NWB::Log::Server logger;
     if(!logger.init(logPort, __hidden_logger_server_main::s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken))
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
@@ -102,13 +96,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         CommandLineParseApp(app, argc, argv);
 
-        return MainLogic(
-            logPort,
-            AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()),
-            crashRetentionConfig,
-            AStringView(crashUploadToken.data(), crashUploadToken.size()),
-            inst
-        );
+        return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, AStringView(crashUploadToken.data(), crashUploadToken.size()), inst);
     }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
 

@@ -74,8 +74,7 @@ NwbOpticalMedium nwbOpticalDominantMedium(const NwbOpticalMedia media){
 #if NWB_OPTICAL_CLOSED_MEDIA
     result = media.entries[media.count - 1u];
     if(result.mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
-        [unroll]
-        for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
+        [unroll] for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
             if(index < media.count){
                 const NwbOpticalMedium candidate = media.entries[index];
                 if(candidate.priority > result.priority || (candidate.priority == result.priority && candidate.entityId < result.entityId))
@@ -89,15 +88,9 @@ NwbOpticalMedium nwbOpticalDominantMedium(const NwbOpticalMedia media){
 
 #if NWB_OPTICAL_CLOSED_MEDIA
 // Nested boundaries are an authored stack: highest priority wins (lowest EntityID breaks ties); same-instance shells union via positive winding. Mixed policies/unmatched exits are ambiguous: never guess from tie order.
-bool nwbOpticalApplyBoundary(
-    inout NwbOpticalMedia media,
-    const NwbOpticalMedium medium,
-    const bool entering,
-    inout NwbOpticalTraceResult result
-){
+bool nwbOpticalApplyBoundary(inout NwbOpticalMedia media, const NwbOpticalMedium medium, const bool entering, inout NwbOpticalTraceResult result){
     uint existing = NWB_OPTICAL_MAX_MEDIA;
-    [unroll]
-    for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
+    [unroll] for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
         if(index < media.count && media.entries[index].instance == medium.instance)
             existing = index;
     }
@@ -130,8 +123,7 @@ bool nwbOpticalApplyBoundary(
     }
     if(medium.mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && existing + 1u != media.count)
         return false;
-    [unroll]
-    for(uint index = 0u; index + 1u < NWB_OPTICAL_MAX_MEDIA; ++index){
+    [unroll] for(uint index = 0u; index + 1u < NWB_OPTICAL_MAX_MEDIA; ++index){
         if(index >= existing && index + 1u < media.count)
             media.entries[index] = media.entries[index + 1u];
     }

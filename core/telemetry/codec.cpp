@@ -32,17 +32,11 @@ namespace __hidden_telemetry_codec{
 }
 
 [[nodiscard]] static bool ValidateEventPayload(const EventHeader& header, const void* const payload, const usize payloadBytes)noexcept{
-    return ValidatePayloadPointer(payload, payloadBytes)
-        && header.payloadBytes == payloadBytes
-        && ValidateHeaderPayload(header)
-    ;
+    return ValidatePayloadPointer(payload, payloadBytes) && header.payloadBytes == payloadBytes && ValidateHeaderPayload(header);
 }
 
 [[nodiscard]] static bool ValidateStreamHeader(const EncodedStreamHeader& header)noexcept{
-    return header.magic == s_StreamMagic
-        && header.version == s_TelemetryFormatVersion
-        && header.reserved == 0u
-    ;
+    return header.magic == s_StreamMagic && header.version == s_TelemetryFormatVersion && header.reserved == 0u;
 }
 
 [[nodiscard]] static EncodedEventHeader EncodeHeader(const EventHeader& header)noexcept{
@@ -72,12 +66,7 @@ namespace __hidden_telemetry_codec{
 }
 
 template<typename Container>
-[[nodiscard]] static bool AppendEncodedEvent(
-    Container& outBytes,
-    const EventHeader& header,
-    const void* const payload,
-    const usize payloadBytes
-){
+[[nodiscard]] static bool AppendEncodedEvent(Container& outBytes, const EventHeader& header, const void* const payload, const usize payloadBytes){
     if(!ValidateEventPayload(header, payload, payloadBytes))
         return false;
     if(payloadBytes > Limit<usize>::s_Max - sizeof(EncodedEventHeader))
@@ -185,12 +174,7 @@ bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     return outBytes.size() == encodedBytes;
 }
 
-Expected<usize, DecodeResult> DecodeEventStream(
-    TelemetryArena& arena,
-    const void* const bytes,
-    const usize byteCount,
-    Recorder& inOutRecorder
-){
+Expected<usize, DecodeResult> DecodeEventStream(TelemetryArena& arena, const void* const bytes, const usize byteCount, Recorder& inOutRecorder){
     inOutRecorder.clear();
     if(byteCount < sizeof(EncodedStreamHeader) || !bytes)
         return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });

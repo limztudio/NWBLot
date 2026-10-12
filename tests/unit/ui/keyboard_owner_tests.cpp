@@ -375,7 +375,6 @@ TEST_F(UiKeyboardOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
     press(Core::Key::Enter);
     const auto actionResult2 = take();
     ASSERT_TRUE(actionResult2);
-    action = *actionResult2;
 }
 
 

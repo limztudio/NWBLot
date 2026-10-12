@@ -122,8 +122,9 @@ layout movement. Checkbox metrics include the square and its label gap. State ar
 normal region; the normal panel/button/checkbox parts are required. The stock widget skin contract requires the checkbox mark and focus overlay; custom low-level painters may choose their own region requirements.
 
 A panel blocks pointer input through its empty area. The layout's ancestor clip intersects both painting
-and hit testing. Enabled buttons and checkboxes participate in Tab/Shift+Tab navigation and initial
-Enter/Space activation; repeated key-downs do not repeat activation. A disabled control cannot consume an
+and hit testing. Enabled buttons and checkboxes participate in Tab/Shift+Tab navigation. The initial
+Enter/Space press arms activation, and its matching release submits once; Escape cancels the arm before
+release. Repeated key-downs do not submit. A disabled control cannot consume an
 activation and leaves its panel as the pointer barrier. Captured primary input stays owned through release,
 even when the target is removed; release outside the original visible target cancels activation.
 

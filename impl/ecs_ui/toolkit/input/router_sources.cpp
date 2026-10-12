@@ -37,10 +37,8 @@ bool InputRouter::ownsSource(const InputSource& source)const noexcept{
     return held && held->consumed;
 }
 
-void InputRouter::cancelNativeInput(const bool includeKeyboard){
+void InputRouter::cancelNativeInput(){
     cancelPointerCapture();
-    if(!includeKeyboard)
-        return;
     clearHover();
     m_pointerKnown = false;
     for(usize index = m_commandSources.size(); index > 0u; --index){
@@ -57,14 +55,12 @@ bool InputRouter::canEditCommand(const InputEvent& event)const{
     if(event.type != InputEventType::CommandDown || !event.edit)
         return false;
     const CommandSource* source = findCommandSource(event.source);
-    const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    if(
-        !source || !source->consumed || !focused || !focused->textEditable || !isInteractive(*focused)
-        || source->focusOwner.target != focused->id || source->focusOwner.declarationGeneration != focused->declarationGeneration
-        || source->focusOwner.popup != focused->popup || source->focusOwner.control != focused->control
-    )
+    if(source == nullptr || !currentCommandFocus(*source))
         return false;
-    return !source->delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && currentControlKeyOwner(source->controlOwner));
+    const HitTarget* focused = findTarget(source->focusOwner.target, source->focusOwner.declarationGeneration);
+    if(!focused->textEditable)
+        return false;
+    return !source->delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && currentControlKeyOwner(*source));
 }
 
 

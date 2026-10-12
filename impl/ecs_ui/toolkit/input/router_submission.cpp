@@ -30,7 +30,7 @@ bool InputRouter::canSubmitCommand(const InputEvent& event)const{
     if(source == nullptr || !source->submitArmed || !currentCommandFocus(*source))
         return false;
     const HitTarget* focused = findTarget(source->focusOwner.target, source->focusOwner.declarationGeneration);
-    return focused->textEditable && (!source->delegated || currentControlKeyOwner(source->controlOwner));
+    return focused->textEditable && (!source->delegated || currentControlKeyOwner(*source));
 }
 
 void InputRouter::cancelSubmitCommands(const WidgetId id)noexcept{
@@ -53,8 +53,8 @@ bool InputRouter::pressed(const WidgetId id)const{
 void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result){
     if(!currentCommandFocus(source))
         return;
-    if(source.contextOwner.target.valid() && event.command == InputCommand::ContextMenu && currentContextMenuOwner(source.contextOwner)){
-        const HitTarget* target = findTarget(source.contextOwner.target, source.contextOwner.declarationGeneration);
+    if(source.contextArmed && event.command == InputCommand::ContextMenu && currentContextMenuOwner(source.focusOwner)){
+        const HitTarget* target = findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration);
         appendContextMenu(*target, source.contextPosition, true, result);
         return;
     }
@@ -62,7 +62,7 @@ void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& s
         return;
     const HitTarget* focused = findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration);
     if(source.controlOwner.host.valid()){
-        if(currentControlKeyOwner(source.controlOwner)){
+        if(currentControlKeyOwner(source)){
             const HitTarget* host = findTarget(source.controlOwner.host, source.controlOwner.declarationGeneration);
             appendControlAction(*host, *focused, ControlActionKind::Submit, 0.0, result);
         }
@@ -74,14 +74,14 @@ void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& s
 void InputRouter::cancelCommandPresses()noexcept{
     for(CommandSource& source : m_commandSources){
         source.submitArmed = false;
-        source.contextOwner = {};
+        source.contextArmed = false;
     }
 }
 
 void InputRouter::retireCommandFocus()noexcept{
     for(CommandSource& source : m_commandSources){
         source.submitArmed = false;
-        source.contextOwner = {};
+        source.contextArmed = false;
         source.focusOwner = {};
         source.controlOwner = {};
     }
@@ -89,9 +89,9 @@ void InputRouter::retireCommandFocus()noexcept{
 
 void InputRouter::reconcileCommandPresses(){
     for(CommandSource& source : m_commandSources){
-        if(!currentCommandFocus(source) || (source.controlOwner.host.valid() && !currentControlKeyOwner(source.controlOwner))){
+        if(!currentCommandFocus(source)){
             source.submitArmed = false;
-            source.contextOwner = {};
+            source.contextArmed = false;
         }
     }
 }

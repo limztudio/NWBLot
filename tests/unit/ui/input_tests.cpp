@@ -641,7 +641,6 @@ TEST_F(UiInputTests, NativeCaptureTerminationAdmitsFreshClicksWithoutCancellingC
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).keyboardConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerCaptureLost }).pointerConsumed);
-    m_router.cancelNativeInput(false);
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.secondaryDown());
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
@@ -665,7 +664,7 @@ TEST_F(UiInputTests, NativeFocusTerminationDropsMissingNativeReleasesButPreserve
     controller.command = InputCommand::Activate;
     EXPECT_TRUE(send(controller).keyboardConsumed);
     EXPECT_TRUE(send({ InputEventType::FocusLost }).keyboardConsumed);
-    m_router.cancelNativeInput(true);
+    m_router.cancelNativeInput();
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
     EXPECT_TRUE(m_router.ownsSource(controller.source));

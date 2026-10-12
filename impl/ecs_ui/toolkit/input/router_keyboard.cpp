@@ -76,9 +76,19 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
             || event.command == InputCommand::Accept || event.command == InputCommand::Submit;
         const HitTarget* keyboardOwner = focused != nullptr && delegatedCommand ? keyboardHost(*focused) : nullptr;
         const HitTarget* control = keyboardOwner != nullptr ? keyboardOwner : focused;
-        const bool controlHandled = control != nullptr && focused != nullptr && control->navigable && routeControlKey(event, *control, *focused, source->controlOwner, alreadyPressed, result);
+        const bool submitCommand = event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate;
+        bool controlHandled = false;
+        if(control != nullptr && focused != nullptr && control->navigable){
+            if(submitCommand){
+                controlHandled = true;
+                if(!event.repeat && !alreadyPressed)
+                    source->controlOwner = { control->id, control->declarationGeneration, control->popup, control->control, false };
+            }
+            else
+                controlHandled = routeControlNavigation(event, *control, *focused, *source, alreadyPressed, result);
+        }
         source->delegated |= controlHandled && keyboardOwner != nullptr;
-        if(focused != nullptr && !event.repeat && !alreadyPressed && (controlHandled || focused->activatable || focused->textEditable) && (event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate))
+        if(submitCommand && focused != nullptr && !event.repeat && !alreadyPressed && (controlHandled || focused->activatable || focused->textEditable))
             source->submitArmed = true;
     }
     if(consumed){

@@ -54,13 +54,15 @@ const HitTarget* InputRouter::keyboardHost(const HitTarget& source)const{
     return host;
 }
 
-bool InputRouter::currentControlKeyOwner(const ControlKeyOwner& owner)const{
+bool InputRouter::currentControlKeyOwner(const CommandSource& held)const{
+    const ControlKeyOwner& owner = held.controlOwner;
+    const TargetOwner& sourceOwner = held.focusOwner;
     const HitTarget* host = findTarget(owner.host, owner.declarationGeneration);
-    const HitTarget* source = findTarget(owner.source, owner.sourceDeclarationGeneration);
+    const HitTarget* source = findTarget(sourceOwner.target, sourceOwner.declarationGeneration);
     if(
         host == nullptr || !isInteractive(*host) || !host->navigable || host->owner.valid()
         || host->control != owner.control || host->popup != owner.popup || source == nullptr
-        || !isInteractive(*source) || source->control != owner.sourceControl
+        || !isInteractive(*source) || source->control != sourceOwner.control || source->popup != sourceOwner.popup
         || (owner.horizontal && !host->horizontalNavigation)
     )
         return false;

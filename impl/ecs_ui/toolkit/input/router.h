@@ -44,13 +44,10 @@ private:
         u64 declarationGeneration = 0u;
         PopupToken popup;
         ControlToken control;
-        WidgetId source;
-        u64 sourceDeclarationGeneration = 0u;
-        ControlToken sourceControl;
         bool horizontal = false;
     };
 
-    struct ContextMenuOwner{
+    struct TargetOwner{
         WidgetId target;
         u64 declarationGeneration = 0u;
         PopupToken popup;
@@ -65,12 +62,12 @@ private:
     struct CommandSource{
         InputSource source;
         ControlKeyOwner controlOwner{};
-        ContextMenuOwner contextOwner{};
-        ContextMenuOwner focusOwner{};
+        TargetOwner focusOwner{};
         Point contextPosition;
         bool consumed = false;
         bool delegated = false;
         bool submitArmed = false;
+        bool contextArmed = false;
     };
 
     struct HoverIdentity{
@@ -114,7 +111,7 @@ public:
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset();
     // Native capture/focus termination may suppress releases; the host resets its native owner records at this boundary.
-    void cancelNativeInput(bool includeKeyboard);
+    void cancelNativeInput();
     [[nodiscard]] bool consumeActivation(WidgetId id);
     [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration);
     [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token);
@@ -170,17 +167,17 @@ private:
     [[nodiscard]] bool validControlTargets()const;
     [[nodiscard]] bool validKeyboardOwners()const;
     [[nodiscard]] const HitTarget* keyboardHost(const HitTarget& source)const;
-    [[nodiscard]] bool currentControlKeyOwner(const ControlKeyOwner& owner)const;
+    [[nodiscard]] bool currentControlKeyOwner(const CommandSource& source)const;
     [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const;
     [[nodiscard]] bool currentControlAction(const ControlAction& action)const;
     void reconcileControlActions();
-    [[nodiscard]] bool currentContextMenuOwner(const ContextMenuOwner& owner)const;
+    [[nodiscard]] bool currentContextMenuOwner(const TargetOwner& owner)const;
     void reconcileContextMenus();
     void appendContextMenu(const HitTarget& target, const Point& position, bool keyboard, InputRoutingResult& result);
     [[nodiscard]] bool routeContextMenuKey(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed);
     void routeSecondary(const InputEvent& event, InputRoutingResult& result);
     void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result, f64 deltaX = 0.0);
-    [[nodiscard]] bool routeControlKey(const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, bool alreadyPressed, InputRoutingResult& result);
+    [[nodiscard]] bool routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, bool alreadyPressed, InputRoutingResult& result);
     void routeWheel(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
     [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const;
@@ -236,7 +233,7 @@ private:
     ControlToken m_focusControl;
     u64 m_focusDeclaration = 0u;
     u64 m_captureDeclaration = 0u;
-    ContextMenuOwner m_secondaryOwner;
+    TargetOwner m_secondaryOwner;
     Point m_pointer;
     Point m_secondaryPosition;
     bool m_pointerKnown = false;

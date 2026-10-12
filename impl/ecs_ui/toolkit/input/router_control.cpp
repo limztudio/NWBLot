@@ -133,7 +133,7 @@ void InputRouter::reconcileControlActions(){
     }
     // Losing an initial-down owner is terminal for that held key even if its token later returns.
     for(auto& source : m_commandSources){
-        if(!currentControlKeyOwner(source.controlOwner)){
+        if(!currentControlKeyOwner(source)){
             if(source.controlOwner.host.valid())
                 source.submitArmed = false;
             source.controlOwner = {};
@@ -182,7 +182,7 @@ void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result
         appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, result, event.scrollX);
 }
 
-bool InputRouter::routeControlKey(const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, const bool alreadyPressed, InputRoutingResult& result){
+bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, const bool alreadyPressed, InputRoutingResult& result){
     ControlActionKind::Enum kind;
     switch(event.command){
     case InputCommand::Left:
@@ -205,19 +205,16 @@ bool InputRouter::routeControlKey(const InputEvent& event, const HitTarget& host
     case InputCommand::Home: kind = ControlActionKind::Home; break;
     case InputCommand::DocumentEnd:
     case InputCommand::End: kind = ControlActionKind::End; break;
-    case InputCommand::Accept:
-    case InputCommand::Submit:
-    case InputCommand::Activate: kind = ControlActionKind::Submit; break;
     default: return false;
     }
+    ControlKeyOwner& owner = held.controlOwner;
     if(!alreadyPressed && !event.repeat)
-        owner = { host.id, host.declarationGeneration, host.popup, host.control, source.id, source.declarationGeneration, source.control, kind == ControlActionKind::Left || kind == ControlActionKind::Right };
+        owner = { host.id, host.declarationGeneration, host.popup, host.control, kind == ControlActionKind::Left || kind == ControlActionKind::Right };
     if(
         owner.host == host.id && owner.declarationGeneration == host.declarationGeneration
         && owner.popup == host.popup && owner.control == host.control
-        && owner.source == source.id && owner.sourceDeclarationGeneration == source.declarationGeneration
-        && owner.sourceControl == source.control
-        && kind != ControlActionKind::Submit
+        && held.focusOwner.target == source.id && held.focusOwner.declarationGeneration == source.declarationGeneration
+        && held.focusOwner.popup == source.popup && held.focusOwner.control == source.control
     )
         appendControlAction(host, source, kind, 0.0, result);
     return true;

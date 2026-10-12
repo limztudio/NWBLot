@@ -84,25 +84,27 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         Event event(m_arena);
         event.owner = entry->owner;
         event.focusGeneration = entry->focusGeneration;
-        const Ui::InputCommandIntent intent{ input.command, input.extend, input.edit };
-        event.command = Ui::TranslateEditCommand(intent, input.repeat, entry->displayed.textMode);
-        if(!released && event.command.command == Ui::EditCommand::Submit){
-            if(compositionActive(*entry))
-                m_context.input().cancelSubmitCommands(entry->widget.id);
-            return;
-        }
-        if(released && event.command.command != Ui::EditCommand::Submit)
-            return;
-        const auto navigation = Ui::TranslateEditNavigation(intent);
-        event.navigation = navigation.has_value();
-        if(navigation){
-            event.navigationDirection = *navigation;
-            if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
+        if(released)
+            event.command.command = Ui::EditCommand::Submit;
+        else{
+            const Ui::InputCommandIntent intent{ input.command, input.extend, input.edit };
+            event.command = Ui::TranslateEditCommand(intent, input.repeat, entry->displayed.textMode);
+            if(event.command.command == Ui::EditCommand::Submit){
+                if(compositionActive(*entry))
+                    m_context.input().cancelSubmitCommands(entry->widget.id);
                 return;
-            event.navigationViewportHeight = entry->displayed.placement.content.height;
+            }
+            const auto navigation = Ui::TranslateEditNavigation(intent);
+            event.navigation = navigation.has_value();
+            if(navigation){
+                event.navigationDirection = *navigation;
+                if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
+                    return;
+                event.navigationViewportHeight = entry->displayed.placement.content.height;
+            }
+            else if(event.command.command == Ui::EditCommand::None)
+                return;
         }
-        else if(event.command.command == Ui::EditCommand::None)
-            return;
         if(!append(Move(event)))
             return;
     }

@@ -177,7 +177,7 @@ void UiLayerSystem::windowFocusUpdate(const bool focused){
     event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
     routeInput(event);
     if(!focused){
-        m_context.input().cancelNativeInput(true);
+        m_context.input().cancelNativeInput();
         m_pressedButtons = 0u;
         m_pointerOwner = __hidden_layer_input::s_Scene;
         m_blockNativeChars = false;
@@ -234,7 +234,6 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
     const bool submit = m_editHost.prepareSubmit(*normalized);
     const Ui::InputRoutingResult result = m_context.input().process();
     m_editHost.input(*normalized, previousCapture, submit);
-    m_editHost.synchronizeFocus();
     if(consumed)
         *consumed = result.keyboardConsumed;
     if(blockText){

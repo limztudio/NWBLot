@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::currentContextMenuOwner(const ContextMenuOwner& owner)const{
+bool InputRouter::currentContextMenuOwner(const TargetOwner& owner)const{
     const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
     return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
 }
@@ -45,8 +45,8 @@ void InputRouter::reconcileContextMenus(){
     if(!currentContextMenuOwner(m_secondaryOwner))
         m_secondaryOwner = {};
     for(auto& source : m_commandSources){
-        if(!currentContextMenuOwner(source.contextOwner))
-            source.contextOwner = {};
+        if(source.contextArmed && !currentContextMenuOwner(source.focusOwner))
+            source.contextArmed = false;
     }
 }
 
@@ -67,7 +67,7 @@ bool InputRouter::routeContextMenuKey(const InputEvent& event, const HitTarget* 
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;
     if(!alreadyPressed && !event.repeat){
-        source.contextOwner = { focused->id, focused->declarationGeneration, focused->popup, focused->control };
+        source.contextArmed = true;
         source.contextPosition = { focused->rectangle.x, (focused->rectangle.y + focused->rectangle.height) };
     }
     return true;

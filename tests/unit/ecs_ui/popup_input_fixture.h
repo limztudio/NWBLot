@@ -381,7 +381,6 @@ protected:
         const bool submit = m_host.prepareSubmit(*normalized);
         const Ui::InputRoutingResult result = m_context.input().process();
         m_host.input(*normalized, previousCapture, submit);
-        m_host.synchronizeFocus();
         return result;
     }
 

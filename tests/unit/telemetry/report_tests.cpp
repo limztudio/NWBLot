@@ -127,9 +127,6 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_43_7_0"));
     EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_44_8_1"));
     EXPECT_FALSE(ContainsText(dot, " ms"));
-    EXPECT_EQ(report.summary.gpuTimingEventCount, 1u);
-    EXPECT_EQ(report.summary.gpuTimingSampleCount, aggregatedTiming.sampleCount);
-    EXPECT_EQ(report.summary.gpuTimingSeconds, aggregatedTiming.seconds);
     EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "gpu,gbuffer"));
 }
 

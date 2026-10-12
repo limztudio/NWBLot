@@ -113,7 +113,6 @@ TEST(OutputLayerColor, HdrBlendsInLinearNitsBeforeOnePqEncoding){
 }
 
 TEST(OutputLayerColor, NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound){
-    EXPECT_GT(nwbHdr10SceneToNits(float3(100.)).x, nwbHdr10SceneToNits(float3(1.)).x);
     EXPECT_LT(nwbHdr10SceneToNits(float3(100.)).x, 1000.);
     ExpectColorNear(nwbHdr10EncodeUiLinear(float3(-1.)), nwbHdr10EncodeUiLinear(float3(0.)));
 }

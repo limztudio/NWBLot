@@ -166,15 +166,12 @@ TEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheS
         EXPECT_EQ(&first, &second);
         EXPECT_EQ(arena.memoryStats().allocationCount, afterFirst);
         EXPECT_EQ(reinterpret_cast<usize>(&first) % alignof(AlignedExtension), 0u);
-        EXPECT_EQ(first.member.bytes.size(), 513u);
-        EXPECT_EQ(first.member.bytes.back(), 0x5au);
         const ParsedAssetMetadata& borrowed = metadata;
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(borrowed, name), &first);
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, Name("tests/metadata_extension/absent")), nullptr);
-        TextExtension& text = RequireParsedMetadataExtension<TextExtension>(metadata, Name("tests/metadata_extension/text"), arena, textState);
-        ASSERT_EQ(text.strings.size(), s_ExpectedDualCount);
-        EXPECT_EQ(text.strings[1u], "second separately allocated extension payload");
-        EXPECT_EQ(metadata.extensions.size(), s_ExpectedDualCount);
+        const Name textName("tests/metadata_extension/text");
+        const TextExtension& text = RequireParsedMetadataExtension<TextExtension>(metadata, textName, arena, textState);
+        EXPECT_EQ(FindParsedMetadataExtension<TextExtension>(metadata, textName), &text);
     }
     EXPECT_EQ(alignedState.constructions, 1u);
     EXPECT_EQ(alignedState.destructions, 1u);

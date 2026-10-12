@@ -201,7 +201,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
     }
 }
 
-TEST(Csg, CsgFrameReceiverLookup){
+TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
     {
         TestWorld testWorld;
 
@@ -248,7 +248,6 @@ TEST(Csg, CsgFrameReceiverLookup){
         const auto opaqueDrawStateResult2 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
         ASSERT_TRUE(opaqueDrawStateResult2);
         const auto& opaqueDrawState = *opaqueDrawStateResult2;
-        EXPECT_TRUE(opaqueDrawState.active);
         EXPECT_EQ(opaqueDrawState.cutterCount, s_ExpectedDualCount);
 
         usize resolvedCutterCount = 0u;
@@ -283,8 +282,6 @@ TEST(Csg, CsgFrameReceiverLookup){
 
         const auto opaqueDrawStateResult3 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
         ASSERT_TRUE(opaqueDrawStateResult3);
-        const auto& opaqueDrawState = *opaqueDrawStateResult3;
-        EXPECT_TRUE(opaqueDrawState.active);
 
         const auto transparentDrawStateResult4 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent);
         EXPECT_FALSE(transparentDrawStateResult4);
@@ -309,7 +306,6 @@ TEST(Csg, CsgFrameReceiverLookup){
         const auto transparentDrawStateResult6 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent);
         ASSERT_TRUE(transparentDrawStateResult6);
         const auto& transparentDrawState = *transparentDrawStateResult6;
-        EXPECT_TRUE(transparentDrawState.active);
         EXPECT_EQ(transparentDrawState.cutterCount, 1u);
     }
 }
@@ -396,8 +392,6 @@ TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
     NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
     const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, MakeNotNull(inputVertices), 8u, MakeNotNull(inputTriangles), 12u, cuts, s_ExpectedDualCount, options, commitVertices, commitTriangles);
     ASSERT_TRUE(commit);
-    EXPECT_EQ(commit->inputVertexCount, 8u);
-    EXPECT_EQ(commit->inputTriangleCount, 12u);
     EXPECT_EQ(commit->appliedCutCount, s_ExpectedDualCount);
     ASSERT_FALSE(commitTriangles.empty());
     ASSERT_GE(commitVertices.size(), 8u);

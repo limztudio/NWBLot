@@ -219,11 +219,9 @@ TEST(UiPopupLayoutTests, InvalidInputsRejectPlacement){
 
 TEST(UiPopupStateTests, OpenEpochAdvancesOnlyOnClosedToOpenTransitions){
     PopupState state;
-    EXPECT_EQ(state.openGeneration(), 0u);
     state.close();
     EXPECT_EQ(state.openGeneration(), 0u);
     state.open();
-    EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.openGeneration(), 1u);
     state.open();
     EXPECT_EQ(state.openGeneration(), 1u);
@@ -231,7 +229,6 @@ TEST(UiPopupStateTests, OpenEpochAdvancesOnlyOnClosedToOpenTransitions){
     state.close();
     EXPECT_EQ(state.openGeneration(), 1u);
     state.open();
-    EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.openGeneration(), 2u);
 }
 

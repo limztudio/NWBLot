@@ -94,8 +94,6 @@ class UiProbeReferenceTests(unittest.TestCase):
         source, alpha = authored_texel("dot", 7, 9, (0, 0, 0), (0, 0, 0))
         self.assertEqual(linear_rgb_bytes(source), (235, 245, 255))
         self.assertEqual(alpha, 80 / 255)
-        self.assertGreater(alpha, 0.0)
-        self.assertLess(alpha, 1.0)
 
     def test_partial_uv_crop_matches_corresponding_full_tile_pixels(self):
         fill, border = (53, 131, 192), (97, 176, 233)

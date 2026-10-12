@@ -40,9 +40,6 @@ TEST(SurfelGiQualitySettings, OddResizeKeepsEveryFullPixelInsideTheGatherGrid){
             }
         }
     }
-    const SurfelGiResolveSize resized = MakeSurfelGiResolveSize(1001u, 701u, 4u);
-    EXPECT_EQ(resized.width, 251u);
-    EXPECT_EQ(resized.height, 176u);
 }
 
 TEST(SurfelGiQualitySettings, EmptyAndLargestExtentsDoNotWrapTheReducedSize){

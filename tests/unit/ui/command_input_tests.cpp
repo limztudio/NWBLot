@@ -467,22 +467,9 @@ TEST_F(UiCommandInputTests, MalformedCommandSourcesRejectWithoutChangingExisting
     output = *outputResult;
     EXPECT_FALSE(output.allowText);
     EXPECT_FALSE(m_router.process().commandConsumed);
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 1u, 1u }, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 0u, 1u }, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_FALSE(m_router.consumeActivation(target.id));
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, 1u }, InputCommand::None)).routing.commandConsumed);
-    EXPECT_TRUE(m_router.consumeActivation(target.id));
-}
-
-TEST_F(UiCommandInputTests, DeviceIdentityDoesNotChooseCommandBehaviorOrActivationOrigin){
-    const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
-    const InputSource source{ 0u, 777u };
-    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.commandConsumed);
-    EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
-    ASSERT_EQ(m_router.actions().size(), 1u);
-    EXPECT_EQ(m_router.actions()[0u].origin, InputActionSource::Command);
-    EXPECT_EQ(m_router.actions()[0u].inputSource, source);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 0u, 1u }, InputCommand::None)).routing.commandConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
 }
 

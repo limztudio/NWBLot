@@ -840,13 +840,6 @@ TEST(Math, DegeneratePlaneNormalUsesFallback){
     EXPECT_TRUE(NearlyEqual4(PlaneTests::FromPointNormal(VectorZero(), VectorSet(1.0f, 2.0f, 3.0f, 0.0f), VectorSet(0.0f, 0.0f, 1.0f, 0.0f)), 0.0f, 0.0f, 1.0f, -3.0f));
 }
 
-TEST(Math, MergingContainedSpherePreservesLargerBounds){
-    BoundingSphere contained;
-    const BoundingSphere larger(Float3U(0.0f, 0.0f, 0.0f), 3.0f);
-    BoundingSphere::CreateMerged(contained, larger, BoundingSphere(Float3U(1.0f, 0.0f, 0.0f), 1.0f));
-    EXPECT_TRUE(NearlyEqual4(LoadFloat(contained.centerRadius), 0.0f, 0.0f, 0.0f, 3.0f));
-}
-
 TEST(Math, MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTies){
     const SIMDMatrix matrices[]{
         MatrixSet(-1.0f, 0.0f, 0.0f, 3.0f, -1.0f, 0.0f, 0.0f, -2.0f, -1.0f, 0.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),

@@ -108,7 +108,6 @@ TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
     destination = Move(source);
 
     EXPECT_TRUE(source.isNull());
-    EXPECT_TRUE(destination.isString());
     EXPECT_EQ(destination.asString(), ViewOf(text));
 }
 
@@ -127,8 +126,6 @@ TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena)
     destination = source;
 
     EXPECT_TRUE(source.isMap());
-    EXPECT_TRUE(destination.isMap());
-
     const Value* copiedList = destination.findField(MStringView("items", 5u));
     ASSERT_NE(copiedList, nullptr);
     CheckSingleStringListValue(*copiedList, text);

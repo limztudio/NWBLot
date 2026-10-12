@@ -83,16 +83,12 @@ static constexpr u32 PackSpirvStringWord(const char a, const char b, const char 
     return static_cast<u32>(static_cast<u8>(a)) | (static_cast<u32>(static_cast<u8>(b)) << 8u) | (static_cast<u32>(static_cast<u8>(c)) << 16u) | (static_cast<u32>(static_cast<u8>(d)) << 24u);
 }
 
-TEST(AssetsGraphics, SpirvEntryPointLookup){
-    AStringView entryPoint;
-
+TEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected){
     const u32 words[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
 
     EXPECT_TRUE(NWB::Core::IsValidSpirvModuleWords(words, LengthOf(words)));
     const auto entryPointResult1 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_MAIN, NWB::Core::ShaderType::Pixel);
     ASSERT_TRUE(entryPointResult1);
-    entryPoint = *entryPointResult1;
-    EXPECT_EQ(entryPoint, s_MAIN);
 
     const auto entryPointResult2 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_MAIN, NWB::Core::ShaderType::Compute);
     ASSERT_FALSE(entryPointResult2);

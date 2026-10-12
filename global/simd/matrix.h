@@ -15,6 +15,9 @@
 namespace SIMDMatrixDetail{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static const SIMDVectorConstF s_SIMDMatrixSign = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDMatrixNegativeTwo = { { { -2.0f, -2.0f, -2.0f, 0.0f } } };
 static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELECT_0, s_SELECT_0, s_SELECT_1 } } };
@@ -311,6 +314,9 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 vi
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -318,6 +324,9 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 vi
 
 
 namespace SIMDMatrixDoubleDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static const SIMDVectorDoubleConstF s_DoubleSIMDMatrixSign = { { { 1.0, -1.0, 1.0, -1.0 } } };
@@ -467,6 +476,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(
     matrix.v[3] = s_DoubleSIMDIdentityR3;
     return matrix;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

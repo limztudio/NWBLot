@@ -458,6 +458,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Write designated initializers (`.member = ...`) in struct declaration order. Do not group tail/flag fields at the end when the declaration puts small scalars or generation fields earlier. This includes padding-optimized declarations (pointer, 8-byte, then 4-byte members first with the small tail last); follow the declaration, not logical grouping.
 
 ## 13. Declaration/Definition Order
+- Group definitions of the same function into one contiguous overload block. Keep corresponding Single/Double blocks next to each other, and place related scalar, vector, pointer, and stream forms in the same operation group. Preserve helper and declaration dependencies when ordering those groups.
 - In `.cpp` files, function definitions must follow the declaration order from the corresponding class/struct declaration.
 - Allowed:
   - Declaration order: `X()`, then `Y()`

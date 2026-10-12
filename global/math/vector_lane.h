@@ -259,6 +259,16 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
 }
 #endif
 
+#if defined(NWB_HAS_NEON)
+NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
+    const uint32x4_t raw = vreinterpretq_u32_s32(value);
+    const uint32x4_t isZero = vceqq_u32(raw, vdupq_n_u32(0));
+    uint32x4_t leading = vsubq_u32(vdupq_n_u32(31), vclzq_u32(raw));
+    leading = vbslq_u32(isZero, vdupq_n_u32(0), leading);
+    return vreinterpretq_s32_u32(leading);
+}
+#endif
+
 NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     f32 quotient = s_1DIV2PI * value;
     if(value >= 0.0f)
@@ -284,16 +294,6 @@ NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
     outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - s_CosQuarticCoeff) * y2 + 1.0f);
 }
-
-#if defined(NWB_HAS_NEON)
-NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
-    const uint32x4_t raw = vreinterpretq_u32_s32(value);
-    const uint32x4_t isZero = vceqq_u32(raw, vdupq_n_u32(0));
-    uint32x4_t leading = vsubq_u32(vdupq_n_u32(31), vclzq_u32(raw));
-    leading = vbslq_u32(isZero, vdupq_n_u32(0), leading);
-    return vreinterpretq_s32_u32(leading);
-}
-#endif
 
 template<u32 Lane>
 NWB_INLINE f32 NWB_SIMD_CALL GetLane(SIMDVectorSingle value)noexcept{

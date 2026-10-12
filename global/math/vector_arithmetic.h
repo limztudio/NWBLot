@@ -266,6 +266,43 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMultiplyAdd(SIMDVectorDoub
 #endif
 }
 
+// Preserve the compiler's contraction policy for a source multiply-add expression instead of requiring an explicit FMA.
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMultiplyAddExpression(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
+#if defined(NWB_HAS_SCALAR)
+    return VectorSet(
+        VectorGetX(v0) * VectorGetX(v1) + VectorGetX(v2),
+        VectorGetY(v0) * VectorGetY(v1) + VectorGetY(v2),
+        VectorGetZ(v0) * VectorGetZ(v1) + VectorGetZ(v2),
+        VectorGetW(v0) * VectorGetW(v1) + VectorGetW(v2)
+    );
+#else
+    return v0 * v1 + v2;
+#endif
+}
+
+// Preserve the compiler's contraction policy for a source multiply-add expression instead of requiring an explicit FMA.
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMultiplyAddExpression(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
+#if defined(NWB_HAS_NEON64)
+    return SIMDVectorDoubleDetail::FromPairs(
+        SIMDVectorDoubleDetail::GetLow(v0) * SIMDVectorDoubleDetail::GetLow(v1)
+            + SIMDVectorDoubleDetail::GetLow(v2),
+        SIMDVectorDoubleDetail::GetHigh(v0) * SIMDVectorDoubleDetail::GetHigh(v1)
+            + SIMDVectorDoubleDetail::GetHigh(v2)
+    );
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(BitCast<__m256d>(v0) * BitCast<__m256d>(v1) + BitCast<__m256d>(v2));
+#elif defined(NWB_HAS_SSE2)
+    return SIMDVectorDoubleDetail::FromPairs(
+        SIMDVectorDoubleDetail::GetLow(v0) * SIMDVectorDoubleDetail::GetLow(v1)
+            + SIMDVectorDoubleDetail::GetLow(v2),
+        SIMDVectorDoubleDetail::GetHigh(v0) * SIMDVectorDoubleDetail::GetHigh(v1)
+            + SIMDVectorDoubleDetail::GetHigh(v2)
+    );
+#else
+    return v0 * v1 + v2;
+#endif
+}
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNegativeMultiplySubtract(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
 #if defined(NWB_HAS_FMA3)
     return _mm_fnmadd_ps(v0, v1, v2);
@@ -301,43 +338,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNegativeMultiplySubtract(S
     return __builtin_elementwise_fma(-v0, v1, v2);
 #else
     return VectorDoubleSubtract(v2, VectorDoubleMultiply(v0, v1));
-#endif
-}
-
-// Preserve the compiler's contraction policy for a source multiply-add expression instead of requiring an explicit FMA.
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMultiplyAddExpression(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorSet(
-        VectorGetX(v0) * VectorGetX(v1) + VectorGetX(v2),
-        VectorGetY(v0) * VectorGetY(v1) + VectorGetY(v2),
-        VectorGetZ(v0) * VectorGetZ(v1) + VectorGetZ(v2),
-        VectorGetW(v0) * VectorGetW(v1) + VectorGetW(v2)
-    );
-#else
-    return v0 * v1 + v2;
-#endif
-}
-
-// Preserve the compiler's contraction policy for a source multiply-add expression instead of requiring an explicit FMA.
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMultiplyAddExpression(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
-#if defined(NWB_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::GetLow(v0) * SIMDVectorDoubleDetail::GetLow(v1)
-            + SIMDVectorDoubleDetail::GetLow(v2),
-        SIMDVectorDoubleDetail::GetHigh(v0) * SIMDVectorDoubleDetail::GetHigh(v1)
-            + SIMDVectorDoubleDetail::GetHigh(v2)
-    );
-#elif defined(NWB_HAS_AVX)
-    return BitCast<SIMDVectorDouble>(BitCast<__m256d>(v0) * BitCast<__m256d>(v1) + BitCast<__m256d>(v2));
-#elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::GetLow(v0) * SIMDVectorDoubleDetail::GetLow(v1)
-            + SIMDVectorDoubleDetail::GetLow(v2),
-        SIMDVectorDoubleDetail::GetHigh(v0) * SIMDVectorDoubleDetail::GetHigh(v1)
-            + SIMDVectorDoubleDetail::GetHigh(v2)
-    );
-#else
-    return v0 * v1 + v2;
 #endif
 }
 
@@ -538,6 +538,14 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4MinComponent(SIMDVectorDo
     return result;
 }
 
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3MinComponent(SIMDVectorSingle value)noexcept{
+    return Vector4MinComponent(VectorSwizzle<0, 1, 2, 0>(value));
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3MinComponent(SIMDVectorDouble value)noexcept{
+    return VectorDouble4MinComponent(VectorDoubleSwizzle<0, 1, 2, 0>(value));
+}
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4MaxComponent(SIMDVectorSingle value)noexcept{
     SIMDVectorSingle result = VectorMax(value, VectorSwizzle<2, 3, 0, 1>(value));
     result = VectorMax(result, VectorSwizzle<1, 0, 3, 2>(result));
@@ -548,14 +556,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4MaxComponent(SIMDVectorDo
     SIMDVectorDouble result = VectorDoubleMax(value, VectorDoubleSwizzle<2, 3, 0, 1>(value));
     result = VectorDoubleMax(result, VectorDoubleSwizzle<1, 0, 3, 2>(result));
     return result;
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3MinComponent(SIMDVectorSingle value)noexcept{
-    return Vector4MinComponent(VectorSwizzle<0, 1, 2, 0>(value));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3MinComponent(SIMDVectorDouble value)noexcept{
-    return VectorDouble4MinComponent(VectorDoubleSwizzle<0, 1, 2, 0>(value));
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3MaxComponent(SIMDVectorSingle value)noexcept{

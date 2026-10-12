@@ -70,11 +70,21 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorEqualR(SIMDVectorSingle v0, SIMDVectorSingle 
     return VectorScalarDetail::ComparisonMaskR(VectorMoveMask(VectorEqual(v0, v1)), VectorComponentMask::s_XYZW);
 }
 
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorEqualR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+    outCR = VectorEqualR(v0, v1);
+    return VectorEqual(v0, v1);
+}
+
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleEqualR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
     return VectorScalarDetail::ComparisonMaskR(
         VectorDoubleMoveMask(VectorDoubleEqual(v0, v1)),
         VectorDoubleComponentMask::s_DoubleXYZW
     );
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    outCR = VectorDoubleEqualR(v0, v1);
+    return VectorDoubleEqual(v0, v1);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorEqualInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
@@ -111,11 +121,21 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorEqualIntR(SIMDVectorSingle v0, SIMDVectorSing
     return VectorScalarDetail::ComparisonMaskR(VectorMoveMask(VectorEqualInt(v0, v1)), VectorComponentMask::s_XYZW);
 }
 
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorEqualIntR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+    outCR = VectorEqualIntR(v0, v1);
+    return VectorEqualInt(v0, v1);
+}
+
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleEqualIntR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
     return VectorScalarDetail::ComparisonMaskR(
         VectorDoubleMoveMask(VectorDoubleEqualInt(v0, v1)),
         VectorDoubleComponentMask::s_DoubleXYZW
     );
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualIntR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    outCR = VectorDoubleEqualIntR(v0, v1);
+    return VectorDoubleEqualInt(v0, v1);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNearEqual(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle epsilon)noexcept{
@@ -239,6 +259,27 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreater(SIMDVectorDouble v
 #endif
 }
 
+NWB_INLINE u32 NWB_SIMD_CALL VectorGreaterR(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+    return VectorScalarDetail::ComparisonMaskR(VectorMoveMask(VectorGreater(v0, v1)), VectorComponentMask::s_XYZW);
+}
+
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorGreaterR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+    outCR = VectorGreaterR(v0, v1);
+    return VectorGreater(v0, v1);
+}
+
+NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleGreaterR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    return VectorScalarDetail::ComparisonMaskR(
+        VectorDoubleMoveMask(VectorDoubleGreater(v0, v1)),
+        VectorDoubleComponentMask::s_DoubleXYZW
+    );
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    outCR = VectorDoubleGreaterR(v0, v1);
+    return VectorDoubleGreater(v0, v1);
+}
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorGreaterOrEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(VectorGetX(v0) >= VectorGetX(v1) ? 0xFFFFFFFFu : 0u, VectorGetY(v0) >= VectorGetY(v1) ? 0xFFFFFFFFu : 0u, VectorGetZ(v0) >= VectorGetZ(v1) ? 0xFFFFFFFFu : 0u, VectorGetW(v0) >= VectorGetW(v1) ? 0xFFFFFFFFu : 0u);
@@ -265,6 +306,27 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterOrEqual(SIMDVectorD
 #else
     return BitCast<SIMDVectorDouble>(v0 >= v1);
 #endif
+}
+
+NWB_INLINE u32 NWB_SIMD_CALL VectorGreaterOrEqualR(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+    return VectorScalarDetail::ComparisonMaskR(VectorMoveMask(VectorGreaterOrEqual(v0, v1)), VectorComponentMask::s_XYZW);
+}
+
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorGreaterOrEqualR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+    outCR = VectorGreaterOrEqualR(v0, v1);
+    return VectorGreaterOrEqual(v0, v1);
+}
+
+NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleGreaterOrEqualR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    return VectorScalarDetail::ComparisonMaskR(
+        VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(v0, v1)),
+        VectorDoubleComponentMask::s_DoubleXYZW
+    );
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterOrEqualR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+    outCR = VectorDoubleGreaterOrEqualR(v0, v1);
+    return VectorDoubleGreaterOrEqual(v0, v1);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLess(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
@@ -333,28 +395,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLessOrEqual(SIMDVectorDoub
 #endif
 }
 
-NWB_INLINE u32 NWB_SIMD_CALL VectorGreaterR(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    return VectorScalarDetail::ComparisonMaskR(VectorMoveMask(VectorGreater(v0, v1)), VectorComponentMask::s_XYZW);
-}
-
-NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleGreaterR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return VectorScalarDetail::ComparisonMaskR(
-        VectorDoubleMoveMask(VectorDoubleGreater(v0, v1)),
-        VectorDoubleComponentMask::s_DoubleXYZW
-    );
-}
-
-NWB_INLINE u32 NWB_SIMD_CALL VectorGreaterOrEqualR(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    return VectorScalarDetail::ComparisonMaskR(VectorMoveMask(VectorGreaterOrEqual(v0, v1)), VectorComponentMask::s_XYZW);
-}
-
-NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleGreaterOrEqualR(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return VectorScalarDetail::ComparisonMaskR(
-        VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(v0, v1)),
-        VectorDoubleComponentMask::s_DoubleXYZW
-    );
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -371,64 +411,16 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorInBoundsR(SIMDVectorSingle value, SIMDVectorS
     return VectorScalarDetail::BoundsMaskR(VectorMoveMask(VectorInBounds(value, bounds)), VectorComponentMask::s_XYZW);
 }
 
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorInBoundsR(u32& outCR, SIMDVectorSingle value, SIMDVectorSingle bounds)noexcept{
+    outCR = VectorInBoundsR(value, bounds);
+    return VectorInBounds(value, bounds);
+}
+
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleInBoundsR(SIMDVectorDouble value, SIMDVectorDouble bounds)noexcept{
     return VectorScalarDetail::BoundsMaskR(
         VectorDoubleMoveMask(VectorDoubleInBounds(value, bounds)),
         VectorDoubleComponentMask::s_DoubleXYZW
     );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorEqualR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    outCR = VectorEqualR(v0, v1);
-    return VectorEqual(v0, v1);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    outCR = VectorDoubleEqualR(v0, v1);
-    return VectorDoubleEqual(v0, v1);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorEqualIntR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    outCR = VectorEqualIntR(v0, v1);
-    return VectorEqualInt(v0, v1);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualIntR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    outCR = VectorDoubleEqualIntR(v0, v1);
-    return VectorDoubleEqualInt(v0, v1);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorGreaterR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    outCR = VectorGreaterR(v0, v1);
-    return VectorGreater(v0, v1);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    outCR = VectorDoubleGreaterR(v0, v1);
-    return VectorDoubleGreater(v0, v1);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorGreaterOrEqualR(u32& outCR, SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    outCR = VectorGreaterOrEqualR(v0, v1);
-    return VectorGreaterOrEqual(v0, v1);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterOrEqualR(u32& outCR, SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    outCR = VectorDoubleGreaterOrEqualR(v0, v1);
-    return VectorDoubleGreaterOrEqual(v0, v1);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorInBoundsR(u32& outCR, SIMDVectorSingle value, SIMDVectorSingle bounds)noexcept{
-    outCR = VectorInBoundsR(value, bounds);
-    return VectorInBounds(value, bounds);
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleInBoundsR(u32& outCR, SIMDVectorDouble value, SIMDVectorDouble bounds)noexcept{

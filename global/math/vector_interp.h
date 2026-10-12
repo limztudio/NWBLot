@@ -31,18 +31,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLerpV(SIMDVectorDouble v0,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorHermiteV(SIMDVectorSingle position0, SIMDVectorSingle tangent0, SIMDVectorSingle position1, SIMDVectorSingle tangent1, SIMDVectorSingle t)noexcept;
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleHermiteV(SIMDVectorDouble position0, SIMDVectorDouble tangent0, SIMDVectorDouble position1, SIMDVectorDouble tangent1, SIMDVectorDouble t)noexcept;
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorHermite(SIMDVectorSingle position0, SIMDVectorSingle tangent0, SIMDVectorSingle position1, SIMDVectorSingle tangent1, f32 t)noexcept{
-    return VectorHermiteV(position0, tangent0, position1, tangent1, VectorReplicate(t));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleHermite(SIMDVectorDouble position0, SIMDVectorDouble tangent0, SIMDVectorDouble position1, SIMDVectorDouble tangent1, f64 t)noexcept{
-    return VectorDoubleHermiteV(position0, tangent0, position1, tangent1, VectorDoubleReplicate(t));
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorHermiteV(SIMDVectorSingle position0, SIMDVectorSingle tangent0, SIMDVectorSingle position1, SIMDVectorSingle tangent1, SIMDVectorSingle t)noexcept{
     const SIMDVectorSingle catMulT2 = VectorSet(-3.0f, -2.0f, 3.0f, -1.0f);
     const SIMDVectorSingle catMulT3 = VectorSet(2.0f, 1.0f, -2.0f, 1.0f);
@@ -75,17 +63,17 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleHermiteV(SIMDVectorDouble 
     return VectorDoubleMultiplyAdd(VectorDoubleSplatW(t3), tangent1, result);
 }
 
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorHermite(SIMDVectorSingle position0, SIMDVectorSingle tangent0, SIMDVectorSingle position1, SIMDVectorSingle tangent1, f32 t)noexcept{
+    return VectorHermiteV(position0, tangent0, position1, tangent1, VectorReplicate(t));
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleHermite(SIMDVectorDouble position0, SIMDVectorDouble tangent0, SIMDVectorDouble position1, SIMDVectorDouble tangent1, f64 t)noexcept{
+    return VectorDoubleHermiteV(position0, tangent0, position1, tangent1, VectorDoubleReplicate(t));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCatmullRomV(SIMDVectorSingle p0, SIMDVectorSingle p1, SIMDVectorSingle p2, SIMDVectorSingle p3, SIMDVectorSingle t)noexcept;
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCatmullRomV(SIMDVectorDouble p0, SIMDVectorDouble p1, SIMDVectorDouble p2, SIMDVectorDouble p3, SIMDVectorDouble t)noexcept;
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCatmullRom(SIMDVectorSingle p0, SIMDVectorSingle p1, SIMDVectorSingle p2, SIMDVectorSingle p3, f32 t)noexcept{ return VectorCatmullRomV(p0, p1, p2, p3, VectorReplicate(t)); }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCatmullRom(SIMDVectorDouble p0, SIMDVectorDouble p1, SIMDVectorDouble p2, SIMDVectorDouble p3, f64 t)noexcept{ return VectorDoubleCatmullRomV(p0, p1, p2, p3, VectorDoubleReplicate(t)); }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCatmullRomV(SIMDVectorSingle p0, SIMDVectorSingle p1, SIMDVectorSingle p2, SIMDVectorSingle p3, SIMDVectorSingle t)noexcept{
     const SIMDVectorSingle three = VectorReplicate(3.0f);
@@ -122,6 +110,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCatmullRomV(SIMDVectorDoub
     result = VectorDoubleMultiplyAdd(t3, p3, result);
     return VectorDoubleMultiply(result, s_DoubleSIMDOneHalf);
 }
+
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCatmullRom(SIMDVectorSingle p0, SIMDVectorSingle p1, SIMDVectorSingle p2, SIMDVectorSingle p3, f32 t)noexcept{ return VectorCatmullRomV(p0, p1, p2, p3, VectorReplicate(t)); }
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCatmullRom(SIMDVectorDouble p0, SIMDVectorDouble p1, SIMDVectorDouble p2, SIMDVectorDouble p3, f64 t)noexcept{ return VectorDoubleCatmullRomV(p0, p1, p2, p3, VectorDoubleReplicate(t)); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

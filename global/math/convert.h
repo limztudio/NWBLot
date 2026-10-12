@@ -876,18 +876,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadHalf(const Half4U& value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Half2U& src)noexcept{
-    return SIMDConvertDoubleDetail::MakeF64(ConvertHalfToFloat(src.x), ConvertHalfToFloat(src.y), 0.0, 0.0);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Half4U& src)noexcept{
-    return SIMDConvertDoubleDetail::MakeF64(ConvertHalfToFloat(src.x), ConvertHalfToFloat(src.y), ConvertHalfToFloat(src.z), ConvertHalfToFloat(src.w));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // SIMD types are calculation values; persistent data uses typed layouts via these boundaries.
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float4& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -899,10 +887,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float4& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double4& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<4u>(src.raw);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(f32 src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src, 0.0f, 0.0f, 0.0f);
@@ -912,10 +896,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(f32 src)noexcept{
 #elif defined(NWB_HAS_SSE4)
     return _mm_load_ss(&src);
 #endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(f64 src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<1u>(&src);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float2U& src)noexcept{
@@ -930,16 +910,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float2U& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double2U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<2u>(src.raw);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float3U& src)noexcept{
     return SIMDConvertDetail::LoadFloat3Components(src);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double3U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(src.raw);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float4U& src)noexcept{
@@ -952,42 +924,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat(const Float4U& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double4U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<4u>(src.raw);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double2& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<2u>(src.raw);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double3& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(src.raw);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloatInt(const Float3Int& src)noexcept{
-    return SIMDConvertDetail::LoadFloat3Components(src);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Double3Int& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(&src.x);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloatInt(const Float3UInt& src)noexcept{
-    return SIMDConvertDetail::LoadFloat3Components(src);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Double3UInt& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(&src.x);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float34& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat34Scalar(src);
@@ -998,10 +934,6 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float34& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double34& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDouble34Rows(src);
-}
-
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float44& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat44Scalar(src);
@@ -1010,10 +942,6 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float44& src)noexcept{
 #elif defined(NWB_HAS_SSE4)
     return SIMDConvertDetail::LoadFloat44Sse<true>(src);
 #endif
-}
-
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double44& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDouble44Rows(src);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float33U& src)noexcept{
@@ -1058,10 +986,6 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float33U& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double33U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDouble33Rows(src);
-}
-
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float34U& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat34Scalar(src);
@@ -1072,10 +996,6 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float34U& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double34U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadDouble34Rows(src);
-}
-
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float44U& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat44Scalar(src);
@@ -1084,6 +1004,58 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float44U& src)noexcept{
 #elif defined(NWB_HAS_SSE4)
     return SIMDConvertDetail::LoadFloat44Sse<false>(src);
 #endif
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Half2U& src)noexcept{
+    return SIMDConvertDoubleDetail::MakeF64(ConvertHalfToFloat(src.x), ConvertHalfToFloat(src.y), 0.0, 0.0);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Half4U& src)noexcept{
+    return SIMDConvertDoubleDetail::MakeF64(ConvertHalfToFloat(src.x), ConvertHalfToFloat(src.y), ConvertHalfToFloat(src.z), ConvertHalfToFloat(src.w));
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double4& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<4u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(f64 src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<1u>(&src);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double2U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<2u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double3U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double4U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<4u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double2& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<2u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDouble(const Double3& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(src.raw);
+}
+
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double34& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDouble34Rows(src);
+}
+
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double44& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDouble44Rows(src);
+}
+
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double33U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDouble33Rows(src);
+}
+
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double34U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDouble34Rows(src);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double44U& src)noexcept{
@@ -1098,6 +1070,14 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL LoadDouble(const Double33& src)noexcep
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloatInt(const Float3Int& src)noexcept{
+    return SIMDConvertDetail::LoadFloat3Components(src);
+}
+
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloatInt(const Float3UInt& src)noexcept{
+    return SIMDConvertDetail::LoadFloat3Components(src);
+}
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int4& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), static_cast<u32>(src.z), static_cast<u32>(src.w));
@@ -1107,10 +1087,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int4& src)noexcept{
     __m128i vector = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
     return _mm_castsi128_ps(vector);
 #endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x4& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<4u>(src.raw);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(i32 src)noexcept{
@@ -1125,10 +1101,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(i32 src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(i64 src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<1u>(&src);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int2U& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), 0, 0);
@@ -1139,10 +1111,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int2U& src)noexcept{
 #elif defined(NWB_HAS_SSE4)
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x2U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<2u>(src.raw);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int3U& src)noexcept{
@@ -1160,10 +1128,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int3U& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x3U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<3u>(src.raw);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int4U& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), static_cast<u32>(src.z), static_cast<u32>(src.w));
@@ -1175,10 +1139,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const Int4U& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x4U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<4u>(src.raw);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt4& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src.x, src.y, src.z, src.w);
@@ -1188,10 +1148,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt4& src)noexcept{
     __m128i vector = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
     return _mm_castsi128_ps(vector);
 #endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const UInt64x4& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<4u>(src.raw);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(u32 src)noexcept{
@@ -1206,10 +1162,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(u32 src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(u64 src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<1u>(&src);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt2U& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src.x, src.y, 0, 0);
@@ -1220,10 +1172,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt2U& src)noexcept{
 #elif defined(NWB_HAS_SSE4)
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const UInt64x2U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<2u>(src.raw);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt3U& src)noexcept{
@@ -1242,10 +1190,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt3U& src)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const UInt64x3U& src)noexcept{
-    return SIMDConvertDoubleDetail::LoadIntComponents<3u>(src.raw);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt4U& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src.x, src.y, src.z, src.w);
@@ -1255,6 +1199,50 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadInt(const UInt4U& src)noexcept{
     __m128i vector = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src.raw));
     return _mm_castsi128_ps(vector);
 #endif
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Double3Int& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(&src.x);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Double3UInt& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadDoubleComponents<3u>(&src.x);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x4& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<4u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(i64 src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<1u>(&src);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x2U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<2u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x3U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<3u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const Int64x4U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<4u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const UInt64x4& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<4u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(u64 src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<1u>(&src);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const UInt64x2U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<2u>(src.raw);
+}
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const UInt64x3U& src)noexcept{
+    return SIMDConvertDoubleDetail::LoadIntComponents<3u>(src.raw);
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL LoadDoubleInt(const UInt64x4U& src)noexcept{
@@ -1278,10 +1266,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float4& dst)noexc
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double4& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<4u>(src, dst.raw);
-}
-
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, f32& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     dst = src.f[0];
@@ -1290,10 +1274,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, f32& dst)noexcept
 #elif defined(NWB_HAS_SSE4)
     _mm_store_ss(&dst, src);
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, f64& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<1u>(src, &dst);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float2U& dst)noexcept{
@@ -1308,16 +1288,8 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float2U& dst)noex
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double2U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<2u>(src, dst.raw);
-}
-
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float3U& dst)noexcept{
     SIMDConvertDetail::StoreFloat3Components(src, dst);
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double3U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, dst.raw);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float4U& dst)noexcept{
@@ -1333,46 +1305,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVectorSingle src, Float4U& dst)noex
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double4U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<4u>(src, dst.raw);
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double2& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<2u>(src, dst.raw);
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double3& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, dst.raw);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE void NWB_SIMD_CALL StoreFloatInt(SIMDVectorSingle src, i32 w, Float3Int& dst)noexcept{
-    SIMDConvertDetail::StoreFloat3Components(src, dst);
-    dst.w = w;
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, i64 w, Double3Int& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, &dst.x);
-    dst.w = w;
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreFloatInt(SIMDVectorSingle src, u32 w, Float3UInt& dst)noexcept{
-    SIMDConvertDetail::StoreFloat3Components(src, dst);
-    dst.w = w;
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, u64 w, Double3UInt& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, &dst.x);
-    dst.w = w;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
@@ -1385,10 +1317,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
     _mm_store_ps(&dst._21, src.v[1]);
     _mm_store_ps(&dst._31, src.v[2]);
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double34& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDouble34Rows(src, dst);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
@@ -1405,10 +1333,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
     _mm_store_ps(&dst._31, src.v[2]);
     _mm_store_ps(&dst._41, src.v[3]);
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double44& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDouble44Rows(src, dst);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
@@ -1448,10 +1372,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double33U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDouble33Rows(src, dst);
-}
-
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
@@ -1464,10 +1384,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34U& dst)noexcept{
     _mm_storeu_ps(&dst._21, src.v[1]);
     _mm_storeu_ps(&dst._31, src.v[2]);
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double34U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreDouble34Rows(src, dst);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44U& dst)noexcept{
@@ -1486,6 +1402,50 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44U& dst)noexcept{
 #endif
 }
 
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double4& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<4u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, f64& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<1u>(src, &dst);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double2U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<2u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double3U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double4U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<4u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double2& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<2u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDVectorDouble src, Double3& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double34& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDouble34Rows(src, dst);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double44& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDouble44Rows(src, dst);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double33U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDouble33Rows(src, dst);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double34U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDouble34Rows(src, dst);
+}
+
 NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double44U& dst)noexcept{
     SIMDConvertDoubleDetail::StoreDouble44Rows(src, dst);
 }
@@ -1498,6 +1458,16 @@ NWB_INLINE void NWB_SIMD_CALL StoreDouble(SIMDMatrixDouble src, Double33& dst)no
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_INLINE void NWB_SIMD_CALL StoreFloatInt(SIMDVectorSingle src, i32 w, Float3Int& dst)noexcept{
+    SIMDConvertDetail::StoreFloat3Components(src, dst);
+    dst.w = w;
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreFloatInt(SIMDVectorSingle src, u32 w, Float3UInt& dst)noexcept{
+    SIMDConvertDetail::StoreFloat3Components(src, dst);
+    dst.w = w;
+}
+
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int4& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
@@ -1506,10 +1476,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int4& dst)noexcept{
 #elif defined(NWB_HAS_SSE4)
     SIMDConvertDetail::StoreInt4Sse<true>(src, dst.raw);
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x4& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<4u>(src, dst.raw);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, i32& dst)noexcept{
@@ -1522,10 +1488,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, i32& dst)noexcept{
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, i64& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<1u>(src, &dst);
-}
-
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int2U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     dst.x = static_cast<i32>(src.u[0]);
@@ -1535,10 +1497,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int2U& dst)noexcept
 #elif defined(NWB_HAS_SSE4)
     _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x2U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<2u>(src, dst.raw);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int3U& dst)noexcept{
@@ -1555,10 +1513,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int3U& dst)noexcept
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x3U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<3u>(src, dst.raw);
-}
-
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int4U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
@@ -1567,10 +1521,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, Int4U& dst)noexcept
 #elif defined(NWB_HAS_SSE4)
     SIMDConvertDetail::StoreInt4Sse<false>(src, dst.raw);
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x4U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<4u>(src, dst.raw);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt4& dst)noexcept{
@@ -1586,10 +1536,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt4& dst)noexcept
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x4& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<4u>(src, dst.raw);
-}
-
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, u32& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     dst = src.u[0];
@@ -1598,10 +1544,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, u32& dst)noexcept{
 #elif defined(NWB_HAS_SSE4)
     _mm_store_ss(reinterpret_cast<f32*>(&dst), src);
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, u64& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<1u>(src, &dst);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt2U& dst)noexcept{
@@ -1613,10 +1555,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt2U& dst)noexcep
 #elif defined(NWB_HAS_SSE4)
     _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x2U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<2u>(src, dst.raw);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt3U& dst)noexcept{
@@ -1633,10 +1571,6 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt3U& dst)noexcep
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x3U& dst)noexcept{
-    SIMDConvertDoubleDetail::StoreIntComponents<3u>(src, dst.raw);
-}
-
 NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt4U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     dst.x = src.u[0];
@@ -1648,6 +1582,52 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt(SIMDVectorSingle src, UInt4U& dst)noexcep
 #elif defined(NWB_HAS_SSE4)
     _mm_storeu_si128(reinterpret_cast<__m128i*>(dst.raw), _mm_castps_si128(src));
 #endif
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, i64 w, Double3Int& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, &dst.x);
+    dst.w = w;
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, u64 w, Double3UInt& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreDoubleComponents<3u>(src, &dst.x);
+    dst.w = w;
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x4& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<4u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, i64& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<1u>(src, &dst);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x2U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<2u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x3U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<3u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, Int64x4U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<4u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x4& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<4u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, u64& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<1u>(src, &dst);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x2U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<2u>(src, dst.raw);
+}
+
+NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x3U& dst)noexcept{
+    SIMDConvertDoubleDetail::StoreIntComponents<3u>(src, dst.raw);
 }
 
 NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x4U& dst)noexcept{
@@ -1684,6 +1664,27 @@ NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDVectorSingle src, Float4& dst)noex
 #endif
 }
 
+NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
+#if defined(NWB_HAS_SSE4)
+    _mm_stream_ps(&dst._11, src.v[0]);
+    _mm_stream_ps(&dst._21, src.v[1]);
+    _mm_stream_ps(&dst._31, src.v[2]);
+#else
+    StoreFloat(src, dst);
+#endif
+}
+
+NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
+#if defined(NWB_HAS_SSE4)
+    _mm_stream_ps(&dst._11, src.v[0]);
+    _mm_stream_ps(&dst._21, src.v[1]);
+    _mm_stream_ps(&dst._31, src.v[2]);
+    _mm_stream_ps(&dst._41, src.v[3]);
+#else
+    StoreFloat(src, dst);
+#endif
+}
+
 NWB_INLINE void NWB_SIMD_CALL StreamDouble(SIMDVectorDouble src, Double4& dst)noexcept{
     SIMDConvertDoubleDetail::StreamDouble4Components(src, dst.raw);
 }
@@ -1697,34 +1698,9 @@ NWB_INLINE void NWB_SIMD_CALL StreamDouble(SIMDVectorDouble src, Double3& dst)no
     SIMDConvertDoubleDetail::StreamDoubleHighComponent(src, &dst.z);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
-#if defined(NWB_HAS_SSE4)
-    _mm_stream_ps(&dst._11, src.v[0]);
-    _mm_stream_ps(&dst._21, src.v[1]);
-    _mm_stream_ps(&dst._31, src.v[2]);
-#else
-    StoreFloat(src, dst);
-#endif
-}
-
 NWB_INLINE void NWB_SIMD_CALL StreamDouble(SIMDMatrixDouble src, Double34& dst)noexcept{
     for(usize row = 0u; row < 3u; ++row)
         SIMDConvertDoubleDetail::StreamDouble4Components(src.v[row], dst.raw + row * 4u);
-}
-
-NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
-#if defined(NWB_HAS_SSE4)
-    _mm_stream_ps(&dst._11, src.v[0]);
-    _mm_stream_ps(&dst._21, src.v[1]);
-    _mm_stream_ps(&dst._31, src.v[2]);
-    _mm_stream_ps(&dst._41, src.v[3]);
-#else
-    StoreFloat(src, dst);
-#endif
 }
 
 NWB_INLINE void NWB_SIMD_CALL StreamDouble(SIMDMatrixDouble src, Double44& dst)noexcept{

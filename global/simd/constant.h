@@ -27,6 +27,7 @@ struct alignas(32) SIMDVectorDoubleConstF{
         SIMDVectorDouble v;
     };
 
+    NWB_INLINE operator const f64*()const noexcept{ return f; }
     NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
 };
 

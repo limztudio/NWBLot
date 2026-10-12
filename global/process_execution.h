@@ -54,6 +54,9 @@ namespace ProcessExecutionFailure{
 namespace ProcessExecutionDetail{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool AreProcessArgumentsValid(const Span<const AStringView> arguments)noexcept{
     if(arguments.empty() || arguments.front().empty())
         return false;

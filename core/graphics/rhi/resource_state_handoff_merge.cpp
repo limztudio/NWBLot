@@ -2,8 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "backend.h"
-#include "selected_resource_validation.h"
+#include "command.h"
+
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/backend_selection/resource_validation.h>
+#include "resource_state_handoff_key.h"
 
 #include <core/alloc/scratch.h>
 
@@ -26,7 +29,7 @@ namespace __hidden_command_list_state_handoff_merge{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TextureStateKey = GraphicsBackend::TextureSubresourceStateKey;
+using TextureStateKey = TextureSubresourceStateKey;
 
 
 // ScratchArena reclaims one most-recent allocation per alignment bucket.
@@ -115,7 +118,7 @@ private:
 };
 
 
-using TextureStateIndexMap = ScratchStateIndexMap< TextureStateKey, GraphicsBackend::TextureSubresourceStateKeyHasher, GraphicsBackend::TextureSubresourceStateKeyEqualTo >;
+using TextureStateIndexMap = ScratchStateIndexMap< TextureStateKey, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo >;
 using BufferStateIndexMap = ScratchStateIndexMap<Buffer*, Hasher<Buffer*>, EqualTo<Buffer*>>;
 using PermanentTextureStateIndexMap = ScratchStateIndexMap<Texture*, Hasher<Texture*>, EqualTo<Texture*>>;
 
@@ -195,7 +198,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
     m_permanentBufferStates.reserve(permanentBufferStateCapacity);
 
     {
-        TextureStateIndexMap resultIndices(scratchArena, textureStateCapacity, GraphicsBackend::TextureSubresourceStateKeyHasher(), GraphicsBackend::TextureSubresourceStateKeyEqualTo());
+        TextureStateIndexMap resultIndices(scratchArena, textureStateCapacity, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo());
         if(!resultIndices.valid()){
             reset();
             return false;

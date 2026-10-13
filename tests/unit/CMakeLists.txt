@@ -1,3 +1,5 @@
+add_subdirectory(alloc)
+add_subdirectory(common)
 add_subdirectory(csg)
 add_subdirectory(ecs)
 add_subdirectory(ecs_graphics)

@@ -8,6 +8,7 @@
 #include "module.h"
 #include "backend_forward.h"
 
+#include <core/graphics/rhi/resource_state_handoff_key.h>
 #include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
@@ -150,28 +151,6 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct TextureSubresourceStateKey{
-    Texture* texture = nullptr;
-    MipLevel mipLevel = 0;
-    ArraySlice arraySlice = 0;
-};
-
-struct TextureSubresourceStateKeyHasher{
-    [[nodiscard]] usize operator()(const TextureSubresourceStateKey& value)const noexcept{
-        usize seed = 0;
-        ::HashCombine(seed, value.texture);
-        ::HashCombine(seed, value.mipLevel);
-        ::HashCombine(seed, value.arraySlice);
-        return seed;
-    }
-};
-
-struct TextureSubresourceStateKeyEqualTo{
-    [[nodiscard]] bool operator()(const TextureSubresourceStateKey& lhs, const TextureSubresourceStateKey& rhs)const noexcept{
-        return lhs.texture == rhs.texture && lhs.mipLevel == rhs.mipLevel && lhs.arraySlice == rhs.arraySlice;
-    }
-};
 
 class StateTracker final : NoCopy{
     friend class CommandList;

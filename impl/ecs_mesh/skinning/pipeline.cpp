@@ -4,7 +4,7 @@
 
 #include "system.h"
 
-#include <impl/assets/graphics/skinned_mesh/names.h>
+#include <impl/assets_graphics/skinned_mesh/names.h>
 #include <impl/assets_shader/loader.h>
 
 #include <core/common/log.h>

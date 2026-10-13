@@ -110,49 +110,6 @@ bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSigna
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::setRayTracingState(const RayTracingState& state){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("set ray-tracing state")))
-        return;
-
-    ShaderTable* const shaderTable = state.shaderTable;
-    RayTracingPipeline* const pipeline = shaderTable ? shaderTable->m_pipeline.get() : nullptr;
-    if(
-        shaderTable
-        && (
-            &shaderTable->m_context != &m_context
-            || &shaderTable->m_device != &m_device
-            || !pipeline
-            || &pipeline->m_context != &m_context
-            || &pipeline->m_device != &m_device
-            || pipeline->m_pipeline == VK_NULL_HANDLE
-            || pipeline->m_pipelineLayout == VK_NULL_HANDLE
-            || !m_context.extensions.khrRayTracingPipeline
-            || !m_context.rayTracingPipelineFeatureEnabled
-            || !m_context.deviceDispatch.vkCmdTraceRaysKHR
-        )
-    ){
-        rejectCommandRecording(NWB_TEXT("set ray-tracing state"), NWB_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready"));
-        return;
-    }
-
-    endActiveRenderPass();
-    commitBarriers();
-    if(m_commandRecordingFailed)
-        return;
-    m_currentGraphicsState = {};
-    m_currentComputeState = {};
-    m_currentMeshletState = {};
-    m_currentRayTracingState = state;
-
-    if(!shaderTable)
-        return;
-
-    retainResource(shaderTable);
-
-    m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
-}
-
-
 Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 buildScratchSize, const u64 scratchAlignment, TStringView operationName){
     if(buildScratchSize == 0u)
         return VkDeviceAddress{0u};

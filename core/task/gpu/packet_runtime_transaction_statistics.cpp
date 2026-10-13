@@ -142,6 +142,22 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuTaskGraphRuntimeStatistics CollectGpuTaskGraphRuntimeStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuRecordedGraph& recordedGraph, const GpuGraphSubmissionTransaction& transaction)noexcept{
+    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Read);
+    if(!artifactOperation.valid())
+        return {};
+    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket, &artifactOperation);
+    if(!submissionOperation.valid())
+        return {};
+    if(!planAccess.validFor(compiledGraph))
+        return {};
+    return GpuTaskGraphRuntimeStatistics{ .compile = planAccess.compileStatistics(), .recording = recordedGraph.recordingStatistics(compiledGraph, planAccess), .submission = transaction.submissionStatistics(), };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_END
 
 

@@ -6,7 +6,7 @@
 
 #include <core/crash/package_names.h>
 
-#include <nwb_rgd_decode.h>
+#include <logger/rgd/decode.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirecto
 
     const AString<LogArena> capturePath = PathToString<char>(arena, rgdCapture);
 
-    const auto decoded = nwb_rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()));
+    const auto decoded = Rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()));
     if(!decoded){
         outReport += s_GpuDetectiveSectionHeader;
         outReport += s_GpuDetectiveDecodeFailedStatus;

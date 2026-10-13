@@ -435,7 +435,6 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
 
 Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, bool alphaToCoverageEnable, TStringView operationName);
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
-VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept;
 
 inline void CopyHostMemory(CpuTaskScheduler& cpuScheduler, void* dst, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){
     if(!dst || !src || size == 0)

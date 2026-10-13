@@ -18,6 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 class Device;
+class VulkanAllocator;
 class Queue;
 class TrackedCommandBuffer;
 class StateTracker;

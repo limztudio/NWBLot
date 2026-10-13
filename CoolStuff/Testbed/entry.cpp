@@ -7,7 +7,7 @@
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/telemetry/frame_graph_registry.h>
-#include <impl/assets/graphics/bindless/runtime_abi.h>
+#include <impl/assets_graphics/bindless/runtime_abi.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>

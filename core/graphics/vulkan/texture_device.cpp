@@ -257,40 +257,6 @@ TextureHandle Device::createHandleForNativeTexture(const ObjectType objectType, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SamplerHandle Device::createSampler(const SamplerDesc& d){
-    if(d.reductionType != SamplerReductionType::Standard && d.reductionType != SamplerReductionType::Comparison){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: unsupported reduction type {}"), static_cast<u32>(d.reductionType));
-        return nullptr;
-    }
-
-    SamplerDesc normalizedDesc = d;
-    const f32 supported = m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy;
-    const f32 maximum = supported > 1.0f ? supported : 1.0f;
-    const f32 requested = normalizedDesc.maxAnisotropy;
-    const f32 lowerBounded = requested >= 1.0f ? requested : 1.0f;
-    normalizedDesc.maxAnisotropy = lowerBounded > maximum ? maximum : lowerBounded;
-
-    SamplerHandle sampler(NewArenaObject<Sampler>(m_context.objectArena, m_context), SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
-    if(!sampler)
-        return nullptr;
-    sampler->m_desc = normalizedDesc;
-
-    const VkSamplerCreateInfo samplerInfo = VulkanDetail::BuildSamplerCreateInfo(normalizedDesc);
-
-    const VkResult res = m_context.deviceDispatch.vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
-    if(res != VK_SUCCESS){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create sampler"));
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
-        return nullptr;
-    }
-
-    return sampler;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_VULKAN_END
 
 

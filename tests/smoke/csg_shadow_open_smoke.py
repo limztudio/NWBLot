@@ -33,13 +33,13 @@ def expected_open_rgb(length, events):
     return tuple(255. * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1. / 2.4) - 0.055) for value in linear)
 
 
-def validate_runtime(log_text, case, route, frames):
-    if case not in CASES or route not in ("hardware", "software"):
-        raise SmokeFailure("unknown open-shadow case or route")
+def validate_runtime(log_text, case, route, frames, warning_policy="enabled"):
+    if case not in CASES or route not in ("hardware", "software") or warning_policy not in ("enabled", "disabled"):
+        raise SmokeFailure("unknown open-shadow case, route or warning policy")
     lines = log_text.splitlines()
     warning_indices = [index for index, line in enumerate(lines) if "[WARNING]" in line]
     remaining = log_text
-    if case == "terminal65":
+    if case == "terminal65" and warning_policy == "enabled":
         if len(warning_indices) != 1:
             raise SmokeFailure("terminal65 requires only the exact open-capacity flags=16 diagnostic")
         start = warning_indices[0]
@@ -76,7 +76,9 @@ def validate_runtime(log_text, case, route, frames):
     sources = [int(value) for value in re.findall(r"FramebufferCapture: graphics source frame (\d+)", log_text)]
     if len(sources) != 1 or sources[0] < frames - 1:
         raise SmokeFailure(f"{case}: capture lacks one completed source after the required frame warmup")
-    return {"graphics_source_frame": sources[0], "route": route, "retained_events": [first, second], "diagnostic_flags": 16 if case == "terminal65" else 0, "expected_capacity_terminal": case == "terminal65"}
+    flags_observed = case == "terminal65" and warning_policy == "enabled"
+    return {"graphics_source_frame": sources[0], "route": route, "retained_events": [first, second], "diagnostic_flags": 16 if flags_observed else None,
+        "diagnostic_flags_observed": flags_observed, "warning_policy": warning_policy, "capacity_diagnostic_available": warning_policy == "enabled", "expected_capacity_terminal": case == "terminal65"}
 
 
 def measure_frame(frame, case):
@@ -130,8 +132,8 @@ def capture_case(args, case):
         command.extend(("--skip-log-message", "atlas arm=1 light=directional hardware=0"))
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     capture_args = capture.parse_args(command)
-    if case == "terminal65":
-        # Only this named terminal arm defers WARNING validation to the exact single flags=16 check below.
+    if case == "terminal65" and args.warning_policy == "enabled":
+        # Only the warning-enabled terminal arm defers WARNING validation to the exact single flags=16 check below.
         capture_args.reject_log_message.remove("[WARNING]")
     environment = capture_environment("cut", "directional", "open")
     for key in tuple(environment):
@@ -149,7 +151,7 @@ def capture_case(args, case):
     finally:
         os.environ.clear()
         os.environ.update(previous_environment)
-    receipt = validate_runtime(runtime_log.read_text(encoding="utf-8"), case, args.route, args.frames)
+    receipt = validate_runtime(runtime_log.read_text(encoding="utf-8"), case, args.route, args.frames, args.warning_policy)
     frame = read_bmp_24_rows(output)
     if frame[:2] != (960, 720):
         raise SmokeFailure("open-shadow smoke requires the actual 960x720 framebuffer")
@@ -165,6 +167,7 @@ def parse_args(argv):
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--route", choices=("hardware", "software"), required=True)
+    parser.add_argument("--warning-policy", choices=("enabled", "disabled"), required=True, help="Build warning-log capability; canonical fin disables ordinary warnings.")
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--timeout", type=float, default=120.)
     parser.add_argument("--application-arg", action="append", default=[])

@@ -17,75 +17,136 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::setPushConstants(const void* data, usize byteSize){
-    if(!publicCommandStateAccessible())
-        return;
-    if(byteSize == 0)
-        return;
-    if(!VulkanDetail::AreAllPointersValid(data)){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("data is null"));
-        return;
-    }
-    if(byteSize > UINT32_MAX){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds uint32 range"));
-        return;
+CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
+    VkResult res = VK_SUCCESS;
+
+    CooperativeVectorDeviceFeatures output(m_context.objectArena);
+
+    if(!m_context.extensions.nvCooperativeVector || !m_context.coopVecFeatures.cooperativeVector)
+        return output;
+
+    uint32_t propertyCount = 0;
+    res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
+    if(res != VK_SUCCESS || propertyCount == 0)
+        return output;
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
+    Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
+    for(u32 i = 0u; i < propertyCount; ++i){
+        properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
+        properties[i].pNext = nullptr;
     }
 
-    const u32 pushConstantByteSize = static_cast<u32>(byteSize);
-    if(!VulkanDetail::IsPushConstantByteSizeValid(pushConstantByteSize, m_context.physicalDeviceProperties.limits.maxPushConstantsSize)){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size is unaligned or exceeds the device limit"));
-        return;
-    }
+    res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
+    if(res != VK_SUCCESS)
+        return output;
 
-    VkPipelineLayout layout = VK_NULL_HANDLE;
-    GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
-    u32 activePipelineCount = 0u;
-    u32 pipelinePushConstantByteSize = 0;
-
-    const auto selectPipeline = [&](const VkPipelineLayout candidateLayout, const u32 candidatePushConstantByteSize, const GpuQueueCapability::Mask candidateCapabilities)noexcept{
-        ++activePipelineCount;
-        layout = candidateLayout;
-        requiredCapabilities = candidateCapabilities;
-        pipelinePushConstantByteSize = candidatePushConstantByteSize;
+    output.matMulFormats.resize(propertyCount);
+    auto fillMatMulFormat = [&](usize i){
+        const auto& prop = properties[i];
+        CooperativeVectorMatMulFormatCombo& combo = output.matMulFormats[i];
+        combo.inputType = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputType));
+        combo.inputInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputInterpretation));
+        combo.matrixInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.matrixInterpretation));
+        combo.biasInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.biasInterpretation));
+        combo.outputType = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.resultType));
+        combo.transposeSupported = prop.transpose != VK_FALSE;
     };
 
-    if(m_currentGraphicsState.pipeline){
-        auto* gp = m_currentGraphicsState.pipeline;
-        selectPipeline(gp->m_pipelineLayout, gp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
-    }
-    if(m_currentComputeState.pipeline){
-        auto* cp = m_currentComputeState.pipeline;
-        selectPipeline(cp->m_pipelineLayout, cp->m_pushConstantByteSize, GpuQueueCapability::Compute);
-    }
-    if(m_currentMeshletState.pipeline){
-        auto* mp = m_currentMeshletState.pipeline;
-        selectPipeline(mp->m_pipelineLayout, mp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
-    }
-    if(m_currentRayTracingState.shaderTable){
-        auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
-        if(rtp)
-            selectPipeline(rtp->m_pipelineLayout, rtp->m_pushConstantByteSize, GpuQueueCapability::Compute);
-        else
-            ++activePipelineCount;
+    if(taskScheduler().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
+        taskScheduler().parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
+    else{
+        for(usize i = 0u; i < propertyCount; ++i)
+            fillMatMulFormat(i);
     }
 
-    if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("exactly one active valid pipeline layout is required"));
-        return;
-    }
-    if(!recordAndValidateCommandCapability(requiredCapabilities, s_SetPushConstantsOperation))
-        return;
+    output.trainingFloat16 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE && m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
+    output.trainingFloat32 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE && m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
 
-    if(pipelinePushConstantByteSize == 0){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("active pipeline layout has no push constant range"));
-        return;
-    }
-    if(pushConstantByteSize > pipelinePushConstantByteSize){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds the active pipeline push constant range"));
-        return;
+    return output;
+}
+
+usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
+    VkResult res = VK_SUCCESS;
+
+    if(type > CooperativeVectorDataType::Float64 || layout > CooperativeVectorMatrixLayout::TrainingOptimal || type == CooperativeVectorDataType::UInt8Packed || type == CooperativeVectorDataType::SInt8Packed || rows <= 0 || columns <= 0)
+        return 0;
+    if((type == CooperativeVectorDataType::FloatE4M3 || type == CooperativeVectorDataType::FloatE5M2) && (layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor))
+        return 0;
+    if(!m_context.extensions.nvCooperativeVector || m_context.coopVecFeatures.cooperativeVector != VK_TRUE || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV)
+        return 0;
+
+    const VkComponentTypeKHR componentType = VulkanDetail::ConvertCoopVecDataType(type);
+    if(componentType != VK_COMPONENT_TYPE_FLOAT32_KHR){
+        uint32_t propertyCount = 0u;
+        res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
+        if(res != VK_SUCCESS || propertyCount == 0u)
+            return 0;
+
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
+        Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
+        for(VkCooperativeVectorPropertiesNV& property : properties){
+            property.sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
+            property.pNext = nullptr;
+        }
+
+        res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
+        if(res != VK_SUCCESS)
+            return 0;
+
+        bool matrixInterpretationSupported = false;
+        for(u32 i = 0u; i < propertyCount; ++i){
+            if(properties[i].matrixInterpretation == componentType){
+                matrixInterpretationSupported = true;
+                break;
+            }
+        }
+        if(!matrixInterpretationSupported)
+            return 0;
     }
 
-    m_context.deviceDispatch.vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
+    usize dstSize = 0;
+    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    const usize rowCount = static_cast<usize>(rows);
+    const usize columnCount = static_cast<usize>(columns);
+    const auto rowByteSize = TryMultiply<usize>(columnCount, dataTypeSize);
+    if(!rowByteSize)
+        return 0;
+
+    const usize srcStride = GetCooperativeVectorOptimalMatrixStride(type, CooperativeVectorMatrixLayout::RowMajor, static_cast<u32>(rows), static_cast<u32>(columns));
+    if(srcStride == 0u)
+        return 0;
+
+    const auto precedingRowsByteSize = TryMultiply<usize>(rowCount - 1u, srcStride);
+    if(!precedingRowsByteSize)
+        return 0;
+    if(AddOverflows<usize>(*precedingRowsByteSize, *rowByteSize))
+        return 0;
+    const usize srcSize = *precedingRowsByteSize + *rowByteSize;
+
+    const usize dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, static_cast<u32>(rows), static_cast<u32>(columns));
+    if((layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor) && dstStride == 0u)
+        return 0;
+
+    auto convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
+    convertInfo.srcSize = srcSize;
+    convertInfo.srcData.hostAddress = nullptr;
+    convertInfo.pDstSize = &dstSize;
+    convertInfo.dstData.hostAddress = nullptr;
+    convertInfo.srcComponentType = componentType;
+    convertInfo.dstComponentType = convertInfo.srcComponentType;
+    convertInfo.numRows = static_cast<u32>(rows);
+    convertInfo.numColumns = static_cast<u32>(columns);
+    convertInfo.srcLayout = VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
+    convertInfo.srcStride = srcStride;
+    convertInfo.dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(layout);
+    convertInfo.dstStride = dstStride;
+
+    res = m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
+    if(res == VK_SUCCESS)
+        return dstSize;
+
+    return 0;
 }
 
 

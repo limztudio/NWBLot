@@ -10,7 +10,7 @@
 
 #include "cook.h"
 
-#include <impl/assets/csg/shape_id.h>
+#include <impl/assets_csg/shape_id.h>
 
 #include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>

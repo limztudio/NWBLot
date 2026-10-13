@@ -333,43 +333,6 @@ Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, co
     return layout;
 }
 
-VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mode)noexcept{
-    switch(mode){
-    case SamplerAddressMode::Clamp:      return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    case SamplerAddressMode::Wrap:       return VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    case SamplerAddressMode::Border:     return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    case SamplerAddressMode::Mirror:     return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    case SamplerAddressMode::MirrorOnce: return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    default:                             return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    }
-}
-
-VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept{
-    const f32 maxAnisotropy = desc.maxAnisotropy >= 1.f ? desc.maxAnisotropy : 1.f;
-
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = desc.magFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-    samplerInfo.minFilter = desc.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-    samplerInfo.mipmapMode = desc.mipFilter ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    samplerInfo.addressModeU = ConvertSamplerAddressMode(desc.addressU);
-    samplerInfo.addressModeV = ConvertSamplerAddressMode(desc.addressV);
-    samplerInfo.addressModeW = ConvertSamplerAddressMode(desc.addressW);
-    samplerInfo.mipLodBias = desc.mipBias;
-    samplerInfo.anisotropyEnable = maxAnisotropy > 1.f ? VK_TRUE : VK_FALSE;
-    samplerInfo.maxAnisotropy = maxAnisotropy;
-    samplerInfo.compareEnable = desc.reductionType == SamplerReductionType::Comparison ? VK_TRUE : VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-    samplerInfo.minLod = 0.f;
-    samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
-    samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-    return samplerInfo;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 

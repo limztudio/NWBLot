@@ -2,14 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
-
-#include <core/alloc/persistent.h>
-#include <core/alloc/scratch.h>
-#include <core/common/name_symbols.h>
 
 #include <global/algorithm.h>
 #include <global/auto_registration.h>
@@ -27,9 +22,6 @@
 #include <global/fixed_buffer.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
-#include <global/simd/type.h>
-#include <global/simd/vector.h>
-#include <global/simd/collision_triangle.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/process_memory_map.h>
@@ -54,7 +46,6 @@ namespace __hidden_global_tests{
 static constexpr AStringView s_ALPHA = "alpha";
 static constexpr AStringView s_BETA = "beta";
 static constexpr AStringView s_UNIT = "unit";
-static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = NWB_TEXT("parallel logger message");
 static constexpr AStringView s_VALUE_42 = "value 42";
 static constexpr AStringView s_VALUE_FORMAT_TRAILING = "value {}.trailing";
 static constexpr WStringView s_VALUE_FORMAT_TRAILING_WIDE = L"value {}.trailing";
@@ -70,7 +61,6 @@ constexpr u32 s_ThirdElementIndex = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CapturingLogger = NWB::Tests::CapturingLogger;
 using AString = NWB::Tests::TestAString;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
@@ -89,41 +79,9 @@ static char s_DiagnosticEventExpressionText[s_DiagnosticEventCaptureTextBytes] =
 static char s_DiagnosticEventMessageText[s_DiagnosticEventCaptureTextBytes] = {};
 static char s_DiagnosticEventFileText[s_DiagnosticEventCaptureTextBytes] = {};
 
-inline constexpr usize s_VerifyAlignedReallocationAlignment = 256u;
-inline constexpr usize s_VerifyAlignedReallocationInitialBytes = s_VerifyAlignedReallocationAlignment;
-inline constexpr usize s_VerifyAlignedReallocationBlockerBytes = s_VerifyAlignedReallocationAlignment;
-inline constexpr usize s_VerifyAlignedReallocationGrownBytes = s_VerifyAlignedReallocationAlignment * 4u;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename Arena>
-static void VerifyAlignedReallocation(Arena& arena){
-    constexpr usize s_Alignment = s_VerifyAlignedReallocationAlignment;
-    constexpr usize s_InitialBytes = s_VerifyAlignedReallocationInitialBytes;
-    constexpr usize s_BlockerBytes = s_VerifyAlignedReallocationBlockerBytes;
-    constexpr usize s_GrownBytes = s_VerifyAlignedReallocationGrownBytes;
-
-    EXPECT_EQ(arena.reallocate(nullptr, s_Alignment, 0u), nullptr);
-    auto* initial = static_cast<u8*>(arena.reallocate(nullptr, s_Alignment, s_InitialBytes));
-    ASSERT_NE(initial, nullptr);
-    EXPECT_EQ(reinterpret_cast<usize>(initial) % s_Alignment, 0u);
-    for(usize i = 0u; i < s_InitialBytes; ++i)
-        initial[i] = static_cast<u8>(i);
-
-    void* blocker = arena.allocate(1u, s_BlockerBytes);
-    ASSERT_NE(blocker, nullptr);
-
-    auto* resized = static_cast<u8*>(arena.reallocate(initial, s_Alignment, s_GrownBytes));
-    ASSERT_NE(resized, nullptr);
-    EXPECT_EQ(reinterpret_cast<usize>(resized) % s_Alignment, 0u);
-    for(usize i = 0u; i < s_InitialBytes; ++i)
-        EXPECT_EQ(resized[i], static_cast<u8>(i));
-
-    arena.deallocate(blocker, 1u, s_BlockerBytes);
-    EXPECT_EQ(arena.reallocate(resized, s_Alignment, 0u), nullptr);
-}
 
 static AStringView CopyDiagnosticEventText(char (&outText)[s_DiagnosticEventCaptureTextBytes], const AStringView text)noexcept{
     usize copied = 0u;
@@ -280,12 +238,6 @@ TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
     EXPECT_EQ(values[s_ThirdElementIndex], 23u);
 }
 
-TEST(Global, Vector3TryNormalizeRejectsInvalidValues){
-    EXPECT_FALSE(Vector3TryNormalize(VectorZero()));
-    EXPECT_FALSE(Vector3TryNormalize(s_SIMDQNaN));
-    EXPECT_FALSE(Vector3TryNormalize(s_SIMDInfinity));
-}
-
 TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
     constexpr AStringView s_Maps = "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n" "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n";
     Vector<LinuxProcessMemoryMapEntry> entries;
@@ -306,59 +258,6 @@ TEST(Global, GrowingCapacitySaturatesAtSizeLimit){
 
 TEST(Global, CheckedDivideUpRejectsZeroDivisor){
     EXPECT_FALSE(::DivideUpChecked(17u, 0u));
-}
-
-TEST(Global, TriangleAreaRejectsExactThreshold){
-    const Float3U a(1.0f, 1.0f, 1.0f);
-    const Float3U b(4.0f, 1.0f, 1.0f);
-    const Float3U c(1.0f, 5.0f, 1.0f);
-    EXPECT_TRUE(::TriangleHasArea(LoadFloat(a), LoadFloat(b), LoadFloat(c), 143.0));
-    EXPECT_FALSE(::TriangleHasArea(LoadFloat(a), LoadFloat(b), LoadFloat(c), 144.0));
-}
-
-// Binary32 subtraction collapses this nondegenerate triangle to a line; promotion must happen before subtracting its origin.
-TEST(Global, TriangleAreaPromotesBeforeCancellingLargeEdges){
-    const SIMDVectorSingle a = VectorSet(33554432.0f, 0.0f, 0.0f, 0.0f);
-    const SIMDVectorSingle b = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
-    const SIMDVectorSingle c = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    EXPECT_TRUE(::TriangleHasArea(a, b, c, 0.5));
-    EXPECT_FALSE(::TriangleHasArea(a, b, c, 1.0));
-}
-
-// Inactive W coordinates must not participate in promoted cross products or area reductions.
-TEST(Global, TriangleAreaIgnoresNonfiniteInactiveCoordinates){
-    const SIMDVectorSingle a = VectorSetW(VectorZero(), Limit<f32>::s_Infinity);
-    const SIMDVectorSingle b = VectorSetW(VectorSet(3.0f, 0.0f, 0.0f, 0.0f), VectorGetW(s_SIMDQNaN));
-    const SIMDVectorSingle c = VectorSetW(VectorSet(0.0f, 4.0f, 0.0f, 0.0f), -Limit<f32>::s_Infinity);
-    const SIMDVectorDouble normal = ::BuildTriangleAreaNormal64(a, b, c);
-    EXPECT_EQ(BitCast<u64>(VectorDoubleGetW(normal)), 0u);
-    EXPECT_TRUE(::TriangleHasArea(a, b, c, 143.0));
-    EXPECT_FALSE(::TriangleHasArea(a, b, c, 144.0));
-}
-
-// The small squared components round away separately but survive their sum; retain the existing backend's strict area threshold.
-TEST(Global, TriangleAreaPreservesSquaredSumOrderAtThreshold){
-    const SIMDVectorSingle a = VectorZero();
-    const SIMDVectorSingle b = VectorSet(1.0f, 0.0f, -1.0f, 0.0f);
-    const SIMDVectorSingle c = VectorSet(0.0f, 1.25f, -134217728.0f, 0.0f);
-    constexpr f64 s_LargeSquaredComponent = 18014398509481984.0;
-#if defined(NWB_HAS_AVX2)
-    EXPECT_TRUE(::TriangleHasArea(a, b, c, s_LargeSquaredComponent));
-    EXPECT_FALSE(::TriangleHasArea(a, b, c, s_LargeSquaredComponent + 4.0));
-#else
-    EXPECT_FALSE(::TriangleHasArea(a, b, c, s_LargeSquaredComponent));
-    EXPECT_TRUE(::TriangleHasArea(a, b, c, s_LargeSquaredComponent - 2.0));
-#endif
-}
-
-TEST(Global, GlobalArenaReallocationPreservesAlignment){
-    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
-    VerifyAlignedReallocation(arena);
-}
-
-TEST(Global, PersistentArenaReallocationPreservesAlignment){
-    NWB::Core::Alloc::PersistentArena arena(NWB::Tests::s_TestArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(16u * 1024u));
-    VerifyAlignedReallocation(arena);
 }
 
 TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
@@ -584,72 +483,6 @@ TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
     EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
 }
 #endif
-
-TEST(Global, LoggerMacrosBehaveAsSingleStatements){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard guard(logger);
-
-    bool elseBranchRan = false;
-    if(false)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("unreachable"));
-    else
-        elseBranchRan = true;
-
-    EXPECT_TRUE(elseBranchRan);
-    EXPECT_EQ(logger.messageCount(), 0u);
-}
-
-TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
-    constexpr u32 s_ThreadCount = 4u;
-    constexpr u32 s_MessagesPerThread = 512u;
-    constexpr u32 s_ExpectedMessageCount = s_ThreadCount * s_MessagesPerThread;
-    constexpr u32 s_ExpectedErrorCount = s_ExpectedMessageCount / s_ExpectedDualCount;
-    CapturingLogger logger;
-    Latch startGate(s_ThreadCount + s_ExpectedDualCount);
-    Atomic<u32> activeWriters{ s_ThreadCount };
-    Atomic<bool> invalidObservation{ false };
-    bool sawConcurrentMessage = false;
-    bool sawConcurrentError = false;
-    Thread reader([&](){
-        startGate.arrive_and_wait();
-        do{
-            const u32 messageCount = logger.messageCount();
-            const u32 errorCount = logger.errorCount();
-            const NWB::Core::Common::LogType::Enum lastType = logger.lastType();
-            if(messageCount > s_ExpectedMessageCount || errorCount > s_ExpectedErrorCount || (lastType != NWB::Core::Common::LogType::Info && lastType != NWB::Core::Common::LogType::Error))
-                invalidObservation.store(true, MemoryOrder::relaxed);
-            if(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE))
-                sawConcurrentMessage = true;
-            if(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE))
-                sawConcurrentError = true;
-            YieldThread();
-        }while(activeWriters.load(MemoryOrder::acquire) != 0u);
-    });
-    Thread writers[s_ThreadCount];
-    for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
-        writers[threadIndex] = Thread([&logger, &startGate, &activeWriters](){
-            startGate.arrive_and_wait();
-            for(u32 messageIndex = 0u; messageIndex < s_MessagesPerThread; ++messageIndex){
-                const NWB::Core::Common::LogType::Enum type = (messageIndex & 1u) == 0u ? NWB::Core::Common::LogType::Info : NWB::Core::Common::LogType::Error;
-                NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, type, s_PARALLEL_LOGGER_MESSAGE);
-            }
-            activeWriters.fetch_sub(1u, MemoryOrder::release);
-        });
-    }
-
-    startGate.arrive_and_wait();
-    for(Thread& writer : writers)
-        writer.join();
-    reader.join();
-
-    EXPECT_FALSE(invalidObservation.load(MemoryOrder::relaxed));
-    EXPECT_TRUE(sawConcurrentMessage);
-    EXPECT_TRUE(sawConcurrentError);
-    EXPECT_EQ(logger.messageCount(), s_ExpectedMessageCount);
-    EXPECT_EQ(logger.errorCount(), s_ExpectedErrorCount);
-    EXPECT_TRUE(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE));
-    EXPECT_TRUE(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE));
-}
 
 TEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText){
     ResetDiagnosticEventCapture();

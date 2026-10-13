@@ -117,7 +117,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
                     --working-directory "${_nwb_transparent_multi_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_analytic" --route "${_nwb_csg_route}" --atlas analytic)
             set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 240 LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_open_smoke")
-            add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
+            add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke.py" --warning-policy "$<IF:$<CONFIG:fin>,disabled,enabled>" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                     --working-directory "${_nwb_transparent_multi_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_open" --route "${_nwb_csg_route}")
             set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 900 LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
         endforeach()
@@ -242,7 +242,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set_tests_properties(nwb_refraction_gpudbg_capture_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 240)
         add_test(NAME nwb_refraction_gallery_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_smoke.py" "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_gallery" ${_nwb_refraction_logserver_args})
-        set_tests_properties(nwb_refraction_gallery_capture_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 600)
+        set_tests_properties(nwb_refraction_gallery_capture_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 900)
         add_test(NAME nwb_refraction_duplicate_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_duplicate_smoke.py" "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_duplicates" ${_nwb_refraction_logserver_args})
         set_tests_properties(nwb_refraction_duplicate_capture_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 600)

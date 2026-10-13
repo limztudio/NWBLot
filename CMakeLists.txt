@@ -43,6 +43,7 @@ add_subdirectory(global)
 add_subdirectory(core)
 add_subdirectory(logger/telemetry)
 add_subdirectory(logger/client)
+add_subdirectory(logger/rgd)
 add_subdirectory(impl)
 
 if(NWB_BUILD_LOGSERVER AND (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))

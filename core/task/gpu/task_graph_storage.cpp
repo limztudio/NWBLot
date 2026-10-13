@@ -652,6 +652,27 @@ const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(const GpuUpl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<GpuTaskGraph::MarkerLabelRange> GpuTaskGraph::appendMarkerLabel(const AStringView text){
+    if(text.empty() || !text.data() || text.size() > Limit<u32>::s_Max || text.size() > Limit<u32>::s_Max - m_markerText.size())
+        return MakeUnexpected(Failure{});
+
+    const MarkerLabelRange range{ static_cast<u32>(m_markerText.size()), static_cast<u32>(text.size()) };
+    const usize nextSize = m_markerText.size() + text.size();
+    m_markerText.resize(nextSize);
+    NWB_MEMCPY(m_markerText.data() + range.offset, range.size, text.data(), text.size());
+    return range;
+}
+
+AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{
+    NWB_ASSERT(offset <= m_markerText.size());
+    NWB_ASSERT(size <= m_markerText.size() - offset);
+    return AStringView(reinterpret_cast<const char*>(m_markerText.data() + offset), size);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_END
 
 

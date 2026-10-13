@@ -4,7 +4,7 @@
 
 #include "material_system.h"
 
-#include <impl/assets/graphics/mesh/names.h>
+#include <impl/assets_graphics/mesh/names.h>
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>

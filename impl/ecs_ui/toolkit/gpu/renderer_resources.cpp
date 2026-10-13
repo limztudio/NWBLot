@@ -4,7 +4,7 @@
 
 #include "renderer_internal.h"
 
-#include <impl/assets/graphics/ui/names.h>
+#include <impl/assets_graphics/ui/names.h>
 #include <impl/assets_shader/loader.h>
 
 #include <core/graphics/shader_archive.h>

@@ -5,7 +5,7 @@
 #include "rt_private.h"
 #include "renderer_raytracing_state.h"
 
-#include <impl/assets/graphics/refraction/names.h>
+#include <impl/assets_graphics/refraction/names.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
 
 

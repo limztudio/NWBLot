@@ -11,7 +11,7 @@
 #include <impl/ecs_render/shared/renderer_scene_private.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
-#include <impl/assets/graphics/deferred/names.h>
+#include <impl/assets_graphics/deferred/names.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>

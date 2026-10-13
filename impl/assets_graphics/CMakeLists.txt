@@ -1,4 +1,8 @@
 nwb_declare_interface_library(nwb_assets_graphics)
+target_sources(nwb_assets_graphics INTERFACE "${CMAKE_CURRENT_LIST_DIR}/avboit/names.h" "${CMAKE_CURRENT_LIST_DIR}/bvh/names.h" "${CMAKE_CURRENT_LIST_DIR}/caustic/names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/csg/names.h" "${CMAKE_CURRENT_LIST_DIR}/deferred/names.h" "${CMAKE_CURRENT_LIST_DIR}/gi/names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh/names.h" "${CMAKE_CURRENT_LIST_DIR}/refraction/names.h" "${CMAKE_CURRENT_LIST_DIR}/shadow/names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/skinned_mesh/names.h" "${CMAKE_CURRENT_LIST_DIR}/ui/names.h" "${CMAKE_CURRENT_LIST_DIR}/bindless/runtime_abi.h")
 target_link_libraries(nwb_assets_graphics INTERFACE nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler)
 
 if(NWB_BUILD_PIPELINE)

@@ -4,9 +4,11 @@
 from pathlib import Path
 import sys
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-from csg_shadow_open_smoke import CASES, COUNTS, LENGTHS, OPEN_CAPACITY_MESSAGE, REGIONS, compare_frames, expected_open_rgb, validate_runtime
+from csg_shadow_open_smoke import CASES, COUNTS, LENGTHS, OPEN_CAPACITY_MESSAGE, REGIONS, compare_frames, expected_open_rgb, parse_args, validate_runtime
 from csg_shadow_reference import expected_rgb, region_pixels
 from generate_csg_shadow_open_meshes import open_sheets, validate_open_sheets
 from window_capture_smoke import SmokeFailure
@@ -31,7 +33,7 @@ class CsgOpenShadowTests(unittest.TestCase):
         for x, y in region_pixels(REGIONS[region_index], frame[0], frame[1]):
             frame[2][y][x] = value
 
-    def log(self, case="retained", route="hardware"):
+    def log(self, case="retained", route="hardware", warning_policy="enabled"):
         first, second = COUNTS[case]
         lines = ["FramebufferCapture: capture ready", "FramebufferCapture: graphics source frame 119", "CsgShadowSmokeProject: shutdown",
             f"CsgShadowSmokeProject: open_case={case} retained_events={first},{second} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1",
@@ -43,7 +45,7 @@ class CsgOpenShadowTests(unittest.TestCase):
             lines.append("RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware" else "RendererSystem: dispatched light-space shadow maps")
         else:
             lines.append(f"RendererSystem: dispatched CSG light-space shadows (hardware_compose={int(route == 'hardware')}, views=1)")
-        if case == "terminal65":
+        if case == "terminal65" and warning_policy == "enabled":
             lines.extend(("00:00:01.250 [WARNING]:", "", OPEN_CAPACITY_MESSAGE, "", "00:00:01.251 [INFO]:", "", "later ordinary diagnostic"))
         return "\n".join(lines)
 
@@ -93,6 +95,38 @@ class CsgOpenShadowTests(unittest.TestCase):
         for log in (self.log("terminal65").replace("flags=16", "flags=2"), self.log("terminal65") + "\n[WARNING]: unrelated", self.log("terminal65").replace("[WARNING]", "[ERROR]")):
             with self.assertRaises(SmokeFailure):
                 validate_runtime(log, "terminal65", "hardware", 120)
+
+    def test_disabled_warning_policy_preserves_all_cases_without_fabricating_flags(self):
+        for route in ("hardware", "software"):
+            for case in CASES:
+                receipt = validate_runtime(self.log(case, route, "disabled"), case, route, 120, "disabled")
+                self.assertIsNone(receipt["diagnostic_flags"])
+                self.assertFalse(receipt["diagnostic_flags_observed"])
+                self.assertFalse(receipt["capacity_diagnostic_available"])
+                self.assertEqual(receipt["warning_policy"], "disabled")
+                self.assertEqual(receipt["expected_capacity_terminal"], case == "terminal65")
+        self.assertEqual(len(compare_frames(self.frames())["regions"]), 6)
+
+    def test_disabled_warning_policy_rejects_every_warning_and_validation_error(self):
+        for case in CASES:
+            for marker in ("00:00:01.250 [WARNING]:\n" + OPEN_CAPACITY_MESSAGE, "[WARNING]: unrelated", "[ERROR]: unrelated", "VUID-invalid"):
+                with self.assertRaises(SmokeFailure):
+                    validate_runtime(self.log(case, warning_policy="disabled") + "\n" + marker, case, "hardware", 120, "disabled")
+        with self.assertRaises(SmokeFailure):
+            validate_runtime(self.log("terminal65", warning_policy="disabled"), "terminal65", "hardware", 120)
+
+    def test_warning_policy_is_explicit_and_independent_of_gpu_validation(self):
+        base = ["--executable", "smoke", "--working-directory", ".", "--output-directory", ".", "--route", "software"]
+        for invalid in ([], ["--warning-policy", "unknown"]):
+            with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                parse_args(base + invalid)
+        disabled = parse_args(base + ["--warning-policy", "disabled", "--gpu-validation"])
+        receipt = validate_runtime(self.log("terminal65", warning_policy="disabled"), "terminal65", "hardware", 120, disabled.warning_policy)
+        self.assertIsNone(receipt["diagnostic_flags"])
+        self.assertFalse(receipt["diagnostic_flags_observed"])
+        enabled = parse_args(base + ["--warning-policy", "enabled", "--no-gpu-validation"])
+        with self.assertRaises(SmokeFailure):
+            validate_runtime(self.log("terminal65", warning_policy="disabled"), "terminal65", "hardware", 120, enabled.warning_policy)
 
     def test_multiline_warning_cannot_waive_prefix_suffix_or_detached_message(self):
         self.assertEqual(validate_runtime(self.log("terminal65"), "terminal65", "hardware", 120)["diagnostic_flags"], 16)

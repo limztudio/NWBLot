@@ -492,72 +492,7 @@ struct MeshletState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RayTracingPipelineShaderDesc{
-    ShaderHandle shader;
-    BindingLayoutHandle bindingLayout;
-    // Borrowed until pipeline creation; retained descriptions refer to pipeline-owned group metadata.
-    AStringView exportName;
-
-    ~RayTracingPipelineShaderDesc();
-
-    RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value)noexcept;
-    RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value)noexcept;
-    RayTracingPipelineShaderDesc& setExportName(AStringView value)noexcept{ exportName = value; return *this; }
-};
-
-struct RayTracingPipelineHitGroupDesc{
-    ShaderHandle closestHitShader;
-    ShaderHandle anyHitShader;
-    ShaderHandle intersectionShader;
-    BindingLayoutHandle bindingLayout;
-    // Borrowed until pipeline creation; retained descriptions refer to pipeline-owned group metadata.
-    AStringView exportName;
-    bool isProceduralPrimitive = false;
-
-    ~RayTracingPipelineHitGroupDesc();
-
-    RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value)noexcept;
-    RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value)noexcept;
-    RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value)noexcept;
-    RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value)noexcept;
-    RayTracingPipelineHitGroupDesc& setExportName(AStringView value)noexcept{ exportName = value; return *this; }
-    constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value)noexcept{ isProceduralPrimitive = value; return *this; }
-};
-
-struct RayTracingPipelineDesc{
-    GraphicsVector<RayTracingPipelineShaderDesc> shaders;
-    GraphicsVector<RayTracingPipelineHitGroupDesc> hitGroups;
-    BindingLayoutVector globalBindingLayouts;
-    u32 maxPayloadSize = 0;
-    u32 maxAttributeSize = sizeof(f32) * 2; // typical case: float2 uv;
-    u32 maxRecursionDepth = 1;
-    i32 hlslExtensionsUAV = -1;
-    bool allowOpacityMicromaps = false;
-    bool allowClusterAccelerationStructures = false;
-    bool allowSpheres = false;
-    bool allowLinearSweptSpheres = false;
-
-    explicit RayTracingPipelineDesc(GraphicsArena& arena)
-        : shaders(arena)
-        , hitGroups(arena)
-    {}
-    ~RayTracingPipelineDesc();
-
-    RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value);
-    RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value);
-    RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value);
-    constexpr RayTracingPipelineDesc& setMaxPayloadSize(u32 value)noexcept{ maxPayloadSize = value; return *this; }
-    constexpr RayTracingPipelineDesc& setMaxAttributeSize(u32 value)noexcept{ maxAttributeSize = value; return *this; }
-    constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value)noexcept{ maxRecursionDepth = value; return *this; }
-    constexpr RayTracingPipelineDesc& setHlslExtensionsUAV(i32 value)noexcept{ hlslExtensionsUAV = value; return *this; }
-    constexpr RayTracingPipelineDesc& setAllowOpacityMicromaps(bool value)noexcept{ allowOpacityMicromaps = value; return *this; }
-    constexpr RayTracingPipelineDesc& setAllowClusterAccelerationStructures(bool value)noexcept{ allowClusterAccelerationStructures = value; return *this; }
-    constexpr RayTracingPipelineDesc& setAllowSpheres(bool value)noexcept{ allowSpheres = value; return *this; }
-    constexpr RayTracingPipelineDesc& setAllowLinearSweptSpheres(bool value)noexcept{ allowLinearSweptSpheres = value; return *this; }
-};
-
 typedef GraphicsBackend::Handle<RayTracingShaderTable> RayTracingShaderTableHandle;
-typedef GraphicsBackend::Handle<RayTracingPipeline> RayTracingPipelineHandle;
 
 inline constexpr u32 s_InvalidRayTracingShaderTableRecordIndex = Limit<u32>::s_Max;
 

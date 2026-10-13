@@ -7,3 +7,4 @@ target_sources(nwb_math_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/vector_rounding
 target_link_libraries(nwb_math_tests PRIVATE nwb_common nwb_alloc)
 target_sources(nwb_math_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/current_contract_boundary_tests.cpp")
 target_sources(nwb_math_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/frustum_affine_boundary_tests.cpp")
+target_sources(nwb_math_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/geometry_boundary_tests.cpp")

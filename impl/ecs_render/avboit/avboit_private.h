@@ -17,7 +17,7 @@
 #include <impl/ecs_render/avboit/renderer_avboit_state.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>
-#include <impl/assets/graphics/avboit/names.h>
+#include <impl/assets_graphics/avboit/names.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>

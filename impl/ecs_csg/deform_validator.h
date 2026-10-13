@@ -23,8 +23,6 @@ public:
     [[nodiscard]] static bool FiniteFloat(const f32 value)noexcept;
     [[nodiscard]] static bool FiniteVertexVec(const SIMDVectorSingle position, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle uv0, const SIMDVectorSingle color)noexcept;
     [[nodiscard]] static bool FiniteVertex(const CsgDeformVertex& vertex)noexcept;
-    [[nodiscard]] static SIMDVectorSingle SaturateVec(const SIMDVectorSingle value)noexcept;
-    [[nodiscard]] static SIMDVectorSingle AbsDivideVec(const SIMDVectorSingle numerator, const SIMDVectorSingle denominator)noexcept;
     [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept;
     [[nodiscard]] static bool ValidOptions(const CsgDeformBuildOptions& options)noexcept;
     [[nodiscard]] static bool ValidTopology(NotNull<const CsgDeformTriangle*> triangles, const usize triangleCount, const usize vertexCount)noexcept;

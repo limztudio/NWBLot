@@ -63,7 +63,7 @@ Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::
     auto glyphs = Rasterize(source, options);
     if(!glyphs || !PackGlyphs(options, *glyphs, candidate, scratch) || !ExportPositioning(source, candidate))
         return MakeUnexpected(Failure{});
-    if(!Impl::ValidateFontAtlasPayload(candidate))
+    if(!Impl::ValidateFontAtlasPayload(candidate, scratch))
         return MakeUnexpected(Failure{});
     return candidate;
 }

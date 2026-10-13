@@ -90,10 +90,10 @@ public:
     struct DefineEntry{
         CookVector<CookString> values;
 
-        explicit DefineEntry(CookArena& memoryArena)
+        explicit DefineEntry(CookArena& memoryArena)noexcept
             : values(memoryArena)
         {}
-        explicit DefineEntry(CookVector<CookString>&& inValues)
+        explicit DefineEntry(CookVector<CookString>&& inValues)noexcept
             : values(Move(inValues))
         {}
     };
@@ -135,16 +135,6 @@ public:
 
 
 private:
-    struct SortedDependencyItem{
-        CookString canonicalPath;
-        Path path;
-
-        explicit SortedDependencyItem(CookArena& arena)
-            : canonicalPath(arena)
-            , path(arena)
-        {}
-    };
-
     template<typename MapT>
     struct DefineEntryPtr{
         const typename MapT::key_type* key;
@@ -169,7 +159,7 @@ public:
 
     bool validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
 
-    void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata);
+    void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena);
 
     bool gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, Span<const AStringView> externallyPlannedMacroIncludes, CookVector<Path>& outDependencies, Core::Alloc::ScratchArena& scratchArena);
 
@@ -194,7 +184,7 @@ private:
         entries.reserve(map.size());
         for(const auto& [name, value] : map)
             entries.push_back(EntryPtr{ &name, &value });
-        Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs){ return *lhs.key < *rhs.key; });
+        Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs)noexcept(noexcept(*lhs.key < *rhs.key)){ return *lhs.key < *rhs.key; });
         return entries;
     }
 

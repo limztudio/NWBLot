@@ -9,6 +9,11 @@
 #include "runtime_cache.h"
 #include "submission_state.h"
 
+#include <impl/assets/graphics/skinned_mesh/constants.h>
+#include <impl/ecs_mesh/runtime/mesh.h>
+#include <impl/ecs_mesh/components.h>
+#include <impl/ecs_skeleton/components.h>
+
 #include <core/alloc/scratch.h>
 #include <core/ecs/system.h>
 #include <core/graphics/runtime/render_pass.h>
@@ -17,10 +22,6 @@
 #include <core/task/gpu/packet_runtime.h>
 #include <core/task/gpu/persistent_state.h>
 #include <core/task/gpu/types.h>
-#include <impl/assets/graphics/skinned_mesh/constants.h>
-#include <impl/ecs_mesh/runtime/mesh.h>
-#include <impl/ecs_mesh/components.h>
-#include <impl/ecs_skeleton/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,10 +157,10 @@ private:
 
         [[nodiscard]] bool usesSkinning()const noexcept{ return skinCount != 0u && jointCount != 0u; }
         [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const{
-            const auto storageHandle = [](const Core::GpuDescriptorHandle handle){
+            const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
             };
-            const auto uniformHandle = [](const Core::GpuDescriptorHandle handle){
+            const auto uniformHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
             };
             const bool common =

@@ -26,12 +26,12 @@ NWB_FBX_TO_NWB_BEGIN
 
 class FbxMeshBuild final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVectorSingle ToVector(const ufbx_vec3 value, const f32 w = 0.0f);
-    [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position);
-    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex);
-    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex);
-    [[nodiscard]] static Expected<SIMDVectorSingle> BuildCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal);
-    [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVectorSingle weights);
+    [[nodiscard]] static SIMDVectorSingle ToVector(const ufbx_vec3 value, const f32 w = 0.0f)noexcept;
+    [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position)noexcept;
+    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
+    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
+    [[nodiscard]] static Expected<SIMDVectorSingle> BuildCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept;
+    [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept;
     [[nodiscard]] static bool IsFiniteSourceTriangleCorner(
         const SIMDVectorSingle position,
         const SIMDVectorSingle normal,
@@ -41,7 +41,7 @@ public:
         const bool hasTangent,
         const bool wantsSkinning,
         const SIMDVectorSingle skinWeights
-    );
+    )noexcept;
     template<typename VisitTriangle>
     [[nodiscard]] static bool VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, UtilityVector<u32>& inOutTriangleIndices, VisitTriangle&& visitTriangle);
     [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, UtilityVector<u32>& inOutTriangleIndices);

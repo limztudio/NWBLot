@@ -25,6 +25,10 @@
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/task_graph_stage.h>
+#include <impl/assets/graphics/mesh/binding_slots.h>
+#include <impl/assets_material/asset.h>
+#include <impl/ecs_csg/frame_state.h>
+#include <impl/ecs_csg/shape_registry.h>
 
 #include <core/ecs/system.h>
 #include <core/graphics/gpu_timing.h>
@@ -36,10 +40,6 @@
 #include <core/task/gpu/output_layer_contributor.h>
 #include <core/task/gpu/queue_assignment_telemetry.h>
 #include <core/telemetry/frame_graph_contributor.h>
-#include <impl/assets/graphics/mesh/binding_slots.h>
-#include <impl/assets_material/asset.h>
-#include <impl/ecs_csg/frame_state.h>
-#include <impl/ecs_csg/shape_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,9 +84,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_DEBUG)
-struct MaterialTypedInstanceRangeVector;
-#endif
 // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived cross-queue frontier.
 // Each stage points at a rebindable timing slot so the renderer can attach one ticket to every actual packet after compilation.
 namespace DeferredGraphicsPrefixTimingSlot{
@@ -206,6 +203,7 @@ private:
     void resetFrameTargets();
     void resetDeferredTaskGraphRuntime();
     void resetFrameTaskState();
+    void resetDeferredCausticsTaskState()noexcept;
     void resetSharedDeferredFrameTaskState();
     void resetGraphicsPrefixTaskState()noexcept;
     // Accepted cross-frame scratch and producer-return state survives ordinary recording attempts. Reset it only when the imported target/resource generation changes.

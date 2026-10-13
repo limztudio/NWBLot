@@ -140,13 +140,13 @@ inline constexpr FileFormatFlags s_FileFormatFloatField = std::ios::floatfield;
 
 template<typename ArenaT>
 struct StagedDirectoryPaths{
+    Path<ArenaT> stageDirectory;
+    Path<ArenaT> backupDirectory;
+
     explicit StagedDirectoryPaths(ArenaT& arena)
         : stageDirectory(arena)
         , backupDirectory(arena)
     {}
-
-    Path<ArenaT> stageDirectory;
-    Path<ArenaT> backupDirectory;
 };
 
 
@@ -207,7 +207,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Path<ArenaT> LexicallyNormal(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Path<ArenaT> LexicallyNormal(const Path<ArenaT>& path){
     return path.lexicallyNormal();
 }
 

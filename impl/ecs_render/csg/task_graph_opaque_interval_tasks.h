@@ -92,18 +92,7 @@ struct CsgReceiverSpanBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     struct Payload : public CsgOpaqueIntervalRecordInputs{
-
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererMaterialSystem& materialSystemIn,
-            RendererCsgSystem& csgSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const bool& meshViewSetupReadyIn,
-            const bool& sceneShadingSetupReadyIn
-        )
-            : CsgOpaqueIntervalRecordInputs(arena, materialSystemIn, csgSystemIn, targetsIn, timingTicketIn, meshViewSetupReadyIn, sceneShadingSetupReadyIn)
-        {}
+        using CsgOpaqueIntervalRecordInputs::CsgOpaqueIntervalRecordInputs;
     };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
@@ -115,18 +104,7 @@ struct CsgIntervalCombineGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     struct Payload : public CsgOpaqueIntervalRecordInputs{
-
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererMaterialSystem& materialSystemIn,
-            RendererCsgSystem& csgSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const bool& meshViewSetupReadyIn,
-            const bool& sceneShadingSetupReadyIn
-        )
-            : CsgOpaqueIntervalRecordInputs(arena, materialSystemIn, csgSystemIn, targetsIn, timingTicketIn, meshViewSetupReadyIn, sceneShadingSetupReadyIn)
-        {}
+        using CsgOpaqueIntervalRecordInputs::CsgOpaqueIntervalRecordInputs;
     };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);

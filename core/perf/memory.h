@@ -66,7 +66,7 @@ struct MemoryDelta{
     [[nodiscard]] bool valid()const noexcept{ return hasSamples; }
 };
 
-[[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const ::ArenaMemoryStats& stats, const MemorySource::Enum source = MemorySource::ExplicitScope){
+[[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const ::ArenaMemoryStats& stats, const MemorySource::Enum source = MemorySource::ExplicitScope)noexcept{
     MemorySnapshot snapshot;
     snapshot.scopeName = scopeName;
     snapshot.source = source;
@@ -81,7 +81,7 @@ struct MemoryDelta{
 }
 
 template<typename Arena>
-[[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const Arena& arena){
+[[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const Arena& arena)noexcept(noexcept(MakeMemorySnapshot(scopeName, frameIndex, arena.memoryStats()))){
     return MakeMemorySnapshot(scopeName, frameIndex, arena.memoryStats());
 }
 

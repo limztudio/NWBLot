@@ -112,7 +112,8 @@ protected:
         group.pixels.resize(8u * 8u * 4u, 128u);
         group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
         m_asset.setPayload(Move(payload));
-        ASSERT_TRUE(m_asset.validatePayload());
+        Core::Alloc::ScratchArena scratchArena(Name("tests/ui/text/glyph_visibility/validation_scratch"));
+        ASSERT_TRUE(m_asset.validatePayload(scratchArena));
         m_atlas = CreateBakedFontAtlas(m_arena, m_asset, 1u);
         ASSERT_TRUE(m_atlas);
     }

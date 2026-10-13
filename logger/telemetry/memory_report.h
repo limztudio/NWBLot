@@ -6,6 +6,7 @@
 
 
 #include <logger/global.h>
+
 #include <core/telemetry/perf.h>
 
 
@@ -63,7 +64,7 @@ inline constexpr char s_JsonRecordClose = '}';
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Telemetry::PerfMemoryPayload& payload);
+void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Telemetry::PerfMemoryPayload& payload)noexcept;
 void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& out, const TelemetryReportSummary& summary);
 void AppendTelemetryMemoryRecordJson(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::PerfMemoryPayload& payload, u32 streamId);
 

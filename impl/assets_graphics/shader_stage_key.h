@@ -37,7 +37,7 @@ struct ShaderStageKey{
 };
 
 struct ShaderStageKeyHasher{
-    usize operator()(const ShaderStageKey& key)const{
+    usize operator()(const ShaderStageKey& key)const noexcept{
         usize seed = Hasher<Name>{}(key.shaderName);
         ::HashCombine(seed, key.stageName);
         return seed;

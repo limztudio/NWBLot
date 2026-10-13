@@ -137,7 +137,7 @@ bool BackendContext::abandonAcquiredFrame(){
     if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
         return false;
     UniqueLock<Futex> presentationLock(m_framePresentationMutex);
-    m_framePresentationCondition.wait(presentationLock, [this](){
+    m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
     });
     if(!m_frameAcquired)

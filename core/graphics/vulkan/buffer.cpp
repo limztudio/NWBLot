@@ -8,6 +8,8 @@
 
 #include <core/common/log.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -230,12 +232,17 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
         return VK_NULL_HANDLE;
     }
 
+    ScopeExit releaseUnpublishedView([this, view]()noexcept{
+        m_context.deviceDispatch.vkDestroyBufferView(m_context.device, view, m_context.allocationCallbacks);
+    });
+
     BufferViewEntry entry;
     entry.format = format;
     entry.byteOffset = byteOffset;
     entry.byteSize = resolvedSize;
     entry.view = view;
     m_bufferViews.push_back(entry);
+    releaseUnpublishedView.release();
 
     return view;
 }
@@ -324,7 +331,9 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
     bufferInfo.pQueueFamilyIndices = sharingInfo.data();
 
-    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, d, bufferInfo, true);
+    BufferHandle buffer(NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, d, bufferInfo, true), BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!buffer)
+        return nullptr;
     if(d.isVolatile)
         buffer->m_versionTracking.resize(d.maxVersions);
 
@@ -335,13 +344,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: native buffer identity is already registered"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: A newly created buffer duplicated a live native buffer identity"));
-        DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }
 
@@ -354,7 +361,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         }
     }
 
-    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return buffer;
 }
 
 Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize dataSize, TStringView operationName, const u32 alignment){

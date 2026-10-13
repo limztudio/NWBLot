@@ -9,6 +9,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/gpu_timing.h>
+
 #include <global/exception.h>
 #include <global/termination.h>
 
@@ -29,6 +30,10 @@ namespace GpuPacketRuntimeDetail{
 
 
 static Atomic<u64> s_NextAcceptanceRevision{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 u64 AllocateAcceptanceRevision()noexcept{
     u64 nextRevision = s_NextAcceptanceRevision.load(MemoryOrder::relaxed);
@@ -117,6 +122,9 @@ inline constexpr u32 s_ReaderMask = s_WriterBit - 1u;
 
 
 thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_ActiveOperation = nullptr;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, const SubmissionOperationMode mode, const GpuRecordedGraph::ArtifactOperation* const borrowedArtifact)noexcept{

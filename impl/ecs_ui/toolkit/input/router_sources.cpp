@@ -37,7 +37,7 @@ bool InputRouter::ownsSource(const InputSource& source)const noexcept{
     return held && held->consumed;
 }
 
-void InputRouter::cancelDeviceInput(const u64 device){
+void InputRouter::cancelDeviceInput(const u64 device)noexcept{
     if(m_activePointerSource.valid() && m_activePointerSource.device == device)
         terminatePointerSource(m_activePointerSource);
     for(usize index = m_pointerSources.size(); index > 0u; --index){
@@ -69,7 +69,7 @@ void InputRouter::cancelDeviceInput(const u64 device){
     }
 }
 
-bool InputRouter::canEditCommand(const InputEvent& event)const{
+bool InputRouter::canEditCommand(const InputEvent& event)const noexcept{
     if(event.type != InputEventType::CommandDown || !event.edit)
         return false;
     const CommandSource* source = findCommandSource(event.source);

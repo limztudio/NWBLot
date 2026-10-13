@@ -33,8 +33,8 @@ public:
 public:
     [[nodiscard]] f64 value()const noexcept{ return m_value; }
     [[nodiscard]] const EditModel& draft()const noexcept{ return m_draft; }
-    [[nodiscard]] NumericParseStatus::Enum status(const FloatBounds& bounds = {})const;
-    [[nodiscard]] bool dirty()const;
+    [[nodiscard]] NumericParseStatus::Enum status(const FloatBounds& bounds = {})const noexcept;
+    [[nodiscard]] bool dirty()const noexcept;
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
     // Neither the returned reference nor a view into it may outlive the synchronous edit operation.
     [[nodiscard]] EditModel& lendDraft()noexcept{ return m_draft; }

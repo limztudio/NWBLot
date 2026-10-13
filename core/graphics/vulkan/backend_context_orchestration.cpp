@@ -54,7 +54,7 @@ bool BackendContext::createDevice(){
         m_maxFramesInFlight = 1;
     }
 
-    auto resolveDeviceExtensionFeature = [this](const AStringView name)->DeviceExtensionFeature::Enum{
+    auto resolveDeviceExtensionFeature = [this](const AStringView name)noexcept->DeviceExtensionFeature::Enum{
         // Feature metadata remains canonical even when policy removes an extension from the default optional set.
         // A caller that names that extension explicitly must still receive coherent feature query/enable handling.
         for(const ExtEntry& entry : s_OptionalDeviceExts){
@@ -129,12 +129,12 @@ bool BackendContext::createDevice(){
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, physicalQueueFamilies.data());
-    const auto queueCapabilitiesForFamily = [&physicalQueueFamilies](const i32 queueFamily){
+    const auto queueCapabilitiesForFamily = [&physicalQueueFamilies](const i32 queueFamily)noexcept{
         if(queueFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size())
             return GpuQueueCapability::None;
         return VulkanDetail::QueueCapabilitiesForQueueFlags(physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags);
     };
-    const auto timestampValidBitsForFamily = [&physicalQueueFamilies](const i32 queueFamily){
+    const auto timestampValidBitsForFamily = [&physicalQueueFamilies](const i32 queueFamily)noexcept{
         if(queueFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size())
             return 0u;
         return physicalQueueFamilies[static_cast<usize>(queueFamily)].timestampValidBits;

@@ -8,13 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <CLI.hpp>
-
-#include <core/common/command_line.h>
-#include <global/terminal_entry.h>
-#include <core/common/module.h>
 #include "module.h"
 #include "frame.h"
+
+#include <core/common/command_line.h>
+#include <core/common/module.h>
+
+#include <global/terminal_entry.h>
+
+#include <CLI.hpp>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,7 +73,7 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
     }, [&](const GeneralException& error){
         logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(logger.arena(), error.what())), NWB::Core::Common::LogType::Fatal);
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
-    }, [](){ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
+    }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
 
 
@@ -97,7 +99,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         CommandLineParseApp(app, argc, argv);
 
         return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, AStringView(crashUploadToken.data(), crashUploadToken.size()), inst);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
 
 

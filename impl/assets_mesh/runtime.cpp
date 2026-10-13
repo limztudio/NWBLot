@@ -8,7 +8,6 @@
 #include "binary_payload.h"
 #include "meshlet_ref_codec.h"
 #include "meshlet_payload_packing.h"
-#include "payload_validation.h"
 #include "meshlet_ref_validation.h"
 #include "runtime_validation.h"
 #include "runtime_validation_diagnostics.h"
@@ -59,8 +58,6 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!checkVirtualPath(MeshBinaryPayload::s_MeshLoadBinaryContext))
         return false;
 
-    clearGeometryPayload();
-
     const TStringView loadFailureContext = MeshBinaryPayload::s_MeshLoadBinaryContext;
     usize cursor = 0;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryPayload::MeshHeaderBinary>(binary, cursor, MeshBinaryPayload::s_MeshMagic, loadFailureContext, MeshBinaryPayload::s_MeshAssetKindLabel);
@@ -81,14 +78,18 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!readGeometryAttributeStreams(binary, cursor, header, loadFailureContext))
+    Mesh candidate(m_positionStream.get_allocator().arena(), virtualPath());
+    if(!candidate.readGeometryAttributeStreams(binary, cursor, header, loadFailureContext))
         return false;
-    if(!readGeometryMeshletStreams(binary, cursor, header, loadFailureContext))
+    if(!candidate.readGeometryMeshletStreams(binary, cursor, header, loadFailureContext))
         return false;
     if(!Core::Assets::ReadCompletePayload(binary, cursor, loadFailureContext))
         return false;
 
-    return validatePayload();
+    if(!candidate.validatePayload())
+        return false;
+    *this = Move(candidate);
+    return true;
 }
 
 

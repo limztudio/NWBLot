@@ -52,11 +52,11 @@ static_assert(IsTriviallyCopyable_V<TextureMipLevel>, "Texture mip level must st
 
 class Texture final : public Core::Assets::TypedAsset<Texture>{
 public:
-    NWB_DEFINE_ASSET_TYPE("texture")
+    using MipLevelVector = Core::Assets::AssetVector<TextureMipLevel>;
 
 
 public:
-    using MipLevelVector = Core::Assets::AssetVector<TextureMipLevel>;
+    NWB_DEFINE_ASSET_TYPE("texture")
 
 
 public:
@@ -72,8 +72,8 @@ public:
 
 
 public:
-    bool loadBinary(const Core::Assets::AssetBytes& binary);
     [[nodiscard]] bool validatePayload()const;
+    bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 public:
     void setPayload(

@@ -3,6 +3,8 @@
 
 
 #include "paint_image_fixture.h"
+#include "paint_assertions.h"
+#include "image_fixture_support.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,28 +91,11 @@ void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expect
             EXPECT_EQ(am.sliceCount, em.sliceCount);
         }
     }
-    for(usize index = 0u; index < actual.vertices().size(); ++index){
-        const Vertex& a = actual.vertices()[index];
-        const Vertex& e = expected.vertices()[index];
-        EXPECT_FLOAT_EQ(a.position.x, e.position.x);
-        EXPECT_FLOAT_EQ(a.position.y, e.position.y);
-        EXPECT_FLOAT_EQ(a.texCoord.x, e.texCoord.x);
-        EXPECT_FLOAT_EQ(a.texCoord.y, e.texCoord.y);
-        EXPECT_FLOAT_EQ(a.color.r, e.color.r);
-        EXPECT_FLOAT_EQ(a.color.g, e.color.g);
-        EXPECT_FLOAT_EQ(a.color.b, e.color.b);
-        EXPECT_FLOAT_EQ(a.color.a, e.color.a);
-    }
+    UiPaintAssertions::ExpectSameVertices(actual, expected);
     for(usize index = 0u; index < actual.commands().size(); ++index){
         const DrawCommand& a = actual.commands()[index];
         const DrawCommand& e = expected.commands()[index];
-        EXPECT_EQ(a.firstIndex, e.firstIndex);
-        EXPECT_EQ(a.indexCount, e.indexCount);
-        EXPECT_EQ(a.material, e.material);
-        EXPECT_EQ(a.glyphPageIndex, e.glyphPageIndex);
-        EXPECT_EQ(a.sdfPageIndex, e.sdfPageIndex);
-        EXPECT_EQ(a.sdfChannel, e.sdfChannel);
-        EXPECT_EQ(a.layer, e.layer);
+        UiPaintAssertions::ExpectSameCommandFields(a, e);
         EXPECT_EQ(a.textureImageIndex, e.textureImageIndex);
         ExpectRect(a.clip, e.clip);
     }
@@ -171,32 +156,7 @@ SharedSdfAtlasPage PaintImageFixture::makeSdf(const u64 atlasIdentity){
 SharedImageSource PaintImageFixture::makeImage(const StringView path, const u8 seed, const u32 width, const u32 height){
     if(path.empty() || width == 0u || height == 0u)
         return {};
-    const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u);
-    if(!mipCount)
-        return {};
-    Texture::MipLevelVector mips(m_arena);
-    mips.reserve(*mipCount);
-    u32 mipWidth = width;
-    u32 mipHeight = height;
-    u64 offset = 0u;
-    for(u32 index = 0u; index < *mipCount; ++index){
-        const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight);
-        if(!plane)
-            return {};
-        mips.push_back({ mipWidth, mipHeight, plane->blocksX, plane->blocksY, offset, plane->planeByteCount, 1u });
-        offset += plane->planeByteCount;
-        mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
-        mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
-    }
-    if(offset > Limit<usize>::s_Max)
-        return {};
-    Core::Assets::AssetBytes bytes(m_arena);
-    bytes.resize(static_cast<usize>(offset));
-    for(usize index = 0u; index < bytes.size(); ++index)
-        bytes[index] = static_cast<u8>(static_cast<u32>(seed) + index * 17u);
-    Texture texture(m_arena, Name(path));
-    texture.setPayload(TextureColorSpace::Srgb, true, width, height, Move(mips), Move(bytes), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
-    return MakeImageSource(m_arena, texture);
+    return UiFixtureSupport::MakeSeededImage(m_arena, path, seed, width, height);
 }
 
 

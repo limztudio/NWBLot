@@ -37,7 +37,7 @@ struct PreparedFontImageGroup{
     Core::Assets::AssetBytes pixels;
 
 
-    explicit PreparedFontImageGroup(Core::Assets::AssetArena& arena)
+    explicit PreparedFontImageGroup(Core::Assets::AssetArena& arena)noexcept
         : pixels(arena)
     {}
 };
@@ -49,7 +49,7 @@ struct PreparedFontSource{
     Sha256Digest fontSha256;
 
 
-    explicit PreparedFontSource(Core::Assets::AssetArena& arena)
+    explicit PreparedFontSource(Core::Assets::AssetArena& arena)noexcept
         : fontBytes(arena)
         , groups(arena)
     {}

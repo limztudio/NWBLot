@@ -227,14 +227,6 @@ void RendererRayTracingSystem::logCapabilityOnce(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::shadowVisibilityResourcesPreflighted()const noexcept{
-    return m_shadowVisibilityResourcesPreflighted;
-}
-
-bool RendererRayTracingSystem::shadowVisibilityHardwareSupported()const noexcept{
-    return m_shadowVisibilityHardwareSupported;
-}
-
 bool RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
     return m_shadowVisibilityTraceResourcesPreflighted && !m_shadowVisibilityHardwareSupported;
 }

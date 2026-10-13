@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
+
 #include <core/common/log.h>
 #include <core/task/gpu/task_graph.h>
 

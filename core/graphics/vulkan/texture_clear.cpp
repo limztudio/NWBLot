@@ -193,7 +193,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         return;
     }
 
-    if(VulkanTextureDetail::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)){
+    if(VulkanTextureDetail::TextureClearBoxFullyCoversSubresources(desc, resolvedSubresources, box)){
         clearDepthStencilTexture(texture, resolvedSubresources, clearDepth, depth, clearStencil, stencil);
         return;
     }

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/avboit/compute_effect_record_inputs.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
@@ -174,14 +175,7 @@ struct AvboitIntegrationGraphTask{
     // The avboit system, the frame targets, and the timing ticket are required: integration always dispatches against this frame's targets.
     // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
     // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
-    struct Payload{
-        RendererAvboitSystem& avboitSystem;
-        AvboitFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        RendererTaskTimingFeedback* timingFeedback = nullptr;
-        const Core::GpuTimingScopeDefinition* timingScope = nullptr;
-        mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-    };
+    using Payload = AvboitComputeEffectRecordInputs;
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 

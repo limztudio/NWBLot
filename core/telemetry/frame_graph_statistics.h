@@ -6,6 +6,7 @@
 
 
 #include "recorder.h"
+
 #include <global/expected.h>
 
 
@@ -232,6 +233,7 @@ struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 inheritedTimelineWaitElisionCount = 0u;
     f64 submissionSeconds = 0.0;
 };
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

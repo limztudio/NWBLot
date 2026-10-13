@@ -3,19 +3,18 @@
 
 
 #include "task_graph_refraction_capture.h"
+#include "generated_geometry_reuse.h"
 
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
-
-#include "generated_geometry_reuse.h"
-
-#include <core/graphics/backend_selection/backend.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/graphics/backend_selection/backend.h>
 
 #include <global/basic_string.h>
 

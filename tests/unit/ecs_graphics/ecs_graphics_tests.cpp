@@ -143,7 +143,7 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     NWB::Tests::TestArena<> arena;
     NWB::Impl::CsgShapeRegistry registry(arena.arena);
     ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-    NWB::Impl::CsgShapeTypeInfo shape;
+    NWB::Impl::CsgShapeTypeInfo shape(arena.arena);
     const auto foundShape1 = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
     ASSERT_TRUE(foundShape1);
     shape = *foundShape1;
@@ -181,7 +181,7 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     NWB::Tests::TestArena<> arena;
     NWB::Impl::CsgShapeRegistry registry(arena.arena);
     ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-    NWB::Impl::CsgShapeTypeInfo shape;
+    NWB::Impl::CsgShapeTypeInfo shape(arena.arena);
     const auto foundShape2 = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
     ASSERT_TRUE(foundShape2);
     shape = *foundShape2;
@@ -217,7 +217,7 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     NWB::Impl::CsgShapeTypeDesc custom = shape.desc;
     custom.name = Name("tests/csg/finite_custom_cutter");
     custom.shaderModule = Name("tests/csg/finite_custom_cutter_eval");
-    custom.shaderModuleInclude = ACompactString("tests/csg/finite_custom_cutter_eval.slangi");
+    custom.shaderModuleInclude = "tests/csg/finite_custom_cutter_eval.slangi";
     const auto customId = registry.registerShapeType(custom);
     ASSERT_TRUE(customId);
     const auto foundShape5 = registry.findShapeType(*customId);

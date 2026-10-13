@@ -8,11 +8,9 @@
 #include "sampling_sequence.h"
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
-
-#include <core/graphics/backend_selection/backend.h>
-
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
+#include <core/graphics/backend_selection/backend.h>
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/capture/command_ir.h>

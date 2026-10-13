@@ -13,9 +13,9 @@
 #include <impl/ecs_render/raytrace/software_transparent_sampling.h>
 #include <impl/ecs_render/shadow/transparent_sampling_history.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
+#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 
 #include <core/graphics/rhi/device.h>
-#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 
 #include <global/containers.h>
 

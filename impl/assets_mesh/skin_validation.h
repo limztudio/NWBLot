@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "payload_validation.h"
 #include "skin_types.h"
 
 

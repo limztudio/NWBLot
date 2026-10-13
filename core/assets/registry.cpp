@@ -5,6 +5,7 @@
 #include "registry.h"
 
 #include <core/common/log.h>
+
 #include <global/assert.h>
 #include <global/not_null.h>
 
@@ -49,7 +50,10 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
         return true;
     }
 
-    m_codecs.emplace(typeName, Move(codec));
+    if(!m_codecs.emplace(typeName, Move(codec)).second){
+        NWB_ASSERT(false);
+        return false;
+    }
     return true;
 }
 

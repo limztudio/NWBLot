@@ -21,7 +21,7 @@ GpuTaskGraph::DiscardNotificationScope::DiscardNotificationScope(const GpuTaskGr
     : m_graph(graph)
 {}
 
-GpuTaskGraph::DiscardNotificationScope::~DiscardNotificationScope(){
+GpuTaskGraph::DiscardNotificationScope::~DiscardNotificationScope()noexcept{
     complete();
 }
 
@@ -82,7 +82,7 @@ GpuTaskGraph::PacketRecordingAbort::PacketRecordingAbort(PacketRecordingAbort&& 
     other.reset();
 }
 
-GpuTaskGraph::PacketRecordingAbort::~PacketRecordingAbort(){
+GpuTaskGraph::PacketRecordingAbort::~PacketRecordingAbort()noexcept{
     if(valid()){
         NWB_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
         TerminateInvariant();
@@ -427,15 +427,7 @@ bool GpuTaskGraph::completePacketRecordingAbort(const GpuCompiledGraph& compiled
         }
         notification.activateWithinLock();
         notification.adoptPacketRecordingClaimWithinLock();
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.lifecycleState = TaskLifecycleState::Discarded;
-            task.recordingClaimGeneration = 0u;
-            task.submissionClaimGeneration = 0u;
-            task.discardNotificationGeneration = notificationGeneration;
-            task.recordThunkInProgress = false;
-            task.recordThunkCompleted = false;
-        }
+        discardPacketTasksWithinLock(packetPlan, tasks, notificationGeneration);
         abort.reset();
     }
 

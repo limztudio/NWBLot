@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+
 #include <core/assets/module.h>
 
 

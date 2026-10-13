@@ -27,14 +27,14 @@ namespace __hidden_builder_text_area{
 
 class TextAreaActions final : public IEditActionSink{
 public:
-    TextAreaActions(const EditModel& model, const TextAreaState& state, const Context& context)
+    TextAreaActions(const EditModel& model, const TextAreaState& state, const Context& context)noexcept
         : m_model(model)
         , m_state(state)
         , m_context(context)
         , m_instanceGeneration(model.instanceGeneration())
         , m_revision(state.revision())
     {}
-    virtual ~TextAreaActions()override = default;
+    virtual ~TextAreaActions()noexcept override = default;
 
 
 public:

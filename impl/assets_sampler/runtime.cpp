@@ -48,8 +48,6 @@ bool Sampler::validatePayload()const{
 }
 
 bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
-    m_description = {};
-
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, cursor, SamplerBinaryPayload::s_SamplerMagic, NWB_TEXT("Sampler::loadBinary"), NWB_TEXT("sampler"));
     if(!headerResult)
@@ -82,8 +80,10 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Sampler::loadBinary")))
         return false;
 
+    if(!checkVirtualPath(NWB_TEXT("Sampler::validatePayload")))
+        return false;
     m_description = description;
-    return validatePayload();
+    return true;
 }
 
 

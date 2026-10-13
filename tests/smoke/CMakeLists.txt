@@ -44,6 +44,11 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set_tests_properties("${TEST_NAME}" PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT ${_nwb_window_capture_smoke_ctest_timeout_seconds})
     endfunction()
 
+    if(TARGET testbed)
+        nwb_add_window_capture_smoke(nwb_testbed_window_capture_smoke testbed_window_capture.bmp "$<TARGET_FILE:testbed>" "${NWB_OUTPUT_ROOT}" "NWB Testbed"
+            "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--expect-log-message" "ProjectTestbed: startup scene created" "--expect-log-message" "ProjectTestbed: shutdown")
+    endif()
+
     function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT)
         target_sources("${TARGET_NAME}" PRIVATE "${CMAKE_CURRENT_LIST_DIR}/graphics_abi.cpp" "${CMAKE_CURRENT_LIST_DIR}/render_quality_settings.h" "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.cpp" "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.h"
             "${CMAKE_CURRENT_LIST_DIR}/surfel_gi_quality_settings.cpp" "${CMAKE_CURRENT_LIST_DIR}/surfel_gi_quality_settings.h" "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.cpp" "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.h"
@@ -381,7 +386,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             set(_nwb_csg_temporal_test "nwb_csg_gi_${TEST_SUFFIX}_smoke")
             add_test(NAME "${_nwb_csg_temporal_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_temporal_smoke.py" "--executable" "$<TARGET_FILE:nwb_csg_visible_smoke>" "--working-directory" "${_nwb_csg_visible_runtime_root}"
                     "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_${TEST_SUFFIX}" "--view" "${VIEW}" "--motion" "${MOTION}" "--route" "${ROUTE}"
-                    "--frame-interval" "${FRAME_INTERVAL}" "${_nwb_csg_temporal_check}" "--overwrite" "--gpu-validation" "--timeout" "${_nwb_csg_temporal_script_timeout_seconds}" ${_nwb_csg_temporal_logserver_args} ${ARGN})
+                    "--frame-interval" "${FRAME_INTERVAL}" "${_nwb_csg_temporal_check}" "--overwrite" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_csg_temporal_script_timeout_seconds}" ${_nwb_csg_temporal_logserver_args} ${ARGN})
             set_tests_properties("${_nwb_csg_temporal_test}" PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT ${_nwb_csg_temporal_ctest_timeout_seconds})
         endfunction()
 
@@ -469,6 +474,10 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         target_compile_definitions(nwb_skinned_caustic_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_skinned_caustic_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_skinned_caustic_smoke nwb_skinning_culling_benchmark_assets)
+
+        nwb_add_window_capture_smoke(nwb_skinned_caustic_capture_late_smoke skinned_caustic_capture_late.bmp "$<TARGET_FILE:nwb_skinned_caustic_smoke>" "${_nwb_skinning_culling_runtime_root}" "NWB Skinned Caustic Smoke"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
+            "--expect-log-message" "SkinnedCausticSmokeProject: skinned glass refractor over ground created" "--expect-log-message" "SkinnedCausticSmokeProject: shutdown")
 
         add_test(NAME nwb_skinned_caustic_csg_transition_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke.py" --executable "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
                 --working-directory "${_nwb_skinning_culling_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout 180 ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)

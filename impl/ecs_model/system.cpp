@@ -4,16 +4,18 @@
 
 #include "system.h"
 
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/entity.h>
-#include <core/ecs/world.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_mesh/components.h>
 #include <impl/ecs_scene/components.h>
 #include <impl/ecs_skeleton/components.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
+
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/entity.h>
+#include <core/ecs/world.h>
+
 #include <global/algorithm.h>
 
 
@@ -35,7 +37,7 @@ namespace __hidden_model_system{
 using AttachmentJointQuery = ModelAttachmentJointQuery;
 
 static void ResolveAttachmentJointQueries(Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, AttachmentJointQuery* const queries, const usize queryCount, const usize* const parentOrder){
-    const auto queryAt = [&](const usize index) -> AttachmentJointQuery&{
+    const auto queryAt = [&](const usize index)noexcept -> AttachmentJointQuery&{
         return queries[parentOrder ? parentOrder[index] : index];
     };
     usize groupBegin = 0u;
@@ -82,8 +84,6 @@ void TagObject(Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const
     objectComponent.localTransform = localTransform;
     objectComponent.kind = kind;
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -222,7 +222,7 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
 void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena){
     const auto objects = m_world.view<ModelObjectComponent>();
     usize ownedCount = 0u;
-    objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
+    objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
             static_cast<void>(objectEntity);
             if(object.owner == entity)
                 ++ownedCount;
@@ -397,7 +397,7 @@ void ModelSystem::updateStaticMeshAttachments(){
     const auto attachments = m_world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>();
     usize queryCount = 0u;
     if(attachments.candidateCount() > 1u){
-        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
+        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform)noexcept{
                 static_cast<void>(entity);
                 static_cast<void>(object);
                 static_cast<void>(transform);
@@ -435,7 +435,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             parentOrder.reserve(queryCount);
             for(usize queryIndex = 0u; queryIndex < queryCount; ++queryIndex)
                 parentOrder.push_back(queryIndex);
-            Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs){
+            Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
                 return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
             });
             __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, parentOrder.data());
@@ -486,7 +486,7 @@ void ModelSystem::updateStaticMeshAttachments(){
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const{
     Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
-    m_world.view<ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, ModelObjectComponent& object){
+    m_world.view<ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, ModelObjectComponent& object)noexcept{
             if(result.valid())
                 return;
             if(object.owner == owner && object.object == objectName)

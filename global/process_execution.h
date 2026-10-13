@@ -9,6 +9,7 @@
 #include "filesystem.h"
 #include "expected.h"
 #include "span.h"
+#include "scope_exit.h"
 #include "platform.h"
 #include "text_utils.h"
 #include "type.h"
@@ -429,7 +430,7 @@ template<typename ArenaT>
             _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
         if(::dup2(outputFileDescriptor, STDERR_FILENO) < 0)
             _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
-        if(::close(outputFileDescriptor) != 0)
+        if(outputFileDescriptor != STDOUT_FILENO && outputFileDescriptor != STDERR_FILENO && ::close(outputFileDescriptor) != 0)
             _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
         ::execvp(argv[0], const_cast<char* const*>(argv.data()));
         _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
@@ -477,15 +478,23 @@ template<typename ArenaT, typename StringT>
     int pipeFds[2] = { -1, -1 };
     if(::pipe(pipeFds) != 0)
         return false;
-
-    const pid_t childPid = ::fork();
-    if(childPid < 0){
+    ScopeExit closePipe([&]()noexcept{
         ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
         ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
+    });
+
+    const pid_t childPid = ::fork();
+    if(childPid < 0)
         return false;
-    }
 
     if(childPid == 0){
+        if(::close(pipeFds[0]) != 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+        if(::dup2(pipeFds[1], STDOUT_FILENO) < 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+        if(pipeFds[1] != STDOUT_FILENO && ::close(pipeFds[1]) != 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+
         const int devNull = ::open("/dev/null", O_WRONLY);
         if(devNull >= 0){
             if(::dup2(devNull, STDERR_FILENO) < 0)
@@ -496,28 +505,19 @@ template<typename ArenaT, typename StringT>
             }
         }
 
-        if(::dup2(pipeFds[1], STDOUT_FILENO) < 0)
-            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
-        if(::close(pipeFds[0]) != 0)
-            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
-        if(::close(pipeFds[1]) != 0)
-            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
         ::execvp(argv[0], const_cast<char* const*>(argv.data()));
         _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
     }
+
+    ScopeExit reapChild([&]()noexcept{ ProcessExecutionDetail::KillAndReapProcess(childPid); });
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
     const u64 timeoutStartMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
     const u64 deadlineMilliseconds = timeoutMilliseconds == 0u || timeoutStartMilliseconds == 0u ? 0u : timeoutStartMilliseconds + static_cast<u64>(timeoutMilliseconds);
 
     const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
-    if(flags >= 0){
-        if(::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK) < 0){
-            ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
-            ProcessExecutionDetail::KillAndReapProcess(childPid);
-            return false;
-        }
-    }
+    if(flags < 0 || ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK) < 0)
+        return false;
 
     char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes] = {};
     const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer) ? readBufferBytes : sizeof(buffer);
@@ -576,11 +576,10 @@ template<typename ArenaT, typename StringT>
     }
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
-    if(timedOut){
-        ProcessExecutionDetail::KillAndReapProcess(childPid);
+    if(timedOut)
         return false;
-    }
 
+    reapChild.release();
     const bool processSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds);
     return readSucceeded && !outputTruncated && processSucceeded && !outOutput.empty();
 }

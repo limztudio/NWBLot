@@ -26,7 +26,7 @@ namespace __hidden_ui_gpu_texture_images{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidSource(const SharedImageSource& source){
+[[nodiscard]] static bool ValidSource(const SharedImageSource& source)noexcept{
     if(!source || source->generation() == 0u || !source->identity().valid())
         return false;
     const Texture& texture = source->texture();
@@ -76,7 +76,7 @@ namespace __hidden_ui_gpu_texture_images{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTextureImageVersion::GpuTextureImageVersion(Core::GraphicsRuntime& graphics, SharedImageSource source)
+GpuTextureImageVersion::GpuTextureImageVersion(Core::GraphicsRuntime& graphics, SharedImageSource source)noexcept
     : m_graphics(graphics)
     , m_source(Move(source))
 {}
@@ -89,7 +89,7 @@ GpuTextureImageVersion::~GpuTextureImageVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot){
+bool GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept{
     const auto& images = snapshot.textureImages();
     if(images.size() > s_PaintMaxImages || snapshot.glyphPages().size() > s_PaintMaxImages || snapshot.sdfPages().size() > s_PaintMaxImages || images.size() + snapshot.glyphPages().size() + snapshot.sdfPages().size() > s_PaintMaxImages)
         return false;

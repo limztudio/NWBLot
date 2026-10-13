@@ -33,7 +33,7 @@ static constexpr usize s_BitsPerByte = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ClassifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
+void ClassifyPlacements(InteropVector<CpuWorkerPlacement>& placements)noexcept{
     u32 minimumClass = Limit<u32>::s_Max;
     u32 maximumClass = 0u;
     for(const CpuWorkerPlacement& placement : placements){
@@ -129,9 +129,9 @@ static constexpr u32 s_QueryRetryCount = 4u;
             if(information->Size < sizeof(SYSTEM_CPU_SET_INFORMATION))
                 return MakeUnexpected(Failure{});
             const auto& cpuSet = information->CpuSet;
-            const bool permittedGroup = FindIf(processGroups.begin(), processGroups.end(), [&cpuSet](const USHORT group){ return group == cpuSet.Group; }
+            const bool permittedGroup = FindIf(processGroups.begin(), processGroups.end(), [&cpuSet](const USHORT group)noexcept{ return group == cpuSet.Group; }
             ) != processGroups.end();
-            const bool permittedSet = defaultSets.empty() || FindIf(defaultSets.begin(), defaultSets.end(), [&cpuSet](const ULONG id){ return id == cpuSet.Id; }
+            const bool permittedSet = defaultSets.empty() || FindIf(defaultSets.begin(), defaultSets.end(), [&cpuSet](const ULONG id)noexcept{ return id == cpuSet.Id; }
             ) != defaultSets.end();
             const bool reservedElsewhere = cpuSet.Allocated && !cpuSet.AllocatedToTargetProcess;
             bool permittedMask = true;

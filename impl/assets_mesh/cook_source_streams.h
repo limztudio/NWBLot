@@ -11,6 +11,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
+
 #include <global/binary.h>
 
 
@@ -23,9 +24,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh cook source stream parsing and validation.
-
-
 struct SourceMeshStreams{
     ScratchVector<Float3U> positions;
     ScratchVector<Float3U> normals;
@@ -35,7 +33,7 @@ struct SourceMeshStreams{
     ScratchVector<MeshVertexRef> vertexRefs;
     Core::Assets::AssetVector<u32> indices;
 
-    SourceMeshStreams(Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena)
+    SourceMeshStreams(Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena)noexcept
         : positions(scratchArena)
         , normals(scratchArena)
         , tangents(scratchArena)

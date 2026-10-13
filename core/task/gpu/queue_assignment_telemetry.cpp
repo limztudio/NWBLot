@@ -167,8 +167,12 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
 
         const Name taskName = declarations.taskAt(taskIndex).identity;
         auto previous = m_history.find(taskName);
-        if(previous == m_history.end())
-            m_history.emplace(taskName, telemetry.acceptedQueue);
+        if(previous == m_history.end()){
+            if(!m_history.emplace(taskName, telemetry.acceptedQueue).second){
+                NWB_ASSERT(false);
+                return false;
+            }
+        }
         else
             previous.value() = telemetry.acceptedQueue;
     }
@@ -181,7 +185,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     return true;
 }
 
-bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const{
+bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept{
     if(!declarations.valid() || !compiledPlan.validFor(declarations))
         return false;
 

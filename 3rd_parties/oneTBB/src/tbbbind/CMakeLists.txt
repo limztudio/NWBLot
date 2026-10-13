@@ -68,19 +68,11 @@ function(tbbbind_build TBBBIND_NAME REQUIRED_HWLOC_TARGET)
 
     # Prefer using target_link_options instead of target_link_libraries to specify link options because
     # target_link_libraries may incorrectly handle some options (on Windows, for example).
-    if (COMMAND target_link_options)
-        target_link_options(${TBBBIND_NAME}
-            PRIVATE
-            ${TBB_LIB_LINK_FLAGS}
-            ${TBB_COMMON_LINK_FLAGS}
-        )
-    else()
-        target_link_libraries(${TBBBIND_NAME}
-            PRIVATE
-            ${TBB_LIB_LINK_FLAGS}
-            ${TBB_COMMON_LINK_FLAGS}
-        )
-    endif()
+    target_link_options(${TBBBIND_NAME}
+        PRIVATE
+        ${TBB_LIB_LINK_FLAGS}
+        ${TBB_COMMON_LINK_FLAGS}
+    )
 
     target_link_libraries(${TBBBIND_NAME}
         PUBLIC

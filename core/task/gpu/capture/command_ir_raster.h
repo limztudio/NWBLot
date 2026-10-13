@@ -166,7 +166,7 @@ interface IGpuCommandIrRetainedOwner{
 
 class GpuCommandIrOwnerAnchor final{
 public:
-    GpuCommandIrOwnerAnchor() = default;
+    GpuCommandIrOwnerAnchor()noexcept = default;
     GpuCommandIrOwnerAnchor(IGpuCommandIrRetainedOwner* owner, AdoptRefT)noexcept;
     GpuCommandIrOwnerAnchor(const GpuCommandIrOwnerAnchor& other)noexcept;
     GpuCommandIrOwnerAnchor(GpuCommandIrOwnerAnchor&& other)noexcept;

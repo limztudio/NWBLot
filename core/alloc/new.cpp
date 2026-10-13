@@ -46,13 +46,13 @@ template<typename AllocateFunc>
 }
 
 [[nodiscard]] void* InternalOperatorNew(const std::size_t size){
-    return RetryOperatorNew([size](){
+    return RetryOperatorNew([size]()noexcept{
         return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(size));
     });
 }
 
 [[nodiscard]] void* InternalOperatorNew(const std::size_t size, const std::size_t alignment){
-    return RetryOperatorNew([size, alignment](){
+    return RetryOperatorNew([size, alignment]()noexcept{
         return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(size), static_cast<usize>(alignment));
     });
 }

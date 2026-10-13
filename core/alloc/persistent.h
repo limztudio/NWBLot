@@ -5,12 +5,12 @@
 #pragma once
 
 
-#include <global/expected.h>
 #include "global.h"
 #include "core.h"
 
 #include <global/arena_base.h>
 #include <global/arena_object.h>
+#include <global/expected.h>
 #include <global/sync.h>
 
 

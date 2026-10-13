@@ -32,7 +32,7 @@ constexpr AStringView s_ExpectedTokenFoundSeparator = ", found ";
 constexpr usize s_ExpectedTokenFoundSeparatorLength = s_ExpectedTokenFoundSeparator.size();
 
 
-[[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs){
+[[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs)noexcept{
     switch(op){
     case TokenType::Plus:
     case TokenType::PlusEqual:
@@ -156,7 +156,10 @@ private:
         }
 
         MString key(variableName.data(), variableName.size(), m_arena);
-        m_variables.emplace(Move(key), Move(initialValue));
+        if(!m_variables.emplace(Move(key), Move(initialValue)).second){
+            error(variableLine, variableColumn, "duplicate variable declaration");
+            return false;
+        }
         m_declarations.emplace_back(typeName, variableName, m_arena);
         if(m_declaredAssetVariable.empty())
             m_declaredAssetVariable = variableName;
@@ -174,7 +177,10 @@ private:
         m_declaredAssetVariable = MStringView(outAssetVariable.data(), outAssetVariable.size());
 
         MString key(outAssetVariable.data(), outAssetVariable.size(), m_arena);
-        m_variables.emplace(Move(key), Value(m_arena));
+        if(!m_variables.emplace(Move(key), Value(m_arena)).second){
+            error(1u, 1u, "duplicate variable declaration");
+            return false;
+        }
         m_declarations.emplace_back(assetType, assetVariable, m_arena);
         return true;
     }
@@ -792,11 +798,7 @@ private:
     }
 
     [[nodiscard]] bool isDeclaredVariable(MStringView name)const noexcept{
-        for(const Document::Declaration& declaration : m_declarations){
-            if(MStringView(declaration.variable.data(), declaration.variable.size()) == name)
-                return true;
-        }
-        return false;
+        return m_variables.find(name) != m_variables.end();
     }
 
     [[nodiscard]] Value* declaredAssetRoot(const u32 line, const u32 column){

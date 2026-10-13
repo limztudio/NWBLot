@@ -6,6 +6,7 @@
 #include "selected_resource_validation.h"
 
 #include <core/alloc/scratch.h>
+
 #include <global/algorithm.h>
 #include <global/containers.h>
 
@@ -178,13 +179,13 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
     m_deviceGeneration = base.m_deviceGeneration;
 
     using namespace __hidden_command_list_state_handoff_merge;
-    const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs){
+    const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs)noexcept{
         return lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
-    const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs){
+    const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs)noexcept{
         return lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
-    const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs){
+    const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs)noexcept{
         return lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
 
@@ -299,7 +300,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
                 }
             }
         }
-        Sort(events.begin(), events.end(), [](const BufferRangeEvent& lhs, const BufferRangeEvent& rhs){
+        Sort(events.begin(), events.end(), [](const BufferRangeEvent& lhs, const BufferRangeEvent& rhs)noexcept{
             if(lhs.bufferIndex != rhs.bufferIndex)
                 return lhs.bufferIndex < rhs.bufferIndex;
             if(lhs.offset != rhs.offset)

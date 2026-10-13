@@ -18,7 +18,7 @@ bool Builder::popupFrameVisible(const BuilderScopeFrame& frame)const noexcept{
     return frame.m_popupState && frame.m_popupState->isOpen() && frame.m_popupState->instanceGeneration() == frame.m_popupToken.instanceGeneration && frame.m_popupState->openGeneration() == frame.m_popupToken.openGeneration;
 }
 
-bool Builder::popupAncestorsVisible()const{
+bool Builder::popupAncestorsVisible()const noexcept{
     if(m_context.failed())
         return false;
     for(const BuilderScopeFrame* frame = m_scope.get(); frame; frame = frame->m_parent){
@@ -92,7 +92,7 @@ bool Builder::validatePopupFamily(){
     return !m_context.failed();
 }
 
-void Builder::releasePopupFamily(){
+void Builder::releasePopupFamily()noexcept{
     for(usize index = 0u; index <= m_popupFrameCount; ++index){
         BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
         m_scope = MakeNotNull(&frame);

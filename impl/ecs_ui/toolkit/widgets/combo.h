@@ -48,7 +48,7 @@ class ComboState final : NoCopy{
 
 
 public:
-    ComboState();
+    ComboState()noexcept;
 
 
 public:
@@ -64,9 +64,9 @@ public:
     [[nodiscard]] const Rect& bounds()const noexcept{ return m_bounds; }
     [[nodiscard]] const ListState& listState()const noexcept{ return m_list; }
     // Explicit application changes renew the field input lifetime even when the value is unchanged.
-    void select(u64 key);
-    void open();
-    void close();
+    void select(u64 key)noexcept;
+    void open()noexcept;
+    void close()noexcept;
 
 
 private:
@@ -84,10 +84,10 @@ private:
 class ComboBehavior final{
 public:
     // Rebinding after omission or to another field retires popup interaction while preserving committed selection.
-    [[nodiscard]] static bool Bind(ComboState& state, WidgetId owner, u64 declarationGeneration);
+    [[nodiscard]] static bool Bind(ComboState& state, WidgetId owner, u64 declarationGeneration)noexcept;
     [[nodiscard]] static bool Reconcile(ComboState& state, const IListDataSource& source);
-    static void Open(ComboState& state);
-    static void Close(ComboState& state);
+    static void Open(ComboState& state)noexcept;
+    static void Close(ComboState& state)noexcept;
     [[nodiscard]] static bool Commit(ComboState& state, const IListDataSource& source, u64 key);
     [[nodiscard]] static ListState& Preview(ComboState& state)noexcept{ return state.m_list; }
 };

@@ -122,7 +122,7 @@ static bool GetVariantBytecode(
     compileDefines.reserve(mergedDefines.size());
     for(const auto& [defineName, value] : mergedDefines)
         compileDefines.push_back(ShaderCook::ShaderMacroDefinition{ defineName, value });
-    Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderCook::ShaderMacroDefinition& lhs, const ShaderCook::ShaderMacroDefinition& rhs){
+    Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderCook::ShaderMacroDefinition& lhs, const ShaderCook::ShaderMacroDefinition& rhs)noexcept{
         return lhs.name < rhs.name;
     });
 
@@ -196,7 +196,7 @@ static bool AppendShaderIndexToManifest(
     return false;
 }
 
-static u64 BuildShaderVariantCookKeyHash(const NameHash& virtualPathHash, const u64 sourceChecksum, const u64 bytecodeChecksum){
+static u64 BuildShaderVariantCookKeyHash(const NameHash& virtualPathHash, const u64 sourceChecksum, const u64 bytecodeChecksum)noexcept{
     static constexpr u32 s_ShaderVariantCookKeyVersion = 2u;
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_ShaderVariantCookKeyVersion);
@@ -263,7 +263,7 @@ bool AppendPreparedShadersToManifest(
             const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
 
             const u64 sourceChecksum = shaderCook.computeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
-            const CookString sourceChecksumHex = FormatHex64A(cookArena, sourceChecksum);
+            const ScratchString sourceChecksumHex = FormatHex64A(scratchArena, sourceChecksum);
 
             const Path bytecodeCachePath = __hidden_shader_volume_writer::BuildVariantCachePath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
             if(!__hidden_shader_volume_writer::GetVariantBytecode(

@@ -9,6 +9,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/filesystem/volume_naming.h>
+
 #include <global/limit.h>
 #include <global/simplemath.h>
 
@@ -489,7 +490,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
         if(layout.size == 0 || layout.destinationOffset == layout.sourceOffset)
             continue;
 
-        if(!moveBytesLocked(layout.destinationOffset, layout.sourceOffset, layout.size))
+        if(!moveBytesLocked(layout.destinationOffset, layout.sourceOffset, layout.size, scratchArena))
             return false;
     }
 

@@ -21,7 +21,7 @@ namespace GlobalFilesystemRetentionDetail{
 
 struct KeepAllEntries{
     template<typename PathT>
-    [[nodiscard]] bool operator()(const PathT&)const{
+    [[nodiscard]] bool operator()(const PathT&)const noexcept{
         return true;
     }
 };

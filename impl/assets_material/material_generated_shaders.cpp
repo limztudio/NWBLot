@@ -35,7 +35,7 @@ static constexpr AStringView s_AvboitExtinctionPixelShaderGeneratedPrefix("gener
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendGeneratedMaterialShaderIncludes(CookString& outSource, const AStringView authoringHeaderInclude, const MaterialCookEntry& entry){
+static void AppendGeneratedMaterialShaderIncludes(ScratchString& outSource, const AStringView authoringHeaderInclude, const MaterialCookEntry& entry){
     outSource += "#include \"";
     outSource += authoringHeaderInclude;
     outSource += "\"\n";
@@ -69,6 +69,12 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     ScratchArena& scratchArena
 ){
     CookVector<GeneratedMaterialPixelShader> generatedShaders(arena);
+    usize generatedShaderCount = 0u;
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.stageShaders.empty() && !entry.surfaceSource.empty())
+            ++generatedShaderCount;
+    }
+    generatedShaders.reserve(generatedShaderCount);
 
     const Name sharedMeshShaderNameId = ToName(sharedMeshShaderName);
     if(!sharedMeshShaderNameId){
@@ -103,13 +109,13 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
         }
 
         // Engine authoring + .bind + surface hook; mesh stage is shared.
-        CookString generatedSource(arena);
+        ScratchString generatedSource(scratchArena);
         generatedSource += "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
         AppendGeneratedMaterialShaderIncludes(generatedSource, "mesh/material_ps_authoring.slangi", entry);
 
-        CookString relativeFile(arena);
+        ScratchString relativeFile(scratchArena);
         relativeFile += entry.virtualPath;
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / AStringView(relativeFile);
@@ -167,6 +173,12 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
     ScratchArena& scratchArena
 ){
     CookVector<GeneratedMaterialPixelShader> generatedShaders(arena);
+    usize generatedShaderCount = 0u;
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.transparent && !entry.surfaceSource.empty())
+            ++generatedShaderCount;
+    }
+    generatedShaders.reserve(generatedShaderCount);
 
     const Path generatedRoot = cacheDirectory / configurationSafeName / "generated" / generatedDirectoryLeaf;
     auto removeAllIfExistsResult2 = RemoveAllIfExists(generatedRoot);
@@ -186,13 +198,13 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         }
 
         // Same .bind + .surface pair as the G-buffer PS.
-        CookString generatedSource(arena);
+        ScratchString generatedSource(scratchArena);
         generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
         AppendGeneratedMaterialShaderIncludes(generatedSource, authoringHeaderInclude, entry);
 
-        CookString relativeFile(arena);
+        ScratchString relativeFile(scratchArena);
         relativeFile += entry.virtualPath;
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / AStringView(relativeFile);

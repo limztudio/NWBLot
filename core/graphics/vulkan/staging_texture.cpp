@@ -38,7 +38,7 @@ struct StagingTextureQueueFamilies{
     VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
 };
 
-inline Expected<StagingTextureMip> BuildStagingTextureMipLayout(const TextureDesc& desc, const VulkanDetail::TextureFormatBlockLayout& formatLayout, const u32 mip){
+inline Expected<StagingTextureMip> BuildStagingTextureMipLayout(const TextureDesc& desc, const VulkanDetail::TextureFormatBlockLayout& formatLayout, const u32 mip)noexcept{
     StagingTextureMip result{};
 
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mip);
@@ -319,7 +319,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: unavailable queue sharing"));
         return nullptr;
     }
-    auto* staging = NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator);
+    StagingTextureHandle staging(NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator), StagingTextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!staging){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate staging texture wrapper"));
         return nullptr;
@@ -338,7 +338,6 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     const VkResult res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture buffer: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, staging);
         return nullptr;
     }
 
@@ -355,7 +354,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     staging->m_admittedQueueFamilies = Move(queueFamilies->families);
     staging->m_cpuAccess = cpuAccess;
 
-    return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return staging;
 }
 
 Expected<StagingTextureMapping> Device::mapStagingTexture(StagingTexture& staging, const TextureSlice& slice, const CpuAccessMode::Enum requestedAccess){

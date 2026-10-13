@@ -7,6 +7,7 @@
 
 #include "renderer_draw_types.h"
 #include "generated_geometry_state.h"
+#include "compute_emulation_output_index.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +23,31 @@ namespace ECSRenderDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Plan, typename AcceptMode>
+[[nodiscard]] bool CaptureAliasFreeGeneratedGeometryDraws(Plan& plan, const MaterialPassDrawItems& source, Core::Alloc::ScratchArena& scratchArena, AcceptMode acceptMode){
+    plan.drawItems.reserve(source.computeDrawItems.size());
+    plan.outputBuffers.reserve(source.computeDrawItems.size());
+    plan.outputLayouts.reserve(source.computeDrawItems.size());
+    plan.outputHeapSlots.reserve(source.computeDrawItems.size());
+    MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
+    MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
+    for(const MaterialPassDrawItem& drawItem : source.computeDrawItems){
+        if(!acceptMode(drawItem.pipelineKey.csgMode))
+            return false;
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid())
+            return false;
+        if(!outputs.insert(mesh.emulationVertexBuffer.get()) || !slots.insert(mesh.emulationVertexHeapHandle.slot()))
+            return false;
+        plan.drawItems.push_back(drawItem);
+        plan.outputBuffers.push_back(mesh.emulationVertexBuffer);
+        plan.outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
+        plan.outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
+    }
+    return true;
+}
 
 
 [[nodiscard]] NWB_INLINE bool MatchesRetainedGeneratedGeometryOutputs(

@@ -9,6 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+
 #include <global/binary.h>
 #include <global/limit.h>
 
@@ -244,7 +245,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     sortedRecords.reserve(m_files.size());
     for(const auto& [path, record] : m_files)
         sortedRecords.push_back(VolumeIndexEntryDisk{ path.hash(), record.offset, record.size });
-    Sort(sortedRecords.begin(), sortedRecords.end(), [](const VolumeIndexEntryDisk& lhs, const VolumeIndexEntryDisk& rhs){
+    Sort(sortedRecords.begin(), sortedRecords.end(), [](const VolumeIndexEntryDisk& lhs, const VolumeIndexEntryDisk& rhs)noexcept{
         return ::LessNameHash(lhs.hash, rhs.hash);
     });
 

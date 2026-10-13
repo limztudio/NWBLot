@@ -33,7 +33,7 @@ namespace __hidden_gather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<Assets::AssetVector<Assets::AssetString>> CollectBuiltFiles(const AssetGatherOptions& options){
+[[nodiscard]] static Expected<Assets::AssetVector<Assets::AssetString>> CollectBuiltFiles(const AssetGatherOptions& options){
     Assets::AssetArena& arena = options.inputs.get_allocator().arena();
     Assets::AssetVector<Assets::AssetString> files(arena);
     for(const Assets::AssetString& input : options.inputs){

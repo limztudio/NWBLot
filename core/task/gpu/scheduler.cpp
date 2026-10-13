@@ -24,7 +24,7 @@ namespace __hidden_gpu_packet_runtime_execution{
 
 
 // A frontier packet is meaningful only as an explicit recovery/finalization tail. The compiler prevents it from merging with ordinary work, but does not force declaration order, so normal graph execution rejects one inside either its semantic endpoint prefix or its automatically derived ordinary prefix before recording begins.
-[[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& terminalTask){
+[[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& terminalTask)noexcept{
     const usize packetCount = planAccess.packetCount();
     if(packetCount == 0u)
         return MakeUnexpected(GpuSubmissionPacketId{});

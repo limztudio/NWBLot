@@ -40,7 +40,7 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph&
     csgIntervalClearScheduling.forceSubmissionBoundary = false;
     csgIntervalClearScheduling.allowPacketMerge = true;
     csgIntervalClearScheduling.mergeWithPrevious = true;
-    const auto makeCsgIntervalClearTaskDesc = [&csgIntervalClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency){
+    const auto makeCsgIntervalClearTaskDesc = [&csgIntervalClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency)noexcept{
         Core::GpuTaskDesc clearDesc;
         clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(csgIntervalClearScheduling).setDependencies(&dependency, 1u);
         return clearDesc;

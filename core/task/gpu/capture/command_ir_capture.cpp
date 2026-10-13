@@ -23,7 +23,7 @@ namespace GpuCommandIrDetail{
 
 
 [[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
-    constexpr u32 allowedResourceStates = (static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput) << 1u) - 1u;
+    constexpr u32 s_AllowedResourceStates = (static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput) << 1u) - 1u;
     if(record.opcode >= GpuCommandIrOpcode::kCount || !record.task.valid() || !record.packet.valid() || !record.queue.valid() || !record.destination.valid() || record.destination.generation != record.task.generation)
         return false;
 
@@ -47,14 +47,14 @@ namespace GpuCommandIrDetail{
             && record.sourceUploadBlob.generation == record.task.generation
             && record.blobSizeBytes != 0u
             && record.finalState != ResourceStates::Unknown
-            && (static_cast<u32>(record.finalState) & ~allowedResourceStates) == 0u
+            && (static_cast<u32>(record.finalState) & ~s_AllowedResourceStates) == 0u
         ;
     case GpuCommandIrOpcode::UploadTexture:
         return record.sourceUploadBlob.valid()
             && record.sourceUploadBlob.generation == record.task.generation
             && record.blobSizeBytes != 0u
             && record.finalState != ResourceStates::Unknown
-            && (static_cast<u32>(record.finalState) & ~allowedResourceStates) == 0u
+            && (static_cast<u32>(record.finalState) & ~s_AllowedResourceStates) == 0u
             && record.uploadAspect < TextureUploadAspect::kCount
             && record.destinationSlice.x == 0u
             && record.destinationSlice.y == 0u

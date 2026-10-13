@@ -5,6 +5,8 @@
 #include "internal.h"
 
 #include <global/blocking_io.h>
+#include <global/scope_exit.h>
+#include <global/termination.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -270,6 +272,19 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     AppendUnsignedToFixedBuffer(ackHandleText, reinterpret_cast<uintptr_t>(ackWriteHandle));
     AppendUnsignedToFixedBuffer(ackEventText, reinterpret_cast<uintptr_t>(ackEvent));
 
+    ScopeExit releaseHandlesOnFailure([&]()noexcept{
+        if(!CloseHandle(requestReadHandle))
+            TerminateInvariant();
+        if(!CloseHandle(requestWriteHandle))
+            TerminateInvariant();
+        if(!CloseHandle(ackReadHandle))
+            TerminateInvariant();
+        if(!CloseHandle(ackWriteHandle))
+            TerminateInvariant();
+        if(!CloseHandle(ackEvent))
+            TerminateInvariant();
+    });
+
     TString<ArenaT> commandLine(handlerExecutablePath.arena());
     commandLine.reserve(handlerExecutablePath.size() + __hidden_crash_win32::s_HandlerCommandLineReserveSlack);
     commandLine += NWB_TEXT("\"");
@@ -290,6 +305,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     SIZE_T attributeListBytes = 0u;
     const BOOL attributeListSizeQueried = InitializeProcThreadAttributeList(nullptr, 1u, 0u, &attributeListBytes);
     if(attributeListSizeQueried || GetLastError() != ERROR_INSUFFICIENT_BUFFER || attributeListBytes == 0u){
+        releaseHandlesOnFailure.release();
         CloseHandle(requestReadHandle);
         CloseHandle(requestWriteHandle);
         CloseHandle(ackReadHandle);
@@ -299,6 +315,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     }
 
     void* const attributeListMemory = AllocateArenaCMemory(handlerExecutablePath.arena(), static_cast<usize>(attributeListBytes));
+    releaseHandlesOnFailure.release();
     if(!attributeListMemory){
         CloseHandle(requestReadHandle);
         CloseHandle(requestWriteHandle);

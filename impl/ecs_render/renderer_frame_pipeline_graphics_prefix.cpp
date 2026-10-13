@@ -9,12 +9,6 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
-
-#include <core/task/gpu/capture/command_ir.h>
-#include <core/graphics/gpu_timing.h>
-
-#include <global/timer.h>
-
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
@@ -32,6 +26,11 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
+
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/graphics/gpu_timing.h>
+
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,7 +149,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         if(!timingTickets[timingSlot])
             return MakeUnexpected(Failure{});
     }
-    const auto timingTicketSlot = [timingTickets](const PrefixTimingSlot slot){
+    const auto timingTicketSlot = [timingTickets](const PrefixTimingSlot slot)noexcept{
         return &timingTickets[static_cast<usize>(slot)];
     };
     const Core::TextureSubresourceSet csgPeelSubresources(0u, 1u, 0u, deferredTargets.csgPeelLayerCount);

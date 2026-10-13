@@ -11,7 +11,7 @@ from numeric_edit_native import NumericEditNativeInput
 from numeric_edit_probe import center, draft_fields, float_bits, integer_bits, observe_numeric_edit, snapshot_from_logs, text_hash
 from caret_capture import wait_for_caret_phase
 from window_smoke import parse_args
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 from probe_reference import linear_rgb_bytes
@@ -73,14 +73,16 @@ class NumericEditRun:
                 continue
             if snapshot["logical_extent"][0] < 640.0 or snapshot["logical_extent"][1] < 400.0:
                 raise SmokeSkip("the numeric editor fixture needs a logical client of at least 640x400")
-            if not self.native.windows and self._caret_probe_sample(snapshot) is not None:
-                # Full-frame processing can alias the 1s caret blink cycle; reuse the exact oracle sample only when every other gate already matches.
-                sample = self._caret_probe_sample(snapshot)
-                wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
-            if self.native.windows:
-                self.backend.capture_prepared_raw_client_window(self.handle, path)
-            else:
-                self.backend.capture_client_window(self.handle, path)
+            if not self.native.windows and report is not None and report["model_matches"] and report["geometry_matches"] and report["extra_matches"]:
+                if (extent is None or tuple(report["extent"]) == extent) and all(probe["passed"] or probe["name"].endswith("_caret") for probe in report["probes"]):
+                    # Synchronize a caret-only retry; an already visible initial capture needs no extra blink cycle.
+                    sample = self._caret_probe_sample(snapshot)
+                    if sample is not None:
+                        column, first_row, end_row, color, tolerance = sample
+                        pixels = self.backend.sample_client_pixels(self.handle, column, first_row, 1, end_row - first_row)
+                        if not any(max(abs(actual - expected) for actual, expected in zip(row[0], color)) <= tolerance for row in pixels):
+                            wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
+            self.backend.capture_prepared_raw_client_window(self.handle, path)
             report = observe_numeric_edit(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
@@ -366,15 +368,7 @@ def run(args):
 
 
 def main(argv):
-    args = parse_args(argv)
-    try:
-        return run(args)
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", flush=True)
-        return SKIP_EXIT_CODE
-    except (SmokeFailure, OSError, ValueError, TimeoutError) as error:
-        print(f"FAIL: {error}", flush=True)
-        return 1
+    return run_smoke_main(argv, parse_args, run)
 
 
 if __name__ == "__main__":

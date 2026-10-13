@@ -3,6 +3,7 @@
 
 
 #include "asset.h"
+#include "arena_names.h"
 
 #include <core/assets/auto_registration.h>
 
@@ -37,7 +38,8 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAtlasAssetCodecAutoRegistrar, FontAtlasAs
 bool FontAtlas::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!checkVirtualPath(NWB_TEXT("FontAtlas::loadBinary")))
         return false;
-    auto payload = DeserializeFontAtlasPayload(binary, m_payload.glyphs.get_allocator().arena());
+    Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_LoadBinaryArena);
+    auto payload = DeserializeFontAtlasPayload(binary, m_payload.glyphs.get_allocator().arena(), scratchArena);
     if(!payload)
         return false;
     FontAtlas candidate(m_payload.glyphs.get_allocator().arena(), virtualPath());
@@ -46,12 +48,8 @@ bool FontAtlas::loadBinary(const Core::Assets::AssetBytes& binary){
     return true;
 }
 
-bool FontAtlas::validatePayload()const{
-    return checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload")) && ValidateFontAtlasPayload(m_payload);
-}
-
-const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const noexcept{
-    return glyphId < m_payload.glyphs.size() ? &m_payload.glyphs[glyphId] : nullptr;
+bool FontAtlas::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+    return checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload")) && ValidateFontAtlasPayload(m_payload, scratchArena);
 }
 
 

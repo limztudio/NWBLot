@@ -99,7 +99,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     if(!tasks || packet.taskCount == 0u || !packetQueueInfo || !m_device.matchesPhysicalQueueIdentity(packet.queue) || (initialStates && !initialStates->validForDeviceGeneration(planAccess.deviceGeneration())))
         return false;
 
-    const auto validateOwnership = [&](const ResourceQueueSharing::Mask sharing, const ResourceQueueSharing::Mask resourceSharing, const bool usesConcurrentSharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue){
+    const auto validateOwnership = [&](const ResourceQueueSharing::Mask sharing, const ResourceQueueSharing::Mask resourceSharing, const bool usesConcurrentSharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue)noexcept{
         if(sharing != resourceSharing)
             return false;
         if(usesConcurrentSharing)
@@ -122,17 +122,17 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         if(!initialStateValidation->validate())
             return false;
     }
-    const auto permanentTextureState = [&](Texture* const texture)->Expected<ResourceStates::Mask>{
+    const auto permanentTextureState = [&](Texture* const texture)noexcept -> Expected<ResourceStates::Mask>{
         if(initialStateValidation)
             return initialStateValidation->permanentTextureState(texture);
         return ResourceStates::Unknown;
     };
-    const auto permanentBufferState = [&](Buffer* const buffer)->Expected<ResourceStates::Mask>{
+    const auto permanentBufferState = [&](Buffer* const buffer)noexcept -> Expected<ResourceStates::Mask>{
         if(initialStateValidation)
             return initialStateValidation->permanentBufferState(buffer);
         return ResourceStates::Unknown;
     };
-    const auto validateTextureForState = [&](Texture* const texture, const ResourceStates::Mask state){
+    const auto validateTextureForState = [&](Texture* const texture, const ResourceStates::Mask state)noexcept{
         if(!texture || !ResourceQueueAdmissionAdmitsQueue(texture->getQueueAdmissionSnapshot(), *packetQueueInfo))
             return false;
         if(state == ResourceStates::Unknown)
@@ -141,7 +141,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return false;
         return GraphicsBackend::IsTextureReadyForState(m_device, texture, state);
     };
-    const auto validateBufferForState = [&](Buffer* const buffer, const ResourceStates::Mask state){
+    const auto validateBufferForState = [&](Buffer* const buffer, const ResourceStates::Mask state)noexcept{
         if(!buffer)
             return false;
         if(!ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo))
@@ -196,17 +196,17 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         }
     }
 
-    const auto validateTextureRange = [](Texture* const texture, const TextureSubresourceSet& sourceRange){
+    const auto validateTextureRange = [](Texture* const texture, const TextureSubresourceSet& sourceRange)noexcept{
         if(!texture)
             return false;
         const TextureDesc& description = texture->getCreationDescription();
         const TextureSubresourceSet range = sourceRange.resolve(description, TextureSubresourceMipResolve::Range);
         return range.numMipLevels != 0u && range.numArraySlices != 0u && static_cast<u64>(range.baseMipLevel) + range.numMipLevels <= description.mipLevels && static_cast<u64>(range.baseArraySlice) + range.numArraySlices <= description.arraySize;
     };
-    const auto validateBufferRange = [](Buffer* const buffer, const BufferRange& range){
+    const auto validateBufferRange = [](Buffer* const buffer, const BufferRange& range)noexcept{
         return buffer && GpuInitialStateHandoffValidation::ValidBufferRange(range, buffer->getCreationDescription().byteSize);
     };
-    const auto validateResourceReady = [&](const GpuGraphResourceId resourceID, const ResourceStates::Mask requiredState = ResourceStates::Unknown)->Expected<ResourceStates::Mask>{
+    const auto validateResourceReady = [&](const GpuGraphResourceId resourceID, const ResourceStates::Mask requiredState = ResourceStates::Unknown)noexcept -> Expected<ResourceStates::Mask>{
         if(!declarationAccess.validResource(resourceID))
             return MakeUnexpected(Failure{});
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
@@ -262,7 +262,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return MakeUnexpected(Failure{});
         }
     };
-    const auto validateResourceState = [&](const GpuGraphResourceId resourceID, const ResourceStates::Mask requiredState){
+    const auto validateResourceState = [&](const GpuGraphResourceId resourceID, const ResourceStates::Mask requiredState)noexcept{
         if(!declarationAccess.validResource(resourceID))
             return false;
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
@@ -276,7 +276,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return false;
         return (*permanentState) == ResourceStates::Unknown || (*permanentState) == requiredState;
     };
-    const auto resourcePermanentState = [&](const GpuGraphResourceId resourceID)->Expected<ResourceStates::Mask>{
+    const auto resourcePermanentState = [&](const GpuGraphResourceId resourceID)noexcept -> Expected<ResourceStates::Mask>{
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
         if(resource.type == GpuGraphResourceType::Texture)
             return permanentTextureState(declarationAccess.textureForResource(resourceID));
@@ -288,7 +288,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         }
         return MakeUnexpected(Failure{});
     };
-    const auto hasExplicitInitialState = [&](const GpuCompiledBarrier& barrier){
+    const auto hasExplicitInitialState = [&](const GpuCompiledBarrier& barrier)noexcept{
         if(!initialStates || !declarationAccess.validResource(barrier.resource))
             return false;
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
@@ -343,7 +343,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         return range.hasExtent();
     };
 
-    const auto validateBarrierList = [&](const GpuCompiledBarrier* const barriers, const u32 barrierCount){
+    const auto validateBarrierList = [&](const GpuCompiledBarrier* const barriers, const u32 barrierCount)noexcept{
         if(barrierCount != 0u && !barriers)
             return false;
         for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){

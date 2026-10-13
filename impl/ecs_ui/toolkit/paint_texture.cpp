@@ -5,6 +5,7 @@
 #include "paint.h"
 
 #include "rect_math.h"
+
 #include <global/simplemath.h>
 
 
@@ -43,13 +44,19 @@ bool PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectan
     const f32 visibleBottom = VectorGetW(visibleBounds);
     if(rectangle.width == 0.0f || rectangle.height == 0.0f || clip.width <= 0.0f || clip.height <= 0.0f || tint.a == 0.0f || visibleRight <= visibleLeft || visibleBottom <= visibleTop)
         return true;
-    if(!prepareTextureImages(&source, 1u))
-        return false;
     u32 index = 0u;
     for(; index < m_snapshot.m_textureImages.size(); ++index){
-        const ImageSource& bound = *m_snapshot.m_textureImages[index];
-        if(bound.identity() == source->identity() && bound.generation() == source->generation())
+        if(m_snapshot.m_textureImages[index].get() == source.get())
             break;
+    }
+    if(index == m_snapshot.m_textureImages.size()){
+        if(!prepareTextureImages(&source, 1u))
+            return false;
+        for(index = 0u; index < m_snapshot.m_textureImages.size(); ++index){
+            const ImageSource& bound = *m_snapshot.m_textureImages[index];
+            if(bound.identity() == source->identity() && bound.generation() == source->generation())
+                break;
+        }
     }
     NWB_ASSERT(index < m_snapshot.m_textureImages.size());
     emitQuad(rectangle, uv, tint, PaintMaterial::Image, Limit<u32>::s_Max, Limit<u32>::s_Max, 0u, index);

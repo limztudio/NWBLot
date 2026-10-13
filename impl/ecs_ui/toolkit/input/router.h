@@ -107,10 +107,10 @@ public:
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
     // Context passes the focus-loss generation captured at preparation to fence delayed popup acceptance.
     [[nodiscard]] bool commitTargets(const HitTarget* targets, usize count, u64 layoutGeneration, const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max);
-    [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token);
+    [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token)noexcept;
     [[nodiscard]] bool dismissPopup(PopupDismissReason::Enum reason);
-    void closePopup(const PopupToken& token);
-    void fencePopup(const PopupToken& token);
+    void closePopup(const PopupToken& token)noexcept;
+    void fencePopup(const PopupToken& token)noexcept;
     [[nodiscard]] bool hasPopup()const noexcept{ return !m_popups.empty(); }
     [[nodiscard]] usize popupCount()const noexcept{ return m_popups.size(); }
     // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
@@ -123,18 +123,18 @@ public:
     // Transfer command focus to another input owner without cancelling already accepted UI actions.
     void clearFocus()noexcept;
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
-    void reset();
+    void reset()noexcept;
     // Device termination may suppress releases; only this device's pending sources are removed.
-    void cancelDeviceInput(u64 device);
-    [[nodiscard]] bool consumeActivation(WidgetId id);
-    [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration);
-    [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token);
+    void cancelDeviceInput(u64 device)noexcept;
+    [[nodiscard]] bool consumeActivation(WidgetId id)noexcept;
+    [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration)noexcept;
+    [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
     // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
-    void fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token);
+    void fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
     // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
-    [[nodiscard]] Expected<PointerGesture> consumePointerGesture(WidgetId id, u64 declarationGeneration);
-    [[nodiscard]] WidgetId hitTest(const Point& position)const;
-    [[nodiscard]] bool wouldConsumePointer(const Point& position)const;
+    [[nodiscard]] Expected<PointerGesture> consumePointerGesture(WidgetId id, u64 declarationGeneration)noexcept;
+    [[nodiscard]] WidgetId hitTest(const Point& position)const noexcept;
+    [[nodiscard]] bool wouldConsumePointer(const Point& position)const noexcept;
     [[nodiscard]] u64 layoutGeneration()const noexcept{ return m_layoutGeneration; }
     [[nodiscard]] const InputVector<HitTarget>& targets()const noexcept{ return m_targets; }
     [[nodiscard]] const InputVector<InputAction>& actions()const noexcept{ return m_actions; }
@@ -158,69 +158,69 @@ public:
     [[nodiscard]] bool ownsKey(i32 key)const noexcept;
     [[nodiscard]] bool ownsSource(const InputSource& source)const noexcept;
     // Held commands cannot switch editors or begin editing after their delegated owner has retired.
-    [[nodiscard]] bool canEditCommand(const InputEvent& event)const;
+    [[nodiscard]] bool canEditCommand(const InputEvent& event)const noexcept;
     // Query a queued release before process retires its physical source.
-    [[nodiscard]] bool canSubmitCommand(const InputEvent& event)const;
+    [[nodiscard]] bool canSubmitCommand(const InputEvent& event)const noexcept;
     void cancelSubmitCommands(WidgetId id)noexcept;
-    [[nodiscard]] bool pressed(WidgetId id)const;
+    [[nodiscard]] bool pressed(WidgetId id)const noexcept;
 
 
 private:
     [[nodiscard]] static bool IsPointerEvent(InputEventType::Enum type)noexcept;
     [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event);
     [[nodiscard]] Expected<InputEvent> resolvePointerEvent(const InputEvent& event);
-    void retireQueuedReleases();
+    void retireQueuedReleases()noexcept;
     [[nodiscard]] PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)noexcept;
     [[nodiscard]] const PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)const noexcept;
     void routePointerSource(const InputEvent& event, InputRoutingResult& result);
-    void observePointer(const InputEvent& event, const HitTarget* hit);
-    void terminatePointerSource(InputSource source);
+    void observePointer(const InputEvent& event, const HitTarget* hit)noexcept;
+    void terminatePointerSource(InputSource source)noexcept;
     [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept;
     [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept;
-    [[nodiscard]] bool currentCommandFocus(const CommandSource& source)const;
+    [[nodiscard]] bool currentCommandFocus(const CommandSource& source)const noexcept;
     void releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result);
     void cancelCommandPresses()noexcept;
     void retireCommandFocus()noexcept;
-    void reconcileCommandPresses();
-    void cancelPointerPress();
-    [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
-    [[nodiscard]] bool isInteractive(const HitTarget& target)const;
-    [[nodiscard]] bool validControlTargets()const;
-    [[nodiscard]] bool validCommandOwners()const;
-    [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const;
-    [[nodiscard]] bool currentControlCommandOwner(const CommandSource& source)const;
-    [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const;
-    [[nodiscard]] bool currentControlAction(const ControlAction& action)const;
-    void reconcileControlActions();
-    [[nodiscard]] bool currentContextMenuOwner(const TargetOwner& owner)const;
-    void reconcileContextMenus();
+    void reconcileCommandPresses()noexcept;
+    void cancelPointerPress()noexcept;
+    [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const noexcept;
+    [[nodiscard]] bool isInteractive(const HitTarget& target)const noexcept;
+    [[nodiscard]] bool validControlTargets()const noexcept;
+    [[nodiscard]] bool validCommandOwners()const noexcept;
+    [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const noexcept;
+    [[nodiscard]] bool currentControlCommandOwner(const CommandSource& source)const noexcept;
+    [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const noexcept;
+    [[nodiscard]] bool currentControlAction(const ControlAction& action)const noexcept;
+    void reconcileControlActions()noexcept;
+    [[nodiscard]] bool currentContextMenuOwner(const TargetOwner& owner)const noexcept;
+    void reconcileContextMenus()noexcept;
     void appendContextMenu(const HitTarget& target, const Point& position, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
-    [[nodiscard]] bool routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed);
+    [[nodiscard]] bool routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed)noexcept;
     void routeSecondary(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
     void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result, f64 deltaX = 0.0);
     [[nodiscard]] bool routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, bool alreadyPressed, InputRoutingResult& result);
     void routeWheel(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
-    [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
-    [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const;
+    [[nodiscard]] bool allowedByPopup(const HitTarget& target)const noexcept;
+    [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept;
     [[nodiscard]] bool stagePopups(const PopupScope* scopes, usize count);
-    [[nodiscard]] bool validPopupTarget(const HitTarget& target)const;
+    [[nodiscard]] bool validPopupTarget(const HitTarget& target)const noexcept;
     void installPopups(u64 expectedFocusLossGeneration);
     void retirePopup(WidgetId id);
     void cancelPopupFocus();
     void rebuildLookup();
-    void reconcileTargets();
-    void updateHover();
-    void setHoverTarget(const HitTarget* hovered);
+    void reconcileTargets()noexcept;
+    void updateHover()noexcept;
+    void setHoverTarget(const HitTarget* hovered)noexcept;
     void advanceHoverActivity()noexcept;
     void clearHover()noexcept;
-    void cancelInteraction();
+    void cancelInteraction()noexcept;
     void appendActivation(const HitTarget& target, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
     void appendPointerGesture(const HitTarget& target, InputRoutingResult& result);
     void updatePointerGesture(const Point& position, bool completed)noexcept;
-    void reconcilePointerGestures();
+    void reconcilePointerGestures()noexcept;
     void routePointer(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
-    [[nodiscard]] bool moveFocus(bool reverse);
+    [[nodiscard]] bool moveFocus(bool reverse)noexcept;
     [[nodiscard]] bool moveFocusForTraversal(bool reverse);
 
 

@@ -69,7 +69,7 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRa
 
     ResourceStates::Mask resolvedState = ResourceStates::Unknown;
     bool first = true;
-    const auto accumulate = [&](const ResourceStates::Mask state){
+    const auto accumulate = [&](const ResourceStates::Mask state)noexcept{
         if(first){
             resolvedState = state;
             first = false;
@@ -330,7 +330,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
         }
     }
     releases.push_back(BufferOwnershipRelease{mergedRange, destinationQueue});
-    Sort(releases.begin(), releases.end(), [](const BufferOwnershipRelease& lhs, const BufferOwnershipRelease& rhs){
+    Sort(releases.begin(), releases.end(), [](const BufferOwnershipRelease& lhs, const BufferOwnershipRelease& rhs)noexcept{
         return lhs.range.byteOffset < rhs.range.byteOffset;
     });
     m_bufferOwnershipReleaseDestinations.insert_or_assign(&buffer, Move(releases));

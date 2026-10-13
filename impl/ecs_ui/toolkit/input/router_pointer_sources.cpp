@@ -50,7 +50,7 @@ bool InputRouter::wantsPointer()const noexcept{
     return hasPopup() || m_hover.valid();
 }
 
-void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit){
+void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit)noexcept{
     if(!event.hoverCapable)
         return;
     m_hoverPointerSource = event.source;
@@ -59,7 +59,7 @@ void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit){
     setHoverTarget(hit);
 }
 
-void InputRouter::terminatePointerSource(const InputSource source){
+void InputRouter::terminatePointerSource(const InputSource source)noexcept{
     const bool active = m_activePointerSource == source;
     const bool unfinished = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
         return held.source == source;
@@ -108,7 +108,7 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
     // Reuse only within this event; popup dismissal and layout reconciliation still resolve hover against their new state.
     const HitTarget* hit = event.hoverCapable ? findHitTarget(event.position) : nullptr;
     bool hitResolved = event.hoverCapable;
-    const auto resolveHit = [this, &event, &hit, &hitResolved](){
+    const auto resolveHit = [this, &event, &hit, &hitResolved]()noexcept{
         if(!hitResolved){
             hit = findHitTarget(event.position);
             hitResolved = true;

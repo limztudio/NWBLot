@@ -18,13 +18,7 @@ NWB_CORE_BEGIN
 TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usize maxBytes)noexcept{
     if(text.size() > maxBytes)
         return TextInputAdmission::TooLarge;
-    usize offset = 0u;
-    while(offset < text.size()){
-        const auto codePoint = Utf8TextDetail::DecodeCodePoint(text, offset);
-        if(!codePoint)
-            return TextInputAdmission::InvalidText;
-    }
-    return TextInputAdmission::Accepted;
+    return Utf8TextDetail::IsValidText(text) ? TextInputAdmission::Accepted : TextInputAdmission::InvalidText;
 }
 
 bool IsTextInputUtf8Boundary(const AStringView text, const usize byteOffset)noexcept{

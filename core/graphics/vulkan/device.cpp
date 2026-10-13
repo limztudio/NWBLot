@@ -8,6 +8,9 @@
 #include "resource_bindings_detail.h"
 
 #include <core/common/log.h>
+
+#include <global/exception.h>
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -128,6 +131,13 @@ Device::Device(const DeviceDesc& desc)
     , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
     , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true)
 {
+    // A constructor failure cannot invoke Device::~Device; no work has been published to callers yet.
+    const i32 initialExceptionCount = UncaughtExceptionCount();
+    ScopeExit releaseUnpublishedResources([this, initialExceptionCount]()noexcept{
+        if(UncaughtExceptionCount() > initialExceptionCount)
+            releaseOwnedResources();
+    });
+
     VkResult res = VK_SUCCESS;
 
     m_context.descriptorBufferManager = &m_descriptorBufferManager;
@@ -551,6 +561,10 @@ Device::~Device()noexcept{
     if(nativeIdleResult == VK_ERROR_DEVICE_LOST)
         markDeviceLost();
 
+    releaseOwnedResources();
+}
+
+void Device::releaseOwnedResources()noexcept{
     m_uploadManager.clear();
     m_scratchManager.clear();
 

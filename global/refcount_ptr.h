@@ -170,7 +170,7 @@ public:
         const RefCountPtr<U, E>& u,
         typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0
     )noexcept
-        : m_pair(u.get(), Forward<E>(u.getDeleter()))
+        : m_pair(u.get(), u.getDeleter())
     {
         InternalAddRef(m_pair.first());
     }

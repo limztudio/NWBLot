@@ -3,9 +3,6 @@
 
 
 #include <impl/ecs_render/raytrace/hardware_caustics_stage_builder.h>
-
-#include <core/graphics/backend_selection/backend.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
@@ -14,6 +11,8 @@
 #include <impl/ecs_render/raytrace/hardware_caustics_resolve_chain.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
+
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

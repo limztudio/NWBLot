@@ -7,15 +7,14 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/raytrace/software_caustics_resolve_chain.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
-
-#include <impl/ecs_render/kernel/task_graph_scheduling.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/raytrace/software_caustics_resolve_chain.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,21 +48,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
 ){
     using namespace RendererTaskGraphDetail;
 
-    m_deferredSoftwareCausticsTask = {};
-    m_deferredCausticIrradianceClearTask = {};
-    m_deferredCausticAccumulatorBootstrapClearTask = {};
-    m_deferredCausticAccumulatorNonTemporalClearTask = {};
-    m_deferredCausticAccumulatorDecayTask = {};
-    m_deferredCausticPhotonTask = {};
-    m_deferredCausticGeometryTask = {};
-    m_deferredCausticResolvePrepareTask = {};
-    m_deferredCausticResolveWaveletTask = {};
-    m_deferredCausticResolveSecondWaveletTask = {};
-    m_deferredCausticResolveThirdWaveletTask = {};
-    m_deferredCausticResolveFourthWaveletTask = {};
-    m_deferredCausticResolveFifthWaveletTask = {};
-    m_deferredCausticResolveUpsampleTask = {};
-    m_deferredCausticProducerDispatched = false;
+    resetDeferredCausticsTaskState();
 
     // Direct successor of Shadow Visibility; Compute family is optional.
     if(

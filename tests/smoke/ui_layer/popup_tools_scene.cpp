@@ -190,7 +190,7 @@ void UiPopupToolsSmokeScene::observeState(){
 
 void UiPopupToolsSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const auto current = values();
-    const auto positions = BuildSmokeMarkerPositions<(std::tuple_size_v<decltype(current)> + 1u) * 2u, 12u, 16u>();
+    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<decltype(current)> + 1u) * 2u, 12u, 16u>();
     const f32 y = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index <= current.size(); ++index){
         const u64 value = index == current.size() ? m_sequence : current[index];

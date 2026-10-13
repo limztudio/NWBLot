@@ -7,7 +7,7 @@
 
 #include <tests/unit/ui/native_input.h>
 
-#include <impl/ecs_ui/edit_box_host.h>
+#include "edit_host_fixture_support.h"
 
 #include <core/os/clipboard_service.h>
 #include <core/os/text_input_service.h>
@@ -91,33 +91,7 @@ public:
     bool delayed = false;
 };
 
-class FixtureShaper final : public Ui::ITextShaper{
-public:
-    explicit FixtureShaper(Alloc::GlobalArena& arena)
-        : m_arena(arena)
-    {}
-    virtual ~FixtureShaper()override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<Ui::ShapedRun, Ui::TextLayoutStatus::Enum> shape(const Ui::ShapeRequest& request)override{
-        Ui::ShapedRun run(m_arena);
-        run.metrics = { 8.0f, 2.0f, 2.0f };
-        usize begin = 0u;
-        while(begin < request.text.size()){
-            usize end = begin + 1u;
-            while(end < request.text.size() && IsUtf8Continuation(static_cast<u8>(request.text[end])))
-                ++end;
-            run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { 10.0f, 0.0f }, {} });
-            begin = end;
-        }
-        return run;
-    }
-
-
-private:
-    Alloc::GlobalArena& m_arena;
-};
+using FixtureShaper = UiEditHostFixtureSupport::FixtureShaper;
 
 class UiEditBoxHostTests : public testing::Test{
 public:
@@ -150,28 +124,7 @@ protected:
         m_result = actions ? m_host.editActions(m_widget, model, options, {}, *actions) : m_host.edit(m_widget, model, options);
         if(!m_result.valid)
             return false;
-        Ui::EditBoxView view(m_arena);
-        if(!view.snapshot(model))
-            return false;
-        auto layout = m_layoutBuilder.layout({ view.displayText() });
-        if(!layout)
-            return false;
-        if(!view.adoptLayout(Move(*layout)))
-            return false;
-        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {});
-        if(!placement)
-            return false;
-        m_placement = *placement;
-        if(!m_host.publish(m_widget, view, m_placement, options))
-            return false;
-        Ui::HitTarget target;
-        target.rectangle = bounds;
-        target.clip = { 0.0f, 0.0f, 500.0f, 200.0f };
-        target.enabled = options.enabled;
-        target.focusable = options.enabled;
-        target.pointerGesture = options.enabled;
-        target.textEditable = true;
-        if(!m_context.addTarget(m_widget, target))
+        if(!publishEdit(model, options, bounds))
             return false;
         if(m_includeButton){
             const Ui::WidgetState* button = m_context.declare("other", Ui::WidgetKind::Button);
@@ -190,6 +143,26 @@ protected:
             return false;
         m_host.finishFrame();
         return true;
+    }
+
+    [[nodiscard]] bool publishEdit(Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll = {}){
+        Ui::EditBoxView view(m_arena);
+        if(!UiEditHostFixtureSupport::PrepareEditView(view, model, m_layoutBuilder))
+            return false;
+        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, previousScroll);
+        if(!placement)
+            return false;
+        m_placement = *placement;
+        if(!m_host.publish(m_widget, view, m_placement, options))
+            return false;
+        Ui::HitTarget target;
+        target.rectangle = bounds;
+        target.clip = { 0.0f, 0.0f, 500.0f, 200.0f };
+        target.enabled = options.enabled;
+        target.focusable = options.enabled;
+        target.pointerGesture = options.enabled;
+        target.textEditable = true;
+        return m_context.addTarget(m_widget, target);
     }
 
     [[nodiscard]] bool commit(){

@@ -110,7 +110,13 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] constexpr T AddSaturating(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
-    return AddOverflows<T>(lhs, rhs) ? Limit<T>::s_Max : static_cast<T>(lhs + rhs);
+    if(AddOverflows<T>(lhs, rhs)){
+        if constexpr(IsSigned_V<T>)
+            return rhs < T(0) ? Limit<T>::s_Min : Limit<T>::s_Max;
+        else
+            return Limit<T>::s_Max;
+    }
+    return static_cast<T>(lhs + rhs);
 }
 
 

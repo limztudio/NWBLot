@@ -270,6 +270,10 @@ Expected<GraphicsVector<ShaderArchive::Record>> ShaderArchive::DeserializeIndex(
         Record record(arena);
         record.shaderName = Name(recordHeader.shaderName);
         record.stage = Name(recordHeader.stage);
+        if(!record.shaderName || !record.stage){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: empty shader or stage at record {}"), i);
+            return MakeUnexpected(Failure{});
+        }
         record.virtualPathHash = recordHeader.virtualPathHash;
         record.sourceChecksum = recordHeader.sourceChecksum;
         record.bytecodeChecksum = recordHeader.bytecodeChecksum;

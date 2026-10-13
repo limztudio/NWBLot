@@ -8,17 +8,16 @@
 #include "resource_names.h"
 
 #include <impl/ecs_mesh/runtime/resource_names.h>
+#include <impl/assets_mesh/meshlet_ref_codec.h>
+#include <impl/assets_mesh/meshlet_triangle_indices.h>
+#include <impl/assets_mesh/meshlet_vertex_attributes.h>
+#include <impl/assets_mesh/skin_validation.h>
+#include <impl/ecs_mesh/runtime/buffer_upload.h>
+#include <impl/assets_mesh/meshlet_ref_validation.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/assets_mesh/meshlet_ref_codec.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.h>
-#include <impl/assets_mesh/meshlet_vertex_attributes.h>
-#include <impl/assets_mesh/payload_validation.h>
-#include <impl/assets_mesh/skin_validation.h>
-#include <impl/ecs_mesh/runtime/buffer_upload.h>
-#include <impl/assets_mesh/meshlet_ref_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +37,7 @@ namespace __hidden_runtime_cache_resources{
 
 // Each runtime-BLAS stream needs allocator overhead beyond its typed payload.
 static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
+inline constexpr Name s_RuntimeMeshUploadArena("impl/ecs_mesh/skinning_runtime_mesh_upload");
 
 static constexpr AStringView s_RestPositionsSuffix = "rest_positions";
 static constexpr AStringView s_RestNormalsSuffix = "rest_normals";
@@ -73,10 +73,10 @@ static constexpr TStringView s_RtTriangleIndexLabel = NWB_TEXT("rt triangle inde
 static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle attribute");
 
 
-[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
-    TString<Core::Alloc::GlobalArena> sourceText{arena};
+[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::ScratchArena& scratchArena, const MeshSkinningRuntimeInstance& instance){
+    TString<Core::Alloc::ScratchArena> sourceText{scratchArena};
     if(instance.sourceName)
-        sourceText = StringConvert(arena, instance.sourceName.resolvedText());
+        sourceText = StringConvert(scratchArena, instance.sourceName.resolvedText());
     else
         sourceText.assign(NWB_TEXT("<unnamed>"));
 
@@ -241,7 +241,7 @@ template<typename PayloadT, typename PayloadVector>
 template<typename PayloadVector>
 [[nodiscard]] bool AssignPaddedRawRuntimeBuffer(
     Core::GraphicsRuntime& graphics,
-    Core::Alloc::GlobalArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
     MeshSkinningRuntimeInstance& instance,
     Core::BufferHandle& outBuffer,
     const AStringView suffix,
@@ -258,7 +258,7 @@ template<typename PayloadVector>
         return false;
     }
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, arena, bufferName, payload, { canHaveUavs, true, false, queueSharing });
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, bufferName, payload, { canHaveUavs, true, false, queueSharing });
     if(buffer){
         outBuffer = Move(*buffer);
         return true;
@@ -290,7 +290,8 @@ template<typename PayloadVector>
 
 
 bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance){
-    if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(m_arena, instance))
+    Core::Alloc::ScratchArena uploadScratchArena(__hidden_runtime_cache_resources::s_RuntimeMeshUploadArena);
+    if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(uploadScratchArena, instance))
         return false;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
@@ -377,7 +378,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
-        m_arena,
+        uploadScratchArena,
         instance,
         instance.meshletPositionRefDeltaBuffer,
         __hidden_runtime_cache_resources::s_MeshletPositionRefDeltasSuffix,
@@ -387,7 +388,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
-        m_arena,
+        uploadScratchArena,
         instance,
         instance.meshletAttributeRefDeltaBuffer,
         __hidden_runtime_cache_resources::s_MeshletAttributeRefDeltasSuffix,
@@ -406,7 +407,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
-        m_arena,
+        uploadScratchArena,
         instance,
         instance.meshletPrimitiveIndexBuffer,
         __hidden_runtime_cache_resources::s_MeshletPrimitiveIndicesSuffix,

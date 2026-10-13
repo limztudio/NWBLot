@@ -39,17 +39,17 @@ Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsMaterialBindIdentifier(const AStringView text){
+static bool IsMaterialBindIdentifier(const AStringView text)noexcept{
     if(text.empty())
         return false;
 
-    const auto isAlpha = [](const char ch){
+    const auto isAlpha = [](const char ch)noexcept{
         return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
     };
-    const auto isDigit = [](const char ch){
+    const auto isDigit = [](const char ch)noexcept{
         return ch >= '0' && ch <= '9';
     };
-    const auto isIdentifierChar = [&](const char ch){
+    const auto isIdentifierChar = [&](const char ch)noexcept{
         return isAlpha(ch) || isDigit(ch) || ch == '_';
     };
 
@@ -361,7 +361,7 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
         structs.push_back(Move(*bindStruct));
     }
 
-    Sort(structs.begin(), structs.end(), [](const MaterialBindStruct& lhs, const MaterialBindStruct& rhs){
+    Sort(structs.begin(), structs.end(), [](const MaterialBindStruct& lhs, const MaterialBindStruct& rhs)noexcept{
         return lhs.name < rhs.name;
     });
     return structs;

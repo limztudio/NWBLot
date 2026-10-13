@@ -22,9 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh cook meshlet-traversal stream reordering.
-
-
 struct MeshCookCommonStreamReorder{
     Core::Assets::AssetVector<Float3U> positions;
     Core::Assets::AssetVector<Half4U> normals;
@@ -37,7 +34,7 @@ struct MeshCookCommonStreamReorder{
     ScratchVector<u32> uv0Remap;
     ScratchVector<u32> colorRemap;
 
-    MeshCookCommonStreamReorder(Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena)
+    MeshCookCommonStreamReorder(Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena)noexcept
         : positions(assetArena)
         , normals(assetArena)
         , tangents(assetArena)

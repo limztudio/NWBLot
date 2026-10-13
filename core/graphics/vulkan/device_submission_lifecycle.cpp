@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+
 #include <global/atomic.h>
 #include <global/termination.h>
 

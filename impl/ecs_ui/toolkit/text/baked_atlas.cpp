@@ -61,10 +61,6 @@ BakedFontAtlas::BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas&
     m_ready = true;
 }
 
-const FontAtlasGlyph* BakedFontAtlas::glyph(u32 glyphId)const noexcept{
-    return glyphId < m_glyphs.size() ? &m_glyphs[glyphId] : nullptr;
-}
-
 const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const{
     NWB_FATAL_ASSERT(group < m_pages.size());
     return m_pages[group];

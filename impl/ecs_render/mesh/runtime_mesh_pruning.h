@@ -7,9 +7,10 @@
 
 #include "renderer_mesh_types.h"
 
-#include <core/alloc/scratch.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_mesh/runtime/mesh_requests.h>
+
+#include <core/alloc/scratch.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -15,7 +15,7 @@ target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/input_bindings_te
     "${CMAKE_CURRENT_LIST_DIR}/text_area_view_tests.cpp"
 
     "${CMAKE_CURRENT_LIST_DIR}/edit_navigation_state_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_caret_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/edit_caret_geometry_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_caret_range_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/multiline_view_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/multiline_view_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/multiline_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/multiline_text_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_view_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/fixture_text_shaping.h" "${CMAKE_CURRENT_LIST_DIR}/multiline_view_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/multiline_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/multiline_text_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/multiline_model_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/multiline_composition_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/multiline_command_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_selection_epoch_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/search_selection_epoch_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_parse_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_format_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_model_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/integer_model_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/float_model_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_model_lifetime_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_fixture.h"
@@ -37,3 +37,11 @@ target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/input_bindings_te
 target_link_libraries(nwb_ui_tests PRIVATE nwb_ui_gpu nwb_ui_images nwb_ui_edit nwb_ui_widgets nwb_ui nwb_ui_text nwb::harfbuzz)
 target_compile_definitions(nwb_ui_tests PRIVATE NWB_TEST_FONT_DIRECTORY="${CMAKE_SOURCE_DIR}/impl/assets/ui/fonts/default")
 target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/pointer_sources_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/pointer_hit_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/native_input.h")
+
+target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/baked_font_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/baked_font_fixture.cpp")
+
+target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/widget_fixture.cpp")
+
+target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/image_fixture_support.h" "${CMAKE_CURRENT_LIST_DIR}/image_fixture_support.cpp")
+
+target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/paint_assertions.h" "${CMAKE_CURRENT_LIST_DIR}/paint_assertions.cpp")

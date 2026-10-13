@@ -42,7 +42,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     u32 activePipelineCount = 0u;
     u32 pipelinePushConstantByteSize = 0;
 
-    const auto selectPipeline = [&](const VkPipelineLayout candidateLayout, const u32 candidatePushConstantByteSize, const GpuQueueCapability::Mask candidateCapabilities){
+    const auto selectPipeline = [&](const VkPipelineLayout candidateLayout, const u32 candidatePushConstantByteSize, const GpuQueueCapability::Mask candidateCapabilities)noexcept{
         ++activePipelineCount;
         layout = candidateLayout;
         requiredCapabilities = candidateCapabilities;
@@ -141,7 +141,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         }
     }
 
-    const auto isComponentTypeSupported = [&](const VkComponentTypeKHR componentType){
+    const auto isComponentTypeSupported = [&](const VkComponentTypeKHR componentType)noexcept{
         if(componentType == VK_COMPONENT_TYPE_FLOAT32_KHR)
             return true;
         for(u32 i = 0u; i < cooperativeVectorPropertyCount; ++i){
@@ -151,7 +151,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         return false;
     };
 
-    const auto isLowerPrecisionFloat = [](const VkComponentTypeKHR componentType){
+    const auto isLowerPrecisionFloat = [](const VkComponentTypeKHR componentType)noexcept{
         switch(componentType){
         case VK_COMPONENT_TYPE_FLOAT_E4M3_NV:
         case VK_COMPONENT_TYPE_FLOAT_E5M2_NV:
@@ -163,11 +163,11 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         }
     };
 
-    const auto isFloat8 = [](const VkComponentTypeKHR componentType){
+    const auto isFloat8 = [](const VkComponentTypeKHR componentType)noexcept{
         return componentType == VK_COMPONENT_TYPE_FLOAT_E4M3_NV || componentType == VK_COMPONENT_TYPE_FLOAT_E5M2_NV;
     };
 
-    const auto isTypeConversionSupported = [&](const VkComponentTypeKHR srcType, const VkComponentTypeKHR dstType){
+    const auto isTypeConversionSupported = [&](const VkComponentTypeKHR srcType, const VkComponentTypeKHR dstType)noexcept{
         if(srcType == dstType)
             return true;
         if(srcType == VK_COMPONENT_TYPE_FLOAT32_KHR)

@@ -3,9 +3,6 @@
 
 
 #include <impl/ecs_render/avboit/compute_effect_chain_builder.h>
-
-#include <core/graphics/backend_selection/backend.h>
-
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
@@ -15,6 +12,8 @@
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
+#include <core/graphics/backend_selection/backend.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,6 +22,29 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_avboit_compute_effect_chain{
+
+
+[[nodiscard]] static Core::GpuTaskSchedulingHint ComputeEffectScheduling(){
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    // Keep each effect in one recording packet while the compiler chooses its queue.
+    RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(scheduling);
+    RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(scheduling);
+    // Accepted samples use the queue class and exact transport chosen by this compile.
+    scheduling.allowTimingFeedbackRouting = true;
+    scheduling.allowCrossClassTimingFeedbackRouting = true;
+    return scheduling;
+}
+
+
+};
 
 
 AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)
@@ -46,18 +68,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
     if(!inputs.occupancyTask.valid())
         return MakeUnexpected(Failure{});
 
-    Core::GpuTaskSchedulingHint avboitComputeScheduling;
-    avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
-    avboitComputeScheduling.forceSubmissionBoundary = false;
-    avboitComputeScheduling.allowPacketMerge = true;
-    avboitComputeScheduling.mergeWithPrevious = true;
-    avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
-    // Keep each effect in one recording packet while the compiler chooses its queue.
-    RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
-    RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
-    // Accepted samples use the queue class and exact transport chosen by this compile.
-    avboitComputeScheduling.allowTimingFeedbackRouting = true;
-    avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
+    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::ComputeEffectScheduling();
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(*inputs.targets);
     Core::GpuTaskId completionTask = inputs.occupancyTask;
     if(inputs.hasTransparentRenderers){
@@ -116,18 +127,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
     if(!inputs.transmittance.valid() || !inputs.currentBindlessSlots.valid())
         return MakeUnexpected(Failure{});
 
-    Core::GpuTaskSchedulingHint avboitComputeScheduling;
-    avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
-    avboitComputeScheduling.forceSubmissionBoundary = false;
-    avboitComputeScheduling.allowPacketMerge = true;
-    avboitComputeScheduling.mergeWithPrevious = true;
-    avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
-    // Keep each effect in one recording packet while the compiler chooses its queue.
-    RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
-    RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
-    // Accepted samples use the queue class and exact transport chosen by this compile.
-    avboitComputeScheduling.allowTimingFeedbackRouting = true;
-    avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
+    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::ComputeEffectScheduling();
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(*inputs.targets);
     // Integration retains packet affinity; the compiler lowers its queue and resource states.
     const Core::GpuTaskResourceUse integrationResourceUses[] = {

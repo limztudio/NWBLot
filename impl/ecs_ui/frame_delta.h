@@ -22,7 +22,7 @@ class UiFrameDelta final{
 public:
     void add(f32 deltaSeconds)noexcept;
     [[nodiscard]] f32 consume()noexcept;
-    void clear()noexcept;
+    void clear()noexcept{ m_pendingSeconds = 0.0; }
 
 private:
     f64 m_pendingSeconds = 0.0;

@@ -143,6 +143,56 @@ TEST(AssetsGraphics, MeshletConeDegenerateDirectionUsesExplicitFallback){
 }
 
 
+TEST(AssetsGraphics, MeshletPositionAndSkinDeltasRejectU32WraparoundAtEveryWidth){
+    using namespace NWB::Impl;
+    for(const MeshletRefDeltaWidth::Enum width : { MeshletRefDeltaWidth::U8, MeshletRefDeltaWidth::U16, MeshletRefDeltaWidth::U32 }){
+        MeshletDesc meshlet;
+        meshlet.counts = PackMeshletCounts(1u, 1u, 1u, 1u);
+        meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
+        meshlet.positionBase = Limit<u32>::s_Max - 1u;
+        const u32 byteWidth = MeshletRefDeltaByteWidth(width);
+        u8 bytes[8u] = { 1u };
+        const auto boundary = DecodeMeshletPositionRef(bytes, byteWidth, meshlet, 0u, false);
+        ASSERT_TRUE(boundary);
+        EXPECT_EQ(boundary->position, Limit<u32>::s_Max);
+        meshlet.positionBase = Limit<u32>::s_Max;
+        EXPECT_FALSE(DecodeMeshletPositionRef(bytes, byteWidth, meshlet, 0u, false));
+
+        bytes[0u] = 0u;
+        bytes[byteWidth] = 1u;
+        meshlet.positionBase = 0u;
+        meshlet.skinBase = Limit<u32>::s_Max - 1u;
+        const auto skinBoundary = DecodeMeshletPositionRef(bytes, byteWidth * 2u, meshlet, 0u, true);
+        ASSERT_TRUE(skinBoundary);
+        EXPECT_EQ(skinBoundary->skin, Limit<u32>::s_Max);
+        meshlet.skinBase = Limit<u32>::s_Max;
+        EXPECT_FALSE(DecodeMeshletPositionRef(bytes, byteWidth * 2u, meshlet, 0u, true));
+    }
+}
+
+TEST(AssetsGraphics, MeshletAttributeDeltasRejectU32WraparoundInEveryChannelAndWidth){
+    using namespace NWB::Impl;
+    u32 MeshletDesc::* const baseMembers[] = { &MeshletDesc::normalBase, &MeshletDesc::tangentBase, &MeshletDesc::uv0Base, &MeshletDesc::colorBase };
+    u32 MeshletAttributeStreamRef::* const indexMembers[] = { &MeshletAttributeStreamRef::normal, &MeshletAttributeStreamRef::tangent, &MeshletAttributeStreamRef::uv0, &MeshletAttributeStreamRef::color };
+    for(const MeshletRefDeltaWidth::Enum width : { MeshletRefDeltaWidth::U8, MeshletRefDeltaWidth::U16, MeshletRefDeltaWidth::U32 }){
+        const u32 byteWidth = MeshletRefDeltaByteWidth(width);
+        for(usize channel = 0u; channel < LengthOf(baseMembers); ++channel){
+            MeshletDesc meshlet;
+            meshlet.counts = PackMeshletCounts(1u, 1u, 1u, 1u);
+            meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
+            meshlet.*baseMembers[channel] = Limit<u32>::s_Max - 1u;
+            u8 bytes[16u] = {};
+            bytes[channel * byteWidth] = 1u;
+            const auto boundary = DecodeMeshletAttributeRef(bytes, byteWidth * 4u, meshlet, 0u);
+            ASSERT_TRUE(boundary);
+            EXPECT_EQ((*boundary).*indexMembers[channel], Limit<u32>::s_Max);
+            meshlet.*baseMembers[channel] = Limit<u32>::s_Max;
+            EXPECT_FALSE(DecodeMeshletAttributeRef(bytes, byteWidth * 4u, meshlet, 0u));
+        }
+    }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

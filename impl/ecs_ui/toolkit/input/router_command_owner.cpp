@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::validCommandOwners()const{
+bool InputRouter::validCommandOwners()const noexcept{
     for(const HitTarget& source : m_stagedTargets){
         if(!source.commandOwner.valid()){
             if(source.commandOwnerDeclarationGeneration != 0u || !source.commandControl.empty())
@@ -41,7 +41,7 @@ bool InputRouter::validCommandOwners()const{
     return true;
 }
 
-const HitTarget* InputRouter::commandHost(const HitTarget& source)const{
+const HitTarget* InputRouter::commandHost(const HitTarget& source)const noexcept{
     if(!source.textEditable || !source.commandOwner.valid() || !source.commandControl.valid() || !isInteractive(source))
         return nullptr;
     const HitTarget* host = findTarget(source.commandOwner, source.commandOwnerDeclarationGeneration);
@@ -50,7 +50,7 @@ const HitTarget* InputRouter::commandHost(const HitTarget& source)const{
     return host;
 }
 
-bool InputRouter::currentControlCommandOwner(const CommandSource& held)const{
+bool InputRouter::currentControlCommandOwner(const CommandSource& held)const noexcept{
     const ControlCommandOwner& owner = held.controlOwner;
     const TargetOwner& sourceOwner = held.focusOwner;
     const HitTarget* host = findTarget(owner.host, owner.declarationGeneration);

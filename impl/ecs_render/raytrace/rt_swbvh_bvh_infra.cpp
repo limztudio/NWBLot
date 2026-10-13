@@ -8,9 +8,10 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
 #include <impl/ecs_csg/components.h>
+#include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
+
 #include <global/algorithm.h>
 #include <global/hash_utils.h>
-#include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +73,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     if(!heap.isInitialized())
         return false;
 
-    const auto sortHandlesReady = [this](){
+    const auto sortHandlesReady = [this]()noexcept{
         return RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle) && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle);
     };
 

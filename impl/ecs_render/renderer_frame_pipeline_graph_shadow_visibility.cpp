@@ -12,14 +12,13 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
-
-#include <impl/ecs_render/kernel/task_graph_scheduling.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -639,7 +638,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
                 return false;
             }
-            if(FindIf(csgBoundsResources.begin(), csgBoundsResources.end(), [&](const auto existing){ return existing == resource; }) != csgBoundsResources.end())
+            if(FindIf(csgBoundsResources.begin(), csgBoundsResources.end(), [&](const auto existing)noexcept{ return existing == resource; }) != csgBoundsResources.end())
                 continue;
             csgBoundsResources.push_back(resource);
             lightSpaceReads.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));

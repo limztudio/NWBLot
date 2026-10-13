@@ -117,12 +117,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     const NwbSwBvhInstance instance = nwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
 #if NWB_RT_CSG_ENABLED
-    if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u){
-        const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(g_NwbCausticSwMaterialContextSlots.materialSlots.w, g_NwbCausticSwMaterialContextSlots.sceneSlots.z, instanceIndex, worldOrigin, worldDirection, tMin, closest.t);
-        if(candidate.hit || candidate.failure != 0u)
-            closest = candidate;
+    if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
         return;
-    }
 #endif
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
     // Per-mesh geometry slots must remain non-uniform at every access.
@@ -238,10 +234,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
         [loop] while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
-#if NWB_RT_CSG_ENABLED
-                if(closest.failure != 0u)
-                    return closest;
-#endif
                 break;
             }
             else{
@@ -264,6 +256,21 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
         }
     }
 
+#if NWB_RT_CSG_ENABLED
+    // Match hardware closest-hit ordering: the current CSG receivers refine the nearest ordinary surface.
+    const uint contextSlot = g_NwbCausticSwMaterialContextSlots.materialSlots.w;
+    const uint materialSlot = g_NwbCausticSwMaterialContextSlots.sceneSlots.z;
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    for(uint index = 0u; index < activeCount; ++index){
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(contextSlot, materialSlot, instance, origin, direction, tMin, closest.t);
+        if(candidate.failure != 0u)
+            return candidate;
+        if(candidate.hit)
+            closest = candidate;
+    }
+#endif
     return closest;
 }
 

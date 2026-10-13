@@ -39,7 +39,7 @@ static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
         registry,
         TextureBinaryPayload::s_TextureAssetKindLabel,
         &ParseTextureDocument,
-        [](TextureCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildTextureAsset); },
+        [](TextureCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildTextureAsset(entry, arena); },
         false
     );
 }

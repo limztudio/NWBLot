@@ -11,6 +11,7 @@
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/common/log.h>
+
 #include <global/basic_string.h>
 
 
@@ -43,12 +44,12 @@ using namespace RendererTaskGraphDetail;
         return false;
     Core::Buffer* rightSources[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     usize sourceIndex = 0u;
-    ForEachMaterialPassMeshSourceBuffer(right.meshResources, [&](const Core::BufferHandle& source){
+    ForEachMaterialPassMeshSourceBuffer(right.meshResources, [&](const Core::BufferHandle& source)noexcept{
         rightSources[sourceIndex++] = source.get();
     });
     sourceIndex = 0u;
     bool same = true;
-    ForEachMaterialPassMeshSourceBuffer(left.meshResources, [&](const Core::BufferHandle& source){
+    ForEachMaterialPassMeshSourceBuffer(left.meshResources, [&](const Core::BufferHandle& source)noexcept{
         same = same && source.get() == rightSources[sourceIndex];
         ++sourceIndex;
     });

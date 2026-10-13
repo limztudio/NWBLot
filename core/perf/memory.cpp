@@ -55,8 +55,13 @@ MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName, const MemoryS
     const MemoryScopeId scope{ static_cast<u32>(m_scopes.size()), m_generation };
     record->generation = scope.generation;
     ContainerDetail::ReserveGrowingCapacity(m_scopes, m_scopes.size() + 1u);
-    m_scopeMap.try_emplace(key, scope);
     m_scopes.push_back(Move(record));
+    ScopeExit discardScope([&]()noexcept{ m_scopes.pop_back(); });
+    if(!m_scopeMap.try_emplace(key, scope).second){
+        NWB_ASSERT(false);
+        return {};
+    }
+    discardScope.release();
     return scope;
 }
 

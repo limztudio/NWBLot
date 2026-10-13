@@ -217,7 +217,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(policy.calibrationIntervalFrames == 0u || frameIndex % policy.calibrationIntervalFrames != 0u || !AllowsTimingFeedbackRouting(task))
         return nullptr;
 
-    const auto sampleCountFor = [&](const GpuPhysicalQueueInfo& queue){
+    const auto sampleCountFor = [&](const GpuPhysicalQueueInfo& queue)noexcept{
         const GpuTaskTimingHistory* const history = historySnapshot.find(TimingHistoryKeyForQueue(key, queue.queueClass), queue.id);
         return history ? history->sampleCount : 0u;
     };

@@ -21,6 +21,10 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+SIMDVectorSingle CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept{
+    return VectorAdd(inAreaVec, Vector3Cross(VectorSubtract(firstVec, originVec), VectorSubtract(secondVec, originVec)));
+}
+
 void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const CsgDeformTriangleVector<ScratchArena>& triangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges){
     outEdges.clear();
     if(triangles.empty())
@@ -34,11 +38,8 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const
             CsgDeformEdgeKey(triangle.indices[2u], triangle.indices[0u]),
         };
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
-            const auto found = edgeUses.find(edges[corner]);
-            if(found == edgeUses.end())
-                edgeUses.emplace(edges[corner], 1u);
-            else
-                found.value() = found.value() + 1u;
+            const auto edgeUse = edgeUses.try_emplace(edges[corner], 0u);
+            ++edgeUse.first.value();
         }
     }
     outEdges.reserve(triangles.size());
@@ -76,7 +77,7 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Ve
     outLoop.reserve(edges.size());
     outLoop.push_back(cursor);
     {
-        const auto seed = ::FindIf(remaining.begin(), remaining.end(), [cursor](const CsgDeformCutLoopEdge& edge){ return edge.first == cursor || edge.second == cursor; }
+        const auto seed = ::FindIf(remaining.begin(), remaining.end(), [cursor](const CsgDeformCutLoopEdge& edge)noexcept{ return edge.first == cursor || edge.second == cursor; }
         );
         if(seed == remaining.end())
             return false;
@@ -110,18 +111,6 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Ve
             return false;
     }
     return true;
-}
-
-SIMDVectorSingle CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept{
-    return VectorAdd(inAreaVec, Vector3Cross(VectorSubtract(firstVec, originVec), VectorSubtract(secondVec, originVec)));
-}
-
-SIMDVectorSingle CsgDeformCapBuilder::ScaleCenterVec(SIMDVectorSingle sumVec, SIMDVectorSingle loopSizeVec)noexcept{
-    return VectorDivide(sumVec, loopSizeVec);
-}
-
-SIMDVectorSingle CsgDeformCapBuilder::CapCenterNormalVec(SIMDVectorSingle loopNormalVec)noexcept{
-    return loopNormalVec;
 }
 
 Expected<SIMDVectorSingle> CsgDeformCapBuilder::CapNormal(const CsgDeformVertexVector<ScratchArena>& vertices, const Vector<u32, ScratchArena>& loop)noexcept{
@@ -158,13 +147,12 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormal
         centerColorVec = VectorAdd(centerColorVec, LoadFloat(vertex.color));
     }
     const SIMDVectorSingle loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
-    const SIMDVectorSingle centerNormalVec = CsgDeformCapBuilder::CapCenterNormalVec(loopNormalVec);
     CsgDeformVertex center;
-    StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerPositionVec, loopSizeVec), center.position);
-    StoreFloat(centerNormalVec, center.normal);
+    StoreFloat(VectorDivide(centerPositionVec, loopSizeVec), center.position);
+    StoreFloat(loopNormalVec, center.normal);
     center.tangent = s_FallbackTangent;
-    StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerUvVec, loopSizeVec), center.uv0);
-    StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerColorVec, loopSizeVec), center.color);
+    StoreFloat(VectorDivide(centerUvVec, loopSizeVec), center.uv0);
+    StoreFloat(VectorDivide(centerColorVec, loopSizeVec), center.color);
     if(!CsgDeformWallBuilder::NormalizeDeformVertex(center))
         return MakeUnexpected(Failure{});
     const u32 centerIndex = static_cast<u32>(inOutVertices.size());

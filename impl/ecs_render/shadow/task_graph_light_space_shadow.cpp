@@ -385,7 +385,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
                 resource = importBuffer(buffer, buffer->getCreationDescription().debugName, "Light-Space Meshlet Bounds");
             if(!resource.valid())
                 return {};
-            if(FindIf(uses.begin(), uses.end(), [&](const auto& use){ return use.resource == resource; }) == uses.end())
+            if(FindIf(uses.begin(), uses.end(), [&](const auto& use)noexcept{ return use.resource == resource; }) == uses.end())
                 uses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
     }

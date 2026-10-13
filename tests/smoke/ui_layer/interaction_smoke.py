@@ -7,7 +7,6 @@ This harness does not qualify physical pointer grabs or Wayland input.
 """
 from __future__ import annotations
 
-import argparse
 import ctypes
 import json
 import math
@@ -21,8 +20,9 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from window_capture_smoke import (  # noqa: E402
-    LinuxXEvent, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WinRect, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
+    LinuxXEvent, run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WinRect, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
     launch_logserver, launch_testbed, read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
+from smoke_arguments import parse_ui_smoke_args
 from fixture_environment import build_fixture_environment
 from probe_reference import linear_rgb_bytes
 
@@ -57,27 +57,7 @@ class WinGuiThreadInfo(ctypes.Structure):
 
 
 def parse_args(argv, *, description=__doc__):
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--executable", type=Path, required=True)
-    parser.add_argument("--working-directory", type=Path, required=True)
-    parser.add_argument("--output-directory", type=Path, required=True)
-    parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--timeout", type=float, default=90.0)
-    parser.add_argument("--application-arg", action="append", default=[])
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
-    args = parser.parse_args(argv)
-    if not math.isfinite(args.timeout) or args.timeout <= 0.0:
-        parser.error("--timeout must be finite and positive")
-    args.executable = args.executable.resolve()
-    args.working_directory = args.working_directory.resolve()
-    args.output_directory = args.output_directory.resolve()
-    args.window_title = "NWB UI Layer Smoke"
-    args.no_logserver = False
-    args.log_port = 0
-    args.software_vulkan = "off"
-    if args.gpu_validation:
-        args.application_arg = ["--gpudbg", *args.application_arg]
-    return args
+    return parse_ui_smoke_args(argv, description=description)
 
 
 def observe_markers(frame, scale_x, scale_y, expected_count, enabled):
@@ -361,15 +341,7 @@ def run(args):
 
 
 def main(argv):
-    args = parse_args(argv)
-    try:
-        return run(args)
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", flush=True)
-        return SKIP_EXIT_CODE
-    except (SmokeFailure, OSError, ValueError, TimeoutError) as error:
-        print(f"FAIL: {error}", flush=True)
-        return 1
+    return run_smoke_main(argv, parse_args, run)
 
 
 if __name__ == "__main__":

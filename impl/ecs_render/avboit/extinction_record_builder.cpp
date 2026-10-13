@@ -3,18 +3,16 @@
 
 
 #include <impl/ecs_render/avboit/extinction_record_builder.h>
-
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
-
-#include <core/graphics/backend_selection/backend.h>
-
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
+
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

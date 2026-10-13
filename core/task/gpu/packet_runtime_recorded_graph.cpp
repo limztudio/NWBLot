@@ -8,6 +8,7 @@
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/gpu_timing.h>
+
 #include <global/termination.h>
 
 
@@ -80,6 +81,23 @@ namespace __hidden_gpu_packet_runtime_recorded_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename StatisticsT>
+static void AccumulatePacketRecordingStatistics(StatisticsT& statistics, const GpuRecordedPacket& recordedPacket, const bool overlaps)noexcept{
+    ++statistics.packetCount;
+    statistics.taskCount += recordedPacket.taskCount;
+    statistics.commandListCount += recordedPacket.commandListCount;
+    statistics.barrierCount += recordedPacket.barrierCount;
+    statistics.commandListAcquisitionSeconds += recordedPacket.commandListAcquisitionSeconds;
+    statistics.graphBarrierRecordingSeconds += recordedPacket.graphBarrierRecordingSeconds;
+    statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
+    statistics.recordingSeconds += recordedPacket.recordingSeconds;
+    if(recordedPacket.recordingWorkerIndex != 0u)
+        ++statistics.workerRoutedPacketCount;
+    // Overlap is graph-wide even when accumulating only one physical queue.
+    if(overlaps)
+        ++statistics.parallelPacketCount;
+}
+
 struct PacketRecordingIntervalEntry{
     u64 beginNanoseconds = 0u;
     u64 endNanoseconds = 0u;
@@ -136,11 +154,6 @@ struct GpuRecordedGraph::ArtifactStorage final : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
     if(!stateFanInScratchArena){
         stateFanInScratchArena = MakeGlobalUnique<Alloc::ScratchArena>(arena, GpuPacketRuntimeDetail::s_PacketStateFanInScratchArena);
@@ -166,7 +179,7 @@ GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)
     , m_activeStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
     , m_candidateStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
 {}
-GpuRecordedGraph::~GpuRecordedGraph(){
+GpuRecordedGraph::~GpuRecordedGraph()noexcept{
     if(ArtifactOperation::ActiveFor(*this)){
         NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph destruction requires active artifact operations to finish first");
         TerminateInvariant();
@@ -507,18 +520,7 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(const GpuC
         if(recordedPacket.commandListCount == 0u || recordedPacket.packet != planAccess.packetIdAt(packetIndex))
             continue;
 
-        ++statistics.packetCount;
-        statistics.taskCount += recordedPacket.taskCount;
-        statistics.commandListCount += recordedPacket.commandListCount;
-        statistics.barrierCount += recordedPacket.barrierCount;
-        statistics.commandListAcquisitionSeconds += recordedPacket.commandListAcquisitionSeconds;
-        statistics.graphBarrierRecordingSeconds += recordedPacket.graphBarrierRecordingSeconds;
-        statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
-        statistics.recordingSeconds += recordedPacket.recordingSeconds;
-        if(recordedPacket.recordingWorkerIndex != 0u)
-            ++statistics.workerRoutedPacketCount;
-        if(storage.packetRecordingOverlaps[packetIndex] != 0u)
-            ++statistics.parallelPacketCount;
+        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingStatistics(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
     }
     return statistics;
 }
@@ -558,19 +560,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         if(packetPlan.queue != queue)
             continue;
 
-        ++statistics.packetCount;
-        statistics.taskCount += recordedPacket.taskCount;
-        statistics.commandListCount += recordedPacket.commandListCount;
-        statistics.barrierCount += recordedPacket.barrierCount;
-        statistics.commandListAcquisitionSeconds += recordedPacket.commandListAcquisitionSeconds;
-        statistics.graphBarrierRecordingSeconds += recordedPacket.graphBarrierRecordingSeconds;
-        statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
-        statistics.recordingSeconds += recordedPacket.recordingSeconds;
-        if(recordedPacket.recordingWorkerIndex != 0u)
-            ++statistics.workerRoutedPacketCount;
-        // The cached flag is graph-wide. A packet on this queue retains overlap with a published packet on another physical queue, preserving the aggregate's cross-queue recording semantics.
-        if(storage.packetRecordingOverlaps[packetIndex] != 0u)
-            ++statistics.parallelPacketCount;
+        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingStatistics(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
     }
     return statistics;
 }

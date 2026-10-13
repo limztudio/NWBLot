@@ -84,7 +84,9 @@ public:
         for(const char ch : text)
             canonicalText.push_back(Canonicalize(ch));
 
-        m_symbols.emplace(hash, Move(canonicalText));
+        const auto insertion = m_symbols.emplace(hash, Move(canonicalText));
+        if(!insertion.second)
+            return insertion.first->first == hash;
         return true;
     }
 
@@ -120,7 +122,7 @@ public:
         for(const auto& symbol : m_symbols)
             records.push_back(SymbolRecordView{ symbol.first, &symbol.second });
 
-        Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs){
+        Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs)noexcept{
                 return LessNameHash(lhs.hash, rhs.hash);
             }
         );
@@ -275,8 +277,8 @@ private:
 
 
 [[nodiscard]] RuntimeRegistry& Registry(){
-    static RuntimeRegistry registry;
-    return registry;
+    static RuntimeRegistry s_Registry;
+    return s_Registry;
 }
 
 void RecordSymbol(const NameHash& hash, const AStringView text, void* const userData){

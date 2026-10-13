@@ -37,7 +37,7 @@ static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
         registry,
         NWB_TEXT("sampler"),
         &ParseSamplerDocument,
-        [](SamplerCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildSamplerAsset); },
+        [](SamplerCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildSamplerAsset(entry, arena); },
         false
     );
 }

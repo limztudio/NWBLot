@@ -7,7 +7,7 @@
 
 #include <tests/unit/ui/native_input.h>
 
-#include <impl/ecs_ui/edit_box_host.h>
+#include "edit_host_fixture_support.h"
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
 
 #include <core/os/clipboard_service.h>
@@ -91,33 +91,7 @@ public:
     ClipboardRequestToken startedToken;
 };
 
-class FixtureShaper final : public Ui::ITextShaper{
-public:
-    explicit FixtureShaper(Alloc::GlobalArena& arena)
-        : m_arena(arena)
-    {}
-    virtual ~FixtureShaper()override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<Ui::ShapedRun, Ui::TextLayoutStatus::Enum> shape(const Ui::ShapeRequest& request)override{
-        Ui::ShapedRun run(m_arena);
-        run.metrics = { 8.0f, 2.0f, 2.0f };
-        usize begin = 0u;
-        while(begin < request.text.size()){
-            usize end = begin + 1u;
-            while(end < request.text.size() && IsUtf8Continuation(static_cast<u8>(request.text[end])))
-                ++end;
-            run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { 10.0f, 0.0f }, {} });
-            begin = end;
-        }
-        return run;
-    }
-
-
-private:
-    Alloc::GlobalArena& m_arena;
-};
+using FixtureShaper = UiEditHostFixtureSupport::FixtureShaper;
 
 class UiPopupInputTests : public testing::Test{
 public:
@@ -156,12 +130,7 @@ protected:
         const Ui::EditBoxOptions options;
         const Ui::EditBoxResult result = m_host.edit(retained, model, options);
         Ui::EditBoxView view(m_arena);
-        if(!result.valid || !view.snapshot(model))
-            return MakeUnexpected(Failure{});
-        auto layout = m_layoutBuilder.layout({ view.displayText() });
-        if(!layout)
-            return MakeUnexpected(Failure{});
-        if(!view.adoptLayout(Move(*layout)))
+        if(!result.valid || !UiEditHostFixtureSupport::PrepareEditView(view, model, m_layoutBuilder))
             return MakeUnexpected(Failure{});
         const auto placement = view.arrange(bounds, {}, m_viewport, {});
         if(!placement || !m_host.publish(retained, view, *placement, options))
@@ -247,12 +216,7 @@ protected:
             if(!m_popupResult.valid || m_context.popupToken().valid())
                 return false;
             Ui::EditBoxView view(m_arena);
-            if(!view.snapshot(m_popupModel))
-                return false;
-            auto layout = m_layoutBuilder.layout({ view.displayText() });
-            if(!layout)
-                return false;
-            if(!view.adoptLayout(Move(*layout)))
+            if(!UiEditHostFixtureSupport::PrepareEditView(view, m_popupModel, m_layoutBuilder))
                 return false;
             const auto placement = view.arrange({ 250.0f, 60.0f, 180.0f, 30.0f }, {}, m_viewport, {});
             if(!placement)

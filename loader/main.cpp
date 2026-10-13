@@ -8,16 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <CLI.hpp>
-
-#include <global/global.h>
-#include <global/exception.h>
-#include <global/scope_exit.h>
-#include <global/terminal_entry.h>
-#include <global/filesystem.h>
+#include "project_entry.h"
+#include "profile_names.h"
+#include <logger/client/module.h>
 
 #include <core/common/command_line.h>
-#include <logger/client/module.h>
 #include <core/common/module.h>
 #include <core/crash/module.h>
 #include <core/frame/module.h>
@@ -28,8 +23,13 @@
 #include <core/filesystem/factory.h>
 #include <core/filesystem/volume_naming.h>
 
-#include "project_entry.h"
-#include "profile_names.h"
+#include <global/global.h>
+#include <global/exception.h>
+#include <global/scope_exit.h>
+#include <global/terminal_entry.h>
+#include <global/filesystem.h>
+
+#include <CLI.hpp>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,7 +78,7 @@ inline constexpr i32 s_UninitializedFrameExtent = 0;
 
 class CallbackShutdownGuard : NoCopy{
 public:
-    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks, NWB::Core::CpuTaskScope& tasks)
+    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks, NWB::Core::CpuTaskScope& tasks)noexcept
         : m_callbacks(callbacks)
         , m_tasks(tasks)
     {}
@@ -104,9 +104,7 @@ public:
         m_tasks.wait();
     }
 
-    void activate()noexcept{
-        m_active = true;
-    }
+    void activate()noexcept{ m_active = true; }
 
 private:
     NWB::IProjectEntryCallbacks& m_callbacks;
@@ -168,7 +166,7 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
 
 class FilesystemAssetBinarySource final : public NWB::Core::Assets::IAssetBinarySource{
 public:
-    explicit FilesystemAssetBinarySource(NWB::Core::Filesystem::IFilesystem& filesystem)
+    explicit FilesystemAssetBinarySource(NWB::Core::Filesystem::IFilesystem& filesystem)noexcept
         : m_filesystem(filesystem)
     {}
 
@@ -377,7 +375,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
             context.perfCapture = [&frame](const NWB::Core::Perf::CaptureOptions& options){
                 frame.setPerfCapture(options);
             };
-            context.requestQuit = [&frame](){
+            context.requestQuit = [&frame]()noexcept{
                 frame.requestQuit();
             };
 
@@ -484,7 +482,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
 
         return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_loader::s_LoaderExitFailure; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_loader::s_LoaderExitFailure; });
 }
 
 

@@ -7,10 +7,11 @@
 
 #include "components.h"
 
-#include <core/assets/ref.h>
-#include <core/ecs/system.h>
 #include <impl/assets_skeleton/asset.h>
 #include <impl/assets_skeleton/joint_types.h>
+
+#include <core/assets/ref.h>
+#include <core/ecs/system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

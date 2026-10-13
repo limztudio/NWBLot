@@ -5,6 +5,7 @@
 #include "software_transparent_sampling.h"
 
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
+
 #include <global/hash_utils.h>
 
 
@@ -40,10 +41,6 @@ void SoftwareTransparentSamplingHistory::accept()noexcept{
     m_acceptedScene = m_scene;
     m_acceptedLightHash = m_lightHash;
     m_accepted = m_scene.trusted && m_lightingPrepared;
-}
-
-void SoftwareTransparentSamplingHistory::discard()noexcept{
-    m_accepted = false;
 }
 
 bool SoftwareTransparentSamplingHistory::usable()const noexcept{

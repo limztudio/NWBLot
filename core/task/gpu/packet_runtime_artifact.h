@@ -75,7 +75,7 @@ private:
 
 public:
     explicit GpuTaskGraphExternalResourceHandoffSnapshot(GraphicsArena& arena);
-    ~GpuTaskGraphExternalResourceHandoffSnapshot();
+    ~GpuTaskGraphExternalResourceHandoffSnapshot()noexcept;
 
 
 public:

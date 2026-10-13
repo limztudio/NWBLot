@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "arena_names.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -33,17 +34,16 @@ static Expected<SkeletonCookEntry> ParseSkeletonDocument(const Path& assetRoot, 
 }
 
 static Expected<SkeletonCookEntry> ParseSkeletonValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena);
+    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
+}
+
+static Expected<Skeleton> BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Core::Assets::AssetArena& arena){
+    Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_BuildAssetArena);
+    return BuildSkeletonAsset(entry, arena, scratchArena);
 }
 
 static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(
-        registry,
-        NWB_TEXT("skeleton"),
-        &ParseSkeletonDocument,
-        &ParseSkeletonValue,
-        [](SkeletonCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildSkeletonAsset); }
-    );
+    return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(registry, NWB_TEXT("skeleton"), &ParseSkeletonDocument, &ParseSkeletonValue, &BuildSkeletonCookedAsset);
 }
 
 

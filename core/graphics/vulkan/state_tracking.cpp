@@ -7,6 +7,7 @@
 #include "state_tracking_detail.h"
 
 #include <core/common/log.h>
+
 #include <global/containers.h>
 #include <global/termination.h>
 

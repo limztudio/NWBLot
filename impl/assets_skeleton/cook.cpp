@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "arena_names.h"
 #include "binary_payload.h"
 #include "cook_matrix.h"
 
@@ -16,6 +17,7 @@
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
+
 #include <global/binary.h>
 
 
@@ -33,32 +35,36 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
 
     const Skeleton& skeleton = static_cast<const Skeleton&>(asset);
-    if(!skeleton.validatePayload())
+    Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_SerializeArena);
+    if(!skeleton.validatePayload(scratchArena))
         return false;
 
-    Core::Assets::AssetVector<NameHash> jointNameHashes(outBinary.get_allocator().arena());
+    usize reserveBytes = sizeof(SkeletonBinaryPayload::HeaderBinary);
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skeleton.joints().size(), sizeof(SkeletonBinaryPayload::JointBinary)) || !BinaryDetail::CanStoreValueCount(outBinary, reserveBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkeletonAssetCodec::serialize failed: cooked payload size overflows"));
+        return false;
+    }
+
+    Vector<NameHash, Core::Alloc::ScratchArena> jointNameHashes(scratchArena);
     jointNameHashes.resize(skeleton.joints().size());
     for(const auto& jointLookup : skeleton.jointIndices())
         jointNameHashes[jointLookup.second] = jointLookup.first.hash();
 
-    Core::Assets::AssetVector<SkeletonBinaryPayload::JointBinary> jointBinaries(outBinary.get_allocator().arena());
-    jointBinaries.reserve(skeleton.joints().size());
+    outBinary.clear();
+    outBinary.reserve(reserveBytes);
+
+    SkeletonBinaryPayload::HeaderBinary header;
+    header.jointCount = static_cast<u64>(skeleton.joints().size());
+    AppendPOD(outBinary, header);
     for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
         const SkeletonJoint& joint = skeleton.joints()[jointIndex];
         SkeletonBinaryPayload::JointBinary jointBinary = {};
         jointBinary.nameHash = jointNameHashes[jointIndex];
         jointBinary.parentIndex = joint.parentIndex;
         jointBinary.localBindPose = joint.localBindPose;
-        jointBinaries.push_back(jointBinary);
+        AppendPOD(outBinary, jointBinary);
     }
-
-    outBinary.clear();
-    outBinary.reserve(sizeof(SkeletonBinaryPayload::HeaderBinary) + jointBinaries.size() * sizeof(SkeletonBinaryPayload::JointBinary));
-
-    SkeletonBinaryPayload::HeaderBinary header;
-    header.jointCount = static_cast<u64>(jointBinaries.size());
-    AppendPOD(outBinary, header);
-    return Core::Assets::AppendVectorPayload(outBinary, jointBinaries, NWB_TEXT("SkeletonAssetCodec::serialize"), NWB_TEXT("joints"));
+    return true;
 }
 
 
@@ -180,7 +186,7 @@ struct SkeletonJointPayload final{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
+Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_skeleton_cook;
 
     SkeletonCookEntry entry(arena);
@@ -217,7 +223,7 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, co
     if(!payloadResult)
         return MakeUnexpected(Failure{});
     testSkeleton.setJoints(Move(payloadResult->joints), Move(payloadResult->jointIndices));
-    if(!testSkeleton.validatePayload())
+    if(!testSkeleton.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return entry;
 }
@@ -228,10 +234,10 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, con
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, doc.asset(), arena);
+    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, doc.asset(), arena, scratchArena);
 }
 
-Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena){
+Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Skeleton asset(arena, skeletonEntry.virtualPath);
 
     auto payloadResult = __hidden_skeleton_cook::BuildSkeletonJointPayload(skeletonEntry, arena);
@@ -239,7 +245,7 @@ Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Co
         return MakeUnexpected(Failure{});
 
     asset.setJoints(Move(payloadResult->joints), Move(payloadResult->jointIndices));
-    if(!asset.validatePayload())
+    if(!asset.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return asset;
 }

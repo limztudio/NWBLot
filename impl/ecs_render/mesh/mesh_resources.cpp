@@ -7,6 +7,12 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
+#include <impl/assets_mesh/asset.h>
+#include <impl/assets_mesh/meshlet_triangle_indices.h>
+#include <impl/assets_mesh/meshlet_vertex_attributes.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/runtime/buffer_upload.h>
+#include <impl/ecs_mesh/runtime/resource_names.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
@@ -14,12 +20,6 @@
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/assets_mesh/asset.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.h>
-#include <impl/assets_mesh/meshlet_vertex_attributes.h>
-#include <impl/ecs_mesh/module.h>
-#include <impl/ecs_mesh/runtime/buffer_upload.h>
-#include <impl/ecs_mesh/runtime/resource_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +38,7 @@ namespace __hidden_mesh{
 
 
 static constexpr usize s_RayTracingReconstructionScratchPaddingBytes = 4096u;
+inline constexpr Name s_PaddedMeshUploadArena("impl/ecs_render/padded_mesh_upload");
 inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pruning");
 
 
@@ -140,14 +141,14 @@ template<typename PayloadT, typename PayloadVector>
 }
 
 template<typename PayloadVector>
-[[nodiscard]] static bool AssignPaddedRawMeshBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena, const Name& meshName, Core::BufferHandle& outBuffer, const AStringView suffix, const PayloadVector& payload, const TStringView label){
+[[nodiscard]] static bool AssignPaddedRawMeshBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::ScratchArena& scratchArena, const Name& meshName, Core::BufferHandle& outBuffer, const AStringView suffix, const PayloadVector& payload, const TStringView label){
     outBuffer = nullptr;
 
     const Name bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
         return false;
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, arena, bufferName, payload, { false, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, bufferName, payload, { false, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
     if(!buffer){
         ReportMeshBufferSetupFailure(buffer.error(), meshName, label);
         return false;
@@ -256,9 +257,10 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(m_graphics, meshPath, createdMesh.colorBuffer, RendererArenaScope::s_ColorsBufferName, mesh.colorStream(), RendererArenaScope::s_ColorBufferLabel) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(m_graphics, meshPath, createdMesh.meshletDescBuffer, RendererArenaScope::s_MeshletsBufferName, mesh.meshlets(), RendererArenaScope::s_MeshletDescriptorBufferLabel) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(m_graphics, meshPath, createdMesh.meshletBoundsBuffer, RendererArenaScope::s_MeshletBoundsBufferName, mesh.meshletBounds(), RendererArenaScope::s_MeshletBoundsBufferLabel, true) && uploaded;
+    Core::Alloc::ScratchArena uploadScratchArena(__hidden_mesh::s_PaddedMeshUploadArena);
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
-        m_arena,
+        uploadScratchArena,
         meshPath,
         createdMesh.meshletPositionRefDeltaBuffer,
         RendererArenaScope::s_MeshletPositionRefDeltasBufferName,
@@ -267,7 +269,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
-        m_arena,
+        uploadScratchArena,
         meshPath,
         createdMesh.meshletAttributeRefDeltaBuffer,
         RendererArenaScope::s_MeshletAttributeRefDeltasBufferName,
@@ -284,7 +286,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
-        m_arena,
+        uploadScratchArena,
         meshPath,
         createdMesh.meshletPrimitiveIndexBuffer,
         RendererArenaScope::s_MeshletPrimitiveIndicesBufferName,

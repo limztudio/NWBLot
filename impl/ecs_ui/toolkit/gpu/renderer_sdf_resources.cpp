@@ -26,7 +26,7 @@ namespace __hidden_ui_gpu_sdf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidPage(const SharedSdfAtlasPage& page){
+[[nodiscard]] static bool ValidPage(const SharedSdfAtlasPage& page)noexcept{
     if(!page)
         return false;
     const SdfAtlasPageBinding& binding = page->binding();
@@ -66,7 +66,7 @@ namespace __hidden_ui_gpu_sdf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuSdfAtlasVersion::GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSdfAtlasPage page)
+GpuSdfAtlasVersion::GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSdfAtlasPage page)noexcept
     : m_graphics(graphics)
     , m_page(Move(page))
 {}
@@ -80,7 +80,7 @@ GpuSdfAtlasVersion::~GpuSdfAtlasVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot){
+bool GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     const auto& pages = snapshot.sdfPages();
     if(pages.size() + snapshot.glyphPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;

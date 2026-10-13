@@ -42,8 +42,7 @@ static bool ValidateMaterialVariant(ShaderCook& shaderCook, const MaterialCookEn
     }
     const AStringView requestedVariant(materialEntry.shaderVariant.data(), materialEntry.shaderVariant.size());
 
-    ShaderCook::CookArena& arena = materialEntry.shaderVariant.get_allocator().arena();
-    const CookString contextLabel = StringFormat(arena, "{} [{}]", AStringView(materialEntry.virtualPath), stageName.resolvedText());
+    const ScratchString contextLabel = StringFormat(scratchArena, "{} [{}]", AStringView(materialEntry.virtualPath), stageName.resolvedText());
     return shaderCook.validateVariantSignature(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues, scratchArena);
 }
 

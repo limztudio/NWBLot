@@ -41,6 +41,35 @@ inline constexpr int s_TexConvExitFailure = 1;
 inline constexpr int s_TexConvExitFatal = -1;
 
 
+template<bool AlphaMask>
+[[nodiscard]] bool ValidateInputImage(const Path& path){
+    const auto isRegularFile = IsRegularFile(path);
+    if(!isRegularFile && !IsMissingPathError(isRegularFile.error())){
+        if constexpr(AlphaMask)
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), StringConvert(isRegularFile.error().message()));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(path), StringConvert(isRegularFile.error().message()));
+        return false;
+    }
+    if(!isRegularFile || !*isRegularFile){
+        if constexpr(AlphaMask)
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'"), PathToString<tchar>(path));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'"), PathToString<tchar>(path));
+        return false;
+    }
+    if(!IsSupportedInputPath(path)){
+        if constexpr(AlphaMask)
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
+        return false;
+    }
+    return true;
+}
+
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -126,36 +155,11 @@ int Run(const int argc, char** argv){
             }
 
             for(const Path& inputPath : inputPaths){
-                const auto inputIsRegularFile = IsRegularFile(inputPath);
-                if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(inputPath), StringConvert(inputIsRegularFile.error().message()));
+                if(!TexConvCliDetail::ValidateInputImage<false>(inputPath))
                     return TexConvCliDetail::s_TexConvExitFailure;
-                }
-                if(!inputIsRegularFile || !*inputIsRegularFile){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'"), PathToString<tchar>(inputPath));
-                    return TexConvCliDetail::s_TexConvExitFailure;
-                }
-                if(!IsSupportedInputPath(inputPath)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
-                    return TexConvCliDetail::s_TexConvExitFailure;
-                }
             }
-
-            if(alphaSource.mode == AlphaSourceMode::Image){
-                const auto alphaIsRegularFile = IsRegularFile(alphaSource.path);
-                if(!alphaIsRegularFile && !IsMissingPathError(alphaIsRegularFile.error())){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(alphaSource.path), StringConvert(alphaIsRegularFile.error().message()));
-                    return TexConvCliDetail::s_TexConvExitFailure;
-                }
-                if(!alphaIsRegularFile || !*alphaIsRegularFile){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'"), PathToString<tchar>(alphaSource.path));
-                    return TexConvCliDetail::s_TexConvExitFailure;
-                }
-                if(!IsSupportedInputPath(alphaSource.path)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
-                    return TexConvCliDetail::s_TexConvExitFailure;
-                }
-            }
+            if(alphaSource.mode == AlphaSourceMode::Image && !TexConvCliDetail::ValidateInputImage<true>(alphaSource.path))
+                return TexConvCliDetail::s_TexConvExitFailure;
 
             const auto outputPaths = ResolveOutputPaths(inputPaths.front(), outputPathText);
             if(!outputPaths || !ValidateOutputPaths(*outputPaths, force))

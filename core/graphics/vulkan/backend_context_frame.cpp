@@ -6,6 +6,8 @@
 #include "backend_context_detail.h"
 #include "arena_names.h"
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -212,7 +214,7 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
         )
     )
         return false;
-    m_framePresentationCondition.wait(presentationLock, [this](){
+    m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
     });
     if(claim && (claim->identity != m_framePresentationClaimIdentity || claim->invoke != &BackendContext::InvokeFramePresentationSignalPreparation || claim->resolved != &BackendContext::InvokeFramePresentationSignalResolution))
@@ -374,19 +376,23 @@ bool BackendContext::recreateAcquireSyncSlots(const usize count){
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     for(usize index = 0u; index < count; ++index){
         AcquireSyncSlot slot;
+        ScopeExit destroyUnpublishedSlot([&]()noexcept{
+            if(slot.fence)
+                m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
+            if(slot.semaphore)
+                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
+        });
+
         VkResult result = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &slot.semaphore);
         if(result == VK_SUCCESS)
             result = m_deviceDispatch.vkCreateFence(m_vulkanDevice, &fenceInfo, nullptr, &slot.fence);
         if(result != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire synchronization slot {}. {}"), index, ResultToString(result));
-            if(slot.fence)
-                m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
-            if(slot.semaphore)
-                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
             clearAcquireSyncSlots();
             return false;
         }
         m_acquireSyncSlots.push_back(slot);
+        destroyUnpublishedSlot.release();
     }
     return true;
 }

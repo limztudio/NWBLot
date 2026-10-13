@@ -231,23 +231,23 @@ struct NameSymbolResolverState{
 
 
 [[nodiscard]] inline NameSymbolRecorderState& SymbolRecorderState()noexcept{
-    static NameSymbolRecorderState state;
-    return state;
+    static NameSymbolRecorderState s_state;
+    return s_state;
 }
 
 [[nodiscard]] inline NameSymbolResolverState& SymbolResolverState()noexcept{
-    static NameSymbolResolverState state;
-    return state;
+    static NameSymbolResolverState s_state;
+    return s_state;
 }
 
 [[nodiscard]] inline bool& SymbolRecordInProgress()noexcept{
-    thread_local static bool inProgress = false;
-    return inProgress;
+    thread_local static bool s_inProgress = false;
+    return s_inProgress;
 }
 
 [[nodiscard]] inline bool& SymbolResolveInProgress()noexcept{
-    thread_local static bool inProgress = false;
-    return inProgress;
+    thread_local static bool s_inProgress = false;
+    return s_inProgress;
 }
 
 class ScopedSymbolCallbackFlag final{
@@ -273,10 +273,10 @@ private:
 inline constexpr usize s_SymbolTextBufferLength = 1024u; // keep == NameSymbols::s_MaxResolvedTextLength
 inline constexpr usize s_SymbolTextBufferCount = 8u;
 [[nodiscard]] inline char* NextSymbolTextBuffer()noexcept{
-    thread_local static char buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
-    thread_local static usize next = 0u;
-    char* const buffer = buffers[next];
-    next = (next + 1u) % s_SymbolTextBufferCount;
+    thread_local static char s_buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
+    thread_local static usize s_next = 0u;
+    char* const buffer = s_buffers[s_next];
+    s_next = (s_next + 1u) % s_SymbolTextBufferCount;
     return buffer;
 }
 
@@ -454,6 +454,27 @@ class Name{
     friend constexpr bool operator<(const Name& a, const Name& b)noexcept;
 
 
+private:
+    struct StringViewConstruction{};
+
+    template<typename CharT>
+    constexpr Name(StringViewConstruction, const BasicStringView<CharT> text)
+        : m_hash(ComputeNameHash(text))
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+        , m_debugName{}
+#endif
+#if defined(NWB_BUILD_SYMBOLS)
+        , m_hasSymbolText(true)
+#endif
+    {
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+        NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
+#endif
+        if(!IsConstantEvaluated())
+            NameDetail::RecordNameSymbolText(m_hash, text);
+    }
+
+
 public:
     constexpr Name()noexcept
         : m_hash{}
@@ -465,13 +486,7 @@ public:
 #endif
     {}
     constexpr Name(std::nullptr_t)noexcept
-        : m_hash{}
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        , m_debugName{}
-#endif
-#if defined(NWB_BUILD_SYMBOLS)
-        , m_hasSymbolText(false)
-#endif
+        : Name()
     {}
     constexpr Name(const char* str)noexcept
         : m_hash(ComputeNameHash(str))
@@ -513,35 +528,11 @@ public:
 #endif
     }
     explicit constexpr Name(const AStringView text)
-        : m_hash(ComputeNameHash(text))
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        , m_debugName{}
-#endif
-#if defined(NWB_BUILD_SYMBOLS)
-        , m_hasSymbolText(true)
-#endif
-    {
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
-#endif
-        if(!IsConstantEvaluated())
-            NameDetail::RecordNameSymbolText(m_hash, text);
-    }
+        : Name(StringViewConstruction{}, text)
+    {}
     explicit constexpr Name(const WStringView text)
-        : m_hash(ComputeNameHash(text))
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        , m_debugName{}
-#endif
-#if defined(NWB_BUILD_SYMBOLS)
-        , m_hasSymbolText(true)
-#endif
-    {
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
-#endif
-        if(!IsConstantEvaluated())
-            NameDetail::RecordNameSymbolText(m_hash, text);
-    }
+        : Name(StringViewConstruction{}, text)
+    {}
 
 
 public:

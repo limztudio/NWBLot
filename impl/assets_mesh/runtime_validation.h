@@ -24,16 +24,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh payload stream and meshlet validation.
-
-
 class MeshRuntimeValidation final : NoCopy{
 public:
     [[nodiscard]] static SIMDVectorSingle MakeMeshPositionVector(const SIMDVectorSingle position)noexcept;
     [[nodiscard]] static SIMDVectorSingle MakeMeshNormalVector(const SIMDVectorSingle normal)noexcept;
-    [[nodiscard]] static SIMDVectorSingle MakeMeshTangentVector(const SIMDVectorSingle tangent)noexcept;
     [[nodiscard]] static SIMDVectorSingle MakeMeshUvVector(const SIMDVectorSingle uv)noexcept;
-    [[nodiscard]] static SIMDVectorSingle MakeMeshColorVector(const SIMDVectorSingle color)noexcept;
     [[nodiscard]] static bool ValidDirectionVector(const SIMDVectorSingle direction)noexcept;
     [[nodiscard]] static bool ValidTangentVector(const SIMDVectorSingle tangent)noexcept;
     [[nodiscard]] static bool ValidateMeshStreams(

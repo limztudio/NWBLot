@@ -33,14 +33,14 @@ private:
 
 
 public:
-    explicit ReconcileGuard(const Context& context)
+    explicit ReconcileGuard(const Context& context)noexcept
         : m_context(context)
     {}
-    virtual ~ReconcileGuard()override = default;
+    virtual ~ReconcileGuard()noexcept override = default;
 
 
 public:
-    [[nodiscard]] bool add(const PopupState& state, const PopupToken& token){
+    [[nodiscard]] bool add(const PopupState& state, const PopupToken& token)noexcept{
         if(m_count == s_InputMaxPopups)
             return false;
         m_popups[m_count].emplace(PopupLoan{ state, token });

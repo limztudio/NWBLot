@@ -59,7 +59,13 @@ struct VolumeMipDims{
 
 
 void ConfigureCompressor(basisu::basis_compressor_params& parameters, basisu::job_pool& jobPool, basist::basis_tex_format format, bool srgb);
-void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb);
+struct MipEncoderDiagnostics{
+    TStringView initializeFailure;
+    TStringView processFailure;
+    TStringView incompleteFailure;
+};
+[[nodiscard]] bool EncodeMip(basisu::basis_compressor_params& parameters, basist::basis_tex_format format, u32 planeCount, u32 width, u32 height, TexturePayload& inOutPayload, const MipEncoderDiagnostics& diagnostics, bool* inOutHasAlpha = nullptr);
+void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb)noexcept;
 [[nodiscard]] bool ValidateBackendOutput(const basisu::basisu_backend_output& backendOutput, const basist::basis_tex_format expectedFormat);
 [[nodiscard]] bool AppendCanonicalMip(const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload);
 [[nodiscard]] Expected<basisu::imagef> LoadAlphaMask(const AlphaSource& alphaSource, const u32 expectedWidth, const u32 expectedHeight);
@@ -145,6 +151,37 @@ template<typename PlaneVector>
     targets.dims = *dims;
     targets.planes.resize(dims->targetDepth);
     return targets;
+}
+
+template<typename PlaneVector, typename Resample, typename Average>
+[[nodiscard]] Expected<PlaneVector> GenerateVolumeMip(const PlaneVector& sourcePlanes, Resample&& resample, Average&& average, const TStringView failureLabel){
+    auto targets = PrepareVolumeMipTargets(sourcePlanes);
+    if(!targets)
+        return MakeUnexpected(Failure{});
+    const auto& dims = targets->dims;
+    for(u32 targetZ = 0u; targetZ < dims.targetDepth; ++targetZ){
+        const auto range = ComputeVolumeMipSliceRange(dims.sourceDepth, dims.targetDepth, targetZ);
+        if(!range)
+            return MakeUnexpected(Failure{});
+        PlaneVector filteredPlanes;
+        filteredPlanes.resize(range->end - range->first);
+        for(u32 sourceZ = range->first; sourceZ < range->end; ++sourceZ){
+            auto& filteredPlane = filteredPlanes[sourceZ - range->first];
+            filteredPlane.resize(dims.targetWidth, dims.targetHeight);
+            if(!resample(sourcePlanes[sourceZ], filteredPlane)){
+                NWB_LOGGER_ERROR(failureLabel);
+                return MakeUnexpected(Failure{});
+            }
+        }
+        const u32 filteredPlaneCount = static_cast<u32>(filteredPlanes.size());
+        auto& targetPlane = targets->planes[targetZ];
+        targetPlane.resize(dims.targetWidth, dims.targetHeight);
+        for(u32 y = 0u; y < dims.targetHeight; ++y){
+            for(u32 x = 0u; x < dims.targetWidth; ++x)
+                average(filteredPlanes, targetPlane, x, y, filteredPlaneCount);
+        }
+    }
+    return Move(targets->planes);
 }
 
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import socket
 import subprocess
 import time
@@ -74,7 +75,7 @@ class ProfileSessionController:
         if not args.with_profile:
             return None
 
-        if args.profile_logserver_timeout <= 0.0:
+        if not math.isfinite(args.profile_logserver_timeout) or args.profile_logserver_timeout <= 0.0:
             raise SystemExit(MSG_POSITIVE_TIMEOUT)
 
         log_port = _facade.resolve_profile_log_port(args)

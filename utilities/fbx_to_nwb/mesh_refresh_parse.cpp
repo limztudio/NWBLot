@@ -299,7 +299,7 @@ template<typename ElementT, usize ComponentCount>
     return true;
 }
 
-[[nodiscard]] bool IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName){
+[[nodiscard]] bool IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName)noexcept{
     return fieldName == Core::Metascript::MStringView(s_PositionsField.data(), s_PositionsField.size())
         || fieldName == Core::Metascript::MStringView(s_NormalsField.data(), s_NormalsField.size())
         || fieldName == Core::Metascript::MStringView(s_TangentsField.data(), s_TangentsField.size())

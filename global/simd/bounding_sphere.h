@@ -226,7 +226,7 @@
     }
 
     const SIMDVectorSingle radiusSum = VectorAdd(sphereRadius, otherRadius);
-    if(Vector4GreaterOrEqual(distanceSq, VectorMultiply(radiusSum, radiusSum)))
+    if(Vector4Greater(distanceSq, VectorMultiply(radiusSum, radiusSum)))
         return ContainmentType::Disjoint;
     return ContainmentType::Intersects;
 }
@@ -243,7 +243,7 @@
     }
 
     const SIMDVectorDouble radiusSum = VectorDoubleAdd(sphereRadius, otherRadius);
-    if(VectorDouble4GreaterOrEqual(distanceSq, VectorDoubleMultiply(radiusSum, radiusSum)))
+    if(VectorDouble4Greater(distanceSq, VectorDoubleMultiply(radiusSum, radiusSum)))
         return ContainmentType::Disjoint;
     return ContainmentType::Intersects;
 }

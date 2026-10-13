@@ -36,12 +36,21 @@ void CompactAtlasGroups(Impl::FontAtlasPayload& payload){
         const u32 height = endY - firstY;
         Core::Assets::AssetBytes compactPixels(group.pixels.get_allocator().arena());
         compactPixels.resize(static_cast<usize>(width) * height * channelCount);
-        for(u32 y = 0u; y < height; ++y){
-            for(u32 x = 0u; x < width; ++x){
-                const usize source = (static_cast<usize>(firstY + y) * group.width + firstX + x) * group.channelCount;
-                const usize destination = (static_cast<usize>(y) * width + x) * channelCount;
-                for(u32 channel = 0u; channel < channelCount; ++channel)
-                    compactPixels[destination + channel] = group.pixels[source + channel];
+        if(channelCount == group.channelCount){
+            const usize rowBytes = static_cast<usize>(width) * channelCount;
+            for(u32 y = 0u; y < height; ++y){
+                const usize source = (static_cast<usize>(firstY + y) * group.width + firstX) * channelCount;
+                NWB_MEMCPY(compactPixels.data() + static_cast<usize>(y) * rowBytes, rowBytes, group.pixels.data() + source, rowBytes);
+            }
+        }
+        else{
+            for(u32 y = 0u; y < height; ++y){
+                for(u32 x = 0u; x < width; ++x){
+                    const usize source = (static_cast<usize>(firstY + y) * group.width + firstX + x) * group.channelCount;
+                    const usize destination = (static_cast<usize>(y) * width + x) * channelCount;
+                    for(u32 channel = 0u; channel < channelCount; ++channel)
+                        compactPixels[destination + channel] = group.pixels[source + channel];
+                }
             }
         }
         for(auto& glyph : payload.glyphs){

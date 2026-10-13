@@ -2,13 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/allocation_size.h>
 #include <global/atomic.h>
 #include <global/simd/memory.h>
 #include <global/simd/type.h>
 #include <global/timer.h>
+#include <global/text_utils.h>
 
-#include <fenv.h>
 #include <iostream>
 #include <new>
 
@@ -298,8 +299,8 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
 
 [[nodiscard]] bool QualifyEquality()noexcept{
 #pragma STDC FENV_ACCESS ON
-    fenv_t original{};
-    if(feholdexcept(&original) != 0)
+    const auto original = HoldFloatingPointExceptions();
+    if(!original)
         return false;
     alignas(64) u64 lhs[8]{}, rhs[8]{};
     bool valid = true;
@@ -320,18 +321,18 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
             }
         }
     }
-    if(fetestexcept(FE_ALL_EXCEPT) != 0 || feraiseexcept(FE_DIVBYZERO) != 0)
+    if(TestFloatingPointExceptions(FE_ALL_EXCEPT) != 0 || !RaiseFloatingPointExceptions(FE_DIVBYZERO))
         valid = false;
     // Opaque call targets prevent either predicate from being removed between the pre-existing flag and its observation.
     bool(*volatile wideFunction)(const u64*, const u64*)noexcept = CandidateEqual;
     bool(*volatile firstWordFunction)(const u64*, const u64*)noexcept = CandidateEqualFirstWord;
     const bool wideEqual = wideFunction(lhs, rhs);
-    const i32 wideFlags = fetestexcept(FE_ALL_EXCEPT);
+    const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     const bool firstWordEqual = firstWordFunction(lhs, rhs);
-    const i32 firstWordFlags = fetestexcept(FE_ALL_EXCEPT);
+    const i32 firstWordFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!wideEqual || !firstWordEqual || wideFlags != FE_DIVBYZERO || firstWordFlags != FE_DIVBYZERO)
         valid = false;
-    if(fesetenv(&original) != 0)
+    if(!SetFloatingPointEnvironment(*original))
         valid = false;
     return valid;
 }
@@ -511,11 +512,10 @@ int main(int argc, char** argv){
     }
     usize samples = 7u;
     if(argc >= 3){
-        char* end = nullptr;
-        const u64 parsed = static_cast<u64>(strtoul(argv[2], &end, 10));
-        if(end == argv[2] || *end != '\0' || parsed == 0u || parsed > 100u)
+        const auto parsedSamples = ParseU64FromChars(AStringView(argv[2]));
+        if(!parsedSamples || *parsedSamples == 0u || *parsedSamples > 100u)
             return 2;
-        samples = static_cast<usize>(parsed);
+        samples = static_cast<usize>(*parsedSamples);
     }
     if(NWB_STRCMP(argv[1], "--bench-copy") == 0)
         BenchCopy(samples);

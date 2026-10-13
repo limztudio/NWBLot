@@ -9,6 +9,7 @@
 
 #include <global/filesystem/operations.h>
 #include <global/thread.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,12 +58,16 @@ template<typename ArenaT>
 template<typename ArenaT>
 [[nodiscard]] inline bool WaitForDirectory(const ::Path<ArenaT>& path, const u32 timeoutMilliseconds, const u32 pollMilliseconds = FilesystemTestDetail::s_DefaultDirectoryPollMilliseconds){
     const u32 stepMilliseconds = pollMilliseconds == 0u ? FilesystemTestDetail::s_MinimumDirectoryPollMilliseconds : pollMilliseconds;
-    for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= timeoutMilliseconds; elapsedMilliseconds += stepMilliseconds){
+    const Timer deadline = TimerAddMS(TimerNow(), timeoutMilliseconds);
+    for(;;){
         if(PathIsDirectory(path))
             return true;
-        SleepMS(stepMilliseconds);
+        const Timer now = TimerNow();
+        if(now >= deadline)
+            return false;
+        const u32 remainingMilliseconds = static_cast<u32>(Max(DurationInMS<i64>(deadline, now), i64(1)));
+        SleepMS(Min(stepMilliseconds, remainingMilliseconds));
     }
-    return false;
 }
 
 

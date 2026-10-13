@@ -3,12 +3,11 @@
 
 
 #include <impl/ecs_render/deferred/lighting_stage_builder.h>
-
-#include <core/graphics/backend_selection/backend.h>
-
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -3,6 +3,7 @@
 
 
 #include "nested_popup_source.h"
+#include "smoke_geometry.h"
 
 #include <global/assert.h>
 
@@ -124,24 +125,7 @@ Expected<u64> UiNestedPopupSmokeSource::indexOf(const u64 keyValue)const{
 }
 
 Expected<u64> UiNestedPopupSmokeSource::findEnabled(const u64 start, const bool reverse)const{
-    u64 index = 0u;
-    if(start >= rowCount())
-        return MakeUnexpected(Failure{});
-    if(enabled(start)){
-        index = start;
-        return index;
-    }
-    if(reverse){
-        if(start == 0u)
-            return MakeUnexpected(Failure{});
-        index = start - 1u;
-    }
-    else{
-        if(start + 1u >= rowCount())
-            return MakeUnexpected(Failure{});
-        index = start + 1u;
-    }
-    return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
+    return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
 StringView UiNestedPopupSmokeSource::text(const u64 index)const{

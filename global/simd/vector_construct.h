@@ -635,16 +635,16 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, 
 #if defined(NWB_HAS_NEON64)
     return vreinterpretq_f32_u8(vqtbl1q_u8(vreinterpretq_u8_f32(value), SIMDVectorDetail::PermuteByteIndices(e0, e1, e2, e3)));
 #elif defined(NWB_HAS_NEON)
-    static const u32 controlElement[4] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, };
+    static const u32 s_controlElement[4] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, };
 
     uint8x8x2_t table{};
     table.val[0] = vreinterpret_u8_f32(vget_low_f32(value));
     table.val[1] = vreinterpret_u8_f32(vget_high_f32(value));
 
-    uint32x2_t idx = vcreate_u32(static_cast<u64>(controlElement[e0]) | (static_cast<u64>(controlElement[e1]) << 32));
+    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[e0]) | (static_cast<u64>(s_controlElement[e1]) << 32));
     const uint8x8_t lo = vtbl2_u8(table, vreinterpret_u8_u32(idx));
 
-    idx = vcreate_u32(static_cast<u64>(controlElement[e2]) | (static_cast<u64>(controlElement[e3]) << 32));
+    idx = vcreate_u32(static_cast<u64>(s_controlElement[e2]) | (static_cast<u64>(s_controlElement[e3]) << 32));
     const uint8x8_t hi = vtbl2_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX)
@@ -815,7 +815,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
     const uint8x16x2_t table = { vreinterpretq_u8_f32(v0), vreinterpretq_u8_f32(v1) };
     return vreinterpretq_f32_u8(vqtbl2q_u8(table, SIMDVectorDetail::PermuteByteIndices(x, y, z, w)));
 #elif defined(NWB_HAS_NEON)
-    static const u32 controlElement[8] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, 0x13121110u, 0x17161514u, 0x1B1A1918u, 0x1F1E1D1Cu, };
+    static const u32 s_controlElement[8] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, 0x13121110u, 0x17161514u, 0x1B1A1918u, 0x1F1E1D1Cu, };
 
     uint8x8x4_t table{};
     table.val[0] = vreinterpret_u8_f32(vget_low_f32(v0));
@@ -823,10 +823,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
     table.val[2] = vreinterpret_u8_f32(vget_low_f32(v1));
     table.val[3] = vreinterpret_u8_f32(vget_high_f32(v1));
 
-    uint32x2_t idx = vcreate_u32(static_cast<u64>(controlElement[x]) | (static_cast<u64>(controlElement[y]) << 32));
+    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[x]) | (static_cast<u64>(s_controlElement[y]) << 32));
     const uint8x8_t lo = vtbl4_u8(table, vreinterpret_u8_u32(idx));
 
-    idx = vcreate_u32(static_cast<u64>(controlElement[z]) | (static_cast<u64>(controlElement[w]) << 32));
+    idx = vcreate_u32(static_cast<u64>(s_controlElement[z]) | (static_cast<u64>(s_controlElement[w]) << 32));
     const uint8x8_t hi = vtbl4_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX)
@@ -854,36 +854,36 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
     return VectorPermute(v0, v1, X, Y, Z, W);
 #else
-    constexpr int shuffle = _MM_SHUFFLE(W & 3u, Z & 3u, Y & 3u, X & 3u);
-    constexpr int blend = (X >= 4u ? 0x1 : 0x0) | (Y >= 4u ? 0x2 : 0x0) | (Z >= 4u ? 0x4 : 0x0) | (W >= 4u ? 0x8 : 0x0);
+    constexpr int s_Shuffle = _MM_SHUFFLE(W & 3u, Z & 3u, Y & 3u, X & 3u);
+    constexpr int s_Blend = (X >= 4u ? 0x1 : 0x0) | (Y >= 4u ? 0x2 : 0x0) | (Z >= 4u ? 0x4 : 0x0) | (W >= 4u ? 0x8 : 0x0);
 #if defined(NWB_HAS_AVX)
-    if constexpr(blend == 0x0)
-        return _mm_permute_ps(v0, shuffle);
-    else if constexpr(blend == 0xF)
-        return _mm_permute_ps(v1, shuffle);
-    else if constexpr(blend == 0xC)
-        return _mm_shuffle_ps(v0, v1, shuffle);
-    else if constexpr(blend == 0x3)
-        return _mm_shuffle_ps(v1, v0, shuffle);
+    if constexpr(s_Blend == 0x0)
+        return _mm_permute_ps(v0, s_Shuffle);
+    else if constexpr(s_Blend == 0xF)
+        return _mm_permute_ps(v1, s_Shuffle);
+    else if constexpr(s_Blend == 0xC)
+        return _mm_shuffle_ps(v0, v1, s_Shuffle);
+    else if constexpr(s_Blend == 0x3)
+        return _mm_shuffle_ps(v1, v0, s_Shuffle);
     else{
-        const SIMDVectorSingle a = _mm_permute_ps(v0, shuffle);
-        const SIMDVectorSingle b = _mm_permute_ps(v1, shuffle);
-        return _mm_blend_ps(a, b, blend);
+        const SIMDVectorSingle a = _mm_permute_ps(v0, s_Shuffle);
+        const SIMDVectorSingle b = _mm_permute_ps(v1, s_Shuffle);
+        return _mm_blend_ps(a, b, s_Blend);
     }
 #else
-    if constexpr(blend == 0x0)
-        return _mm_shuffle_ps(v0, v0, shuffle);
-    else if constexpr(blend == 0xF)
-        return _mm_shuffle_ps(v1, v1, shuffle);
-    else if constexpr(blend == 0xC)
-        return _mm_shuffle_ps(v0, v1, shuffle);
-    else if constexpr(blend == 0x3)
-        return _mm_shuffle_ps(v1, v0, shuffle);
+    if constexpr(s_Blend == 0x0)
+        return _mm_shuffle_ps(v0, v0, s_Shuffle);
+    else if constexpr(s_Blend == 0xF)
+        return _mm_shuffle_ps(v1, v1, s_Shuffle);
+    else if constexpr(s_Blend == 0xC)
+        return _mm_shuffle_ps(v0, v1, s_Shuffle);
+    else if constexpr(s_Blend == 0x3)
+        return _mm_shuffle_ps(v1, v0, s_Shuffle);
     else{
-        const SIMDVectorSingle a = _mm_shuffle_ps(v0, v0, shuffle);
-        const SIMDVectorSingle b = _mm_shuffle_ps(v1, v1, shuffle);
+        const SIMDVectorSingle a = _mm_shuffle_ps(v0, v0, s_Shuffle);
+        const SIMDVectorSingle b = _mm_shuffle_ps(v1, v1, s_Shuffle);
 #if defined(NWB_HAS_SSE4)
-        return _mm_blend_ps(a, b, blend);
+        return _mm_blend_ps(a, b, s_Blend);
 #else
         const __m128 select = _mm_castsi128_ps(_mm_set_epi32(W >= 4u ? -1 : 0, Z >= 4u ? -1 : 0, Y >= 4u ? -1 : 0, X >= 4u ? -1 : 0));
         return _mm_or_ps(_mm_andnot_ps(select, a), _mm_and_ps(select, b));

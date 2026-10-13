@@ -13,6 +13,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+
 #include <global/assert.h>
 #include <global/auto_registration.h>
 
@@ -33,8 +34,8 @@ namespace __hidden_asset_volume_prepare_registry{
 
 
 ::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena>& QueryAutoPrepareQueue(){
-    static ::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena> queue(AssetsVolumeArenaScope::s_PrepareQueueArena);
-    return queue;
+    static ::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena> s_Queue(AssetsVolumeArenaScope::s_PrepareQueueArena);
+    return s_Queue;
 }
 
 

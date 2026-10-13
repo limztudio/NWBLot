@@ -59,26 +59,11 @@ public:
 
 class UiNumericEditLoanTests : public NumericFixture{
 protected:
-    [[nodiscard]] static PopupOptions ParentOptions(){
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 340.0f, 420.0f };
-        return options;
-    }
+    [[nodiscard]] static PopupOptions ParentOptions(){ return UiWidgetTests::LargeLoanParentOptions(); }
 
-    [[nodiscard]] static PopupOptions ChildOptions(){
-        PopupOptions options;
-        options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 340.0f, 420.0f };
-        return options;
-    }
+    [[nodiscard]] static PopupOptions ChildOptions(){ return UiWidgetTests::LargeLoanChildOptions(); }
 
-    [[nodiscard]] static ListOptions ListOptions(){
-        NWB::Impl::Ui::ListOptions options;
-        options.height = { LayoutSizePolicy::Fixed, 140.0f };
-        options.rowHeight = 24.0f;
-        return options;
-    }
+    [[nodiscard]] static ListOptions ListOptions(){ return UiWidgetTests::LargeLoanListOptions(); }
 
     [[nodiscard]] bool beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());

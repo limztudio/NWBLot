@@ -160,9 +160,10 @@ public:
             && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('C', 'B', 'D', 'T'))
             && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('C', 'O', 'L', 'R'));
         if(source.atlas){
+            Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/atlas_validation"));
             const FontAtlasPayload& payload = source.atlas->payload();
             if(
-                source.atlas->validatePayload() && payload.font == m_identity
+                source.atlas->validatePayload(scratchArena) && payload.font == m_identity
                 && ValidateFontAtlasSourceMatch(payload, source.font)
                 && payload.faceIndex == source.font.faceIndex() && payload.unitsPerEm == hb_face_get_upem(m_hbFace)
                 && payload.sourceGlyphCount == hb_face_get_glyph_count(m_hbFace)

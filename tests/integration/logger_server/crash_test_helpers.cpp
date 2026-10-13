@@ -12,6 +12,7 @@
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/thread.h>
+#include <global/timer.h>
 #include <logger/server/crash_paths.h>
 
 
@@ -267,15 +268,19 @@ static Expected<CrashTestPath> FindTriggerPackage(Core::Alloc::GlobalArena& aren
 Expected<CrashTestPath> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     constexpr u32 s_TimeoutMilliseconds = 3000u;
     constexpr u32 s_PollMilliseconds = 10u;
-    for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= s_TimeoutMilliseconds; elapsedMilliseconds += s_PollMilliseconds){
+    const Timer deadline = TimerAddMS(TimerNow(), s_TimeoutMilliseconds);
+    for(;;){
         if(PathIsDirectory(pendingDirectory)){
             auto packageDirectory = FindTriggerPackage(arena, pendingDirectory, category, expression, message, file);
             if(packageDirectory)
                 return Move(*packageDirectory);
         }
-        SleepMS(s_PollMilliseconds);
+        const Timer now = TimerNow();
+        if(now >= deadline)
+            return MakeUnexpected(Failure{});
+        const u32 remainingMilliseconds = static_cast<u32>(Max(DurationInMS<i64>(deadline, now), i64(1)));
+        SleepMS(Min(s_PollMilliseconds, remainingMilliseconds));
     }
-    return MakeUnexpected(Failure{});
 }
 
 void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, const AStringView crashId){

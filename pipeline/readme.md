@@ -131,11 +131,11 @@ Each tool owns its orchestration API and implementation. Shared artifact, cache,
 manifest, and volume-writing support remains in `core/assets/volume`; asset codecs,
 metadata parsers, and build registrations remain in their owning asset modules.
 
-Library callers gathering independently built graphics assets leave
-`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` at the auto-collected default
-(`NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge()`, declared in
-`core/assets/gather_merge_registry.h`). The graphics asset implementation self-registers its merge hook, so the
-gather tool consumes the registered contract without naming an `impl/` symbol directly.
+Library callers gathering independently built graphics assets set
+`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` to
+`NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge()`, declared in
+`core/assets/gather_merge_registry.h`. The graphics asset implementation self-registers its merge hook, so the
+gather tool no longer names an `impl/` symbol directly.
 The generic gather API also accepts a project callback for other metadata merge
 contracts. A callback receives the duplicate virtual identity, an existing payload
 to update, and the incoming payload bytes. Returning `false` rejects the conflict
@@ -144,4 +144,4 @@ unchanged when they fail.
 
 ## Library result contracts
 
-Fallible path, metadata, dependency-selection and volume-write producers return values through global `Expected<T, E>`. `ProviderCatalog::selectInputs`, `read` and `resolve` return the selection, parsed document and provider index after admission. `WriteAssetVolume` returns `AssetVolumeWriteResult`, and `ReadBuiltAsset` returns identity/payload-offset data while retaining its caller-owned byte buffer. Build/gather orchestration, registered metadata accumulation and conflict callbacks keep their actual mutation or callback contracts. Check results before consuming them, preserve supplied arenas, and propagate failure before manifest or volume publication. See [produced values and expected failures](../docs/expected_results.md).
+Fallible path, metadata, dependency-selection and volume-write producers return values through global `Expected<T, E>`. `DependencyProviderCatalog::selectInputs`, `read` and `resolve` return the selection, parsed document and provider index after admission. `WriteAssetVolume` returns `AssetVolumeWriteResult`, and `ReadBuiltAsset` returns identity/payload-offset data while retaining its caller-owned byte buffer. Build/gather orchestration, registered metadata accumulation and conflict callbacks keep their actual mutation or callback contracts. Check results before consuming them, preserve supplied arenas, and propagate failure before manifest or volume publication. See [produced values and expected failures](../docs/expected_results.md).

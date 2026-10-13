@@ -186,6 +186,7 @@ struct TextureMipPlaneBlockLayout{
     return TextureMipPlaneBlockLayout{ .blocksX = static_cast<u32>(blocksX64), .blocksY = static_cast<u32>(blocksY64), .planeByteCount = blockCount * layout->bytesPerBlock, };
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

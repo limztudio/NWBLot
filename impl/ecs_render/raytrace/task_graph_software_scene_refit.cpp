@@ -8,6 +8,7 @@
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
+
 #include <global/algorithm.h>
 
 
@@ -100,7 +101,7 @@ SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(Core::GpuTaskGraph& graph
         }
         if(!resource.valid())
             return {};
-        if(FindIf(uses.begin(), uses.end(), [&](const auto& use){ return use.resource == resource; }) == uses.end())
+        if(FindIf(uses.begin(), uses.end(), [&](const auto& use)noexcept{ return use.resource == resource; }) == uses.end())
             uses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
     const Core::GpuUploadBlobId upload = graph.copyUploadData(snapshot->inputs.data(), snapshot->inputs.size() * sizeof(SoftwareSceneRefitInstanceGpu), alignof(u32));

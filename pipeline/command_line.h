@@ -8,6 +8,7 @@
 #include "asset_builder/global.h"
 
 #include <core/assets/global.h>
+
 #include <global/terminal_entry.h>
 
 #include <CLI.hpp>
@@ -49,7 +50,7 @@ struct PipelineOptions{
     ACompactString assetType{ NWB::Pipeline::AssetBuilder::s_GraphicsAssetBuildType };
     bool includeSkinDependencies = false;
 
-    explicit PipelineOptions(NWB::Core::Assets::AssetArena& arena)
+    explicit PipelineOptions(NWB::Core::Assets::AssetArena& arena)noexcept
         : inputs(arena)
         , assetRoots(arena)
         , repoRoot(arena)
@@ -77,7 +78,7 @@ public:
             if(!options)
                 return s_PipelineExitFailure;
             return body(*options);
-        }, [&](const CLI::ParseError& error){ return exit(error); }, [](){ return s_PipelineExitFatal; });
+        }, [&](const CLI::ParseError& error){ return exit(error); }, []()noexcept{ return s_PipelineExitFatal; });
     }
 
 

@@ -1,5 +1,5 @@
 package: tsl
 version: robin-map 1.4.1
-updated_utc: 2026-07-14T16:03:35Z
+updated_utc: 2026-10-13
 source: https://github.com/Tessil/robin-map/releases/tag/v1.4.1
-notes: tsl::robin_map open-addressing hash map. Header-only. NWB retains a skipped deserialize hash in a [[maybe_unused]] local so its return value is not hidden.
+notes: tsl::robin_map open-addressing hash map. Header-only. NWB retains a skipped deserialize hash in a [[maybe_unused]] local so its return value is not hidden. NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::tsl_headers as the alias for nwb_tsl_headers with SYSTEM INTERFACE includes from package root. The wrapper retains _SILENCE_CXX23_ALIGNED_STORAGE_DEPRECATION_WARNING as an INTERFACE definition.

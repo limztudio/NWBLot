@@ -30,7 +30,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     if(m_deviceParams.enableDebugRuntime){
         const u64 deviceLocalMemoryMiB = VulkanDetail::BytesToMiB(VulkanDetail::GetDeviceLocalMemoryBytes(m_instanceDispatch, m_vulkanPhysicalDevice));
 
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Vulkan GPU debug: selected device"
            << "\n    name: " << physicalDeviceProperties.deviceName
            << "\n    type: " << VulkanDetail::PhysicalDeviceTypeToString(physicalDeviceProperties.deviceType)
@@ -61,28 +61,28 @@ void BackendContext::logVulkanDeviceConfiguration(
         if(createCrossFamilySecondaryTransferQueue)
             ss << " auxiliaryTransfer=" << secondaryTransferQueueFamily;
 
-        ss << "\n    key features: dynamicRendering=" << VulkanDetail::BoolToString(m_dynamicRenderingSupported)
-           << " synchronization2=" << VulkanDetail::BoolToString(m_synchronization2Supported)
-           << " bufferDeviceAddress=" << VulkanDetail::BoolToString(m_bufferDeviceAddressSupported)
-           << " descriptorBuffer=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
-           << " meshTaskShader=" << VulkanDetail::BoolToString(m_meshTaskShaderSupported)
-           << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
-           << "\n    optional paths: meshShaderRequested=" << VulkanDetail::BoolToString(m_deviceParams.enableNativeMeshShaders)
-           << " meshShader=" << VulkanDetail::BoolToString(m_meshShaderFeatureEnabled)
-           << " hardwareRayTracingRequested=" << VulkanDetail::BoolToString(m_deviceParams.hardwareRayTracingPolicy == HardwareRayTracingPolicy::Automatic)
-           << " accelerationStructure=" << VulkanDetail::BoolToString(m_accelerationStructureFeatureEnabled)
-           << " rayTracingPipeline=" << VulkanDetail::BoolToString(m_rayTracingPipelineFeatureEnabled)
-           << " rayQuery=" << VulkanDetail::BoolToString(m_rayQueryFeatureEnabled)
-           << " shaderExecutionReordering=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) || isDeviceExtensionEnabled(VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME))
-           << " spheres=" << VulkanDetail::BoolToString(m_rayTracingSpheresSupported)
-           << " linearSweptSpheres=" << VulkanDetail::BoolToString(m_rayTracingLinearSweptSpheresSupported)
-           << " cooperativeVector=" << VulkanDetail::BoolToString(m_cooperativeVectorFeatureEnabled)
+        ss << "\n    key features: dynamicRendering=" << VulkanDetail::BoolToYesNoText(m_dynamicRenderingSupported)
+           << " synchronization2=" << VulkanDetail::BoolToYesNoText(m_synchronization2Supported)
+           << " bufferDeviceAddress=" << VulkanDetail::BoolToYesNoText(m_bufferDeviceAddressSupported)
+           << " descriptorBuffer=" << VulkanDetail::BoolToYesNoText(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
+           << " meshTaskShader=" << VulkanDetail::BoolToYesNoText(m_meshTaskShaderSupported)
+           << " maintenance4=" << VulkanDetail::BoolToYesNoText(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
+           << "\n    optional paths: meshShaderRequested=" << VulkanDetail::BoolToYesNoText(m_deviceParams.enableNativeMeshShaders)
+           << " meshShader=" << VulkanDetail::BoolToYesNoText(m_meshShaderFeatureEnabled)
+           << " hardwareRayTracingRequested=" << VulkanDetail::BoolToYesNoText(m_deviceParams.hardwareRayTracingPolicy == HardwareRayTracingPolicy::Automatic)
+           << " accelerationStructure=" << VulkanDetail::BoolToYesNoText(m_accelerationStructureFeatureEnabled)
+           << " rayTracingPipeline=" << VulkanDetail::BoolToYesNoText(m_rayTracingPipelineFeatureEnabled)
+           << " rayQuery=" << VulkanDetail::BoolToYesNoText(m_rayQueryFeatureEnabled)
+           << " shaderExecutionReordering=" << VulkanDetail::BoolToYesNoText(isDeviceExtensionEnabled(VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) || isDeviceExtensionEnabled(VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME))
+           << " spheres=" << VulkanDetail::BoolToYesNoText(m_rayTracingSpheresSupported)
+           << " linearSweptSpheres=" << VulkanDetail::BoolToYesNoText(m_rayTracingLinearSweptSpheresSupported)
+           << " cooperativeVector=" << VulkanDetail::BoolToYesNoText(m_cooperativeVectorFeatureEnabled)
            << "\n    enabled device extensions: " << m_enabledExtensions.device.size()
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
     }
 
-    const auto sameClassQueueCount = [this](const CommandQueue::Enum queueClass){
+    const auto sameClassQueueCount = [this](const CommandQueue::Enum queueClass)noexcept{
         usize count = 0u;
         for(const VulkanPhysicalQueueDesc& queue : m_sameClassQueues){
             if(queue.queueClass == queueClass)
@@ -99,9 +99,9 @@ void BackendContext::logVulkanDeviceConfiguration(
             : m_deviceParams.enableCrossFamilySameClassQueueRouting ? "no alternate Graphics family or additional Graphics queues" : "Graphics family exposes no additional queues"
     ;
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class graphics queue requested={} crossFamilyRequested={} effective={} count={} graphicsFamily={} auxiliaryGraphicsFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableCrossFamilySameClassQueueRouting))
-        , StringConvert(VulkanDetail::BoolToString(m_sameClassGraphicsQueueEnabled))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_sameClassGraphicsQueueEnabled))
         , sameClassGraphicsQueueCount
         , m_graphicsQueueFamily
         , m_secondaryGraphicsQueueFamily
@@ -119,8 +119,8 @@ void BackendContext::logVulkanDeviceConfiguration(
     const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
     const AStringView asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane ? VulkanDetail::s_DisabledQueueReason : asyncComputeLaneEffective ? "dedicated compute family selected" : "no dedicated compute-only family";
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: async compute lane requested={} effective={} graphicsFamily={} computeFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableAsyncComputeLane))
-        , StringConvert(VulkanDetail::BoolToString(asyncComputeLaneEffective))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableAsyncComputeLane))
+        , StringConvert(VulkanDetail::BoolToYesNoText(asyncComputeLaneEffective))
         , m_graphicsQueueFamily
         , schedulerComputeQueueFamily
         , StringConvert(asyncComputeLaneReason)
@@ -133,9 +133,9 @@ void BackendContext::logVulkanDeviceConfiguration(
                 : m_deviceParams.enableCrossFamilySameClassQueueRouting ? "no alternate dedicated Compute family or additional Compute queues" : "Compute family exposes no additional queues"
     ;
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class compute queue requested={} crossFamilyRequested={} effective={} count={} computeFamily={} auxiliaryComputeFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableCrossFamilySameClassQueueRouting))
-        , StringConvert(VulkanDetail::BoolToString(m_sameClassComputeQueueEnabled))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_sameClassComputeQueueEnabled))
         , sameClassComputeQueueCount
         , m_computeQueueFamily
         , m_secondaryComputeQueueFamily
@@ -152,8 +152,8 @@ void BackendContext::logVulkanDeviceConfiguration(
     const bool transferQueueEffective = m_transferQueueEnabled;
     const AStringView transferQueueReason = !m_deviceParams.enableTransferQueue ? VulkanDetail::s_DisabledQueueReason : transferQueueEffective ? "dedicated transfer-only family selected" : "no dedicated transfer-only family";
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: transfer queue requested={} effective={} graphicsFamily={} computeFamily={} transferFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableTransferQueue))
-        , StringConvert(VulkanDetail::BoolToString(transferQueueEffective))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableTransferQueue))
+        , StringConvert(VulkanDetail::BoolToYesNoText(transferQueueEffective))
         , m_graphicsQueueFamily
         , m_computeQueueFamily
         , m_transferQueueFamily
@@ -167,9 +167,9 @@ void BackendContext::logVulkanDeviceConfiguration(
                 : m_deviceParams.enableCrossFamilySameClassQueueRouting ? "no alternate dedicated Transfer family or additional Transfer queues" : "Transfer family exposes no additional queues"
     ;
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class transfer queue requested={} crossFamilyRequested={} effective={} count={} transferFamily={} auxiliaryTransferFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
-        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableCrossFamilySameClassQueueRouting))
-        , StringConvert(VulkanDetail::BoolToString(m_sameClassTransferQueueEnabled))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
+        , StringConvert(VulkanDetail::BoolToYesNoText(m_sameClassTransferQueueEnabled))
         , sameClassTransferQueueCount
         , m_transferQueueFamily
         , m_secondaryTransferQueueFamily

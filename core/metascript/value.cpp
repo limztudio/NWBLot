@@ -5,11 +5,23 @@
 #include "value.h"
 #include "arena_names.h"
 
+#include <global/allocation_size.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_METASCRIPT_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Value Value::Reference(MStringView val, MetaArena& arena){
+    Value out(arena);
+    out.setReference(val);
+    return out;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,18 +47,14 @@ Value::Value(f64 val, MetaArena& arena)noexcept
 
 Value::Value(MStringView val, MetaArena& arena)
     : m_arena(arena)
-    , m_type(ValueType::String)
 {
     m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
+    if(!m_data.m_string)
+        throw AllocationException{};
+    m_type = ValueType::String;
 }
 
-Value Value::Reference(MStringView val, MetaArena& arena){
-    Value out(arena);
-    out.setReference(val);
-    return out;
-}
-
-Value::~Value(){
+Value::~Value()noexcept{
     destroy();
 }
 
@@ -63,17 +71,22 @@ Value::Value(Value&& other)noexcept
 }
 
 Value& Value::operator=(const Value& other){
-    if(this != &other){
-        destroy();
+    if(this != &other)
         copyFrom(other);
-    }
     return *this;
 }
 
-Value& Value::operator=(Value&& other)noexcept{
+Value& Value::operator=(Value&& other){
     if(this != &other){
+        Value candidate(m_arena);
+        if(&m_arena != &other.m_arena){
+            candidate.copyFrom(other);
+            other.destroy();
+        }
+        else
+            candidate.moveFrom(Move(other));
         destroy();
-        moveFrom(Move(other));
+        moveFrom(Move(candidate));
     }
     return *this;
 }
@@ -131,7 +144,7 @@ Value Value::operator+(const Value& rhs)const{
     return Value(m_arena);
 }
 
-Value Value::operator-(const Value& rhs)const{
+Value Value::operator-(const Value& rhs)const noexcept{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
@@ -147,7 +160,7 @@ Value Value::operator-(const Value& rhs)const{
     return Value(m_arena);
 }
 
-Value Value::operator*(const Value& rhs)const{
+Value Value::operator*(const Value& rhs)const noexcept{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
@@ -163,7 +176,7 @@ Value Value::operator*(const Value& rhs)const{
     return Value(m_arena);
 }
 
-Value Value::operator/(const Value& rhs)const{
+Value Value::operator/(const Value& rhs)const noexcept{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(rhs.m_data.m_integer == 0){
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
@@ -245,7 +258,7 @@ Value& Value::operator+=(const Value& rhs){
     return *this;
 }
 
-Value& Value::operator-=(const Value& rhs){
+Value& Value::operator-=(const Value& rhs)noexcept{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
@@ -264,7 +277,7 @@ Value& Value::operator-=(const Value& rhs){
     return *this;
 }
 
-Value& Value::operator*=(const Value& rhs){
+Value& Value::operator*=(const Value& rhs)noexcept{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
@@ -283,7 +296,7 @@ Value& Value::operator*=(const Value& rhs){
     return *this;
 }
 
-Value& Value::operator/=(const Value& rhs){
+Value& Value::operator/=(const Value& rhs)noexcept{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(rhs.m_data.m_integer == 0){
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
@@ -314,29 +327,29 @@ Value& Value::operator/=(const Value& rhs){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-i64 Value::asInteger()const{
+i64 Value::asInteger()const noexcept{
     NWB_ASSERT(m_type == ValueType::Integer);
     return m_data.m_integer;
 }
 
-f64 Value::asDouble()const{
+f64 Value::asDouble()const noexcept{
     NWB_ASSERT(m_type == ValueType::Double);
     return m_data.m_double;
 }
 
-f64 Value::toDouble()const{
+f64 Value::toDouble()const noexcept{
     if(m_type == ValueType::Integer)
         return static_cast<f64>(m_data.m_integer);
     NWB_ASSERT(m_type == ValueType::Double);
     return m_data.m_double;
 }
 
-MStringView Value::asString()const{
+MStringView Value::asString()const noexcept{
     NWB_ASSERT(m_type == ValueType::String);
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
-MStringView Value::asReference()const{
+MStringView Value::asReference()const noexcept{
     NWB_ASSERT(m_type == ValueType::Reference);
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
@@ -348,61 +361,69 @@ MString Value::copyString()const{
     return MString(sv.data(), sv.size(), m_arena);
 }
 
-const Value::ListType& Value::asList()const{
+const Value::ListType& Value::asList()const noexcept{
     NWB_ASSERT(m_type == ValueType::List);
     return *m_data.m_list;
 }
 
-Value::ListType& Value::asList(){
+Value::ListType& Value::asList()noexcept{
     NWB_ASSERT(m_type == ValueType::List);
     return *m_data.m_list;
 }
 
-const Value::MapType& Value::asMap()const{
+const Value::MapType& Value::asMap()const noexcept{
     NWB_ASSERT(m_type == ValueType::Map);
     return *m_data.m_map;
 }
 
-Value::MapType& Value::asMap(){
+Value::MapType& Value::asMap()noexcept{
     NWB_ASSERT(m_type == ValueType::Map);
     return *m_data.m_map;
 }
 
 
-void Value::setInteger(i64 val){
+void Value::setInteger(i64 val)noexcept{
     destroy();
     m_type = ValueType::Integer;
     m_data.m_integer = val;
 }
 
-void Value::setDouble(f64 val){
+void Value::setDouble(f64 val)noexcept{
     destroy();
     m_type = ValueType::Double;
     m_data.m_double = val;
 }
 
 void Value::setString(MStringView val){
+    StringType* const replacement = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
+    if(!replacement)
+        throw AllocationException{};
     destroy();
+    m_data.m_string = replacement;
     m_type = ValueType::String;
-    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
 }
 
 void Value::setReference(MStringView val){
+    StringType* const replacement = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
+    if(!replacement)
+        throw AllocationException{};
     destroy();
+    m_data.m_string = replacement;
     m_type = ValueType::Reference;
-    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
 }
 
 void Value::makeList(){
+    ListType* const replacement = allocList();
     destroy();
+    m_data.m_list = replacement;
     m_type = ValueType::List;
-    m_data.m_list = allocList();
 }
 
 void Value::makeMap(){
+    MapType* const replacement = allocMap();
     destroy();
+    m_data.m_map = replacement;
     m_type = ValueType::Map;
-    m_data.m_map = allocMap();
 }
 
 Value& Value::field(MStringView name){
@@ -419,7 +440,7 @@ Value& Value::field(MStringView name){
     return result.first.value();
 }
 
-const Value* Value::findField(MStringView name)const{
+const Value* Value::findField(MStringView name)const noexcept{
     NWB_ASSERT(m_type == ValueType::Map);
 
     auto it = m_data.m_map->find(name);
@@ -471,20 +492,20 @@ void Value::append(Value&& val){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Value::destroy(){
+void Value::destroy()noexcept{
     if(m_type == ValueType::Null)
         return;
 
     switch(m_type){
     case ValueType::String:
     case ValueType::Reference:
-        DestroyArenaObject(m_arena, m_data.m_string);
+        DestroyArenaObjectNoexcept(m_arena, m_data.m_string);
         break;
     case ValueType::List:
-        DestroyArenaObject(m_arena, m_data.m_list);
+        DestroyArenaObjectNoexcept(m_arena, m_data.m_list);
         break;
     case ValueType::Map:
-        DestroyArenaObject(m_arena, m_data.m_map);
+        DestroyArenaObjectNoexcept(m_arena, m_data.m_map);
         break;
     default:
         break;
@@ -495,46 +516,47 @@ void Value::destroy(){
 }
 
 void Value::copyFrom(const Value& other){
-    m_type = other.m_type;
-    m_data = {};
-
-    switch(m_type){
+    Value candidate(m_arena);
+    switch(other.m_type){
     case ValueType::Integer:
-        m_data.m_integer = other.m_data.m_integer;
+        candidate.setInteger(other.m_data.m_integer);
         break;
     case ValueType::Double:
-        m_data.m_double = other.m_data.m_double;
+        candidate.setDouble(other.m_data.m_double);
         break;
     case ValueType::String:
+        candidate.setString(other.asString());
+        break;
     case ValueType::Reference:
-        m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), m_arena);
+        candidate.setReference(other.asReference());
         break;
-    case ValueType::List:{
-        m_data.m_list = allocList();
-        m_data.m_list->reserve(other.m_data.m_list->size());
-        appendListCopies(*other.m_data.m_list, other.m_data.m_list->size());
+    case ValueType::List:
+        candidate.makeList();
+        candidate.m_data.m_list->reserve(other.m_data.m_list->size());
+        candidate.appendListCopies(*other.m_data.m_list, other.m_data.m_list->size());
         break;
-    }
-    case ValueType::Map:{
-        m_data.m_map = allocMap();
-        m_data.m_map->reserve(other.m_data.m_map->size());
+    case ValueType::Map:
+        candidate.makeMap();
+        candidate.m_data.m_map->reserve(other.m_data.m_map->size());
         for(const auto& [k, v] : *other.m_data.m_map){
-            auto result = m_data.m_map->emplace(StringType(k, m_arena), Value(m_arena));
+            auto result = candidate.m_data.m_map->emplace(StringType(k, m_arena), Value(m_arena));
+            if(!result.second){
+                NWB_ASSERT(false);
+                continue;
+            }
             result.first.value().copyFrom(v);
         }
         break;
-    }
     default:
         break;
     }
+
+    destroy();
+    moveFrom(Move(candidate));
 }
 
 void Value::moveFrom(Value&& other)noexcept{
-    if(&m_arena != &other.m_arena){
-        copyFrom(other);
-        other.destroy();
-        return;
-    }
+    NWB_ASSERT(&m_arena == &other.m_arena);
 
     m_type = other.m_type;
     m_data = other.m_data;
@@ -543,12 +565,11 @@ void Value::moveFrom(Value&& other)noexcept{
     other.m_data = {};
 }
 
-Value& Value::appendListCopy(const Value& val){
+void Value::appendListCopy(const Value& val){
     NWB_ASSERT(m_type == ValueType::List);
-    m_data.m_list->emplace_back(m_arena);
-    Value& dst = m_data.m_list->back();
-    dst.copyFrom(val);
-    return dst;
+    Value candidate(m_arena);
+    candidate.copyFrom(val);
+    m_data.m_list->push_back(Move(candidate));
 }
 
 void Value::appendListCopies(const ListType& values, const usize count){
@@ -558,11 +579,17 @@ void Value::appendListCopies(const ListType& values, const usize count){
 }
 
 Value::ListType* Value::allocList()const{
-    return NewArenaObject<ListType>(m_arena, m_arena);
+    ListType* const created = NewArenaObject<ListType>(m_arena, m_arena);
+    if(!created)
+        throw AllocationException{};
+    return created;
 }
 
 Value::MapType* Value::allocMap()const{
-    return NewArenaObject<MapType>(m_arena, 0, MStringHash(), MStringEqual(), m_arena);
+    MapType* const created = NewArenaObject<MapType>(m_arena, 0, MStringHash(), MStringEqual(), m_arena);
+    if(!created)
+        throw AllocationException{};
+    return created;
 }
 
 

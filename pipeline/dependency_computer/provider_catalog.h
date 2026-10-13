@@ -17,7 +17,7 @@ struct DependencyInputSelection{
     Vector<u8, NWB::Core::Alloc::ScratchArena> selected;
     Vector<usize, NWB::Core::Alloc::ScratchArena> order;
 
-    explicit DependencyInputSelection(NWB::Core::Alloc::ScratchArena& arena)
+    explicit DependencyInputSelection(NWB::Core::Alloc::ScratchArena& arena)noexcept
         : selected(arena)
         , order(arena)
     {}
@@ -25,8 +25,11 @@ struct DependencyInputSelection{
 
 // First discovery retains the same physical provider and root ownership as AssetBuilder.
 class DependencyProviderCatalog final : NoCopy{
+    friend Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeSkinDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena);
+
+
 public:
-    explicit DependencyProviderCatalog(NWB::Core::Assets::AssetArena& arena);
+    explicit DependencyProviderCatalog(NWB::Core::Assets::AssetArena& arena)noexcept;
     DependencyProviderCatalog(DependencyProviderCatalog&&) = delete;
 
 
@@ -35,7 +38,6 @@ public:
     [[nodiscard]] Expected<DependencyInputSelection> selectInputs(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] Expected<NWB::Core::Metascript::Document> read(usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] Expected<usize> resolve(const Name& virtualPath, const Name& assetType, NWB::Core::Alloc::ScratchArena& scratchArena)const;
-    [[nodiscard]] const NWB::Core::Assets::DiscoveredNwbFileVector& files()const noexcept{ return m_files; }
 
 
 private:

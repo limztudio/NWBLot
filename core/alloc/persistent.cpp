@@ -57,15 +57,11 @@ static_assert(alignof(FreeLinks) <= alignof(MaxAlign), "PersistentArena free lin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool IsSupportedAlignment(const usize align){
-    return IsSupportedAlignmentValue(align);
-}
-
 [[nodiscard]] constexpr usize EffectiveAlignment(const usize align)noexcept{
     return align > s_BlockAlignment ? align : s_BlockAlignment;
 }
 
-[[nodiscard]] constexpr usize MinimumFreeSpan(){
+[[nodiscard]] constexpr usize MinimumFreeSpan()noexcept{
     return AlignUp(sizeof(FreeLinks), s_BlockAlignment);
 }
 
@@ -309,7 +305,7 @@ usize PersistentArena::StructureAlignedSize(const usize byte){
 }
 
 usize PersistentArena::StructureAlignedSize(const usize byte, const usize align){
-    if(!__hidden_persistent::IsSupportedAlignment(align)){
+    if(!IsSupportedAlignmentValue(align)){
         NWB_ASSERT_MSG(false, NWB_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
         return 0u;
     }
@@ -355,7 +351,7 @@ void* PersistentArena::allocate(const usize align, usize size){
     size = Alignment(align, size);
     if(size == 0u)
         return nullptr;
-    if(!__hidden_persistent::IsSupportedAlignment(align)){
+    if(!IsSupportedAlignmentValue(align)){
         NWB_ASSERT_MSG(false, NWB_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
         return nullptr;
     }
@@ -389,7 +385,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
         m_memoryStats.recordReallocation(oldSpanBytes, 0u);
         return nullptr;
     }
-    if(!__hidden_persistent::IsSupportedAlignment(align)){
+    if(!IsSupportedAlignmentValue(align)){
         NWB_ASSERT_MSG(false, NWB_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
         return nullptr;
     }

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import shutil
 import subprocess
@@ -14,7 +15,7 @@ from typing import Dict, Optional, Sequence
 from launcher.models import LaunchSettings, ProfileSession
 from launcher import repository_windows_process
 from launcher.constants import (APPLICATION_FORCED_STOP_TIMEOUT_SECONDS, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, COMMAND_RUN, CWD_PREFIX, GPUDBG_FLAG, LOGSERVER_LABEL, LOG_PREFIX, MSG_KILLING, MSG_LAUNCHED_APP, MSG_LEAVING_APP, MSG_LEAVING_BOTH,
-    MSG_MISSING_EXECUTABLE, MSG_MISSING_WORKDIR, MSG_NO_EXIT_STATUS, MSG_NO_PKILL, MSG_PKILL_FAILED, MSG_RUN_FORCED, MSG_RUN_GRACEFUL, MSG_RUN_REQUEST, MSG_STOPPED_APP, MSG_STOPPING, PKILL_COMMAND, PKILL_FOLLOW_FLAG, PKILL_STDERR_MAX_BYTES, PLATFORM_WINDOWS,
+    MSG_MISSING_EXECUTABLE, MSG_MISSING_WORKDIR, MSG_NO_EXIT_STATUS, MSG_NO_PKILL, MSG_PKILL_FAILED, MSG_POSITIVE_RUN_SECONDS, MSG_RUN_FORCED, MSG_RUN_GRACEFUL, MSG_RUN_REQUEST, MSG_STOPPED_APP, MSG_STOPPING, PKILL_COMMAND, PKILL_FOLLOW_FLAG, PKILL_STDERR_MAX_BYTES, PLATFORM_WINDOWS,
     PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS, PROFILE_LOG_READY_POLL_SECONDS, STOP_KIND_FORCED, STOP_KIND_GRACEFUL,)
 
 
@@ -83,6 +84,9 @@ class ProcessLauncher:
         import launcher as _facade
         process: Optional[subprocess.Popen] = None
         try:
+            run_seconds = getattr(args, "run_seconds", None)
+            if run_seconds is not None and (not math.isfinite(run_seconds) or run_seconds <= 0.0):
+                raise SystemExit(MSG_POSITIVE_RUN_SECONDS)
             if not paths_validated:
                 _facade.validate_launch_paths(executable, working_directory, args.dry_run)
 
@@ -105,8 +109,7 @@ class ProcessLauncher:
             if args.detach:
                 return 0
 
-            run_seconds = args.run_seconds
-            if run_seconds is not None and run_seconds > 0.0:
+            if run_seconds is not None:
                 if _facade.host_platform_name() == PLATFORM_WINDOWS:
                     run_result = repository_windows_process.run_bounded_process(process, run_seconds, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,)
                     if run_result.deadline_reached:

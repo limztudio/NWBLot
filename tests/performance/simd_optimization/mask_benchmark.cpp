@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/simdmath.h>
 #include <global/timer.h>
+#include <global/text_utils.h>
 #include <global/scope_exit.h>
 
 #include <cerrno>
-#include <cfenv>
 #include <cstdlib>
 
 
@@ -91,11 +92,11 @@ NWB_NOINLINE u32 Observe(const SIMDVectorDouble a, const SIMDVectorDouble b)noex
 
 NWB_NOINLINE u32 Qualify()noexcept{
 #pragma STDC FENV_ACCESS ON
-    fenv_t originalEnvironment{};
-    if(feholdexcept(&originalEnvironment) != 0)
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    if(!originalEnvironment)
         return 2u;
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
     u64 state = 0x7462825482129431ull;
@@ -114,27 +115,27 @@ NWB_NOINLINE u32 Qualify()noexcept{
         0x7FEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8123412341234ull, 0x7FF0234523452345ull, 0x7FC012347FC01234ull, 0x7F8012347F801234ull };
     constexpr int modes[]{ FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO };
     for(const int mode : modes){
-        if(fesetround(mode) != 0)
+        if(!SetFloatingPointRoundingMode(mode))
             return 2u;
         for(usize sample = 0u; sample < 2048u; ++sample){
             const SIMDVectorDouble a = VectorDoubleSetInt(edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)]);
             const SIMDVectorDouble b = sample % 2u ? a : VectorDoubleSetInt(edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)]);
 #define NWB_AUDIT_COMPARE(kind) \
-            if(feclearexcept(FE_ALL_EXCEPT) != 0) return 3u; \
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) return 3u; \
             errno = 0; \
             const u32 baseline##kind = Observe<Operation::kind, false>(a, b); \
-            const int baselineFlags##kind = fetestexcept(FE_ALL_EXCEPT), baselineErrno##kind = errno; \
-            if(feclearexcept(FE_ALL_EXCEPT) != 0) return 3u; \
+            const int baselineFlags##kind = TestFloatingPointExceptions(FE_ALL_EXCEPT), baselineErrno##kind = errno; \
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) return 3u; \
             errno = 0; \
             const u32 candidate##kind = Observe<Operation::kind, true>(a, b); \
-            if(candidate##kind != baseline##kind || fetestexcept(FE_ALL_EXCEPT) != baselineFlags##kind || errno != baselineErrno##kind) return 4u;
+            if(candidate##kind != baseline##kind || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags##kind || errno != baselineErrno##kind) return 4u;
             NWB_AUDIT_COMPARE(EqualFloat)
             NWB_AUDIT_COMPARE(EqualDouble)
             NWB_AUDIT_COMPARE(EqualDoubleXYZ)
 #undef NWB_AUDIT_COMPARE
         }
     }
-    if(fesetround(FE_TONEAREST) != 0)
+    if(!SetFloatingPointRoundingMode(FE_TONEAREST))
         return 2u;
     return 0u;
 }
@@ -228,10 +229,10 @@ int main(const int argc, const char* const* argv){
     const bool candidate = StringView(argv[3]) == "candidate", latency = StringView(argv[5]) == "latency";
     if((!candidate && StringView(argv[3]) != "baseline") || (!latency && StringView(argv[5]) != "throughput"))
         return 2;
-    char* end = nullptr;
-    const usize iterations = static_cast<usize>(strtoull(argv[4], &end, 10));
-    if(iterations == 0u || end == argv[4] || *end != '\0')
+    const auto parsedIterations = ParseU64FromChars(AStringView(argv[4]));
+    if(!parsedIterations || *parsedIterations == 0u || *parsedIterations > Limit<usize>::s_Max / (latency ? 1u : 8u))
         return 2;
+    const usize iterations = static_cast<usize>(*parsedIterations);
     Dataset data{};
     InitializeDataset(data);
     if(StringView(argv[2]) == "move")

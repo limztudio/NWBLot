@@ -1,5 +1,3 @@
-include("${PROJECT_SOURCE_DIR}/configuration/ImportedLibraries.cmake")
-
 # --------------------------------------------------------------------------- #
 # MHD_config.h generation.
 #

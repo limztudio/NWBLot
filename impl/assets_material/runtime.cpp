@@ -288,23 +288,6 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!checkVirtualPath(NWB_TEXT("Material::loadBinary")))
         return false;
 
-    m_shaderVariant.clear();
-    m_materialInterface = s_NameNone;
-    m_shadingModelId = 0u;
-    m_surfaceDispatchId = 0u;
-    m_typedLayoutHash = 0u;
-    m_typedLayoutBlocks.clear();
-    m_typedLayoutFields.clear();
-    m_typedBlockBytes.clear();
-    m_resourceReferences.clear();
-    clearStageShaders();
-    m_avboitAccumulatePixelShader.reset();
-    m_avboitOccupancyPixelShader.reset();
-    m_avboitExtinctionPixelShader.reset();
-    m_transparent = false;
-    m_twoSided = false;
-    m_refractive = false;
-
     usize cursor = 0;
     u32 magic = 0;
     const auto magicResult = ReadPOD<u32>(binary, cursor);
@@ -318,13 +301,14 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
+    Material candidate(m_shaderVariant.get_allocator().arena(), virtualPath());
     const auto shaderVariant = ReadString(binary, cursor);
     if(!shaderVariant){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shader variant"));
         return false;
     }
-    m_shaderVariant.assign(shaderVariant->data(), shaderVariant->size());
-    if(m_shaderVariant.empty()){
+    candidate.m_shaderVariant.assign(shaderVariant->data(), shaderVariant->size());
+    if(candidate.m_shaderVariant.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader variant is empty"));
         return false;
     }
@@ -336,17 +320,17 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
     materialInterfaceHash = *materialInterfaceHashResult;
-    m_materialInterface = Name(materialInterfaceHash);
-    if(!m_materialInterface){
+    candidate.m_materialInterface = Name(materialInterfaceHash);
+    if(!candidate.m_materialInterface){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material interface is required"));
         return false;
     }
 
-    const auto layoutHash = __hidden_runtime::ReadMaterialTypedLayout(binary, cursor, m_typedLayoutBlocks, m_typedLayoutFields, m_typedBlockBytes, m_resourceReferences);
+    const auto layoutHash = __hidden_runtime::ReadMaterialTypedLayout(binary, cursor, candidate.m_typedLayoutBlocks, candidate.m_typedLayoutFields, candidate.m_typedBlockBytes, candidate.m_resourceReferences);
     if(!layoutHash)
         return false;
-    m_typedLayoutHash = *layoutHash;
-    if(m_typedLayoutHash == 0u){
+    candidate.m_typedLayoutHash = *layoutHash;
+    if(candidate.m_typedLayoutHash == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: interface material is missing typed layout data"));
         return false;
     }
@@ -396,13 +380,13 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         }
 
         const usize shaderIndex = Core::ShaderType::ToIndex(shaderType);
-        if(m_stageShaders[shaderIndex].valid()){
+        if(candidate.m_stageShaders[shaderIndex].valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: duplicate shader stage index {}"), shaderIndex);
             return false;
         }
 
-        m_stageShaders[shaderIndex] = shaderAsset;
-        ++m_stageShaderCount;
+        candidate.m_stageShaders[shaderIndex] = shaderAsset;
+        ++candidate.m_stageShaderCount;
     }
 
     u32 materialFlags = 0u;
@@ -416,23 +400,23 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
         return false;
     }
-    m_transparent = (materialFlags & MaterialBinaryPayload::MaterialFlag::Transparent) != 0u;
-    m_twoSided = (materialFlags & MaterialBinaryPayload::MaterialFlag::TwoSided) != 0u;
-    m_refractive = (materialFlags & MaterialBinaryPayload::MaterialFlag::Refractive) != 0u;
+    candidate.m_transparent = (materialFlags & MaterialBinaryPayload::MaterialFlag::Transparent) != 0u;
+    candidate.m_twoSided = (materialFlags & MaterialBinaryPayload::MaterialFlag::TwoSided) != 0u;
+    candidate.m_refractive = (materialFlags & MaterialBinaryPayload::MaterialFlag::Refractive) != 0u;
 
-    const auto m_shadingModelIdResult = ReadPOD<u32>(binary, cursor);
-    if(!m_shadingModelIdResult){
+    const auto shadingModelIdResult = ReadPOD<u32>(binary, cursor);
+    if(!shadingModelIdResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shading model id"));
         return false;
     }
-    m_shadingModelId = *m_shadingModelIdResult;
+    candidate.m_shadingModelId = *shadingModelIdResult;
 
-    const auto m_surfaceDispatchIdResult = ReadPOD<u32>(binary, cursor);
-    if(!m_surfaceDispatchIdResult){
+    const auto surfaceDispatchIdResult = ReadPOD<u32>(binary, cursor);
+    if(!surfaceDispatchIdResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing surface dispatch id"));
         return false;
     }
-    m_surfaceDispatchId = *m_surfaceDispatchIdResult;
+    candidate.m_surfaceDispatchId = *surfaceDispatchIdResult;
 
     // Optional per-material AVBOIT pixel shaders (transparent materials only): accumulate, occupancy, extinction, each a presence flag plus shader name hash.
     const auto readOptionalAvboitPixelShader = [&](const TStringView passLabel) -> Expected<Core::Assets::AssetRef<PixelShader>>{
@@ -468,16 +452,16 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     const auto accumulateShader = readOptionalAvboitPixelShader(NWB_TEXT("accumulate"));
     if(!accumulateShader)
         return false;
-    m_avboitAccumulatePixelShader = *accumulateShader;
+    candidate.m_avboitAccumulatePixelShader = *accumulateShader;
     const auto occupancyShader = readOptionalAvboitPixelShader(NWB_TEXT("occupancy"));
     if(!occupancyShader)
         return false;
-    m_avboitOccupancyPixelShader = *occupancyShader;
+    candidate.m_avboitOccupancyPixelShader = *occupancyShader;
     const auto extinctionShader = readOptionalAvboitPixelShader(NWB_TEXT("extinction"));
     if(!extinctionShader)
         return false;
-    m_avboitExtinctionPixelShader = *extinctionShader;
-    if(!HasValidMaterialAvboitPixelShaderContract(m_transparent, m_avboitAccumulatePixelShader, m_avboitOccupancyPixelShader, m_avboitExtinctionPixelShader)){
+    candidate.m_avboitExtinctionPixelShader = *extinctionShader;
+    if(!HasValidMaterialAvboitPixelShaderContract(candidate.m_transparent, candidate.m_avboitAccumulatePixelShader, candidate.m_avboitOccupancyPixelShader, candidate.m_avboitExtinctionPixelShader)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT pixel shaders must be present if and only if the material is transparent"));
         return false;
     }
@@ -487,13 +471,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
+    *this = Move(candidate);
     return true;
-}
-
-void Material::clearStageShaders()noexcept{
-    for(Core::Assets::AssetRef<IShader>& shaderAsset : m_stageShaders)
-        shaderAsset.reset();
-    m_stageShaderCount = 0;
 }
 
 void Material::setTypedLayout(const u64 layoutHash, const TypedLayoutBlockVector& blocks, const TypedLayoutFieldVector& fields, const TypedBlockByteVector& blockBytes){

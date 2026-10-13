@@ -5,6 +5,7 @@
 #include "ingest.h"
 
 #include <core/telemetry/codec.h>
+
 #include <global/binary.h>
 
 
@@ -34,6 +35,10 @@ inline constexpr StringView s_PerfCsvFileExtension = ".perf.csv";
 inline constexpr StringView s_GraphFileExtension = ".graph.dot";
 static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] Path MakeTelemetryUploadStem(LogArena& arena){
     const auto timeResult = GetLocalTime();
     if(!timeResult)
@@ -59,10 +64,6 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 void SetResultMessage(TelemetryIngestResult& result, AStringView message, const Core::Common::LogType::Enum type){
     result.message = StringConvert(result.message.get_allocator().arena(), message);
     result.type = type;
-}
-
-[[nodiscard]] bool EnsureDirectory(const Path& directory){
-    return EnsureDirectories(directory).has_value();
 }
 
 [[nodiscard]] bool StoreRawTelemetry(const Path& rawPath, const void* bytes, const usize byteCount){
@@ -112,7 +113,7 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
 
     const Path rawDirectory = __hidden_telemetry_ingest::RawDirectory(arena, config.storageDirectory);
     const Path reportDirectory = __hidden_telemetry_ingest::ReportDirectory(arena, config.storageDirectory);
-    if(!__hidden_telemetry_ingest::EnsureDirectory(rawDirectory) || !__hidden_telemetry_ingest::EnsureDirectory(reportDirectory)){
+    if(!EnsureDirectories(rawDirectory) || !EnsureDirectories(reportDirectory)){
         __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not create storage directories", Core::Common::LogType::Error);
         return result;
     }

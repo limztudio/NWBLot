@@ -4,9 +4,11 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <global/algorithm.h>
 #include <impl/ecs_render/raytrace/rt_shadow_tasks.h>
+
+#include <core/task/gpu/compiled_graph.h>
+
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,7 +80,7 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
         return MakeUnexpected(Failure{});
 
     RayTraceMaterialContextSlots slots;
-    const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle) -> Expected<u32>{
+    const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle)noexcept -> Expected<u32>{
         if(!buffer)
             return 0u;
         if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)

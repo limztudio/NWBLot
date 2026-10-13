@@ -22,14 +22,14 @@ TESTBED_BEGIN
 
 class UiRadioGroupSource final : public NWB::Impl::Ui::IListDataSource{
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override;
-    [[nodiscard]] virtual u64 revision()const noexcept override;
-    [[nodiscard]] virtual u64 rowCount()const noexcept override;
-    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return 1u; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return 1u; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return 3u; }
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override{ return index < 3u ? index + 1u : 0u; }
     [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const noexcept override;
     [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
     [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
-    [[nodiscard]] virtual bool enabled(u64 index)const noexcept override;
+    [[nodiscard]] virtual bool enabled(u64 index)const noexcept override{ return index < 2u; }
 };
 
 class UiRadioGroupGallery final : NoCopy{

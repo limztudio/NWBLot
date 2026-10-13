@@ -61,7 +61,7 @@ namespace GpuTaskGraphCompilerDetail{
     }
 
     if(plansResourceStateDependencies){
-        Sort(resourceStateDependencies.begin(), resourceStateDependencies.end(), [](const GpuPacketDependency& lhs, const GpuPacketDependency& rhs){
+        Sort(resourceStateDependencies.begin(), resourceStateDependencies.end(), [](const GpuPacketDependency& lhs, const GpuPacketDependency& rhs)noexcept{
                 if(lhs.consumer.index != rhs.consumer.index)
                     return lhs.consumer.index < rhs.consumer.index;
                 return lhs.producer.index > rhs.producer.index;
@@ -81,7 +81,7 @@ namespace GpuTaskGraphCompilerDetail{
     usize packetReachabilityWordsPerPacket = 0u;
     if(plansResourceStateDependencies && packetCount == 0u)
         return false;
-    const auto publishPacketDependency = [&](const GpuSubmissionPacketId producer, const GpuSubmissionPacketId consumer){
+    const auto publishPacketDependency = [&](const GpuSubmissionPacketId producer, const GpuSubmissionPacketId consumer)noexcept{
         if(!producer.valid() || !consumer.valid() || producer.generation != compiledPlan.planGeneration || consumer.generation != compiledPlan.planGeneration || producer.index >= consumer.index || consumer.index >= packetCount)
             return false;
 

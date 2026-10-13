@@ -9,6 +9,8 @@
 #include <core/common/log.h>
 
 #include <global/blocking_io.h>
+#include <global/diagnostics.h>
+#include <global/scope_exit.h>
 
 #if defined(NWB_PLATFORM_LINUX)
 #include <fcntl.h>
@@ -61,10 +63,13 @@ public:
     explicit TemporaryFile(const Path& path)
         : m_path(path)
     {}
-    ~TemporaryFile(){
+    ~TemporaryFile()noexcept{
         if(m_owned){
-            if(!RemoveFile(m_path))
-                NWB_LOGGER_WARNING(NWB_TEXT("font_builder: cannot remove unpublished temporary '{}'"), PathToString<tchar>(m_path));
+            const auto removed = RemoveFile(m_path);
+            if(!removed){
+                const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: cannot remove unpublished temporary '{}', error {}", m_path.c_str(), removed.error().value());
+                CaptureDiagnosticEvent("font_builder_publication", diagnostic.view(), __FILE__, __LINE__);
+            }
         }
     }
 
@@ -119,7 +124,7 @@ private:
     const Path* files[] = { &paths.metadata, &paths.font };
     u32 presentCount = 0u;
     for(const Path* file : files){
-        const auto exists = FileExists(*file);
+        const auto exists = FileExistsNoFollow(*file);
         if(!exists)
             return MakeUnexpected(Failure{});
         if(*exists){
@@ -137,18 +142,11 @@ private:
 [[nodiscard]] static bool CheckWorkPaths(const OutputPaths& paths){
     const Path* files[] = { &paths.metadataTemporary, &paths.fontTemporary, &paths.metadataBackup, &paths.fontBackup, };
     for(const Path* file : files){
-        const auto exists = FileExists(*file);
+        const auto exists = FileExistsNoFollow(*file);
         if(!exists || *exists)
             return false;
     }
     return true;
-}
-
-static void RestoreBackups(const Path* const outputs[2u], const Path* const backups[2u], const u32 count){
-    for(u32 index = count; index > 0u; --index){
-        if(!RenamePath(*backups[index - 1u], *outputs[index - 1u]))
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}'"), PathToString<tchar>(*outputs[index - 1u]));
-    }
 }
 
 [[nodiscard]] static bool Publish(const OutputPaths& paths, TemporaryFile& font, TemporaryFile& metadata, const bool overwrite){
@@ -159,29 +157,60 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
     const Path* backups[] = { &paths.fontBackup, &paths.metadataBackup };
     const Path* temporaries[] = { &paths.fontTemporary, &paths.metadataTemporary };
     TemporaryFile* staged[] = { &font, &metadata };
-
+    ErrorCode removalErrors[2u];
+    ErrorCode restorationErrors[2u];
     u32 backedUp = 0u;
+    u32 published = 0u;
+
+    // Restore the previous pair before any allocating failure observer can run or an unexpected exception leaves publication.
+    const auto rollback = [&]()noexcept{
+        for(u32 index = 2u; index > 0u; --index){
+            const u32 current = index - 1u;
+            if(current < published){
+                const auto removed = RemoveFile(*outputs[current]);
+                if(!removed){
+                    removalErrors[current] = removed.error();
+                    const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: could not remove failed new '{}', error {}", outputs[current]->c_str(), removalErrors[current].value());
+                    CaptureDiagnosticEvent("font_builder_publication", diagnostic.view(), __FILE__, __LINE__);
+                }
+            }
+            if(current < backedUp && !removalErrors[current]){
+                const auto restored = RenamePath(*backups[current], *outputs[current]);
+                if(!restored){
+                    restorationErrors[current] = restored.error();
+                    const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: could not restore previous '{}', error {}", outputs[current]->c_str(), restorationErrors[current].value());
+                    CaptureDiagnosticEvent("font_builder_publication", diagnostic.view(), __FILE__, __LINE__);
+                }
+            }
+        }
+    };
+    ScopeExit restoreOnFailure(rollback);
+
+    const auto failPublication = [&](){
+        rollback();
+        restoreOnFailure.release();
+        for(u32 index = 0u; index < 2u; ++index){
+            if(removalErrors[index])
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}'"), PathToString<tchar>(*outputs[index]));
+            if(restorationErrors[index])
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}'"), PathToString<tchar>(*outputs[index]));
+        }
+        return false;
+    };
+
     if(*present){
         for(; backedUp < 2u; ++backedUp){
-            if(!RenamePath(*outputs[backedUp], *backups[backedUp])){
-                RestoreBackups(outputs, backups, backedUp);
-                return false;
-            }
+            if(!RenamePath(*outputs[backedUp], *backups[backedUp]))
+                return failPublication();
         }
     }
-    u32 published = 0u;
     for(; published < 2u; ++published){
-        if(!RenamePath(*temporaries[published], *outputs[published])){
-            for(u32 index = published; index > 0u; --index){
-                const auto removed = RemoveFile(*outputs[index - 1u]);
-                if(!removed || !*removed)
-                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}'"), PathToString<tchar>(*outputs[index - 1u]));
-            }
-            RestoreBackups(outputs, backups, backedUp);
-            return false;
-        }
+        if(!RenamePath(*temporaries[published], *outputs[published]))
+            return failPublication();
         staged[published]->published();
     }
+
+    restoreOnFailure.release();
     for(u32 index = 0u; index < backedUp; ++index){
         const auto removed = RemoveFile(*backups[index]);
         if(!removed || !*removed)

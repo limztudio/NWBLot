@@ -137,7 +137,7 @@ bool MeshCookMeshlets::AddVisitedMeshletTriangle(
 
     localTriangleIndices.push_back(triangleIndex);
     const MeshletTriangleVectors& triangleVectors = trianglePrecompute.triangleCalculations[triangleIndex].vectors;
-    const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex){
+    const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex)noexcept{
         return trianglePrecompute.triangleCalculations[otherTriangleIndex].vectors.areaNormal;
     };
     AddMeshletTriangleToScoreState(localTriangleIndices, triangleVectors, triangleAreaNormalAt, scoreState);

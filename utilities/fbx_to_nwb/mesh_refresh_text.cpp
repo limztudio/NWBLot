@@ -7,6 +7,7 @@
 #include "text_write.h"
 
 #include <core/common/log.h>
+#include <core/metascript/lexer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +46,7 @@ static constexpr AStringView s_SkinRowSuffixText = "] },\n";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs){
+[[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs)noexcept{
     if(lhs.size() != rhs.size())
         return false;
     for(usize i = 0u; i < lhs.size(); ++i){
@@ -55,93 +56,59 @@ static constexpr AStringView s_SkinRowSuffixText = "] },\n";
     return true;
 }
 
-[[nodiscard]] usize SkipWhitespace(const AStringView text, usize offset){
-    while(offset < text.size() && IsAsciiSpace(text[offset]))
-        ++offset;
-    return offset;
-}
-
-[[nodiscard]] bool HasIdentifierBoundary(const AStringView text, const usize begin, const usize end){
-    const bool leftOk = begin == 0u || !IsAsciiIdentifierChar(text[begin - 1u]);
-    const bool rightOk = end >= text.size() || !IsAsciiIdentifierChar(text[end]);
-    return leftOk && rightOk;
-}
-
 [[nodiscard]] Expected<TextReplacement> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName){
     TextReplacement outRange;
-    AString pattern;
-    pattern.reserve(variableName.size() + fieldName.size() + 1u);
-    pattern.append(variableName.data(), variableName.size());
-    pattern.push_back('.');
-    pattern.append(fieldName.data(), fieldName.size());
+    Core::Metascript::Lexer lexer(source);
+    Core::Metascript::Token token = lexer.next();
+    bool statementBegin = true;
+    bool foundAssignment = false;
+    while(token.type != Core::Metascript::TokenType::EndOfFile){
+        if(token.type == Core::Metascript::TokenType::Error)
+            return MakeUnexpected(Failure{});
 
-    usize offset = 0u;
-    while(offset < source.size()){
-        const usize found = source.find(pattern, offset);
-        if(found == AStringView::npos)
-            break;
+        if(statementBegin && token.type == Core::Metascript::TokenType::Identifier && IsSameText(token.text, variableName)){
+            token = lexer.next();
+            if(token.type == Core::Metascript::TokenType::Dot){
+                token = lexer.next();
+                if(token.type == Core::Metascript::TokenType::Identifier && IsSameText(token.text, fieldName)){
+                    token = lexer.next();
+                    const bool assignment = token.type == Core::Metascript::TokenType::Equal || token.type == Core::Metascript::TokenType::PlusEqual || token.type == Core::Metascript::TokenType::MinusEqual
+                        || token.type == Core::Metascript::TokenType::StarEqual || token.type == Core::Metascript::TokenType::SlashEqual;
+                    if(assignment){
+                        // Parsed values can combine assignments, but rewriting needs one authoritative literal list.
+                        if(foundAssignment || token.type != Core::Metascript::TokenType::Equal)
+                            return MakeUnexpected(Failure{});
+                        foundAssignment = true;
+                        token = lexer.next();
+                        if(token.type != Core::Metascript::TokenType::LeftBracket)
+                            return MakeUnexpected(Failure{});
 
-        const usize patternEnd = found + pattern.size();
-        if(!HasIdentifierBoundary(source, found, patternEnd)){
-            offset = patternEnd;
-            continue;
-        }
-
-        usize cursor = SkipWhitespace(source, patternEnd);
-        if(cursor >= source.size() || source[cursor] != '='){
-            offset = patternEnd;
-            continue;
-        }
-        cursor = SkipWhitespace(source, cursor + 1u);
-        if(cursor >= source.size() || source[cursor] != '['){
-            offset = patternEnd;
-            continue;
-        }
-
-        const usize listBegin = cursor;
-        u32 depth = 0u;
-        bool inString = false;
-        bool escaped = false;
-        for(; cursor < source.size(); ++cursor){
-            const char c = source[cursor];
-            if(inString){
-                if(escaped){
-                    escaped = false;
-                    continue;
+                        outRange.begin = static_cast<usize>(token.text.data() - source.data());
+                        usize depth = 1u;
+                        while(depth != 0u){
+                            token = lexer.next();
+                            if(token.type == Core::Metascript::TokenType::Error || token.type == Core::Metascript::TokenType::EndOfFile)
+                                return MakeUnexpected(Failure{});
+                            if(token.type == Core::Metascript::TokenType::LeftBracket)
+                                ++depth;
+                            else if(token.type == Core::Metascript::TokenType::RightBracket)
+                                --depth;
+                        }
+                        outRange.end = static_cast<usize>(token.text.data() - source.data()) + token.text.size();
+                        token = lexer.next();
+                        if(token.type != Core::Metascript::TokenType::Semicolon)
+                            return MakeUnexpected(Failure{});
+                    }
                 }
-                if(c == '\\'){
-                    escaped = true;
-                    continue;
-                }
-                if(c == '"')
-                    inString = false;
-                continue;
-            }
-
-            if(c == '"'){
-                inString = true;
-                continue;
-            }
-            if(c == '['){
-                ++depth;
-                continue;
-            }
-            if(c != ']')
-                continue;
-
-            if(depth == 0u)
-                return MakeUnexpected(Failure{});
-            --depth;
-            if(depth == 0u){
-                outRange.begin = listBegin;
-                outRange.end = cursor + 1u;
-                return outRange;
             }
         }
-        return MakeUnexpected(Failure{});
+
+        statementBegin = token.type == Core::Metascript::TokenType::Semicolon;
+        token = lexer.next();
     }
-
-    return MakeUnexpected(Failure{});
+    if(!foundAssignment)
+        return MakeUnexpected(Failure{});
+    return outRange;
 }
 
 template<typename Value, typename WriteValue>
@@ -205,7 +172,7 @@ template<typename Value, typename WriteValue>
 [[nodiscard]] bool AddReplacement(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing '{}.{}' assignment"), StringConvert(variableName), StringConvert(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), StringConvert(variableName), StringConvert(fieldName));
         return false;
     }
 
@@ -244,7 +211,7 @@ template<typename Value, typename WriteValue>
 }
 
 [[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityVector<TextReplacement>& replacements){
-    Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs){
+    Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
             return lhs.begin > rhs.begin;
         }
     );
@@ -257,7 +224,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName){
+[[nodiscard]] bool IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
     if(value.isReference()){
         const Core::Metascript::MStringView reference = value.asReference();
         return IsSameText(reference, variableName);

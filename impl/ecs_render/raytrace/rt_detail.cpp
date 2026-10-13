@@ -40,7 +40,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return RenderableRayTracingMeshResources{ Move(*resolvedMesh), Move(*mesh) };
 }
 
-[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
+[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept{
     return handle.valid() && handle.descriptorClass() == descriptorClass;
 }
 

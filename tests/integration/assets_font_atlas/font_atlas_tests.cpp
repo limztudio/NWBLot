@@ -39,7 +39,9 @@ namespace __hidden_font_atlas_tests{
 using namespace Impl;
 
 struct FontAtlasTestArenaTag{};
-using AtlasTestArena = TestArena<FontAtlasTestArenaTag>;
+struct AtlasTestArena : TestArena<FontAtlasTestArenaTag>{
+    Core::Alloc::ScratchArena scratchArena{ Name("tests/font_atlas/validation_scratch") };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,7 +95,7 @@ using AtlasTestArena = TestArena<FontAtlasTestArenaTag>;
     return payload;
 }
 
-static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value){
+static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
     for(u32 index = 0u; index < 4u; ++index)
         bytes[offset + index] = static_cast<u8>(value >> (index * 8u));
 }
@@ -143,7 +145,7 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
     FontAtlasPayload payload = MakePayload(testArena);
-    auto valid = SerializeFontAtlasPayload(payload, testArena.arena);
+    auto valid = SerializeFontAtlasPayload(payload, testArena.arena, testArena.scratchArena);
     ASSERT_TRUE(valid);
     FontAtlas atlas(testArena.arena, Name("project/fonts/body_atlas"));
     ASSERT_TRUE(atlas.loadBinary(*valid));
@@ -195,24 +197,24 @@ TEST(AssetsFontAtlas, CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLostGuar
         }
         payload.glyphs[channelCount] = {};
         payload.glyphs[channelCount].glyphId = channelCount;
-        auto binary = SerializeFontAtlasPayload(payload, testArena.arena);
+        auto binary = SerializeFontAtlasPayload(payload, testArena.arena, testArena.scratchArena);
         ASSERT_TRUE(binary) << channelCount;
-        auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena);
+        auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena, testArena.scratchArena);
         ASSERT_TRUE(loaded) << channelCount;
         EXPECT_EQ(loaded->groups[0u].pixels, group.pixels);
         FontAtlasPayload invalid(payload);
         invalid.glyphs[0u].channel = channelCount;
-        EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
+        EXPECT_FALSE(ValidateFontAtlasPayload(invalid, testArena.scratchArena));
         invalid = payload;
         ++invalid.glyphs[0u].x;
-        EXPECT_FALSE(ValidateFontAtlasPayload(invalid)); // The right exterior guard was removed by cropping.
+        EXPECT_FALSE(ValidateFontAtlasPayload(invalid, testArena.scratchArena)); // The right exterior guard was removed by cropping.
         invalid = payload;
         ++invalid.glyphs[0u].y;
-        EXPECT_FALSE(ValidateFontAtlasPayload(invalid)); // The lower exterior guard was removed by cropping.
+        EXPECT_FALSE(ValidateFontAtlasPayload(invalid, testArena.scratchArena)); // The lower exterior guard was removed by cropping.
         invalid = payload;
         invalid.groups[0u].pixels.push_back(0u);
         invalid.groups[0u].sha256 = ComputeSha256({ invalid.groups[0u].pixels.data(), invalid.groups[0u].pixels.size() });
-        EXPECT_FALSE(SerializeFontAtlasPayload(invalid, testArena.arena));
+        EXPECT_FALSE(SerializeFontAtlasPayload(invalid, testArena.arena, testArena.scratchArena));
     }
 }
 
@@ -222,9 +224,9 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersAreRejected){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
     const FontAtlasPayload payload = MakePayload(testArena);
-    auto binary = SerializeFontAtlasPayload(payload, testArena.arena);
+    auto binary = SerializeFontAtlasPayload(payload, testArena.arena, testArena.scratchArena);
     ASSERT_TRUE(binary);
-    auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena);
+    auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena, testArena.scratchArena);
     ASSERT_TRUE(loaded);
     const usize groupOffset = FontAtlasBinaryPayload::s_HeaderBytes + payload.glyphs.size() * FontAtlasBinaryPayload::s_GlyphBytes;
     const Pair<usize, u32> invalidFields[] = {
@@ -238,17 +240,17 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersAreRejected){
         const u32 value = field.second();
         Core::Assets::AssetBytes invalid(*binary);
         WriteLittleU32(invalid, offset, value);
-        EXPECT_FALSE(DeserializeFontAtlasPayload(invalid, testArena.arena)) << offset << ": " << value;
+        EXPECT_FALSE(DeserializeFontAtlasPayload(invalid, testArena.arena, testArena.scratchArena)) << offset << ": " << value;
     }
     FontAtlasPayload invalid(payload);
     invalid.groups[0u].channelCount = 0u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
+    EXPECT_FALSE(ValidateFontAtlasPayload(invalid, testArena.scratchArena));
     invalid.groups[0u].channelCount = 5u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
+    EXPECT_FALSE(ValidateFontAtlasPayload(invalid, testArena.scratchArena));
     invalid.groups[0u].channelCount = Limit<u32>::s_Max;
     invalid.groups[0u].width = Limit<u32>::s_Max;
     invalid.groups[0u].height = Limit<u32>::s_Max;
-    EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
+    EXPECT_FALSE(ValidateFontAtlasPayload(invalid, testArena.scratchArena));
 }
 
 TEST(AssetsFontAtlas, CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput){
@@ -283,25 +285,25 @@ TEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBySerialization){
     FontAtlasPayload original = MakePayload(testArena);
     FontAtlasPayload candidate(original);
     candidate.groups[0u].pixels[0u] ^= 1u;
-    EXPECT_FALSE(SerializeFontAtlasPayload(candidate, testArena.arena));
+    EXPECT_FALSE(SerializeFontAtlasPayload(candidate, testArena.arena, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[0u].channel = 4u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[0u].x = Limit<u32>::s_Max;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[0u].planeRight += 1.f;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[0u].advanceUnits = Limit<f32>::s_Infinity;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[1u].channel = 0u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[4u].x = 1u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
 }
 
 TEST(AssetsFontAtlas, GuardedRegionsRejectSameChannelOverlapAndAllowIndependentChannels){
@@ -310,7 +312,7 @@ TEST(AssetsFontAtlas, GuardedRegionsRejectSameChannelOverlapAndAllowIndependentC
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
     FontAtlasPayload payload = MakePayload(testArena);
-    ASSERT_TRUE(ValidateFontAtlasPayload(payload));
+    ASSERT_TRUE(ValidateFontAtlasPayload(payload, testArena.scratchArena));
     FontAtlasGroup& group = payload.groups[0u];
     group.width = 16u;
     group.pixels.resize(16u * 8u * 4u, 0u);
@@ -318,13 +320,35 @@ TEST(AssetsFontAtlas, GuardedRegionsRejectSameChannelOverlapAndAllowIndependentC
     FontAtlasGlyph& second = payload.glyphs[1u];
     second.channel = 0u;
     second.x = 7u;
-    ASSERT_TRUE(ValidateFontAtlasPayload(payload));
+    ASSERT_TRUE(ValidateFontAtlasPayload(payload, testArena.scratchArena));
     second.x = 6u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(payload)); // Bitmaps are disjoint, but the one-texel guards overlap.
+    EXPECT_FALSE(ValidateFontAtlasPayload(payload, testArena.scratchArena)); // Bitmaps are disjoint, but the one-texel guards overlap.
     second.x = 4u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(payload));
+    EXPECT_FALSE(ValidateFontAtlasPayload(payload, testArena.scratchArena));
     second.channel = 1u;
-    EXPECT_TRUE(ValidateFontAtlasPayload(payload));
+    EXPECT_TRUE(ValidateFontAtlasPayload(payload, testArena.scratchArena));
+}
+
+TEST(AssetsFontAtlas, GuardedOverlapReusesCallerScratchAcrossGroupsAndRejectedChannels){
+    using namespace __hidden_font_atlas_tests;
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    AtlasTestArena testArena;
+    FontAtlasPayload payload = MakePayload(testArena);
+    payload.groups.push_back(FontAtlasGroup(payload.groups.front()));
+    payload.glyphs[2u].group = 1u;
+    payload.glyphs[3u].group = 1u;
+    ASSERT_TRUE(ValidateFontAtlasPayload(payload, testArena.scratchArena));
+    const ArenaMemoryStats warm = testArena.scratchArena.memoryStats();
+    for(usize iteration = 0u; iteration < 16u; ++iteration){
+        const bool valid = iteration % 2u == 0u;
+        payload.glyphs[3u].channel = valid ? 3u : 2u;
+        EXPECT_EQ(ValidateFontAtlasPayload(payload, testArena.scratchArena), valid);
+        const ArenaMemoryStats current = testArena.scratchArena.memoryStats();
+        EXPECT_EQ(current.usedBytes, warm.usedBytes);
+        EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
+    }
+    EXPECT_EQ(logger.errorCount(), 8u);
 }
 
 TEST(AssetsFontAtlas, PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize){
@@ -333,23 +357,23 @@ TEST(AssetsFontAtlas, PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize)
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
     FontAtlasPayload original = MakePayload(testArena);
-    ASSERT_TRUE(ValidateFontAtlasPayload(original));
+    ASSERT_TRUE(ValidateFontAtlasPayload(original, testArena.scratchArena));
     FontAtlasPayload candidate(original);
     candidate.glyphs[0u].planeRight += 1.f;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[0u].planeBottom += 1.f;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.bakePpem *= 2u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     for(FontAtlasGlyph& glyph : candidate.glyphs){
         if(glyph.drawable == 0u)
             continue;
         glyph.planeRight = glyph.planeLeft + 31.25f;
         glyph.planeBottom = glyph.planeTop + 31.25f;
     }
-    EXPECT_TRUE(ValidateFontAtlasPayload(candidate));
+    EXPECT_TRUE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
 }
 
 TEST(AssetsFontAtlas, RejectsIncompleteOrDuplicateGlyphPolicyAndUnsupportedLimits){
@@ -360,22 +384,22 @@ TEST(AssetsFontAtlas, RejectsIncompleteOrDuplicateGlyphPolicyAndUnsupportedLimit
     FontAtlasPayload original = MakePayload(testArena);
     FontAtlasPayload candidate(original);
     candidate.glyphs.pop_back();
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[1u].glyphId = 0u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.bakePpem = 15u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.spreadPixels = 33u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.groups[0u].width = 2049u;
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.fontSha256 = {};
-    EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
+    EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
 }
 
 TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFont){

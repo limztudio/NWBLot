@@ -14,10 +14,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Contain the RDF open exception at the decoder boundary.
+// Missing files fail explicit RDF admission before the throwing vendor C++ parser.
 TEST(RgdDecode, MissingFileFailsGracefully){
-    AInteropString out;
-    EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText("nwb_rgd_smoke_missing.rgd", out));
+    const auto result = nwb_rgd::DecodeCrashDumpToText("nwb_rgd_smoke_missing.rgd");
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), StringView("rdf_open_failed"));
 }
 
 TEST(RgdDecode, GarbageInputFailsGracefully){
@@ -27,8 +28,9 @@ TEST(RgdDecode, GarbageInputFailsGracefully){
         ASSERT_TRUE(f.is_open());
         f << "not a valid radeon gpu detective capture\n";
     }
-    AInteropString out;
-    EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText(s_Path.data(), out));
+    const auto result = nwb_rgd::DecodeCrashDumpToText(s_Path.data());
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), StringView("parse_failed"));
 
     NWB::Tests::TestArena<> testArena;
     Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, s_Path);

@@ -46,18 +46,8 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 }
 
 
-[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshTangentVector(const SIMDVectorSingle tangent)noexcept{
-    return tangent;
-}
-
-
 [[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshUvVector(const SIMDVectorSingle uv)noexcept{
     return VectorSetW(VectorSetZ(uv, 0.0f), 0.0f);
-}
-
-
-[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshColorVector(const SIMDVectorSingle color)noexcept{
-    return color;
 }
 
 
@@ -86,38 +76,44 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
     const TStringView meshPathText
 ){
     if(!FitsU32(positions.size()) || !FitsU32(normals.size()) || !FitsU32(tangents.size()) || !FitsU32(uv0.size()) || !FitsU32(colors.size())){
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("exceeds u32 stream count limits"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("exceeds u32 stream count limits"));
+        return false;
     }
 
     for(usize i = 0u; i < positions.size(); ++i){
         if(VectorIsFinite(MakeMeshPositionVector(LoadFloat(positions[i])), VectorComponentMask::s_XYZ))
             continue;
 
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_PositionsStreamLabel, i, NWB_TEXT("contains non-finite data"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_PositionsStreamLabel, i, NWB_TEXT("contains non-finite data"));
+        return false;
     }
     for(usize i = 0u; i < normals.size(); ++i){
         if(ValidDirectionVector(MakeMeshNormalVector(LoadHalf(normals[i]))))
             continue;
 
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_NormalsStreamLabel, i, NWB_TEXT("is invalid"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_NormalsStreamLabel, i, NWB_TEXT("is invalid"));
+        return false;
     }
     for(usize i = 0u; i < tangents.size(); ++i){
-        if(ValidTangentVector(MakeMeshTangentVector(LoadHalf(tangents[i]))))
+        if(ValidTangentVector(LoadHalf(tangents[i])))
             continue;
 
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_TangentsStreamLabel, i, NWB_TEXT("is invalid"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_TangentsStreamLabel, i, NWB_TEXT("is invalid"));
+        return false;
     }
     for(usize i = 0u; i < uv0.size(); ++i){
         if(VectorIsFinite(MakeMeshUvVector(LoadFloat(uv0[i])), VectorComponentMask::s_XY))
             continue;
 
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_Uv0StreamLabel, i, NWB_TEXT("contains non-finite data"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_Uv0StreamLabel, i, NWB_TEXT("contains non-finite data"));
+        return false;
     }
     for(usize i = 0u; i < colors.size(); ++i){
-        if(VectorIsFinite(MakeMeshColorVector(LoadHalf(colors[i])), VectorComponentMask::s_XYZW))
+        if(VectorIsFinite(LoadHalf(colors[i]), VectorComponentMask::s_XYZW))
             continue;
 
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_ColorsStreamLabel, i, NWB_TEXT("contains non-finite data"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_ColorsStreamLabel, i, NWB_TEXT("contains non-finite data"));
+        return false;
     }
 
     return true;
@@ -145,7 +141,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         [&](const usize meshletIndex, const MeshletDesc& meshlet, const usize, const u32 localPositionIndex)->Expected<u32>{
             const auto positionRef = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, true);
             if(!positionRef){
-                static_cast<void>(MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid encoded position ref")));
+                MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid encoded position ref"));
                 return MakeUnexpected(Failure{});
             }
 
@@ -154,10 +150,12 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         [&](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(previousSkin);
             static_cast<void>(skinIndex);
-            return MeshPayloadValidationDiagnostics::FailMeshletAttributePayloadValidation(contextText, meshPathText, meshletIndex, attributeIndex, NWB_TEXT("shared across skin identities"));
+            MeshPayloadValidationDiagnostics::LogMeshletAttributePayloadValidation(contextText, meshPathText, meshletIndex, attributeIndex, NWB_TEXT("shared across skin identities"));
+            return false;
         },
         [&](const usize attributeIndex){
-            return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(contextText, meshPathText, NWB_TEXT("meshlet attribute ref"), attributeIndex, NWB_TEXT("is unreferenced"));
+            MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, NWB_TEXT("meshlet attribute ref"), attributeIndex, NWB_TEXT("is unreferenced"));
+            return false;
         }
     );
 }
@@ -181,10 +179,12 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
     const TStringView meshPathText
 ){
     if(meshlets.empty() || meshletBounds.size() != meshlets.size()){
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("has incomplete meshlet payload"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("has incomplete meshlet payload"));
+        return false;
     }
     if(!FitsU32(positionRefDeltas.size()) || !FitsU32(attributeRefDeltas.size()) || (skinRequired && !FitsU32(skinCount))){
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("exceeds u32 stream count limits"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("exceeds u32 stream count limits"));
+        return false;
     }
 
     usize expectedLocalVertexRefCount = 0u;
@@ -198,28 +198,35 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         const u32 encodedPositionCount = MeshletPositionCount(meshlet);
         const u32 attributeCount = MeshletAttributeCount(meshlet);
         if(vertexCount == 0u || vertexCount > s_MeshMaxMeshletVertices){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid vertex count"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid vertex count"));
+            return false;
         }
         if(primitiveCount == 0u || primitiveCount > s_MeshMaxMeshletTriangles){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid primitive count"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid primitive count"));
+            return false;
         }
         if(encodedPositionCount == 0u || encodedPositionCount > s_MeshMaxMeshletVertices){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid deformed position count"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid deformed position count"));
+            return false;
         }
         if(attributeCount == 0u || attributeCount > s_MeshMaxMeshletVertices){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid attribute count"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid attribute count"));
+            return false;
         }
         if(meshlet.localVertexOffset != expectedLocalVertexRefCount || meshlet.primitiveOffset != expectedPrimitiveIndexCount || meshlet.positionRefOffset != expectedPositionRefByteCount || meshlet.attributeRefOffset != expectedAttributeRefByteCount){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has non-contiguous offsets"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has non-contiguous offsets"));
+            return false;
         }
 
         const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, skinRequired);
         const auto encodedAttributeBytes = MeshletEncodedAttributeRefByteCount(meshlet);
         if(!encodedPositionBytes || !encodedAttributeBytes){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid ref encoding width"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid ref encoding width"));
+            return false;
         }
         if(*encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount || *encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("encoded ref byte counts overflow"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("encoded ref byte counts overflow"));
+            return false;
         }
 
         expectedLocalVertexRefCount += vertexCount;
@@ -227,19 +234,23 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         expectedAttributeRefByteCount += *encodedAttributeBytes;
         expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * s_MeshletTriangleIndexCount;
         if(expectedLocalVertexRefCount > localVertexRefs.size() || expectedPositionRefByteCount > positionRefDeltas.size() || expectedAttributeRefByteCount > attributeRefDeltas.size() || expectedPrimitiveIndexCount > meshletPrimitiveIndices.size()){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("exceeds meshlet stream bounds"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("exceeds meshlet stream bounds"));
+            return false;
         }
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
         const SIMDVectorSingle sphere = LoadFloat(bounds.sphere);
         if(!VectorIsFinite(sphere, VectorComponentMask::s_XYZW) || VectorGetW(sphere) < 0.0f){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid bounds"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid bounds"));
+            return false;
         }
         if(MeshletConeFlags(bounds) & ~s_MeshletConeFlagEnabled){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone flags"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone flags"));
+            return false;
         }
         if(MeshletConeEnabled(bounds) && MeshletConePackedCutoff(bounds) == 0u){
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone cutoff"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone cutoff"));
+            return false;
         }
 
         for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
@@ -247,7 +258,8 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             if(ref && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, positionCount, skinCount, skinRequired))
                 continue;
 
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid encoded position ref"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid encoded position ref"));
+            return false;
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
@@ -255,14 +267,16 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             if(ref && MeshMeshletRefValidation::MeshletAttributeRefInRange(*ref, normalCount, tangentCount, uv0Count, colorCount))
                 continue;
 
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid encoded attribute ref"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid encoded attribute ref"));
+            return false;
         }
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
             const MeshletLocalVertexRef& ref = localVertexRefs[meshlet.localVertexOffset + localVertexIndex];
             if(ref.localDeformedPosition < encodedPositionCount && ref.localAttribute < attributeCount)
                 continue;
 
-            return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("local vertex ref is out of range"));
+            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("local vertex ref is out of range"));
+            return false;
         }
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
             const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * s_MeshletTriangleIndexCount;
@@ -270,13 +284,15 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 if(meshletPrimitiveIndices[primitiveOffset + corner] < vertexCount)
                     continue;
 
-                return MeshPayloadValidationDiagnostics::FailMeshletPrimitivePayloadValidation(contextText, meshPathText, meshletIndex, primitiveIndex, NWB_TEXT("has an out-of-range local vertex"));
+                MeshPayloadValidationDiagnostics::LogMeshletPrimitivePayloadValidation(contextText, meshPathText, meshletIndex, primitiveIndex, NWB_TEXT("has an out-of-range local vertex"));
+                return false;
             }
         }
     }
 
     if(expectedLocalVertexRefCount != localVertexRefs.size() || expectedPositionRefByteCount != positionRefDeltas.size() || expectedAttributeRefByteCount != attributeRefDeltas.size() || expectedPrimitiveIndexCount != meshletPrimitiveIndices.size()){
-        return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet streams contain trailing data"));
+        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet streams contain trailing data"));
+        return false;
     }
 
     if(skinRequired && !ValidateMeshletAttributeSkinSharing(positionRefDeltas, localVertexRefs, meshlets, contextText, meshPathText))

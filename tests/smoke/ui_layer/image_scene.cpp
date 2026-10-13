@@ -5,6 +5,7 @@
 #include "image_scene.h"
 
 #include "../smoke_environment.h"
+#include "passive_scene_support.h"
 
 #include <global/simplemath.h>
 
@@ -53,21 +54,7 @@ bool UiImageSmokeScene::paint(Impl::UiPaintContext& context){
 bool UiImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     static_cast<void>(mods);
-    if(key != Core::Key::F4 && key != Core::Key::F5)
-        return false;
-    if(action != Core::InputAction::Press)
-        return true;
-    if(key == Core::Key::F4)
-        m_phase = !m_phase;
-    else if(m_parent.isOpen()){
-        m_child.close();
-        m_parent.close();
-    }
-    else{
-        m_parent.open();
-        m_child.open();
-    }
-    return true;
+    return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);
 }
 
 bool UiImageSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){

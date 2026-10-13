@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::radioGroupStateMatches(const RadioGroupFrame& frame)const{
+bool Builder::radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept{
     return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot);
 }
 

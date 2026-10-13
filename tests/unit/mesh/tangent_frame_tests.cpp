@@ -40,15 +40,15 @@ using Vector = NWB::Tests::TestVector<T>;
 
 class TangentFrameFixture{
 public:
+    static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v)noexcept;
+    static Vector<TangentFrameRebuildVertex> MakeFlatQuadVertices();
+
+
+public:
     TangentFrameFixture() = delete;
     TangentFrameFixture(const TangentFrameFixture&) = delete;
     TangentFrameFixture& operator=(const TangentFrameFixture&) = delete;
     ~TangentFrameFixture() = delete;
-
-
-public:
-    static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v)noexcept;
-    static Vector<TangentFrameRebuildVertex> MakeFlatQuadVertices();
 };
 
 
@@ -66,6 +66,7 @@ TangentFrameRebuildVertex TangentFrameFixture::MakeVertex(const f32 x, const f32
 
 Vector<TangentFrameRebuildVertex> TangentFrameFixture::MakeFlatQuadVertices(){
     Vector<TangentFrameRebuildVertex> vertices;
+    vertices.reserve(4u);
     vertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f, 1.0f, 1.0f));
@@ -99,6 +100,7 @@ TEST(Mesh, DegenerateUvsUseStableTangentFallback){
 
 TEST(Mesh, RejectsDegenerateTangentFrameTriangle){
     Vector<TangentFrameRebuildVertex> vertices;
+    vertices.reserve(3u);
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));

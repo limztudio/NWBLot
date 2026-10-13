@@ -22,7 +22,6 @@ class CsgDeformWallBuilder final : NoCopy{
 public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
     [[nodiscard]] static SIMDVectorSingle MixAttributeVec(SIMDVectorSingle firstVec, SIMDVectorSingle secondVec, SIMDVectorSingle blendVec, SIMDVectorSingle otherVec)noexcept;
-    [[nodiscard]] static SIMDVectorSingle NormalizeDirectionVec(SIMDVectorSingle direction)noexcept;
     [[nodiscard]] static SIMDVectorSingle KeepWVec(SIMDVectorSingle normalizedVec, SIMDVectorSingle sourceVec)noexcept;
     [[nodiscard]] static SIMDVectorSingle TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept;
     [[nodiscard]] static SIMDVectorSingle UpAxisVec()noexcept;

@@ -223,7 +223,7 @@ bool BackendContext::createVulkanDevice(){
     });
 
     {
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Vulkan: Enabled device extensions:";
         for(const auto& [name, _] : m_enabledExtensions.device)
             ss << "\n    " << name;
@@ -357,7 +357,7 @@ bool BackendContext::createVulkanDevice(){
         appendUniqueQueueFamily(secondaryTransferQueueFamily);
 
     u32 maxQueueCount = 1u;
-    const auto queueCountForFamily = [&sameClassQueueRequests](const i32 queueFamily){
+    const auto queueCountForFamily = [&sameClassQueueRequests](const i32 queueFamily)noexcept{
         u32 queueCount = 1u;
         for(const SameClassQueueRequest& request : sameClassQueueRequests){
             if(request.family == queueFamily && request.queueIndex >= queueCount)

@@ -9,6 +9,7 @@
 
 #include <global/limit.h>
 #include <global/name.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +43,12 @@ template<typename ScopeId, typename ScopeVector, typename ScopeMap, typename Cre
     configureScope(*scope, scopeId);
 
     scopes.push_back(Move(scope));
-    scopeMap.try_emplace(scopeName, scopeId);
+    ScopeExit discardScope([&]()noexcept{ scopes.pop_back(); });
+    if(!scopeMap.try_emplace(scopeName, scopeId).second){
+        NWB_ASSERT(false);
+        return {};
+    }
+    discardScope.release();
     return scopeId;
 }
 

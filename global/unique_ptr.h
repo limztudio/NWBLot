@@ -30,6 +30,15 @@ public:
 
 
 protected:
+    static void AssertDefaultConstructedDeleterValid()noexcept{
+        static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
+    }
+    static void AssertRValueDeleterValid()noexcept{
+        static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
+    }
+
+
+protected:
     constexpr Storage()noexcept
         : m_pair(pointer())
     {}
@@ -66,12 +75,6 @@ public:
 
 protected:
     void swapStorage(Storage& x)noexcept{ m_pair.swap(x.m_pair); }
-    static void AssertDefaultConstructedDeleterValid()noexcept{
-        static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
-    }
-    static void AssertRValueDeleterValid()noexcept{
-        static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
-    }
     template<typename OtherDeleter, typename Owner>
     void moveAssignFrom(Owner& owner)noexcept{
         reset(owner.release());
@@ -108,6 +111,8 @@ private:
 template<typename T, typename Deleter = DefaultDeleter<T>>
 class UniquePtr : private UniquePtrDetail::Storage<T, Deleter>{
     static_assert(!IsRValueReference<Deleter>::value, "The supplied Deleter cannot be a r-value reference.");
+
+
 public:
     typedef Deleter deleter_type;
     typedef T element_type;
@@ -296,22 +301,14 @@ public:
     typename AddLValueReference<element_type>::type operator*()const noexcept(noexcept(*m_owner)){
         return *m_owner;
     }
-    pointer operator->()const noexcept{
-        return m_owner.get();
-    }
+    pointer operator->()const noexcept{ return m_owner.get(); }
 
 
 public:
-    [[nodiscard]] pointer get()const noexcept{
-        return m_owner.get();
-    }
+    [[nodiscard]] pointer get()const noexcept{ return m_owner.get(); }
 
-    [[nodiscard]] owner_type& owner()noexcept{
-        return m_owner;
-    }
-    [[nodiscard]] const owner_type& owner()const noexcept{
-        return m_owner;
-    }
+    [[nodiscard]] owner_type& owner()noexcept{ return m_owner; }
+    [[nodiscard]] const owner_type& owner()const noexcept{ return m_owner; }
 
 
 private:
@@ -356,7 +353,7 @@ MakeStdUnique(Args&&...) = delete;
 
 
 template<typename T, typename Deleter>
-[[nodiscard]] inline NotNullUniquePtr<T, Deleter> MakeNotNullUnique(UniquePtr<T, Deleter>&& owner){
+[[nodiscard]] inline NotNullUniquePtr<T, Deleter> MakeNotNullUnique(UniquePtr<T, Deleter>&& owner)noexcept{
     return NotNullUniquePtr<T, Deleter>(Move(owner));
 }
 

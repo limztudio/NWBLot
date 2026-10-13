@@ -384,19 +384,19 @@ public:
         const Iterator pathEnd = normalizedPath.end();
         const Iterator baseEnd = normalizedBase.end();
 
-        while(pathIt != pathEnd && baseIt != baseEnd && *pathIt == *baseIt){
+        while(pathIt != pathEnd && baseIt != baseEnd && pathIt.nativeComponent() == baseIt.nativeComponent()){
             ++pathIt;
             ++baseIt;
         }
 
         for(; baseIt != baseEnd; ++baseIt){
-            const Path component = *baseIt;
-            if(component.native() == native_string_view(NWB_TEXT("/"), 1u))
+            const native_string_view component = baseIt.nativeComponent();
+            if(component == native_string_view(NWB_TEXT("/"), 1u))
                 continue;
             output.appendComponent(native_string_view(NWB_TEXT(".."), 2u));
         }
         for(; pathIt != pathEnd; ++pathIt)
-            output.appendComponent((*pathIt).native());
+            output.appendComponent(pathIt.nativeComponent());
 
         if(output.empty())
             output.assignSource(native_string_view(NWB_TEXT("."), 1u));
@@ -530,8 +530,8 @@ private:
         if(rootDirectoryLength > rootNameLength)
             output.m_text += GlobalFilesystemPathDetail::PreferredSeparator<value_type>();
 
-        for(const Path component : *this){
-            const native_string_view text = component.native();
+        for(Iterator component = begin(); component != end(); ++component){
+            const native_string_view text = component.nativeComponent();
 #if defined(NWB_PLATFORM_WINDOWS)
             if(rootDirectoryLength != 0u && text == native_string_view(m_text.data(), rootDirectoryLength))
                 continue;

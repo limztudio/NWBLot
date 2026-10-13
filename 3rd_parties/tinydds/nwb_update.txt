@@ -1,5 +1,5 @@
 package: tinydds
 version: commit e94dbc7ebcf4b09a35b4367eee9f45fb0e45d397
-updated_utc: 2026-09-23T12:45:01Z
+updated_utc: 2026-10-13
 source: https://github.com/DeanoC/tiny_dds
-notes: Official DeanoC/tiny_dds single-header DDS reader/writer, flattened to tinydds.h so consumers keep #include <tinydds.h>. NWB-local patches on official: (1) do not truncate compressed mip chains at 4x4, clamp only when the header claims more levels than 1x1 dimensions allow; (2) skip empty mip payloads on write so callers can compose cubemap face data. Implementation is compiled by basisu_gpu_texture.cpp. NWB CMake wrapper exposes nwb::tinydds. Upstream header unchanged since 2019; pointer tracks HEAD, verified 2026-09-23.
+notes: Official DeanoC/tiny_dds single-header DDS reader/writer, flattened to tinydds.h so consumers keep #include <tinydds.h>. NWB-local patches on official: (1) do not truncate compressed mip chains at 4x4, clamp only when the header claims more levels than 1x1 dimensions allow; (2) skip empty mip payloads on write so callers can compose cubemap face data. Implementation is compiled by basisu_gpu_texture.cpp. NWB CMake wrapper exposes nwb::tinydds. Upstream header unchanged since 2019; pointer tracks HEAD, verified 2026-09-23. NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::tinydds as the alias for nwb_vendor_tinydds with SYSTEM INTERFACE includes from package root.

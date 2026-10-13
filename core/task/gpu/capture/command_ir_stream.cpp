@@ -52,13 +52,13 @@ namespace __hidden_gpu_command_ir_stream{
 }
 
 [[nodiscard]] static bool ValidateClearTextureRecord(const GpuCommandIrClearTextureRecord& record)noexcept{
-    constexpr u8 allowedFlags = static_cast<u8>(GpuCommandIrClearTextureFlag::ClearDepth | GpuCommandIrClearTextureFlag::ClearStencil);
+    constexpr u8 s_AllowedFlags = static_cast<u8>(GpuCommandIrClearTextureFlag::ClearDepth | GpuCommandIrClearTextureFlag::ClearStencil);
     const u8 clearFlags = static_cast<u8>(record.clearFlags);
     if(
         record.destinationSubresources.numMipLevels == 0u
         || record.destinationSubresources.numArraySlices == 0u
         || record.clearTextureValueType >= static_cast<u8>(GpuClearTextureTaskValueType::kCount)
-        || (clearFlags & ~allowedFlags) != 0u
+        || (clearFlags & ~s_AllowedFlags) != 0u
         || record.reserved != 0u
     )
         return false;

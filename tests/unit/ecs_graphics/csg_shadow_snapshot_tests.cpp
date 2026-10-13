@@ -87,10 +87,10 @@ void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
 }
 
 [[nodiscard]] bool RegisterCustomShape(SnapshotContext& context, const Name name = s_CustomShape){
-    CsgShapeTypeDesc description;
+    CsgShapeTypeDesc description(context.testWorld.arena);
     description.name = name;
     description.shaderModule = Name("tests/csg_shadow/evaluator");
-    description.shaderModuleInclude = ACompactString("tests/csg_shadow/evaluator.slangi");
+    description.shaderModuleInclude = "tests/csg_shadow/evaluator.slangi";
     description.boundsCallback = &CustomBounds;
     return context.registry.registerShapeType(description).has_value();
 }

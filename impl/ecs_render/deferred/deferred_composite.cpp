@@ -11,13 +11,12 @@
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
+#include <impl/assets/graphics/deferred/binding_slots.h>
+#include <impl/assets/graphics/deferred/names.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
-
-#include <impl/assets/graphics/deferred/binding_slots.h>
-#include <impl/assets/graphics/deferred/names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -213,7 +213,7 @@ bool GpuTaskGraphCompiler::compile(
     };
 
     Vector<InitialOwnershipCompletionRequirement, Alloc::ScratchArena> initialOwnershipCompletionRequirements(graph.externalCompletionCount(), scratchArena);
-    const auto appendInitialOwnershipCompletionRequirement = [&](const GpuExternalCompletionId completion, const GpuPhysicalQueueId sourceQueue, const u64 minimumValue){
+    const auto appendInitialOwnershipCompletionRequirement = [&](const GpuExternalCompletionId completion, const GpuPhysicalQueueId sourceQueue, const u64 minimumValue)noexcept{
         if(!graph.validExternalCompletion(completion) || !sourceQueue.valid() || minimumValue == 0u)
             return false;
 
@@ -343,7 +343,7 @@ bool GpuTaskGraphCompiler::compile(
     }
     const f64 packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);
 
-    const auto failAcceptedQueueFrontierPlan = [&](const GpuTaskId task, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {}){
+    const auto failAcceptedQueueFrontierPlan = [&](const GpuTaskId task, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {})noexcept{
         outAnalysis.m_diagnostic = GpuTaskGraphAnalysisDiagnostic{ .task = task, .relatedTask = relatedTask, .resource = resource, .resourceVersion = {}, .status = GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask, };
         outAnalysis.m_valid = false;
         return false;

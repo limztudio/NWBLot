@@ -85,8 +85,12 @@ public:
         for(const Declaration& declaration : doc.declarations()){
             if(IsAssetBunchType(DeclarationType(declaration)))
                 continue;
-            if(m_table)
-                m_table->try_emplace(DeclarationVariable(declaration), &declaration);
+            if(m_table){
+                if(!m_table->try_emplace(DeclarationVariable(declaration), &declaration).second){
+                    NWB_ASSERT(false);
+                    continue;
+                }
+            }
             else
                 m_inline[m_inlineCount++] = &declaration;
         }

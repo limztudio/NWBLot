@@ -6,6 +6,7 @@
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/command.h>
+
 #include <global/allocation_size.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>

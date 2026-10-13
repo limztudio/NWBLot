@@ -7,11 +7,9 @@
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
+#include <global/floating_point_environment.h>
 #include <global/simd/collision_triangle.h>
 #include <global/scope_exit.h>
-
-#include <cfenv>
-#include <fenv.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,10 +143,10 @@ TEST(MathTriangleIntersection, DoubleCoplanarSeparationAndTouchSurviveLargeTrans
 
 TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringIntersection){
 #pragma STDC FENV_ACCESS ON
-    fenv_t originalEnvironment{};
-    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
     volatile u32 singleInactiveBits = 0x7f800001u;
@@ -163,14 +161,14 @@ TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringInter
         VectorDoubleSetIntW(VectorDoubleSet(2.0, 0.0, 0.0, 0.0), doubleInactiveBits),
         VectorDoubleSetIntW(VectorDoubleSet(0.0, 2.0, 0.0, 0.0), doubleInactiveBits)
     };
-    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const bool singleIntersects = TriangleTests::Intersects(firstSingle[0], firstSingle[1], firstSingle[2], firstSingle[0], firstSingle[1], firstSingle[2]);
-    const i32 singleInvalid = fetestexcept(FE_INVALID);
+    const i32 singleInvalid = TestFloatingPointExceptions(FE_INVALID);
     EXPECT_TRUE(singleIntersects);
     EXPECT_EQ(singleInvalid, 0);
-    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const bool doubleIntersects = TriangleDoubleTests::Intersects(firstDouble[0], firstDouble[1], firstDouble[2], firstDouble[0], firstDouble[1], firstDouble[2]);
-    const i32 doubleInvalid = fetestexcept(FE_INVALID);
+    const i32 doubleInvalid = TestFloatingPointExceptions(FE_INVALID);
     EXPECT_TRUE(doubleIntersects);
     EXPECT_EQ(doubleInvalid, 0);
 }

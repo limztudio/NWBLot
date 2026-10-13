@@ -55,25 +55,9 @@ public:
     }
 
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const override{
-        u64 index = 0u;
         invalidateText();
         ++searchCalls;
-        if(start >= count)
-            return MakeUnexpected(Failure{});
-        index = start;
-        if(rawKey(index) != disabled)
-            return index;
-        if(backwards){
-            if(index == 0u)
-                return MakeUnexpected(Failure{});
-            --index;
-        }
-        else{
-            if(index + 1u == count)
-                return MakeUnexpected(Failure{});
-            ++index;
-        }
-        return index;
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index){ return rawKey(index); });
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{

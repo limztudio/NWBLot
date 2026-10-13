@@ -9,7 +9,6 @@
 #include "caustic_photon_parameters.h"
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
-#include <global/compile.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/material/material_system.h>
@@ -38,12 +37,6 @@
 #include <impl/assets/graphics/gi/names.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 #include <impl/assets/graphics/shadow/constants.h>
-
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>
@@ -58,6 +51,14 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
+
+#include <global/compile.h>
+#include <global/algorithm.h>
 #include <global/environment.h>
 #include <global/not_null.h>
 #include <global/text_utils.h>
@@ -486,6 +487,18 @@ inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 namespace RayTracingDetail{
 
 
+struct DispatchGroups{
+    u32 x;
+    u32 y;
+};
+
+[[nodiscard]] NWB_INLINE DispatchGroups ResolveDispatchGroups(const u32 width, const u32 height, const u32 receiverFactor, const u32 groupSize)noexcept{
+    const u32 receiverWidth = (width + receiverFactor - 1u) / receiverFactor;
+    const u32 receiverHeight = (height + receiverFactor - 1u) / receiverFactor;
+    return { DivideUp(receiverWidth, groupSize), DivideUp(receiverHeight, groupSize) };
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -496,7 +509,7 @@ struct RenderableRayTracingMeshResources{
 };
 
 [[nodiscard]] Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, Core::ECS::EntityID entity);
-[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass);
+[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept;
 [[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable);
 [[nodiscard]] bool EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
 [[nodiscard]] bool ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);

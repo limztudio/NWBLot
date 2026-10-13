@@ -33,7 +33,7 @@ struct SkinCookEntry{
     Core::Assets::AssetVector<SkinInfluence4> influences;
     Core::Assets::AssetVector<SkeletonJointMatrix> inverseBindMatrices;
 
-    explicit SkinCookEntry(Core::Assets::AssetArena& arena)
+    explicit SkinCookEntry(Core::Assets::AssetArena& arena)noexcept
         : influences(arena)
         , inverseBindMatrices(arena)
     {}

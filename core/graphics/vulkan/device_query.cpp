@@ -109,7 +109,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature)const noexcept{
     case Feature::Meshlets:
         return m_context.extensions.extMeshShader && m_context.meshShaderFeatures.meshShader == VK_TRUE && m_context.deviceDispatch.vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
-        return m_context.extensions.khrFragmentShadingRate;
+        return false;
     case Feature::ConstantBufferRanges:
         return true;
     default:
@@ -324,17 +324,18 @@ HeapHandle Device::createHeap(const HeapDesc& d){
         return nullptr;
     }
 
-    auto* heap = NewArenaObject<Heap>(m_context.objectArena, m_context, m_allocator);
+    HeapHandle heap(NewArenaObject<Heap>(m_context.objectArena, m_context, m_allocator), HeapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!heap)
+        return nullptr;
     heap->m_desc = d;
 
     res = m_allocator.allocateHeap(*heap);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, heap);
         return nullptr;
     }
 
-    return HeapHandle(heap, HeapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return heap;
 }
 
 

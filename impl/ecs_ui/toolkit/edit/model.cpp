@@ -168,7 +168,7 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
     return true;
 }
 
-bool EditModel::validateText(const AStringView value)const{
+bool EditModel::validateText(const AStringView value)const noexcept{
     return m_textMode == EditTextMode::SingleLine ? GraphemeSegmentation::Validate(value, true) : ValidateMultilineText(value);
 }
 

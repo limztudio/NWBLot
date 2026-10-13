@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/simd/type.h>
 #include <global/limit.h>
+#include <global/scope_exit.h>
 #include <gtest/gtest.h>
 
-#include <cfenv>
 #include <new>
 
 #if defined(__linux__)
@@ -80,8 +81,12 @@ NWB_NOINLINE bool StorageEqual(const Value& lhs, const Value& rhs)noexcept{ retu
 
 template<typename Value, usize Count>
 void CheckNaNComparisonFlags(){
-    std::fenv_t original;
-    ASSERT_EQ(std::fegetenv(&original), 0);
+    const auto original = GetFloatingPointEnvironment();
+    ASSERT_TRUE(original);
+    ScopeExit restore([&]()noexcept{
+        if(!SetFloatingPointEnvironment(*original))
+            NWB_ASSERT(false);
+    });
     for(const u32 nanBits : { 0x7FC12345u, 0x7F812345u }){
         for(usize nanLane = 0u; nanLane < Count; ++nanLane){
             for(usize mismatch = 0u; mismatch <= Count; ++mismatch){
@@ -91,29 +96,27 @@ void CheckNaNComparisonFlags(){
                 lhs.raw[nanLane] = rhs.raw[nanLane] = BitCast<f32>(nanBits);
                 if(mismatch < Count && mismatch != nanLane)
                     rhs.raw[mismatch] += 1.0f;
-                std::feclearexcept(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
                 const bool expected = LegacyEqual<Value, Count>(lhs, rhs);
-                const int expectedFlags = std::fetestexcept(FE_ALL_EXCEPT);
-                std::feclearexcept(FE_ALL_EXCEPT);
+                const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
                 const bool actual = StorageEqual(lhs, rhs);
-                const int actualFlags = std::fetestexcept(FE_ALL_EXCEPT);
+                const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 EXPECT_EQ(actual, expected) << nanLane << ", " << mismatch;
                 EXPECT_EQ(actualFlags, expectedFlags) << nanLane << ", " << mismatch;
             }
         }
     }
-    EXPECT_EQ(std::fesetenv(&original), 0);
 }
 
 #if defined(NWB_HAS_SSE2)
 struct EqualityEnvironmentGuard{
-    std::fenv_t original{};
-    unsigned originalMxcsr = _mm_getcsr();
-    bool captured = std::fegetenv(&original) == 0;
+    Expected<FloatingPointEnvironment> original = GetFloatingPointEnvironment();
+    u32 originalMxcsr = _mm_getcsr();
 
     ~EqualityEnvironmentGuard(){
-        if(captured){
-            std::fesetenv(&original);
+        if(original){
+            EXPECT_TRUE(SetFloatingPointEnvironment(*original));
             _mm_setcsr(originalMxcsr);
         }
     }
@@ -121,26 +124,27 @@ struct EqualityEnvironmentGuard{
 
 struct EqualityObservation{
     bool equal;
-    int flags;
-    unsigned rawFlags;
+    i32 flags;
+    u32 rawFlags;
 };
 
 template<typename Value, typename Compare>
-EqualityObservation ObserveEquality(const Value& lhs, const Value& rhs, Compare compare){
-    std::feclearexcept(FE_ALL_EXCEPT);
+Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare){
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return MakeUnexpected(Failure{});
     _mm_setcsr(_mm_getcsr() & ~0x3Fu);
     const bool equal = compare(lhs, rhs);
-    return { equal, std::fetestexcept(FE_ALL_EXCEPT), _mm_getcsr() & 0x3Fu };
+    return EqualityObservation{ equal, TestFloatingPointExceptions(FE_ALL_EXCEPT), _mm_getcsr() & 0x3Fu };
 }
 
 template<typename Value, usize Count>
 void CheckRawEqualityComparisonFlags(){
     EqualityEnvironmentGuard restore;
-    ASSERT_TRUE(restore.captured);
-    std::fenv_t held;
-    ASSERT_EQ(std::feholdexcept(&held), 0);
-    const unsigned heldMxcsr = _mm_getcsr();
-    for(const unsigned mode : { 0u, 0x40u, 0x8000u, 0x8040u }){
+    ASSERT_TRUE(restore.original);
+    const auto held = HoldFloatingPointExceptions();
+    ASSERT_TRUE(held);
+    const u32 heldMxcsr = _mm_getcsr();
+    for(const u32 mode : { 0u, 0x40u, 0x8000u, 0x8040u }){
         _mm_setcsr((heldMxcsr & ~(0x8040u | 0x3Fu)) | mode);
         for(const u32 bits : { 0x00000001u, 0x80000001u, 0x007FFFFFu, 0x807FFFFFu, 0x7FC12345u, 0x7F812345u }){
             for(usize exceptionalLane = 0u; exceptionalLane < Count; ++exceptionalLane){
@@ -154,15 +158,19 @@ void CheckRawEqualityComparisonFlags(){
                         if(mismatch < Count && mismatch != exceptionalLane)
                             rhs.raw[mismatch] += 1.0f;
                         const auto strict = ObserveEquality(lhs, rhs, LegacyEqual<Value, Count>);
+                        ASSERT_TRUE(strict);
                         const auto actual = ObserveEquality(lhs, rhs, StorageEqual<Value>);
-                        EXPECT_EQ(actual.equal, strict.equal) << mode << ", " << exceptionalLane << ", " << mismatch;
-                        EXPECT_EQ(actual.flags, strict.flags) << mode << ", " << exceptionalLane << ", " << mismatch;
-                        EXPECT_EQ(actual.rawFlags, strict.rawFlags) << mode << ", " << exceptionalLane << ", " << mismatch;
+                        ASSERT_TRUE(actual);
+                        EXPECT_EQ(actual->equal, strict->equal) << mode << ", " << exceptionalLane << ", " << mismatch;
+                        EXPECT_EQ(actual->flags, strict->flags) << mode << ", " << exceptionalLane << ", " << mismatch;
+                        EXPECT_EQ(actual->rawFlags, strict->rawFlags) << mode << ", " << exceptionalLane << ", " << mismatch;
                         const auto defaultContext = ObserveEquality(lhs, rhs, DefaultContextLegacyEqual<Value, Count>);
+                        ASSERT_TRUE(defaultContext);
                         const auto actualDefault = ObserveEquality(lhs, rhs, StorageEqual<Value>);
-                        EXPECT_EQ(actualDefault.equal, defaultContext.equal) << mode << ", " << exceptionalLane << ", " << mismatch;
-                        EXPECT_EQ(actualDefault.flags, defaultContext.flags) << mode << ", " << exceptionalLane << ", " << mismatch;
-                        EXPECT_EQ(actualDefault.rawFlags, defaultContext.rawFlags) << mode << ", " << exceptionalLane << ", " << mismatch;
+                        ASSERT_TRUE(actualDefault);
+                        EXPECT_EQ(actualDefault->equal, defaultContext->equal) << mode << ", " << exceptionalLane << ", " << mismatch;
+                        EXPECT_EQ(actualDefault->flags, defaultContext->flags) << mode << ", " << exceptionalLane << ", " << mismatch;
+                        EXPECT_EQ(actualDefault->rawFlags, defaultContext->rawFlags) << mode << ", " << exceptionalLane << ", " << mismatch;
                     }
                 }
             }
@@ -197,7 +205,6 @@ void CheckPageBoundary(){
     EXPECT_EQ(munmap(mapping, static_cast<usize>(pageSize) * 2u), 0);
 }
 #endif
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/bit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -236,10 +238,7 @@ private:
         return range(table + 6u, ((end - start + 1u) * bits + 15u) / 16u * 2u);
     }
     [[nodiscard]] u32 valueSize(u16 format)const noexcept{
-        u32 size = 0u;
-        for(u32 bit = 0u; bit < 8u; ++bit)
-            size += (format & (1u << bit)) != 0u ? 2u : 0u;
-        return size;
+        return static_cast<u32>(CountSetBits(static_cast<u32>(format & 0xffu))) * 2u;
     }
     [[nodiscard]] bool value(u64 offset, u16 format, u64 parent)noexcept{
         if((format & 0xff00u) != 0u || !range(offset, valueSize(format)))

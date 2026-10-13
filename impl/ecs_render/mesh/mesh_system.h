@@ -7,11 +7,11 @@
 
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
+#include <impl/assets/graphics/mesh/binding_slots.h>
 
 #include <core/assets/ref.h>
 #include <core/ecs/entity_id.h>
 #include <core/graphics/runtime/render_pass.h>
-#include <impl/assets/graphics/mesh/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,7 +138,7 @@ public:
         handler(s_MeshletLocalVertexRefBindingSlot, false);
         handler(s_MeshletPrimitiveIndexBindingSlot, true);
     }
-    [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot){
+    [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot)noexcept{
         switch(bindingSlot){
         case s_MeshPositionBindingSlot: return mesh.positionBuffer;
         case s_MeshNormalBindingSlot: return mesh.normalBuffer;
@@ -157,8 +157,8 @@ public:
         }
     }
     template<typename BufferHandler>
-    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler){
-        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
+    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(s_MeshPositionBindingSlot, MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), false))){
+        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
             handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
         });
     }

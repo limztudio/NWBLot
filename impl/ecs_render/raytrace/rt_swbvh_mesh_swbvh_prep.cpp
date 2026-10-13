@@ -8,9 +8,10 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
 #include <impl/ecs_csg/components.h>
+#include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
+
 #include <global/algorithm.h>
 #include <global/hash_utils.h>
-#include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -240,14 +241,6 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
     }
     return recorded;
-}
-
-bool RendererRayTracingSystem::preparedMeshSwBvhBuildsReady()const noexcept{
-    return m_preparedMeshSwBvhBuildsReady;
-}
-
-const PreparedMeshSwBvhBuildVector& RendererRayTracingSystem::preparedMeshSwBvhBuilds()const noexcept{
-    return m_preparedMeshSwBvhBuilds;
 }
 
 void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){

@@ -103,7 +103,7 @@ void UiEditBoxHost::commitFrame(const u64 generation){
     synchronizeFocus();
 }
 
-bool UiEditBoxHost::hasTextFocus()const{
+bool UiEditBoxHost::hasTextFocus()const noexcept{
     const Entry* entry = find(m_context.input().focus());
     if(!entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled || entry->displayed.modelGeneration != entry->owner.modelGeneration || entry->displayed.popup != entry->popup)
         return false;
@@ -111,7 +111,7 @@ bool UiEditBoxHost::hasTextFocus()const{
     return target && target->enabled && target->textEditable && target->popup == entry->popup;
 }
 
-bool UiEditBoxHost::wantsTextInput()const{
+bool UiEditBoxHost::wantsTextInput()const noexcept{
     if(!m_context.input().windowFocused() || !hasTextFocus())
         return false;
     const Entry* entry = find(m_context.input().focus());

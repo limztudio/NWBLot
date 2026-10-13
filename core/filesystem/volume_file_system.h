@@ -99,7 +99,7 @@ private:
 
     bool readBytesLocked(u64 offset, void* data, u64 byteCount)const;
     bool writeBytesLocked(u64 offset, const void* data, u64 byteCount);
-    bool moveBytesLocked(u64 destinationOffset, u64 sourceOffset, u64 byteCount);
+    bool moveBytesLocked(u64 destinationOffset, u64 sourceOffset, u64 byteCount, Alloc::ScratchArena& scratchArena);
     bool trimSegmentsForNextFreeOffsetLocked();
 
     void unmountLocked();

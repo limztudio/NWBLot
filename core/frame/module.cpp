@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 #include <core/perf/cpu_task_profile.h>
+
 #include <global/cpu_topology.h>
 #include <global/exception.h>
 

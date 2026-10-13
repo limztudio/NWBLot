@@ -5,10 +5,11 @@
 #pragma once
 
 
-#include <global/expected.h>
 #include "recorder.h"
 
 #include <core/common/log.h>
+
+#include <global/expected.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +60,7 @@ struct TextLogPayload{
 
 class TextLogCaptureLogger final : public Common::ILogger{
 public:
-    explicit TextLogCaptureLogger(Recorder& recorder, Common::ILogger* forwardLogger = nullptr);
+    explicit TextLogCaptureLogger(Recorder& recorder, Common::ILogger* forwardLogger = nullptr)noexcept;
     virtual ~TextLogCaptureLogger()override = default;
 
 

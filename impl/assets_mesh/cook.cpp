@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-
 #include "cook_metadata.h"
 #include "cook_source_streams.h"
 #include "cook_stream_reorder.h"
@@ -26,11 +25,12 @@
 #include <core/alloc/scratch.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/assets/paths.h>
-#include <global/simd/frame.h>
 #include <core/metascript/parser.h>
+#include <core/common/log.h>
+
+#include <global/simd/frame.h>
 #include <global/binary.h>
 #include <global/text_utils.h>
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -489,13 +489,13 @@ private:
 
 public:
     explicit GpuCompiledGraph(GraphicsArena& arena);
-    ~GpuCompiledGraph();
+    ~GpuCompiledGraph()noexcept;
 
 
 public:
     // An active graph attempt leases this exact immutable plan until every transaction packet resolves.
     // Failed reset leaves packet storage, identities, topology, and statistics unchanged so explicit cleanup can continue.
-    [[nodiscard]] bool tryReset();
+    [[nodiscard]] bool tryReset()noexcept;
     void reset();
 
 

@@ -8,41 +8,23 @@ import sys
 import time
 
 from list_native import ListNativeInput
-from list_probe import center, observe_list, snapshot_from_logs
+from probe_common import center
+from list_probe import observe_list, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
+from keyed_run import KeyedRun
 from fixture_environment import build_fixture_environment
 
 
-class ListRun:
+class ListRun(KeyedRun):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = ListNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native_type=ListNativeInput)
         self.expected = {"selected": 0, "cursor": 0, "count": 100000, "focused": 0, "reversed": 0, "removed": 0, "visible": 1, "commits": 0, "underlying": 0}
 
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
 
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot["scale"]
-        return round(x * scale_x), round(y * scale_y)
 
-    def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot["rectangles"][name])))
 
-    def row(self, offset):
-        x, y, width, height = self.snapshot["rectangles"]["viewport"]
-        return self.point(x + min(width / 2.0, 120.0), y + (offset + 0.5) * 24.0)
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), **changes):
         self.expected.update(changes)
@@ -203,15 +185,7 @@ def run(args):
 
 
 def main(argv):
-    args = parse_args(argv)
-    try:
-        return run(args)
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", flush=True)
-        return SKIP_EXIT_CODE
-    except (SmokeFailure, OSError, ValueError, TimeoutError) as error:
-        print(f"FAIL: {error}", flush=True)
-        return 1
+    return run_smoke_main(argv, parse_args, run)
 
 
 if __name__ == "__main__":

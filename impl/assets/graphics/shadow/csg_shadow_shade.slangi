@@ -129,7 +129,7 @@ bool nwbCsgShadowSubtractSpan(
     const uint instance,
     const NwbLightSpaceEvent farEvent,
     const NwbLightSpaceEvent nearEvent,
-    const NwbCsgShadowInterval intervals[NWB_CSG_RAY_MAX_CUTTERS],
+    __constref NwbCsgShadowInterval intervals[NWB_CSG_RAY_MAX_CUTTERS],
     const uint intervalCount,
     const float3 rayOrigin,
     const float3 rayDirection,

@@ -288,8 +288,10 @@ class Implementation<T1, T2, ImplementationKind::DistinctEmptyValues>
     : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::DistinctEmptyValues>>
     , private T1
     , private T2{
-private:
     friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::DistinctEmptyValues>>;
+
+
+private:
     typedef ImplementationTypes<T1, T2> Types;
 
 
@@ -329,8 +331,10 @@ template<typename T1, typename T2>
 class Implementation<T1, T2, ImplementationKind::SameEmptyValue>
     : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::SameEmptyValue>>
     , private T1{
-private:
     friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::SameEmptyValue>>;
+
+
+private:
     typedef ImplementationTypes<T1, T2> Types;
 
 

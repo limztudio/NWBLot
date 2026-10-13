@@ -2,7 +2,6 @@
 """Combine disjoint authored fixture roots into one private project cook root."""
 
 import argparse
-import hashlib
 from pathlib import Path
 
 
@@ -55,7 +54,7 @@ def prepare_asset_root(output_root, source_roots):
     actual = {path.relative_to(output).as_posix() for path in output.rglob("*") if path.is_file()}
     if actual != contents.keys():
         raise ValueError("private output file identities changed while writing")
-    mismatched = [relative for relative, payload in contents.items() if hashlib.sha256((output / relative).read_bytes()).digest() != hashlib.sha256(payload).digest()]
+    mismatched = [relative for relative, payload in contents.items() if (output / relative).read_bytes() != payload]
     if mismatched:
         raise ValueError("private output payload verification failed: " + ", ".join(mismatched))
     return len(contents)

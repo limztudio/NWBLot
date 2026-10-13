@@ -45,12 +45,12 @@ inline void ClearAcceptedToken(QueueSubmissionToken* acceptedToken)noexcept{
 
 template<typename Copy>
 struct CopiesPayloadBase{
+    GraphicsVector<Copy> copies;
+    QueueSubmissionToken* acceptedToken = nullptr;
+
     explicit CopiesPayloadBase(GraphicsArena& arena)
         : copies(arena)
     {}
-
-    GraphicsVector<Copy> copies;
-    QueueSubmissionToken* acceptedToken = nullptr;
 };
 
 template<typename Payload>

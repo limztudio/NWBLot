@@ -16,14 +16,6 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 UiRadioGroupSource::instanceGeneration()const noexcept{ return 1u; }
-
-u64 UiRadioGroupSource::revision()const noexcept{ return 1u; }
-
-u64 UiRadioGroupSource::rowCount()const noexcept{ return 3u; }
-
-u64 UiRadioGroupSource::key(const u64 index)const noexcept{ return index < 3u ? index + 1u : 0u; }
-
 Expected<u64> UiRadioGroupSource::indexOf(const u64 keyValue)const noexcept{
     if(keyValue == 0u || keyValue > 3u)
         return MakeUnexpected(Failure{});
@@ -43,8 +35,6 @@ StringView UiRadioGroupSource::text(const u64 index)const noexcept{
     static constexpr StringView s_Labels[] = { "Balanced", "High quality", "Unavailable" };
     return index < 3u ? s_Labels[index] : StringView{};
 }
-
-bool UiRadioGroupSource::enabled(const u64 index)const noexcept{ return index < 2u; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

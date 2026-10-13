@@ -8,6 +8,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+
 #include <global/assert.h>
 #include <global/auto_registration.h>
 
@@ -28,8 +29,8 @@ namespace __hidden_gather_merge_registry{
 
 
 ::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena>& QueryAutoMergeQueue(){
-    static ::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena> queue(AssetsArenaScope::s_GatherMergeQueueArena);
-    return queue;
+    static ::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena> s_Queue(AssetsArenaScope::s_GatherMergeQueueArena);
+    return s_Queue;
 }
 
 

@@ -114,6 +114,54 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
 }
 
 
+TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/reload_admission"));
+    NWB::Core::SamplerDesc description;
+    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+    description.maxAnisotropy = 4.0f;
+    description.mipBias = -0.25f;
+    description.minFilter = false;
+    description.addressW = NWB::Core::SamplerAddressMode::Border;
+    sampler.setDescription(description);
+    NWB::Impl::SamplerAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary(testArena.arena);
+    ASSERT_TRUE(codec.serialize(sampler, binary));
+    ASSERT_TRUE(sampler.loadBinary(binary));
+    for(usize prefix = 0u; prefix < binary.size(); ++prefix){
+        NWB::Core::Assets::AssetBytes malformed(binary);
+        malformed.resize(prefix);
+        EXPECT_FALSE(sampler.loadBinary(malformed)) << prefix;
+        NWB::Core::Assets::AssetBytes retained(testArena.arena);
+        ASSERT_TRUE(codec.serialize(sampler, retained));
+        EXPECT_EQ(retained, binary) << prefix;
+    }
+    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
+        NWB::Impl::SamplerBinaryPayload::HeaderBinary header;
+        NWB_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
+        switch(invalidCase){
+        case 0u: header.magic = 0u; break;
+        case 1u: ++header.version; break;
+        case 2u: header.reserved = 1u; break;
+        case 3u: header.minFilter = 2u; break;
+        case 4u: header.addressU = Limit<u32>::s_Max; break;
+        case 5u: header.mipBias = BitCast<f32>(0x7fc00000u); break;
+        }
+        NWB::Core::Assets::AssetBytes malformed(testArena.arena);
+        AppendPOD(malformed, header);
+        if(invalidCase == 6u)
+            malformed.push_back(0u);
+        EXPECT_FALSE(sampler.loadBinary(malformed)) << invalidCase;
+        NWB::Core::Assets::AssetBytes retained(testArena.arena);
+        ASSERT_TRUE(codec.serialize(sampler, retained));
+        EXPECT_EQ(retained, binary) << invalidCase;
+    }
+    EXPECT_EQ(logger.errorCount(), binary.size() + 7u);
+}
+
+
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
     static constexpr AStringView s_UnsupportedAssignments[] = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n", };
 
@@ -137,7 +185,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
         const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
         NWB::Impl::SamplerCookEntry entry(testArena.arena);
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, *entry.arena, scratchArena)) << assignment;
+        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, entry.arena, scratchArena)) << assignment;
         const TStringView expectedDiagnostic = assignment.starts_with("asset.reduction") ? NWB_TEXT("unsupported reduction type") : NWB_TEXT("unsupported asset field 'border_color'");
         EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
     }
@@ -161,7 +209,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
     const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
     NWB::Impl::SamplerCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, *entry.arena, scratchArena));
+    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, entry.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
 #else
 #endif

@@ -109,7 +109,7 @@ void PaintBuilder::pushClip(const Rect& clip){
     m_clips.push_back(__hidden_ui_paint::Intersect(m_clips.back(), clip));
 }
 
-bool PaintBuilder::popClip(){
+bool PaintBuilder::popClip()noexcept{
     NWB_ASSERT(m_recording);
     if(m_clips.size() <= 1u || (m_overlayDepth != 0u && m_clips.size() <= m_overlays[m_overlayDepth - 1u].clipDepth + 1u))
         return false;
@@ -153,7 +153,7 @@ DrawSnapshot PaintBuilder::freeze(){
     return Move(m_snapshot);
 }
 
-Rect PaintBuilder::currentClip()const{
+Rect PaintBuilder::currentClip()const noexcept{
     NWB_ASSERT(m_recording);
     return m_clips.back();
 }

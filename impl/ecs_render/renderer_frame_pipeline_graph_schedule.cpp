@@ -5,9 +5,6 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/reflection/scene_content_stamp.h>
-
-#include <global/hash_utils.h>
-
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
@@ -20,14 +17,6 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
-
-#include <core/task/gpu/capture/command_ir.h>
-#include <core/task/gpu/frame_timing_begin_task.h>
-#include <core/task/gpu/scheduler.h>
-#include <core/graphics/gpu_timing.h>
-
-#include <global/timer.h>
-
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/kernel/task_graph_frame_recovery_task.h>
 #include <impl/ecs_render/kernel/task_graph_frame_timing_end_task.h>
@@ -66,6 +55,14 @@
 #include <impl/ecs_render/avboit/material_upload_builder.h>
 #include <impl/ecs_render/avboit/geometry_preparation_builder.h>
 #include <impl/ecs_render/avboit/compute_emulation_capture.h>
+
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/frame_timing_begin_task.h>
+#include <core/task/gpu/scheduler.h>
+#include <core/graphics/gpu_timing.h>
+
+#include <global/hash_utils.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

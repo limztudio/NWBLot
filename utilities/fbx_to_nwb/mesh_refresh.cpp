@@ -39,29 +39,25 @@ struct StreamSortEntry{
     usize sourceIndex = 0u;
 };
 
-[[nodiscard]] u32 FloatSortKey(const f32 value){
-    return FloatingHashBits(value);
+[[nodiscard]] bool LessF32(const f32 lhs, const f32 rhs)noexcept{
+    return FloatingHashBits(lhs) < FloatingHashBits(rhs);
 }
 
-[[nodiscard]] bool LessF32(const f32 lhs, const f32 rhs){
-    return FloatSortKey(lhs) < FloatSortKey(rhs);
+[[nodiscard]] bool SameF32(const f32 lhs, const f32 rhs)noexcept{
+    return FloatingHashBits(lhs) == FloatingHashBits(rhs);
 }
 
-[[nodiscard]] bool SameF32(const f32 lhs, const f32 rhs){
-    return FloatSortKey(lhs) == FloatSortKey(rhs);
-}
-
-[[nodiscard]] bool SameF32Bits(const f32 lhs, const f32 rhs){
+[[nodiscard]] bool SameF32Bits(const f32 lhs, const f32 rhs)noexcept{
     return NWB_MEMCMP(&lhs, &rhs, sizeof(lhs)) == 0;
 }
 
-[[nodiscard]] bool LessValue(const Vec2& lhs, const Vec2& rhs){
+[[nodiscard]] bool LessValue(const Vec2& lhs, const Vec2& rhs)noexcept{
     if(!SameF32(lhs.x, rhs.x))
         return LessF32(lhs.x, rhs.x);
     return LessF32(lhs.y, rhs.y);
 }
 
-[[nodiscard]] bool LessValue(const Vec3& lhs, const Vec3& rhs){
+[[nodiscard]] bool LessValue(const Vec3& lhs, const Vec3& rhs)noexcept{
     if(!SameF32(lhs.x, rhs.x))
         return LessF32(lhs.x, rhs.x);
     if(!SameF32(lhs.y, rhs.y))
@@ -69,7 +65,7 @@ struct StreamSortEntry{
     return LessF32(lhs.z, rhs.z);
 }
 
-[[nodiscard]] bool LessValue(const Vec4& lhs, const Vec4& rhs){
+[[nodiscard]] bool LessValue(const Vec4& lhs, const Vec4& rhs)noexcept{
     if(!SameF32(lhs.x, rhs.x))
         return LessF32(lhs.x, rhs.x);
     if(!SameF32(lhs.y, rhs.y))
@@ -79,19 +75,19 @@ struct StreamSortEntry{
     return LessF32(lhs.w, rhs.w);
 }
 
-[[nodiscard]] bool SameValue(const Vec2& lhs, const Vec2& rhs){
+[[nodiscard]] bool SameValue(const Vec2& lhs, const Vec2& rhs)noexcept{
     return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y);
 }
 
-[[nodiscard]] bool SameValue(const Vec3& lhs, const Vec3& rhs){
+[[nodiscard]] bool SameValue(const Vec3& lhs, const Vec3& rhs)noexcept{
     return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y) && SameF32Bits(lhs.z, rhs.z);
 }
 
-[[nodiscard]] bool SameValue(const Vec4& lhs, const Vec4& rhs){
+[[nodiscard]] bool SameValue(const Vec4& lhs, const Vec4& rhs)noexcept{
     return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y) && SameF32Bits(lhs.z, rhs.z) && SameF32Bits(lhs.w, rhs.w);
 }
 
-[[nodiscard]] bool LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs){
+[[nodiscard]] bool LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
     for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(lhs.joint[i] != rhs.joint[i])
             return lhs.joint[i] < rhs.joint[i];
@@ -103,7 +99,7 @@ struct StreamSortEntry{
     return false;
 }
 
-[[nodiscard]] bool SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs){
+[[nodiscard]] bool SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
     MeshSkinInfluenceEqual equal;
     return equal(lhs, rhs);
 }
@@ -279,7 +275,7 @@ template<typename Value>
 }
 
 
-void AccumulateReport(SourceMeshCanonicalizeReport& total, const SourceMeshCanonicalizeReport& item){
+void AccumulateReport(SourceMeshCanonicalizeReport& total, const SourceMeshCanonicalizeReport& item)noexcept{
     total.before.positions += item.before.positions;
     total.before.normals += item.before.normals;
     total.before.tangents += item.before.tangents;
@@ -309,7 +305,7 @@ void AccumulateReport(SourceMeshCanonicalizeReport& total, const SourceMeshCanon
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh){
+SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept{
     SourceMeshStreamCounts counts;
     counts.positions = mesh.positions.size();
     counts.normals = mesh.normals.size();

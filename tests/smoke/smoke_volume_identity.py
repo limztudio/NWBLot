@@ -32,10 +32,12 @@ def runtime_pipeline_cache_paths(directory):
 
 def file_identity(path):
     digest = hashlib.sha256()
+    byte_count = 0
     with path.open("rb") as source:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
-    return {"bytes": path.stat().st_size, LIT_SHA256: digest.hexdigest()}
+            byte_count += len(block)
+    return {"bytes": byte_count, LIT_SHA256: digest.hexdigest()}
 
 
 def authored_volume_hashes(directory):

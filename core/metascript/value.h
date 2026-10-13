@@ -42,25 +42,28 @@ public:
 
 
 public:
+    [[nodiscard]] static Value Reference(MStringView val, MetaArena& arena);
+
+
+public:
     explicit Value(MetaArena& arena)noexcept;
     Value(i64 val, MetaArena& arena)noexcept;
     Value(f64 val, MetaArena& arena)noexcept;
     Value(MStringView val, MetaArena& arena);
-    [[nodiscard]] static Value Reference(MStringView val, MetaArena& arena);
-    ~Value();
+    ~Value()noexcept;
     Value(const Value& other);
     Value(Value&& other)noexcept;
     Value& operator=(const Value& other);
-    Value& operator=(Value&& other)noexcept;
+    Value& operator=(Value&& other);
 
     [[nodiscard]] Value operator+(const Value& rhs)const;
-    [[nodiscard]] Value operator-(const Value& rhs)const;
-    [[nodiscard]] Value operator*(const Value& rhs)const;
-    [[nodiscard]] Value operator/(const Value& rhs)const;
+    [[nodiscard]] Value operator-(const Value& rhs)const noexcept;
+    [[nodiscard]] Value operator*(const Value& rhs)const noexcept;
+    [[nodiscard]] Value operator/(const Value& rhs)const noexcept;
     Value& operator+=(const Value& rhs);
-    Value& operator-=(const Value& rhs);
-    Value& operator*=(const Value& rhs);
-    Value& operator/=(const Value& rhs);
+    Value& operator-=(const Value& rhs)noexcept;
+    Value& operator*=(const Value& rhs)noexcept;
+    Value& operator/=(const Value& rhs)noexcept;
 
 
 public:
@@ -75,25 +78,25 @@ public:
     [[nodiscard]] bool isMap()const noexcept{ return m_type == ValueType::Map; }
     [[nodiscard]] bool isNumeric()const noexcept{ return m_type == ValueType::Integer || m_type == ValueType::Double; }
 
-    [[nodiscard]] i64 asInteger()const;
-    [[nodiscard]] f64 asDouble()const;
-    [[nodiscard]] f64 toDouble()const;
-    [[nodiscard]] MStringView asString()const;
-    [[nodiscard]] MStringView asReference()const;
-    [[nodiscard]] const ListType& asList()const;
-    [[nodiscard]] ListType& asList();
-    [[nodiscard]] const MapType& asMap()const;
-    [[nodiscard]] MapType& asMap();
+    [[nodiscard]] i64 asInteger()const noexcept;
+    [[nodiscard]] f64 asDouble()const noexcept;
+    [[nodiscard]] f64 toDouble()const noexcept;
+    [[nodiscard]] MStringView asString()const noexcept;
+    [[nodiscard]] MStringView asReference()const noexcept;
+    [[nodiscard]] const ListType& asList()const noexcept;
+    [[nodiscard]] ListType& asList()noexcept;
+    [[nodiscard]] const MapType& asMap()const noexcept;
+    [[nodiscard]] MapType& asMap()noexcept;
 
-    void setInteger(i64 val);
-    void setDouble(f64 val);
+    void setInteger(i64 val)noexcept;
+    void setDouble(f64 val)noexcept;
     void setString(MStringView val);
     void setReference(MStringView val);
     void makeList();
     void makeMap();
 
     Value& field(MStringView name);
-    [[nodiscard]] const Value* findField(MStringView name)const;
+    [[nodiscard]] const Value* findField(MStringView name)const noexcept;
 
     void append(Value&& val);
 
@@ -109,17 +112,17 @@ public:
                 return false;
         }
 
-        constexpr bool canAppendString = requires(Container& c, usize n){ c.reserve(n); }
+        constexpr bool s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c, const MStringView text){ c.emplace_back(text); }
         ;
-        constexpr bool canAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
+        constexpr bool s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c){ c.get_allocator().arena(); }
             && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
                 c.emplace_back(text, allocator);
             }
         ;
         const usize listOffset = outList.size();
-        if constexpr(canAppendArenaString){
+        if constexpr(s_CanAppendArenaString){
             auto& arena = outList.get_allocator().arena();
             outList.reserve(listOffset + list.size());
             for(const auto& elem : list){
@@ -127,7 +130,7 @@ public:
                 outList.emplace_back(text, arena);
             }
         }
-        else if constexpr(canAppendString){
+        else if constexpr(s_CanAppendString){
             outList.reserve(listOffset + list.size());
             for(const auto& elem : list){
                 const MStringView text = elem.asString();
@@ -147,10 +150,10 @@ public:
 
 
 private:
-    void destroy();
+    void destroy()noexcept;
     void copyFrom(const Value& other);
     void moveFrom(Value&& other)noexcept;
-    Value& appendListCopy(const Value& val);
+    void appendListCopy(const Value& val);
     void appendListCopies(const ListType& values, usize count);
 
     [[nodiscard]] ListType* allocList()const;

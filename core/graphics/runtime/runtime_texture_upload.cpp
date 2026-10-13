@@ -99,10 +99,10 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
     if(TextureUploadRequiresGraphicsConsumerQueue(textureDesc))
         return CommandQueue::Graphics;
 
-    const auto canUse = [&](const CommandQueue::Enum queue){
+    const auto canUse = [&](const CommandQueue::Enum queue)noexcept{
         return queue == CommandQueue::Graphics || (device.getQueue(queue) && ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, queue));
     };
-    const auto availableConsumerQueue = [&](){
+    const auto availableConsumerQueue = [&]()noexcept{
         if(canUse(CommandQueue::Transfer))
             return CommandQueue::Transfer;
         if(canUse(CommandQueue::Compute))

@@ -45,7 +45,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
         return MakeUnexpected(Failure{});
     }
 
-    CookString rawVariant{arena};
+    ScratchString rawVariant{scratchArena};
     AStringView rawVariantView;
     if(variantValue->isList()){
         const auto& list = variantValue->asList();
@@ -140,7 +140,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
         sortedAssignments.reserve(assignments.size());
         for(const auto& [defineName, defineValue] : assignments)
             sortedAssignments.push_back(AssignmentPtr{ &defineName, &defineValue });
-        Sort(sortedAssignments.begin(), sortedAssignments.end(), [](const AssignmentPtr& lhs, const AssignmentPtr& rhs){
+        Sort(sortedAssignments.begin(), sortedAssignments.end(), [](const AssignmentPtr& lhs, const AssignmentPtr& rhs)noexcept{
             return *lhs.key < *rhs.key;
         });
 

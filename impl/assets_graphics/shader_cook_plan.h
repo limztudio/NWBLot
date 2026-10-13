@@ -13,10 +13,11 @@
 
 #include "shader_stage_key.h"
 
-#include <core/assets/cook_metadata.h>
-#include <core/assets/cook_paths.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/cook.h>
+
+#include <core/assets/cook_metadata.h>
+#include <core/assets/cook_paths.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +76,7 @@ struct PreparedShaderPlan{
     PreparedShaderVector preparedEntries;
     u64 plannedFileCount = 0;
 
-    explicit PreparedShaderPlan(ShaderCook::CookArena& arena)
+    explicit PreparedShaderPlan(ShaderCook::CookArena& arena)noexcept
         : preparedEntries(arena)
     {}
 };

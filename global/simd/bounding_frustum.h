@@ -29,20 +29,63 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
     SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
 )noexcept{
     const auto decomposition = MatrixDecompose(matrix);
-    const SIMDVectorSingle scale = decomposition ? decomposition->scale : s_SIMDOne;
     const SIMDVectorSingle rotation = decomposition ? decomposition->rotation : s_SIMDIdentityR3;
-
-    const SIMDVectorSingle absScale = VectorAbs(scale);
-    const SIMDVectorSingle maxScale = CollisionDetail::Vector3MaxComponent(absScale);
-    const SIMDVectorSingle scaledPlanes = VectorMultiply(VectorSet(nearPlaneValue, farPlaneValue, 0.0f, 0.0f), maxScale);
     outOrigin = Vector3Transform(frustumOrigin, matrix);
-    outOrientation = QuaternionNormalize(QuaternionMultiply(frustumOrientation, rotation));
-    outRightSlope = rightSlopeValue;
-    outLeftSlope = leftSlopeValue;
-    outTopSlope = topSlopeValue;
-    outBottomSlope = bottomSlopeValue;
-    outNearPlane = VectorGetX(scaledPlanes);
-    outFarPlane = VectorGetY(scaledPlanes);
+    outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, frustumOrientation));
+
+    SIMDVectorSingle corners[s_CornerCount];
+    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
+    SIMDVectorSingle minBounds{};
+    SIMDVectorSingle maxBounds{};
+    for(usize index = 0u; index < s_CornerCount; ++index){
+        corners[index] = Vector3Transform(corners[index], matrix);
+        if(index == 0u)
+            minBounds = maxBounds = corners[index];
+        else
+            CollisionDetail::ExpandMinMax(corners[index], minBounds, maxBounds);
+    }
+
+    struct LocalBounds{
+        SIMDVectorSingle minimum;
+        SIMDVectorSingle maximum;
+    };
+    const auto fitted = [&]()noexcept -> Expected<LocalBounds>{
+        LocalBounds bounds{};
+        for(usize index = 0u; index < s_CornerCount; ++index){
+            const SIMDVectorSingle local = Vector3InverseRotate(VectorSubtract(corners[index], outOrigin), outOrientation);
+            if(VectorGetZ(local) <= 0.0f)
+                return MakeUnexpected(Failure{});
+            const SIMDVectorSingle slopesAndDepth = VectorSetZ(VectorDivide(local, VectorSplatZ(local)), VectorGetZ(local));
+            if(index == 0u)
+                bounds.minimum = bounds.maximum = slopesAndDepth;
+            else
+                CollisionDetail::ExpandMinMax(slopesAndDepth, bounds.minimum, bounds.maximum);
+        }
+        return bounds;
+    }();
+    if(!fitted){
+        // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
+        const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), 0.5f);
+        const SIMDVectorSingle extents = VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f);
+        const f32 depth = VectorGetZ(maxBounds) - VectorGetZ(minBounds);
+        const f32 padding = Max(1.0f, depth);
+        outOrigin = VectorSetZ(center, VectorGetZ(minBounds) - padding);
+        outOrientation = s_SIMDIdentityR3;
+        outRightSlope = VectorGetX(extents) / padding;
+        outLeftSlope = -outRightSlope;
+        outTopSlope = VectorGetY(extents) / padding;
+        outBottomSlope = -outTopSlope;
+        outNearPlane = padding;
+        outFarPlane = padding + depth;
+        return;
+    }
+
+    outRightSlope = VectorGetX(fitted->maximum);
+    outLeftSlope = VectorGetX(fitted->minimum);
+    outTopSlope = VectorGetY(fitted->maximum);
+    outBottomSlope = VectorGetY(fitted->minimum);
+    outNearPlane = VectorGetZ(fitted->minimum);
+    outFarPlane = VectorGetZ(fitted->maximum);
 }
 
 inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
@@ -50,7 +93,7 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
     SIMDVectorSingle translation, SIMDVectorSingle& outOrigin, SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
 )noexcept{
     outOrigin = VectorAdd(Vector3Rotate(VectorScale(frustumOrigin, scale), rotation), translation);
-    outOrientation = QuaternionNormalize(QuaternionMultiply(frustumOrientation, rotation));
+    outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, frustumOrientation));
     const SIMDVectorSingle scaledPlanes = VectorMultiply(VectorSet(nearPlaneValue, farPlaneValue, 0.0f, 0.0f), VectorAbs(VectorReplicate(scale)));
     outRightSlope = rightSlopeValue;
     outLeftSlope = leftSlopeValue;
@@ -58,6 +101,11 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
     outBottomSlope = bottomSlopeValue;
     outNearPlane = VectorGetX(scaledPlanes);
     outFarPlane = VectorGetY(scaledPlanes);
+    if(scale < 0.0f){
+        outOrientation = QuaternionNormalize(QuaternionMultiply(outOrientation, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)));
+        outTopSlope = -bottomSlopeValue;
+        outBottomSlope = -topSlopeValue;
+    }
 }
 
 inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
@@ -65,20 +113,63 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
     SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
 )noexcept{
     const auto decomposition = MatrixDoubleDecompose(matrix);
-    const SIMDVectorDouble scale = decomposition ? decomposition->scale : s_DoubleSIMDOne;
     const SIMDVectorDouble rotation = decomposition ? decomposition->rotation : s_DoubleSIMDIdentityR3;
-
-    const SIMDVectorDouble absScale = VectorDoubleAbs(scale);
-    const SIMDVectorDouble maxScale = CollisionDoubleDetail::VectorDouble3MaxComponent(absScale);
-    const SIMDVectorDouble scaledPlanes = VectorDoubleMultiply(VectorDoubleSet(nearPlaneValue, farPlaneValue, 0.0, 0.0), maxScale);
     outOrigin = VectorDouble3Transform(frustumOrigin, matrix);
-    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(frustumOrientation, rotation));
-    outRightSlope = rightSlopeValue;
-    outLeftSlope = leftSlopeValue;
-    outTopSlope = topSlopeValue;
-    outBottomSlope = bottomSlopeValue;
-    outNearPlane = VectorDoubleGetX(scaledPlanes);
-    outFarPlane = VectorDoubleGetY(scaledPlanes);
+    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(rotation, frustumOrientation));
+
+    SIMDVectorDouble corners[s_DoubleCornerCount];
+    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
+    SIMDVectorDouble minBounds{};
+    SIMDVectorDouble maxBounds{};
+    for(usize index = 0u; index < s_DoubleCornerCount; ++index){
+        corners[index] = VectorDouble3Transform(corners[index], matrix);
+        if(index == 0u)
+            minBounds = maxBounds = corners[index];
+        else
+            CollisionDoubleDetail::ExpandMinMax(corners[index], minBounds, maxBounds);
+    }
+
+    struct LocalBounds{
+        SIMDVectorDouble minimum;
+        SIMDVectorDouble maximum;
+    };
+    const auto fitted = [&]()noexcept -> Expected<LocalBounds>{
+        LocalBounds bounds{};
+        for(usize index = 0u; index < s_DoubleCornerCount; ++index){
+            const SIMDVectorDouble local = VectorDouble3InverseRotate(VectorDoubleSubtract(corners[index], outOrigin), outOrientation);
+            if(VectorDoubleGetZ(local) <= 0.0)
+                return MakeUnexpected(Failure{});
+            const SIMDVectorDouble slopesAndDepth = VectorDoubleSetZ(VectorDoubleDivide(local, VectorDoubleSplatZ(local)), VectorDoubleGetZ(local));
+            if(index == 0u)
+                bounds.minimum = bounds.maximum = slopesAndDepth;
+            else
+                CollisionDoubleDetail::ExpandMinMax(slopesAndDepth, bounds.minimum, bounds.maximum);
+        }
+        return bounds;
+    }();
+    if(!fitted){
+        // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
+        const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), 0.5);
+        const SIMDVectorDouble extents = VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), 0.5);
+        const f64 depth = VectorDoubleGetZ(maxBounds) - VectorDoubleGetZ(minBounds);
+        const f64 padding = Max(1.0, depth);
+        outOrigin = VectorDoubleSetZ(center, VectorDoubleGetZ(minBounds) - padding);
+        outOrientation = s_DoubleSIMDIdentityR3;
+        outRightSlope = VectorDoubleGetX(extents) / padding;
+        outLeftSlope = -outRightSlope;
+        outTopSlope = VectorDoubleGetY(extents) / padding;
+        outBottomSlope = -outTopSlope;
+        outNearPlane = padding;
+        outFarPlane = padding + depth;
+        return;
+    }
+
+    outRightSlope = VectorDoubleGetX(fitted->maximum);
+    outLeftSlope = VectorDoubleGetX(fitted->minimum);
+    outTopSlope = VectorDoubleGetY(fitted->maximum);
+    outBottomSlope = VectorDoubleGetY(fitted->minimum);
+    outNearPlane = VectorDoubleGetZ(fitted->minimum);
+    outFarPlane = VectorDoubleGetZ(fitted->maximum);
 }
 
 inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
@@ -86,7 +177,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
     SIMDVectorDouble translation, SIMDVectorDouble& outOrigin, SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
 )noexcept{
     outOrigin = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(frustumOrigin, scale), rotation), translation);
-    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(frustumOrientation, rotation));
+    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(rotation, frustumOrientation));
     const SIMDVectorDouble scaledPlanes = VectorDoubleMultiply(VectorDoubleSet(nearPlaneValue, farPlaneValue, 0.0, 0.0), VectorDoubleAbs(VectorDoubleReplicate(scale)));
     outRightSlope = rightSlopeValue;
     outLeftSlope = leftSlopeValue;
@@ -94,6 +185,11 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
     outBottomSlope = bottomSlopeValue;
     outNearPlane = VectorDoubleGetX(scaledPlanes);
     outFarPlane = VectorDoubleGetY(scaledPlanes);
+    if(scale < 0.0){
+        outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(outOrientation, VectorDoubleSet(0.0, 1.0, 0.0, 0.0)));
+        outTopSlope = -bottomSlopeValue;
+        outBottomSlope = -topSlopeValue;
+    }
 }
 
 

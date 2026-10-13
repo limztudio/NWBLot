@@ -7,10 +7,10 @@
 
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/mesh/object_geometry_cache.h>
-
-#include <core/graphics/api.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
+
+#include <core/graphics/api.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

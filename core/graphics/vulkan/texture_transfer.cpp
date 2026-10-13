@@ -23,7 +23,23 @@ namespace __hidden_texture_transfer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources){
+[[nodiscard]] inline bool TextureTransferImagesWithinFormatLimits(const VulkanContext& context, const VkImageCreateInfo& source, const VkImageCreateInfo& destination){
+    VkImageFormatProperties sourceProperties{};
+    const VkResult sourceResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
+        context.physicalDevice, source.format, source.imageType, source.tiling, source.usage, source.flags, &sourceProperties
+    );
+    VkImageFormatProperties destinationProperties{};
+    const VkResult destinationResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
+        context.physicalDevice, destination.format, destination.imageType, destination.tiling, destination.usage, destination.flags, &destinationProperties
+    );
+    return sourceResult == VK_SUCCESS
+        && destinationResult == VK_SUCCESS
+        && VulkanTextureDetail::IsTextureImageWithinFormatLimits(source, sourceProperties)
+        && VulkanTextureDetail::IsTextureImageWithinFormatLimits(destination, destinationProperties)
+    ;
+}
+
+[[nodiscard]] inline bool ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources)noexcept{
     for(MipLevel mipOffset = 0u; mipOffset < sourceSubresources.numMipLevels; ++mipOffset){
         const VkExtent3D sourceExtent = VulkanDetail::GetTextureMipExtent(sourceDesc, sourceSubresources.baseMipLevel + mipOffset);
         const VkExtent3D destinationExtent = VulkanDetail::GetTextureMipExtent(destinationDesc, destinationSubresources.baseMipLevel + mipOffset);
@@ -144,32 +160,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
         return;
     }
 
-    VkImageFormatProperties sourceFormatProperties{};
-    const VkResult sourceFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
-        m_context.physicalDevice,
-        src.m_imageInfo.format,
-        src.m_imageInfo.imageType,
-        src.m_imageInfo.tiling,
-        src.m_imageInfo.usage,
-        src.m_imageInfo.flags,
-        &sourceFormatProperties
-    );
-    VkImageFormatProperties destinationFormatProperties{};
-    const VkResult destinationFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
-        m_context.physicalDevice,
-        dest.m_imageInfo.format,
-        dest.m_imageInfo.imageType,
-        dest.m_imageInfo.tiling,
-        dest.m_imageInfo.usage,
-        dest.m_imageInfo.flags,
-        &destinationFormatProperties
-    );
-    if(
-        sourceFormatResult != VK_SUCCESS
-        || destinationFormatResult != VK_SUCCESS
-        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(src.m_imageInfo, sourceFormatProperties)
-        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(dest.m_imageInfo, destinationFormatProperties)
-    ){
+    if(!__hidden_texture_transfer::TextureTransferImagesWithinFormatLimits(m_context, src.m_imageInfo, dest.m_imageInfo)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("native image formats do not support the requested shapes"));
         return;
     }
@@ -422,32 +413,7 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         return;
     }
 
-    VkImageFormatProperties sourceFormatProperties{};
-    const VkResult sourceFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
-        m_context.physicalDevice,
-        src.m_imageInfo.format,
-        src.m_imageInfo.imageType,
-        src.m_imageInfo.tiling,
-        src.m_imageInfo.usage,
-        src.m_imageInfo.flags,
-        &sourceFormatProperties
-    );
-    VkImageFormatProperties destinationFormatProperties{};
-    const VkResult destinationFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
-        m_context.physicalDevice,
-        dest.m_imageInfo.format,
-        dest.m_imageInfo.imageType,
-        dest.m_imageInfo.tiling,
-        dest.m_imageInfo.usage,
-        dest.m_imageInfo.flags,
-        &destinationFormatProperties
-    );
-    if(
-        sourceFormatResult != VK_SUCCESS
-        || destinationFormatResult != VK_SUCCESS
-        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(src.m_imageInfo, sourceFormatProperties)
-        || !VulkanTextureDetail::IsTextureImageWithinFormatLimits(dest.m_imageInfo, destinationFormatProperties)
-    ){
+    if(!__hidden_texture_transfer::TextureTransferImagesWithinFormatLimits(m_context, src.m_imageInfo, dest.m_imageInfo)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("native image formats do not support the requested shapes and sample counts"));
         return;
     }

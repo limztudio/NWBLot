@@ -2,12 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
 
 #include <gtest/gtest.h>
-
-#include <cfenv>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,10 +76,10 @@ NWB_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept{
 TEST(MathNativeMask, RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads){
 #pragma STDC FENV_ACCESS ON
     using namespace __hidden_native_mask_tests;
-    fenv_t originalEnvironment{};
-    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
 
@@ -93,65 +92,65 @@ TEST(MathNativeMask, RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads){
             magnitudes[2] | (static_cast<u64>((expected >> 2u) & 1u) << 63u),
             magnitudes[3] | (static_cast<u64>((expected >> 3u) & 1u) << 63u)
         );
-        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
         EXPECT_EQ(ExtractMask(value), expected) << expected;
-        EXPECT_EQ(fetestexcept(FE_ALL_EXCEPT), 0) << expected;
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << expected;
     }
 }
 
 TEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions){
 #pragma STDC FENV_ACCESS ON
     using namespace __hidden_native_mask_tests;
-    fenv_t originalEnvironment{};
-    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
 
     constexpr i32 roundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     for(const i32 roundingMode : roundingModes){
-        ASSERT_EQ(fesetround(roundingMode), 0);
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
         for(usize poisonLane = 0u; poisonLane < 4u; ++poisonLane){
             const SIMDVectorSingle referenceSingle = VectorReplicate(1.0f);
             const SIMDVectorDouble referenceDouble = VectorDoubleReplicate(1.0);
             const SIMDVectorSingle single = VectorSetIntByIndex(referenceSingle, 0x7F801234u, poisonLane);
             const SIMDVectorDouble value = VectorDoubleSetIntByIndex(referenceDouble, 0x7FF0000000001234ull, poisonLane);
 
-            ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
             EXPECT_FALSE(CompareSingle<false>(single, referenceSingle)) << roundingMode << ':' << poisonLane;
-            EXPECT_EQ(fetestexcept(FE_ALL_EXCEPT), FE_INVALID) << roundingMode << ':' << poisonLane;
+            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), FE_INVALID) << roundingMode << ':' << poisonLane;
 
-            ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
             EXPECT_TRUE(CompareSingle<true>(single, single)) << roundingMode << ':' << poisonLane;
-            EXPECT_EQ(fetestexcept(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
+            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
 
-            ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
             const bool baselinePartial = BaselineCompareDouble3(value, referenceDouble);
-            const i32 baselinePartialFlags = fetestexcept(FE_ALL_EXCEPT);
+            const i32 baselinePartialFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
             EXPECT_EQ(baselinePartial, poisonLane == 3u) << roundingMode << ':' << poisonLane;
             if(poisonLane != 3u)
                 EXPECT_EQ(baselinePartialFlags, FE_INVALID) << roundingMode << ':' << poisonLane;
 
-            ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
             const bool actualPartial = CompareDouble<false, 3u>(value, referenceDouble);
-            const i32 actualPartialFlags = fetestexcept(FE_ALL_EXCEPT);
+            const i32 actualPartialFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
             EXPECT_EQ(actualPartial, baselinePartial) << roundingMode << ':' << poisonLane;
             EXPECT_EQ(actualPartialFlags, baselinePartialFlags) << roundingMode << ':' << poisonLane;
             if(poisonLane != 3u)
                 EXPECT_EQ(actualPartialFlags, FE_INVALID) << roundingMode << ':' << poisonLane;
 
-            ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
             EXPECT_FALSE((CompareDouble<false, 4u>(value, referenceDouble))) << roundingMode << ':' << poisonLane;
-            EXPECT_EQ(fetestexcept(FE_ALL_EXCEPT), FE_INVALID) << roundingMode << ':' << poisonLane;
+            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), FE_INVALID) << roundingMode << ':' << poisonLane;
 
-            ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
             EXPECT_TRUE((CompareDouble<true, 3u>(value, value))) << roundingMode << ':' << poisonLane;
-            EXPECT_EQ(fetestexcept(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
+            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
 
-            ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
             EXPECT_TRUE((CompareDouble<true, 4u>(value, value))) << roundingMode << ':' << poisonLane;
-            EXPECT_EQ(fetestexcept(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
+            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
         }
     }
 }

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -16,6 +17,13 @@ from launcher.constants import (ARG_ARCH, ARG_BUILD_DIR, ARG_BUILD_ONLY, ARG_CMA
     HELP_PROFILE_LOGSERVER_TIMEOUT, HELP_PROFILE_LOG_ADDRESS, HELP_PROFILE_LOG_PORT, HELP_REPO_ROOT, HELP_RUN_SECONDS, HELP_SKIP_BUILD, HELP_WITH_PROFILE, HELP_WORKING_DIRECTORY, MAIN_ENTRY, MSG_BUILD_APPLICATION_ARGS, MSG_BUILD_ONLY_SKIP_BUILD,
     MSG_BUILD_TARGETS_HELP, MSG_BUILD_TARGET_HELP, MSG_FORWARD_THROUGH, MSG_LAUNCHER_DESC, MSG_PROFILES_HELP, MSG_RUN_TARGET_HELP, MSG_TARGET_HELP, NARGS_ONE_OR_MORE, PROFILE_LOGSERVER_EXECUTABLE, PROFILE_LOGSERVER_TARGET, PROFILE_LOGSERVER_TIMEOUT_SECONDS,
     PROFILE_LOG_ADDRESS, PROFILE_LOG_PORT_AUTO, ROUTE_SEPARATOR, STORE_TRUE, SUPPORTED_ARCHITECTURES,)
+
+
+def _positive_finite_duration(value: str) -> float:
+    duration = float(value)
+    if not math.isfinite(duration) or duration <= 0.0:
+        raise argparse.ArgumentTypeError("duration must be finite and positive")
+    return duration
 
 
 class LauncherCli:
@@ -49,14 +57,14 @@ class LauncherCli:
         parser.add_argument(ARG_GPUDBG, action=STORE_TRUE, help=HELP_GPUDBG)
         parser.add_argument(ARG_KILL_EXISTING, action=STORE_TRUE, help=HELP_KILL_EXISTING,)
         parser.add_argument(ARG_DETACH, action=STORE_TRUE, help=HELP_DETACH)
-        parser.add_argument(ARG_RUN_SECONDS, type=float, default=None, help=HELP_RUN_SECONDS,)
+        parser.add_argument(ARG_RUN_SECONDS, type=_positive_finite_duration, default=None, help=HELP_RUN_SECONDS,)
         parser.add_argument(ARG_WITH_PROFILE, action=STORE_TRUE, help=HELP_WITH_PROFILE)
         parser.add_argument(ARG_PROFILE_LOG_ADDRESS, default=PROFILE_LOG_ADDRESS, help=HELP_PROFILE_LOG_ADDRESS,)
         parser.add_argument(ARG_PROFILE_LOG_PORT, type=int, default=PROFILE_LOG_PORT_AUTO, help=HELP_PROFILE_LOG_PORT,)
         parser.add_argument(ARG_PROFILE_LOGSERVER_TARGET, default=PROFILE_LOGSERVER_TARGET, help=HELP_PROFILE_LOGSERVER_TARGET,)
         parser.add_argument(ARG_PROFILE_LOGSERVER_NAME, default=PROFILE_LOGSERVER_EXECUTABLE, help=HELP_PROFILE_LOGSERVER_NAME,)
         parser.add_argument(ARG_PROFILE_LOGSERVER_EXECUTABLE, type=Path, help=HELP_PROFILE_LOGSERVER_EXECUTABLE,)
-        parser.add_argument(ARG_PROFILE_LOGSERVER_TIMEOUT, type=float, default=PROFILE_LOGSERVER_TIMEOUT_SECONDS, help=HELP_PROFILE_LOGSERVER_TIMEOUT,)
+        parser.add_argument(ARG_PROFILE_LOGSERVER_TIMEOUT, type=_positive_finite_duration, default=PROFILE_LOGSERVER_TIMEOUT_SECONDS, help=HELP_PROFILE_LOGSERVER_TIMEOUT,)
         parser.add_argument(ARG_PROFILE_LOGSERVER_ARG, dest=ARG_PROFILE_LOGSERVER_ARGS_DEST, action=DEFINE_ACTION, default=list(), help=HELP_PROFILE_LOGSERVER_ARG,)
 
     @staticmethod

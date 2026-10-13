@@ -26,7 +26,7 @@ import struct
 import sys
 import tempfile
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
@@ -40,7 +40,7 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 from gpu_timing_parse import (  # noqa: E402
     INTERVAL_RE, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
 from window_capture_smoke import (  # noqa: E402
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_capture_result,)
 
 LIT_RENDER_FRAME = "render.frame"
@@ -247,6 +247,8 @@ def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
     dib_size = struct.unpack_from(LIT_I, data, 14)[0]
     if dib_size < 40 or len(data) < 14 + dib_size:
         raise SmokeFailure(f"capture has an unsupported DIB header: {path}")
+    if pixel_offset < 14 + dib_size:
+        raise SmokeFailure(f"capture pixel data overlaps its headers: {path}")
 
     width, signed_height, planes, bits_per_pixel, compression = struct.unpack_from("<iiHHI", data, 18)
     if width <= 0 or signed_height == 0 or planes != 1 or bits_per_pixel != 24 or compression != 0:
@@ -386,6 +388,32 @@ def prepare_m4_client_area(capture_backend, window):
         capture_backend.prepare_raw_client_window(window)
 
 
+@dataclass
+class BenchmarkStartup:
+    # Keep each acquired resource visible to the caller's finally block before the next step can fail.
+    logserver_process: Optional[object] = None
+    app_process: Optional[object] = None
+    log_directory: Optional[Path] = None
+    log_baseline: Mapping[Path, int] = field(default_factory=dict)
+    log_pattern: str = ""
+    window: Optional[object] = None
+
+
+def start_benchmark(args: argparse.Namespace, mode: str, executable: Path, capture_backend, launch_args, environment, startup: BenchmarkStartup) -> None:
+    startup.logserver_process, log_port, startup.log_directory, startup.log_baseline, startup.log_pattern = launch_logserver(launch_args, executable, environment)
+    if not startup.log_directory:
+        raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
+    startup.app_process = launch_testbed(launch_args, executable, environment, log_port)
+
+    lane = wait_for_lane_status(startup.app_process, startup.log_directory, startup.log_baseline, startup.log_pattern, args.startup_timeout,)
+    validate_lane_for_mode(mode, lane)
+    wait_for_log_message(startup.app_process, startup.log_directory, startup.log_baseline, startup.log_pattern, M4_RENDER_UNFOCUSED_LOG, args.startup_timeout,)
+
+    startup.window = capture_backend.wait_for_window(startup.app_process.pid, args.startup_timeout, args.window_title)
+    if not startup.window:
+        raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
+
+
 def run_frame_locked_capture(args: argparse.Namespace, mode: str, executable: Path, capture_backend,) -> FrameLockedCapture:
     """Capture a settled temporal frame after an identical number of world ticks in each mode."""
     if not executable.is_file():
@@ -402,42 +430,26 @@ def run_frame_locked_capture(args: argparse.Namespace, mode: str, executable: Pa
     environment[LIT_NWB_STRESS_TEST_SPIN_ANGLE] = args.frozen_yaw
     environment["NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"] = str(args.pixel_capture_frames)
 
-    logserver_process = None
-    app_process = None
-    log_directory: Optional[Path] = None
-    log_baseline: Mapping[Path, int] = {}
-    log_pattern = ""
+    startup = BenchmarkStartup()
     app_exit_code = None
     app_exit_tail = ""
     log_text = ""
-    window = None
     try:
-        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(launch_args, executable, environment)
-        if not log_directory:
-            raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
-        app_process = launch_testbed(launch_args, executable, environment, log_port)
+        start_benchmark(args, mode, executable, capture_backend, launch_args, environment, startup)
 
-        lane = wait_for_lane_status(app_process, log_directory, log_baseline, log_pattern, args.startup_timeout,)
-        validate_lane_for_mode(mode, lane)
-        wait_for_log_message(app_process, log_directory, log_baseline, log_pattern, M4_RENDER_UNFOCUSED_LOG, args.startup_timeout,)
-
-        window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
-        if not window:
-            raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
-
-        prepare_m4_client_area(capture_backend, window)
-        wait_for_log_message(app_process, log_directory, log_baseline, log_pattern, M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG, args.startup_timeout,)
-        wait_while_running(app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
-        capture_result = capture_m4_client_area(capture_backend, window, capture_path)
+        prepare_m4_client_area(capture_backend, startup.window)
+        wait_for_log_message(startup.app_process, startup.log_directory, startup.log_baseline, startup.log_pattern, M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG, args.startup_timeout,)
+        wait_while_running(startup.app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
+        capture_result = capture_m4_client_area(capture_backend, startup.window, capture_path)
         validate_capture_result(capture_result)
-        app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
-        app_process = None
-        log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, LIT_BENCHMARK_LOGSERVER,)
-        logserver_process = None
+        app_exit_code, app_exit_tail = terminate_process(startup.app_process, f"{mode} frame-locked capture", startup.window)
+        startup.app_process = None
+        log_text = shutdown_logserver_and_collect(startup.logserver_process, startup.log_directory, startup.log_baseline, startup.log_pattern, LIT_BENCHMARK_LOGSERVER,)
+        startup.logserver_process = None
         capture_log_path.write_text(log_text, encoding=LIT_UTF_8)
     finally:
-        terminate_process(app_process, f"{mode} frame-locked capture", window)
-        terminate_process(logserver_process, LIT_BENCHMARK_LOGSERVER)
+        terminate_process(startup.app_process, f"{mode} frame-locked capture", startup.window)
+        terminate_process(startup.logserver_process, LIT_BENCHMARK_LOGSERVER)
 
     require_normal_process_exit(app_exit_code, app_exit_tail, LIT_TESTBED)
     if not log_text:
@@ -471,39 +483,23 @@ def run_single_mode(args: argparse.Namespace, mode: str, executable: Path, symbo
     environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
     environment[LIT_NWB_STRESS_TEST_SPIN_ANGLE] = args.frozen_yaw
 
-    logserver_process = None
-    app_process = None
-    log_directory: Optional[Path] = None
-    log_baseline: Mapping[Path, int] = {}
-    log_pattern = ""
+    startup = BenchmarkStartup()
     app_exit_code = None
     app_exit_tail = ""
     measurement_log_text = ""
-    window = None
     try:
-        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(launch_args, executable, environment)
-        if not log_directory:
-            raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
-        app_process = launch_testbed(launch_args, executable, environment, log_port)
+        start_benchmark(args, mode, executable, capture_backend, launch_args, environment, startup)
 
-        lane = wait_for_lane_status(app_process, log_directory, log_baseline, log_pattern, args.startup_timeout,)
-        validate_lane_for_mode(mode, lane)
-        wait_for_log_message(app_process, log_directory, log_baseline, log_pattern, M4_RENDER_UNFOCUSED_LOG, args.startup_timeout,)
-
-        window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
-        if not window:
-            raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
-
-        wait_while_running(app_process, args.warmup_seconds, f"during {mode} warmup")
-        measurement_start_byte_offset = wait_for_measurement_timing_boundary(app_process, timing_path, args.startup_timeout)
-        wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
-        app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
-        app_process = None
-        measurement_log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, LIT_BENCHMARK_LOGSERVER,)
-        logserver_process = None
+        wait_while_running(startup.app_process, args.warmup_seconds, f"during {mode} warmup")
+        measurement_start_byte_offset = wait_for_measurement_timing_boundary(startup.app_process, timing_path, args.startup_timeout)
+        wait_while_running(startup.app_process, args.measure_seconds, f"during {mode} measurement")
+        app_exit_code, app_exit_tail = terminate_process(startup.app_process, f"{mode} benchmark", startup.window)
+        startup.app_process = None
+        measurement_log_text = shutdown_logserver_and_collect(startup.logserver_process, startup.log_directory, startup.log_baseline, startup.log_pattern, LIT_BENCHMARK_LOGSERVER,)
+        startup.logserver_process = None
     finally:
-        terminate_process(app_process, f"{mode} benchmark", window)
-        terminate_process(logserver_process, LIT_BENCHMARK_LOGSERVER)
+        terminate_process(startup.app_process, f"{mode} benchmark", startup.window)
+        terminate_process(startup.logserver_process, LIT_BENCHMARK_LOGSERVER)
 
     require_normal_process_exit(app_exit_code, app_exit_tail, LIT_TESTBED)
     if not measurement_log_text:
@@ -579,13 +575,13 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
 
 
 def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if value <= 0.0:
-        parser.error(f"{option} must be positive")
+    if not math.isfinite(value) or value <= 0.0:
+        parser.error(f"{option} must be positive and finite")
 
 
 def require_non_negative(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if value < 0.0:
-        parser.error(f"{option} must not be negative")
+    if not math.isfinite(value) or value < 0.0:
+        parser.error(f"{option} must be non-negative and finite")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -651,6 +647,22 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run_self_test() -> int:
+    numeric_parser = mock.Mock()
+    require_positive(numeric_parser, LIT_STARTUP_TIMEOUT, 1.0)
+    require_non_negative(numeric_parser, LIT_WARMUP_SECONDS, 0.0)
+    numeric_parser.error.assert_not_called()
+    for validator in (require_positive, require_non_negative):
+        for value in (math.nan, math.inf, -math.inf):
+            numeric_parser.error.reset_mock()
+            numeric_parser.error.side_effect = ValueError("non-finite benchmark option")
+            try:
+                validator(numeric_parser, LIT_STARTUP_TIMEOUT, value)
+            except ValueError as error:
+                assert str(error) == "non-finite benchmark option"
+            else:
+                raise AssertionError("a non-finite benchmark deadline or tolerance was accepted")
+            numeric_parser.error.assert_called_once()
+
     capture_args = parse_args([LIT_SELF_TEST])
 
     lane_log = ("StressTestSmokeProject: M4 async compute requested=1 effective=1 graphicsQueue=0:17 computeQueue=1:17 " "computeDedicated=1 computeSupported=1 computeGraphics=0")
@@ -787,6 +799,26 @@ def run_self_test() -> int:
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
+        capture_path = root / "header-offset.bmp"
+        for dib_size in (40, 56):
+            pixel_offset = 14 + dib_size
+            bmp = bytearray(pixel_offset + 4)
+            bmp[:2] = b"BM"
+            struct.pack_into("<I", bmp, 10, pixel_offset)
+            struct.pack_into("<IiiHHI", bmp, 14, dib_size, 1, 1, 1, 24, 0)
+            bmp[pixel_offset:] = bytes((3, 2, 1, 0))
+            capture_path.write_bytes(bmp)
+            assert read_bmp_rgb(capture_path) == (1, 1, bytes((1, 2, 3)))
+            for invalid_offset in (0, 14, pixel_offset - 1):
+                struct.pack_into("<I", bmp, 10, invalid_offset)
+                capture_path.write_bytes(bmp)
+                try:
+                    read_bmp_rgb(capture_path)
+                except SmokeFailure as error:
+                    assert "overlaps its headers" in str(error)
+                else:
+                    raise AssertionError("BMP pixel admission accepted bytes inside a header")
+
         module = sys.modules[__name__]
         executable = root / "orchestration.exe"
         executable.write_bytes(b"exe")
@@ -971,20 +1003,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str]) -> int:
-    args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
-    try:
-        return run(args)
-    except DedicatedComputeUnavailable as error:
-        print(f"SKIP: {error}", file=sys.stderr)
-        return SKIP_EXIT_CODE
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", file=sys.stderr)
-        return SKIP_EXIT_CODE
-    except SmokeFailure as error:
-        print(f"FAIL: {error}", file=sys.stderr)
-        return 1
+    return run_smoke_main(argv, parse_args, run, self_test=run_self_test, output_stream=sys.stderr, failure_types=(SmokeFailure,))
 
 
 if __name__ == LIT_MAIN:

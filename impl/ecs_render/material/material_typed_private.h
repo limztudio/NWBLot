@@ -6,10 +6,10 @@
 
 
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
-
-#include <core/common/log.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>
 #include <impl/ecs_scene/components.h>
+
+#include <core/common/log.h>
 
 #include <global/algorithm.h>
 #include <global/assert.h>
@@ -254,22 +254,7 @@ inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& 
     AssertMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, NWB_TEXT("mutable"));
 }
 
-struct MaterialTypedInstanceRangeVector{
-    explicit MaterialTypedInstanceRangeVector(Core::Alloc::ScratchArena& arena)
-        : m_ranges(arena)
-    {}
-
-    [[nodiscard]] bool empty()const{ return m_ranges.empty(); }
-    [[nodiscard]] usize size()const{ return m_ranges.size(); }
-    void reserve(const usize count){ m_ranges.reserve(count); }
-    void push_back(const MaterialTypedInstanceRanges& ranges){ m_ranges.push_back(ranges); }
-
-    [[nodiscard]] auto begin()const{ return m_ranges.begin(); }
-    [[nodiscard]] auto end()const{ return m_ranges.end(); }
-
-private:
-    Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena> m_ranges;
-};
+using MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena>;
 
 template<typename MaterialTypedByteVector>
 inline void AssertMaterialTypedUploadRanges(const MaterialTypedInstanceRangeVector& instanceRanges, const MaterialTypedByteVector& materialTypedBytes){

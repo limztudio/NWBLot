@@ -7,6 +7,11 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
+#include <impl/assets_mesh/asset.h>
+#include <impl/assets_mesh/meshlet_triangle_indices.h>
+#include <impl/assets_mesh/meshlet_vertex_attributes.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
@@ -14,11 +19,6 @@
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/assets_mesh/asset.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.h>
-#include <impl/assets_mesh/meshlet_vertex_attributes.h>
-#include <impl/ecs_mesh/module.h>
-#include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

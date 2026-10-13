@@ -173,7 +173,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         return;
     }
 
-    auto buildVkInstance = [&](usize i){
+    auto buildVkInstance = [&](usize i)noexcept{
         const auto& inst = pInstances[i];
         VkAccelerationStructureInstanceKHR vkInst = {};
 

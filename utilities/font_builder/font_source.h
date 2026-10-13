@@ -30,7 +30,7 @@ private:
 
 public:
     explicit FontSource(Core::Assets::AssetArena& arena);
-    ~FontSource();
+    ~FontSource()noexcept;
 
 
 public:

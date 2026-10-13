@@ -2,18 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/assets/cook_metadata.h>
-#include <core/task/cpu/scheduler.h>
-
 #include <impl/assets_model/cook.h>
 #include <impl/assets_sampler/cook.h>
 #include <impl/assets_shader/asset.h>
 
-#include <tests/common/capturing_logger.h>
+#include <core/assets/cook_metadata.h>
+#include <core/task/cpu/scheduler.h>
 
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
+
+#include <global/filesystem.h>
 #include <global/text_utils.h>
 
-#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -141,17 +142,6 @@ static_assert(IsNothrowDestructible_V<ParsedMetadataExtension>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool WriteFixtureFile(const NWB::Path& path, const AStringView text){
-    GlobalFilesystemDetail::OutputFileStream file(path, GlobalFilesystemDetail::OutputFileStream::binary);
-    file.write(text.data(), static_cast<GlobalFilesystemDetail::StreamSize>(text.size()));
-    file.close();
-    return !file.fail();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 TEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject){
     AssetArena arena(Name("tests/metadata_extension/require"));
     ExtensionState alignedState;
@@ -273,7 +263,7 @@ TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedM
         const Name name("tests/metadata_extension/constructor_unwind");
         const u64 baseline = arena.memoryStats().usedBytes;
         EXPECT_THROW({
-            static_cast<void>(RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state, true));
+            EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state, true).identity, 1u);
         }, ConstructionFailure);
         EXPECT_TRUE(metadata.extensions.empty());
         EXPECT_EQ(state.constructions, 1u);
@@ -328,7 +318,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
         fail = true;
         EXPECT_THROW({
             ParsedMetadataExtension pending = MakeParsedMetadataExtension<AlignedExtension>(ownerArena, ownerArena, state);
-            static_cast<void>(values.try_emplace(Name("tests/metadata_extension/insertion_unwind"), Move(pending)));
+            EXPECT_TRUE(values.try_emplace(Name("tests/metadata_extension/insertion_unwind"), Move(pending)).second);
         }, InsertionFailure);
         fail = false;
         EXPECT_TRUE(values.empty());
@@ -408,7 +398,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         const NWB::Path path = root / filename;
         AssetString source(s_SamplerFields, fixtureArena);
         source += StringFormat(fixtureArena, "asset.mip_bias = {};\r\n", identity);
-        ASSERT_TRUE(WriteFixtureFile(path, source));
+        ASSERT_TRUE(::WriteTextFile(path, source));
         const AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
         files.emplace_back(fixtureArena, root, path, normalized, ACompactString("project"));
     }
@@ -432,7 +422,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
                 const usize identity = (index * 37u) % s_SamplerCount;
                 const AssetString virtualPath = StringFormat(fixtureArena, "project/sampler_{:03}", identity);
                 EXPECT_EQ(samplers[index].virtualPath, ToName(virtualPath));
-                EXPECT_EQ(samplers[index].arena, &parseArena);
+                EXPECT_EQ(&samplers[index].arena, &parseArena);
                 EXPECT_FLOAT_EQ(samplers[index].description.mipBias, static_cast<f32>(identity));
             }
         }

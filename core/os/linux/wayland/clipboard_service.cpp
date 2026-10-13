@@ -72,8 +72,8 @@ bool WaylandClipboardService::initialize(){
     m_registry = wl_display_get_registry(&m_display);
     if(!m_registry)
         return false;
-    static const wl_registry_listener listener{ OnRegistryGlobal, OnRegistryRemove };
-    if(wl_registry_add_listener(m_registry, &listener, this) != 0 || wl_display_roundtrip(&m_display) < 0)
+    static const wl_registry_listener s_Listener{ OnRegistryGlobal, OnRegistryRemove };
+    if(wl_registry_add_listener(m_registry, &s_Listener, this) != 0 || wl_display_roundtrip(&m_display) < 0)
         return false;
     return true;
 }

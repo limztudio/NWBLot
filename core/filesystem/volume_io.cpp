@@ -8,6 +8,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+
 #include <global/limit.h>
 #include <global/simplemath.h>
 
@@ -261,6 +262,12 @@ static bool WriteSegmentBytes(
                 return false;
             }
 
+            stream.close();
+            if(!stream.good()){
+                LogFailureWithPath(volumeName, "writeBytes:close", segmentPaths[segmentIndex], LastErrnoMessage());
+                return false;
+            }
+
             inputBytes += chunkBytes;
             return true;
         }
@@ -317,16 +324,16 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
         return false;
     }
 
+    const auto streamOffset = FilesystemVolumeDetail::ToStreamOff(m_segmentSize - 1);
+    if(!streamOffset){
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"), StringConvert(m_volumeName), m_segmentSize);
+        return false;
+    }
+
     const Path path = segmentPath(segmentIndex);
     GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc);
     if(!stream.is_open()){
         FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentOpen, path, FilesystemVolumeDetail::LastErrnoMessage());
-        return false;
-    }
-
-    const auto streamOffset = FilesystemVolumeDetail::ToStreamOff(m_segmentSize - 1);
-    if(!streamOffset){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"), StringConvert(m_volumeName), m_segmentSize);
         return false;
     }
 
@@ -340,6 +347,12 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     stream.write(&zero, 1);
     if(!stream.good()){
         FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentWrite, path, FilesystemVolumeDetail::LastErrnoMessage());
+        return false;
+    }
+
+    stream.close();
+    if(!stream.good()){
+        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, "createSegment:close", path, FilesystemVolumeDetail::LastErrnoMessage());
         return false;
     }
 

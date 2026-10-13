@@ -9,7 +9,7 @@
 
 #include <global/filesystem.h>
 
-#include <hb.h>
+#include "baked_font_fixture.h"
 #include <gtest/gtest.h>
 
 
@@ -31,6 +31,7 @@ public:
     TextBakedTests()
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
         , m_arena(Name("tests/ui/text/baked"))
+        , m_scratchArena(Name("tests/ui/text/baked_scratch"))
         , m_font(m_arena, Name("tests/ui/fonts/latin"))
         , m_atlas(m_arena, Name("tests/ui/fonts/latin_atlas"))
         , m_text(m_arena)
@@ -54,26 +55,7 @@ protected:
         payload.font = source.identity;
         payload.fontSha256 = ComputeSha256({ m_font.fontBytes().data(), m_font.fontBytes().size() });
         const Core::Assets::AssetBytes& bytes = m_font.fontBytes();
-        hb_blob_t* blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
-        hb_face_t* face = hb_face_create(blob, 0u);
-        payload.unitsPerEm = hb_face_get_upem(face);
-        payload.sourceGlyphCount = hb_face_get_glyph_count(face);
-        const u32 tags[]{ s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
-        for(const u32 tag : tags){
-            hb_blob_t* tableBlob = hb_face_reference_table(face, tag);
-            u32 size = 0u;
-            const char* data = hb_blob_get_data(tableBlob, &size);
-            if(size != 0u){
-                payload.positioningTables.emplace_back(m_arena);
-                FontAtlasPositioningTable& table = payload.positioningTables.back();
-                table.tag = tag;
-                table.bytes.assign(reinterpret_cast<const u8*>(data), reinterpret_cast<const u8*>(data) + size);
-                table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
-            }
-            hb_blob_destroy(tableBlob);
-        }
-        hb_face_destroy(face);
-        hb_blob_destroy(blob);
+        UiFixtureSupport::PopulateBakedFontTables(bytes, payload, m_arena);
         payload.bakePpem = 32u;
         payload.ascenderUnits = 1000.f;
         payload.descenderUnits = -250.f;
@@ -101,7 +83,7 @@ protected:
             glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height * payload.unitsPerEm) / payload.bakePpem;
         }
         m_atlas.setPayload(Move(payload));
-        ASSERT_TRUE(m_atlas.validatePayload());
+        ASSERT_TRUE(m_atlas.validatePayload(m_scratchArena));
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.f, Move(regions));
     }
@@ -134,6 +116,7 @@ protected:
     Tests::CapturingLogger m_logger;
     Core::Common::LoggerRegistrationGuard m_loggerGuard;
     Core::Alloc::GlobalArena m_arena;
+    Core::Alloc::ScratchArena m_scratchArena;
     Font m_font;
     FontAtlas m_atlas;
     TextService m_text;
@@ -147,9 +130,9 @@ protected:
 
 
 TEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace){
-    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena);
+    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
     ASSERT_TRUE(binary);
-    auto payload = DeserializeFontAtlasPayload(*binary, m_arena);
+    auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
     ASSERT_TRUE(payload);
     payload->fontSha256.bytes[0u] ^= 1u;
     m_atlas.setPayload(Move(*payload));
@@ -167,9 +150,9 @@ TEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace){
 }
 
 TEST_F(TextBakedTests, LogicalFontIdentityMustMatchEvenWhenTheBytesMatch){
-    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena);
+    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
     ASSERT_TRUE(binary);
-    auto payload = DeserializeFontAtlasPayload(*binary, m_arena);
+    auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
     ASSERT_TRUE(payload);
     payload->font = Core::Assets::AssetRef<Font>("tests/ui/fonts/other");
     m_atlas.setPayload(Move(*payload));

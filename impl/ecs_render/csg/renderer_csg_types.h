@@ -6,13 +6,13 @@
 
 
 #include <impl/ecs_render/components.h>
-
-#include <core/alloc/scratch.h>
-#include <core/graphics/api.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_csg/shape_registry.h>
+
+#include <core/alloc/scratch.h>
+#include <core/graphics/api.h>
 
 #include <global/containers.h>
 

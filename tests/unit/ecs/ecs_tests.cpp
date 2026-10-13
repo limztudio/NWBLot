@@ -202,6 +202,49 @@ TEST(Ecs, DestroyedEntityGenerationCannotReachRecycledComponents){
     EXPECT_NE(recycledEntity.id(), entityId);
 }
 
+TEST(Ecs, ClearedEntityFacadesCannotReachOrDestroyReplacementComponents){
+    TestWorld testWorld;
+    Array<NWB::Core::ECS::EntityID, 8u> retiredIds{};
+    for(usize round = 0u; round < retiredIds.size(); ++round){
+        auto entity = testWorld.world.createEntity();
+        entity.addComponent<PositionComponent>().x = static_cast<i32>(round);
+        retiredIds[round] = entity.id();
+        testWorld.world.clear();
+        testWorld.world.clear();
+        auto replacement = testWorld.world.createEntity();
+        replacement.addComponent<PositionComponent>().x = 73;
+        for(usize retired = 0u; retired <= round; ++retired){
+            auto stale = testWorld.world.entity(retiredIds[retired]);
+            EXPECT_FALSE(stale.alive());
+            EXPECT_FALSE(stale.hasComponent<PositionComponent>());
+            EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(stale.id()), nullptr);
+            stale.removeComponent<PositionComponent>();
+            stale.destroy();
+        }
+        EXPECT_TRUE(replacement.alive());
+        EXPECT_EQ(testWorld.world.entityCount(), 1u);
+        EXPECT_EQ(replacement.getComponent<PositionComponent>().x, 73);
+        testWorld.world.clear();
+    }
+}
+
+TEST(Ecs, NextGenerationIdForAFreeSlotCannotDestroyOrUnderflowEntityCount){
+    TestWorld testWorld;
+    auto original = testWorld.world.createEntity();
+    const auto originalId = original.id();
+    original.destroy();
+    auto unallocated = testWorld.world.entity(NWB::Core::ECS::EntityID(originalId.index(), originalId.generation() + 1u));
+    EXPECT_FALSE(unallocated.alive());
+    EXPECT_EQ(testWorld.world.entityCount(), 0u);
+    unallocated.destroy();
+    EXPECT_EQ(testWorld.world.entityCount(), 0u);
+    auto replacement = testWorld.world.createEntity();
+    replacement.addComponent<PositionComponent>().x = 91;
+    EXPECT_TRUE(replacement.alive());
+    EXPECT_EQ(testWorld.world.entityCount(), 1u);
+    EXPECT_EQ(replacement.getComponent<PositionComponent>().x, 91);
+}
+
 TEST(Ecs, DuplicateAddAndRemovePreserveComponentMutationVersions){
     TestWorld testWorld;
 

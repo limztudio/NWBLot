@@ -1,5 +1,5 @@
 package: CLI11
 version: 2.7.2 (tag v2.7.2, commit 919ce47dad39520a6e9a695d3e2d222c6920a445)
-updated_utc: 2026-08-04T16:18:30Z
+updated_utc: 2026-10-13
 source: https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.7.2.zip
-notes: Header-only command-line parser. Pristine v2.7.2 include/CLI snapshot flattened into this package so consumers retain #include <CLI.hpp>; NWB CMake wrapper exposes nwb::cli11_headers.
+notes: Header-only command-line parser. Pristine v2.7.2 include/CLI snapshot flattened into this package so consumers retain #include <CLI.hpp>; NWB CMake wrapper exposes nwb::cli11_headers. NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::cli11_headers as the alias for nwb_cli11_headers with SYSTEM INTERFACE includes from package root.

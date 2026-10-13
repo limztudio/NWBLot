@@ -470,7 +470,7 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
     const SIMDVectorSingle rhsExtents,
     const SIMDVectorSingle rhsOrientation
 )noexcept{
-    const SIMDVectorSingle relativeOrientation = QuaternionMultiply(lhsOrientation, QuaternionConjugate(rhsOrientation));
+    const SIMDVectorSingle relativeOrientation = QuaternionMultiply(QuaternionConjugate(lhsOrientation), rhsOrientation);
     SIMDMatrix rotation = MatrixRotationQuaternion(relativeOrientation);
     const SIMDVectorSingle translation = Vector3InverseRotate(VectorSubtract(rhsCenter, lhsCenter), lhsOrientation);
 
@@ -570,7 +570,40 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
 [[nodiscard]] inline bool TriangleAabbOverlap(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     const SIMDVectorSingle triangleMin = VectorMin(v0, VectorMin(v1, v2));
     const SIMDVectorSingle triangleMax = VectorMax(v0, VectorMax(v1, v2));
-    return MinMaxIntersects(triangleMin, triangleMax, minBounds, maxBounds);
+    if(!MinMaxIntersects(triangleMin, triangleMax, minBounds, maxBounds))
+        return false;
+
+    const SIMDVectorSingle zero = VectorZero();
+    const SIMDVectorSingle relativeV1 = VectorSubtract(v1, v0);
+    const SIMDVectorSingle relativeV2 = VectorSubtract(v2, v0);
+    const SIMDVectorSingle relativeMin = VectorSubtract(minBounds, v0);
+    const SIMDVectorSingle relativeMax = VectorSubtract(maxBounds, v0);
+    const auto crossAxis = [](const SIMDVectorSingle first, const SIMDVectorSingle second)noexcept{
+        // Separate products preserve zero axes for parallel and collapsed edges.
+        const SIMDVectorSingle positive = VectorMultiply(VectorSwizzle<1, 2, 0, 3>(first), VectorSwizzle<2, 0, 1, 3>(second));
+        const SIMDVectorSingle negative = VectorMultiply(VectorSwizzle<2, 0, 1, 3>(first), VectorSwizzle<1, 2, 0, 3>(second));
+        return VectorSubtract(positive, negative);
+    };
+    const auto separated = [&](const SIMDVectorSingle axis)noexcept{
+        if(Vector3Equal(axis, zero))
+            return false;
+        const SIMDVectorSingle p1 = Vector3Dot(relativeV1, axis);
+        const SIMDVectorSingle p2 = Vector3Dot(relativeV2, axis);
+        const SIMDVectorSingle minimumTriangle = VectorMin(zero, VectorMin(p1, p2));
+        const SIMDVectorSingle maximumTriangle = VectorMax(zero, VectorMax(p1, p2));
+        const SIMDVectorSingle firstBounds = VectorMultiply(relativeMin, axis);
+        const SIMDVectorSingle secondBounds = VectorMultiply(relativeMax, axis);
+        const SIMDVectorSingle minimumBox = Vector3Dot(VectorMin(firstBounds, secondBounds), s_SIMDOne3);
+        const SIMDVectorSingle maximumBox = Vector3Dot(VectorMax(firstBounds, secondBounds), s_SIMDOne3);
+        return Vector4Less(maximumTriangle, minimumBox) || Vector4Less(maximumBox, minimumTriangle);
+    };
+    if(separated(crossAxis(relativeV1, relativeV2)))
+        return false;
+
+    const auto edgeSeparated = [&](const SIMDVectorSingle edge)noexcept{
+        return separated(crossAxis(edge, s_SIMDIdentityR0)) || separated(crossAxis(edge, s_SIMDIdentityR1)) || separated(crossAxis(edge, s_SIMDIdentityR2));
+    };
+    return !edgeSeparated(relativeV1) && !edgeSeparated(VectorSubtract(v2, v1)) && !edgeSeparated(VectorNegate(relativeV2));
 }
 
 
@@ -1040,7 +1073,7 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
     const SIMDVectorDouble rhsExtents,
     const SIMDVectorDouble rhsOrientation
 )noexcept{
-    const SIMDVectorDouble relativeOrientation = QuaternionDoubleMultiply(lhsOrientation, QuaternionDoubleConjugate(rhsOrientation));
+    const SIMDVectorDouble relativeOrientation = QuaternionDoubleMultiply(QuaternionDoubleConjugate(lhsOrientation), rhsOrientation);
     SIMDMatrixDouble rotation = MatrixDoubleRotationQuaternion(relativeOrientation);
     const SIMDVectorDouble translation = VectorDouble3InverseRotate(VectorDoubleSubtract(rhsCenter, lhsCenter), lhsOrientation);
 
@@ -1140,7 +1173,40 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
 [[nodiscard]] inline bool TriangleAabbOverlap(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     const SIMDVectorDouble triangleMin = VectorDoubleMin(v0, VectorDoubleMin(v1, v2));
     const SIMDVectorDouble triangleMax = VectorDoubleMax(v0, VectorDoubleMax(v1, v2));
-    return MinMaxIntersects(triangleMin, triangleMax, minBounds, maxBounds);
+    if(!MinMaxIntersects(triangleMin, triangleMax, minBounds, maxBounds))
+        return false;
+
+    const SIMDVectorDouble zero = VectorDoubleZero();
+    const SIMDVectorDouble relativeV1 = VectorDoubleSubtract(v1, v0);
+    const SIMDVectorDouble relativeV2 = VectorDoubleSubtract(v2, v0);
+    const SIMDVectorDouble relativeMin = VectorDoubleSubtract(minBounds, v0);
+    const SIMDVectorDouble relativeMax = VectorDoubleSubtract(maxBounds, v0);
+    const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
+        // Separate products preserve zero axes for parallel and collapsed edges.
+        const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
+        const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
+        return VectorDoubleSubtract(positive, negative);
+    };
+    const auto separated = [&](const SIMDVectorDouble axis)noexcept{
+        if(VectorDouble3Equal(axis, zero))
+            return false;
+        const SIMDVectorDouble p1 = VectorDouble3Dot(relativeV1, axis);
+        const SIMDVectorDouble p2 = VectorDouble3Dot(relativeV2, axis);
+        const SIMDVectorDouble minimumTriangle = VectorDoubleMin(zero, VectorDoubleMin(p1, p2));
+        const SIMDVectorDouble maximumTriangle = VectorDoubleMax(zero, VectorDoubleMax(p1, p2));
+        const SIMDVectorDouble firstBounds = VectorDoubleMultiply(relativeMin, axis);
+        const SIMDVectorDouble secondBounds = VectorDoubleMultiply(relativeMax, axis);
+        const SIMDVectorDouble minimumBox = VectorDouble3Dot(VectorDoubleMin(firstBounds, secondBounds), s_DoubleSIMDOne3);
+        const SIMDVectorDouble maximumBox = VectorDouble3Dot(VectorDoubleMax(firstBounds, secondBounds), s_DoubleSIMDOne3);
+        return VectorDouble4Less(maximumTriangle, minimumBox) || VectorDouble4Less(maximumBox, minimumTriangle);
+    };
+    if(separated(crossAxis(relativeV1, relativeV2)))
+        return false;
+
+    const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
+        return separated(crossAxis(edge, s_DoubleSIMDIdentityR0)) || separated(crossAxis(edge, s_DoubleSIMDIdentityR1)) || separated(crossAxis(edge, s_DoubleSIMDIdentityR2));
+    };
+    return !edgeSeparated(relativeV1) && !edgeSeparated(VectorDoubleSubtract(v2, v1)) && !edgeSeparated(VectorDoubleNegate(relativeV2));
 }
 
 

@@ -49,6 +49,100 @@ inline void ExpectRectExact(const Rect& actual, const Rect& expected){
 }
 
 
+inline void ExpectHitTargetIdentity(const HitTarget& actual, const HitTarget& expected){
+    EXPECT_EQ(actual.id, expected.id);
+    EXPECT_EQ(actual.declarationGeneration, expected.declarationGeneration);
+    EXPECT_EQ(actual.control, expected.control);
+    EXPECT_EQ(actual.owner, expected.owner);
+    EXPECT_EQ(actual.enabled, expected.enabled);
+}
+
+template<usize Capacity>
+struct AcceptedInputState{
+    Array<HitTarget, Capacity> targets{};
+    usize count = 0u;
+    u64 layoutGeneration = 0u;
+    WidgetId capture;
+};
+
+template<usize Capacity, typename Input>
+[[nodiscard]] AcceptedInputState<Capacity> CaptureAcceptedInput(const Input& input){
+    AcceptedInputState<Capacity> saved;
+    saved.count = input.targets().size();
+    saved.layoutGeneration = input.layoutGeneration();
+    saved.capture = input.capture();
+    for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
+        saved.targets[index] = input.targets()[index];
+    return saved;
+}
+
+template<usize Capacity, typename Input>
+void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>& saved){
+    EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
+    EXPECT_EQ(input.capture(), saved.capture);
+    ASSERT_EQ(input.targets().size(), saved.count);
+    ASSERT_LE(saved.count, saved.targets.size());
+    for(usize index = 0u; index < saved.count; ++index){
+        const HitTarget& before = saved.targets[index];
+        const HitTarget& after = input.targets()[index];
+        UiWidgetTests::ExpectHitTargetIdentity(after, before);
+        EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
+        ExpectRect(after.rectangle, before.rectangle);
+        ExpectRect(after.clip, before.clip);
+    }
+}
+
+[[nodiscard]] inline PopupOptions LargeLoanParentOptions(){
+    PopupOptions options;
+    options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
+    options.size = { 340.0f, 420.0f };
+    return options;
+}
+
+[[nodiscard]] inline PopupOptions LargeLoanChildOptions(){
+    PopupOptions options;
+    options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
+    options.size = { 340.0f, 420.0f };
+    return options;
+}
+
+[[nodiscard]] inline NWB::Impl::Ui::ListOptions LargeLoanListOptions(){
+    NWB::Impl::Ui::ListOptions options;
+    options.height = { LayoutSizePolicy::Fixed, 140.0f };
+    options.rowHeight = 24.0f;
+    return options;
+}
+
+template<typename KeyLookup>
+[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const bool backwards, const u64 disabled, KeyLookup&& rawKey){
+    u64 index = 0u;
+    if(start >= count)
+        return MakeUnexpected(Failure{});
+    index = start;
+    if(rawKey(index) != disabled)
+        return index;
+    if(backwards){
+        if(index == 0u)
+            return MakeUnexpected(Failure{});
+        --index;
+    }
+    else{
+        if(index + 1u == count)
+            return MakeUnexpected(Failure{});
+        ++index;
+    }
+    return index;
+}
+
+struct SkinPaintSample{
+    Rect bounds;
+    Color color;
+    f32 maximumU = 0.0f;
+    usize quads = 0u;
+};
+
+[[nodiscard]] bool InstallLatinFixtureFont(Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
+
 class WidgetFixture : public testing::Test{
 public:
     WidgetFixture()
@@ -64,15 +158,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
-        Core::Assets::AssetBytes bytes(m_arena);
-        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-        ASSERT_TRUE(bytesResult);
-        bytes = Move(*bytesResult);
-        m_font.setFontBytes(Move(bytes));
-        ASSERT_TRUE(m_font.validatePayload());
-        const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
-        ASSERT_TRUE(m_text.setFonts(&source, 1u));
+        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
         configureSkin();
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
@@ -152,6 +238,10 @@ protected:
         EXPECT_TRUE(send({ InputEventType::PointerMove, destination }).pointerConsumed);
         EXPECT_TRUE(send({ InputEventType::PrimaryUp, destination }).pointerConsumed);
     }
+
+    [[nodiscard]] Expected<SkinPaintSample> sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept;
+
+    [[nodiscard]] bool installKoreanFallback();
 
     [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
         const f32 left = static_cast<f32>(slot) / 16.0f;

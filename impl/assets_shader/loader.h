@@ -6,12 +6,12 @@
 
 
 #include <impl/global.h>
+#include <impl/assets_shader/asset.h>
 
 #include <core/assets/manager.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/shader_stage_names.h>
-#include <impl/assets_shader/asset.h>
 #include <core/common/log.h>
 
 

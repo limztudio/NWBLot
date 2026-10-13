@@ -35,7 +35,7 @@ ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale)noexcept{
     return matrix;
 }
 
-bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
+bool FiniteUfbxMatrix(const ufbx_matrix& matrix)noexcept{
     for(usize i = 0u; i < s_JointMatrixElementCount; ++i){
         if(!IsFinite(static_cast<f64>(matrix.v[i])))
             return false;
@@ -43,7 +43,7 @@ bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
     return true;
 }
 
-JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
+JointMatrix ToJointMatrix(const ufbx_matrix& matrix)noexcept{
     JointMatrix result{};
     result.rows[0] = Vec4{ static_cast<f32>(matrix.m00), static_cast<f32>(matrix.m01), static_cast<f32>(matrix.m02), static_cast<f32>(matrix.m03), };
     result.rows[1] = Vec4{ static_cast<f32>(matrix.m10), static_cast<f32>(matrix.m11), static_cast<f32>(matrix.m12), static_cast<f32>(matrix.m13), };
@@ -51,7 +51,7 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
     return result;
 }
 
-bool NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
+bool NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs)noexcept{
     const SIMDVectorSingle epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
     for(usize rowIndex = 0u; rowIndex < s_JointMatrixRowCount; ++rowIndex){
         if(!Vector4NearEqual(lhs.v[rowIndex], rhs.v[rowIndex], epsilon))
@@ -60,7 +60,7 @@ bool NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
     return true;
 }
 
-AStringView NodeDisplayName(const ufbx_node* node){
+AStringView NodeDisplayName(const ufbx_node* node)noexcept{
     if(!node)
         return s_NullNodeLabel;
     if(!node->name.data || node->name.length == 0u)
@@ -68,7 +68,7 @@ AStringView NodeDisplayName(const ufbx_node* node){
     return AStringView(node->name.data, node->name.length);
 }
 
-ufbx_matrix BuildMeshFromOutputMatrix(const MeshInstance& instance, const ImportOptions& options){
+ufbx_matrix BuildMeshFromOutputMatrix(const MeshInstance& instance, const ImportOptions& options)noexcept{
     const ufbx_matrix scaleInverse = MakeInverseUniformScaleMatrix(options.scale);
     if(!options.bakeTransforms)
         return scaleInverse;
@@ -77,7 +77,7 @@ ufbx_matrix BuildMeshFromOutputMatrix(const MeshInstance& instance, const Import
     return ufbx_matrix_mul(&nodeMeshToWorldInverse, &scaleInverse);
 }
 
-ufbx_matrix BuildOutputInverseBindMatrix(const ufbx_skin_cluster& cluster, const MeshInstance& instance, const ImportOptions& options){
+ufbx_matrix BuildOutputInverseBindMatrix(const ufbx_skin_cluster& cluster, const MeshInstance& instance, const ImportOptions& options)noexcept{
     const ufbx_matrix meshFromOutput = BuildMeshFromOutputMatrix(instance, options);
     return ufbx_matrix_mul(&cluster.geometry_to_bone, &meshFromOutput);
 }

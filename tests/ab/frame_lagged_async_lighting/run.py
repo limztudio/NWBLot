@@ -10,6 +10,7 @@ Graphics queue route and exits with the standard smoke skip code instead of clai
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import tempfile
 import time
@@ -23,7 +24,7 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from window_capture_smoke import (  # noqa: E402
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process,)
 
 LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE = "lagged lighting-history capture skipped because its source state was unavailable"
@@ -133,8 +134,8 @@ def wait_for_lifecycle_stage(process, log_directory: Path, log_baseline: Mapping
 
 
 def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if value <= 0.0:
-        parser.error(f"{option} must be positive")
+    if not math.isfinite(value) or value <= 0.0:
+        parser.error(f"{option} must be positive and finite")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -220,6 +221,20 @@ def run(args: argparse.Namespace) -> int:
 
 
 def run_self_test() -> int:
+    numeric_parser = mock.Mock()
+    require_positive(numeric_parser, LIT_STARTUP_TIMEOUT, 1.0)
+    numeric_parser.error.assert_not_called()
+    for value in (math.nan, math.inf, -math.inf):
+        numeric_parser.error.reset_mock()
+        numeric_parser.error.side_effect = ValueError("non-finite lifecycle deadline")
+        try:
+            require_positive(numeric_parser, LIT_TRANSITION_TIMEOUT, value)
+        except ValueError as error:
+            assert str(error) == "non-finite lifecycle deadline"
+        else:
+            raise AssertionError("a non-finite lifecycle deadline was accepted")
+        numeric_parser.error.assert_called_once()
+
     log = "\n".join((f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}", f"{ACTIVE_HISTORY_ACCEPTED}{LIT_TARGET_GENERATION_7}", f"{CURRENT_FRAME_ACCEPTED}{LIT_TARGET_GENERATION_7}", f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}",
         f"{ACTIVE_HISTORY_ACCEPTED}{LIT_TARGET_GENERATION_7}",))
     assert validate_lifecycle_order(log) == accepted_lifecycle_events(log)
@@ -325,20 +340,7 @@ def run_self_test() -> int:
 
 
 def main(argv: Sequence[str]) -> int:
-    args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
-    try:
-        return run(args)
-    except DedicatedComputeUnavailable as error:
-        print(f"SKIP: {error}", file=sys.stderr)
-        return SKIP_EXIT_CODE
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", file=sys.stderr)
-        return SKIP_EXIT_CODE
-    except SmokeFailure as error:
-        print(f"FAIL: {error}", file=sys.stderr)
-        return 1
+    return run_smoke_main(argv, parse_args, run, self_test=run_self_test, output_stream=sys.stderr, failure_types=(SmokeFailure,))
 
 
 if __name__ == LIT_MAIN:

@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PointerGesture> InputRouter::consumePointerGesture(const WidgetId id, const u64 declarationGeneration){
+Expected<PointerGesture> InputRouter::consumePointerGesture(const WidgetId id, const u64 declarationGeneration)noexcept{
     const HitTarget* target = findTarget(id, declarationGeneration);
     if(declarationGeneration == 0u || target == nullptr || !isInteractive(*target) || !target->pointerGesture)
         return MakeUnexpected(Failure{});
@@ -78,7 +78,7 @@ void InputRouter::updatePointerGesture(const Point& position, const bool complet
         m_activeGestureSequence = 0u;
 }
 
-void InputRouter::reconcilePointerGestures(){
+void InputRouter::reconcilePointerGestures()noexcept{
     for(usize index = 0u; index < m_pointerGestures.size();){
         const auto& gesture = m_pointerGestures[index].gesture;
         const HitTarget* target = findTarget(gesture.id.target, gesture.id.declarationGeneration);

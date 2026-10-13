@@ -7,6 +7,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+
 #include <global/auto_registration.h>
 
 
@@ -26,8 +27,8 @@ namespace __hidden_auto_registration{
 
 
 ::AutoRegistrationQueue<AssetCodecFactory, AssetArena>& QueryAutoCodecFactoryQueue(){
-    static ::AutoRegistrationQueue<AssetCodecFactory, AssetArena> queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
-    return queue;
+    static ::AutoRegistrationQueue<AssetCodecFactory, AssetArena> s_Queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
+    return s_Queue;
 }
 
 

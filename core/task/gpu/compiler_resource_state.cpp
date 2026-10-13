@@ -117,6 +117,81 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static Expected<bool> PlanCrossPacketResourceStateSeed(
+    GpuTaskGraphResourceStatePlan& plan,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceUse& use,
+    const GpuTaskResourceRange& barrierRange,
+    const GpuTaskResourceRange& readerDependencyRange,
+    const TrackedCompiledResourceState* const previousState,
+    const TrackedCompiledResourceState* const stateSource,
+    const TrackedCompiledResourceState* const readStateSource,
+    const GpuCompiledTask& compiledTask,
+    const ResourceStates::Mask before,
+    const bool needsSameStateDependency
+){
+    GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
+    const GpuPhysicalQueueTopology& topology = plan.topology;
+    auto& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
+    if(previousState){
+        const GpuSubmissionPacketId sourcePacket = FindCompiledPacketForTask(compiledPlan, previousState->task);
+        if(!sourcePacket.valid())
+            return MakeUnexpected(Failure{});
+        if(sourcePacket != compiledTask.packet){
+            const GpuPhysicalQueueInfo* const sourceQueue = FindCompiledQueueInfo(compiledPlan, previousState->queue);
+            const GpuPhysicalQueueInfo* const destinationQueue = FindCompiledQueueInfo(compiledPlan, compiledTask.queue);
+            if(!sourceQueue || !destinationQueue)
+                return MakeUnexpected(Failure{});
+            const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
+            const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource, topology);
+            const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(resource, topology, *sourceQueue, *destinationQueue);
+            if(differentQueueFamilies && resourceUsesConcurrentSharing && !concurrentQueuePair){
+                // The resource was created concurrent for another family set.
+                // Vulkan cannot transfer ownership to an omitted family, so fail compilation instead of recording invalid work.
+                return MakeUnexpected(Failure{});
+            }
+
+            const bool requiresExclusiveOwnershipHandoff = !resourceUsesConcurrentSharing && differentQueueFamilies;
+            if(requiresExclusiveOwnershipHandoff){
+                if(previousState->access == GpuTaskResourceAccess::Read && !AppendOverlappingReaderDependencies(plan, resource, readerDependencyRange, *previousState, sourcePacket))
+                    return MakeUnexpected(Failure{});
+                const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
+                const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
+                if(releaseType >= GpuCompiledBarrierType::kCount || acquireType >= GpuCompiledBarrierType::kCount)
+                    return MakeUnexpected(Failure{});
+                if(!AppendCompiledOwnershipTransfer(plan, resource, barrierRange, previousState->task, compiledTask.task, previousState->queue, compiledTask.queue, GpuOwnershipTransferRoute::Internal))
+                    return MakeUnexpected(Failure{});
+                pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
+                    .task = previousState->task,
+                    .barrier = GpuCompiledBarrier{ .resource = use.resource, .range = barrierRange, .before = before, .after = before, .sourceQueue = previousState->queue, .destinationQueue = compiledTask.queue, .type = releaseType, },
+                });
+                compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
+                    .resource = use.resource,
+                    .range = barrierRange,
+                    .before = before,
+                    .after = before,
+                    .sourceQueue = previousState->queue,
+                    .destinationQueue = compiledTask.queue,
+                    .type = acquireType,
+                });
+            }
+            const bool readOnlySameState = previousState->access == GpuTaskResourceAccess::Read && use.access == GpuTaskResourceAccess::Read && before == use.requiredState && !needsSameStateDependency;
+            const bool mayOmitInternalStateSeed = use.hasIndependentStateSource && readOnlySameState && concurrentQueuePair;
+            if(!mayOmitInternalStateSeed){
+                const GpuSubmissionPacketId stateSourcePacket = FindCompiledPacketForTask(compiledPlan, stateSource->task);
+                if(!stateSourcePacket.valid())
+                    return MakeUnexpected(Failure{});
+                if(stateSourcePacket != compiledTask.packet){
+                    compiledPlan.prologueStateSeeds.push_back(GpuPacketStateSeed{ .resource = use.resource, .range = barrierRange, .sourcePacket = stateSourcePacket, });
+                    return readStateSource != nullptr;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+
 [[nodiscard]] bool PlanTaskResourceStates(GpuTaskGraphResourceStatePlan& plan){
     const GpuTaskGraph::DeclarationReadView& graph = plan.graph;
     const GpuPhysicalQueueTopology& topology = plan.topology;
@@ -125,7 +200,6 @@ namespace GpuTaskGraphCompilerDetail{
     Alloc::ScratchArena& scratchArena = plan.scratchArena;
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;
     TrackedResourceStateHistory& resourceHistory = plan.resourceHistory;
-    Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies = plan.initialOwnershipDependencies;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies = plan.initialAvailabilityDependencies;
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
@@ -258,62 +332,10 @@ namespace GpuTaskGraphCompilerDetail{
                     ;
                     if(previousState && previousState->access == GpuTaskResourceAccess::Read && before != use.requiredState && !compatibleReadStates && !AppendOverlappingReaderDependencies(plan, resource, fragment.range, *previousState, compiledTask->packet))
                         return false;
-                    bool importsReadStateSeed = false;
-                    if(previousState){
-                        const GpuSubmissionPacketId sourcePacket = FindCompiledPacketForTask(compiledPlan, previousState->task);
-                        if(!sourcePacket.valid())
-                            return false;
-                        if(sourcePacket != compiledTask->packet){
-                            const GpuPhysicalQueueInfo* const sourceQueue = FindCompiledQueueInfo(compiledPlan, previousState->queue);
-                            const GpuPhysicalQueueInfo* const destinationQueue = FindCompiledQueueInfo(compiledPlan, compiledTask->queue);
-                            if(!sourceQueue || !destinationQueue)
-                                return false;
-                            const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
-                            const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource, topology);
-                            const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(resource, topology, *sourceQueue, *destinationQueue);
-                            if(differentQueueFamilies && resourceUsesConcurrentSharing && !concurrentQueuePair){
-                                // The resource was created concurrent for another family set.
-                                // Vulkan cannot transfer ownership to an omitted family, so fail compilation instead of recording invalid work.
-                                return false;
-                            }
-
-                            const bool requiresExclusiveOwnershipHandoff = !resourceUsesConcurrentSharing && differentQueueFamilies;
-                            if(requiresExclusiveOwnershipHandoff){
-                                if(previousState->access == GpuTaskResourceAccess::Read && !AppendOverlappingReaderDependencies(plan, resource, fragment.range, *previousState, sourcePacket))
-                                    return false;
-                                const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
-                                const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
-                                if(releaseType >= GpuCompiledBarrierType::kCount || acquireType >= GpuCompiledBarrierType::kCount)
-                                    return false;
-                                if(!AppendCompiledOwnershipTransfer(plan, resource, fragment.range, previousState->task, taskID, previousState->queue, compiledTask->queue, GpuOwnershipTransferRoute::Internal))
-                                    return false;
-                                pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
-                                    .task = previousState->task,
-                                    .barrier = GpuCompiledBarrier{ .resource = use.resource, .range = fragment.range, .before = before, .after = before, .sourceQueue = previousState->queue, .destinationQueue = compiledTask->queue, .type = releaseType, },
-                                });
-                                compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
-                                    .resource = use.resource,
-                                    .range = fragment.range,
-                                    .before = before,
-                                    .after = before,
-                                    .sourceQueue = previousState->queue,
-                                    .destinationQueue = compiledTask->queue,
-                                    .type = acquireType,
-                                });
-                            }
-                            const bool readOnlySameState = previousState->access == GpuTaskResourceAccess::Read && use.access == GpuTaskResourceAccess::Read && before == use.requiredState && !needsSameStateDependency;
-                            const bool mayOmitInternalStateSeed = use.hasIndependentStateSource && readOnlySameState && concurrentQueuePair;
-                            if(!mayOmitInternalStateSeed){
-                                const GpuSubmissionPacketId stateSourcePacket = FindCompiledPacketForTask(compiledPlan, stateSource->task);
-                                if(!stateSourcePacket.valid())
-                                    return false;
-                                if(stateSourcePacket != compiledTask->packet){
-                                    importsReadStateSeed = readStateSource != nullptr;
-                                    compiledPlan.prologueStateSeeds.push_back(GpuPacketStateSeed{ .resource = use.resource, .range = fragment.range, .sourcePacket = stateSourcePacket, });
-                                }
-                            }
-                        }
-                    }
+                    const auto stateSeed = PlanCrossPacketResourceStateSeed(plan, resource, use, fragment.range, fragment.range, previousState, stateSource, readStateSource, *compiledTask, before, needsSameStateDependency);
+                    if(!stateSeed)
+                        return false;
+                    const bool importsReadStateSeed = *stateSeed;
                     const ResourceStates::Mask seededState = importsReadStateSeed ? ReadStateSourceSnapshotState(graph, resource, readStateSource->state) : before;
                     if(materializesGraphInitialState || before != use.requiredState || seededState != use.requiredState || needsSameStateDependency){
                         compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
@@ -393,62 +415,10 @@ namespace GpuTaskGraphCompilerDetail{
             const bool needsUavDependency = needsSameStateDependency && ResourceStates::HasUnorderedAccess(before);
             if(previousState && previousState->access == GpuTaskResourceAccess::Read && before != use.requiredState && !AppendOverlappingReaderDependencies(plan, resource, (*plannedRange), *previousState, compiledTask->packet))
                 return false;
-            bool importsReadStateSeed = false;
-            if(previousState){
-                const GpuSubmissionPacketId sourcePacket = FindCompiledPacketForTask(compiledPlan, previousState->task);
-                if(!sourcePacket.valid())
-                    return false;
-                if(sourcePacket != compiledTask->packet){
-                    const GpuPhysicalQueueInfo* const sourceQueue = FindCompiledQueueInfo(compiledPlan, previousState->queue);
-                    const GpuPhysicalQueueInfo* const destinationQueue = FindCompiledQueueInfo(compiledPlan, compiledTask->queue);
-                    if(!sourceQueue || !destinationQueue)
-                        return false;
-                    const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
-                    const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource, topology);
-                    const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(resource, topology, *sourceQueue, *destinationQueue);
-                    if(differentQueueFamilies && resourceUsesConcurrentSharing && !concurrentQueuePair){
-                        // The resource was created concurrent for another family set.
-                        // Vulkan cannot transfer ownership to an omitted family, so fail compilation instead of recording invalid work.
-                        return false;
-                    }
-
-                    const bool requiresExclusiveOwnershipHandoff = !resourceUsesConcurrentSharing && differentQueueFamilies;
-                    if(requiresExclusiveOwnershipHandoff){
-                        if(previousState->access == GpuTaskResourceAccess::Read && !AppendOverlappingReaderDependencies(plan, resource, (*plannedRange), *previousState, sourcePacket))
-                            return false;
-                        const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
-                        const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
-                        if(releaseType >= GpuCompiledBarrierType::kCount || acquireType >= GpuCompiledBarrierType::kCount)
-                            return false;
-                        if(!AppendCompiledOwnershipTransfer(plan, resource, use.range, previousState->task, taskID, previousState->queue, compiledTask->queue, GpuOwnershipTransferRoute::Internal))
-                            return false;
-                        pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
-                            .task = previousState->task,
-                            .barrier = GpuCompiledBarrier{ .resource = use.resource, .range = use.range, .before = before, .after = before, .sourceQueue = previousState->queue, .destinationQueue = compiledTask->queue, .type = releaseType, },
-                        });
-                        compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
-                            .resource = use.resource,
-                            .range = use.range,
-                            .before = before,
-                            .after = before,
-                            .sourceQueue = previousState->queue,
-                            .destinationQueue = compiledTask->queue,
-                            .type = acquireType,
-                        });
-                    }
-                    const bool readOnlySameState = previousState->access == GpuTaskResourceAccess::Read && use.access == GpuTaskResourceAccess::Read && before == use.requiredState && !needsSameStateDependency;
-                    const bool mayOmitInternalStateSeed = use.hasIndependentStateSource && readOnlySameState && concurrentQueuePair;
-                    if(!mayOmitInternalStateSeed){
-                        const GpuSubmissionPacketId stateSourcePacket = FindCompiledPacketForTask(compiledPlan, stateSource->task);
-                        if(!stateSourcePacket.valid())
-                            return false;
-                        if(stateSourcePacket != compiledTask->packet){
-                            importsReadStateSeed = readStateSource != nullptr;
-                            compiledPlan.prologueStateSeeds.push_back(GpuPacketStateSeed{ .resource = use.resource, .range = use.range, .sourcePacket = stateSourcePacket, });
-                        }
-                    }
-                }
-            }
+            const auto stateSeed = PlanCrossPacketResourceStateSeed(plan, resource, use, use.range, (*plannedRange), previousState, stateSource, readStateSource, *compiledTask, before, needsSameStateDependency);
+            if(!stateSeed)
+                return false;
+            const bool importsReadStateSeed = *stateSeed;
             const ResourceStates::Mask seededState = importsReadStateSeed ? ReadStateSourceSnapshotState(graph, resource, readStateSource->state) : before;
             if(materializesGraphInitialState || before != use.requiredState || seededState != use.requiredState || needsSameStateDependency){
                 compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{

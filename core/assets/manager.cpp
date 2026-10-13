@@ -80,7 +80,10 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
         request.result.state = AssetLoadState::Pending;
         request.assetType = assetType;
         request.virtualPath = virtualPath;
-        m_requests.emplace(requestId, Move(request));
+        if(!m_requests.emplace(requestId, Move(request)).second){
+            NWB_ASSERT(false);
+            return 0u;
+        }
 
         asyncExecutor = m_asyncExecutor;
     }

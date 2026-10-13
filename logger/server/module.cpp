@@ -13,6 +13,9 @@
 #include <core/common/name_symbols.h>
 
 #include <global/algorithm.h>
+#include <global/diagnostics.h>
+#include <global/process.h>
+#include <global/scope_exit.h>
 
 #if defined(NWB_PLATFORM_LINUX)
 #include <arpa/inet.h>
@@ -58,14 +61,26 @@ namespace ConnectionUploadKind{
 };
 
 struct ConnectionInfo{
-    ConnectionInfo() = default;
+    u8* buffer = nullptr;
+    usize size = 0u;
+    usize capacity = 0u;
+    ConnectionUploadKind::Enum uploadKind = ConnectionUploadKind::LogMessage;
+    Path crashUploadPath;
+    bool crashUploadOwned = false;
+    OutputFileStream crashUploadStream;
+
+    explicit ConnectionInfo(LogArena& arena)
+        : crashUploadPath(arena)
+    {}
     ConnectionInfo(ConnectionInfo&&) = delete;
     ConnectionInfo(const ConnectionInfo&) = delete;
     ConnectionInfo& operator=(ConnectionInfo&&) = delete;
     ConnectionInfo& operator=(const ConnectionInfo&) = delete;
-    ~ConnectionInfo(){
-        if(!closeCrashUploadStream())
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to close crash upload stream"));
+    ~ConnectionInfo()noexcept{
+        if(crashUploadOwned)
+            discardCrashUpload();
+        else if(!closeCrashUploadStream())
+            CaptureDiagnosticEvent("logger_server_upload", "Failed to close crash upload stream", __FILE__, __LINE__);
         Core::Alloc::CoreFree(buffer);
     }
 
@@ -101,14 +116,27 @@ struct ConnectionInfo{
         return true;
     }
 
-    [[nodiscard]] bool closeCrashUploadStream(){
+    [[nodiscard]] bool closeCrashUploadStream()noexcept{
         if(crashUploadStream.is_open())
             crashUploadStream.close();
 
         return crashUploadStream.good();
     }
 
-    [[nodiscard]] bool reserve(const usize requiredSize){
+    void discardCrashUpload()noexcept{
+        if(!crashUploadOwned)
+            return;
+        if(!closeCrashUploadStream())
+            CaptureDiagnosticEvent("logger_server_upload", "Failed to close discarded crash upload stream", __FILE__, __LINE__);
+        const auto removed = RemoveFile(crashUploadPath);
+        if(!removed){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to remove discarded crash upload '{}', error {}", crashUploadPath.c_str(), removed.error().value());
+            CaptureDiagnosticEvent("logger_server_upload", diagnostic.view(), __FILE__, __LINE__);
+        }
+        crashUploadOwned = false;
+    }
+
+    [[nodiscard]] bool reserve(const usize requiredSize)noexcept{
         if(requiredSize <= capacity)
             return true;
 
@@ -122,13 +150,6 @@ struct ConnectionInfo{
         capacity = newCapacity;
         return true;
     }
-
-    u8* buffer = nullptr;
-    usize size = 0u;
-    usize capacity = 0u;
-    ConnectionUploadKind::Enum uploadKind = ConnectionUploadKind::LogMessage;
-    char crashUploadPath[s_MaxPendingCrashUploadPathText] = {};
-    OutputFileStream crashUploadStream;
 };
 
 inline constexpr usize s_MaxLogMessageUploadBytes = s_MaxLogMessageUploadMebibytes * s_BytesPerMebibyte;
@@ -191,7 +212,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
         server.arena(),
-        "{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}{}",
+        "{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}{}",
         s_CrashUploadArchiveFilePrefix,
         localTime.tm_year + s_LocalTimeYearBase,
         localTime.tm_mon + s_LocalTimeMonthBase,
@@ -199,6 +220,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
         localTime.tm_hour,
         localTime.tm_min,
         localTime.tm_sec,
+        CurrentProcessId(),
         counter,
         s_CrashUploadArchiveFileExtension
     );
@@ -206,37 +228,19 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     return CrashInboxDirectory(server) / fileName;
 }
 
-[[nodiscard]] static bool CopyCrashUploadPath(Server& server, const Path& path, char (&outPath)[s_MaxPendingCrashUploadPathText]){
-    const AString<LogArena> pathText = PathToString<char>(server.arena(), path);
-    if(pathText.size() >= sizeof(outPath))
-        return false;
-
-    CopyFixedBuffer(outPath, AStringView(pathText.data(), pathText.size()));
-    return true;
-}
-
 [[nodiscard]] static bool OpenCrashUploadStream(Server& server, ConnectionInfo& info){
     const Path inboxDirectory = CrashInboxDirectory(server);
     if(!EnsureDirectories(inboxDirectory))
         return false;
 
-    const Path path = MakeCrashPackagePath(server);
-    if(!CopyCrashUploadPath(server, path, info.crashUploadPath))
+    info.crashUploadPath = MakeCrashPackagePath(server);
+    const AString<LogArena> pathText = PathToString<char>(server.arena(), info.crashUploadPath);
+    if(pathText.size() >= s_MaxPendingCrashUploadPathText)
         return false;
 
-    info.crashUploadStream.open(path.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
-    return info.crashUploadStream.is_open();
-}
-
-static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
-    if(info.uploadKind != ConnectionUploadKind::Crash || info.crashUploadPath[0] == 0)
-        return;
-
-    if(!info.closeCrashUploadStream())
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to close discarded crash upload stream"));
-
-    if(const auto removed = RemoveFile(Path(server.arena(), AStringView(info.crashUploadPath))); !removed || !*removed)
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove discarded crash upload file"));
+    info.crashUploadStream.open(info.crashUploadPath.c_str(), s_FileOpenBinary | OutputFileStream::noreplace);
+    info.crashUploadOwned = info.crashUploadStream.is_open();
+    return info.crashUploadOwned;
 }
 
 
@@ -248,13 +252,17 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
     if(!memory)
         return nullptr;
 
-    auto* info = new(memory) ConnectionInfo();
-    info->uploadKind = uploadKind;
-    if(uploadKind == ConnectionUploadKind::Crash && !OpenCrashUploadStream(server, *info)){
+    ScopeExit releaseMemory([&]()noexcept{ Core::Alloc::CoreFree(memory); });
+    auto* info = new(memory) ConnectionInfo(server.arena());
+    releaseMemory.release();
+    ScopeExit releaseInfo([&]()noexcept{
         info->~ConnectionInfo();
         Core::Alloc::CoreFree(info);
+    });
+    info->uploadKind = uploadKind;
+    if(uploadKind == ConnectionUploadKind::Crash && !OpenCrashUploadStream(server, *info))
         return nullptr;
-    }
+    releaseInfo.release();
     return info;
 }
 
@@ -266,6 +274,16 @@ static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContex
 
     info = nullptr;
     connectionContext = nullptr;
+}
+
+static void RequestCompleted(void* serverContext, MHD_Connection* connection, void** connectionContextAddress, MHD_RequestTerminationCode terminationCode)noexcept{
+    static_cast<void>(serverContext);
+    static_cast<void>(connection);
+    static_cast<void>(terminationCode);
+    if(!connectionContextAddress)
+        return;
+    auto* info = static_cast<ConnectionInfo*>(*connectionContextAddress);
+    DestroyConnectionInfo(info, *connectionContextAddress);
 }
 
 
@@ -367,7 +385,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
     if(uploadDataSize){
         if(!uploadData){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
-            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
+            info->discardCrashUpload();
             __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
         }
@@ -375,7 +393,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->uploadKind);
         if(uploadDataSize > static_cast<size_t>(uploadSizeLimit) || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
-            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
+            info->discardCrashUpload();
             __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
         }
@@ -383,7 +401,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(BinaryByteView(reinterpret_cast<const u8*>(uploadData), appendSize))){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
-            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
+            info->discardCrashUpload();
             __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
         }
@@ -393,19 +411,19 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
     }
 
     if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Crash){
-        if(info->closeCrashUploadStream() && info->crashUploadPath[0] != 0){
-            const Path storedPath(thisPtr->arena(), AStringView(info->crashUploadPath));
+        if(info->closeCrashUploadStream() && info->crashUploadOwned){
+            const Path& storedPath = info->crashUploadPath;
             if(thisPtr->enqueueCrashUpload(storedPath)){
+                info->crashUploadOwned = false;
                 thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
             }
             else{
-                if(const auto removed = RemoveFile(storedPath); !removed || !*removed)
-                    NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove unqueued crash upload file"));
+                info->discardCrashUpload();
                 __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Discarded crash upload that could not be queued"), Core::Common::LogType::Error);
             }
         }
         else{
-            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
+            info->discardCrashUpload();
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store crash upload"), Core::Common::LogType::Error);
         }
     }
@@ -471,7 +489,7 @@ bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStr
     listenAddress.sin_family = AF_INET;
     listenAddress.sin_port = htons(port);
     listenAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, 0u, nullptr, nullptr, &Server::RequestCallback, this, MHD_OPTION_SOCK_ADDR_LEN, static_cast<socklen_t>(sizeof(listenAddress)), &listenAddress, MHD_OPTION_END);
+    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, 0u, nullptr, nullptr, &Server::RequestCallback, this, MHD_OPTION_SOCK_ADDR_LEN, static_cast<socklen_t>(sizeof(listenAddress)), &listenAddress, MHD_OPTION_NOTIFY_COMPLETED, &__hidden_logger_server::RequestCompleted, nullptr, MHD_OPTION_END);
 
     if(!m_daemon)
         return false;
@@ -507,7 +525,7 @@ void Server::stopCrashIngestWorker(){
         m_crashIngestThread.join();
 }
 
-bool Server::crashUploadAuthorized(MHD_Connection& connection)const{
+bool Server::crashUploadAuthorized(MHD_Connection& connection)const noexcept{
     const char* authorizationHeader = MHD_lookup_connection_value(&connection, MHD_HEADER_KIND, "Authorization");
     return CrashUploadAuthorizationMatches(AStringView(m_crashUploadToken.data(), m_crashUploadToken.size()), authorizationHeader ? AStringView(authorizationHeader) : AStringView{});
 }

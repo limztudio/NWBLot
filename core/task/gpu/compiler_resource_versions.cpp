@@ -266,7 +266,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
 
     outEdges.clear();
     GpuTaskGraphAnalysisDiagnostic diagnostic;
-    const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task, const GpuTaskId relatedTask, const GpuGraphResourceId resource, const GpuGraphResourceVersionId version){
+    const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task, const GpuTaskId relatedTask, const GpuGraphResourceId resource, const GpuGraphResourceVersionId version)noexcept{
         diagnostic.status = status;
         diagnostic.task = task;
         diagnostic.relatedTask = relatedTask;

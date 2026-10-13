@@ -8,7 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "asset.h"
+#include "cook.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +27,8 @@ bool FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
     const FontAtlas& atlas = *checked_cast<const FontAtlas*>(&asset);
     if(!atlas.checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload")))
         return false;
-    auto binary = SerializeFontAtlasPayload(atlas.payload(), outBinary.get_allocator().arena());
+    Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_SerializeArena);
+    auto binary = SerializeFontAtlasPayload(atlas.payload(), outBinary.get_allocator().arena(), scratchArena);
     if(!binary)
         return false;
     outBinary = Move(*binary);

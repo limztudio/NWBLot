@@ -75,13 +75,15 @@ public:
     }
 
     [[nodiscard]] bool assign(const view_type text)noexcept(IsArithmetic_V<value_type>){
-        clear();
-
         const usize textSize = text.size();
-        if(text.empty())
+        if(text.empty()){
+            clear();
             return true;
-        if(textSize > s_MaxLength)
+        }
+        if(textSize > s_MaxLength){
+            clear();
             return false;
+        }
 
         for(usize i = 0u; i < textSize; ++i){
             if(text[i] == value_type{}){

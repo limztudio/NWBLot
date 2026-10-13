@@ -8,6 +8,7 @@
 
 #include <core/crash/package_names.h>
 #include <core/crash/reason_names.h>
+
 #include <global/text_utils.h>
 
 
@@ -150,7 +151,7 @@ struct ReportSectionRange{
     return tombstone ? *tombstone : ReportSectionRange{};
 }
 
-[[nodiscard]] static AStringView ReportSectionContent(const AStringView report, const ReportSectionRange& range){
+[[nodiscard]] static AStringView ReportSectionContent(const AStringView report, const ReportSectionRange& range)noexcept{
     if(!range.found())
         return AStringView();
 

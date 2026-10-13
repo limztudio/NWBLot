@@ -17,6 +17,22 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool TimerQuery::hasCompletedCycleWithinLock()const noexcept{
+    return !m_resetRecordingOwner.commandBuffer && m_cycleGeneration == 0u && !m_recordingActive && m_completedCycleSubmission.valid() && m_completedCycleGeneration != 0u;
+}
+
+bool TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* const queueInfo)const noexcept{
+    return !m_resetRecordingOwner.commandBuffer
+        && m_cycleGeneration == 0u
+        && !m_recordingActive
+        && m_completedCycleGeneration == generation
+        && VulkanTimerQueryDetail::MatchesSubmissionToken(m_completedCycleSubmission, submission)
+        && queueInfo
+        && m_timestampValidBits != 0u
+        && queueInfo->timestampValidBits == m_timestampValidBits
+    ;
+}
+
 TimerQueryHandle Device::createTimerQuery(){
     u64 priorIncarnation = m_nextTimerQueryIncarnation.load(MemoryOrder::relaxed);
     while(priorIncarnation != Limit<u64>::s_Max && !m_nextTimerQueryIncarnation.compare_exchange_weak(priorIncarnation, priorIncarnation + 1u, MemoryOrder::relaxed)){}
@@ -41,7 +57,7 @@ bool Device::pollTimerQuery(TimerQuery& query){
     u64 completedGeneration = 0u;
     {
         ScopedLock queryLock(query.m_mutex);
-        if(query.m_resetRecordingOwner.commandBuffer || query.m_cycleGeneration != 0u || query.m_recordingActive || !query.m_completedCycleSubmission.valid() || query.m_completedCycleGeneration == 0u)
+        if(!query.hasCompletedCycleWithinLock())
             return false;
         completedSubmission = query.m_completedCycleSubmission;
         completedGeneration = query.m_completedCycleGeneration;
@@ -55,16 +71,7 @@ bool Device::pollTimerQuery(TimerQuery& query){
     {
         ScopedLock queryLock(query.m_mutex);
         const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query.m_timestampQueue);
-        if(
-            query.m_resetRecordingOwner.commandBuffer
-            || query.m_cycleGeneration != 0u
-            || query.m_recordingActive
-            || query.m_completedCycleGeneration != completedGeneration
-            || !VulkanTimerQueryDetail::MatchesSubmissionToken(query.m_completedCycleSubmission, completedSubmission)
-            || !queueInfo
-            || query.m_timestampValidBits == 0u
-            || queueInfo->timestampValidBits != query.m_timestampValidBits
-        )
+        if(!query.completedCycleMatchesWithinLock(completedGeneration, completedSubmission, queueInfo))
             return false;
 
         const auto timestamps = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool);
@@ -87,7 +94,7 @@ Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
     u64 completedGeneration = 0u;
     {
         ScopedLock queryLock(query.m_mutex);
-        if(query.m_resetRecordingOwner.commandBuffer || query.m_cycleGeneration != 0u || query.m_recordingActive || !query.m_completedCycleSubmission.valid() || query.m_completedCycleGeneration == 0u)
+        if(!query.hasCompletedCycleWithinLock())
             return MakeUnexpected(Failure{});
         completedSubmission = query.m_completedCycleSubmission;
         completedGeneration = query.m_completedCycleGeneration;
@@ -101,16 +108,7 @@ Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
     {
         ScopedLock queryLock(query.m_mutex);
         const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query.m_timestampQueue);
-        if(
-            query.m_resetRecordingOwner.commandBuffer
-            || query.m_cycleGeneration != 0u
-            || query.m_recordingActive
-            || query.m_completedCycleGeneration != completedGeneration
-            || !VulkanTimerQueryDetail::MatchesSubmissionToken(query.m_completedCycleSubmission, completedSubmission)
-            || !queueInfo
-            || query.m_timestampValidBits == 0u
-            || queueInfo->timestampValidBits != query.m_timestampValidBits
-        )
+        if(!query.completedCycleMatchesWithinLock(completedGeneration, completedSubmission, queueInfo))
             return MakeUnexpected(Failure{});
 
         const auto timestamps = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool);

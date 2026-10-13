@@ -13,6 +13,7 @@
 #include <core/alloc/scratch.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/rhi/device.h>
+
 #include <global/sync.h>
 #include <global/simd/vector.h>
 #include <global/termination.h>
@@ -239,7 +240,7 @@ private:
 
 public:
     explicit GpuRecordedGraph(GraphicsArena& arena);
-    ~GpuRecordedGraph();
+    ~GpuRecordedGraph()noexcept;
 
 
 public:
@@ -578,6 +579,20 @@ private:
     class UnacceptedPacketsFinalizationScope;
     class UnacceptedPacketsUnwindScope;
 
+
+private:
+    // Wait for in-flight recording claims; false requires terminal handling of the unresolved exception close.
+    [[nodiscard]] static bool WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
+        if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
+            return true;
+        if(!graph.waitForSubmissionExceptionRecordingClaims(compiledGraph, recordingAttemptGeneration, submissionBinding)){
+            if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
+                return true;
+            TerminateInvariant();
+        }
+        return transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding);
+    }
+
 public:
     explicit GpuGraphSubmissionTransaction(GraphicsArena& arena)
         : m_arena(arena)
@@ -649,17 +664,6 @@ private:
 
     [[nodiscard]] Expected<SubmissionExceptionClosing> beginSubmissionExceptionClosingWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
     [[nodiscard]] bool submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept;
-    // Wait for in-flight recording claims; false requires terminal handling of the unresolved exception close.
-    [[nodiscard]] static bool WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
-        if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
-            return true;
-        if(!graph.waitForSubmissionExceptionRecordingClaims(compiledGraph, recordingAttemptGeneration, submissionBinding)){
-            if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
-                return true;
-            TerminateInvariant();
-        }
-        return transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding);
-    }
     void completeSubmissionExceptionClosingWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

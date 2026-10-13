@@ -48,16 +48,24 @@ struct CsgShapeTypeDesc{
 
     Name name = s_NameNone;
     Name shaderModule = s_NameNone;
-    ACompactString shaderModuleInclude;
+    AString<Core::Alloc::GlobalArena> shaderModuleInclude;
 
     u32 parameterByteSize = 0u;
     DefaultParameterByteVector defaultParameterBytes;
     CsgShapeBoundsCallback boundsCallback = nullptr;
+
+    explicit CsgShapeTypeDesc(Core::Alloc::GlobalArena& arena)noexcept
+        : shaderModuleInclude(arena)
+    {}
 };
 
 struct CsgShapeTypeInfo{
     CsgShapeTypeId id = s_InvalidCsgShapeTypeId;
     CsgShapeTypeDesc desc;
+
+    explicit CsgShapeTypeInfo(Core::Alloc::GlobalArena& arena)noexcept
+        : desc(arena)
+    {}
 };
 
 
@@ -94,6 +102,9 @@ static_assert(IsTriviallyCopyable_V<CsgCapsuleShapeParameters>, "CsgCapsuleShape
 
 
 class CsgShapeRegistry final : NoCopy{
+    friend bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry);
+
+
 private:
     using ShapeVector = Vector<CsgShapeTypeInfo, Core::Alloc::GlobalArena>;
     using ShapeIdMap = HashMap<Name, CsgShapeTypeId, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
@@ -114,7 +125,7 @@ public:
     [[nodiscard]] Expected<CsgShapeTypeInfo> findShapeType(CsgShapeTypeId typeId)const;
     [[nodiscard]] usize shapeTypeCount()const;
     [[nodiscard]] u64 revision()const;
-    [[nodiscard]] Expected<ACompactString> findShaderModuleInclude(const Name& shaderModule)const;
+    [[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>> findShaderModuleInclude(const Name& shaderModule, Core::Alloc::GlobalArena& resultArena)const;
 
 
 public:

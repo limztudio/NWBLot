@@ -21,7 +21,7 @@ GpuTaskGraph::ResetCompletionScope::ResetCompletionScope(GpuTaskGraph& graph)noe
     : m_graph(graph)
 {}
 
-GpuTaskGraph::ResetCompletionScope::~ResetCompletionScope(){
+GpuTaskGraph::ResetCompletionScope::~ResetCompletionScope()noexcept{
     complete();
 }
 

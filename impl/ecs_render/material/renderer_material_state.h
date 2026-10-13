@@ -7,12 +7,11 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/assets_sampler/loader.h>
+#include <impl/assets_texture/loader.h>
 
 #include <core/ecs/entity_id.h>
 #include <core/graphics/rhi/pipeline.h>
-
-#include <impl/assets_sampler/loader.h>
-#include <impl/assets_texture/loader.h>
 
 #include <global/containers.h>
 

@@ -8,6 +8,7 @@
 #include "report.h"
 
 #include <core/telemetry/codec.h>
+
 #include <global/filesystem/operations.h>
 
 
@@ -21,22 +22,14 @@ NWB_LOG_BEGIN
 
 
 struct TelemetryIngestConfig{
+    Path storageDirectory;
+
     explicit TelemetryIngestConfig(LogArena& arena)
         : storageDirectory(arena)
     {}
-
-    Path storageDirectory;
 };
 
 struct TelemetryIngestResult{
-    explicit TelemetryIngestResult(LogArena& arena)
-        : message(arena)
-        , rawPath(arena)
-        , jsonPath(arena)
-        , perfCsvPath(arena)
-        , graphPath(arena)
-    {}
-
     LogString message;
     Path rawPath;
     Path jsonPath;
@@ -50,7 +43,15 @@ struct TelemetryIngestResult{
     Telemetry::DecodeResult decode;
     TelemetryReportSummary summary;
 
-    [[nodiscard]] bool ok()const{
+    explicit TelemetryIngestResult(LogArena& arena)
+        : message(arena)
+        , rawPath(arena)
+        , jsonPath(arena)
+        , perfCsvPath(arena)
+        , graphPath(arena)
+    {}
+
+    [[nodiscard]] bool ok()const noexcept{
         return storedRaw && decode.ok() && wroteJson && wrotePerfCsv && summary.parseFailureCount == 0u;
     }
 };

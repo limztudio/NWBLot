@@ -153,7 +153,7 @@ public:
     void begin(const DisplayMetrics& metrics, u64 generation, u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin);
     void reserve(usize quadCount, usize clipDepth = 8u);
     void pushClip(const Rect& clip);
-    [[nodiscard]] bool popClip();
+    [[nodiscard]] bool popClip()noexcept;
     // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.
     [[nodiscard]] bool beginOverlay(u32 layer);
     [[nodiscard]] bool endOverlay()noexcept;
@@ -170,7 +170,7 @@ public:
     [[nodiscard]] bool drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {});
     [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
-    [[nodiscard]] Rect currentClip()const;
+    [[nodiscard]] Rect currentClip()const noexcept;
 
 
 private:

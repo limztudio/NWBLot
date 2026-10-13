@@ -231,7 +231,7 @@ AString NormalModeOptionsText();
 AString NormalModeErrorText();
 Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value);
 bool ValidateNormalModeText(AString& inOutValue);
-AStringView SourceTangentModeText(SourceTangentMode::Enum mode);
+AStringView SourceTangentModeText(SourceTangentMode::Enum mode)noexcept;
 Expected<Vec4> ParseColorText(const AStringView text);
 Path DefaultOutputPath(const AStringView inputPath);
 
@@ -241,7 +241,7 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances);
 Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector);
 Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection, const ImportOptions& options, bool wantsSkinning, const Vec4& defaultColor, Core::CpuTaskScheduler& cpuScheduler);
 
-[[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh);
+[[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept;
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler);
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler);
 

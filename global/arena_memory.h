@@ -49,12 +49,12 @@ class ArenaMemoryTracker final : NoCopy{
 public:
     constexpr ArenaMemoryTracker()noexcept = default;
     explicit ArenaMemoryTracker(const Name& ownerName, ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate);
-    ~ArenaMemoryTracker();
+    ~ArenaMemoryTracker()noexcept;
 
 
 public:
     void releaseRetainedMemory()noexcept;
-    void reset(u64 reservedBytes = 0u);
+    void reset(u64 reservedBytes = 0u)noexcept;
 
     void addReservedBytes(const u64 bytes)noexcept{
         if(bytes != 0u)

@@ -24,7 +24,7 @@ void Builder::snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draf
     frame.caret = draft.caret();
 }
 
-bool Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const{
+bool Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept{
     return
         popupAncestorsVisible() && frame.state && draft.instanceGeneration() == frame.draftGeneration
         && draft.revision() == frame.draftRevision && draft.externalRevision() == frame.draftExternalRevision
@@ -36,15 +36,15 @@ bool Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel
     ;
 }
 
-bool Builder::integerEditMatches(const IntegerEditFrame& frame)const{
+bool Builder::integerEditMatches(const IntegerEditFrame& frame)const noexcept{
     return frame.model && frame.model->revision() == frame.revision && numericDraftMatches(frame, frame.model->draft());
 }
 
-bool Builder::floatEditMatches(const FloatEditFrame& frame)const{
+bool Builder::floatEditMatches(const FloatEditFrame& frame)const noexcept{
     return frame.model && frame.model->revision() == frame.revision && numericDraftMatches(frame, frame.model->draft());
 }
 
-bool Builder::numericEditMatches(const Item& item)const{
+bool Builder::numericEditMatches(const Item& item)const noexcept{
     if(item.integerEdit != s_LayoutNoParent){
         if(item.integerEdit >= m_scope->m_integerEdits.size() || !integerEditMatches(m_scope->m_integerEdits[item.integerEdit]))
             return false;

@@ -68,7 +68,7 @@ namespace GpuTaskGraphCompilerDetail{
 
     const GpuSubmissionPacketId sourcePacket = compiledSourceTask ? compiledSourceTask->packet : GpuSubmissionPacketId{};
     const GpuSubmissionPacketId destinationPacket = compiledDestinationTask ? compiledDestinationTask->packet : GpuSubmissionPacketId{};
-    const auto validCompiledPacket = [&compiledPlan](const GpuSubmissionPacketId packet){
+    const auto validCompiledPacket = [&compiledPlan](const GpuSubmissionPacketId packet)noexcept{
         return packet.valid() && packet.generation == compiledPlan.planGeneration && packet.index < compiledPlan.packets.size();
     };
     if(

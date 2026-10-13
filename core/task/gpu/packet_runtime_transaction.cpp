@@ -9,6 +9,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/gpu_timing.h>
+
 #include <global/exception.h>
 #include <global/termination.h>
 

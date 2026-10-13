@@ -1117,7 +1117,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     if(!MatrixIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
         return MakeUnexpected(Failure{});
 
-    const SIMDVectorSingle quaternion = QuaternionRotationMatrix(MatrixTranspose(matrix));
+    const SIMDVectorSingle quaternion = QuaternionRotationMatrix(matrix);
     if(QuaternionIsNaN(quaternion) || QuaternionIsInfinite(quaternion))
         return MakeUnexpected(Failure{});
     return quaternion;

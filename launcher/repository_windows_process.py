@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import math
 import ntpath
 import os
-from typing import Callable, Optional, Tuple
+from typing import Optional, Tuple
 
 
 WIN_FUNC_IS_WOW64 = "WINFUNCTYPE"
@@ -168,9 +168,8 @@ class WindowsProcessApi:
         self._user32.PostMessageW.restype = ctypes.c_int
 
 
-def normalize_windows_image_path(path, resolve_path: Optional[Callable[[str], str]] = None) -> str:
-    resolver = resolve_path or os.path.realpath
-    resolved = ntpath.normcase(ntpath.normpath(os.fspath(resolver(os.fspath(path)))))
+def normalize_windows_image_path(path) -> str:
+    resolved = ntpath.normcase(ntpath.normpath(os.fspath(os.path.realpath(os.fspath(path)))))
     if resolved.startswith(UNC_UNC_PREFIX):
         return UNC_ROOT_PREFIX + resolved[UNC_UNC_TRIM:]
     if resolved.startswith(UNC_DEVICE_PREFIX):
@@ -178,10 +177,10 @@ def normalize_windows_image_path(path, resolve_path: Optional[Callable[[str], st
     return resolved
 
 
-def stop_processes_by_image_path(executable, grace_timeout_seconds: float, hard_timeout_seconds: float, api=None, resolve_path: Optional[Callable[[str], str]] = None, current_process_id: Optional[int] = None,) -> Tuple[WindowsProcessStopResult, ...]:
-    process_api = api or WindowsProcessApi()
-    target_image_path = normalize_windows_image_path(executable, resolve_path)
-    own_pid = os.getpid() if current_process_id is None else current_process_id
+def stop_processes_by_image_path(executable, grace_timeout_seconds: float, hard_timeout_seconds: float) -> Tuple[WindowsProcessStopResult, ...]:
+    process_api = WindowsProcessApi()
+    target_image_path = normalize_windows_image_path(executable)
+    own_pid = os.getpid()
     results = []
 
     for pid in process_api.process_ids():
@@ -194,7 +193,7 @@ def stop_processes_by_image_path(executable, grace_timeout_seconds: float, hard_
 
         try:
             image_path = process_api.query_process_image_path(handle)
-            if image_path is None or normalize_windows_image_path(image_path, resolve_path) != target_image_path:
+            if image_path is None or normalize_windows_image_path(image_path) != target_image_path:
                 continue
 
             graceful_close_requested = process_api.request_close(pid)
@@ -213,8 +212,8 @@ def stop_processes_by_image_path(executable, grace_timeout_seconds: float, hard_
     return tuple(results)
 
 
-def run_bounded_process(process, run_seconds: float, grace_timeout_seconds: float, hard_timeout_seconds: float, api=None,) -> WindowsBoundedRunResult:
-    process_api = api or WindowsProcessApi()
+def run_bounded_process(process, run_seconds: float, grace_timeout_seconds: float, hard_timeout_seconds: float) -> WindowsBoundedRunResult:
+    process_api = WindowsProcessApi()
     handle = process_api.open_process(process.pid)
     if handle is None:
         exit_code = process.poll()

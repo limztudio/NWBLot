@@ -23,5 +23,5 @@ target_sources(global_foundation PRIVATE "${CMAKE_CURRENT_LIST_DIR}/simd/macro.h
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector_arithmetic.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_compare.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_construct.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_exp_log.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_interp.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector_inverse_trig.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_lane.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_matrix.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_transform.h" "${CMAKE_CURRENT_LIST_DIR}/simd/vector_trig.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector.h" "${CMAKE_CURRENT_LIST_DIR}/scope_exit.h" "${CMAKE_CURRENT_LIST_DIR}/span.h" "${CMAKE_CURRENT_LIST_DIR}/string_view.h" "${CMAKE_CURRENT_LIST_DIR}/sha256.h"
-    "${CMAKE_CURRENT_LIST_DIR}/termination.h" "${CMAKE_CURRENT_LIST_DIR}/terminal_entry.h" "${CMAKE_CURRENT_LIST_DIR}/texture_payload.h" "${CMAKE_CURRENT_LIST_DIR}/numeric_text.h" "${CMAKE_CURRENT_LIST_DIR}/json_text.h")
+    "${CMAKE_CURRENT_LIST_DIR}/error_code.h" "${CMAKE_CURRENT_LIST_DIR}/floating_point_environment.h" "${CMAKE_CURRENT_LIST_DIR}/termination.h" "${CMAKE_CURRENT_LIST_DIR}/terminal_entry.h" "${CMAKE_CURRENT_LIST_DIR}/texture_payload.h" "${CMAKE_CURRENT_LIST_DIR}/numeric_text.h" "${CMAKE_CURRENT_LIST_DIR}/json_text.h")
 

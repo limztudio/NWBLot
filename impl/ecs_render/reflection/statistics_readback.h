@@ -9,6 +9,7 @@
 #include "history.h"
 
 #include <core/alloc/global.h>
+
 #include <global/arena_object.h>
 #include <global/refcount_ptr.h>
 #include <global/sync.h>

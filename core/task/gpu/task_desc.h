@@ -252,7 +252,6 @@ struct GpuTaskDesc{
     usize resourceUseCount = 0u;
     const GpuTaskResourceSetUse* resourceSetUses = nullptr;
     usize resourceSetUseCount = 0u;
-    // Appended so positional aggregate initializers retain their existing field layout.
     GpuTaskTimingMetadata timing;
     const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
     usize resourceVersionUseCount = 0u;

@@ -8,6 +8,7 @@
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
+
 #include <global/algorithm.h>
 #include <global/binary.h>
 
@@ -192,18 +193,6 @@ bool Texture::validatePayload()const{
 
 
 bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
-    m_colorSpace = TextureColorSpace::Linear;
-    m_hasAlpha = false;
-    m_width = 0u;
-    m_height = 0u;
-    m_dimension = TextureDimension::Texture2D;
-    m_depth = 1u;
-    m_payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    m_alphaMode = TextureAlphaMode::Opaque;
-    m_alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-    m_mipLevels.clear();
-    m_payloadBytes.clear();
-
     if(!checkVirtualPath(TextureBinaryPayload::s_TextureLoadBinaryContext))
         return false;
 
@@ -242,19 +231,35 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinary> mipBinaries(m_mipLevels.get_allocator().arena());
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, mipCount, mipBinaries, TextureBinaryPayload::s_TextureLoadBinaryContext, NWB_TEXT("mip levels")))
+    const auto mipByteCount = ComputeBinaryVectorPayloadBytes<TextureBinaryPayload::MipLevelBinary>(mipCount);
+    if(!mipByteCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: mip payload byte size overflows"));
         return false;
+    }
+    if(!BinaryDetail::CanReadBytes(binary, cursor, *mipByteCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: malformed mip levels payload"));
+        return false;
+    }
 
     const usize payloadByteCount = static_cast<usize>(payloadByteCount64);
-    if(!BinaryDetail::CanReadBytes(binary, cursor, payloadByteCount)){
+    if(!BinaryDetail::CanReadBytes(binary, cursor + *mipByteCount, payloadByteCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: texture payload is truncated"));
         return false;
     }
 
     MipLevelVector mipLevels(m_mipLevels.get_allocator().arena());
-    mipLevels.reserve(mipBinaries.size());
-    for(const TextureBinaryPayload::MipLevelBinary& mipBinary : mipBinaries){
+    if(!BinaryDetail::CanStoreValueCount(mipLevels, mipCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: mip count exceeds runtime container limits"));
+        return false;
+    }
+    mipLevels.reserve(mipCount);
+    for(u32 mipIndex = 0u; mipIndex < mipCount; ++mipIndex){
+        const auto mipBinaryResult = ReadPOD<TextureBinaryPayload::MipLevelBinary>(binary, cursor);
+        if(!mipBinaryResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: malformed mip level {}"), mipIndex);
+            return false;
+        }
+        const TextureBinaryPayload::MipLevelBinary& mipBinary = *mipBinaryResult;
         if(mipBinary.reserved != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid texture mip payload flags"));
             return false;
@@ -280,18 +285,12 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!Core::Assets::ReadCompletePayload(binary, cursor, TextureBinaryPayload::s_TextureLoadBinaryContext))
         return false;
 
-    m_colorSpace = static_cast<TextureColorSpace::Enum>(colorSpace);
-    m_hasAlpha = alphaMode != TextureAlphaMode::Opaque;
-    m_width = width;
-    m_height = height;
-    m_dimension = dimension;
-    m_depth = depth;
-    m_payloadFormat = payloadFormat;
-    m_alphaMode = alphaMode;
-    m_alphaConstantUnorm8 = alphaConstantUnorm8;
-    m_mipLevels = Move(mipLevels);
-    m_payloadBytes = Move(payloadBytes);
-    return validatePayload();
+    Texture candidate(m_mipLevels.get_allocator().arena(), virtualPath());
+    candidate.setPayload(static_cast<TextureColorSpace::Enum>(colorSpace), alphaMode != TextureAlphaMode::Opaque, width, height, Move(mipLevels), Move(payloadBytes), dimension, depth, payloadFormat, alphaMode, alphaConstantUnorm8);
+    if(!candidate.validatePayload())
+        return false;
+    *this = Move(candidate);
+    return true;
 }
 
 

@@ -87,7 +87,7 @@ static constexpr usize s_PerfCsvBytesPerEvent = 128u;
     return index < s_TelemetryReportEventKindCount ? index : static_cast<usize>(Telemetry::EventKind::Unknown);
 }
 
-void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex){
+void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex)noexcept{
     if(!summary.hasFrameRange){
         summary.hasFrameRange = true;
         summary.minFrameIndex = frameIndex;
@@ -123,7 +123,7 @@ void AppendPerfCsvRow(AString<TelemetryArena>& out, const Telemetry::PerfTimingS
     );
 }
 
-void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPayload& payload){
+void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPayload& payload)noexcept{
     if(payload.source == Telemetry::PerfTimingSource::Cpu){
         ++summary.cpuTimingEventCount;
         summary.cpuTimingSampleCount += payload.stats.sampleCount;
@@ -140,7 +140,7 @@ void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPaylo
     }
 }
 
-void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphPayload& payload){
+void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphPayload& payload)noexcept{
     ++summary.frameGraphFrameCount;
     summary.frameGraphNodeCount += payload.nodes.size();
     summary.frameGraphEdgeCount += payload.edges.size();

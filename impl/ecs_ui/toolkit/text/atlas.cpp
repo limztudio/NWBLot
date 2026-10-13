@@ -137,7 +137,7 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
     return true;
 }
 
-const AtlasGlyph* GlyphAtlas::find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const{
+const AtlasGlyph* GlyphAtlas::find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const noexcept{
     const auto found = m_index.find(GlyphKey{ face.get(), glyphId, pixelSize });
     return found == m_index.end() ? nullptr : &m_glyphs[found.value()];
 }

@@ -11,14 +11,13 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
-
-#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -631,7 +630,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             clearDesc.setIdentity(identity).setMarkerLabel(label).setScheduling(clearScheduling).setDependencies(&buildDependency, 1u);
             return m_deferredLightingTaskGraph.addClearBufferTask(clearDesc, Core::GpuClearBufferTaskDesc{ .destination = destination, .clearValue = clearValue, });
         };
-        const auto appendPureSoftwareBvhClear = [&](const Core::GpuTaskId clearTask){
+        const auto appendPureSoftwareBvhClear = [&](const Core::GpuTaskId clearTask)noexcept{
             if(!clearTask.valid())
                 return false;
             if(!m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid())

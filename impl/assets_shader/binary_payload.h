@@ -44,7 +44,7 @@ namespace BytecodeValidationFailure{
 }
 
 template<typename BinaryContainer>
-[[nodiscard]] inline BytecodeValidationFailure::Enum ValidateBytecode(const BinaryContainer& binary){
+[[nodiscard]] inline BytecodeValidationFailure::Enum ValidateBytecode(const BinaryContainer& binary)noexcept(noexcept(IsValidBytecodeSize(binary.size())) && noexcept(ReadPOD<u32>(binary, DeclVal<usize&>()))){
     if(!IsValidBytecodeSize(binary.size()))
         return BytecodeValidationFailure::InvalidSize;
 

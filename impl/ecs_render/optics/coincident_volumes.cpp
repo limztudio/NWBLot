@@ -6,11 +6,11 @@
 
 #include <impl/ecs_render/components.h>
 #include <impl/ecs_render/material/material_system.h>
-
-#include <core/ecs/world.h>
 #include <impl/ecs_csg/components.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_scene/components.h>
+
+#include <core/ecs/world.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +119,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         return;
     }
 
-    const auto mergingEnabled = [](const RendererComponent& renderer){
+    const auto mergingEnabled = [](const RendererComponent& renderer)noexcept{
         return renderer.visible && (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone));
     };
     // Count opt-ins first; opaque-heavy worlds need no candidate allocation.

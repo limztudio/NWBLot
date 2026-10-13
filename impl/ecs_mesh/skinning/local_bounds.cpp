@@ -3,10 +3,12 @@
 
 
 #include "local_bounds.h"
-
 #include "resource_names.h"
 #include "runtime_instance.h"
 #include "timing_names.h"
+
+#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
+#include <impl/assets/graphics/skinned_mesh/constants.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -14,8 +16,6 @@
 #include <core/graphics/backend_selection/backend.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
-#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
-#include <impl/assets/graphics/skinned_mesh/constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

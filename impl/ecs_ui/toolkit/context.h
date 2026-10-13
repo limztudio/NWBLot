@@ -39,7 +39,7 @@ private:
     };
 
     struct StateClaimHash{
-        [[nodiscard]] usize operator()(const StateClaim& claim)const;
+        [[nodiscard]] usize operator()(const StateClaim& claim)const noexcept;
     };
 
     using StateClaims = HashSet<StateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<StateClaim>>;
@@ -56,11 +56,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool beginFrame(u64 generation);
+    [[nodiscard]] bool beginFrame(u64 generation)noexcept;
     [[nodiscard]] bool beginRoot(const WidgetRoot& root);
-    [[nodiscard]] bool endRoot();
+    [[nodiscard]] bool endRoot()noexcept;
     [[nodiscard]] bool pushScope(AStringView stableKey);
-    [[nodiscard]] bool popScope();
+    [[nodiscard]] bool popScope()noexcept;
     [[nodiscard]] WidgetState* declare(AStringView stableKey, WidgetKind::Enum kind);
     // Compound controls declare internal scopes from their owning widget instead of borrowing the current layout scope.
     [[nodiscard]] WidgetState* declarePart(const WidgetState& owner, AStringView stableKey, WidgetKind::Enum kind);
@@ -74,12 +74,12 @@ public:
     [[nodiscard]] Expected<PointerGesture> takePartPointerGesture(const WidgetState& owner, WidgetId part, bool enabled);
     // Registration reserves the declaration-order layer; activation may be repeated during deferred painting.
     [[nodiscard]] bool registerPopupScope(const WidgetState& state, PopupScope scope);
-    [[nodiscard]] bool activatePopupScope(const PopupToken& token);
-    [[nodiscard]] bool updatePopupScope(const PopupToken& token, PopupScope scope);
+    [[nodiscard]] bool activatePopupScope(const PopupToken& token)noexcept;
+    [[nodiscard]] bool updatePopupScope(const PopupToken& token, PopupScope scope)noexcept;
     [[nodiscard]] bool beginPopupScope(const WidgetState& state, PopupScope scope);
-    [[nodiscard]] bool endPopupScope(bool visible);
+    [[nodiscard]] bool endPopupScope(bool visible)noexcept;
     // Discard an inactive scope and its descendants without disturbing the current parent activation.
-    void discardPopupScope(const PopupToken& token);
+    void discardPopupScope(const PopupToken& token)noexcept;
     [[nodiscard]] bool hasPopupScope(const PopupToken& token)const noexcept;
     [[nodiscard]] WidgetId scopeId()const noexcept{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
     [[nodiscard]] PopupToken popupToken()const noexcept{ return m_currentPopup; }
@@ -90,7 +90,7 @@ public:
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
     [[nodiscard]] bool commitFrame(u64 generation);
     void abandonFrame();
-    void resetInput();
+    void resetInput()noexcept;
     // Retire removed/hidden host roots even while a GPU frame is pending.
     void retainRoots(const WidgetRoot* roots, usize count);
     void fail()noexcept{ m_failed = true; }

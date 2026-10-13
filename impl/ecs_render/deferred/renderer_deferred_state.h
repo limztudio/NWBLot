@@ -7,11 +7,10 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/deferred/presentation_settings.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
 
 #include <core/graphics/rhi/pipeline.h>
 #include <core/graphics/rhi/pipeline_state.h>
-
-#include <impl/assets/graphics/scene/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -120,7 +120,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         return;
     }
 
-    const auto buildRegion = [&](const ShaderTable::DispatchRegionSnapshot& regionSnapshot, const bool required) -> Expected<VkStridedDeviceAddressRegionKHR>{
+    const auto buildRegion = [&](const ShaderTable::DispatchRegionSnapshot& regionSnapshot, const bool required)noexcept -> Expected<VkStridedDeviceAddressRegionKHR>{
         Buffer* const buffer = regionSnapshot.buffer.get();
         if(!buffer){
             if(required || regionSnapshot.offset != 0u || regionSnapshot.recordCount != 0u || regionSnapshot.selectedGroupCount != 0u)

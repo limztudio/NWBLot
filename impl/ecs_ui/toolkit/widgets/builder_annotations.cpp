@@ -23,7 +23,7 @@ Builder::Item* Builder::annotationAnchor(const AStringView stableKey)noexcept{
     return nullptr;
 }
 
-bool Builder::listStateMatches(const ListFrame& frame)const{
+bool Builder::listStateMatches(const ListFrame& frame)const noexcept{
     return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
 }
 
@@ -68,7 +68,7 @@ bool Builder::validateDeferredSources()const{
     return true;
 }
 
-bool Builder::validateDeferredStates()const{
+bool Builder::validateDeferredStates()const noexcept{
     // No source callbacks run after these model checks until every scope's loans have been released.
     for(const auto& frame : m_scope->m_sliders){
         if(!sliderMatches(*frame))
@@ -109,7 +109,7 @@ bool Builder::validateDeferredStates()const{
     return true;
 }
 
-void Builder::releaseDeferredLoans(){
+void Builder::releaseDeferredLoans()noexcept{
     // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
     m_scope->m_radioGroups.clear();
     m_scope->m_sliders.clear();

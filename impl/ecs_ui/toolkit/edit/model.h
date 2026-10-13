@@ -88,7 +88,7 @@ public:
     [[nodiscard]] bool selectAll();
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
-    [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false);
+    [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false)noexcept;
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
     [[nodiscard]] Expected<EditWordRange> wordRangeAt(usize position)const noexcept;
     [[nodiscard]] bool replaceSelection(AStringView text);
@@ -102,7 +102,7 @@ public:
     [[nodiscard]] bool redo();
     [[nodiscard]] bool canUndo()const noexcept{ return m_historyCursor != 0u; }
     [[nodiscard]] bool canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
-    [[nodiscard]] bool beginComposition();
+    [[nodiscard]] bool beginComposition()noexcept;
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
     [[nodiscard]] bool updateComposition(AStringView text, usize anchor, usize caret);
     [[nodiscard]] bool commitComposition(AStringView text);
@@ -114,12 +114,12 @@ private:
     [[nodiscard]] bool isBoundary(usize position)const noexcept;
     [[nodiscard]] usize previousBoundary(usize position)const noexcept;
     [[nodiscard]] usize nextBoundary(usize position)const noexcept;
-    [[nodiscard]] usize wordBoundary(usize position, bool forward)const;
+    [[nodiscard]] usize wordBoundary(usize position, bool forward)const noexcept;
     [[nodiscard]] bool replaceRange(usize begin, usize end, AStringView replacement);
-    [[nodiscard]] bool validateText(AStringView text)const;
+    [[nodiscard]] bool validateText(AStringView text)const noexcept;
     [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView text)const;
     void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret, AStringView after, usize afterAnchor, usize afterCaret);
-    void clearHistory();
+    void clearHistory()noexcept;
     void advanceRevision()noexcept;
     void advanceSelectionGeneration()noexcept;
     void advanceCompositionGeneration()noexcept;

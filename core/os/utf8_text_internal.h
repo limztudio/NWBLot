@@ -58,6 +58,15 @@ namespace Utf8TextDetail{
         return MakeUnexpected(Failure{});
     return codePoint;
 }
+
+[[nodiscard]] inline bool IsValidText(const AStringView text)noexcept{
+    usize offset = 0u;
+    while(offset < text.size()){
+        if(!DecodeCodePoint(text, offset))
+            return false;
+    }
+    return true;
+}
 };
 
 

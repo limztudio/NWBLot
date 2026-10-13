@@ -5,6 +5,7 @@
 #include "graph_resource_uses.h"
 
 #include <core/common/log.h>
+
 #include <global/hash_utils.h>
 
 
@@ -113,7 +114,7 @@ struct ResourceUseCollector : NoCopy{
 
     void writeTo(Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses)const{
         outUses.resize(m_count);
-        const auto writeUse = [&](const Core::GpuGraphResourceId resource, const ResourceUseInfo& info){
+        const auto writeUse = [&](const Core::GpuGraphResourceId resource, const ResourceUseInfo& info)noexcept{
             outUses[info.outputIndex] = Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = info.requiredState, .access = info.access, };
         };
         if(m_index){

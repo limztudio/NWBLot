@@ -36,7 +36,7 @@ BuilderScopeFrame::BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
     m_stack.reserve(64u);
 }
 
-void BuilderScopeFrame::reset(){
+void BuilderScopeFrame::reset()noexcept{
     m_panelActive = false;
     m_windowActive = false;
     m_window.state = nullptr;

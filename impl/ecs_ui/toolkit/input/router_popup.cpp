@@ -86,7 +86,7 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
     return true;
 }
 
-bool InputRouter::validPopupTarget(const HitTarget& target)const{
+bool InputRouter::validPopupTarget(const HitTarget& target)const noexcept{
     if(!target.popup.widget.valid()){
         return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
     }
@@ -105,14 +105,14 @@ const PopupScope* InputRouter::popupScope(const PopupToken& token)const noexcept
     return nullptr;
 }
 
-bool InputRouter::allowedByPopup(const HitTarget& target)const{
+bool InputRouter::allowedByPopup(const HitTarget& target)const noexcept{
     if(m_popups.empty())
         return !target.popup.widget.valid();
     const PopupRecord& top = m_popups.back();
     return !top.closing && target.popup == top.scope.token;
 }
 
-bool InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const{
+bool InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
     PopupToken current = token;
     for(usize depth = 0u; depth < s_InputMaxPopups && current.valid(); ++depth){
         if(current == ancestor)

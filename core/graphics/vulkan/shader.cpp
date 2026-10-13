@@ -163,7 +163,9 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     if(it != m_shaders.end())
         return ShaderHandle(it.value().get(), ShaderHandle::deleter_type(&m_context.objectArena));
 
-    Shader* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
+    ShaderHandle shader(NewArenaObject<Shader>(m_context.objectArena, m_context), ShaderHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!shader)
+        return nullptr;
     shader->m_desc.shaderType = shaderType;
     shader->m_desc.entryName = entryName;
     NWB_ASSERT(!m_spirvWords.empty());
@@ -171,7 +173,6 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
     const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), entryName, shaderType, "shader library");
     if(!entryPointName){
-        DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
     shader->m_entryPointName = *entryPointName;
@@ -184,14 +185,16 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(shader->m_entryPointName), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
 
     shader->m_desc.entryName = shader->m_entryPointName;
     key.entryName = shader->m_entryPointName;
-    m_shaders.emplace(Move(key), Handle<Shader>(shader, Handle<Shader>::deleter_type(&m_context.objectArena), s_AdoptRef));
-    return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));
+    if(!m_shaders.emplace(Move(key), shader).second){
+        NWB_ASSERT(false);
+        return nullptr;
+    }
+    return shader;
 }
 
 
@@ -199,19 +202,19 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
-    auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
+    ShaderHandle shader(NewArenaObject<Shader>(m_context.objectArena, m_context), ShaderHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!shader)
+        return nullptr;
     shader->m_desc = d;
     auto words = __hidden_vulkan_shader::BuildValidatedSpirvWords(binary, binarySize, m_context.objectArena);
     if(!words){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
-        DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
     shader->m_spirvWords = Move(*words);
 
     const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), d.entryName, d.shaderType, "standalone shader");
     if(!entryPointName){
-        DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
     shader->m_entryPointName = *entryPointName;
@@ -226,10 +229,9 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
-    return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return shader;
 }
 
 ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants){
@@ -243,7 +245,9 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
     }
 
     Shader& base = baseShader;
-    auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
+    ShaderHandle shader(NewArenaObject<Shader>(m_context.objectArena, m_context), ShaderHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!shader)
+        return nullptr;
     shader->m_desc = base.m_desc;
     NWB_ASSERT(!base.m_spirvWords.empty());
     shader->m_spirvWords = base.m_spirvWords;
@@ -265,7 +269,6 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
 
@@ -273,7 +276,7 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
         shader->m_specializationData.resize(numConstants);
         shader->m_specializationEntries.resize(numConstants);
 
-        auto fillConstant = [&](usize i){
+        auto fillConstant = [&](usize i)noexcept{
             VkSpecializationMapEntry& entry = shader->m_specializationEntries[i];
             entry.constantID = constants[i].constantID;
             entry.offset = static_cast<u32>(i * sizeof(u32));
@@ -290,20 +293,21 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
         }
     }
 
-    return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return shader;
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
-    auto* lib = NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context);
+    ShaderLibraryHandle lib(NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context), ShaderLibraryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!lib)
+        return nullptr;
     auto words = __hidden_vulkan_shader::BuildValidatedSpirvWords(binary, binarySize, m_context.objectArena);
     if(!words){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload"));
-        DestroyArenaObject(m_context.objectArena, lib);
         return nullptr;
     }
     lib->m_spirvWords = Move(*words);
 
-    return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return lib;
 }
 
 
@@ -410,7 +414,9 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         }
     }
 
-    auto* layout = NewArenaObject<InputLayout>(m_context.objectArena, m_context);
+    InputLayoutHandle layout(NewArenaObject<InputLayout>(m_context.objectArena, m_context), InputLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!layout)
+        return nullptr;
     if(attributeCount > 0){
         static_assert(IsTriviallyCopyable_V<VertexAttributeDesc>, "vertex attribute descriptors must be trivially copyable");
         layout->m_attributes.reserve(attributeCount);
@@ -427,7 +433,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     }
 
     layout->m_vkAttributes.resize(attributeCount);
-    auto fillVkAttribute = [&](usize i){
+    auto fillVkAttribute = [&](usize i)noexcept{
         const auto& attr = layout->m_attributes[i];
 
         VkVertexInputAttributeDescription vkAttr{};
@@ -446,7 +452,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             fillVkAttribute(i);
     }
 
-    return InputLayoutHandle(layout, InputLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return layout;
 }
 
 

@@ -3,6 +3,7 @@
 
 
 #include "asset.h"
+#include "arena_names.h"
 #include "binary_payload.h"
 
 #include <core/assets/auto_registration.h>
@@ -49,11 +50,11 @@ u32 Skeleton::findJointIndex(const Name jointName)const{
     return foundJoint.value();
 }
 
-bool Skeleton::validatePayload()const{
+bool Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
-    if(m_joints.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton has no joints"));
+    if(m_joints.empty() || m_joints.size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32"));
         return false;
     }
 
@@ -62,7 +63,7 @@ bool Skeleton::validatePayload()const{
         return false;
     }
 
-    Core::Assets::AssetVector<u8> namedJoints(m_joints.get_allocator().arena());
+    Vector<u8, Core::Alloc::ScratchArena> namedJoints(scratchArena);
     namedJoints.resize(m_joints.size(), 0u);
     for(const auto& jointLookup : m_jointIndices){
         const Name jointName = jointLookup.first;
@@ -81,16 +82,12 @@ bool Skeleton::validatePayload()const{
         }
         namedJoints[jointIndex] = 1u;
     }
-    for(usize jointIndex = 0u; jointIndex < namedJoints.size(); ++jointIndex){
-        if(namedJoints[jointIndex] != 0u)
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has no name"), jointIndex);
-        return false;
-    }
-
     for(usize i = 0u; i < m_joints.size(); ++i){
         const SkeletonJoint& joint = m_joints[i];
+        if(!MatrixIsAffine(LoadFloat(joint.localBindPose), 0.0f)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has non-finite local bind pose"), i);
+            return false;
+        }
         if(joint.parentIndex != s_SkeletonInvalidJointIndex && joint.parentIndex >= i){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}"), i, joint.parentIndex);
             return false;
@@ -101,23 +98,48 @@ bool Skeleton::validatePayload()const{
 }
 
 bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
-    m_joints.clear();
-    m_jointIndices.clear();
-
+    Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, cursor, SkeletonBinaryPayload::s_SkeletonMagic, NWB_TEXT("Skeleton::loadBinary"), NWB_TEXT("skeleton"));
     if(!headerResult)
         return false;
     const SkeletonBinaryPayload::HeaderBinary& header = *headerResult;
 
-    Core::Assets::AssetVector<SkeletonBinaryPayload::JointBinary> jointBinaries(m_joints.get_allocator().arena());
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.jointCount, jointBinaries, NWB_TEXT("Skeleton::loadBinary"), NWB_TEXT("joints")))
+    if(header.padding0 != 0u || header.jointCount > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: reserved header fields or joint count are invalid"));
         return false;
+    }
+    const auto jointByteCount = ComputeBinaryVectorPayloadBytes<SkeletonBinaryPayload::JointBinary>(header.jointCount);
+    if(!jointByteCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint payload byte size overflows"));
+        return false;
+    }
+    if(!BinaryDetail::CanReadBytes(binary, cursor, *jointByteCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed joints payload"));
+        return false;
+    }
 
-    m_joints.reserve(jointBinaries.size());
-    for(const SkeletonBinaryPayload::JointBinary& jointBinary : jointBinaries){
+    Skeleton candidate(m_joints.get_allocator().arena(), virtualPath());
+    const usize jointCount = static_cast<usize>(header.jointCount);
+    if(!BinaryDetail::CanStoreValueCount(candidate.m_joints, jointCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint count exceeds runtime container limits"));
+        return false;
+    }
+    candidate.m_joints.reserve(jointCount);
+    candidate.m_jointIndices.reserve(jointCount);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const auto jointBinaryResult = ReadPOD<SkeletonBinaryPayload::JointBinary>(binary, cursor);
+        if(!jointBinaryResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed joint {}"), jointIndex);
+            return false;
+        }
+        const SkeletonBinaryPayload::JointBinary& jointBinary = *jointBinaryResult;
+        if(jointBinary.padding0 != 0u || jointBinary.padding1[0u] != 0u || jointBinary.padding1[1u] != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: reserved joint fields must be zero"));
+            return false;
+        }
         const Name jointName(jointBinary.nameHash);
-        if(!m_jointIndices.emplace(jointName, static_cast<u32>(m_joints.size())).second){
+        if(!candidate.m_jointIndices.emplace(jointName, static_cast<u32>(candidate.m_joints.size())).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), StringConvert(jointName.resolvedText()));
             return false;
         }
@@ -125,10 +147,13 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         SkeletonJoint joint;
         joint.parentIndex = jointBinary.parentIndex;
         joint.localBindPose = jointBinary.localBindPose;
-        m_joints.push_back(joint);
+        candidate.m_joints.push_back(joint);
     }
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary")) && validatePayload();
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary")) || !candidate.validatePayload(scratchArena))
+        return false;
+    *this = Move(candidate);
+    return true;
 }
 
 

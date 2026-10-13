@@ -96,12 +96,12 @@ bool GpuInitialStateHandoffValidation::validate(){
 
     m_permanentTexturesIndexed = false;
     m_permanentBuffersIndexed = false;
-    const auto textureResource = [](const auto& state){ return state.texture; };
-    const auto bufferResource = [](const auto& state){ return state.buffer; };
+    const auto textureResource = [](const auto& state)noexcept{ return state.texture; };
+    const auto bufferResource = [](const auto& state)noexcept{ return state.buffer; };
     if(m_states.m_permanentTextureStates.size() > s_LinearStateCountLimit){
         if(!m_permanentTextureIndex)
             m_permanentTextureIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_permanentTextureStates, *m_permanentTextureIndex, textureResource, [](const auto& lhs, const auto& rhs){ return LessThan<Texture*>{}(lhs.texture, rhs.texture); }
+        BuildRecordIndex(m_states.m_permanentTextureStates, *m_permanentTextureIndex, textureResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Texture*>{}(lhs.texture, rhs.texture); }
         );
         if(!DeduplicatePermanentIndex(m_states.m_permanentTextureStates, *m_permanentTextureIndex, textureResource))
             return false;
@@ -116,7 +116,7 @@ bool GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_permanentBufferStates.size() > s_LinearStateCountLimit){
         if(!m_permanentBufferIndex)
             m_permanentBufferIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_permanentBufferStates, *m_permanentBufferIndex, bufferResource, [](const auto& lhs, const auto& rhs){ return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer); }
+        BuildRecordIndex(m_states.m_permanentBufferStates, *m_permanentBufferIndex, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer); }
         );
         if(!DeduplicatePermanentIndex(m_states.m_permanentBufferStates, *m_permanentBufferIndex, bufferResource))
             return false;
@@ -132,7 +132,7 @@ bool GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_textureStates.size() > s_LinearStateCountLimit){
         if(!m_textureIndex)
             m_textureIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_textureStates, *m_textureIndex, textureResource, [](const auto& lhs, const auto& rhs){
+        BuildRecordIndex(m_states.m_textureStates, *m_textureIndex, textureResource, [](const auto& lhs, const auto& rhs)noexcept{
                 if(lhs.texture != rhs.texture)
                     return LessThan<Texture*>{}(lhs.texture, rhs.texture);
                 if(lhs.mipLevel != rhs.mipLevel)
@@ -171,7 +171,7 @@ bool GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_bufferStates.size() > s_LinearStateCountLimit){
         if(!m_bufferIndex)
             m_bufferIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_bufferStates, *m_bufferIndex, bufferResource, [](const auto& lhs, const auto& rhs){
+        BuildRecordIndex(m_states.m_bufferStates, *m_bufferIndex, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{
                 if(lhs.buffer != rhs.buffer)
                     return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer);
                 return lhs.range.byteOffset < rhs.range.byteOffset;
@@ -207,7 +207,7 @@ bool GpuInitialStateHandoffValidation::validate(){
 Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextureState(Texture* const texture)const noexcept{
     ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentTexturesIndexed && texture){
-        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(m_states.m_permanentTextureStates, *m_permanentTextureIndex, texture, [](const auto& state){ return state.texture; }
+        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(m_states.m_permanentTextureStates, *m_permanentTextureIndex, texture, [](const auto& state)noexcept{ return state.texture; }
         );
     }
     for(const auto& state : m_states.m_permanentTextureStates){
@@ -225,7 +225,7 @@ Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextur
 Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentBufferState(Buffer* const buffer)const noexcept{
     ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentBuffersIndexed && buffer){
-        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(m_states.m_permanentBufferStates, *m_permanentBufferIndex, buffer, [](const auto& state){ return state.buffer; }
+        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(m_states.m_permanentBufferStates, *m_permanentBufferIndex, buffer, [](const auto& state)noexcept{ return state.buffer; }
         );
     }
     for(const auto& state : m_states.m_permanentBufferStates){

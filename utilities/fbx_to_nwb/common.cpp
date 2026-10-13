@@ -16,6 +16,19 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_common{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr OutputAssetType::Enum s_OutputAssetTypeValues[] = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin, };
+static constexpr NormalMode::Enum s_NormalModeValues[] = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate, };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename TextFunction, typename ParseFunction>
 static bool ValidateOptionText(AString& inOutValue, TextFunction textFunction, ParseFunction parseValue){
     inOutValue = NormalizeOptionText(Move(inOutValue));
@@ -28,11 +41,7 @@ static bool ValidateOptionText(AString& inOutValue, TextFunction textFunction, P
     return false;
 }
 
-static constexpr OutputAssetType::Enum s_OutputAssetTypeValues[] = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin, };
-
-static constexpr NormalMode::Enum s_NormalModeValues[] = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate, };
-
-static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
+static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType)noexcept{
     switch(assetType){
     case OutputAssetType::Bunch:
         return s_DefaultOutputAssetTypeText;
@@ -49,30 +58,7 @@ static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
     }
 }
 
-AString OutputAssetTypeOptionsText(){
-    return BuildEnumOptionTexts<AString, OutputAssetType::Enum>(OutputAssetTypeText, s_OutputAssetTypeValues, LengthOf(s_OutputAssetTypeValues));
-}
-
-AString OutputAssetTypeErrorText(){
-    AString message("Asset type must be ");
-    message += OutputAssetTypeOptionsText();
-    return message;
-}
-
-static Expected<OutputAssetType::Enum> ParseNormalizedAssetTypeText(const AStringView value){
-    return ::ParseNormalizedEnumText<OutputAssetType::Enum, AStringView (*)(OutputAssetType::Enum)>(value, OutputAssetTypeText, s_OutputAssetTypeValues, LengthOf(s_OutputAssetTypeValues));
-}
-
-Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value){
-    const AString normalized = NormalizeOptionText(AString(value));
-    return ParseNormalizedAssetTypeText(AStringView(normalized));
-}
-
-bool ValidateAssetTypeText(AString& inOutValue){
-    return ValidateOptionText(inOutValue, OutputAssetTypeText, ParseNormalizedAssetTypeText);
-}
-
-static AStringView NormalModeText(const NormalMode::Enum normalMode){
+static AStringView NormalModeText(const NormalMode::Enum normalMode)noexcept{
     switch(normalMode){
     case NormalMode::Imported:
         return s_DefaultNormalModeText;
@@ -85,8 +71,45 @@ static AStringView NormalModeText(const NormalMode::Enum normalMode){
     }
 }
 
+static Expected<OutputAssetType::Enum> ParseNormalizedAssetTypeText(const AStringView value)noexcept{
+    return ::ParseNormalizedEnumText<OutputAssetType::Enum, AStringView (*)(OutputAssetType::Enum)noexcept>(value, OutputAssetTypeText, s_OutputAssetTypeValues, LengthOf(s_OutputAssetTypeValues));
+}
+
+static Expected<NormalMode::Enum> ParseNormalizedNormalModeText(const AStringView value)noexcept{
+    return ::ParseNormalizedEnumText<NormalMode::Enum, AStringView (*)(NormalMode::Enum)noexcept>(value, NormalModeText, s_NormalModeValues, LengthOf(s_NormalModeValues));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AString OutputAssetTypeOptionsText(){
+    return BuildEnumOptionTexts<AString, OutputAssetType::Enum>(__hidden_common::OutputAssetTypeText, __hidden_common::s_OutputAssetTypeValues, LengthOf(__hidden_common::s_OutputAssetTypeValues));
+}
+
+AString OutputAssetTypeErrorText(){
+    AString message("Asset type must be ");
+    message += OutputAssetTypeOptionsText();
+    return message;
+}
+
+Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value){
+    const AString normalized = NormalizeOptionText(AString(value));
+    return __hidden_common::ParseNormalizedAssetTypeText(AStringView(normalized));
+}
+
+bool ValidateAssetTypeText(AString& inOutValue){
+    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::OutputAssetTypeText, __hidden_common::ParseNormalizedAssetTypeText);
+}
+
 AString NormalModeOptionsText(){
-    return BuildEnumOptionTexts<AString, NormalMode::Enum>(NormalModeText, s_NormalModeValues, LengthOf(s_NormalModeValues));
+    return BuildEnumOptionTexts<AString, NormalMode::Enum>(__hidden_common::NormalModeText, __hidden_common::s_NormalModeValues, LengthOf(__hidden_common::s_NormalModeValues));
 }
 
 AString NormalModeErrorText(){
@@ -95,20 +118,16 @@ AString NormalModeErrorText(){
     return message;
 }
 
-static Expected<NormalMode::Enum> ParseNormalizedNormalModeText(const AStringView value){
-    return ::ParseNormalizedEnumText<NormalMode::Enum, AStringView (*)(NormalMode::Enum)>(value, NormalModeText, s_NormalModeValues, LengthOf(s_NormalModeValues));
-}
-
 Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value){
     const AString normalized = NormalizeOptionText(AString(value));
-    return ParseNormalizedNormalModeText(AStringView(normalized));
+    return __hidden_common::ParseNormalizedNormalModeText(AStringView(normalized));
 }
 
 bool ValidateNormalModeText(AString& inOutValue){
-    return ValidateOptionText(inOutValue, NormalModeText, ParseNormalizedNormalModeText);
+    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::NormalModeText, __hidden_common::ParseNormalizedNormalModeText);
 }
 
-AStringView SourceTangentModeText(const SourceTangentMode::Enum mode){
+AStringView SourceTangentModeText(const SourceTangentMode::Enum mode)noexcept{
     switch(mode){
     case SourceTangentMode::Imported:
         return s_DefaultNormalModeText;

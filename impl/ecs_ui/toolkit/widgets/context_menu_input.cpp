@@ -23,7 +23,7 @@ void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
         m_scope->m_lists[frame.list].token = frame.listToken;
 }
 
-bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const{
+bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept{
     return
         popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
         && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->m_owner == frame.widget.id

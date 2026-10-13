@@ -7,6 +7,7 @@
 
 #include "basic_string.h"
 #include "expected.h"
+#include "termination.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -20,8 +21,8 @@
 
 class SharedLibrary{
 public:
-    SharedLibrary() = default;
-    ~SharedLibrary(){ close(); }
+    SharedLibrary()noexcept = default;
+    ~SharedLibrary()noexcept{ close(); }
     SharedLibrary(const SharedLibrary&) = delete;
     SharedLibrary& operator=(const SharedLibrary&) = delete;
 
@@ -50,10 +51,12 @@ public:
             return;
 
 #if defined(NWB_PLATFORM_WINDOWS)
-        ::FreeLibrary(static_cast<HMODULE>(m_handle));
+        const bool released = ::FreeLibrary(static_cast<HMODULE>(m_handle)) != 0;
 #else
-        ::dlclose(m_handle);
+        const bool released = ::dlclose(m_handle) == 0;
 #endif
+        if(!released)
+            TerminateInvariant();
         m_handle = nullptr;
     }
 

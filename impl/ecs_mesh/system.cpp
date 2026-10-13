@@ -89,7 +89,7 @@ void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
 }
 
 void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item){ return item == &provider; }
+    if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; }
         ) != m_runtimeMeshProviders.end()
     )
         return;
@@ -98,7 +98,7 @@ void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){
 }
 
 void MeshSystem::unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item){ return item == &provider; }
+    const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; }
     );
     if(found == m_runtimeMeshProviders.end())
         return;

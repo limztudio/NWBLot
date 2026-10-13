@@ -27,10 +27,6 @@ SIMDVectorSingle CsgDeformWallBuilder::MixAttributeVec(SIMDVectorSingle firstVec
     return VectorAdd(VectorMultiply(firstVec, blendVec), VectorMultiply(secondVec, otherVec));
 }
 
-SIMDVectorSingle CsgDeformWallBuilder::NormalizeDirectionVec(SIMDVectorSingle direction)noexcept{
-    return Vector3Normalize(direction);
-}
-
 SIMDVectorSingle CsgDeformWallBuilder::KeepWVec(SIMDVectorSingle normalizedVec, SIMDVectorSingle sourceVec)noexcept{
     return VectorSelect(normalizedVec, sourceVec, s_SIMDMaskW);
 }
@@ -47,7 +43,7 @@ SIMDVectorSingle CsgDeformWallBuilder::UpAxisVec()noexcept{
 
 CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight)noexcept{
     // Preserve first*blend + second*(1-blend) operation order.
-    const SIMDVectorSingle blendVec = CsgDeformValidator::SaturateVec(VectorReplicate(firstWeight));
+    const SIMDVectorSingle blendVec = VectorSaturate(VectorReplicate(firstWeight));
     const SIMDVectorSingle otherVec = VectorSubtract(s_SIMDOne, blendVec);
     const SIMDVectorSingle firstPosition = LoadFloat(first.position);
     const SIMDVectorSingle secondPosition = LoadFloat(second.position);
@@ -73,7 +69,7 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex)noexcep
     const SIMDVectorSingle normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
     if(normalLengthSq > s_NormalizeEpsilonSq){
-        const SIMDVectorSingle normalized = CsgDeformWallBuilder::KeepWVec(CsgDeformWallBuilder::NormalizeDirectionVec(normalVec), normalVec);
+        const SIMDVectorSingle normalized = CsgDeformWallBuilder::KeepWVec(Vector3Normalize(normalVec), normalVec);
         StoreFloat(normalized, vertex.normal);
     }
     else{
@@ -82,7 +78,7 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex)noexcep
     const SIMDVectorSingle tangentVec = LoadFloat(vertex.tangent);
     const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));
     if(tangentLengthSq > s_NormalizeEpsilonSq){
-        const SIMDVectorSingle normalized = CsgDeformWallBuilder::TangentHandednessVec(CsgDeformWallBuilder::NormalizeDirectionVec(tangentVec), tangentVec);
+        const SIMDVectorSingle normalized = CsgDeformWallBuilder::TangentHandednessVec(Vector3Normalize(tangentVec), tangentVec);
         StoreFloat(normalized, vertex.tangent);
     }
     else{
@@ -103,7 +99,7 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(CsgDeformVertexVector<Scratc
     if(!CsgDeformValidator::FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
         return MakeUnexpected(Failure{});
     // A zero secondDistance selects the second endpoint.
-    const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(CsgDeformValidator::AbsDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))));
+    const f32 firstWeight = VectorGetX(VectorSaturate(VectorAbs(VectorDivide(VectorReplicate(secondDistance), VectorReplicate(denominator)))));
     CsgDeformVertex mixed = CsgDeformWallBuilder::MixVertices(vertices[first], vertices[second], firstWeight);
     if(!CsgDeformWallBuilder::NormalizeDeformVertex(mixed))
         return MakeUnexpected(Failure{});

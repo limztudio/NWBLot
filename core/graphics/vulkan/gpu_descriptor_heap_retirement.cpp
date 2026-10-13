@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
+
 #include <global/termination.h>
 
 
@@ -195,7 +196,7 @@ void GpuDescriptorHeap::collectRetired(){
         completion.value = m_device.queueGetCompletedInstance(completion.queue);
 
     ScopedLock lock(m_mutex);
-    const auto heapUseComplete = [&](const HeapUse& heapUse) -> bool {
+    const auto heapUseComplete = [&](const HeapUse& heapUse)noexcept -> bool {
         const QueueSubmissionToken& token = heapUse.submissionToken;
         if(!token.valid())
             return heapUse.commandBuffer == nullptr;

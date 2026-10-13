@@ -81,6 +81,23 @@ class SmokeFailure(Exception):
     pass
 
 
+def run_smoke_main(argv, parse_args, run, *, default_timeout=None, self_test=None, output_stream=None, failure_types=(SmokeFailure, OSError, ValueError, TimeoutError)):
+    """Apply common smoke CLI timeout and exit-status handling."""
+    if default_timeout is not None and not any(argument == "--timeout" or argument.startswith("--timeout=") for argument in argv):
+        argv = [*argv, "--timeout", str(default_timeout)]
+    args = parse_args(argv)
+    if self_test is not None and args.self_test:
+        return self_test()
+    try:
+        return run(args)
+    except SmokeSkip as error:
+        print(f"SKIP: {error}", file=output_stream, flush=True)
+        return SKIP_EXIT_CODE
+    except failure_types as error:
+        print(f"FAIL: {error}", file=output_stream, flush=True)
+        return 1
+
+
 @dataclass
 class ProcessOutputCapture:
     path: Path
@@ -783,6 +800,16 @@ def ximage_rgb_rows(image, byte_order):
     raw_size = image.bytes_per_line * image.height
     raw = ctypes.string_at(image.data, raw_size)
     rows = []
+
+    # Common RGB888 masks map directly to byte channels; keep scaled-mask conversion for other XImage layouts.
+    if (image.bits_per_pixel in (24, 32) and (image.red_mask, image.green_mask, image.blue_mask) == (0xFF0000, 0xFF00, 0xFF)
+            and byte_order in ("little", "big") and image.width >= 0 and image.bytes_per_line >= image.width * bytes_per_pixel):
+        red, green, blue = (2, 1, 0) if byte_order == "little" else (bytes_per_pixel - 3, bytes_per_pixel - 2, bytes_per_pixel - 1)
+        for y in range(image.height):
+            row_base = y * image.bytes_per_line
+            row_end = row_base + image.width * bytes_per_pixel
+            rows.append(list(zip(raw[row_base + red:row_end:bytes_per_pixel], raw[row_base + green:row_end:bytes_per_pixel], raw[row_base + blue:row_end:bytes_per_pixel])))
+        return rows
 
     for y in range(image.height):
         row_base = y * image.bytes_per_line
@@ -1513,14 +1540,8 @@ class WindowsCapture:
                 self.user32.ReleaseDC(None, screen_dc)
 
     def capture_window(self, hwnd, output_path):
-        # Capture renderer-owned client pixels on every platform.
-        # The DWM frame contains unrelated active-window chrome and makes normalized scene regions differ from the X11 drawable contract.
-        self._prepare_capture_window(hwnd)
-        rect = self._client_rect(hwnd)
-        if not rect:
-            raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
-
-        return self._capture_screen_rect(hwnd, rect, output_path)
+        # Both entry points capture renderer-owned client pixels.
+        return self.capture_client_window(hwnd, output_path)
 
     def capture_client_window(self, hwnd, output_path):
         # M4 compares renderer output; GetWindowRect includes a DWM frame whose active/inactive pixels vary by process.

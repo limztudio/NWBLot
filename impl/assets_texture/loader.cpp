@@ -118,14 +118,16 @@ static void InitializeBasisTranscoder(){
     Core::Format::Enum (*selectFallback)(Core::Device&, Core::Format::Enum, const void*),
     const void* fallbackContext
 ){
-    Core::TextureHandle texture = graphics.createTexture(textureDesc);
-    while(!texture){
+    Core::TextureHandle texture;
+    for(;;){
         const Core::Format::Enum fallbackFormat = selectFallback(device, inOutFormat, fallbackContext);
         if(fallbackFormat == Core::Format::UNKNOWN)
             break;
         textureDesc.setFormat(fallbackFormat);
         inOutFormat = fallbackFormat;
         texture = graphics.createTexture(textureDesc);
+        if(texture)
+            break;
     }
     return texture;
 }

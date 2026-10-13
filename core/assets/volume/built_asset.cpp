@@ -6,6 +6,7 @@
 #include "cooked_object_cache.h"
 
 #include <core/common/log.h>
+
 #include <global/binary.h>
 #include <global/process.h>
 

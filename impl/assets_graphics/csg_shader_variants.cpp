@@ -102,14 +102,14 @@ bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceV
 }
 
 Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& cookArena, const AStringView entryName, const ShaderCook::DefineCombo& sourceCombo){
-    constexpr usize addedDefineCount = 2u;
-    if(sourceCombo.size() > Limit<usize>::s_Max - addedDefineCount){
+    constexpr usize s_AddedDefineCount = 2u;
+    if(sourceCombo.size() > Limit<usize>::s_Max - s_AddedDefineCount){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
         return MakeUnexpected(Failure{});
     }
 
     ShaderCook::DefineCombo combo{0, Hasher<ShaderCook::CookString>(), EqualTo<ShaderCook::CookString>(), cookArena};
-    combo.reserve(sourceCombo.size() + addedDefineCount);
+    combo.reserve(sourceCombo.size() + s_AddedDefineCount);
     for(const auto& [defineName, defineValue] : sourceCombo)
         combo.try_emplace(defineName, defineValue);
 

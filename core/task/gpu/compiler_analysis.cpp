@@ -56,7 +56,7 @@ struct TrackedResourceAccessList{
         last = index;
     }
 
-    void retireCovered(Vector<TrackedResourceAccess, Alloc::ScratchArena>& accesses, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range){
+    void retireCovered(Vector<TrackedResourceAccess, Alloc::ScratchArena>& accesses, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range)noexcept{
         usize previous = s_InvalidAccess;
         for(usize index = first; index != s_InvalidAccess; ){
             const usize next = accesses[index].next;
@@ -234,7 +234,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
     outAnalysis.m_externalCompletionCount = graph.externalCompletionCount();
 
     const Timer validationBegin = TimerNow();
-    const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task = {}, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {}, const GpuGraphResourceVersionId resourceVersion = {}){
+    const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task = {}, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {}, const GpuGraphResourceVersionId resourceVersion = {})noexcept{
         outAnalysis.m_diagnostic.status = status;
         outAnalysis.m_diagnostic.task = task;
         outAnalysis.m_diagnostic.relatedTask = relatedTask;
@@ -429,7 +429,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
             if(resource.type == GpuGraphResourceType::Buffer && !(plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range)))
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
             TrackedResourceAccessLists& accesses = resourceAccesses[use.resource.index];
-            const auto overlaps = [&](const TrackedResourceAccess& access){
+            const auto overlaps = [&](const TrackedResourceAccess& access)noexcept{
                 return access.task != task.id && RangesOverlap(resource, access.range, (*plannedRange));
             };
 

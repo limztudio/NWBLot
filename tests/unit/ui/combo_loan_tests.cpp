@@ -86,12 +86,7 @@ private:
     mutable u64 m_revisionDelta = 0u;
 };
 
-struct AcceptedState{
-    Array<HitTarget, 32u> targets{};
-    usize count = 0u;
-    u64 layoutGeneration = 0u;
-    WidgetId capture;
-};
+using AcceptedState = UiWidgetTests::AcceptedInputState<32u>;
 
 class ForeignRevisionSource final : public ComboSource{
 public:
@@ -140,34 +135,9 @@ protected:
         return declareCallbacks(generation) && finishPanel() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] AcceptedState accepted()const{
-        AcceptedState saved;
-        saved.count = m_context.input().targets().size();
-        saved.layoutGeneration = m_context.input().layoutGeneration();
-        saved.capture = m_context.input().capture();
-        for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
-            saved.targets[index] = m_context.input().targets()[index];
-        return saved;
-    }
+    [[nodiscard]] AcceptedState accepted()const{ return UiWidgetTests::CaptureAcceptedInput<32u>(m_context.input()); }
 
-    void expectAccepted(const AcceptedState& saved)const{
-        EXPECT_EQ(m_context.input().layoutGeneration(), saved.layoutGeneration);
-        EXPECT_EQ(m_context.input().capture(), saved.capture);
-        ASSERT_EQ(m_context.input().targets().size(), saved.count);
-        ASSERT_LE(saved.count, saved.targets.size());
-        for(usize index = 0u; index < saved.count; ++index){
-            const HitTarget& before = saved.targets[index];
-            const HitTarget& after = m_context.input().targets()[index];
-            EXPECT_EQ(after.id, before.id);
-            EXPECT_EQ(after.declarationGeneration, before.declarationGeneration);
-            EXPECT_EQ(after.control, before.control);
-            EXPECT_EQ(after.owner, before.owner);
-            EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
-            EXPECT_EQ(after.enabled, before.enabled);
-            ExpectRect(after.rectangle, before.rectangle);
-            ExpectRect(after.clip, before.clip);
-        }
-    }
+    void expectAccepted(const AcceptedState& saved)const{ UiWidgetTests::ExpectAcceptedInput(m_context.input(), saved); }
 
 
 protected:

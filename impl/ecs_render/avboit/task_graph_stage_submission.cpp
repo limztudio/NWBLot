@@ -35,7 +35,7 @@ bool RendererAvboitSystem::appendTaskGraphTimingTickets(
     if(requiredBindingCount > s_AvboitTaskGraphTimingTicketCapacity || requiredBindingCount > bindingCapacity - bindingCount)
         return false;
 
-    const auto appendTimingTicket = [bindings, &bindingCount](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket){
+    const auto appendTimingTicket = [bindings, &bindingCount](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept{
         bindings[bindingCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
     };
 

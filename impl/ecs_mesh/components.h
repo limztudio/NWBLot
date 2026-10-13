@@ -7,9 +7,10 @@
 
 #include "../global.h"
 
+#include <impl/ecs_mesh/runtime/mesh.h>
+
 #include <core/ecs/entity_id.h>
 #include <core/assets/ref.h>
-#include <impl/ecs_mesh/runtime/mesh.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -43,12 +43,13 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives"));
 }
 
-[[nodiscard]] static Core::Common::LogType::Enum AcceptedCrashLogType(const CrashPackageSummary& summary){
-    if(summary.event == DiagnosticEventName::s_Assert)
+[[nodiscard]] static Core::Common::LogType::Enum AcceptedCrashLogType(const CrashPackageSummary& summary)noexcept{
+    const AStringView event(summary.event.data(), summary.event.size());
+    if(event == DiagnosticEventName::s_Assert)
         return Core::Common::LogType::Assert;
-    if(summary.event == DiagnosticEventName::s_Error)
+    if(event == DiagnosticEventName::s_Error)
         return Core::Common::LogType::Error;
-    if(summary.event == DiagnosticEventName::s_Fatal)
+    if(event == DiagnosticEventName::s_Fatal)
         return Core::Common::LogType::Fatal;
 
     return Core::Common::LogType::EssentialInfo;

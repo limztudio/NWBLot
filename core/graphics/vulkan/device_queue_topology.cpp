@@ -7,6 +7,7 @@
 #include "device_detail.h"
 
 #include <core/common/log.h>
+
 #include <global/termination.h>
 
 

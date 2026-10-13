@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
 #include <global/timer.h>
+#include <global/text_utils.h>
 
 #include <cerrno>
-#include <fenv.h>
 #include <cstdlib>
 
 
@@ -140,21 +141,21 @@ template<typename Scalar>
     u64 seed = 0x12ace40f893d5847ull;
     u32 failures = 0u;
     for(const i32 mode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-        if(fesetround(mode) != 0)
+        if(!SetFloatingPointRoundingMode(mode))
             return failures + 1u;
         for(usize index = 0u; index < s_CaseCount; ++index){
             const Case<Scalar> input = Fill<Scalar>(index, seed);
-            if(feclearexcept(FE_ALL_EXCEPT) != 0)
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
                 return failures + 1u;
             errno = 71;
             const auto original = Run<Scalar, false>(input);
-            const i32 originalFlags = fetestexcept(FE_ALL_EXCEPT);
+            const i32 originalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
             const i32 originalErrno = errno;
-            if(feclearexcept(FE_ALL_EXCEPT) != 0)
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
                 return failures + 1u;
             errno = 71;
             const auto candidate = Run<Scalar, true>(input);
-            const i32 candidateFlags = fetestexcept(FE_ALL_EXCEPT);
+            const i32 candidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
             const i32 candidateErrno = errno;
             bool equal = originalFlags == candidateFlags && originalErrno == candidateErrno;
             for(usize lane = 0u; lane < 4u; ++lane)
@@ -229,11 +230,11 @@ template<typename Scalar>
 int main(const int argc, const char* const* argv){
     using namespace __hidden_box_normal_benchmark;
     if(argc == 2 && StringView(argv[1]) == "verify"){
-        fenv_t original{};
-        if(feholdexcept(&original) != 0)
+        const auto original = HoldFloatingPointExceptions();
+        if(!original)
             return 1;
         ScopeExit restore([&]()noexcept{
-            if(fesetenv(&original) != 0)
+            if(!SetFloatingPointEnvironment(*original))
                 __builtin_trap();
         });
         const u32 singleFailures = Verify<f32>();
@@ -247,10 +248,10 @@ int main(const int argc, const char* const* argv){
         const bool latency = StringView(argv[4]) == "latency";
         if((!single && StringView(argv[2]) != "double") || (!candidate && StringView(argv[3]) != "original") || (!latency && StringView(argv[4]) != "throughput"))
             return 2;
-        char* end = nullptr;
-        const usize iterations = static_cast<usize>(strtoull(argv[5], &end, 10));
-        if(iterations == 0u || end == argv[5] || *end != '\0')
+        const auto parsedIterations = ParseU64FromChars(AStringView(argv[5]));
+        if(!parsedIterations || *parsedIterations == 0u || *parsedIterations > Limit<usize>::s_Max / 1u)
             return 2;
+        const usize iterations = static_cast<usize>(*parsedIterations);
         return single ? Measure<f32>(candidate, latency, iterations) : Measure<f64>(candidate, latency, iterations);
     }
     NWB_CERR << "usage: simd_box_normal_benchmark verify | measure single|double original|candidate throughput|latency iterations\n";

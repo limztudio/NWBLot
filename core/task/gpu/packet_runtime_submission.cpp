@@ -42,7 +42,7 @@ namespace GpuPacketRuntimeDetail{
 }
 
 // Ordinary external completions may originate on any current-device queue. A completion paired with an imported ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the consumer could wait an unrelated timeline and race the Vulkan acquire.
-[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID){
+[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept{
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     if(!packetView.valid())
         return false;

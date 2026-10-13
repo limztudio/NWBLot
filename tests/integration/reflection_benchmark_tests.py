@@ -285,6 +285,14 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
         self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, env)
         self.assertEqual(inherited[LIT_NWB_GPU_TIMING_FILE], LIT_OLD_TXT)
 
+    def test_explicit_loader_layers_are_rejected_without_mutating_inherited_controls(self):
+        args = SimpleNamespace(family=LIT_ROUGH, ray_budget=100, history_samples=16, roughness=.4, sampling_seed=0, optical_queries=8, screen_steps=96)
+        for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
+            inherited = {key: "VK_LAYER_KHRONOS_validation", LIT_PRESERVED: LIT_YES}
+            with self.subTest(key=key), self.assertRaisesRegex(benchmark.SmokeFailure, key):
+                benchmark.timed_environment(inherited, args, benchmark.Variant("raw", LIT_HARDWARE), Path(LIT_NEW_TXT))
+            self.assertEqual(inherited, {key: "VK_LAYER_KHRONOS_validation", LIT_PRESERVED: LIT_YES})
+
     def test_cli_rejects_capture_and_zero_ray_budget(self):
         common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -330,7 +338,7 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
                 text.replace("ray budget 100", "ray budget 1000"), text.replace(LIT_SCREEN_STEPS_96, "screen steps 960"), text.replace("reflection mode hardware", "reflection mode hardware_unknown"),
                 text + "ReflectionSmokeProject: hardware ray budget 200\n", text + "Reflection resolve: disabled\n", text + "ReflectionSmokeProject: screen feedback 0\n", text.replace(LIT_TIMING_UNFOCUSED, ""),
                 text.replace("timing render unfocused 1", "timing render unfocused 0"), text.replace(LIT_TIMING_RANGES, ""), text.replace("timing in-flight ranges 32", "timing in-flight ranges 2"),
-                text.replace("timing depth mip count 10", "timing depth mip count 9"), text + "ReflectionSmokeStatistics: sequence=3\n", text + "ReflectionSmokeFeedback: sequence=3\n", text + "ReflectionSmokeProject: hardware unavailable\n"):
+                text.replace("timing depth mip count 10", "timing depth mip count 9"), text + "ReflectionSmokeStatistics: sequence=3\n", text + "ReflectionSmokeFeedback: sequence=3\n", text + "ReflectionSmokeProject: hardware unavailable\n", text + "Vulkan: enabled validation layer\n", text + "VK_LAYER_KHRONOS_validation\n"):
             with self.subTest(text=bad), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.validate_trial_log(bad, args, variant)
 

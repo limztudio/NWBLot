@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "arena_names.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -28,6 +29,11 @@ namespace __hidden_font_atlas_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static Expected<FontAtlas> BuildFontAtlasCookedAsset(FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena){
+    Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_BuildAssetArena);
+    return BuildFontAtlasAsset(entry, arena, scratchArena);
+}
+
 static bool RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontAtlasCookEntry, FontAtlas, FontAtlasAssetCodec>(
         registry, NWB_TEXT("font atlas"),
@@ -37,7 +43,7 @@ static bool RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry
         [](Name virtualPath, const Path& path, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
             return ParseFontAtlasCookMetadataValue(virtualPath, path, asset, context.cookArena, context.scratchArena);
         },
-        [](FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildFontAtlasAsset); }, false
+        &BuildFontAtlasCookedAsset, false
     );
 }
 

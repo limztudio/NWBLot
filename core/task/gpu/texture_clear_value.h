@@ -9,6 +9,7 @@
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/backend_selection/texture_clear_contract.h>
+
 #include <global/expected.h>
 
 

@@ -5,9 +5,11 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <global/algorithm.h>
 #include <impl/ecs_render/raytrace/rt_caustics_tasks.h>
+
+#include <core/task/gpu/compiled_graph.h>
+
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,15 +67,8 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& 
     NWB_ASSERT(heap.isInitialized());
 
     // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target.
-    commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-    commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
-    commandList.setEnableUavBarriersForTexture(targets.causticResolveHalf.get(), true);
-    commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
-
-    const u32 halfWidth = (targets.width + 1u) / 2u;
-    const u32 halfHeight = (targets.height + 1u) / 2u;
-    const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-    const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
+    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, 2u, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 temporalDecay = causticTemporalDecay();
     const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
     const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
@@ -89,8 +84,8 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& 
         effectiveIntensity,
         1u,
         CausticResolveStage::PrepareDownsample,
-        halfGroupsX,
-        halfGroupsY,
+        groups.x,
+        groups.y,
         causticResolveActivitySnapshot(targets)
     );
 }

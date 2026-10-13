@@ -110,7 +110,7 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
 
 void UiNumericEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const f32 y = context.display.logicalHeight - 18.0f;
-    constexpr usize s_ValueCount = std::tuple_size_v<decltype(m_snapshot.values)>;
+    constexpr usize s_ValueCount = TupleSize_V<decltype(m_snapshot.values)>;
     constexpr usize s_MarkerCount = [](){
         usize count = 0u;
         for(usize index = 0u; index <= s_ValueCount; ++index)

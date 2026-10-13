@@ -274,7 +274,8 @@ class LauncherPlatformTests(unittest.TestCase):
         arm64_image = r"C:\Build\arm64\viewer.exe"
         api = FakeWindowsProcessApi({ 101: x64_image, 202: r"c:\build\ARM64\viewer.exe", }, {202: [True]},)
 
-        results = repository_windows_process.stop_processes_by_image_path(arm64_image, 3.0, 2.0, api=api, resolve_path=lambda path: path, current_process_id=999,)
+        with (mock.patch.object(repository_windows_process, "WindowsProcessApi", return_value=api), mock.patch.object(os.path, "realpath", side_effect=lambda path: path), mock.patch.object(os, "getpid", return_value=999)):
+            results = repository_windows_process.stop_processes_by_image_path(arm64_image, 3.0, 2.0)
 
         self.assertEqual((202,), tuple(result.pid for result in results))
         self.assertIn((LIT_CLOSE, 202), api.events)
@@ -284,7 +285,8 @@ class LauncherPlatformTests(unittest.TestCase):
     def test_windows_existing_forced_shutdown_uses_retained_process_handle(self):
         api = FakeWindowsProcessApi({202: LIT_C_BUILD_ARM64_VIEWER_EXE}, {202: [False, True]},)
 
-        results = repository_windows_process.stop_processes_by_image_path(LIT_C_BUILD_ARM64_VIEWER_EXE, 3.0, 2.0, api=api, resolve_path=lambda path: path, current_process_id=999,)
+        with (mock.patch.object(repository_windows_process, "WindowsProcessApi", return_value=api), mock.patch.object(os.path, "realpath", side_effect=lambda path: path), mock.patch.object(os, "getpid", return_value=999)):
+            results = repository_windows_process.stop_processes_by_image_path(LIT_C_BUILD_ARM64_VIEWER_EXE, 3.0, 2.0)
 
         retained_handle = api.handles[202]
         self.assertTrue(results[0].forced)
@@ -294,7 +296,8 @@ class LauncherPlatformTests(unittest.TestCase):
         events = []
         process = FakeSpawnedProcess(302, 0, events)
 
-        result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0, api=FakeBoundedProcessApi([False, True], events, can_terminate=False),)
+        with mock.patch.object(repository_windows_process, "WindowsProcessApi", return_value=FakeBoundedProcessApi([False, True], events, can_terminate=False)):
+            result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0)
 
         self.assertEqual(0, result.exit_code)
         self.assertFalse(result.forced)
@@ -305,7 +308,8 @@ class LauncherPlatformTests(unittest.TestCase):
         process = FakeSpawnedProcess(306, 0, events)
 
         with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "did not grant terminate access"):
-            repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0, api=FakeBoundedProcessApi([False, False, False], events, can_terminate=False),)
+            with mock.patch.object(repository_windows_process, "WindowsProcessApi", return_value=FakeBoundedProcessApi([False, False, False], events, can_terminate=False)):
+                repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0)
 
         retained_handle = next(event[2] for event in events if event[0] == LIT_OPEN)
         self.assertIn((LIT_FORCE, retained_handle), events)
@@ -316,7 +320,8 @@ class LauncherPlatformTests(unittest.TestCase):
         events = []
         process = FakeSpawnedProcess(304, 23, events)
 
-        result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0, api=FakeBoundedProcessApi([False, True], events),)
+        with mock.patch.object(repository_windows_process, "WindowsProcessApi", return_value=FakeBoundedProcessApi([False, True], events)):
+            result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0)
 
         self.assertEqual(23, result.exit_code)
         self.assertFalse(result.forced)
@@ -328,7 +333,8 @@ class LauncherPlatformTests(unittest.TestCase):
         events = []
         process = FakeSpawnedProcess(404, 7, events)
 
-        result = repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0, api=FakeBoundedProcessApi([False, False, True], events),)
+        with mock.patch.object(repository_windows_process, "WindowsProcessApi", return_value=FakeBoundedProcessApi([False, False, True], events)):
+            result = repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0)
 
         self.assertEqual(7, result.exit_code)
         self.assertTrue(result.forced)
@@ -339,7 +345,8 @@ class LauncherPlatformTests(unittest.TestCase):
         process = FakeSpawnedProcess(405, 0, events)
 
         with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "forced process .* successful"):
-            repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0, api=FakeBoundedProcessApi([False, False, True], events),)
+            with mock.patch.object(repository_windows_process, "WindowsProcessApi", return_value=FakeBoundedProcessApi([False, False, True], events)):
+                repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0)
 
         grace_wait_index = next(index for index, event in enumerate(events) if event[0] == LIT_NATIVE_WAIT and event[2] == 5.0)
         force_index = next(index for index, event in enumerate(events) if event[0] == LIT_FORCE)
@@ -459,6 +466,34 @@ class LauncherPlatformTests(unittest.TestCase):
 
             with self.assertRaisesRegex(SystemExit, LIT_A + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launch.py'}") + LIT_Z,):
                 launcher.discover_repo_launchers(root)
+
+
+class LauncherDurationBoundaryTests(unittest.TestCase):
+    def test_cli_rejects_nonfinite_and_nonpositive_durations(self):
+        for option in ("--run-seconds", "--profile-logserver-timeout"):
+            for value in ("nan", "inf", "-inf", "0", "-1"):
+                with self.subTest(option=option, value=value), mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+                    launcher.make_parser({}).parse_args([LIT_RUN, LIT_TESTBED, f"{option}={value}"])
+
+    def test_direct_invalid_run_duration_cannot_validate_stop_or_spawn(self):
+        for duration in (float("nan"), float("inf"), float("-inf"), 0.0, -1.0):
+            args = argparse.Namespace(run_seconds=duration, kill_existing=True, dry_run=False, detach=False, gpudbg=False)
+            with self.subTest(duration=duration), mock.patch.object(launcher, "validate_launch_paths") as validate, mock.patch.object(launcher, "stop_existing_process") as stop, mock.patch.object(subprocess, LIT_POPEN) as spawn:
+                with self.assertRaises(SystemExit):
+                    launcher.launch_process(args, Path("absent_application"), Path("absent_runtime"), {}, ())
+                validate.assert_not_called()
+                stop.assert_not_called()
+                spawn.assert_not_called()
+
+    def test_direct_invalid_profile_timeout_cannot_resolve_or_spawn_server(self):
+        for duration in (float("nan"), float("inf"), float("-inf"), 0.0, -1.0):
+            args = argparse.Namespace(with_profile=True, profile_logserver_timeout=duration)
+            with self.subTest(duration=duration), mock.patch.object(launcher, "resolve_profile_log_port") as port, mock.patch.object(launcher, "resolve_executable_path") as resolve, mock.patch.object(subprocess, LIT_POPEN) as spawn:
+                with self.assertRaises(SystemExit):
+                    launcher.start_profile_session(args, mock.sentinel.settings, Path("absent_runtime"), {})
+                port.assert_not_called()
+                resolve.assert_not_called()
+                spawn.assert_not_called()
 
 
 class LauncherProcessStopTests(unittest.TestCase):

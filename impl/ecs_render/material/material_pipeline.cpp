@@ -10,11 +10,11 @@
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/assets/graphics/csg/names.h>
 #include <impl/assets_material/shader_stage_names.h>
+#include <impl/ecs_csg/shape_registry.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
-#include <impl/ecs_csg/shape_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,10 +32,10 @@ namespace __hidden_material_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<ACompactString> ResolveCsgProjectEvaluatorModuleInclude(const CsgShapeRegistry& shapeRegistry, const Name& evaluatorVariant){
+[[nodiscard]] Expected<Core::GraphicsString> ResolveCsgProjectEvaluatorModuleInclude(Core::GraphicsArena& arena, const CsgShapeRegistry& shapeRegistry, const Name& evaluatorVariant){
     if(!evaluatorVariant)
-        return ACompactString{};
-    auto moduleInclude = shapeRegistry.findShaderModuleInclude(evaluatorVariant);
+        return Core::GraphicsString(arena);
+    auto moduleInclude = shapeRegistry.findShaderModuleInclude(evaluatorVariant, arena);
     if(!moduleInclude || moduleInclude->empty())
         return MakeUnexpected(Failure{});
     return moduleInclude;
@@ -161,12 +161,12 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
     AStringView avboitProjectEvaluatorModuleAssignmentToAdd;
     if(csgClipPipeline){
-        const auto csgProjectEvaluatorModuleInclude = __hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(m_csgShapeRegistry, pipelineKey.csgEvaluatorVariant);
+        const auto csgProjectEvaluatorModuleInclude = __hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(m_arena, m_csgShapeRegistry, pipelineKey.csgEvaluatorVariant);
         if(!csgProjectEvaluatorModuleInclude){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to resolve CSG evaluator module for material '{}'"), StringConvert(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
-        csgProjectEvaluatorModuleAssignment = __hidden_material_pipeline::BuildCsgProjectEvaluatorModuleAssignment(m_arena, csgProjectEvaluatorModuleInclude->view());
+        csgProjectEvaluatorModuleAssignment = __hidden_material_pipeline::BuildCsgProjectEvaluatorModuleAssignment(m_arena, AStringView(*csgProjectEvaluatorModuleInclude));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
             const auto existingEvaluatorModuleAssignment = ECSRenderMaterialShaderVariants::FindVariantDefineAssignment(shaderVariant, ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName);
             if(existingEvaluatorModuleAssignment && *existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){

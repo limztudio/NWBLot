@@ -35,7 +35,6 @@ namespace __hidden_gpu_command_ir_raster_reader{
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -116,7 +115,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             break;
         }
         const GpuCommandIrSetGraphicsStateRecord& record = *wireRecord;
-        valid = true && record.pipelineIndex != Limit<u32>::s_Max && record.colorAttachmentIndex != Limit<u32>::s_Max && record.framebufferOwnerIndex != Limit<u32>::s_Max && record.vertexBindingCount <= s_MaxVertexAttributes && record.hasScissor <= 1u;
+        valid = record.pipelineIndex != Limit<u32>::s_Max && record.colorAttachmentIndex != Limit<u32>::s_Max && record.framebufferOwnerIndex != Limit<u32>::s_Max && record.vertexBindingCount <= s_MaxVertexAttributes && record.hasScissor <= 1u;
         if(!valid)
             break;
         if(record.blobSizeBytes != static_cast<u64>(record.vertexBindingCount) * sizeof(GpuCommandIrRasterVertexWire) || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset){
@@ -175,7 +174,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             break;
         }
         const GpuCommandIrBindGraphicsHeapRecord& record = *wireRecord;
-        valid = true && record.pipelineIndex != Limit<u32>::s_Max && record.heapOwnerIndex != Limit<u32>::s_Max;
+        valid = record.pipelineIndex != Limit<u32>::s_Max && record.heapOwnerIndex != Limit<u32>::s_Max;
         raster.pipeline = { m_graphGeneration, record.pipelineIndex };
         raster.heapOwnerIndex = record.heapOwnerIndex;
         break;
@@ -188,7 +187,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             break;
         }
         const GpuCommandIrSetPushConstantsRecord& record = *wireRecord;
-        valid = true && record.blobSizeBytes != 0u && record.blobSizeBytes <= Limit<u32>::s_Max && (record.blobSizeBytes & 3u) == 0u;
+        valid = record.blobSizeBytes != 0u && record.blobSizeBytes <= Limit<u32>::s_Max && (record.blobSizeBytes & 3u) == 0u;
         if(valid && (record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);

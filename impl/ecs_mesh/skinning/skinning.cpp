@@ -7,6 +7,8 @@
 #include "skin_payload.h"
 #include "timing_names.h"
 
+#include <impl/ecs_mesh/runtime/buffer_upload.h>
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
@@ -15,7 +17,6 @@
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
-#include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,7 +71,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningG
     if(!plan.hasActiveSkin)
         return false;
 
-    const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource){
+    const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource)noexcept{
         return context.declarations.bufferForResource(resource);
     };
 
@@ -138,7 +139,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinning
     if(!plan.updatesMeshletBounds)
         return false;
 
-    const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource){
+    const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource)noexcept{
         return context.declarations.bufferForResource(resource);
     };
 

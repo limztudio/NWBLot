@@ -7,6 +7,8 @@
 #include "device_detail.h"
 
 #include <core/common/log.h>
+
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -117,10 +119,9 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQu
     Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, nativeQueue);
     if(!queue)
         return false;
-    if(queue->m_trackingSemaphore == VK_NULL_HANDLE){
-        DestroyArenaObject(m_context.objectArena, queue);
+    ScopeExit destroyQueue([&]()noexcept{ DestroyArenaObjectNoexcept(m_context.objectArena, queue); });
+    if(queue->m_trackingSemaphore == VK_NULL_HANDLE)
         return false;
-    }
 
     m_physicalQueueInfos.push_back(info);
     m_physicalQueues.push_back(queue);
@@ -130,6 +131,7 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQu
     }
     else if(!m_primaryQueues[queueClassIndex])
         m_primaryQueues[queueClassIndex] = queue;
+    destroyQueue.release();
     return true;
 }
 
@@ -138,7 +140,7 @@ void Device::configureQueueSharingContext(){
     const Queue* const computeQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Compute)];
     const Queue* const transferQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Transfer)];
 
-    const auto resolveAuxiliaryFamily = [this](const Queue* const primaryQueue, const CommandQueue::Enum queueClass){
+    const auto resolveAuxiliaryFamily = [this](const Queue* const primaryQueue, const CommandQueue::Enum queueClass)noexcept{
         if(!primaryQueue)
             return s_InvalidQueueFamilyIndex;
         for(const Queue* const physicalQueue : m_physicalQueues){
@@ -293,7 +295,7 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
         return;
     }
 
-    const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected) -> bool {
+    const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected)noexcept -> bool {
         if(!expected.owner || expected.nativeRecordingID == 0u || !pCommandLists)
             return false;
         for(usize i = 0u; i < numCommandLists; ++i){

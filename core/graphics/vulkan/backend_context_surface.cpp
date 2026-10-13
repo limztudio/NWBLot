@@ -414,7 +414,7 @@ bool BackendContext::createVulkanSwapChain(){
     m_swapChainState.swapChainReadbackAvailable = swapChainReadbackAvailable;
 
     if(m_deviceParams.enableDebugRuntime){
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Vulkan GPU debug: swap chain"
            << "\n    extent: " << extent.width << "x" << extent.height
            << "\n    format: " << VulkanDetail::SwapChainFormatToString(m_swapChainFormat.format)
@@ -426,8 +426,8 @@ bool BackendContext::createVulkanSwapChain(){
            << " (" << static_cast<i32>(selectedPresentMode) << ")"
            << "\n    requested images: " << m_deviceParams.swapChainBufferCount
            << "\n    created images: " << imageCount
-           << "\n    mutable format: " << VulkanDetail::BoolToString(m_swapChainMutableFormatSupported)
-           << "\n    readback: " << VulkanDetail::BoolToString(m_swapChainState.swapChainReadbackAvailable)
+           << "\n    mutable format: " << VulkanDetail::BoolToYesNoText(m_swapChainMutableFormatSupported)
+           << "\n    readback: " << VulkanDetail::BoolToYesNoText(m_swapChainState.swapChainReadbackAvailable)
            << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive")
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));

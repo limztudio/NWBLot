@@ -3,12 +3,10 @@
 
 
 #include <impl/ecs_render/raytrace/hardware_caustics_resolve_chain.h>
-
 #include <impl/ecs_render/raytrace/caustics_resolve_chain.h>
+#include <impl/ecs_render/raytrace/raytracing_system.h>
 
 #include <core/graphics/backend_selection/backend.h>
-
-#include <impl/ecs_render/raytrace/raytracing_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

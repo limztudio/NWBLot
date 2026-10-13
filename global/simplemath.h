@@ -83,6 +83,12 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] NWB_INLINE T Truncate(const T value)noexcept(IsArithmetic_V<T>){
+    using std::trunc;
+    return static_cast<T>(trunc(value));
+}
+
+template<typename T>
 [[nodiscard]] NWB_INLINE T ModF(const T value, T* outInteger)noexcept(IsArithmetic_V<T>){
     using std::modf;
     return static_cast<T>(modf(value, outInteger));

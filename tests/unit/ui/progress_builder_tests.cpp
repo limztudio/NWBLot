@@ -21,12 +21,7 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
-struct ProgressPaintSample{
-    Rect bounds;
-    Color color;
-    f32 maximumU = 0.0f;
-    usize quads = 0u;
-};
+using ProgressPaintSample = SkinPaintSample;
 
 class UiProgressBuilderTests : public WidgetFixture{
 protected:
@@ -74,44 +69,7 @@ protected:
     }
 
     [[nodiscard]] Expected<ProgressPaintSample> sample(const DrawSnapshot& snapshot, const Name& name)const noexcept{
-        const UiSkinRegion* region = m_skin.findRegion(name);
-        if(!region)
-            return MakeUnexpected(Failure{});
-        const f32 leftU = static_cast<f32>(region->rectangle.x) / m_skin.atlasWidth();
-        const f32 rightU = static_cast<f32>(region->rectangle.x + region->rectangle.width) / m_skin.atlasWidth();
-        const f32 topV = static_cast<f32>(region->rectangle.y) / m_skin.atlasHeight();
-        const f32 bottomV = static_cast<f32>(region->rectangle.y + region->rectangle.height) / m_skin.atlasHeight();
-        ProgressPaintSample candidate;
-        f32 right = 0.0f;
-        f32 bottom = 0.0f;
-        for(const DrawCommand& command : snapshot.commands()){
-            if(command.material != PaintMaterial::Skin)
-                continue;
-            for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
-                const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
-                const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-                if(first.texCoord.x < leftU || opposite.texCoord.x > rightU || first.texCoord.y < topV || opposite.texCoord.y > bottomV)
-                    continue;
-                if(candidate.quads == 0u){
-                    candidate.bounds.x = first.position.x;
-                    candidate.bounds.y = first.position.y;
-                    candidate.color = first.color;
-                    right = opposite.position.x;
-                    bottom = opposite.position.y;
-                }
-                candidate.bounds.x = Min(candidate.bounds.x, first.position.x);
-                candidate.bounds.y = Min(candidate.bounds.y, first.position.y);
-                right = Max(right, opposite.position.x);
-                bottom = Max(bottom, opposite.position.y);
-                candidate.maximumU = Max(candidate.maximumU, opposite.texCoord.x);
-                ++candidate.quads;
-            }
-        }
-        if(candidate.quads == 0u)
-            return MakeUnexpected(Failure{});
-        candidate.bounds.width = right - candidate.bounds.x;
-        candidate.bounds.height = bottom - candidate.bounds.y;
-        return candidate;
+        return sampleSkinPaint(snapshot, name);
     }
 };
 

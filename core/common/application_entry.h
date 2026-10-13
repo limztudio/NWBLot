@@ -8,6 +8,7 @@
 #include "module.h"
 #include "arena_names.h"
 #include "name_symbols.h"
+
 #include <global/terminal_entry.h>
 
 

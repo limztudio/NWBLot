@@ -448,7 +448,7 @@ inline void CopyHostMemory(CpuTaskScheduler& cpuScheduler, void* dst, const void
         auto* dstBytes = static_cast<u8*>(dst);
         auto* srcBytes = static_cast<const u8*>(src);
         const usize chunkCount = DivideUp(size, effectiveChunkSize);
-        cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
+        cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex)noexcept{
             const usize chunkOffset = chunkIndex * effectiveChunkSize;
             const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
             NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);

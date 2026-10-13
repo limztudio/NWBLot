@@ -25,7 +25,7 @@ bool Builder::textAreaAvailable(const EditModel& model, const TextAreaState& sta
     return true;
 }
 
-void Builder::snapshotTextArea(TextAreaFrame& frame){
+void Builder::snapshotTextArea(TextAreaFrame& frame)noexcept{
     frame.stateRevision = frame.state->revision();
     frame.navigation = frame.state->navigation().snapshot();
     frame.modelGeneration = frame.model->instanceGeneration();
@@ -37,7 +37,7 @@ void Builder::snapshotTextArea(TextAreaFrame& frame){
     frame.caret = frame.model->caret();
 }
 
-bool Builder::textAreaMatches(const TextAreaFrame& frame)const{
+bool Builder::textAreaMatches(const TextAreaFrame& frame)const noexcept{
     return
         popupAncestorsVisible() && frame.model && frame.state
         && frame.state->revision() == frame.stateRevision && frame.state->navigation().matches(frame.navigation)

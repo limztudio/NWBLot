@@ -86,7 +86,7 @@ void EditModel::recordHistory(const AStringView before, const usize beforeAnchor
     m_historyCursor = m_history.size();
 }
 
-void EditModel::clearHistory(){
+void EditModel::clearHistory()noexcept{
     m_history.clear();
     m_historyCursor = 0u;
     m_historyBytes = 0u;

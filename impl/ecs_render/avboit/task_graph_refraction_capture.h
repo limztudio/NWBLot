@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+
 #include <core/task/gpu/task_graph.h>
 
 

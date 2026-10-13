@@ -60,7 +60,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     }
     if(uniqueEdges.empty())
         return;
-    Sort(uniqueEdges.begin(), uniqueEdges.end(), [](const GpuTaskDependencyEdge* lhs, const GpuTaskDependencyEdge* rhs){
+    Sort(uniqueEdges.begin(), uniqueEdges.end(), [](const GpuTaskDependencyEdge* lhs, const GpuTaskDependencyEdge* rhs)noexcept{
         if(lhs->producer.index != rhs->producer.index)
             return lhs->producer.index < rhs->producer.index;
         if(lhs->consumer.index != rhs->consumer.index)

@@ -290,7 +290,8 @@ TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsRele
         sourceHash = group.sha256;
         payload.groups.push_back(Move(group));
         atlas.setPayload(Move(payload));
-        ASSERT_TRUE(atlas.validatePayload());
+        Core::Alloc::ScratchArena scratchArena(Name("tests/ui/paint_sdf/validation_scratch"));
+        ASSERT_TRUE(atlas.validatePayload(scratchArena));
         page = CreateSdfAtlasPage(m_arena, atlas, 7u, 123u, 0u);
         ASSERT_TRUE(page);
     }

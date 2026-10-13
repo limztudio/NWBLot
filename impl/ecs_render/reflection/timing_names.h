@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+
 #include <core/graphics/gpu_timing.h>
 
 

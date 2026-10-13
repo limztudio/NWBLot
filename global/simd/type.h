@@ -62,9 +62,9 @@ template<typename Element, usize Count>
 #pragma STDC FENV_ACCESS ON
     // Clang bool vectors use packed bits; wide integers are not supported native lane elements.
     if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32> || (IsIntegral_V<Element> && !IsSame_V<Element, bool> && sizeof(Element) <= sizeof(u64)))){
-        constexpr usize lanes = 16u / sizeof(Element);
-        for(usize first = 0u; first < Count; first += lanes){
-            const usize count = Count - first < lanes ? Count - first : lanes;
+        constexpr usize s_Lanes = 16u / sizeof(Element);
+        for(usize first = 0u; first < Count; first += s_Lanes){
+            const usize count = Count - first < s_Lanes ? Count - first : s_Lanes;
             EqualityPacket<Element> lhsPacket{}, rhsPacket{};
             // Exact-sized loads support borrowed unaligned arrays and two/three-lane tails.
             __builtin_memcpy(&lhsPacket, lhs + first, count * sizeof(Element));
@@ -1503,8 +1503,8 @@ template<typename Matrix>
 template<MathStorageValue Value>
 [[nodiscard]] NWB_INLINE bool operator==(const Value& lhs, const Value& rhs)noexcept{
     if constexpr(requires{ lhs.raw; }){
-        constexpr usize count = sizeof(lhs.raw) / sizeof(lhs.raw[0]);
-        return MathTypeDetail::EqualArray<Value, count>(lhs, rhs);
+        constexpr usize s_Count = sizeof(lhs.raw) / sizeof(lhs.raw[0]);
+        return MathTypeDetail::EqualArray<Value, s_Count>(lhs, rhs);
     }
     else if constexpr(IsSame_V<Value, Float3Int> || IsSame_V<Value, Float3UInt>)
         return MathTypeDetail::EqualMixedFloat3(lhs, rhs);

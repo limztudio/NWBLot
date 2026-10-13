@@ -52,7 +52,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     if(!Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
     const bool hasBitmap = map.findField("width") != nullptr;
-    if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, [hasBitmap](const AStringView field){
+    if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, [hasBitmap](const AStringView field)noexcept{
             return field == "advance_units" || (hasBitmap && (field == "group" || field == "channel" || field == "x" || field == "y" || field == "width" || field == "height" || field == "plane_left" || field == "plane_top"));
         }
     ))

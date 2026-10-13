@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PopupDismissReason::Enum> InputRouter::consumePopupDismissal(const PopupToken& token){
+Expected<PopupDismissReason::Enum> InputRouter::consumePopupDismissal(const PopupToken& token)noexcept{
     for(usize index = 0u; index < m_popupDismissals.size(); ++index){
         if(m_popupDismissals[index].token == token){
             const PopupDismissReason::Enum reason = m_popupDismissals[index].reason;
@@ -38,7 +38,7 @@ bool InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
     return true;
 }
 
-void InputRouter::closePopup(const PopupToken& token){
+void InputRouter::closePopup(const PopupToken& token)noexcept{
     for(auto& record : m_popups){
         if(popupDescendant(record.scope.token, token))
             record.closing = true;
@@ -46,7 +46,7 @@ void InputRouter::closePopup(const PopupToken& token){
     reconcileTargets();
 }
 
-void InputRouter::fencePopup(const PopupToken& token){
+void InputRouter::fencePopup(const PopupToken& token)noexcept{
     for(auto& record : m_popups){
         if(record.scope.token.widget == token.widget && record.scope.token != token)
             closePopup(record.scope.token);

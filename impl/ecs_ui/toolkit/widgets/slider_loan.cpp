@@ -14,11 +14,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::sliderMatches(const SliderFrame& frame)const{
+bool Builder::sliderMatches(const SliderFrame& frame)const noexcept{
     return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot);
 }
 
-void Builder::publishSliderResults(const bool valid){
+void Builder::publishSliderResults(const bool valid)noexcept{
     const InputRouter& input = m_context.input();
     for(const auto& frame : m_scope->m_sliders){
         SliderResult result;

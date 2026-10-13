@@ -177,7 +177,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     if(!ledger)
         return MakeUnexpected(Failure{});
 
-    const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> Expected<BufferSuballocation>{
+    const auto trySuballocateFromChunk = [&](BufferChunk& chunk)noexcept -> Expected<BufferSuballocation>{
         const auto alignedOffset = AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment));
         if(!alignedOffset)
             return MakeUnexpected(Failure{});

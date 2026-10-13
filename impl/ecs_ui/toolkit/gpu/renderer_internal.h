@@ -19,6 +19,7 @@
 #include <core/task/gpu/task_graph.h>
 
 #include <global/refcount_ptr.h>
+#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,40 +89,40 @@ template<typename T, typename... Args>
 
 
 struct GpuSkinVersion : NoCopy{
-    explicit GpuSkinVersion(Core::GraphicsRuntime& graphics);
-    ~GpuSkinVersion()noexcept;
-
     Core::GraphicsRuntime& m_graphics;
     SkinBinding m_binding;
     TextureGpuResource m_texture;
+
+
+    explicit GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept;
+    ~GpuSkinVersion()noexcept;
 };
 
 struct GpuGlyphVersion : NoCopy{
-    GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPage page);
-    ~GpuGlyphVersion()noexcept;
-
     Core::GraphicsRuntime& m_graphics;
     SharedGlyphPage m_page;
     Core::TextureHandle m_texture;
     Core::GpuDescriptorHandle m_sampledImage;
     Core::QueueSubmissionToken m_readinessToken;
+
+
+    GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPage page)noexcept;
+    ~GpuGlyphVersion()noexcept;
 };
 
 struct GpuTargetVersion : NoCopy{
-    explicit GpuTargetVersion(Core::GraphicsRuntime& graphics);
-    ~GpuTargetVersion()noexcept;
-
     Core::GraphicsRuntime& m_graphics;
     Core::TextureHandle m_color;
     Core::FramebufferHandle m_framebuffer;
     Core::GpuDescriptorHandle m_sampledImage;
     Core::QueueSubmissionToken m_readinessToken;
+
+
+    explicit GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept;
+    ~GpuTargetVersion()noexcept;
 };
 
 struct GpuSharedResources : NoCopy{
-    explicit GpuSharedResources(Core::GraphicsRuntime& graphics);
-    ~GpuSharedResources()noexcept;
-
     Core::GraphicsRuntime& m_graphics;
     Core::ShaderHandle m_vertexShader;
     Core::ShaderHandle m_pixelShader;
@@ -134,13 +135,13 @@ struct GpuSharedResources : NoCopy{
     Core::GraphicsPipelineHandle m_outputPipeline;
     Core::SamplerHandle m_sampler;
     Core::GpuDescriptorHandle m_samplerDescriptor;
+
+
+    explicit GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept;
+    ~GpuSharedResources()noexcept;
 };
 
 struct GpuFrameData : NoCopy{
-    GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin);
-    [[nodiscard]] bool prefixComplete(Core::Device& device)const;
-    [[nodiscard]] bool complete(Core::Device& device)const;
-
     // Strong version owners keep descriptors allocated through pending recording and final GPU completion.
     Core::Alloc::GlobalArena& m_arena;
     DrawSnapshot m_snapshot;
@@ -162,6 +163,11 @@ struct GpuFrameData : NoCopy{
     GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
     u32 m_presentationMode = NWB_UI_PRESENTATION_SDR;
     bool m_prepared = false;
+
+
+    GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin);
+    [[nodiscard]] bool prefixComplete(Core::Device& device)const;
+    [[nodiscard]] bool complete(Core::Device& device)const;
 };
 
 using GpuFrame = GpuVersion<GpuFrameData>;
@@ -177,6 +183,46 @@ struct GpuFrameSlot{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Native commands and command IR use the same projection and physical clip bounds.
+struct GpuRasterGeometry{
+    SIMDVectorSingle pixelScale;
+    SIMDVectorSingle targetSize;
+
+    GpuRasterGeometry(const DisplayMetrics& display, const Core::TextureDesc& target)noexcept
+        : pixelScale(VectorSet(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY))
+        , targetSize(VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height), static_cast<f32>(target.width), static_cast<f32>(target.height)))
+    {}
+
+    [[nodiscard]] bool initializePushConstants(GpuPaintPushConstants& push, const u32 samplerSlot)const noexcept{
+        const SIMDVectorSingle projection = VectorMultiply(VectorSet(2.0f, -2.0f, 2.0f, -2.0f), pixelScale);
+        const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
+        push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
+        push.translate = { -1.0f, 1.0f };
+        push.samplerSlot = samplerSlot;
+        return IsFinite(push.scale.x) && IsFinite(push.scale.y);
+    }
+
+    [[nodiscard]] Optional<Core::Rect> scissor(const DrawCommand& draw)const noexcept{
+        const SIMDVectorSingle clip = VectorSet(draw.clip.x, draw.clip.y, draw.clip.x, draw.clip.y);
+        const SIMDVectorSingle extent = VectorSet(0.0f, 0.0f, draw.clip.width, draw.clip.height);
+        const SIMDVectorSingle ends = VectorAdd(clip, extent);
+        const SIMDVectorSingle coordinates = VectorPermute<0, 1, 6, 7>(clip, ends);
+        const SIMDVectorSingle physicalClip = VectorMultiply(coordinates, pixelScale);
+        const SIMDVectorSingle first = VectorFloor(VectorSwizzle<0, 1, 0, 1>(physicalClip));
+        const SIMDVectorSingle last = VectorCeiling(VectorSwizzle<2, 3, 2, 3>(physicalClip));
+        const SIMDVectorSingle minimum = VectorSelect(first, VectorZero(), VectorGreater(VectorZero(), first));
+        const SIMDVectorSingle maximum = VectorSelect(last, targetSize, VectorLess(targetSize, last));
+        const f32 minX = VectorGetX(minimum);
+        const f32 minY = VectorGetY(minimum);
+        const f32 maxX = VectorGetX(maximum);
+        const f32 maxY = VectorGetY(maximum);
+        if(maxX <= minX || maxY <= minY)
+            return {};
+        return Core::Rect(static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY));
+    }
+};
 
 
 // Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
@@ -249,10 +295,10 @@ struct GpuOutputTask{
 
 struct GpuRendererState final : NoCopy{
     GpuRendererState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver);
-    [[nodiscard]] static bool MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second);
-    [[nodiscard]] static bool ValidateGlyphPages(const DrawSnapshot& snapshot);
-    [[nodiscard]] static bool ValidateSdfPages(const DrawSnapshot& snapshot);
-    [[nodiscard]] static bool ValidateTextureImages(const DrawSnapshot& snapshot);
+    [[nodiscard]] static bool MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
+    [[nodiscard]] static bool ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static bool ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static bool ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
     [[nodiscard]] bool createResources();
     [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
     [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);

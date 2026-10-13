@@ -5,6 +5,7 @@
 #include "diagnostic.h"
 
 #include <core/common/log.h>
+
 #include <global/assert.h>
 #include <global/binary.h>
 

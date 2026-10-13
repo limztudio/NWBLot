@@ -6,11 +6,11 @@
 
 
 #include <impl/ecs_render/components.h>
+#include <impl/assets_material/asset.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/global.h>
 #include <core/graphics/api.h>
-#include <impl/assets_material/asset.h>
 
 #include <global/containers.h>
 #include <global/hash_utils.h>

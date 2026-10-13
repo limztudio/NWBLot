@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/simd/vector.h>
-
 #include "skin_cook.h"
 #include "skin_binary_payload.h"
 #include "skin_validation.h"
@@ -20,7 +18,9 @@
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
+
 #include <global/binary.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -319,12 +319,6 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!ValidateSkinInfluenceJointIndices(nwbFilePath, entry))
         return MakeUnexpected(Failure{});
 
-    Skin testSkin(entry.influences.get_allocator().arena(), entry.virtualPath);
-    testSkin.setMesh(entry.mesh);
-    testSkin.setSkeleton(entry.skeleton);
-    testSkin.setPayload(Skin::InfluenceVector(entry.influences), Skin::InverseBindMatrixVector(entry.inverseBindMatrices));
-    if(!testSkin.validatePayload())
-        return MakeUnexpected(Failure{});
     return entry;
 }
 

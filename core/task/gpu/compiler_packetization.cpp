@@ -57,7 +57,7 @@ static void InitializePacketMergeSummary(
     const GpuTaskGraphQueueAssignments& assignments,
     const bool trackConsumerFrontiers,
     PacketMergeSummary& outSummary
-){
+)noexcept{
     outSummary.uniformFrontierScoredMergeDomain = task.scheduling.frontierScoredMergeDomain;
     outSummary.allTasksAllowMerge = TaskAllowsPacketMerge(task);
     outSummary.hasCrossQueueConsumerFrontier = trackConsumerFrontiers && HasCrossQueueConsumerFrontier(analysis, assignments, task.id, packetQueue);
@@ -70,7 +70,7 @@ static void AccumulatePacketMergeSummary(
     const GpuTaskGraphQueueAssignments& assignments,
     const bool trackConsumerFrontiers,
     PacketMergeSummary& inOutSummary
-){
+)noexcept{
     inOutSummary.allTasksAllowMerge = inOutSummary.allTasksAllowMerge && TaskAllowsPacketMerge(task);
     if(!inOutSummary.uniformFrontierScoredMergeDomain || !task.scheduling.frontierScoredMergeDomain || inOutSummary.uniformFrontierScoredMergeDomain != task.scheduling.frontierScoredMergeDomain)
         inOutSummary.uniformFrontierScoredMergeDomain = Name{};
@@ -79,7 +79,7 @@ static void AccumulatePacketMergeSummary(
 }
 
 
-[[nodiscard]] Expected<GpuSubmissionPacketRange> ResolvePacketTimingEnvelope(const GpuTaskGraphPacketTimingEnvelopeOptions& options, GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan){
+[[nodiscard]] Expected<GpuSubmissionPacketRange> ResolvePacketTimingEnvelope(const GpuTaskGraphPacketTimingEnvelopeOptions& options, GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan)noexcept{
     const bool hasFirstTask = options.firstTask.valid();
     const bool hasLastTask = options.lastTask.valid();
     if(hasFirstTask != hasLastTask)

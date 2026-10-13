@@ -329,8 +329,9 @@ def timed_environment(base, args, variant, timing_file):
             del env[name]
     for name in ("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", LIT_NWB_GPU_TIMING_FILE):
         env.pop(name, None)
-    if env.get("VK_INSTANCE_LAYERS"):
-        raise SmokeFailure("explicit Vulkan layers must be disabled for the timing benchmark")
+    for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
+        if env.get(key):
+            raise SmokeFailure(f"{key} must be unset for the timing benchmark")
     controls = {"NWB_REFLECTION_SMOKE_CASE": args.family, "NWB_REFLECTION_SMOKE_MODE": variant.mode, "NWB_REFLECTION_SMOKE_TIMING": "1", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "0", "NWB_REFLECTION_SMOKE_RAY_BUDGET": str(args.ray_budget),
         "NWB_REFLECTION_SMOKE_TEMPORAL": str(int(variant.temporal)), "NWB_REFLECTION_SMOKE_SPATIAL": str(int(variant.spatial)), "NWB_REFLECTION_SMOKE_FEEDBACK": str(int(variant.feedback)), "NWB_REFLECTION_SMOKE_SCREEN_STEPS": str(args.screen_steps),
         "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": str(args.history_samples), "NWB_REFLECTION_SMOKE_ROUGHNESS": str(args.roughness if args.family == LIT_ROUGH else 0.0), "NWB_REFLECTION_SMOKE_SEED": str(args.sampling_seed), "NWB_REFLECTION_SMOKE_DEBUG": "none",
@@ -358,7 +359,7 @@ def validate_trial_log(text, args, variant):
     routes = {line.removeprefix(LIT_REFLECTION_RESOLVE) for line in lines if line.startswith(LIT_REFLECTION_RESOLVE)}
     if routes != {route}:
         raise SmokeFailure(f"reflection execution route changed or differs from {route}: {sorted(routes)}")
-    rejected = list(STRICT_LOG_FAILURE_MESSAGES) + ["ReflectionSmokeStatistics:", "ReflectionSmokeHistory:", "ReflectionSmokeMutation:", "ReflectionSmokeOptics:", "ReflectionSmokeFeedback:"]
+    rejected = list(STRICT_LOG_FAILURE_MESSAGES) + ["VK_LAYER_KHRONOS_validation", "Vulkan: enabled validation layer", "ReflectionSmokeStatistics:", "ReflectionSmokeHistory:", "ReflectionSmokeMutation:", "ReflectionSmokeOptics:", "ReflectionSmokeFeedback:"]
     validate_expected_log_text(text, [], rejected)
     if "ReflectionSmokeProject: hardware unavailable" in text and variant.mode in (LIT_HARDWARE, LIT_HYBRID):
         raise SmokeFailure("hardware was unavailable for a hardware benchmark route")

@@ -10,6 +10,7 @@
 #include "task_desc.h"
 
 #include <core/alloc/scratch.h>
+
 #include <global/arena_object.h>
 #include <global/sync.h>
 
@@ -238,7 +239,7 @@ class GpuGraphSubmissionBinding final{
 
 
 public:
-    GpuGraphSubmissionBinding() = default;
+    GpuGraphSubmissionBinding()noexcept = default;
 
 
 public:
@@ -342,7 +343,7 @@ private:
     class DeclarationMutationScope final : NoCopy{
     public:
         explicit DeclarationMutationScope(GpuTaskGraph& graph);
-        ~DeclarationMutationScope();
+        ~DeclarationMutationScope()noexcept;
 
 
     public:
@@ -359,7 +360,7 @@ private:
     class DiscardNotificationScope final : NoCopy{
     public:
         explicit DiscardNotificationScope(const GpuTaskGraph& graph)noexcept;
-        ~DiscardNotificationScope();
+        ~DiscardNotificationScope()noexcept;
 
 
     public:
@@ -377,7 +378,7 @@ private:
     class TaskPayloadDestroyScope final : NoCopy{
     public:
         explicit TaskPayloadDestroyScope(GpuTaskGraph& graph)noexcept;
-        ~TaskPayloadDestroyScope();
+        ~TaskPayloadDestroyScope()noexcept;
 
 
     public:
@@ -392,7 +393,7 @@ private:
     class ResetCompletionScope final : NoCopy{
     public:
         explicit ResetCompletionScope(GpuTaskGraph& graph)noexcept;
-        ~ResetCompletionScope();
+        ~ResetCompletionScope()noexcept;
 
 
     public:
@@ -412,7 +413,7 @@ private:
         friend class GpuTaskScheduler;
 
     public:
-        RecordingAttemptScope() = default;
+        RecordingAttemptScope()noexcept = default;
         ~RecordingAttemptScope()noexcept;
 
 
@@ -441,9 +442,9 @@ private:
         friend class GpuTaskGraph;
 
     public:
-        PacketRecordingAbort() = default;
+        PacketRecordingAbort()noexcept = default;
         PacketRecordingAbort(PacketRecordingAbort&& other)noexcept;
-        ~PacketRecordingAbort();
+        ~PacketRecordingAbort()noexcept;
 
 
     public:
@@ -474,7 +475,7 @@ private:
         friend class PacketRecordingAccess;
 
     public:
-        PacketRecordingLease() = default;
+        PacketRecordingLease()noexcept = default;
         PacketRecordingLease(PacketRecordingLease&&) = delete;
         PacketRecordingLease& operator=(PacketRecordingLease&&) = delete;
 
@@ -532,7 +533,7 @@ private:
         friend class GpuGraphSubmissionTransaction;
 
     public:
-        PacketSubmissionLease() = default;
+        PacketSubmissionLease()noexcept = default;
         PacketSubmissionLease(PacketSubmissionLease&&) = delete;
         PacketSubmissionLease& operator=(PacketSubmissionLease&&) = delete;
 
@@ -716,11 +717,11 @@ private:
     };
 
     struct GpuUploadBlobNode{
+        GraphicsBytes bytes;
+
         explicit GpuUploadBlobNode(GraphicsArena& arena)
             : bytes(arena)
         {}
-
-        GraphicsBytes bytes;
     };
 
 
@@ -893,9 +894,6 @@ public:
     [[nodiscard]] GpuGraphResourceId importResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc);
-    // Reuses a typed texture import whose identity may have been chosen by an earlier producer.
-    // This lets later consumers add resource uses for the same physical texture without inventing incompatible graph metadata.
-    // Reuses a typed buffer import from an earlier producer (later consumers add uses without new metadata).
     [[nodiscard]] GpuGraphResourceId importAccelStruct(const RayTracingAccelStructHandle& accelStruct, const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importHazardDomain(const GpuGraphResourceDesc& desc);
     // Declares a distinct semantic value for one exact physical resource range. Repeating an identical descriptor intentionally produces a different version ID.
@@ -943,13 +941,13 @@ private:
     [[nodiscard]] bool recordTask(const GpuTaskId& task, CommandList& commandList, const GpuTaskRecordContext& context, const PacketRecordingLease& lease, bool& outRecordThunkInvoked)const;
 
     // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
-    void discardPacketTasksWithinLock(const GpuSubmissionPacket& packetPlan, const GpuTaskId* const tasks)const noexcept{
+    void discardPacketTasksWithinLock(const GpuSubmissionPacket& packetPlan, const GpuTaskId* const tasks, const u64 notificationGeneration = 0u)const noexcept{
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             task.lifecycleState = TaskLifecycleState::Discarded;
             task.recordingClaimGeneration = 0u;
             task.submissionClaimGeneration = 0u;
-            task.discardNotificationGeneration = 0u;
+            task.discardNotificationGeneration = notificationGeneration;
             task.recordThunkInProgress = false;
             task.recordThunkCompleted = false;
         }

@@ -265,7 +265,7 @@ void nwbCsgInsertIntervalPeelEntry(inout NwbCsgIntervalPeelEntry entries[NWB_CSG
     }
 }
 
-void nwbCsgWriteIntervalPeelEntries(const uint2 pixel, const NwbCsgIntervalPeelEntry entries[NWB_CSG_PEEL_LAYER_COUNT]){
+void nwbCsgWriteIntervalPeelEntries(const uint2 pixel, __constref NwbCsgIntervalPeelEntry entries[NWB_CSG_PEEL_LAYER_COUNT]){
     const uint layerCount = nwbCsgIntervalPeelLayerCount();
     [unroll] for(uint layerIndex = 0u; layerIndex < NWB_CSG_PEEL_LAYER_COUNT; ++layerIndex){
         if(layerIndex >= layerCount)

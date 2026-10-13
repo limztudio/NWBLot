@@ -5,6 +5,7 @@
 #include "compiler_internal.h"
 
 #include <core/graphics/rhi/queue_sharing.h>
+
 #include <global/atomic.h>
 #include <global/termination.h>
 

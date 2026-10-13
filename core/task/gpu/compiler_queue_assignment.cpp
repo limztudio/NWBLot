@@ -60,7 +60,7 @@ bool GpuTaskGraphCompiler::assignQueues(
         return false;
     outAssignments.reset();
 
-    const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task = {}, const GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None){
+    const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task = {}, const GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None)noexcept{
         outAssignments.m_diagnostic.status = status;
         outAssignments.m_diagnostic.task = task;
         outAssignments.m_diagnostic.requiredCapabilities = requiredCapabilities;

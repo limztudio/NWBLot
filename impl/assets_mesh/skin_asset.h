@@ -25,12 +25,12 @@ NWB_IMPL_BEGIN
 
 class Skin final : public Core::Assets::TypedAsset<Skin>{
 public:
-    NWB_DEFINE_ASSET_TYPE("skin")
+    using InfluenceVector = Core::Assets::AssetVector<SkinInfluence4>;
+    using InverseBindMatrixVector = Core::Assets::AssetVector<SkeletonJointMatrix>;
 
 
 public:
-    using InfluenceVector = Core::Assets::AssetVector<SkinInfluence4>;
-    using InverseBindMatrixVector = Core::Assets::AssetVector<SkeletonJointMatrix>;
+    NWB_DEFINE_ASSET_TYPE("skin")
 
 
 public:

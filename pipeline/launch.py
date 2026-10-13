@@ -104,13 +104,13 @@ def discover_inputs(roots: list[Path], inputs: list[Path] | None, repo_root: Pat
 
 
 def write_inputs(path: Path, values: list[Path]) -> None:
-    text = ""
+    lines = []
     for value in values:
         spelling = str(value)
         if "\n" in spelling or "\r" in spelling:
             raise ValueError("Asset paths must not contain newlines")
-        text += spelling + "\n"
-    path.write_text(text, encoding=TEXT_ENCODING, newline="\n")
+        lines.append(spelling + "\n")
+    path.write_text("".join(lines), encoding=TEXT_ENCODING, newline="\n")
 
 
 def run_stage(executable: Path, arguments: list[str], repo_root: Path) -> None:

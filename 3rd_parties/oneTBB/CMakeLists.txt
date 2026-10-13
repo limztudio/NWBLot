@@ -1,5 +1,3 @@
-include("${PROJECT_SOURCE_DIR}/configuration/ImportedLibraries.cmake")
-
 find_package(Threads REQUIRED)
 
 if(WIN32)
@@ -115,86 +113,29 @@ else()
         )
     endfunction()
 
-    find_package(TBB CONFIG QUIET)
-    if(TARGET TBB::tbb)
-        foreach(_nwb_tbb_imported_target
-                TBB::tbb
-                TBB::tbbmalloc
-                TBB::tbbmalloc_proxy
-                TBB::tbbbind_2_5
-                TBB::irml)
-            nwb_normalize_tbb_imported_config(${_nwb_tbb_imported_target})
-        endforeach()
-
-        if(NOT TARGET TBB::tbbmalloc)
-            find_library(_tbbmalloc_library NAMES tbbmalloc libtbbmalloc.so.2 libtbbmalloc)
-            if(NOT _tbbmalloc_library)
-                message(FATAL_ERROR "Failed to locate tbbmalloc for Linux builds")
-            endif()
-            add_library(TBB::tbbmalloc UNKNOWN IMPORTED GLOBAL)
-            get_target_property(_tbb_include_dirs TBB::tbb INTERFACE_INCLUDE_DIRECTORIES)
-            nwb_set_imported_library_locations(TBB::tbbmalloc DEFAULT "${_tbbmalloc_library}")
-            set_target_properties(TBB::tbbmalloc PROPERTIES
-                INTERFACE_INCLUDE_DIRECTORIES "${_tbb_include_dirs}"
-            )
-        endif()
-        nwb_normalize_tbb_imported_config(TBB::tbbmalloc)
-    else()
-        find_path(_nwb_tbb_include_dir
-            NAMES tbb/tbb.h
-            HINTS "${CMAKE_CURRENT_LIST_DIR}" "${CMAKE_CURRENT_LIST_DIR}/include"
-            PATH_SUFFIXES include Include
-        )
-        find_library(_nwb_tbb_library
-            NAMES tbb libtbb.so.12 libtbb
-            HINTS /usr /usr/local /
-            PATH_SUFFIXES lib Lib lib64
-        )
-        find_library(_nwb_tbbmalloc_library
-            NAMES tbbmalloc libtbbmalloc.so.2 libtbbmalloc
-            HINTS /usr /usr/local /
-            PATH_SUFFIXES lib Lib lib64
-        )
-
-        if(NOT _nwb_tbb_include_dir OR NOT _nwb_tbb_library OR NOT _nwb_tbbmalloc_library)
-            message(FATAL_ERROR
-                "Failed to locate TBB. Install oneTBB development files or provide compatible TBB and tbbmalloc shared libraries with headers."
-            )
-        endif()
-
-        add_library(nwb_tbb_raw UNKNOWN IMPORTED GLOBAL)
-        nwb_set_imported_library_locations(nwb_tbb_raw DEFAULT "${_nwb_tbb_library}")
-        set_target_properties(nwb_tbb_raw PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${_nwb_tbb_include_dir}"
-            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_nwb_tbb_include_dir}"
-        )
-
-        add_library(nwb_tbbmalloc_raw UNKNOWN IMPORTED GLOBAL)
-        nwb_set_imported_library_locations(nwb_tbbmalloc_raw DEFAULT "${_nwb_tbbmalloc_library}")
-        set_target_properties(nwb_tbbmalloc_raw PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${_nwb_tbb_include_dir}"
-            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_nwb_tbb_include_dir}"
-        )
+    find_package(TBB CONFIG REQUIRED)
+    if(NOT TARGET TBB::tbb OR NOT TARGET TBB::tbbmalloc)
+        message(FATAL_ERROR "TBB discovery must export the required TBB::tbb and TBB::tbbmalloc targets")
     endif()
+    foreach(_nwb_tbb_imported_target
+            TBB::tbb
+            TBB::tbbmalloc
+            TBB::tbbmalloc_proxy
+            TBB::tbbbind_2_5
+            TBB::irml)
+        nwb_normalize_tbb_imported_config(${_nwb_tbb_imported_target})
+    endforeach()
 
     add_library(nwb_tbb INTERFACE)
     add_library(nwb::tbb ALIAS nwb_tbb)
     # Linux links the system TBB runtime, but NWB-local header patches (allocator POCMA)
     # live in this vendored include tree and must win over /usr/include.
     target_include_directories(nwb_tbb SYSTEM BEFORE INTERFACE "${CMAKE_CURRENT_LIST_DIR}/include")
-    if(TARGET TBB::tbb)
-        target_link_libraries(nwb_tbb INTERFACE TBB::tbb)
-    else()
-        target_link_libraries(nwb_tbb INTERFACE nwb_tbb_raw)
-    endif()
+    target_link_libraries(nwb_tbb INTERFACE TBB::tbb)
 
     add_library(nwb_tbbmalloc INTERFACE)
     add_library(nwb::tbbmalloc ALIAS nwb_tbbmalloc)
-    if(TARGET TBB::tbbmalloc)
-        target_link_libraries(nwb_tbbmalloc INTERFACE TBB::tbbmalloc)
-    else()
-        target_link_libraries(nwb_tbbmalloc INTERFACE nwb_tbbmalloc_raw)
-    endif()
+    target_link_libraries(nwb_tbbmalloc INTERFACE TBB::tbbmalloc)
 endif()
 
 if(NOT TARGET nwb::tbb_headers)

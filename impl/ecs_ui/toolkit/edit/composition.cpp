@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditModel::beginComposition(){
+bool EditModel::beginComposition()noexcept{
     if(m_compositionActive)
         return true;
     m_compositionAnchor = m_anchor;

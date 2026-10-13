@@ -6,6 +6,7 @@
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/command.h>
+
 #include <global/allocation_size.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
@@ -33,7 +34,7 @@ public:
         , m_payload(payload)
         , m_destroyPayload(destroyPayload)
     {}
-    ~UnappendedPayloadDestroyScope(){
+    ~UnappendedPayloadDestroyScope()noexcept{
         if(m_payload && m_destroyPayload)
             m_destroyPayload(m_arena, m_payload);
     }
@@ -90,7 +91,7 @@ GpuTaskGraph::TaskPayloadDestroyScope::TaskPayloadDestroyScope(GpuTaskGraph& gra
     : m_graph(graph)
 {}
 
-GpuTaskGraph::TaskPayloadDestroyScope::~TaskPayloadDestroyScope(){
+GpuTaskGraph::TaskPayloadDestroyScope::~TaskPayloadDestroyScope()noexcept{
     if(m_active)
         m_graph.destroyTaskPayloadObjects();
 }

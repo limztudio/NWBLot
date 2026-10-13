@@ -9,13 +9,13 @@
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_scene/module.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_mesh/module.h>
-#include <impl/ecs_scene/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,6 +6,7 @@
 #include "state_tracking_detail.h"
 
 #include <core/common/log.h>
+
 #include <global/containers.h>
 
 
@@ -118,7 +119,7 @@ void NormalizeBarrierScopeForQueueCapabilities(const GpuQueueCapability::Mask ca
     constexpr VkPipelineStageFlags2 s_TransferWriteAccessStageMask = (s_TransferStageMask & ~VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR) | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
     const bool allCommands = (stageMask & VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) != 0u;
     const bool allGraphics = graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT) != 0u;
-    const auto stripUnless = [&](const VkAccessFlags2 affectedAccess, const bool supported){
+    const auto stripUnless = [&](const VkAccessFlags2 affectedAccess, const bool supported)noexcept{
         if(!supported)
             accessMask &= ~affectedAccess;
     };
@@ -275,7 +276,7 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
     if(m_renderPassActive){
         resumeFramebuffer = m_renderPassFramebuffer;
 
-        const auto attachmentOverlapsBarrier = [&](const FramebufferAttachment& attachment){
+        const auto attachmentOverlapsBarrier = [&](const FramebufferAttachment& attachment)noexcept{
             if(!attachment.texture)
                 return false;
 

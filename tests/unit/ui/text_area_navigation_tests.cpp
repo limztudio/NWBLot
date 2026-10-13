@@ -35,23 +35,7 @@ public:
 
 
 protected:
-    [[nodiscard]] bool installKoreanFallback(){
-        const auto path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "korean.font";
-        Core::Assets::AssetBytes bytes(m_arena);
-        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-        if(!bytesResult)
-            return false;
-        bytes = Move(*bytesResult);
-        Font korean(m_arena, Name("tests/ui/fonts/korean"));
-        korean.setFontBytes(Move(bytes));
-        if(!korean.validatePayload())
-            return false;
-        const FontSource sources[]{
-            { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u },
-            { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), korean, 1u },
-        };
-        return m_text.setFonts(sources, LengthOf(sources));
-    }
+
 
     [[nodiscard]] bool shapeCurrent(){
         return m_view.snapshot(m_model) && m_view.shape(m_text, { {}, 14.0f }) == TextLayoutStatus::Success;

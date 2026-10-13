@@ -8,6 +8,7 @@
 #include "resource_bindings_detail.h"
 
 #include <core/common/log.h>
+
 #include <global/termination.h>
 
 

@@ -3,7 +3,6 @@
 
 
 #include "system.h"
-
 #include "arena_names.h"
 #include "graph_resource_uses.h"
 #include "live_state_buffers.h"
@@ -13,6 +12,8 @@
 #include "skin_payload.h"
 #include "timing_names.h"
 
+#include <impl/ecs_skeleton/runtime_helpers.h>
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -21,8 +22,8 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/compiler.h>
 #include <core/task/gpu/scheduler.h>
+
 #include <global/termination.h>
-#include <impl/ecs_skeleton/runtime_helpers.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -827,7 +828,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return context->statePrepared;
     };
     const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{ .task = terminalTask, .context = &skinningState, .invoke = prepareSkinningState, };
-    const auto acceptSkinningTask = [](void* const rawContext, const Core::QueueSubmissionToken& token) -> bool {
+    const auto acceptSkinningTask = [](void* const rawContext, const Core::QueueSubmissionToken& token)noexcept -> bool {
         static_cast<void>(token);
         SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
         if(!context || !context->cache || !context->candidate || !context->statePrepared)

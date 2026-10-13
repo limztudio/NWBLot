@@ -155,12 +155,12 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
     return resourceFieldCount == resourceReferences.size();
 }
 
-[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name){
+[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name)noexcept{
     return UpdateFnv64(hash, reinterpret_cast<const u8*>(&name.hash()), sizeof(NameHash));
 }
 
 template<typename ValueType>
-[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashValue(u64 hash, const ValueType& value){
+[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashValue(u64 hash, const ValueType& value)noexcept{
     return UpdateFnv64(hash, reinterpret_cast<const u8*>(&value), sizeof(value));
 }
 

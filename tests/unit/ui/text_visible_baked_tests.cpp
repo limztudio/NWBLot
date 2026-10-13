@@ -6,7 +6,7 @@
 
 #include <global/simplemath.h>
 
-#include <hb.h>
+#include "baked_font_fixture.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,16 +25,16 @@ using namespace NWB::UiTextVisibleTests;
 
 class TextVisibleBakedTests : public TextVisibleFixture{
 protected:
-    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin){
+    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
         return Rect{ origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
     }
 
-    [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin){
+    [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin)noexcept{
         const Rect outline = OutlineRectangle(glyph, origin);
         return { outline.x + outline.width * 0.5f, outline.y + outline.height * 0.5f, 1.0f, 1.0f };
     }
 
-    [[nodiscard]] static Rect BakedRectangle(const PlacedGlyph& glyph, const Point origin){
+    [[nodiscard]] static Rect BakedRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
         const BakedFontAtlas& atlas = *glyph.face->bakedAtlas();
         const FontAtlasGlyph& record = *atlas.glyph(glyph.glyphId);
         const f32 scale = 32.0f / static_cast<f32>(atlas.unitsPerEm());
@@ -60,26 +60,7 @@ protected:
         payload.font = Core::Assets::AssetRef<Font>("tests/ui/fonts/latin");
         const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
         payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
-        hb_blob_t* blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
-        hb_face_t* face = hb_face_create(blob, 0u);
-        payload.unitsPerEm = hb_face_get_upem(face);
-        payload.sourceGlyphCount = hb_face_get_glyph_count(face);
-        const u32 tags[]{ s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
-        for(const u32 tag : tags){
-            hb_blob_t* tableBlob = hb_face_reference_table(face, tag);
-            u32 size = 0u;
-            const char* data = hb_blob_get_data(tableBlob, &size);
-            if(size != 0u){
-                payload.positioningTables.emplace_back(m_arena);
-                FontAtlasPositioningTable& table = payload.positioningTables.back();
-                table.tag = tag;
-                table.bytes.assign(reinterpret_cast<const u8*>(data), reinterpret_cast<const u8*>(data) + size);
-                table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
-            }
-            hb_blob_destroy(tableBlob);
-        }
-        hb_face_destroy(face);
-        hb_blob_destroy(blob);
+        UiFixtureSupport::PopulateBakedFontTables(bytes, payload, m_arena);
         payload.bakePpem = 32u;
         payload.ascenderUnits = 1000.0f;
         payload.descenderUnits = -250.0f;
@@ -119,7 +100,8 @@ protected:
             group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
         }
         m_baked.setPayload(Move(payload));
-        if(!m_baked.validatePayload())
+        Core::Alloc::ScratchArena scratchArena(Name("tests/ui/text/visible_baked/validation_scratch"));
+        if(!m_baked.validatePayload(scratchArena))
             return false;
         const FontSource sources[]{
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u, &m_baked },

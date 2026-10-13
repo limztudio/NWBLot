@@ -178,7 +178,9 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     m_context.deviceDispatch.vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
-    auto* om = NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context);
+    RayTracingOpacityMicromapHandle om(NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context), RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!om)
+        return nullptr;
     om->m_desc = desc;
     om->m_maxOpacity2StateSubdivisionLevel = opacityMicromapProperties.maxOpacity2StateSubdivisionLevel;
     om->m_maxOpacity4StateSubdivisionLevel = opacityMicromapProperties.maxOpacity4StateSubdivisionLevel;
@@ -194,14 +196,12 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     om->m_dataBuffer = createBuffer(bufferDesc);
     if(!om->m_dataBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap storage buffer"));
-        DestroyArenaObject(m_context.objectArena, om);
         return nullptr;
     }
 
     auto* buffer = om->m_dataBuffer.get();
     if(!isBufferReadyForGpuUse(buffer, VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: storage buffer is not ready for device-address access"));
-        DestroyArenaObject(m_context.objectArena, om);
         return nullptr;
     }
 
@@ -213,11 +213,10 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     res = m_context.deviceDispatch.vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, om);
         return nullptr;
     }
 
-    return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return om;
 }
 
 void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){

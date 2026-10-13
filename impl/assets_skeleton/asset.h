@@ -9,6 +9,7 @@
 
 #include <impl/assets_skeleton/joint_types.h>
 
+#include <core/alloc/scratch.h>
 #include <core/assets/module.h>
 
 
@@ -38,12 +39,12 @@ struct SkeletonJoint{
 
 class Skeleton final : public Core::Assets::TypedAsset<Skeleton>{
 public:
-    NWB_DEFINE_ASSET_TYPE("skeleton")
+    using JointVector = Core::Assets::AssetVector<SkeletonJoint>;
+    using JointIndexMap = HashMap<Name, u32, Core::Assets::AssetArena, Hasher<Name>, EqualTo<Name>>;
 
 
 public:
-    using JointVector = Core::Assets::AssetVector<SkeletonJoint>;
-    using JointIndexMap = HashMap<Name, u32, Core::Assets::AssetArena, Hasher<Name>, EqualTo<Name>>;
+    NWB_DEFINE_ASSET_TYPE("skeleton")
 
 
 public:
@@ -59,10 +60,6 @@ public:
 
 
 public:
-    bool loadBinary(const Core::Assets::AssetBytes& binary);
-    [[nodiscard]] bool validatePayload()const;
-
-public:
     void setJoints(JointVector&& joints, JointIndexMap&& jointIndices);
 
 public:
@@ -70,6 +67,10 @@ public:
     [[nodiscard]] const JointIndexMap& jointIndices()const noexcept{ return m_jointIndices; }
     [[nodiscard]] u32 jointCount()const noexcept{ return static_cast<u32>(m_joints.size()); }
     [[nodiscard]] u32 findJointIndex(Name jointName)const;
+
+public:
+    [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
+    bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 
 private:

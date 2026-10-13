@@ -144,29 +144,29 @@ inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble
 [[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const SIMDMatrix& matrix)noexcept{
     const SIMDVectorSingle centerVector = CollisionDetail::SphereCenter(sphereValue);
     const SIMDVectorSingle sphereRadius = VectorSplatW(sphereValue);
-    const auto decomposition = MatrixDecompose(matrix);
-    if(decomposition){
-        const SIMDVectorSingle absScale = VectorAbs(decomposition->scale);
-        const SIMDVectorSingle maxScale = CollisionDetail::Vector3MaxComponent(absScale);
-        return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScale));
-    }
-
-    const SIMDVectorSingle maxScaleVector = VectorMax(Vector3Length(matrix.v[0]), VectorMax(Vector3Length(matrix.v[1]), Vector3Length(matrix.v[2])));
-    return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScaleVector));
+    const SIMDMatrix transposed = MatrixTranspose(matrix);
+    // The largest absolute row sum of A^T A bounds its largest eigenvalue, including shear admitted by decomposition tolerances.
+    const SIMDVectorSingle diagonal = VectorMergeX(Vector3LengthSq(transposed.v[0]), Vector3LengthSq(transposed.v[1]), Vector3LengthSq(transposed.v[2]), VectorZero());
+    const SIMDVectorSingle dot01 = VectorAbs(Vector3Dot(transposed.v[0], transposed.v[1]));
+    const SIMDVectorSingle dot02 = VectorAbs(Vector3Dot(transposed.v[0], transposed.v[2]));
+    const SIMDVectorSingle dot12 = VectorAbs(Vector3Dot(transposed.v[1], transposed.v[2]));
+    const SIMDVectorSingle offDiagonal = VectorMergeX(VectorAdd(dot01, dot02), VectorAdd(dot01, dot12), VectorAdd(dot02, dot12), VectorZero());
+    const SIMDVectorSingle radiusScale = VectorSqrt(CollisionDetail::Vector3MaxComponent(VectorAdd(diagonal, offDiagonal)));
+    return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, radiusScale));
 }
 
 [[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(SIMDVectorDouble sphereValue, const SIMDMatrixDouble& matrix)noexcept{
     const SIMDVectorDouble centerVector = CollisionDoubleDetail::SphereCenter(sphereValue);
     const SIMDVectorDouble sphereRadius = VectorDoubleSplatW(sphereValue);
-    const auto decomposition = MatrixDoubleDecompose(matrix);
-    if(decomposition){
-        const SIMDVectorDouble absScale = VectorDoubleAbs(decomposition->scale);
-        const SIMDVectorDouble maxScale = CollisionDoubleDetail::VectorDouble3MaxComponent(absScale);
-        return CollisionDoubleDetail::SphereCenterRadius(VectorDouble3Transform(centerVector, matrix), VectorDoubleMultiply(sphereRadius, maxScale));
-    }
-
-    const SIMDVectorDouble maxScaleVector = VectorDoubleMax(VectorDouble3Length(matrix.v[0]), VectorDoubleMax(VectorDouble3Length(matrix.v[1]), VectorDouble3Length(matrix.v[2])));
-    return CollisionDoubleDetail::SphereCenterRadius(VectorDouble3Transform(centerVector, matrix), VectorDoubleMultiply(sphereRadius, maxScaleVector));
+    const SIMDMatrixDouble transposed = MatrixDoubleTranspose(matrix);
+    // The largest absolute row sum of A^T A bounds its largest eigenvalue, including shear admitted by decomposition tolerances.
+    const SIMDVectorDouble diagonal = VectorDoubleMergeX(VectorDouble3LengthSq(transposed.v[0]), VectorDouble3LengthSq(transposed.v[1]), VectorDouble3LengthSq(transposed.v[2]), VectorDoubleZero());
+    const SIMDVectorDouble dot01 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[0], transposed.v[1]));
+    const SIMDVectorDouble dot02 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[0], transposed.v[2]));
+    const SIMDVectorDouble dot12 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[1], transposed.v[2]));
+    const SIMDVectorDouble offDiagonal = VectorDoubleMergeX(VectorDoubleAdd(dot01, dot02), VectorDoubleAdd(dot01, dot12), VectorDoubleAdd(dot02, dot12), VectorDoubleZero());
+    const SIMDVectorDouble radiusScale = VectorDoubleSqrt(CollisionDoubleDetail::VectorDouble3MaxComponent(VectorDoubleAdd(diagonal, offDiagonal)));
+    return CollisionDoubleDetail::SphereCenterRadius(VectorDouble3Transform(centerVector, matrix), VectorDoubleMultiply(sphereRadius, radiusScale));
 }
 
 [[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)noexcept{

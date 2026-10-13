@@ -40,7 +40,7 @@ struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTe
     using Copy = CopyTextureCopy;
 
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy){ return copy.source && copy.destination; },
+        return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy)noexcept{ return copy.source && copy.destination; },
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
                 return captureContext.commandIrCapture->captureCopyTexture(captureContext.task, captureContext.packet, captureContext.queue, copy.sourceResource, copy.sourceSlice, copy.destinationResource, copy.destinationSlice);
             },
@@ -62,12 +62,12 @@ struct ResolveTextureResolve{
 };
 
 struct ResolveTexturePayload{
+    GraphicsVector<ResolveTextureResolve> resolves;
+    QueueSubmissionToken* acceptedToken = nullptr;
+
     explicit ResolveTexturePayload(GraphicsArena& arena)
         : resolves(arena)
     {}
-
-    GraphicsVector<ResolveTextureResolve> resolves;
-    QueueSubmissionToken* acceptedToken = nullptr;
 };
 
 struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ResolveTexturePayload>{

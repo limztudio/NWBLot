@@ -30,15 +30,9 @@ public:
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const noexcept{ return m_colorStream; }
     [[nodiscard]] const Core::Assets::AssetVector<MeshletDesc>& meshlets()const noexcept{ return m_meshlets; }
     [[nodiscard]] const Core::Assets::AssetVector<MeshletBounds>& meshletBounds()const noexcept{ return m_meshletBounds; }
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const noexcept{
-        return m_meshletPositionRefDeltas;
-    }
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const noexcept{
-        return m_meshletAttributeRefDeltas;
-    }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const noexcept{
-        return m_meshletLocalVertexRefs;
-    }
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const noexcept{ return m_meshletPositionRefDeltas; }
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const noexcept{ return m_meshletAttributeRefDeltas; }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const noexcept{ return m_meshletLocalVertexRefs; }
     [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const noexcept{ return m_meshletPrimitiveIndices; }
     [[nodiscard]] const Core::Assets::AssetVector<u32>& solidTriangleWords()const noexcept{ return m_solidTriangleWords; }
 
@@ -123,21 +117,6 @@ protected:
             m_solidTriangleWords,
             failureContext
         );
-    }
-
-    void clearGeometryPayload()noexcept{
-        m_positionStream.clear();
-        m_normalStream.clear();
-        m_tangentStream.clear();
-        m_uv0Stream.clear();
-        m_colorStream.clear();
-        m_meshlets.clear();
-        m_meshletBounds.clear();
-        m_meshletPositionRefDeltas.clear();
-        m_meshletAttributeRefDeltas.clear();
-        m_meshletLocalVertexRefs.clear();
-        m_meshletPrimitiveIndices.clear();
-        m_solidTriangleWords.clear();
     }
 
 

@@ -80,7 +80,7 @@ SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)
 
 
 void SystemScheduler::addSystem(ISystem& system){
-    if(FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](ISystem* iterSystem){ return iterSystem == &system; }) != m_allSystems.end())
+    if(FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](ISystem* iterSystem)noexcept{ return iterSystem == &system; }) != m_allSystems.end())
         return;
 
     m_allSystems.push_back(&system);

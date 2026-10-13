@@ -177,7 +177,14 @@ public:
         if(!opticalParameters(*primary, 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)))
             return false;
         const Name group("smoke/refraction/identity");
-        AddStaticCsgMeshReceiver(m_world, *primary, group, false, true);
+        if(!farPlaneReceiver(*primary, group))
+            return false;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: full primary entity identity {}"), primary->id);
+        return true;
+    }
+
+    [[nodiscard]] bool farPlaneReceiver(const Core::ECS::EntityID entity, const Name group){
+        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
         auto cutterEntity = m_world.createEntity();
         if(!cutterEntity.id().valid())
             return false;
@@ -188,7 +195,6 @@ public:
         parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
         AssignCsgCutterParameters(cutter, parameters);
         AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: full primary entity identity {}"), primary->id);
         return true;
     }
 
@@ -201,17 +207,8 @@ public:
         if(!entity.valid())
             return false;
         const Name group("smoke/refraction/csg_crossing_overflow");
-        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
-        auto cutterEntity = m_world.createEntity();
-        if(!cutterEntity.id().valid())
+        if(!farPlaneReceiver(entity, group))
             return false;
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
-        cutter.receiverGroup = group;
-        cutter.shapeType = Name("engine/csg/plane");
-        Impl::CsgPlaneShapeParameters parameters;
-        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
-        AssignCsgCutterParameters(cutter, parameters);
-        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
         return true;
     }
 
@@ -230,17 +227,8 @@ public:
         if(!csg)
             return true;
         const Name group("smoke/refraction/near_air");
-        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
-        auto cutterEntity = m_world.createEntity();
-        if(!cutterEntity.id().valid())
+        if(!farPlaneReceiver(entity, group))
             return false;
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
-        cutter.receiverGroup = group;
-        cutter.shapeType = Name("engine/csg/plane");
-        Impl::CsgPlaneShapeParameters parameters;
-        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
-        AssignCsgCutterParameters(cutter, parameters);
-        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
         return true;
     }
 

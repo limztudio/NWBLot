@@ -9,6 +9,7 @@
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
+
 #include <global/algorithm.h>
 
 
@@ -68,8 +69,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: name index capacity overflows"));
             return false;
         }
-        // The map's default 0.5 load factor needs two buckets per possible distinct name.
-        // Construct the final bucket array directly so scratch storage never needs a reserve-time rehash.
+        // Construct the final bucket array at the map's default 0.5 load factor so scratch storage never needs a reserve-time rehash.
         objectNames.emplace(objectCount * 2u, scratchArena);
         const auto indexObjects = [&objectNames](const auto& objects, const u8 flags){
             for(const auto& object : objects){
@@ -88,6 +88,10 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_skeletonObjects.size(); ++i){
         const ModelSkeletonObject& object = m_skeletonObjects[i];
+        if(!MatrixIsAffine(LoadFloat(object.transform), 0.0f)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} has non-finite transform"), i);
+            return false;
+        }
         if(!object.name || !object.skeleton.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} is incomplete"), i);
             return false;
@@ -100,6 +104,10 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_staticMeshObjects.size(); ++i){
         const ModelStaticMeshObject& object = m_staticMeshObjects[i];
+        if(!MatrixIsAffine(LoadFloat(object.transform), 0.0f)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has non-finite transform"), i);
+            return false;
+        }
         if(!object.name || !object.mesh.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} is incomplete"), i);
             return false;
@@ -136,6 +144,10 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_skinnedMeshObjects.size(); ++i){
         const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
+        if(!MatrixIsAffine(LoadFloat(object.transform), 0.0f)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has non-finite transform"), i);
+            return false;
+        }
         if(!object.name || !object.skin.valid() || !object.skeletonObject){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} is incomplete"), i);
             return false;
@@ -164,19 +176,20 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
 bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_LoadBinaryArena);
-    m_skeletonObjects.clear();
-    m_staticMeshObjects.clear();
-    m_skinnedMeshObjects.clear();
-
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(binary, cursor, ModelBinaryPayload::s_ModelMagic, NWB_TEXT("Model::loadBinary"), NWB_TEXT("model"));
     if(!headerResult)
         return false;
     const ModelBinaryPayload::ModelHeaderBinary& header = *headerResult;
 
-    Core::Assets::AssetVector<ModelBinaryPayload::ModelSkeletonObjectBinary> skeletonObjectBinaries(m_skeletonObjects.get_allocator().arena());
-    Core::Assets::AssetVector<ModelBinaryPayload::ModelStaticMeshObjectBinary> staticMeshObjectBinaries(m_staticMeshObjects.get_allocator().arena());
-    Core::Assets::AssetVector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary> skinnedMeshObjectBinaries(m_skinnedMeshObjects.get_allocator().arena());
+    if(header.padding0 != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Model::loadBinary failed: reserved header fields must be zero"));
+        return false;
+    }
+    Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
+    Vector<ModelBinaryPayload::ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
+    Vector<ModelBinaryPayload::ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
+    Vector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
 
     if(!Core::Assets::ReadVectorPayload(binary, cursor, header.skeletonObjectCount, skeletonObjectBinaries, NWB_TEXT("Model::loadBinary"), NWB_TEXT("skeleton objects")))
         return false;
@@ -185,16 +198,16 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!Core::Assets::ReadVectorPayload(binary, cursor, header.skinnedMeshObjectCount, skinnedMeshObjectBinaries, NWB_TEXT("Model::loadBinary"), NWB_TEXT("skinned mesh objects")))
         return false;
 
-    m_skeletonObjects.reserve(skeletonObjectBinaries.size());
+    candidate.m_skeletonObjects.reserve(skeletonObjectBinaries.size());
     for(const ModelBinaryPayload::ModelSkeletonObjectBinary& objectBinary : skeletonObjectBinaries){
         ModelSkeletonObject object;
         object.name = Name(objectBinary.nameHash);
         object.skeleton.virtualPath = Name(objectBinary.skeletonNameHash);
         object.transform = objectBinary.transform;
-        m_skeletonObjects.push_back(object);
+        candidate.m_skeletonObjects.push_back(object);
     }
 
-    m_staticMeshObjects.reserve(staticMeshObjectBinaries.size());
+    candidate.m_staticMeshObjects.reserve(staticMeshObjectBinaries.size());
     for(const ModelBinaryPayload::ModelStaticMeshObjectBinary& objectBinary : staticMeshObjectBinaries){
         ModelStaticMeshObject object;
         object.name = Name(objectBinary.nameHash);
@@ -203,10 +216,10 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         object.parentObject = Name(objectBinary.parentObjectNameHash);
         object.parentJoint = Name(objectBinary.parentJointNameHash);
         object.transform = objectBinary.transform;
-        m_staticMeshObjects.push_back(object);
+        candidate.m_staticMeshObjects.push_back(object);
     }
 
-    m_skinnedMeshObjects.reserve(skinnedMeshObjectBinaries.size());
+    candidate.m_skinnedMeshObjects.reserve(skinnedMeshObjectBinaries.size());
     for(const ModelBinaryPayload::ModelSkinnedMeshObjectBinary& objectBinary : skinnedMeshObjectBinaries){
         ModelSkinnedMeshObject object;
         object.name = Name(objectBinary.nameHash);
@@ -214,10 +227,13 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         object.material.virtualPath = Name(objectBinary.materialNameHash);
         object.skeletonObject = Name(objectBinary.skeletonObjectNameHash);
         object.transform = objectBinary.transform;
-        m_skinnedMeshObjects.push_back(object);
+        candidate.m_skinnedMeshObjects.push_back(object);
     }
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Model::loadBinary")) && validatePayload(scratchArena);
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Model::loadBinary")) || !candidate.validatePayload(scratchArena))
+        return false;
+    *this = Move(candidate);
+    return true;
 }
 
 

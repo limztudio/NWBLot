@@ -128,11 +128,17 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
             left, right = max(0, math.ceil(cx * scale_x)), min(width, math.floor((cx + min(cw, 200.0)) * scale_x))
             top, bottom = max(0, math.ceil(cy * scale_y)), min(height, math.floor((cy + ch) * scale_y))
             candidates = []
+            coverage_cache = {}
             for y in range(top, bottom):
                 for x in range(left, right):
                     if abs(x - caret_column) <= 2:
                         continue
-                    coverage, residual, color = ink_coverage(rows[y][x], background, foreground)
+                    pixel = rows[y][x]
+                    covered = coverage_cache.get(pixel)
+                    if covered is None:
+                        covered = ink_coverage(pixel, background, foreground)
+                        coverage_cache[pixel] = covered
+                    coverage, residual, color = covered
                     if coverage >= 0.25:
                         candidates.append((residual, -coverage, x, y, color, rows[y][x]))
             closest = min(candidates, default=None)

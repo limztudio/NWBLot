@@ -59,7 +59,7 @@ public:
 
 public:
     void open()noexcept;
-    void close()noexcept;
+    void close()noexcept{ m_open = false; }
     [[nodiscard]] bool isOpen()const noexcept{ return m_open; }
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
     [[nodiscard]] u64 openGeneration()const noexcept{ return m_openGeneration; }

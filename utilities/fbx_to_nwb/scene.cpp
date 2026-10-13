@@ -31,7 +31,7 @@ static constexpr f32 s_TargetUnitMeters = 1.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView UfbxStringView(const ufbx_string value){
+AStringView UfbxStringView(const ufbx_string value)noexcept{
     if(!value.data || value.length == 0u)
         return {};
     return AStringView(value.data, value.length);

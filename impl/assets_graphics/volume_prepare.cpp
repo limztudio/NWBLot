@@ -17,6 +17,7 @@
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/shader_types.h>
 #include <impl/assets_shader/cook.h>
+
 #include <core/assets/volume/volume_prepare_registry.h>
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
@@ -181,7 +182,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
     if(!ParseMaterialBindFiles(context, graphicsMetadata))
         return false;
-    if(!AssetsCsgCook::AssignCsgShapeCookIds(graphicsMetadata.csgShapeEntries))
+    if(!AssetsCsgCook::AssignCsgShapeCookIds(graphicsMetadata.csgShapeEntries, context.scratchArena))
         return false;
 
     auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());

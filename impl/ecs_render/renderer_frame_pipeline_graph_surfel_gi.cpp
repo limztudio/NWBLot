@@ -8,15 +8,14 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/raytrace/surfel_gi_lifecycle_builder.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
-
-#include <impl/ecs_render/kernel/task_graph_scheduling.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/raytrace/surfel_gi_lifecycle_builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +95,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         Core::GpuTaskExternalStateSource values[3u] = {};
         usize count = 0u;
     };
-    const auto makeSurfelGiTaskStateSources = [&](const bool includeCompute, const bool includeCounter, const bool includeIrradianceReturn){
+    const auto makeSurfelGiTaskStateSources = [&](const bool includeCompute, const bool includeCounter, const bool includeIrradianceReturn)noexcept{
         SurfelGiTaskStateSourceSet result;
         if(includeCompute && surfelGiComputeStateSource.states){
             result.values[result.count] = surfelGiComputeStateSource;

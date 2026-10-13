@@ -109,7 +109,7 @@ public:
         : m_arena(other.m_arena)
     {}
 
-    constexpr ~ArenaAllocator() = default;
+    constexpr ~ArenaAllocator()noexcept = default;
     constexpr ArenaAllocator& operator=(const ArenaAllocator&)noexcept = default;
 
 
@@ -204,7 +204,7 @@ public:
         : Base(static_cast<const ArenaAllocator<U, ArenaT>&>(other))
     {}
 
-    constexpr ~DefaultArenaAllocator() = default;
+    constexpr ~DefaultArenaAllocator()noexcept = default;
     constexpr DefaultArenaAllocator& operator=(const DefaultArenaAllocator&)noexcept = default;
 };
 
@@ -261,7 +261,7 @@ public:
         : m_arena(other.m_arena)
     {}
 
-    constexpr ~ArenaCacheAlignedAllocator() = default;
+    constexpr ~ArenaCacheAlignedAllocator()noexcept = default;
     constexpr ArenaCacheAlignedAllocator& operator=(const ArenaCacheAlignedAllocator&)noexcept = default;
 
 

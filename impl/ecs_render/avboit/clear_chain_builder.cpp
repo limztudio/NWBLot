@@ -3,12 +3,11 @@
 
 
 #include <impl/ecs_render/avboit/clear_chain_builder.h>
-
-#include <core/graphics/backend_selection/backend.h>
-
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
+
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,12 +58,12 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(Core::GpuTaskGraph& graph, Rend
         avboitClearScheduling.mergeWithPrevious = true;
         // Clear chain and Occupancy share one AVBOIT Pre timing packet across consumer frontiers.
         avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
-        const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency){
+        const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency)noexcept{
             Core::GpuTaskDesc clearDesc;
             clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(avboitClearScheduling).setDependencies(&dependency, 1u);
             return clearDesc;
         };
-        const auto makeAvboitFloatClearDesc = [](const Core::GpuGraphResourceId destination, const Core::Color& value, const Core::GpuClearTextureTaskRecordHooks& recordHooks = {}){
+        const auto makeAvboitFloatClearDesc = [](const Core::GpuGraphResourceId destination, const Core::Color& value, const Core::GpuClearTextureTaskRecordHooks& recordHooks = {})noexcept{
             Core::GpuClearTextureTaskDesc clearDesc;
             clearDesc.destination = destination;
             clearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;

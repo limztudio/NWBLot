@@ -8,6 +8,7 @@
 #include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
+#include <impl/assets_mesh/asset.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
@@ -15,7 +16,6 @@
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/assets_mesh/asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

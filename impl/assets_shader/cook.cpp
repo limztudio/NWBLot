@@ -11,7 +11,6 @@
 #include "cook.h"
 
 #include "source_dependencies.h"
-#include "arena_names.h"
 #include "shader_types.h"
 
 #include <core/assets/paths.h>
@@ -457,8 +456,7 @@ bool ShaderCook::validateVariantSignature(const AStringView contextLabel, const 
     return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
 
-void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata){
-    Alloc::ScratchArena scratchArena(AssetsShaderArenaScope::s_MergeInheritedDefinesArena);
+void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Alloc::ScratchArena& scratchArena){
     __hidden_shader_cook::ScratchVector<const IncludeEntry*> inheritedEntries{scratchArena};
     inheritedEntries.reserve(dependencies.size());
 

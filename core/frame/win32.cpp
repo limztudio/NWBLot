@@ -16,14 +16,15 @@
 
 
 #include <windows.h>
-#include <global/compile.h>
-#include <global/timer.h>
 
 #include "input_helpers.h"
 
 #include <core/common/log.h>
 #include <core/os/win32/text_input.h>
 #include <core/os/win32/input_message.h>
+
+#include <global/compile.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -655,7 +656,7 @@ bool Frame::mainLoop(){
         return true;
 
     bool gracefulQuit = false;
-    const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop([&](){ return data<Common::WinFrame>().isActive(); },
+    const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop([&]()noexcept{ return data<Common::WinFrame>().isActive(); },
         [&](){
             RECT rect = {};
             const bool hasRect = GetClientRect(data<Common::WinFrame>().hwnd(), &rect) != FALSE;

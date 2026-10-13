@@ -62,17 +62,25 @@ function(nwb_configure_optimization)
     endif()
 endfunction()
 
+function(nwb_apply_engine_runtime target)
+    if(WIN32)
+        set_property(TARGET ${target} PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:dbg>:Debug>DLL")
+    endif()
+    set_property(TARGET ${target} APPEND PROPERTY COMPILE_DEFINITIONS
+        $<$<CONFIG:dbg>:_DEBUG>
+        $<$<CONFIG:opt>:NDEBUG>
+        $<$<CONFIG:fin>:NDEBUG>)
+endfunction()
+
 function(nwb_apply_codegen target)
     set_target_properties(${target} PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
 
     nwb_apply_latest_cxx(${target})
     nwb_apply_debug_symbols(${target})
 
-    if(WIN32 AND NWB_COMPILER_IS_CLANG)
-        set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:dbg>:Debug>DLL")
-    endif()
-
-    target_compile_definitions(${target} PRIVATE $<$<CONFIG:dbg>:_DEBUG> $<$<CONFIG:dbg>:NWB_DEBUG> $<$<CONFIG:opt>:NDEBUG> $<$<CONFIG:opt>:NWB_OPTIMIZE> $<$<CONFIG:fin>:NDEBUG> $<$<CONFIG:fin>:NWB_FINAL>)
+    nwb_apply_engine_runtime(${target})
+    target_compile_definitions(${target} PRIVATE $<$<CONFIG:dbg>:NWB_DEBUG> $<$<CONFIG:opt>:NWB_OPTIMIZE> $<$<CONFIG:fin>:NWB_FINAL>)
 
     if(WIN32)
         target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

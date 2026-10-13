@@ -3,7 +3,7 @@
 
 
 #ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
-#include "csg/constants.h"
+#include "csg_event_diagnostic_inputs.slangi"
 #endif
 
 
@@ -12,12 +12,9 @@
 
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
 #ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
-    const uint eventDataSlot = g_NwbDeferredBindlessResources.csgPeelSlots.w;
-    uint width;
-    uint height;
+    uint eventDataSlot;
     uint layers;
-    nwbHeapStorageImage2DArrayUint4(eventDataSlot).GetDimensions(width, height, layers);
-    if(any(pixel < 0) || any(uint2(pixel) >= uint2(width, height)))
+    if(!nwbCsgDiagnosticEventBounds(pixel, eventDataSlot, layers))
         return half3(0.0h);
     const uint eventCountSlot = g_NwbDeferredBindlessResources.csgSpanSlots.x;
     const uint eventCount = nwbHeapStorageImage2DArrayUint(eventCountSlot).Load(int3(pixel, 0));

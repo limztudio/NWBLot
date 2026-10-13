@@ -14,12 +14,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::currentContextMenuOwner(const TargetOwner& owner)const{
+bool InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
     const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
     return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
 }
 
-Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, const u64 declarationGeneration){
+Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, const u64 declarationGeneration)noexcept{
     const HitTarget* target = findTarget(id, declarationGeneration);
     if(declarationGeneration == 0u || target == nullptr || !target->contextMenu || !m_windowFocused || !isInteractive(*target))
         return MakeUnexpected(Failure{});
@@ -34,7 +34,7 @@ Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, c
     return MakeUnexpected(Failure{});
 }
 
-void InputRouter::reconcileContextMenus(){
+void InputRouter::reconcileContextMenus()noexcept{
     for(usize index = 0u; index < m_contextMenuActions.size();){
         const auto& action = m_contextMenuActions[index];
         if(!currentContextMenuOwner({ action.id.target, action.id.declarationGeneration, action.popup, action.control }))
@@ -62,7 +62,7 @@ void InputRouter::appendContextMenu(const HitTarget& target, const Point& positi
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed){
+bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed)noexcept{
     const bool trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;

@@ -26,7 +26,7 @@ namespace __hidden_gpu_compiled_graph_statistics{
 using OwnershipTransferKey = NotNull<const GpuCompiledOwnershipTransfer*>;
 
 struct OwnershipTransferSignatureHasher{
-    usize operator()(const OwnershipTransferKey& key)const{
+    usize operator()(const OwnershipTransferKey& key)const noexcept{
         const GpuCompiledOwnershipTransfer& transfer = *key;
         usize hash = Hasher<u64>{}(transfer.resource.generation);
         HashCombine(hash, transfer.resource.index);
@@ -50,7 +50,7 @@ struct OwnershipTransferSignatureEqual{
 };
 
 struct OwnershipResourceHasher{
-    usize operator()(const GpuGraphResourceId& resource)const{
+    usize operator()(const GpuGraphResourceId& resource)const noexcept{
         usize hash = Hasher<u64>{}(resource.generation);
         HashCombine(hash, resource.index);
         return hash;
@@ -86,7 +86,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             .deviceGeneration = m_deviceGeneration,
         });
     }
-    const auto countOwnershipBarriers = [](GpuTaskGraphPhysicalQueueCompileStatistics& physical, const GraphicsVector<GpuCompiledBarrier>& barriers, const u32 barrierOffset, const u32 barrierCount){
+    const auto countOwnershipBarriers = [](GpuTaskGraphPhysicalQueueCompileStatistics& physical, const GraphicsVector<GpuCompiledBarrier>& barriers, const u32 barrierOffset, const u32 barrierCount)noexcept{
         if(barrierCount == 0u || barrierOffset > barriers.size() || barrierCount > barriers.size() - barrierOffset)
             return;
 
@@ -163,7 +163,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
                 ++statistics.crossFamilyPacketDependencyCount;
         }
     }
-    const auto countBarriers = [&](const GraphicsVector<GpuCompiledBarrier>& barriers){
+    const auto countBarriers = [&](const GraphicsVector<GpuCompiledBarrier>& barriers)noexcept{
         for(const GpuCompiledBarrier& barrier : barriers){
             switch(barrier.type){
             case GpuCompiledBarrierType::TextureTransition:
@@ -205,7 +205,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
     HashMap<GpuGraphResourceId, OwnershipResourceStatistics, Alloc::ScratchArena, OwnershipResourceHasher, EqualTo<GpuGraphResourceId>> resources(0u, OwnershipResourceHasher(), EqualTo<GpuGraphResourceId>(), scratchArena);
     signatures.reserve(m_ownershipTransfers.size());
     resources.reserve(Min(graph.resourceCount(), m_ownershipTransfers.size()));
-    const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id) -> GpuTaskGraphPhysicalQueueCompileStatistics*{
+    const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id)noexcept -> GpuTaskGraphPhysicalQueueCompileStatistics*{
         const GpuPhysicalQueueInfo* const queue = queueInfo(id);
         if(!queue || queue->queueClass >= CommandQueue::kCount)
             return nullptr;

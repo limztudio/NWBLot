@@ -31,8 +31,8 @@ namespace __hidden_cook_entry_registry{
 
 
 ::AutoRegistrationQueue<CookEntryRegistrationFunction, AssetArena>& QueryAutoRegistrationQueue(){
-    static ::AutoRegistrationQueue<CookEntryRegistrationFunction, AssetArena> queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
-    return queue;
+    static ::AutoRegistrationQueue<CookEntryRegistrationFunction, AssetArena> s_Queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
+    return s_Queue;
 }
 
 

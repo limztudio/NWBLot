@@ -212,11 +212,7 @@ void SliderFixture::expectAccepted(const SliderAcceptedFrame& saved, const bool 
     for(usize index = 0u; index < saved.count; ++index){
         const HitTarget& before = saved.targets[index];
         const HitTarget& after = m_context.input().targets()[index];
-        EXPECT_EQ(after.id, before.id);
-        EXPECT_EQ(after.declarationGeneration, before.declarationGeneration);
-        EXPECT_EQ(after.control, before.control);
-        EXPECT_EQ(after.owner, before.owner);
-        EXPECT_EQ(after.enabled, before.enabled);
+        UiWidgetTests::ExpectHitTargetIdentity(after, before);
         ExpectSliderRect(after.rectangle, before.rectangle);
         ExpectSliderRect(after.clip, before.clip);
     }

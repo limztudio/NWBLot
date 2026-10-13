@@ -22,9 +22,8 @@ namespace __hidden_font_atlas_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Admission working storage is bounded by one group and uses the supplied asset domain arena.
-[[nodiscard]] static bool CheckGuardedOverlap(const FontAtlasPayload& payload){
-    Core::Assets::AssetVector<u64> occupied(payload.glyphs.get_allocator().arena());
+[[nodiscard]] static bool CheckGuardedOverlap(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
+    Vector<u64, Core::Alloc::ScratchArena> occupied(scratchArena);
     usize maxWords = 0u;
     for(const FontAtlasGroup& group : payload.groups)
         maxWords = Max(maxWords, (static_cast<usize>(group.width) * group.height * group.channelCount + 63u) / 64u);
@@ -71,7 +70,7 @@ namespace __hidden_font_atlas_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
+bool ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
     if(!payload.font || payload.fontSha256 == Sha256Digest{} || payload.faceIndex != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;
@@ -113,6 +112,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
         }
         pixelBytes += byteCount;
     }
+    const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
     for(usize index = 0u; index < payload.glyphs.size(); ++index){
         const FontAtlasGlyph& glyph = payload.glyphs[index];
         if(glyph.glyphId != index || glyph.drawable > 1u || !IsFinite(glyph.advanceUnits) || !IsFinite(glyph.planeLeft) || !IsFinite(glyph.planeTop) || !IsFinite(glyph.planeRight) || !IsFinite(glyph.planeBottom)){
@@ -130,7 +130,6 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
             return false;
         }
-        const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
         const SIMDVectorSingle expectedSize = VectorScale(VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), 0.0f, 0.0f), unitsPerPixel);
         const SIMDVectorSingle planeSize = VectorSubtract(VectorSet(glyph.planeRight, glyph.planeBottom, 0.0f, 0.0f), VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f));
         const SIMDVectorSingle difference = VectorSubtract(planeSize, expectedSize);
@@ -146,7 +145,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             return false;
         }
     }
-    if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload))
+    if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload, scratchArena))
         return false;
     if(payload.positioningTables.size() > 3u){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF"));

@@ -92,7 +92,7 @@ Expected<InputEvent> InputRouter::resolvePointerEvent(const InputEvent& event){
     return resolved;
 }
 
-void InputRouter::retireQueuedReleases(){
+void InputRouter::retireQueuedReleases()noexcept{
     // Admission already observed these releases; dropping delivery must also retire their processed sequence ownership.
     for(const InputEvent& event : m_events){
         if(event.type == InputEventType::CommandUp){

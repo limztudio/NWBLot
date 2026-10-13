@@ -52,6 +52,7 @@ public:
         : m_stream(stream)
     {}
 
+
 public:
     template<usize Length>
     NwbTextOutputStream& operator<<(const char (&text)[Length]){
@@ -73,10 +74,12 @@ public:
 
 
 public:
-    void precision(const StreamSize precision){ m_stream.precision(precision); }
+    [[nodiscard]] explicit operator bool()const noexcept{ return static_cast<bool>(m_stream); }
+    [[nodiscard]] bool operator!()const noexcept{ return !m_stream; }
 
-    [[nodiscard]] explicit operator bool()const{ return static_cast<bool>(m_stream); }
-    [[nodiscard]] bool operator!()const{ return !m_stream; }
+
+public:
+    void precision(const StreamSize precision)noexcept{ m_stream.precision(precision); }
 
 
 private:
@@ -250,6 +253,7 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     file << "mesh asset;\n\n";
     WriteMeshAssetBody(file, mesh);
 
+    rawFile.close();
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
@@ -375,6 +379,7 @@ bool WriteSkeletonAsset(const Path& outputPath, const UtilityVector<ufbx_node*>&
     file << "skeleton asset;\n\n";
     WriteSkeletonAssetBody(file, s_AssetVariableName, joints, bindPoseMatrices);
 
+    rawFile.close();
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
@@ -437,6 +442,7 @@ bool WriteSkinAsset(const Path& outputPath, const AStringView meshName, const AS
     file << "skin asset;\n\n";
     WriteSkinAssetBody(file, s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices);
 
+    rawFile.close();
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
@@ -501,6 +507,7 @@ bool WriteModelAsset(const Path& outputPath, const AStringView meshName, const O
     file << "model asset;\n\n";
     WriteModelAssetBody(file, s_AssetVariableName, meshName, skinName, skeletonName);
 
+    rawFile.close();
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
@@ -562,6 +569,7 @@ bool WriteAssetBunch(
     file << "    model,\n";
     file << "];\n";
 
+    rawFile.close();
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset bunch: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
@@ -665,7 +673,8 @@ bool WriteNwbAsset(
     if(assetType == OutputAssetType::Bunch && !separateAssets)
         return __hidden_asset_writer::WriteAssetBunch(outputPath, splitMesh, AStringView(skinName), AStringView(skeletonName), skeletonOutput.joints, skeletonOutput.bindPoseMatrices, &positionSkin, skeletonOutput.inverseBindMatrices);
 
-    return __hidden_asset_writer::WriteMeshAsset(meshPath, splitMesh)
+    return
+        __hidden_asset_writer::WriteMeshAsset(meshPath, splitMesh)
         && __hidden_asset_writer::WriteSkeletonAsset(skeletonPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices)
         && __hidden_asset_writer::WriteSkinAsset(skinPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices)
         && __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName))

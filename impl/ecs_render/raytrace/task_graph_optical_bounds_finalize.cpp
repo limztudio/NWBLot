@@ -10,6 +10,7 @@
 #include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
+
 #include <global/algorithm.h>
 
 
@@ -139,7 +140,7 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(Core::G
         }
         if(!resource.valid())
             return {};
-        const auto found = FindIf(uses.begin(), uses.end(), [&](const auto& use){ return use.resource == resource; });
+        const auto found = FindIf(uses.begin(), uses.end(), [&](const auto& use)noexcept{ return use.resource == resource; });
         if(found == uses.end())
             uses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
     }

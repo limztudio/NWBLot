@@ -6,6 +6,7 @@
 #include "aftermath.h"
 
 #include <core/common/log.h>
+
 #include <global/atomic.h>
 
 

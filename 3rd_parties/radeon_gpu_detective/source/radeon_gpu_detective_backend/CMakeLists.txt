@@ -19,6 +19,11 @@ list(FILTER RGD_BACKEND_SRC EXCLUDE REGEX
 add_library(rgd_backend STATIC ${RGD_BACKEND_SRC})
 add_library(nwb::rgd_backend ALIAS rgd_backend)
 
+# The NWB-owned decoder boundary uses the current Expected contract; upstream backend sources retain their own language mode.
+nwb_get_latest_cxx_flag(_nwb_rgd_decode_cxx_flag)
+set_source_files_properties("${PROJECT_SOURCE_DIR}/nwb_rgd_decode.cpp" PROPERTIES COMPILE_OPTIONS "${_nwb_rgd_decode_cxx_flag}")
+target_include_directories(rgd_backend PRIVATE "${CMAKE_SOURCE_DIR}")
+
 target_include_directories(rgd_backend PUBLIC "${PROJECT_SOURCE_DIR}")
 target_include_directories(rgd_backend PRIVATE
     "${_RGD_3P}"                              # rmv/source/..., dev_driver/include/... (root-relative includes)

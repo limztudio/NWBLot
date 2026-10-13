@@ -234,7 +234,9 @@ struct ArenaDeleter<T[], POOL>{
     {}
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U[], POOL>& other, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept
-        : m_pool(other.m_pool), m_size(other.m_size){}
+        : m_pool(other.m_pool)
+        , m_size(other.m_size)
+    {}
 
     void operator()(T* p)const noexcept{
         for(usize i = 0u; i < m_size; ++i)

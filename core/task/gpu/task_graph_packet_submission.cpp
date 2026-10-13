@@ -204,15 +204,7 @@ void GpuTaskGraph::abortPacketSubmission(const GpuCompiledGraph& compiledGraph, 
                 return;
         }
         notification.activateWithinLock();
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.lifecycleState = TaskLifecycleState::Discarded;
-            task.recordingClaimGeneration = 0u;
-            task.submissionClaimGeneration = 0u;
-            task.discardNotificationGeneration = notificationGeneration;
-            task.recordThunkInProgress = false;
-            task.recordThunkCompleted = false;
-        }
+        discardPacketTasksWithinLock(packetPlan, tasks, notificationGeneration);
         lease.reset();
     }
 
@@ -240,15 +232,7 @@ bool GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGrap
         if(task.lifecycleState != TaskLifecycleState::Submitting || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration || task.submissionClaimGeneration != lease.m_claimGeneration)
             return false;
     }
-    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        task.lifecycleState = TaskLifecycleState::Discarded;
-        task.recordingClaimGeneration = 0u;
-        task.submissionClaimGeneration = 0u;
-        task.discardNotificationGeneration = 0u;
-        task.recordThunkInProgress = false;
-        task.recordThunkCompleted = false;
-    }
+    discardPacketTasksWithinLock(packetPlan, tasks);
     lease.reset();
     return true;
 }

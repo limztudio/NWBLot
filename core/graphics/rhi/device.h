@@ -325,7 +325,6 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool enableHDR10Output = false;
     // Opt-in presentation-image readback. Unsupported surfaces keep a normal presentable swap chain and publish swapChainReadbackAvailable=false instead of failing device creation.
     bool enableSwapChainReadback = false;
-    bool enableNvrhiValidationLayer = false;
     // Native mesh shaders are optional. Windows ARM64 defaults to the compute-emulation path because extension advertisement alone does not qualify native mesh-output correctness; callers may explicitly opt in.
 #if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
     bool enableNativeMeshShaders = false;

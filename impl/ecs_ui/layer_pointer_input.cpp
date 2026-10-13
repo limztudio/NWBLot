@@ -18,7 +18,9 @@ NWB_IMPL_BEGIN
 
 bool UiLayerSystem::pointerInput(const Ui::PointerInput& input){
     synchronizeNativeInput();
-    return routePointerInput(input);
+    bool consumed = false;
+    routePointerInput(input, &consumed);
+    return consumed;
 }
 
 void UiLayerSystem::cancelDeviceInput(const u64 device){
@@ -28,7 +30,7 @@ void UiLayerSystem::cancelDeviceInput(const u64 device){
         Ui::PointerInput input;
         input.source = source;
         input.phase = Ui::PointerPhase::Cancel;
-        static_cast<void>(routePointerInput(input));
+        routePointerInput(input);
     }
     m_context.input().cancelDeviceInput(device);
     if(device == 0u){
@@ -40,7 +42,9 @@ void UiLayerSystem::cancelDeviceInput(const u64 device){
     }
 }
 
-bool UiLayerSystem::routePointerInput(const Ui::PointerInput& input){
+void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, bool* consumed){
+    if(consumed)
+        *consumed = false;
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queuePointer(input);
@@ -49,7 +53,7 @@ bool UiLayerSystem::routePointerInput(const Ui::PointerInput& input){
         m_context.resetInput();
         m_editHost.reset();
         m_blockCommandChars = false;
-        return false;
+        return;
     }
     const Ui::InputRoutingResult result = m_context.input().process();
     if(result.pointerRouted)
@@ -58,7 +62,8 @@ bool UiLayerSystem::routePointerInput(const Ui::PointerInput& input){
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
     if(result.gestureOverflow)
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded pointer gesture queue is full"));
-    return result.pointerConsumed;
+    if(consumed)
+        *consumed = result.pointerConsumed;
 }
 
 

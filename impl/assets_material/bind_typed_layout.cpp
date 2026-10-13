@@ -62,7 +62,7 @@ static_assert(IsTriviallyCopyable_V<MaterialTypedValueData>, "MaterialTypedValue
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialParameterCall> SplitMaterialParameterCall(const AStringView text){
+static Expected<MaterialParameterCall> SplitMaterialParameterCall(const AStringView text)noexcept{
     const AStringView trimmed = TrimView(text);
     usize openParen = Limit<usize>::s_Max;
     for(usize i = 0u; i < trimmed.size(); ++i){
@@ -85,7 +85,7 @@ static Expected<MaterialParameterCall> SplitMaterialParameterCall(const AStringV
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<AStringView> ReadMaterialParameterToken(const AStringView text, usize& inOutCursor){
+static Expected<AStringView> ReadMaterialParameterToken(const AStringView text, usize& inOutCursor)noexcept{
     while(inOutCursor < text.size() && (IsAsciiSpace(text[inOutCursor]) || text[inOutCursor] == ','))
         ++inOutCursor;
     if(inOutCursor >= text.size())
@@ -105,7 +105,7 @@ static Expected<AStringView> ReadMaterialParameterToken(const AStringView text, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialParameterTokens> SplitMaterialParameterTokens(const AStringView text){
+static Expected<MaterialParameterTokens> SplitMaterialParameterTokens(const AStringView text)noexcept{
     MaterialParameterTokens tokens;
     usize cursor = 0u;
     while(const auto token = ReadMaterialParameterToken(text, cursor)){
@@ -123,7 +123,7 @@ static Expected<MaterialParameterTokens> SplitMaterialParameterTokens(const AStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<u32> ParseMaterialBoolToken(const AStringView token){
+static Expected<u32> ParseMaterialBoolToken(const AStringView token)noexcept{
     if(token == AStringView("true") || token == AStringView("1"))
         return 1u;
     if(token == AStringView("false") || token == AStringView("0"))
@@ -135,7 +135,7 @@ static Expected<u32> ParseMaterialBoolToken(const AStringView token){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static AStringView StripMaterialNumericSuffix(const AStringView token, const char suffixLower, const char suffixUpper){
+static AStringView StripMaterialNumericSuffix(const AStringView token, const char suffixLower, const char suffixUpper)noexcept{
     if(token.size() <= 1u)
         return token;
 
@@ -147,7 +147,7 @@ static AStringView StripMaterialNumericSuffix(const AStringView token, const cha
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<f32> ParseMaterialParameterF32Token(const AStringView token){
+static Expected<f32> ParseMaterialParameterF32Token(const AStringView token)noexcept{
     const auto parsed = ParseF64FromChars(token);
     if(!parsed || !IsFinite(*parsed))
         return MakeUnexpected(Failure{});
@@ -160,7 +160,7 @@ static Expected<f32> ParseMaterialParameterF32Token(const AStringView token){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<u32> ParseMaterialParameterSignedToken(const AStringView token, const i64 minValue, const i64 maxValue, const u32 storageMask){
+static Expected<u32> ParseMaterialParameterSignedToken(const AStringView token, const i64 minValue, const i64 maxValue, const u32 storageMask)noexcept{
     const auto parsed = ParseI64FromChars(token);
     if(!parsed)
         return MakeUnexpected(Failure{});
@@ -174,7 +174,7 @@ static Expected<u32> ParseMaterialParameterSignedToken(const AStringView token, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<u32> ParseMaterialParameterUnsignedToken(const AStringView token, const u64 maxValue){
+static Expected<u32> ParseMaterialParameterUnsignedToken(const AStringView token, const u64 maxValue)noexcept{
     const auto parsed = ParseU64FromChars(token);
     if(!parsed || *parsed > maxValue)
         return MakeUnexpected(Failure{});
@@ -186,7 +186,7 @@ static Expected<u32> ParseMaterialParameterUnsignedToken(const AStringView token
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<u32> ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type){
+static Expected<u32> ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type)noexcept{
     AStringView numericToken = token;
     if(type == MaterialParameterValueType::Float)
         numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
@@ -235,7 +235,7 @@ static Expected<u32> ParseMaterialParameterToken(const AStringView token, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, const usize byteOffset, const void* bytes, const usize byteSize){
+static bool StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, const usize byteOffset, const void* bytes, const usize byteSize)noexcept{
     if(byteOffset > sizeof(outParameter.data) || byteSize > sizeof(outParameter.data) - byteOffset)
         return false;
 
@@ -249,7 +249,7 @@ static bool StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, c
 
 
 template<typename ValueType>
-static bool StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, const u32 componentIndex, const u32 value){
+static bool StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, const u32 componentIndex, const u32 value)noexcept(IsArithmetic_V<ValueType>){
     const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
     const ValueType typedValue = static_cast<ValueType>(value);
     return StoreMaterialTypedValueBytes(outParameter, byteOffset, &typedValue, sizeof(typedValue));
@@ -259,7 +259,7 @@ static bool StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool StoreMaterialTypedValueComponent(MaterialTypedValueData& outParameter, const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value){
+static bool StoreMaterialTypedValueComponent(MaterialTypedValueData& outParameter, const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value)noexcept{
     if(componentIndex >= NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT)
         return false;
 
@@ -284,7 +284,7 @@ static bool StoreMaterialTypedValueComponent(MaterialTypedValueData& outParamete
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialTypedValueData> BuildMaterialTypedValueData(const ACompactString& key, const ACompactString& value){
+static Expected<MaterialTypedValueData> BuildMaterialTypedValueData(const ACompactString& key, const ACompactString& value)noexcept{
     MaterialTypedValueData parameter;
     if(!key || !value)
         return MakeUnexpected(Failure{});
@@ -317,7 +317,7 @@ static Expected<MaterialTypedValueData> BuildMaterialTypedValueData(const ACompa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialLayoutFieldType::Enum> ParseMaterialLayoutFieldType(const AStringView typeText){
+static Expected<MaterialLayoutFieldType::Enum> ParseMaterialLayoutFieldType(const AStringView typeText)noexcept{
     const auto resourceType = ParseMaterialBindResourceFieldTypeText(typeText);
     if(resourceType)
         return *resourceType;
@@ -334,7 +334,7 @@ static Expected<MaterialLayoutFieldType::Enum> ParseMaterialLayoutFieldType(cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialBlockClass::Enum> ParseMaterialBindBlockClass(const MaterialBindStruct& bindStruct){
+static Expected<MaterialBlockClass::Enum> ParseMaterialBindBlockClass(const MaterialBindStruct& bindStruct)noexcept{
     if(bindStruct.findAttribute(s_MaterialConstantAttribute))
         return MaterialBlockClass::MaterialConstant;
     if(bindStruct.findAttribute(s_MaterialMutableAttribute))
@@ -402,7 +402,7 @@ static Expected<UInt4U> BuildMaterialTypedLayoutDefaultValue(const Name& materia
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialTypedFieldBytes> GetMaterialTypedLayoutFieldBytes(const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value){
+static Expected<MaterialTypedFieldBytes> GetMaterialTypedLayoutFieldBytes(const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value)noexcept{
     const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
     if(byteSize == 0u || byteSize > sizeof(value))
         return MakeUnexpected(Failure{});
@@ -491,7 +491,7 @@ static Expected<ScratchVector<const MaterialBindInstance*>> BuildSortedMaterialB
     instances.reserve(bindEntry.instances.size());
     for(const MaterialBindInstance& instance : bindEntry.instances)
         instances.push_back(&instance);
-    Sort(instances.begin(), instances.end(), [](const MaterialBindInstance* lhs, const MaterialBindInstance* rhs){
+    Sort(instances.begin(), instances.end(), [](const MaterialBindInstance* lhs, const MaterialBindInstance* rhs)noexcept{
         return lhs->name < rhs->name;
     });
     if(instances.size() > Limit<u32>::s_Max){
@@ -640,7 +640,7 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& inOutBlockBytes, const usize byteOffset, const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value){
+static bool WriteMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& inOutBlockBytes, const usize byteOffset, const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value)noexcept{
     const auto fieldBytes = GetMaterialTypedLayoutFieldBytes(fieldType, value);
     if(!fieldBytes)
         return false;

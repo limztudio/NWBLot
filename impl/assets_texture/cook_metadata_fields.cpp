@@ -12,6 +12,7 @@
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+
 #include <global/filesystem.h>
 #include <global/text_utils.h>
 

@@ -15,6 +15,7 @@
 #include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+
 #include <global/text_utils.h>
 
 
@@ -181,7 +182,6 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     }
 
     const Path outputPath = includeRoot / moduleInclude;
-    ErrorCode errorCode;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
@@ -197,7 +197,6 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 [[nodiscard]] static bool WriteEmptyDefaultModuleInclude(const Path& includeRoot){
     const Path outputPath = includeRoot / "engine" / "csg" / "generated" / "built_in.slangi";
 
-    ErrorCode errorCode;
     auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult2){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult2.error().message()));
@@ -299,14 +298,13 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(CookArena& cookArena, cons
     return entry;
 }
 
-bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
+bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries, ScratchArena& scratchArena){
     using namespace __hidden_assets_csg_cook;
 
     Sort(csgShapeEntries.begin(), csgShapeEntries.end(), &ShapeNameLess);
 
-    using ShapeIdNameMap = HashMap<CsgShapeTypeId, Name, CookArena, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>>;
-    CookArena& cookArena = csgShapeEntries.get_allocator().arena();
-    ShapeIdNameMap shapeIdNames(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), cookArena);
+    using ShapeIdNameMap = HashMap<CsgShapeTypeId, Name, ScratchArena, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>>;
+    ShapeIdNameMap shapeIdNames(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), scratchArena);
     shapeIdNames.reserve(csgShapeEntries.size());
 
     for(usize index = 0u; index < csgShapeEntries.size(); ++index){
@@ -322,13 +320,11 @@ bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
             return false;
         }
 
-        const auto foundShapeId = shapeIdNames.find(shapeTypeId);
-        if(foundShapeId != shapeIdNames.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}"), StringConvert(foundShapeId.value().resolvedText()), StringConvert(entry.shapeName.resolvedText()), shapeTypeId);
+        const auto insertedShapeId = shapeIdNames.try_emplace(shapeTypeId, entry.shapeName);
+        if(!insertedShapeId.second){
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}"), StringConvert(insertedShapeId.first.value().resolvedText()), StringConvert(entry.shapeName.resolvedText()), shapeTypeId);
             return false;
         }
-
-        shapeIdNames.emplace(shapeTypeId, entry.shapeName);
         entry.shapeTypeId = shapeTypeId;
     }
 

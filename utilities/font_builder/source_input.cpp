@@ -30,22 +30,25 @@ Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& 
         }
         return Move(prepared->fontBytes);
     }
-    const auto sourceSize = FileSize(path);
-    if(!sourceSize || *sourceSize == 0u || *sourceSize > Impl::s_FontMaxSourceBytes){
+    InputFileStream stream(path, InputFileStream::binary | InputFileStream::ate);
+    if(!stream.is_open())
+        return MakeUnexpected(AStringView("failed to open font source"));
+    const GlobalFilesystemDetail::StreamOffset sourceSize = stream.tellg();
+    if(!stream || sourceSize <= 0 || static_cast<u64>(sourceSize) > Impl::s_FontMaxSourceBytes || !GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(sourceSize))){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source size is invalid or unreadable"));
         return MakeUnexpected(AStringView("source size is invalid or unreadable"));
     }
-    InputFileStream stream(path, InputFileStream::binary);
-    if(!stream.is_open())
-        return MakeUnexpected(AStringView("failed to open font source"));
+    stream.seekg(0, InputFileStream::beg);
+    if(!stream)
+        return MakeUnexpected(AStringView("failed to seek font source"));
     Core::Assets::AssetBytes input(arena);
-    input.resize(static_cast<usize>(*sourceSize));
-    stream.read(reinterpret_cast<char*>(input.data()), static_cast<StreamSize>(*sourceSize));
-    if(stream.gcount() != static_cast<StreamSize>(*sourceSize))
+    input.resize(static_cast<usize>(sourceSize));
+    stream.read(reinterpret_cast<char*>(input.data()), static_cast<StreamSize>(sourceSize));
+    if(stream.gcount() != static_cast<StreamSize>(sourceSize) || stream.bad())
         return MakeUnexpected(AStringView("failed to read complete font source"));
     char extra = 0;
     stream.read(&extra, 1);
-    if(stream.gcount() != 0 || !stream.eof())
+    if(stream.gcount() != 0 || !stream.eof() || stream.bad())
         return MakeUnexpected(AStringView("font source changed while reading"));
     return input;
 }

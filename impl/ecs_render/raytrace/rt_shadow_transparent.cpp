@@ -4,9 +4,11 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <global/algorithm.h>
 #include <impl/ecs_render/raytrace/rt_shadow_tasks.h>
+
+#include <core/task/gpu/compiled_graph.h>
+
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,11 +42,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         reportTransparentShadowSampling(sampleCount);
         return true;
     }
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, false, false, true, false, false, graphOwnsOpaqueToTransparentBoundary, false, false, false, false, false);
+    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, false, false, true, false, false, graphOwnsOpaqueToTransparentBoundary, false, false, false, false, false);
     if(composeCsg){
         commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
         commandList.commitBarriers();
@@ -75,17 +74,14 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
 ){
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || !m_rayTracingState.m_softTransparentTemporalReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
         deferredLightingResources,
         frameIndex,
-        softGroupsX,
-        softGroupsY,
+        groups.x,
+        groups.y,
         false,
         false,
         false,
@@ -113,17 +109,14 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
 ){
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
         deferredLightingResources,
         frameIndex,
-        softGroupsX,
-        softGroupsY,
+        groups.x,
+        groups.y,
         false,
         false,
         false,
@@ -145,11 +138,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
 bool RendererRayTracingSystem::renderSoftTransparentShadowFold(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const u32 frameIndex){
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, false, false, false, false, false, false, false, false, false, false, false, true);
+    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, false, false, false, false, false, false, false, false, false, false, false, true);
     return true;
 }
 

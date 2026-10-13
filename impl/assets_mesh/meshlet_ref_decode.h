@@ -178,7 +178,7 @@ struct MeshletPositionRefDecodeChannel{
 
 [[nodiscard]] NWB_INLINE bool DecodeMeshletPositionRefChannel(const u8* const bytes, const usize byteCount, const MeshletPositionRefDecodeChannel& channel, const u32 localPositionIndex, MeshletPositionStreamRef& inOutRef)noexcept{
     const auto delta = DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localPositionIndex, channel.width);
-    if(!delta)
+    if(!delta || *delta > Limit<u32>::s_Max - channel.base)
         return false;
 
     inOutRef.*(channel.indexMember) = channel.base + *delta;
@@ -187,7 +187,7 @@ struct MeshletPositionRefDecodeChannel{
 
 [[nodiscard]] NWB_INLINE bool DecodeMeshletAttributeRefChannel(const u8* const bytes, const usize byteCount, const MeshletAttributeRefDecodeChannel& channel, const u32 localAttributeIndex, MeshletAttributeStreamRef& inOutRef)noexcept{
     const auto delta = DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localAttributeIndex, channel.width);
-    if(!delta)
+    if(!delta || *delta > Limit<u32>::s_Max - channel.base)
         return false;
 
     inOutRef.*(channel.indexMember) = channel.base + *delta;

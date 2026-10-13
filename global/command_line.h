@@ -36,7 +36,9 @@ inline void CommandLineParseApp(CLI& cli, const isize argc, CharT** argv){
 
 template<typename StringT>
 [[nodiscard]] inline StringT NormalizeOptionText(StringT text){
-    return ToAsciiLowerCopy(TrimCopy(text));
+    TrimInPlace(text);
+    ToAsciiLowerInPlace(text);
+    return text;
 }
 
 template<typename CharT>

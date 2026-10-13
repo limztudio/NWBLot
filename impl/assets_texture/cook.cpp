@@ -15,6 +15,7 @@
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+
 #include <global/binary.h>
 #include <global/filesystem.h>
 #include <global/text_utils.h>
@@ -41,22 +42,8 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
         return false;
     }
 
-    Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinary> mipBinaries(outBinary.get_allocator().arena());
-    mipBinaries.reserve(texture.mipLevels().size());
-    for(const TextureMipLevel& mip : texture.mipLevels()){
-        TextureBinaryPayload::MipLevelBinary binaryMip;
-        binaryMip.width = mip.width;
-        binaryMip.height = mip.height;
-        binaryMip.sliceCount = mip.sliceCount;
-        binaryMip.blockCountX = mip.blockCountX;
-        binaryMip.blockCountY = mip.blockCountY;
-        binaryMip.offsetBytes = mip.offsetBytes;
-        binaryMip.sizeBytes = mip.sizeBytes;
-        mipBinaries.push_back(binaryMip);
-    }
-
     usize reserveBytes = sizeof(TextureBinaryPayload::HeaderBinary);
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinary)) || !AddBinaryReserveBytes(reserveBytes, texture.payloadBytes().size())){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, texture.mipLevels().size(), sizeof(TextureBinaryPayload::MipLevelBinary)) || !AddBinaryReserveBytes(reserveBytes, texture.payloadBytes().size())){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetCodec::serialize failed: cooked payload size overflows"));
         return false;
     }
@@ -70,13 +57,22 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     header.width = texture.width();
     header.height = texture.height();
     header.depth = texture.depth();
-    header.mipCount = static_cast<u32>(mipBinaries.size());
+    header.mipCount = static_cast<u32>(texture.mipLevels().size());
     header.alphaInfo = static_cast<u32>(texture.alphaMode()) | (static_cast<u32>(texture.alphaConstantUnorm8()) << TextureBinaryPayload::s_AlphaInfoConstantShift);
     header.payloadFormat = static_cast<u32>(texture.payloadFormat());
     header.payloadByteCount = static_cast<u64>(texture.payloadBytes().size());
     AppendPOD(outBinary, header);
-    if(!Core::Assets::AppendVectorPayload(outBinary, mipBinaries, NWB_TEXT("TextureAssetCodec::serialize"), NWB_TEXT("mip levels")))
-        return false;
+    for(const TextureMipLevel& mip : texture.mipLevels()){
+        TextureBinaryPayload::MipLevelBinary binaryMip;
+        binaryMip.width = mip.width;
+        binaryMip.height = mip.height;
+        binaryMip.sliceCount = mip.sliceCount;
+        binaryMip.blockCountX = mip.blockCountX;
+        binaryMip.blockCountY = mip.blockCountY;
+        binaryMip.offsetBytes = mip.offsetBytes;
+        binaryMip.sizeBytes = mip.sizeBytes;
+        AppendPOD(outBinary, binaryMip);
+    }
 
     BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, texture.payloadBytes().data(), texture.payloadBytes().size());
     return true;

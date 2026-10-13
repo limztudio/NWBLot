@@ -61,7 +61,6 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
 
         MeshVertexRef ref;
         const auto& components = value.asList();
-        const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, MeshCookMetadata::s_VertexRefsFieldNameView, vertexRefIndex);
         const AStringView componentNames[] = {
             __hidden_mesh_source_streams::s_VertexRefPositionName,
             __hidden_mesh_source_streams::s_VertexRefNormalName,
@@ -72,14 +71,17 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
         };
         u32* const componentValues[] = { &ref.position, &ref.normal, &ref.tangent, &ref.uv0, &ref.color, &ref.skin, };
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
-            ScratchString componentLabel{scratchArena};
-            componentLabel.reserve(label.size() + componentNames[componentIndex].size() + 2u);
-            componentLabel.append(label.data(), label.size());
-            componentLabel += '.';
-            componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());
-            const auto component = MeshCookMetadata::ParseMetadataU32Value(nwbFilePath, components[componentIndex], metaKind, componentLabel);
-            if(!component)
+            const auto component = MeshCookMetadata::ValidateMetadataU32Value(components[componentIndex]);
+            if(!component){
+                const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, MeshCookMetadata::s_VertexRefsFieldNameView, vertexRefIndex);
+                ScratchString componentLabel{scratchArena};
+                componentLabel.reserve(label.size() + componentNames[componentIndex].size() + 2u);
+                componentLabel.append(label.data(), label.size());
+                componentLabel += '.';
+                componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());
+                MeshCookMetadata::LogMetadataU32ValueFailure(nwbFilePath, metaKind, componentLabel, component.error());
                 return MakeUnexpected(Failure{});
+            }
             *componentValues[componentIndex] = *component;
         }
         vertexRefs.push_back(ref);

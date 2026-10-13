@@ -26,13 +26,8 @@ namespace __hidden_telemetry_codec{
     return payloadBytes == 0u || payload != nullptr;
 }
 
-[[nodiscard]] static bool ValidateHeaderPayload(const EventHeader& header)noexcept{
-    // EventHeader::valid() owns the wire-format invariant checks for encoded telemetry events.
-    return header.valid();
-}
-
 [[nodiscard]] static bool ValidateEventPayload(const EventHeader& header, const void* const payload, const usize payloadBytes)noexcept{
-    return ValidatePayloadPointer(payload, payloadBytes) && header.payloadBytes == payloadBytes && ValidateHeaderPayload(header);
+    return ValidatePayloadPointer(payload, payloadBytes) && header.payloadBytes == payloadBytes && header.valid();
 }
 
 [[nodiscard]] static bool ValidateStreamHeader(const EncodedStreamHeader& header)noexcept{
@@ -120,7 +115,7 @@ Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const vo
 
     EventRecord event(arena);
     event.header = __hidden_telemetry_codec::DecodeHeader(*encodedHeader);
-    if(!__hidden_telemetry_codec::ValidateHeaderPayload(event.header))
+    if(!event.header.valid())
         return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
     if(event.header.payloadBytes > static_cast<u64>(Limit<usize>::s_Max))
         return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::PayloadSizeOverflow });

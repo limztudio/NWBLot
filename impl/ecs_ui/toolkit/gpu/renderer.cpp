@@ -53,7 +53,7 @@ namespace __hidden_ui_gpu{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuSkinVersion::GpuSkinVersion(Core::GraphicsRuntime& graphics)
+GpuSkinVersion::GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept
     : m_graphics(graphics)
 {}
 
@@ -65,7 +65,7 @@ GpuSkinVersion::~GpuSkinVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTargetVersion::GpuTargetVersion(Core::GraphicsRuntime& graphics)
+GpuTargetVersion::GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept
     : m_graphics(graphics)
 {}
 
@@ -78,7 +78,7 @@ GpuTargetVersion::~GpuTargetVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuSharedResources::GpuSharedResources(Core::GraphicsRuntime& graphics)
+GpuSharedResources::GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept
     : m_graphics(graphics)
 {}
 

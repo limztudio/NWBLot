@@ -174,11 +174,11 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton joint {} is null"), jointIndex);
             return MakeUnexpected(Failure{});
         }
-        if(sourceJointLookup.find(joint) != sourceJointLookup.end()){
+        const auto inserted = sourceJointLookup.emplace(joint, jointIndex);
+        if(!inserted.second){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
             return MakeUnexpected(Failure{});
         }
-        sourceJointLookup.emplace(joint, jointIndex);
         sortNames.push_back(NodeName(joint, jointIndex));
     }
 

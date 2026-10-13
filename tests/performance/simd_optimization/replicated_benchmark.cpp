@@ -2,13 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/simdmath.h>
-#include <global/timer.h>
-
-#include <cerrno>
-#include <cfenv>
-#include <cstdlib>
-#include <iostream>
+#include "benchmark_support.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,32 +45,10 @@ inline constexpr StringView s_OperationNames[]{
     "ln", "exp", "normals2", "normals3", "normals4", "vectors2", "vectors3", "vectors4", "slerp",
     "length2", "length3", "length4", "reciprocal2", "reciprocal3", "reciprocal4", "normalize2", "normalize3", "normalize4", "clamp2", "clamp3", "clamp4"
 };
-inline constexpr usize s_DataCount = 64u;
-
-struct Dataset{
-    SIMDVectorDouble left[s_DataCount];
-    SIMDVectorDouble right[s_DataCount];
-    f64 angles[s_DataCount];
-};
-
-NWB_NOINLINE void InitializeDataset(Dataset& dataset, u64 seed)noexcept{
-    const auto next = [&]()noexcept{
-        seed ^= seed << 13u;
-        seed ^= seed >> 7u;
-        seed ^= seed << 17u;
-        return seed;
-    };
-    for(usize index = 0u; index < s_DataCount; ++index){
-        f64 left[4], right[4];
-        for(usize lane = 0u; lane < 4u; ++lane){
-            left[lane] = static_cast<f64>(next() % 8192u) * 0x1p-10 - 4.0;
-            right[lane] = static_cast<f64>(next() % 64u + 1u) * 0x1p-10;
-        }
-        dataset.left[index] = VectorDoubleSet(left[0], left[1], left[2], left[3]);
-        dataset.right[index] = VectorDoubleSet(right[0], right[1], right[2], right[3]);
-        dataset.angles[index] = static_cast<f64>(next() % 2048u + 1u) * 0x1p-10;
-    }
-}
+using SimdOptimizationBenchmark::s_DataCount;
+using SimdOptimizationBenchmark::Dataset;
+using SimdOptimizationBenchmark::InitializeDataset;
+using SimdOptimizationBenchmark::EqualBits;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -300,81 +272,37 @@ NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVec
     else return Reduce<Kind, Candidate>(lhs, rhs);
 }
 
-NWB_INLINE bool EqualBits(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    for(usize lane = 0u; lane < 4u; ++lane){
-        if(VectorDoubleGetIntByIndex(lhs, lane) != VectorDoubleGetIntByIndex(rhs, lane))
-            return false;
-    }
-    return true;
-}
-
 template<Operation::Enum Kind>
 u32 VerifyReduction(u64& seed)noexcept{
 #pragma STDC FENV_ACCESS ON
-    constexpr u64 exceptional[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
-        0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull };
-    u32 failures = 0u;
-    for(usize index = 0u; index < 16384u; ++index){
-        u64 bits[8];
-        for(auto& value : bits){
-            seed ^= seed << 13u;
-            seed ^= seed >> 7u;
-            seed ^= seed << 17u;
-            value = index < 8192u ? exceptional[seed % LengthOf(exceptional)] : seed;
+    return SimdOptimizationBenchmark::VerifyReductionCases(s_OperationNames[Kind], seed,
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); },
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, const SimdOptimizationBenchmark::Observation& expected, const SimdOptimizationBenchmark::Observation& actual, const usize index, u32& failures)noexcept{
+            const auto production = SimdOptimizationBenchmark::Observe([&]()noexcept{ return Production<Kind>(lhs, rhs); });
+            if(!production)
+                return false;
+            const auto& productionExpected = s_ProductionCandidate[Kind] ? actual : expected;
+            if(!SimdOptimizationBenchmark::EqualObservation(productionExpected, *production)){
+                if(++failures <= 3u)
+                    NWB_COUT << "production mismatch operation=" << s_OperationNames[Kind] << " case=" << index << '\n';
+            }
+            if constexpr(Kind == Operation::Normals2 || Kind == Operation::Normals3 || Kind == Operation::Normals4){
+                const auto estimate = SimdOptimizationBenchmark::Observe([&]()noexcept{ return Production<Kind, true>(lhs, rhs); });
+                if(!estimate)
+                    return false;
+                if(!SimdOptimizationBenchmark::EqualObservation(productionExpected, *estimate))
+                    ++failures;
+            }
+            return true;
         }
-        const SIMDVectorDouble lhs = VectorDoubleSetInt(bits[0], bits[1], bits[2], bits[3]), rhs = VectorDoubleSetInt(bits[4], bits[5], bits[6], bits[7]);
-        if(feclearexcept(FE_ALL_EXCEPT) != 0)
-            return failures + 1u;
-        errno = E2BIG;
-        const SIMDVectorDouble expected = Evaluate<Kind, false>(lhs, rhs);
-        const i32 expectedFlags = fetestexcept(FE_ALL_EXCEPT), expectedErrno = errno;
-        if(feclearexcept(FE_ALL_EXCEPT) != 0)
-            return failures + 1u;
-        errno = E2BIG;
-        const SIMDVectorDouble actual = Evaluate<Kind, true>(lhs, rhs);
-        const i32 actualFlags = fetestexcept(FE_ALL_EXCEPT), actualErrno = errno;
-        if(feclearexcept(FE_ALL_EXCEPT) != 0)
-            return failures + 1u;
-        errno = E2BIG;
-        const SIMDVectorDouble production = Production<Kind>(lhs, rhs);
-        const i32 productionFlags = fetestexcept(FE_ALL_EXCEPT), productionErrno = errno;
-        const SIMDVectorDouble productionExpected = s_ProductionCandidate[Kind] ? actual : expected;
-        const i32 productionExpectedFlags = s_ProductionCandidate[Kind] ? actualFlags : expectedFlags;
-        const i32 productionExpectedErrno = s_ProductionCandidate[Kind] ? actualErrno : expectedErrno;
-        if(!EqualBits(productionExpected, production) || productionExpectedFlags != productionFlags || productionExpectedErrno != productionErrno){
-            if(++failures <= 3u)
-                NWB_COUT << "production mismatch operation=" << s_OperationNames[Kind] << " case=" << index << '\n';
-        }
-        if constexpr(Kind == Operation::Normals2 || Kind == Operation::Normals3 || Kind == Operation::Normals4){
-            if(feclearexcept(FE_ALL_EXCEPT) != 0)
-                return failures + 1u;
-            errno = E2BIG;
-            const SIMDVectorDouble estimate = Production<Kind, true>(lhs, rhs);
-            const i32 estimateFlags = fetestexcept(FE_ALL_EXCEPT), estimateErrno = errno;
-            if(!EqualBits(productionExpected, estimate) || productionExpectedFlags != estimateFlags || productionExpectedErrno != estimateErrno)
-                ++failures;
-        }
-        if(!EqualBits(expected, actual) || expectedFlags != actualFlags || expectedErrno != actualErrno){
-            if(++failures <= 3u)
-                NWB_COUT << "reduction mismatch operation=" << s_OperationNames[Kind] << " case=" << index << " flags=" << expectedFlags << '/' << actualFlags << " errno=" << expectedErrno << '/' << actualErrno << '\n';
-        }
-    }
-    return failures;
+    );
 }
 
 u32 Verify()noexcept{
 #pragma STDC FENV_ACCESS ON
-    fenv_t environment{};
-    if(feholdexcept(&environment) != 0)
-        return 1u;
-    constexpr i32 modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    u64 seed = 0x8923409102431291ull;
-    u32 failures = 0u;
-    for(const i32 mode : modes){
-        if(fesetround(mode) != 0){
-            ++failures;
-            break;
-        }
+    const auto verification = SimdOptimizationBenchmark::VerifyRoundingModes([](u64& seed)noexcept{
+        u32 failures = 0u;
         failures += VerifyReduction<Operation::Ln>(seed);
         failures += VerifyReduction<Operation::Exp>(seed);
         failures += VerifyReduction<Operation::Normals2>(seed);
@@ -396,9 +324,11 @@ u32 Verify()noexcept{
         failures += VerifyReduction<Operation::Clamp2>(seed);
         failures += VerifyReduction<Operation::Clamp3>(seed);
         failures += VerifyReduction<Operation::Clamp4>(seed);
-    }
-    if(fesetenv(&environment) != 0)
-        ++failures;
+        return failures;
+    });
+    if(!verification.environmentAvailable)
+        return verification.failures;
+    const u32 failures = verification.failures;
     NWB_COUT << "verification failures=" << failures << " vector_cases=1376256\n";
     return failures;
 }
@@ -427,19 +357,9 @@ NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iteratio
 
 template<Operation::Enum Kind, bool Candidate>
 void Measure(const Dataset& data, const usize iterations, const bool latency){
-    const Timer start = TimerNow();
-    const SIMDVectorDouble result = Workload<Kind, Candidate>(data, iterations, latency);
-    const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
-    u64 checksum = 0u;
-    for(usize lane = 0u; lane < 4u; ++lane)
-        checksum ^= VectorDoubleGetIntByIndex(result, lane) + static_cast<u64>(lane);
     const usize operations = iterations * 4u;
-    NWB_COUT
-        << "{\"operation\":\"" << s_OperationNames[Kind] << "\",\"variant\":\"" << (Candidate ? "candidate" : "baseline")
-        << "\",\"workload\":\"" << (latency ? "latency" : "throughput") << "\",\"operations\":" << operations
-        << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nanoseconds / static_cast<f64>(operations)
-        << ",\"checksum\":\"" << checksum << "\"}\n"
-    ;
+    SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations,
+        [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); });
 }
 
 template<Operation::Enum Kind>
@@ -469,18 +389,13 @@ int main(const int argc, const char* const* argv){
         NWB_CERR << "usage: replicated_benchmark --verify | --measure operation baseline|candidate iterations throughput\n";
         return 2;
     }
-    const bool candidate = StringView(argv[3]) == "candidate";
-    if(!candidate && StringView(argv[3]) != "baseline")
+    const auto options = SimdOptimizationBenchmark::ParseMeasureOptions(argv, Limit<usize>::s_Max / 4u, false);
+    if(!options)
         return 2;
-    const bool latency = StringView(argv[5]) == "latency";
-    if(latency || StringView(argv[5]) != "throughput")
-        return 2;
-    char* end = nullptr;
-    const usize iterations = static_cast<usize>(strtoull(argv[4], &end, 10));
-    if(iterations == 0u || end == argv[4] || *end != '\0')
-        return 2;
+    const bool candidate = options->candidate, latency = options->latency;
+    const usize iterations = options->iterations;
     Dataset data{};
-    InitializeDataset(data, 0x8923409102431291ull);
+    InitializeDataset(data, SimdOptimizationBenchmark::s_InitialSeed);
     for(usize index = 0u; index < s_DataCount; ++index){
         if(StringView(argv[2]) == "normals2"){
             data.left[index] = VectorDouble2Normalize(data.left[index]);

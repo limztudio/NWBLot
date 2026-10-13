@@ -66,7 +66,7 @@ struct NwbOpticalMedia{
     uint count;
 };
 
-NwbOpticalMedium nwbOpticalDominantMedium(const NwbOpticalMedia media){
+NwbOpticalMedium nwbOpticalDominantMedium(__constref NwbOpticalMedia media){
     NwbOpticalMedium result = (NwbOpticalMedium)0;
     result.ior = 1.0;
     if(media.count == 0u)

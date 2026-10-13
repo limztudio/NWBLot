@@ -7,11 +7,11 @@
 #include <impl/ecs_render/material/material_surface_lookup.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
-
-#include <core/ecs/world.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
+
+#include <core/ecs/world.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +38,7 @@ namespace __hidden_csg_frame_state{
 
     u64 contentHash = s_Fnv64OffsetBasis;
     auto cutterView = world.view<CsgCutterComponent>();
-    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
+    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter)noexcept{
             Fnv64AppendValue(contentHash, entity.id);
             Fnv64AppendBool(contentHash, cutter.active);
             Fnv64AppendValue(contentHash, cutter.receiverGroup.hash());
@@ -109,7 +109,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
 
     bool frameStateCacheable = cacheable;
     CsgFrameState state;
-    auto finishFrameState = [&](const CsgFrameState& frameState) -> CsgFrameState{
+    auto finishFrameState = [&](const CsgFrameState& frameState)noexcept -> CsgFrameState{
         if(frameStateCacheable){
             m_csgState.m_frameStateCacheSignature = *signature;
             m_csgState.m_frameStateCache = frameState;

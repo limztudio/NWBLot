@@ -510,6 +510,10 @@ public:
 
 
 private:
+    // Device holds m_mutex while consulting the completed-cycle predicates.
+    [[nodiscard]] bool hasCompletedCycleWithinLock()const noexcept;
+    [[nodiscard]] bool completedCycleMatchesWithinLock(u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* queueInfo)const noexcept;
+
     Futex m_mutex;
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
     RecordingOwner m_resetRecordingOwner;

@@ -95,6 +95,7 @@ private:
 private:
     Vector<u16, Alloc::GlobalArena> m_generations;
     Vector<u32, Alloc::GlobalArena> m_freeIndices;
+    u32 m_nextEntityIndex;
     usize m_aliveCount;
 };
 

@@ -67,7 +67,7 @@ public:
     [[nodiscard]] bool endPopup();
     [[nodiscard]] bool beginRow(AStringView stableKey, const ContainerOptions& options = {});
     [[nodiscard]] bool beginColumn(AStringView stableKey, const ContainerOptions& options = {});
-    [[nodiscard]] bool endContainer();
+    [[nodiscard]] bool endContainer()noexcept;
     [[nodiscard]] bool label(AStringView stableKey, StringView text, const WidgetOptions& options = {});
     // Return one action at most per declaration. Disabled controls discard stale activation and remain pointer barriers.
     [[nodiscard]] bool button(AStringView stableKey, StringView text, const WidgetOptions& options = {});
@@ -103,7 +103,7 @@ public:
     [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options = {});
     [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options = {});
     [[nodiscard]] bool balanced()const noexcept{ return !declarationBlocked() && !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
-    void reset();
+    void reset()noexcept;
     // Observe accepted input without retaining target pointers across frame publication.
     [[nodiscard]] const InputRouter& input()const noexcept{ return m_context.input(); }
     [[nodiscard]] bool failed()const noexcept{ return m_context.failed(); }
@@ -129,11 +129,11 @@ public:
 
 private:
     [[nodiscard]] bool declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
-    [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const;
+    [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const noexcept;
     [[nodiscard]] bool beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
     [[nodiscard]] Item* addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
-    void buttonMetrics(Point& size, Insets& padding)const;
+    void buttonMetrics(Point& size, Insets& padding)const noexcept;
     [[nodiscard]] bool paintPanel();
     [[nodiscard]] bool paintWindow();
     [[nodiscard]] bool paintWindowTitle();
@@ -145,13 +145,13 @@ private:
     [[nodiscard]] bool applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
     [[nodiscard]] bool paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
     [[nodiscard]] bool textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
-    void snapshotTextArea(TextAreaFrame& frame);
-    [[nodiscard]] bool textAreaMatches(const TextAreaFrame& frame)const;
+    void snapshotTextArea(TextAreaFrame& frame)noexcept;
+    [[nodiscard]] bool textAreaMatches(const TextAreaFrame& frame)const noexcept;
     void snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept;
-    [[nodiscard]] bool numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const;
-    [[nodiscard]] bool integerEditMatches(const IntegerEditFrame& frame)const;
-    [[nodiscard]] bool floatEditMatches(const FloatEditFrame& frame)const;
-    [[nodiscard]] bool numericEditMatches(const Item& item)const;
+    [[nodiscard]] bool numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept;
+    [[nodiscard]] bool integerEditMatches(const IntegerEditFrame& frame)const noexcept;
+    [[nodiscard]] bool floatEditMatches(const FloatEditFrame& frame)const noexcept;
+    [[nodiscard]] bool numericEditMatches(const Item& item)const noexcept;
     [[nodiscard]] bool numericStateAvailable(const EditBoxState& state)const noexcept;
     [[nodiscard]] Point editMinimumSize()const noexcept;
     [[nodiscard]] bool prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
@@ -160,7 +160,7 @@ private:
     [[nodiscard]] bool paintList(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
     [[nodiscard]] bool paintRadioGroup(const Item& item, const LayoutBox& box);
-    [[nodiscard]] bool radioGroupStateMatches(const RadioGroupFrame& frame)const;
+    [[nodiscard]] bool radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept;
     [[nodiscard]] bool radioGroupMatches(const RadioGroupFrame& frame)const;
     [[nodiscard]] bool prepareRadioGroup(RadioGroupFrame& frame);
     [[nodiscard]] bool prepareSlider(SliderFrame& frame);
@@ -170,8 +170,8 @@ private:
     // Image and progress paints share one clip-pop plus hit-target tail.
     [[nodiscard]] bool finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, bool painted);
     [[nodiscard]] bool applySliderInput(SliderFrame& frame, const SliderPlacement& placement, bool interactive);
-    [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const;
-    void publishSliderResults(bool valid);
+    [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const noexcept;
+    void publishSliderResults(bool valid)noexcept;
     [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
     [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source,
         ComboState& state, const ComboOptions& options, SearchComboState* search = nullptr,
@@ -179,7 +179,7 @@ private:
     [[nodiscard]] bool paintCombo(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintCombos();
     [[nodiscard]] bool paintComboPopup(ComboFrame& frame);
-    [[nodiscard]] bool comboStateMatches(const ComboFrame& frame)const;
+    [[nodiscard]] bool comboStateMatches(const ComboFrame& frame)const noexcept;
     [[nodiscard]] bool comboMatches(const ComboFrame& frame)const;
     [[nodiscard]] bool applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
     [[nodiscard]] bool applyComboListInput(ComboFrame& frame, ComboResult& result);
@@ -190,26 +190,26 @@ private:
     [[nodiscard]] bool paintDeferred();
     [[nodiscard]] bool paintDeferredContents();
     [[nodiscard]] bool validateDeferredSources()const;
-    [[nodiscard]] bool validateDeferredStates()const;
-    void releaseDeferredLoans();
-    [[nodiscard]] bool listStateMatches(const ListFrame& frame)const;
+    [[nodiscard]] bool validateDeferredStates()const noexcept;
+    void releaseDeferredLoans()noexcept;
+    [[nodiscard]] bool listStateMatches(const ListFrame& frame)const noexcept;
     [[nodiscard]] bool listMatches(const ListFrame& frame)const;
     [[nodiscard]] bool paintTooltips();
     [[nodiscard]] bool prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
     [[nodiscard]] bool applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
     void snapshotContextMenu(ContextMenuFrame& frame)noexcept;
-    [[nodiscard]] bool contextMenuStateMatches(const ContextMenuFrame& frame)const;
+    [[nodiscard]] bool contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept;
     [[nodiscard]] bool contextMenuMatches(const ContextMenuFrame& frame)const;
     [[nodiscard]] bool paintContextMenus();
     [[nodiscard]] bool paintContextMenuPopup(ContextMenuFrame& frame);
     [[nodiscard]] bool paintPopup();
     [[nodiscard]] bool synchronizePopup();
     [[nodiscard]] bool popupFrameVisible(const BuilderScopeFrame& frame)const noexcept;
-    [[nodiscard]] bool popupAncestorsVisible()const;
+    [[nodiscard]] bool popupAncestorsVisible()const noexcept;
     [[nodiscard]] bool finishPopupFamily();
     [[nodiscard]] bool paintPopupFamily(BuilderScopeFrame& frame);
     [[nodiscard]] bool validatePopupFamily();
-    void releasePopupFamily();
+    void releasePopupFamily()noexcept;
     [[nodiscard]] bool reserveCompoundPopup(const WidgetState& widget, const PopupToken& token);
     [[nodiscard]] Rect visibleClip(const Rect& clip)const noexcept;
 

@@ -4,9 +4,11 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <global/algorithm.h>
 #include <impl/ecs_render/raytrace/rt_shadow_tasks.h>
+
+#include <core/task/gpu/compiled_graph.h>
+
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,16 +273,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
 
 
         // Resolve reuses the trace outputs as UAV/SRV scratch.
-        commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
-        commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
-        commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-        // Temporal merge writes history before the wavelet pass reads it.
-        if(m_rayTracingState.m_softShadowTemporalReady){
-            commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
-        }
+        enableSoftShadowResolveBarriers(commandList, targets);
 
         // Advance the jitter sequence once for the primary shadow producer.
         const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
@@ -322,31 +315,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         }
 
         // Split resolve declares the trace fence; unsplit soft resolve phases retain their internal UAV fence.
-        if(!splitOpaqueSoftResolve){
-            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
-        }
-
-        // A prepared graph may expose the opaque geometry-to-resolve handoff before the transparent-fold tail.
-        dispatchSoftShadowDenoiseAndTransparentFold(
-            commandList,
-            targets,
-            deferredLightingResources,
-            frameIndex,
-            softGroupsX,
-            softGroupsY,
-            true,
-            !splitOpaqueSoftResolve,
-            !splitSoftTransparentFold,
-            !splitSoftTransparentFold,
-            false,
-            false,
-            false,
-            graphOwnsOpaqueTemporalMergeEntryStates,
-            false,
-            !splitOpaqueSoftResolve,
-            false
-        );
+        dispatchPrimarySoftShadowResolve(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, splitOpaqueSoftResolve, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates);
         return producedFrameIndex;
     }
 

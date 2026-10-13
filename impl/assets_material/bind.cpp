@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const MaterialBindStruct* MaterialBindEntry::findStruct(const AStringView typeName)const{
+const MaterialBindStruct* MaterialBindEntry::findStruct(const AStringView typeName)const noexcept{
     for(const MaterialBindStruct& bindStruct : structs){
         if(AStringView(bindStruct.name) == typeName)
             return &bindStruct;
@@ -35,7 +35,7 @@ const MaterialBindStruct* MaterialBindEntry::findStruct(const AStringView typeNa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView attributeName)const{
+const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView attributeName)const noexcept{
     for(const MaterialBindAttribute& attribute : attributes){
         if(AStringView(attribute.name) == attributeName)
             return &attribute;
@@ -47,7 +47,7 @@ const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView MaterialBindField::defaultArgument()const{
+AStringView MaterialBindField::defaultArgument()const noexcept{
     const MaterialBindAttribute* attribute = findAttribute(MaterialBindDetail::s_DefaultAttribute);
     return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
 }
@@ -56,7 +56,7 @@ AStringView MaterialBindField::defaultArgument()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldName)const{
+const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldName)const noexcept{
     for(const MaterialBindField& field : fields){
         if(AStringView(field.name) == fieldName)
             return &field;
@@ -68,7 +68,7 @@ const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldNa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const MaterialBindAttribute* MaterialBindStruct::findAttribute(const AStringView attributeName)const{
+const MaterialBindAttribute* MaterialBindStruct::findAttribute(const AStringView attributeName)const noexcept{
     for(const MaterialBindAttribute& attribute : attributes){
         if(AStringView(attribute.name) == attributeName)
             return &attribute;
@@ -80,7 +80,7 @@ const MaterialBindAttribute* MaterialBindStruct::findAttribute(const AStringView
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const MaterialBindInstance* MaterialBindEntry::findInstance(const AStringView instanceName)const{
+const MaterialBindInstance* MaterialBindEntry::findInstance(const AStringView instanceName)const noexcept{
     for(const MaterialBindInstance& instance : instances){
         if(AStringView(instance.name) == instanceName)
             return &instance;
@@ -92,7 +92,7 @@ const MaterialBindInstance* MaterialBindEntry::findInstance(const AStringView in
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void MaterialBindTypedLayout::reset(){
+void MaterialBindTypedLayout::reset()noexcept{
     bindEntry = nullptr;
     layoutHash = 0u;
     typedLayoutBlocks.clear();
@@ -115,7 +115,7 @@ void MaterialBindTypedLayoutCache::reserve(const usize count){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ACompactString> BuildMaterialBindParameterKey(const AStringView instanceName, const AStringView fieldName){
+Expected<ACompactString> BuildMaterialBindParameterKey(const AStringView instanceName, const AStringView fieldName)noexcept{
     ACompactString key;
     if(!key.assign(instanceName) || !key.pushBack('.') || !key.append(fieldName))
         return MakeUnexpected(Failure{});
@@ -126,7 +126,7 @@ Expected<ACompactString> BuildMaterialBindParameterKey(const AStringView instanc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
+u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey)noexcept{
     return UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, parameterKey);
 }
 
@@ -183,7 +183,7 @@ bool ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layou
             return false;
     }
 
-    Sort(outResourceReferences.begin(), outResourceReferences.end(), [](const MaterialResourceReference& lhs, const MaterialResourceReference& rhs){
+    Sort(outResourceReferences.begin(), outResourceReferences.end(), [](const MaterialResourceReference& lhs, const MaterialResourceReference& rhs)noexcept{
         return lhs.constantByteOffset < rhs.constantByteOffset;
     });
 

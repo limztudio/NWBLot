@@ -40,9 +40,9 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     if(!model.validatePayload(scratchArena))
         return false;
 
-    Core::Assets::AssetVector<ModelBinaryPayload::ModelSkeletonObjectBinary> skeletonObjectBinaries(outBinary.get_allocator().arena());
-    Core::Assets::AssetVector<ModelBinaryPayload::ModelStaticMeshObjectBinary> staticMeshObjectBinaries(outBinary.get_allocator().arena());
-    Core::Assets::AssetVector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary> skinnedMeshObjectBinaries(outBinary.get_allocator().arena());
+    Vector<ModelBinaryPayload::ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
+    Vector<ModelBinaryPayload::ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
+    Vector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
 
     skeletonObjectBinaries.reserve(model.skeletonObjects().size());
     for(const ModelSkeletonObject& object : model.skeletonObjects()){
@@ -297,9 +297,9 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
         return MakeUnexpected(Failure{});
     entry.skinnedMeshObjects = Move(*skinnedMeshObjectsResult);
 
-    Model testModel(entry.skeletonObjects.get_allocator().arena(), entry.virtualPath);
-    testModel.setObjects(Model::SkeletonObjectVector(entry.skeletonObjects), Model::StaticMeshObjectVector(entry.staticMeshObjects), Model::SkinnedMeshObjectVector(entry.skinnedMeshObjects));
-    if(!testModel.validatePayload(scratchArena))
+    Model candidateModel(entry.skeletonObjects.get_allocator().arena(), entry.virtualPath);
+    candidateModel.setObjects(Model::SkeletonObjectVector(entry.skeletonObjects), Model::StaticMeshObjectVector(entry.staticMeshObjects), Model::SkinnedMeshObjectVector(entry.skinnedMeshObjects));
+    if(!candidateModel.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return entry;
 }

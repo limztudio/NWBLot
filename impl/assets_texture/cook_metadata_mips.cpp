@@ -11,6 +11,7 @@
 #include "cook_metadata_helpers.h"
 
 #include <core/common/log.h>
+
 #include <global/text_utils.h>
 
 

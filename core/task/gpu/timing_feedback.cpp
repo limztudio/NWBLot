@@ -310,16 +310,18 @@ bool GpuTaskTimingHistoryStore::recordNonCommittingSample(const GpuTaskTimingKey
 
     HistoryRecord* record = findHistoryRecord(key, physicalQueue);
     if(!record){
-        if(!m_historyIndex && m_histories.size() == s_LinearHistoryCount)
-            promoteHistoryIndex();
+        if(!m_historyIndex && m_histories.size() == s_LinearHistoryCount && !promoteHistoryIndex())
+            return false;
         record = &m_histories.emplace_back(m_arena);
         ScopeExit discardRecord([&]()noexcept{ m_histories.pop_back(); });
 
         record->entry.key = key;
         record->entry.physicalQueue = physicalQueue;
         record->samples.reserve(m_maximumSamplesPerHistory);
-        if(m_historyIndex)
-            m_historyIndex->emplace(StoredRouteKey(key, physicalQueue), m_histories.size() - 1u);
+        if(m_historyIndex && !m_historyIndex->emplace(StoredRouteKey(key, physicalQueue), m_histories.size() - 1u).second){
+            NWB_ASSERT(false);
+            return false;
+        }
         discardRecord.release();
     }
     if(record->samples.size() == m_maximumSamplesPerHistory)
@@ -343,8 +345,8 @@ bool GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& k
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(key);
     GpuTaskTimingAssignmentState* assignment = findAssignmentState(assignmentKey);
     if(!assignment){
-        if(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount)
-            promoteAssignmentIndex();
+        if(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount && !promoteAssignmentIndex())
+            return false;
         assignment = &m_assignments.emplace_back();
         ScopeExit discardAssignment([&]()noexcept{ m_assignments.pop_back(); });
 
@@ -353,8 +355,10 @@ bool GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& k
         assignment->lastAcceptedFrameIndex = sourceFrameIndex;
         assignment->lastSwitchFrameIndex = sourceFrameIndex;
         assignment->hasAcceptedAssignment = true;
-        if(m_assignmentIndex)
-            m_assignmentIndex->emplace(StoredAssignmentKey(assignmentKey), m_assignments.size() - 1u);
+        if(m_assignmentIndex && !m_assignmentIndex->emplace(StoredAssignmentKey(assignmentKey), m_assignments.size() - 1u).second){
+            NWB_ASSERT(false);
+            return false;
+        }
         discardAssignment.release();
         return true;
     }
@@ -498,7 +502,7 @@ void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
 }
 
 
-void GpuTaskTimingHistoryStore::promoteHistoryIndex(){
+bool GpuTaskTimingHistoryStore::promoteHistoryIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 
@@ -506,22 +510,31 @@ void GpuTaskTimingHistoryStore::promoteHistoryIndex(){
     RouteIndex index(s_LinearHistoryCount * 4u, m_arena);
     for(usize recordIndex = 0u; recordIndex < m_histories.size(); ++recordIndex){
         const GpuTaskTimingHistoryEntry& entry = m_histories[recordIndex].entry;
-        index.emplace(StoredRouteKey(entry.key, entry.physicalQueue), recordIndex);
+        if(!index.emplace(StoredRouteKey(entry.key, entry.physicalQueue), recordIndex).second){
+            NWB_ASSERT(false);
+            return false;
+        }
     }
     static_assert(IsNothrowMoveConstructible_V<RouteIndex>);
     m_historyIndex.emplace(Move(index));
+    return true;
 }
 
-void GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
+bool GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 
     NWB_ASSERT(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount);
     AssignmentIndex index(s_LinearHistoryCount * 4u, m_arena);
-    for(usize assignmentIndex = 0u; assignmentIndex < m_assignments.size(); ++assignmentIndex)
-        index.emplace(StoredAssignmentKey(m_assignments[assignmentIndex].key), assignmentIndex);
+    for(usize assignmentIndex = 0u; assignmentIndex < m_assignments.size(); ++assignmentIndex){
+        if(!index.emplace(StoredAssignmentKey(m_assignments[assignmentIndex].key), assignmentIndex).second){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
     static_assert(IsNothrowMoveConstructible_V<AssignmentIndex>);
     m_assignmentIndex.emplace(Move(index));
+    return true;
 }
 
 

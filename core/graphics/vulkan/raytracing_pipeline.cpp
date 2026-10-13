@@ -156,7 +156,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this, desc.allowClusterAccelerationStructures);
+    RayTracingPipelineHandle pso(NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this, desc.allowClusterAccelerationStructures), RayTracingPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!pso){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: object allocation failed"));
         return nullptr;
@@ -275,12 +275,10 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     if(stages.empty() || groups.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: no shader stages or groups were provided"));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(pso->m_shaderGroups.size() != groups.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata count mismatch"));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     for(usize groupIndex = 0u; groupIndex < pso->m_shaderGroups.size(); ++groupIndex){
@@ -288,7 +286,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata order mismatch"));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -303,7 +300,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         hitGroup.exportName = hitGroup.exportName.empty() ? AStringView{} : AStringView(pso->m_shaderGroups[groupIndex].exportName);
     }
 
-    if(!configurePipelineBindingsOrDestroy(desc.globalBindingLayouts, NWB_TEXT("ray tracing pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.globalBindingLayouts, NWB_TEXT("ray tracing pipeline"), *pso, scratchArena))
         return nullptr;
 
     const bool enablePipelineFlags2 = desc.allowSpheres || desc.allowLinearSweptSpheres;
@@ -337,13 +334,11 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     res = m_context.deviceDispatch.vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
     const auto handleLayout = VulkanDetail::ComputeRayTracingHandleLayout(m_context, NWB_TEXT("create ray tracing pipeline"));
     if(!handleLayout){
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     const u32 handleSize = handleLayout->handleSize;
@@ -351,7 +346,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     u32 groupCount = static_cast<u32>(groups.size());
     if(handleSize == 0 || static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle table size overflows"));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -360,11 +354,10 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     res = m_context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->m_pipeline, 0, groupCount, pso->m_shaderGroupHandles.size(), pso->m_shaderGroupHandles.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve ray tracing shader group handles: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    return RayTracingPipelineHandle(pso, RayTracingPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return pso;
 }
 
 

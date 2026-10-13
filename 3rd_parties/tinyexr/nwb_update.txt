@@ -1,5 +1,5 @@
 package: tinyexr
 version: 3.2.0 (tag v3.2.0, commit 6f470c9ab24bf3992bc512ce07e8ecb00d9bf105)
-updated_utc: 2026-09-03T04:35:00Z
+updated_utc: 2026-10-13
 source: https://github.com/syoyo/tinyexr/releases/tag/v3.2.0
-notes: Official syoyo/tinyexr v1 single-header API (tinyexr.h + exr_reader.hh + streamreader.hh). v3.2.0 still ships the v1 header used by Basis Universal; the v3 C11 rewrite is not vendored. Implementation is compiled by basisu_tinyexr.cpp against the shared top-level miniz package (TINYEXR_USE_MINIZ=0 with zlib-style shims). LICENSE and NOTICE from official. NWB CMake wrapper exposes nwb::tinyexr.
+notes: Official syoyo/tinyexr v1 single-header API (tinyexr.h + exr_reader.hh + streamreader.hh). v3.2.0 still ships the v1 header used by Basis Universal; the v3 C11 rewrite is not vendored. Implementation is compiled by basisu_tinyexr.cpp against the shared top-level miniz package (TINYEXR_USE_MINIZ=0 with zlib-style shims). LICENSE and NOTICE from official. NWB CMake wrapper exposes nwb::tinyexr. NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::tinyexr as the alias for nwb_vendor_tinyexr with SYSTEM INTERFACE includes from package root.

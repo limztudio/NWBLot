@@ -34,9 +34,9 @@ namespace __hidden_shape_registry{
         return false;
     }
 
-    const AStringView include = desc.shaderModuleInclude.view();
+    const AStringView include = AStringView(desc.shaderModuleInclude);
     for(const char ch : include){
-        if(ch != '"' && ch != ';' && ch != '=')
+        if(ch != '"' && ch != ';' && ch != '=' && ch != '\0' && ch != '\r' && ch != '\n')
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid shader module include '{}'"), StringConvert(desc.name.resolvedText()), StringConvert(include));
@@ -179,8 +179,8 @@ template<typename ParameterT>
 }
 
 template<typename ParameterT>
-[[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(const Name& name, const ParameterT& defaultParameters, const CsgShapeBoundsCallback boundsCallback){
-    CsgShapeTypeDesc desc;
+[[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(Core::Alloc::GlobalArena& arena, const Name& name, const ParameterT& defaultParameters, const CsgShapeBoundsCallback boundsCallback){
+    CsgShapeTypeDesc desc(arena);
     desc.name = name;
     desc.parameterByteSize = sizeof(ParameterT);
     desc.defaultParameterBytes.resize(sizeof(ParameterT));
@@ -255,7 +255,10 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
     }
 
     const CsgShapeTypeId id = canonicalId;
-    m_shapeTypes.push_back(CsgShapeTypeInfo{ id, desc });
+    CsgShapeTypeInfo shapeType(m_shapeTypes.get_allocator().arena());
+    shapeType.id = id;
+    shapeType.desc = desc;
+    m_shapeTypes.push_back(Move(shapeType));
     m_shapeTypeIds.emplace(desc.name, id);
     m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u);
     ++m_revision;
@@ -299,11 +302,11 @@ u64 CsgShapeRegistry::revision()const{
     return m_revision;
 }
 
-Expected<ACompactString> CsgShapeRegistry::findShaderModuleInclude(const Name& shaderModule)const{
+Expected<AString<Core::Alloc::GlobalArena>> CsgShapeRegistry::findShaderModuleInclude(const Name& shaderModule, Core::Alloc::GlobalArena& resultArena)const{
     if(!shaderModule)
         return MakeUnexpected(Failure{});
 
-    ACompactString shaderModuleInclude;
+    AString<Core::Alloc::GlobalArena> shaderModuleInclude(resultArena);
     bool found = false;
     ScopedLock lock(m_mutex);
     for(const CsgShapeTypeInfo& shapeType : m_shapeTypes){
@@ -355,12 +358,13 @@ Expected<CsgShapeTypeInfo> CsgShapeRegistry::shapeTypeById(const CsgShapeTypeId 
 
 
 bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
+    Core::Alloc::GlobalArena& arena = registry.m_shapeTypes.get_allocator().arena();
     bool result = true;
 
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(s_CsgBoxShapeName, CsgBoxShapeParameters{}, &__hidden_shape_registry::BoxBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(s_CsgCapsuleShapeName, CsgCapsuleShapeParameters{}, &__hidden_shape_registry::CapsuleBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(s_CsgPlaneShapeName, CsgPlaneShapeParameters{}, &__hidden_shape_registry::PlaneBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(s_CsgSphereShapeName, CsgSphereShapeParameters{}, &__hidden_shape_registry::SphereBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgBoxShapeName, CsgBoxShapeParameters{}, &__hidden_shape_registry::BoxBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgCapsuleShapeName, CsgCapsuleShapeParameters{}, &__hidden_shape_registry::CapsuleBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgPlaneShapeName, CsgPlaneShapeParameters{}, &__hidden_shape_registry::PlaneBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgSphereShapeName, CsgSphereShapeParameters{}, &__hidden_shape_registry::SphereBounds), true) && result;
 
     return result;
 }

@@ -34,22 +34,22 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ComboState::ComboState()
+ComboState::ComboState()noexcept
     : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity))
 {}
 
-void ComboState::select(const u64 key){
+void ComboState::select(const u64 key)noexcept{
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
     m_selectedKey = key;
     ComboBehavior::Close(*this);
 }
 
-void ComboState::open(){
+void ComboState::open()noexcept{
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
     ComboBehavior::Open(*this);
 }
 
-void ComboState::close(){
+void ComboState::close()noexcept{
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
     ComboBehavior::Close(*this);
 }

@@ -166,7 +166,7 @@ ArenaMemoryTracker::ArenaMemoryTracker(const Name& ownerName, const ArenaMemoryR
     __hidden_arena_memory::FindOrCreateOwner(ownerName).attach(*this);
 }
 
-ArenaMemoryTracker::~ArenaMemoryTracker(){
+ArenaMemoryTracker::~ArenaMemoryTracker()noexcept{
     if(!m_owner)
         return;
 
@@ -180,7 +180,7 @@ void ArenaMemoryTracker::releaseRetainedMemory()noexcept{
     m_deallocationCount.store(m_allocationCount.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
 }
 
-void ArenaMemoryTracker::reset(const u64 reservedBytes){
+void ArenaMemoryTracker::reset(const u64 reservedBytes)noexcept{
     ScopedLock lock(__hidden_arena_memory::s_OwnerMutex);
     releaseRetainedMemory();
     if(m_owner)

@@ -57,31 +57,6 @@ GpuCompiledGraph::ReadView::~ReadView()noexcept{
 }
 
 
-void GpuCompiledGraph::ReadView::release()noexcept{
-    if(!m_graph)
-        return;
-
-    NWB_FATAL_ASSERT_MSG(s_ActiveView == this, "GpuCompiledGraph read views must unwind in lexical order");
-    if(s_ActiveView != this)
-        TerminateInvariant();
-    s_ActiveView = m_previousView;
-    if(m_ownsAdmission){
-        u32 planAccessState = m_graph->m_planAccessState.load(MemoryOrder::acquire);
-        for(;;){
-            if((planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask) == 0u){
-                NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph plan read admission must retain its exact reader claim");
-                TerminateInvariant();
-            }
-            if(m_graph->m_planAccessState.compare_exchange_weak(planAccessState, planAccessState - 1u, MemoryOrder::release, MemoryOrder::relaxed))
-                break;
-        }
-    }
-    m_graph = nullptr;
-    m_previousView = nullptr;
-    m_ownsAdmission = false;
-}
-
-
 bool GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept{
     if(!m_graph || !graph.valid())
         return false;
@@ -247,6 +222,31 @@ const GpuPhysicalQueueInfo* GpuCompiledGraph::ReadView::queueInfo(const GpuPhysi
 }
 GpuPhysicalQueueTopology GpuCompiledGraph::ReadView::queueTopology()const & noexcept{
     return m_graph ? m_graph->queueTopology() : GpuPhysicalQueueTopology{};
+}
+
+
+void GpuCompiledGraph::ReadView::release()noexcept{
+    if(!m_graph)
+        return;
+
+    NWB_FATAL_ASSERT_MSG(s_ActiveView == this, "GpuCompiledGraph read views must unwind in lexical order");
+    if(s_ActiveView != this)
+        TerminateInvariant();
+    s_ActiveView = m_previousView;
+    if(m_ownsAdmission){
+        u32 planAccessState = m_graph->m_planAccessState.load(MemoryOrder::acquire);
+        for(;;){
+            if((planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask) == 0u){
+                NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph plan read admission must retain its exact reader claim");
+                TerminateInvariant();
+            }
+            if(m_graph->m_planAccessState.compare_exchange_weak(planAccessState, planAccessState - 1u, MemoryOrder::release, MemoryOrder::relaxed))
+                break;
+        }
+    }
+    m_graph = nullptr;
+    m_previousView = nullptr;
+    m_ownsAdmission = false;
 }
 
 

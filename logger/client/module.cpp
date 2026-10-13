@@ -52,7 +52,7 @@ static constexpr u32 s_RetrySleepMs = 100u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Client::GlobalInit(){
+bool Client::GlobalInit()noexcept{
     CURLcode curlResult;
 
     curlResult = curl_global_init(CURL_GLOBAL_ALL);

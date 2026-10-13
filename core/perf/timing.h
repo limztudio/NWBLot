@@ -90,13 +90,13 @@ public:
 class TimingRecorder final : public TimingSink, NoCopy{
 private:
     struct ScopeRecord : NoCopy{
-        explicit ScopeRecord(const Name& scopeName)noexcept
-            : name(scopeName)
-        {}
-
         Name name = s_NameNone;
         TimingAccumulator accumulator;
         u32 generation = 0u;
+
+        explicit ScopeRecord(const Name& scopeName)noexcept
+            : name(scopeName)
+        {}
     };
 
     using ScopeRecordPtr = GlobalUniquePtr<ScopeRecord>;

@@ -183,7 +183,7 @@ Expected<RadioGroupChoices> RadioGroupBehavior::Reconcile(RadioGroupState& state
     return candidate;
 }
 
-bool RadioGroupBehavior::Apply(RadioGroupState& state, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupResult& result){
+bool RadioGroupBehavior::Apply(RadioGroupState& state, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupResult& result)noexcept{
     using namespace __hidden_ui_radio_group_behavior;
     if(state.m_reconciling){
         state.m_reentryObserved = true;

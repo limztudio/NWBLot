@@ -2,12 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
 
 #include <gtest/gtest.h>
 
-#include <cfenv>
+#include <fenv.h>
+
 
 #if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
 #include <signal.h>
@@ -68,12 +70,12 @@ NWB_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorD
 template<Reduction::Enum Kind>
 static void CheckReductionEdge(SIMDVectorDouble input, SIMDVectorDouble multiplier, const i32 roundingMode, const usize index){
 #pragma STDC FENV_ACCESS ON
-    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const SIMDVectorDouble expected = OriginalReduction<Kind>(input, multiplier);
-    const i32 expectedExceptions = fetestexcept(FE_ALL_EXCEPT);
-    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    const i32 expectedExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const SIMDVectorDouble actual = CurrentReduction<Kind>(input, multiplier);
-    const i32 actualExceptions = fetestexcept(FE_ALL_EXCEPT);
+    const i32 actualExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     EXPECT_EQ(actualExceptions, expectedExceptions) << roundingMode << ':' << index << ':' << Kind;
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorDoubleGetIntByIndex(actual, lane), VectorDoubleGetIntByIndex(expected, lane)) << roundingMode << ':' << index << ':' << Kind << ':' << lane;
@@ -81,10 +83,10 @@ static void CheckReductionEdge(SIMDVectorDouble input, SIMDVectorDouble multipli
 
 TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions){
 #pragma STDC FENV_ACCESS ON
-    fenv_t originalEnvironment{};
-    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
 
@@ -101,7 +103,7 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
     };
     constexpr i32 roundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     for(const i32 roundingMode : roundingModes){
-        ASSERT_EQ(fesetround(roundingMode), 0);
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
         for(usize index = 0u; index < LengthOf(inputBits); ++index){
             const SIMDVectorDouble input = VectorDoubleSetInt(inputBits[index][0], inputBits[index][1], inputBits[index][2], inputBits[index][3]);
             const SIMDVectorDouble multiplier = VectorDoubleSetInt(inputBits[index][4], inputBits[index][5], inputBits[index][6], inputBits[index][7]);
@@ -141,15 +143,15 @@ NWB_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noe
 template<u32 Dimension>
 static void CheckReciprocalLengthEdge(SIMDVectorDouble input){
 #pragma STDC FENV_ACCESS ON
-    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const SIMDVectorDouble expected = OriginalReciprocalLength<Dimension>(input);
-    const i32 expectedFlags = fetestexcept(FE_ALL_EXCEPT);
-    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const SIMDVectorDouble actual = CurrentReciprocalLength<Dimension, false>(input);
-    const i32 actualFlags = fetestexcept(FE_ALL_EXCEPT);
-    ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+    const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const SIMDVectorDouble estimate = CurrentReciprocalLength<Dimension, true>(input);
-    const i32 estimateFlags = fetestexcept(FE_ALL_EXCEPT);
+    const i32 estimateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     EXPECT_EQ(actualFlags, expectedFlags) << Dimension;
     EXPECT_EQ(estimateFlags, expectedFlags) << Dimension;
     for(usize lane = 0u; lane < 4u; ++lane){
@@ -160,10 +162,10 @@ static void CheckReciprocalLengthEdge(SIMDVectorDouble input){
 
 TEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes){
 #pragma STDC FENV_ACCESS ON
-    fenv_t originalEnvironment{};
-    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
     constexpr u64 cases[][4]{
@@ -176,7 +178,7 @@ TEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresA
     };
     constexpr i32 roundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     for(const i32 roundingMode : roundingModes){
-        ASSERT_EQ(fesetround(roundingMode), 0);
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
         for(const auto& bits : cases){
             const SIMDVectorDouble input = VectorDoubleSetInt(bits[0], bits[1], bits[2], bits[3]);
             CheckReciprocalLengthEdge<2u>(input);
@@ -200,7 +202,7 @@ TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOve
         action.sa_flags = SA_SIGINFO;
         if(sigemptyset(&action.sa_mask) != 0 || sigaction(SIGFPE, &action, nullptr) != 0)
             _exit(3);
-        if(feclearexcept(FE_ALL_EXCEPT) != 0 || feenableexcept(FE_INVALID | FE_OVERFLOW) == -1)
+        if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT) || feenableexcept(FE_INVALID | FE_OVERFLOW) == -1)
             _exit(4);
         volatile u64 maximumBits = 0x7fefffffffffffffull;
         const SIMDVectorDouble lhs = VectorDoubleSetInt(maximumBits, 0x3ff0000000000000ull, 0u, 0u);

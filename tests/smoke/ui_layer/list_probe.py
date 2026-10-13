@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import re
 
+from probe_common import snapshot_from_patterns
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker
 
@@ -18,25 +19,9 @@ MARKER_TOLERANCE = 5
 
 
 def snapshot_from_logs(text):
-    states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
-    if not states or not displays or not skins:
-        return None
-    state = states[-1]
-    sequence = int(state[1])
-    values = tuple(map(int, state[2].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
-    if any(name not in rectangles for name in RECTANGLES):
-        return None
-    display = tuple(map(float, displays[-1].groups()))
-    geometry_values = (value for rectangle in rectangles.values() for value in rectangle)
-    if not all(math.isfinite(value) for value in (*display, *geometry_values)) or not all(value > 0.0 for value in display):
-        raise SmokeFailure("list fixture reported invalid geometry or display metrics")
-    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
+    return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="list")
 
 
-def center(rectangle):
-    x, y, width, height = rectangle
-    return x + width / 2.0, y + height / 2.0
 
 
 def observe_list(frame, snapshot, expected, *, extent=None, skin="default", row_height=24.0, extra=None):

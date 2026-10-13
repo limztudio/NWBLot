@@ -29,7 +29,7 @@ AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
     const VkAccelerationStructureGeometryLinearSweptSpheresDataNV* const lssData,
     const u32 primitiveCount,
     const bool transformDataPresent
-){
+)noexcept{
     AccelStructGeometryBuildSignature signature;
     signature.geometryType = geometry.geometryType;
     signature.geometryFlags = geometry.flags;
@@ -67,7 +67,7 @@ AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
     return signature;
 }
 
-bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current){
+bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current)noexcept{
     if(previous.geometryType != current.geometryType || previous.geometryFlags != current.geometryFlags || previous.primitiveCount != current.primitiveCount)
         return false;
 
@@ -691,7 +691,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
     }
 
-    auto buildGeometry = [&](usize i){
+    auto buildGeometry = [&](usize i)noexcept{
         const auto& geomDesc = pGeometries[i];
 
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};

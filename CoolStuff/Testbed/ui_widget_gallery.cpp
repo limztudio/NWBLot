@@ -56,7 +56,7 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display){
+NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display)noexcept{
     using namespace __hidden_testbed_ui_gallery;
     const f32 height = ((s_SelectorHeight + s_ContentGap) + s_ContentHeight);
     const SIMDVectorSingle available = VectorSubtract(VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f), VectorSet(s_SelectorWidth, height, 0.0f, 0.0f)), VectorReplicate(s_Margin));

@@ -606,7 +606,7 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
                     idle = prepareProfileLocked(CpuTaskProfileKind::WorkerIdle, {}, {}, workerIndex, affinity);
                     idle->begin = TimerNow();
                 }
-                const bool ready = m_workerChanged[affinity].wait(lock, stop, [this, affinity](){
+                const bool ready = m_workerChanged[affinity].wait(lock, stop, [this, affinity]()noexcept{
                     return hasReadyLocked(affinity, false, false);
                 });
                 if(idle)

@@ -23,14 +23,14 @@ namespace __hidden_builder_numeric_edit{
 template <typename Model, typename Bounds>
 class NumericActions final : public IEditActionSink{
 public:
-    NumericActions(Model& model, const Bounds& bounds, NumericEditResult& result, u64& revision, const Context& context)
+    NumericActions(Model& model, const Bounds& bounds, NumericEditResult& result, u64& revision, const Context& context)noexcept
         : m_model(model)
         , m_bounds(bounds)
         , m_result(result)
         , m_revision(revision)
         , m_context(context)
     {}
-    virtual ~NumericActions()override = default;
+    virtual ~NumericActions()noexcept override = default;
 
 
 public:

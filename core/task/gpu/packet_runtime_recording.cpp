@@ -397,14 +397,13 @@ bool GpuNativePacketRecorder::recordPacket(
                 commandList->cancelTaskCapabilityTracking();
         }
         if(recorded && (!GpuPacketRecordingDetail::HasQueueCapabilities(taskView.commands.allowedCapabilities(), usedCapabilities) || !GpuPacketRecordingDetail::HasQueueCapabilities(queue->capabilities, usedCapabilities))){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})"),
-                StringConvert(taskView.markerLabel),
-                static_cast<u32>(usedCapabilities),
-                static_cast<u32>(taskView.commands.allowedCapabilities()),
-                static_cast<u32>(queue->queueClass),
-                queue->id.index,
-                static_cast<u32>(queue->capabilities)
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})")
+                , StringConvert(taskView.markerLabel)
+                , static_cast<u32>(usedCapabilities)
+                , static_cast<u32>(taskView.commands.allowedCapabilities())
+                , static_cast<u32>(queue->queueClass)
+                , queue->id.index
+                , static_cast<u32>(queue->capabilities)
             );
             recorded = false;
         }

@@ -146,7 +146,6 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, c
 
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_font_atlas_cook_metadata;
-    static_cast<void>(scratchArena);
     if(
         !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix)
         || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { "font", "bake_ppem", "spread_pixels", "raster_mode", "ascender_units", "descender_units", "line_gap_units", "glyphs" })
@@ -183,17 +182,17 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     if(!glyphsResult)
         return MakeUnexpected(Failure{});
     candidate.payload.glyphs = Move(*glyphsResult);
-    if(!ValidateFontAtlasPayload(candidate.payload))
+    if(!ValidateFontAtlasPayload(candidate.payload, scratchArena))
         return MakeUnexpected(Failure{});
     candidate.virtualPath = virtualPath;
     return candidate;
 }
 
-Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena){
+Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     FontAtlas candidate(arena, entry.virtualPath);
     FontAtlasPayload payload(entry.payload);
     candidate.setPayload(Move(payload));
-    if(!candidate.validatePayload())
+    if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return candidate;
 }

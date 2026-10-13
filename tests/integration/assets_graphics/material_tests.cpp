@@ -67,7 +67,6 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_FINAL)
 static Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(const AStringView metaText, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
     NWB::Core::Metascript::Document doc(testArena.arena);
     if(!doc.parse(metaText))
@@ -108,6 +107,7 @@ static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringV
     return built;
 }
 
+#if defined(NWB_FINAL)
 static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCodec(TestArena& testArena, NWB::Impl::MaterialAssetCodec& codec, const NWB::Impl::Material& material){
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     const bool serialized = codec.serialize(material, binary);
@@ -388,6 +388,58 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
 #endif
 }
 
+TEST(AssetsGraphics, MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboitReferences){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
+    auto built = BuildMaterialFromBindAndMeta(AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_BlockScopedMaterialMeta, "material_reload_admission", testArena, scratchArena);
+    ASSERT_TRUE(built);
+    NWB::Impl::Material material = Move(*built);
+    material.setTransparent(true);
+    material.setTwoSided(true);
+    material.setAvboitAccumulatePixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_accumulate"));
+    material.setAvboitOccupancyPixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_occupancy"));
+    material.setAvboitExtinctionPixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_extinction"));
+    NWB::Impl::MaterialAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary(testArena.arena);
+    ASSERT_TRUE(codec.serialize(material, binary));
+    ASSERT_TRUE(material.loadBinary(binary));
+    for(usize prefix = 0u; prefix < binary.size(); ++prefix){
+        NWB::Core::Assets::AssetBytes malformed(binary);
+        malformed.resize(prefix);
+        EXPECT_FALSE(material.loadBinary(malformed)) << prefix;
+        NWB::Core::Assets::AssetBytes retained(testArena.arena);
+        ASSERT_TRUE(codec.serialize(material, retained));
+        EXPECT_EQ(retained, binary) << prefix;
+    }
+    const auto layoutOffsets = AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(binary);
+    ASSERT_TRUE(layoutOffsets);
+    for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
+        NWB::Core::Assets::AssetBytes malformed(binary);
+        switch(invalidCase){
+        case 0u:
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, 0u, u32{ 0u }));
+            break;
+        case 1u:
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, layoutOffsets->layoutHashOffset, u64{ 0u }));
+            break;
+        case 2u:
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, binary.size() - sizeof(NameHash) - sizeof(u32), u32{ 2u }));
+            break;
+        case 3u:
+            malformed.push_back(0u);
+            break;
+        }
+        EXPECT_FALSE(material.loadBinary(malformed)) << invalidCase;
+        NWB::Core::Assets::AssetBytes retained(testArena.arena);
+        ASSERT_TRUE(codec.serialize(material, retained));
+        EXPECT_EQ(retained, binary) << invalidCase;
+    }
+    EXPECT_EQ(logger.errorCount(), binary.size() + 4u);
+}
+
+
 TEST(AssetsGraphics, MaterialBindSchemaValidation){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -655,8 +707,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     Path& outputDirectory = cookCase->outputDirectory;
 
     const Path assetRoot = root / s_ASSETS_DIR;
-    if(!AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(testArena, assetRoot, AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_BlockScopedMaterialMeta))
-        return;
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(testArena, assetRoot, AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_BlockScopedMaterialMeta));
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 

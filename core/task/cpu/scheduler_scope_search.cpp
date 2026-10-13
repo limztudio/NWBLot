@@ -78,7 +78,7 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait
         const TaskNode& node = m_nodes[current];
         if(node.scope == &wait.m_scope || m_scopeContributionVisits[current] == positiveStamp){
             m_scopeContributionVisits[current] = positiveStamp;
-            const auto positive = [this, positiveStamp](const TaskHandle handle){
+            const auto positive = [this, positiveStamp](const TaskHandle handle)noexcept{
                 return resolveLocked(handle) && m_scopeContributionVisits[handle.index] == positiveStamp;
             };
             // Only the processed prefix can contain discovery ancestors; unprocessed sibling frontiers stay untouched.

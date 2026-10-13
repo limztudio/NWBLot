@@ -276,6 +276,81 @@ protected:
     EditBoxResult m_result;
 };
 
+struct AcceptedAreaFrame{
+    Array<HitTarget, 16u> targets{};
+    usize count = 0u;
+    usize popupCount = 0u;
+    u64 generation = 0u;
+};
+
+class TextAreaLoanFixture : public TextAreaFixture{
+protected:
+    [[nodiscard]] static TextAreaOptions AreaOptions(){
+        TextAreaOptions options;
+        options.height = { LayoutSizePolicy::Fixed, 96.0f };
+        return options;
+    }
+
+    [[nodiscard]] static PopupOptions ParentOptions(){ return UiWidgetTests::LargeLoanParentOptions(); }
+
+    [[nodiscard]] static PopupOptions ChildOptions(){ return UiWidgetTests::LargeLoanChildOptions(); }
+
+    [[nodiscard]] static ListOptions ListOptions(){ return UiWidgetTests::LargeLoanListOptions(); }
+
+
+protected:
+    [[nodiscard]] bool acceptBaseline(){
+        useHost();
+        if(!m_model.setText("alpha\nbeta") || !frameArea(1u, AreaOptions()))
+            return false;
+        m_host.publications.clear();
+        m_host.publishes = 0u;
+        m_host.loans = 0u;
+        return true;
+    }
+
+    [[nodiscard]] bool beginParent(const u64 generation){
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
+    }
+
+    [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
+
+    [[nodiscard]] AcceptedAreaFrame accepted()const{
+        AcceptedAreaFrame frame;
+        frame.count = m_context.input().targets().size();
+        frame.popupCount = m_context.input().popupCount();
+        frame.generation = m_context.input().layoutGeneration();
+        for(usize index = 0u; index < Min(frame.count, frame.targets.size()); ++index)
+            frame.targets[index] = m_context.input().targets()[index];
+        return frame;
+    }
+
+    void expectRejected(const AcceptedAreaFrame& frame){
+        EXPECT_TRUE(m_builder.failed());
+        EXPECT_TRUE(m_context.failed());
+        EXPECT_FALSE(m_context.ready());
+        EXPECT_FALSE(m_context.commitFrame(2u));
+        EXPECT_EQ(m_context.input().layoutGeneration(), frame.generation);
+        EXPECT_EQ(m_context.input().popupCount(), frame.popupCount);
+        ASSERT_EQ(m_context.input().targets().size(), frame.count);
+        ASSERT_LE(frame.count, frame.targets.size());
+        for(usize index = 0u; index < frame.count; ++index){
+            const HitTarget& before = frame.targets[index];
+            const HitTarget& after = m_context.input().targets()[index];
+            UiWidgetTests::ExpectHitTargetIdentity(after, before);
+            EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
+            EXPECT_EQ(after.popup, before.popup);
+            UiComboTests::ExpectRect(after.rectangle, before.rectangle);
+            UiComboTests::ExpectRect(after.clip, before.clip);
+        }
+    }
+
+
+protected:
+    PopupState m_parent;
+    PopupState m_child;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

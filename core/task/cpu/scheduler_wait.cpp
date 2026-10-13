@@ -40,7 +40,7 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
             --m_joinWaiters;
         });
 
-        m_changed.wait(lock, [this, handle](){
+        m_changed.wait(lock, [this, handle]()noexcept{
             return !resolveLocked(handle) || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting());
         });
     }
@@ -64,7 +64,7 @@ void CpuTaskScheduler::wait(){
         ++m_joinWaiters;
         ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
 
-        m_changed.wait(lock, [this](){
+        m_changed.wait(lock, [this]()noexcept{
             return m_outstanding == 0u || hasReadyLocked(CpuAffinity::Any, isMainThread(), false);
         });
     }

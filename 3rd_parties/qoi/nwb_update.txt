@@ -1,5 +1,5 @@
 package: qoi
 version: commit 97bacc86a9c4abf5a2d452102dc26546c4c670b9
-updated_utc: 2026-09-23T12:45:01Z
+updated_utc: 2026-10-13
 source: https://github.com/phoboslab/qoi
-notes: Official phoboslab/qoi single-header decoder (qoi.h). MIT license is in the header. Basis Universal compiles the implementation in basisu_enc.cpp via QOI_IMPLEMENTATION. NWB CMake wrapper exposes nwb::qoi. Verified qoi.h byte-identical to upstream HEAD on 2026-09-23; pointer tracks HEAD.
+notes: Official phoboslab/qoi single-header decoder (qoi.h). MIT license is in the header. Basis Universal compiles the implementation in basisu_enc.cpp via QOI_IMPLEMENTATION. NWB CMake wrapper exposes nwb::qoi. Verified qoi.h byte-identical to upstream HEAD on 2026-09-23; pointer tracks HEAD. NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::qoi as the alias for nwb_vendor_qoi with SYSTEM INTERFACE includes from package root.

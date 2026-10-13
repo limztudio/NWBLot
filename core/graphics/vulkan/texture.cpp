@@ -5,6 +5,7 @@
 #include "backend.h"
 #include "texture_resource_detail.h"
 
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -472,7 +473,12 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         return VK_NULL_HANDLE;
     }
 
-    m_views.emplace(key, view);
+    ScopeExit destroyView([&]()noexcept{ m_context.deviceDispatch.vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks); });
+    if(!m_views.emplace(key, view).second){
+        NWB_ASSERT(false);
+        return VK_NULL_HANDLE;
+    }
+    destroyView.release();
     return view;
 }
 

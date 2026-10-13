@@ -50,7 +50,7 @@ static void TransposeTaskRelationTile(Array<u64, s_BitsPerWord>& tile)noexcept{
     }
 }
 
-static void SymmetrizeTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const usize taskCount, const usize wordsPerRow){
+static void SymmetrizeTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const usize taskCount, const usize wordsPerRow)noexcept{
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
         const usize rowBase = rowBlock * s_BitsPerWord;
         const usize rowCount = Min(s_BitsPerWord, taskCount - rowBase);
@@ -94,7 +94,7 @@ static void SymmetrizeTaskRelations(Vector<u64, Alloc::ScratchArena>& words, con
 
 template<typename RowRanges>
 static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const Vector<usize, Alloc::ScratchArena>& offsets, const RowRanges& ranges, const usize taskCount, const usize wordsPerRow){
-    const auto readWord = [&](const usize task, const usize word){
+    const auto readWord = [&](const usize task, const usize word)noexcept(noexcept(word < ranges[task].m_begin || word >= ranges[task].m_end ? static_cast<u64>(0u) : words[offsets[task] + word - ranges[task].m_begin])){
         const auto& range = ranges[task];
         return word < range.m_begin || word >= range.m_end ? static_cast<u64>(0u) : words[offsets[task] + word - range.m_begin];
     };
@@ -208,16 +208,7 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(const GpuTaskId& lhs
 bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability){
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
-    outReachability.m_words.clear();
-    outReachability.m_topologicalRanks.clear();
-    outReachability.m_relatedWordRanges.clear();
-    outReachability.m_rowOffsets.clear();
-    outReachability.m_totalOrder = false;
-    outReachability.m_graphGeneration = 0u;
-    outReachability.m_taskCount = 0u;
-    outReachability.m_wordsPerRow = 0u;
-    outReachability.m_valid = false;
-    const auto fail = [&outReachability](){
+    const auto reset = [&outReachability]()noexcept{
         outReachability.m_words.clear();
         outReachability.m_topologicalRanks.clear();
         outReachability.m_relatedWordRanges.clear();
@@ -227,6 +218,10 @@ bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView&
         outReachability.m_taskCount = 0u;
         outReachability.m_wordsPerRow = 0u;
         outReachability.m_valid = false;
+    };
+    reset();
+    const auto fail = [&reset]()noexcept{
+        reset();
         return false;
     };
     if(!analysis.validFor(graph))

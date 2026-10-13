@@ -130,7 +130,7 @@ bool RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const T
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextLogCaptureLogger::TextLogCaptureLogger(Recorder& recorder, Common::ILogger* const forwardLogger)
+TextLogCaptureLogger::TextLogCaptureLogger(Recorder& recorder, Common::ILogger* const forwardLogger)noexcept
     : m_recorder(recorder)
     , m_forwardLogger(forwardLogger)
 {}

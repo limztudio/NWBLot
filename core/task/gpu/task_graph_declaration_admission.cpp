@@ -30,7 +30,7 @@ GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& g
     m_valid = true;
 }
 
-GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope(){
+GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexcept{
     if(!m_valid)
         return;
 

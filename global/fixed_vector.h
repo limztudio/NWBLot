@@ -117,12 +117,12 @@ public:
         m_currentSize = 0;
     }
 
-    constexpr void fill(const T& value)noexcept{
+    constexpr void fill(const T& value)noexcept(noexcept(DeclVal<T&>() = DeclVal<const T&>())){
         Base::fill(value);
         m_currentSize = s_MaxElements;
     }
 
-    constexpr void swap(FixedVector& other)noexcept{
+    constexpr void swap(FixedVector& other)noexcept(noexcept(DeclVal<Base&>().swap(DeclVal<Base&>()))){
         Base::swap(other);
         Swap(m_currentSize, other.m_currentSize);
     }

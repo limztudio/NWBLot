@@ -27,12 +27,9 @@ private:
 
 
 private:
-    explicit GpuNativePacketRecorder(Device& device)noexcept
+    explicit GpuNativePacketRecorder(Device& device, GpuTimingRecorder* const timingRecorder = nullptr)noexcept
         : m_device(device)
-    {}
-    GpuNativePacketRecorder(Device& device, GpuTimingRecorder& timingRecorder)noexcept
-        : m_device(device)
-        , m_timingRecorder(&timingRecorder)
+        , m_timingRecorder(timingRecorder)
     {}
 
 
@@ -145,7 +142,7 @@ struct PacketWaitStatistics{
 [[nodiscard]] u64 AllocateAcceptanceRevision()noexcept;
 
 [[nodiscard]] bool ValidateInitialOwnershipCompletionToken(const GpuTaskGraphInitialOwnerHandoffSourceView& source, const GpuCompiledBarrier& barrier, const GpuPhysicalQueueInfo& sourceQueue, const QueueSubmissionToken& token, u16 deviceGeneration)noexcept;
-[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID);
+[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept;
 
 // Reject missing declaration tokens across the entire range before any native packet can be accepted.
 [[nodiscard]] bool ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept;

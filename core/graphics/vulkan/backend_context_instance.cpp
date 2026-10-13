@@ -133,7 +133,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     if(!requiredExtensions.empty()){
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Cannot create a Vulkan instance because the following required extension(s) are not supported:";
         for(const auto& ext : requiredExtensions)
             ss << "\n  - " << ext;
@@ -142,7 +142,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     {
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Vulkan: Enabled instance extensions:";
         for(const auto& ext : m_enabledExtensions.instance)
             ss << "\n    " << ext;
@@ -173,7 +173,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     if(!requiredLayers.empty()){
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Cannot create a Vulkan instance because the following required layer(s) are not supported:";
         for(const auto& ext : requiredLayers)
             ss << "\n  - " << ext;
@@ -185,7 +185,7 @@ bool BackendContext::createVulkanInstance(){
     m_hdr10ColorSpaceExtensionEnabled = isInstanceExtensionEnabled(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
 
     {
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Vulkan: Enabled layers:";
         for(const auto& layer : m_enabledExtensions.layers)
             ss << "\n    " << layer;
@@ -226,11 +226,11 @@ bool BackendContext::createVulkanInstance(){
     }
 
     if(m_deviceParams.enableDebugRuntime){
-        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
+        auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Vulkan GPU debug: instance setup"
            << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(scratchArena, applicationInfo.apiVersion)
-           << "\n    validation layer enabled: " << VulkanDetail::BoolToString(isLayerEnabled("VK_LAYER_KHRONOS_validation"))
-           << "\n    debug utils extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+           << "\n    validation layer enabled: " << VulkanDetail::BoolToYesNoText(isLayerEnabled("VK_LAYER_KHRONOS_validation"))
+           << "\n    debug utils extension enabled: " << VulkanDetail::BoolToYesNoText(isInstanceExtensionEnabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
            << "\n    enabled instance extensions: " << m_enabledExtensions.instance.size()
            << "\n    enabled layers: " << m_enabledExtensions.layers.size()
         ;

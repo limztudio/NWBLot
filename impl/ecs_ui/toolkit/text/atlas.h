@@ -91,7 +91,7 @@ public:
 public:
     void reset();
     [[nodiscard]] bool prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize);
-    [[nodiscard]] const AtlasGlyph* find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const;
+    [[nodiscard]] const AtlasGlyph* find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const noexcept;
     [[nodiscard]] SharedGlyphPage page(u32 index);
     [[nodiscard]] usize pageCount()const noexcept{ return m_pages.size(); }
     [[nodiscard]] usize glyphCount()const noexcept{ return m_glyphs.size(); }

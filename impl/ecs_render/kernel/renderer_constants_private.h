@@ -5,15 +5,16 @@
 #pragma once
 
 
+#include <impl/assets/graphics/csg/constants.h>
+#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
+
 #include <core/graphics/api.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
-#include <impl/assets/graphics/csg/constants.h>
-#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

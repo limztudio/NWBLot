@@ -6,6 +6,7 @@
 
 
 #include <core/assets/binary_payload_io.h>
+
 #include <global/binary.h>
 
 

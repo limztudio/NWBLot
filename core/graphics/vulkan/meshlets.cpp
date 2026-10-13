@@ -74,7 +74,9 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_MeshletPipelineArena);
 
-    auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);
+    MeshletPipelineHandle pso(NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context), MeshletPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!pso)
+        return nullptr;
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
@@ -85,22 +87,18 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     if(desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Task shader was supplied for meshlet pipeline, but VK_EXT_mesh_shader taskShader was not enabled."));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(desc.amplificationShader && (desc.amplificationShader->m_shaderModule == VK_NULL_HANDLE || desc.amplificationShader->m_desc.shaderType != ShaderType::Amplification)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline task shader has the wrong shader stage."));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(desc.meshShader && (desc.meshShader->m_shaderModule == VK_NULL_HANDLE || desc.meshShader->m_desc.shaderType != ShaderType::Mesh)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline mesh shader has the wrong shader stage."));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(desc.pixelShader && (desc.pixelShader->m_shaderModule == VK_NULL_HANDLE || desc.pixelShader->m_desc.shaderType != ShaderType::Pixel)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline fragment shader has the wrong shader stage."));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -111,27 +109,25 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         appendPipelineShaderStage(*desc.meshShader, VK_SHADER_STAGE_MESH_BIT_EXT, specInfos, shaderStages);
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
     if(desc.pixelShader)
         appendPipelineShaderStage(*desc.pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
-    if(!configurePipelineBindingsOrDestroy(desc.bindingLayouts, NWB_TEXT("meshlet pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("meshlet pipeline"), *pso, scratchArena))
         return nullptr;
 
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
 
     const VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_BLEND_CONSTANTS, VK_DYNAMIC_STATE_STENCIL_REFERENCE, };
-    const auto fixedState = buildGraphicsPipelineFixedStateOrDestroy(
+    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(
         fbinfo,
         desc.renderState,
         VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
         dynamicStates,
         static_cast<u32>(LengthOf(dynamicStates)),
         NWB_TEXT("meshlet pipeline"),
-        *pso,
         scratchArena
     );
     if(!fixedState)
@@ -146,10 +142,10 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    if(!createPipelineOrDestroy(NWB_TEXT("meshlet pipeline"), *pso, pipelineInfo))
+    if(!createPipeline(NWB_TEXT("meshlet pipeline"), *pso, pipelineInfo))
         return nullptr;
 
-    return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return pso;
 }
 
 

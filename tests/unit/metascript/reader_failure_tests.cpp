@@ -58,7 +58,7 @@ TEST(Metascript, UnexpectedReaderExceptionsPropagateWithoutBecomingParseErrors){
     Document document(arena.arena);
     ThrowingReader reader;
 
-    EXPECT_THROW(static_cast<void>(document.parse(reader)), UnexpectedReadFailure);
+    EXPECT_THROW(EXPECT_TRUE(document.parse(reader)), UnexpectedReadFailure);
     EXPECT_FALSE(document.hasErrors());
 }
 

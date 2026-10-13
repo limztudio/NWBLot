@@ -2,15 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/simd/collision_triangle.h>
 #include <global/string_view.h>
 #include <global/scope_exit.h>
 #include <global/timer.h>
 
-#include <cfenv>
-#include <fenv.h>
 #include <iostream>
 #if defined(NWB_PLATFORM_LINUX)
+#include <fenv.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -422,27 +422,27 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
 
 [[nodiscard]] static bool CheckExceptionEquivalence(const TrianglePair& pair)noexcept{
 #pragma STDC FENV_ACCESS ON
-    fenv_t originalEnvironment{};
-    if(feholdexcept(&originalEnvironment) != 0)
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    if(!originalEnvironment)
         return false;
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             __builtin_trap();
     });
     const bool original = Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
-    const i32 originalFlags = fetestexcept(FE_ALL_EXCEPT);
-    if(feclearexcept(FE_ALL_EXCEPT) != 0)
+    const i32 originalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
     const bool reference = ZeroAxis(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
-    const i32 referenceFlags = fetestexcept(FE_ALL_EXCEPT);
-    if(feclearexcept(FE_ALL_EXCEPT) != 0)
+    const i32 referenceFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
     const bool hoisted = AbsHoisted(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
-    const i32 hoistedFlags = fetestexcept(FE_ALL_EXCEPT);
-    if(feclearexcept(FE_ALL_EXCEPT) != 0)
+    const i32 hoistedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
     const bool production = TriangleDoubleTests::Intersects(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
-    const i32 productionFlags = fetestexcept(FE_ALL_EXCEPT);
+    const i32 productionFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     return original == reference && reference == hoisted && hoisted == production && originalFlags == referenceFlags && referenceFlags == hoistedFlags && hoistedFlags == productionFlags;
 }
 
@@ -459,8 +459,10 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         struct sigaction action{};
         action.sa_sigaction = TrapHandler;
         action.sa_flags = SA_SIGINFO;
-        fenv_t environment{};
-        if(sigemptyset(&action.sa_mask) != 0 || sigaction(SIGFPE, &action, nullptr) != 0 || feholdexcept(&environment) != 0 || feenableexcept(mask) < 0)
+        if(sigemptyset(&action.sa_mask) != 0 || sigaction(SIGFPE, &action, nullptr) != 0)
+            _exit(127);
+        const auto environment = HoldFloatingPointExceptions();
+        if(!environment || feenableexcept(mask) < 0)
             _exit(127);
         const bool result = implementation(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
         _exit(result ? 1 : 0);
@@ -538,24 +540,24 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         vertex = VectorDoubleSetIntW(vertex, 0x7ff0000000000001u);
     for(SIMDVectorDouble& vertex : pairs[0].second)
         vertex = VectorDoubleSetIntW(vertex, 0x7ff0000000000001u);
-    fenv_t environment{};
-    if(feholdexcept(&environment) != 0)
+    const auto environment = HoldFloatingPointExceptions();
+    if(!environment)
         return false;
     const bool baseline = Baseline(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
-    const i32 baselineExceptions = fetestexcept(FE_ALL_EXCEPT);
-    if(feclearexcept(FE_ALL_EXCEPT) != 0)
+    const i32 baselineExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
     const bool candidate = ZeroAxis(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
-    const i32 candidateExceptions = fetestexcept(FE_ALL_EXCEPT);
-    if(feclearexcept(FE_ALL_EXCEPT) != 0)
+    const i32 candidateExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
     const bool production = TriangleDoubleTests::Intersects(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
-    const i32 productionExceptions = fetestexcept(FE_ALL_EXCEPT);
-    if(feclearexcept(FE_ALL_EXCEPT) != 0)
+    const i32 productionExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
     const bool hoisted = AbsHoisted(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
-    const i32 hoistedExceptions = fetestexcept(FE_ALL_EXCEPT);
-    if(fesetenv(&environment) != 0)
+    const i32 hoistedExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!SetFloatingPointEnvironment(*environment))
         return false;
     if(!(baseline && candidate && production && hoisted && baselineExceptions == candidateExceptions && candidateExceptions == productionExceptions && productionExceptions == hoistedExceptions && (candidateExceptions & FE_INVALID) == 0))
         return false;

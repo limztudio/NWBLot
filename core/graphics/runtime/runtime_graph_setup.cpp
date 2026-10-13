@@ -92,7 +92,7 @@ struct StandaloneTaskGraphTimingRetirementTask{
     };
 
 
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept{
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
         return !payload.frameTimingTransaction.needsRetirement() || payload.frameTimingTransaction.recordEnd(commandList);
     }
@@ -169,7 +169,7 @@ struct FrameTimingResetGraphTask{
     };
 
 
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept{
+    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.timing)
             return false;
@@ -435,7 +435,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
             frameTimingTransaction->discard();
         }
         const bool discarded = transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration());
-            if(!recovered || !discarded)
+        if(!recovered || !discarded)
             graphics.requestDeviceRecreation();
         return MakeUnexpected(Failure{});
     }

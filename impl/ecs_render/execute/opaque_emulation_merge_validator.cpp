@@ -33,7 +33,7 @@ void OpaqueEmulationMergeValidator::validate(
 )const{
     RendererFramePipeline& pipeline = *m_pipeline;
     outResult = OpaqueEmulationMergeValidationResult{};
-    const auto taskIsCompiled = [&](const Core::GpuTaskId task){
+    const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{
         return compiledPlan.findTask(task).valid();
     };
     const Core::GpuPhysicalQueueInfo* const opaqueComputeEmulationQueue = pipeline.m_graphicsPrefixOpaqueComputeEmulationTask.valid() ? compiledPlan.queueInfoForTask(pipeline.m_graphicsPrefixOpaqueComputeEmulationTask) : nullptr;
@@ -69,7 +69,7 @@ void OpaqueEmulationMergeValidator::validate(
         )
     ;
     // Shared outputs need exact packet order; keep the G-buffer prelude first.
-    outResult.opaqueSharedComputeEmulationMerged = [&](){
+    outResult.opaqueSharedComputeEmulationMerged = [&]()noexcept{
         const usize phaseCount = pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount;
         if(phaseCount == 0u){
             for(const Core::GpuTaskId& task : pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
@@ -112,7 +112,7 @@ void OpaqueEmulationMergeValidator::validate(
         )
     ;
     // The producer/raster pair must stay contiguous in one packet.
-    outResult.opaqueCsgIntervalSampleComputeEmulationMerged = [&](){
+    outResult.opaqueCsgIntervalSampleComputeEmulationMerged = [&]()noexcept{
         if(!pipeline.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid())
             return true;
         if(

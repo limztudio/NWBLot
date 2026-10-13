@@ -8,9 +8,8 @@
 #include <core/alloc/general.h>
 #include <gtest/gtest.h>
 
+#include <global/floating_point_environment.h>
 #include <global/scope_exit.h>
-
-#include <fenv.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -223,10 +222,10 @@ TEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure){
 
 TEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags){
 #pragma STDC FENV_ACCESS ON
-    fenv_t originalEnvironment{};
-    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
 
@@ -245,14 +244,14 @@ TEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionF
     const SIMDVectorSingle poisonedMax = VectorSelect(localMax, VectorReplicateInt(inactiveBits[1]), s_SIMDMaskW);
     objectToWorld.v[3] = VectorReplicateInt(inactiveBits[0]);
     for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-        ASSERT_EQ(fesetround(roundingMode), 0);
-        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
         const auto reference = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
-        const i32 referenceFlags = fetestexcept(FE_ALL_EXCEPT);
+        const i32 referenceFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
         ASSERT_TRUE(reference);
-        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
         const auto bounds = ComputeOpticalWorldBounds(objectToWorld, poisonedMin, poisonedMax);
-        const i32 actualFlags = fetestexcept(FE_ALL_EXCEPT);
+        const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
         ASSERT_TRUE(bounds);
         EXPECT_EQ(actualFlags, referenceFlags);
         EXPECT_EQ(actualFlags & FE_INVALID, 0);

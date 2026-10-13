@@ -21,10 +21,11 @@
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_stage_names.h>
 #include <core/metascript/parser.h>
+#include <core/common/log.h>
+
 #include <global/hash_utils.h>
 #include <global/text_utils.h>
 #include <global/simd/convert.h>
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

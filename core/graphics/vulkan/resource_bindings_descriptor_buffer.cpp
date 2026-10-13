@@ -88,7 +88,7 @@ bool DescriptorBufferManager::initialize(){
         return false;
     }
     m_lifecycleTransitioning = true;
-    const auto failInitialization = [this](){
+    const auto failInitialization = [this]()noexcept{
         shutdownSegment(m_resourceSegment);
         shutdownSegment(m_samplerSegment);
         m_bindingGeneration = 0u;
@@ -243,7 +243,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
     }
 
     SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
-    auto clearAllocation = [&](const DescriptorBufferSegment& allocation){
+    auto clearAllocation = [&](const DescriptorBufferSegment& allocation)noexcept{
         if(allocation.valid() && segment.mappedMemory)
             NWB_MEMSET(static_cast<u8*>(segment.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
     };
@@ -390,7 +390,7 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
 
     storage.freeRanges.insert(storage.freeRanges.begin() + insertIndex, freedRange);
 
-    const auto mergeAdjacentAt = [&](const usize leftIndex) -> bool{
+    const auto mergeAdjacentAt = [&](const usize leftIndex)noexcept -> bool{
         if(leftIndex + 1u >= storage.freeRanges.size())
             return false;
 

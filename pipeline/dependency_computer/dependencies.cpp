@@ -29,7 +29,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     const auto selection = catalog.selectInputs(options, scratchArena);
     if(!selection)
         return MakeUnexpected(Failure{});
-    const auto& files = catalog.files();
+    const auto& files = catalog.m_files;
     Vector<u8, Assets::ScratchArena> included(selection->selected, scratchArena);
     for(const usize index : selection->order){
         const auto document = catalog.read(index, scratchArena);

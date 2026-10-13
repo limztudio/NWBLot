@@ -119,7 +119,7 @@ public:
     // Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
     [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(RadioGroupState& state, const IListDataSource& source, RadioGroupResult& result, const IRadioGroupReconcileGuard* guard = nullptr);
     // Navigation consumes copied choices and never calls the source; accepted internal intents preserve the input token.
-    [[nodiscard]] static bool Apply(RadioGroupState& state, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupResult& result);
+    [[nodiscard]] static bool Apply(RadioGroupState& state, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupResult& result)noexcept;
 };
 
 

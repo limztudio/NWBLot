@@ -216,7 +216,7 @@ private:
     return payload;
 }
 
-[[nodiscard]] static SIMDVectorSingle ConvertSrgbVolumeTexelToLinearRgb(const SIMDVectorSingle normalizedTexel){
+[[nodiscard]] static SIMDVectorSingle ConvertSrgbVolumeTexelToLinearRgb(const SIMDVectorSingle normalizedTexel)noexcept{
     const SIMDVectorSingle clamped = VectorSaturate(normalizedTexel);
     const SIMDVectorSingle scaled = VectorDivide(VectorAdd(clamped, VectorReplicate(0.055f)), VectorReplicate(1.055f));
     const SIMDVectorSingle nonlinear = VectorPow(scaled, VectorReplicate(2.4f));
@@ -224,21 +224,21 @@ private:
     return VectorSelect(nonlinear, linearPart, VectorLess(clamped, VectorReplicate(0.04045f)));
 }
 
-[[nodiscard]] static SIMDVectorSingle ConvertLinearVolumeRgbToSrgb(const SIMDVectorSingle linearRgb){
+[[nodiscard]] static SIMDVectorSingle ConvertLinearVolumeRgbToSrgb(const SIMDVectorSingle linearRgb)noexcept{
     const SIMDVectorSingle clamped = VectorSaturate(linearRgb);
     const SIMDVectorSingle nonlinear = VectorSubtract(VectorMultiply(VectorReplicate(1.055f), VectorPow(clamped, VectorReplicate(1.0f / 2.4f))), VectorReplicate(0.055f));
     const SIMDVectorSingle linearPart = VectorMultiply(clamped, VectorReplicate(12.92f));
     return VectorSaturate(VectorSelect(nonlinear, linearPart, VectorLess(clamped, VectorReplicate(0.0031308f))));
 }
 
-[[nodiscard]] static SIMDVectorSingle AverageLinearVolumeTexels(const SIMDVectorSingle channelSums, const u32 count){
+[[nodiscard]] static SIMDVectorSingle AverageLinearVolumeTexels(const SIMDVectorSingle channelSums, const u32 count)noexcept{
     NWB_ASSERT(count != 0u);
     const SIMDVectorSingle bias = VectorReplicate(static_cast<f32>(count) * 0.5f);
     const SIMDVectorSingle averaged = VectorDivide(VectorAdd(channelSums, bias), VectorReplicate(static_cast<f32>(count)));
     return VectorTruncate(averaged);
 }
 
-[[nodiscard]] static SIMDVectorSingle AverageSrgbVolumeTexels(const SIMDVectorSingle linearRgbSum, const SIMDVectorSingle alphaSum, const u32 count){
+[[nodiscard]] static SIMDVectorSingle AverageSrgbVolumeTexels(const SIMDVectorSingle linearRgbSum, const SIMDVectorSingle alphaSum, const u32 count)noexcept{
     NWB_ASSERT(count != 0u);
     const SIMDVectorSingle averagedLinear = VectorDivide(linearRgbSum, VectorReplicate(static_cast<f32>(count)));
     const SIMDVectorSingle encodedRgb = ConvertLinearVolumeRgbToSrgb(averagedLinear);
@@ -250,63 +250,32 @@ private:
 }
 
 [[nodiscard]] static Expected<ImagePlanes> GenerateNextVolumeMip(const ImagePlanes& sourcePlanes, const bool srgb){
-    auto targets = EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes);
-    if(!targets)
-        return MakeUnexpected(Failure{});
-    auto& outPlanes = targets->planes;
-    const auto& mipDims = targets->dims;
-    const u32 sourceDepth = mipDims.sourceDepth;
-    const u32 targetWidth = mipDims.targetWidth;
-    const u32 targetHeight = mipDims.targetHeight;
-    const u32 targetDepth = mipDims.targetDepth;
-
-    for(u32 targetZ = 0u; targetZ < targetDepth; ++targetZ){
-        const auto range = EncodeBackendDetail::ComputeVolumeMipSliceRange(sourceDepth, targetDepth, targetZ);
-        if(!range)
-            return MakeUnexpected(Failure{});
-        const u32 sourceFirst = range->first;
-        const u32 sourceEnd = range->end;
-
-        basisu::vector<basisu::image> filteredPlanes;
-        filteredPlanes.resize(sourceEnd - sourceFirst);
-        for(u32 sourceZ = sourceFirst; sourceZ < sourceEnd; ++sourceZ){
-            basisu::image& filteredPlane = filteredPlanes[sourceZ - sourceFirst];
-            filteredPlane.resize(targetWidth, targetHeight);
-            if(!basisu::image_resample(sourcePlanes[sourceZ], filteredPlane, srgb, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate a volume mip level."));
-                return MakeUnexpected(Failure{});
-            }
-        }
-
-        const u32 filteredPlaneCount = static_cast<u32>(filteredPlanes.size());
-        basisu::image& targetPlane = outPlanes[targetZ];
-        targetPlane.resize(targetWidth, targetHeight);
-        for(u32 y = 0u; y < targetHeight; ++y){
-            for(u32 x = 0u; x < targetWidth; ++x){
-                SIMDVectorSingle channelSums = VectorZero();
-                SIMDVectorSingle linearRgbSum = VectorZero();
-                SIMDVectorSingle alphaSum = VectorZero();
-                for(const basisu::image& filteredPlane : filteredPlanes){
-                    const basisu::color_rgba& sourceColor = filteredPlane(x, y);
-                    const SIMDVectorSingle texel = VectorSet(static_cast<f32>(sourceColor.r), static_cast<f32>(sourceColor.g), static_cast<f32>(sourceColor.b), static_cast<f32>(sourceColor.a));
-                    if(srgb){
-                        const SIMDVectorSingle normalizedTexel = VectorDivide(texel, VectorReplicate(s_BasisColorChannelMax));
-                        linearRgbSum = VectorAdd(linearRgbSum, ConvertSrgbVolumeTexelToLinearRgb(normalizedTexel));
-                        alphaSum = VectorAdd(alphaSum, VectorSelect(VectorZero(), texel, s_SIMDMaskW));
-                    }
-                    else{
-                        channelSums = VectorAdd(channelSums, texel);
-                    }
+    return EncodeBackendDetail::GenerateVolumeMip(sourcePlanes,
+        [srgb](const basisu::image& source, basisu::image& target){
+            return basisu::image_resample(source, target, srgb, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount);
+        },
+        [srgb](const ImagePlanes& filteredPlanes, basisu::image& targetPlane, const u32 x, const u32 y, const u32 filteredPlaneCount){
+            SIMDVectorSingle channelSums = VectorZero();
+            SIMDVectorSingle linearRgbSum = VectorZero();
+            SIMDVectorSingle alphaSum = VectorZero();
+            for(const basisu::image& filteredPlane : filteredPlanes){
+                const basisu::color_rgba& sourceColor = filteredPlane(x, y);
+                const SIMDVectorSingle texel = VectorSet(static_cast<f32>(sourceColor.r), static_cast<f32>(sourceColor.g), static_cast<f32>(sourceColor.b), static_cast<f32>(sourceColor.a));
+                if(srgb){
+                    const SIMDVectorSingle normalizedTexel = VectorDivide(texel, VectorReplicate(s_BasisColorChannelMax));
+                    linearRgbSum = VectorAdd(linearRgbSum, ConvertSrgbVolumeTexelToLinearRgb(normalizedTexel));
+                    alphaSum = VectorAdd(alphaSum, VectorSelect(VectorZero(), texel, s_SIMDMaskW));
                 }
-
-                const SIMDVectorSingle average = srgb ? AverageSrgbVolumeTexels(linearRgbSum, alphaSum, filteredPlaneCount) : AverageLinearVolumeTexels(channelSums, filteredPlaneCount);
-                Float4 targetTexel = {};
-                StoreFloat(average, targetTexel);
-                targetPlane(x, y) = basisu::color_rgba(static_cast<int>(targetTexel.r), static_cast<int>(targetTexel.g), static_cast<int>(targetTexel.b), static_cast<int>(targetTexel.a));
+                else{
+                    channelSums = VectorAdd(channelSums, texel);
+                }
             }
-        }
-    }
-    return Move(targets->planes);
+
+            const SIMDVectorSingle average = srgb ? AverageSrgbVolumeTexels(linearRgbSum, alphaSum, filteredPlaneCount) : AverageLinearVolumeTexels(channelSums, filteredPlaneCount);
+            Float4 targetTexel = {};
+            StoreFloat(average, targetTexel);
+            targetPlane(x, y) = basisu::color_rgba(static_cast<int>(targetTexel.r), static_cast<int>(targetTexel.g), static_cast<int>(targetTexel.b), static_cast<int>(targetTexel.a));
+        }, NWB_TEXT("tex_conv: failed to generate a volume mip level."));
 }
 
 [[nodiscard]] static bool EncodeVolumeMip(const ImagePlanes& planes, const bool srgb, TexturePayload& inOutPayload, bool& inOutHasAlpha){
@@ -330,27 +299,11 @@ private:
     parameters.m_source_images = planes;
     parameters.m_mip_gen = false;
 
-    basisu::basis_compressor compressor;
-    if(!compressor.init(parameters)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize a volume mip encoder."));
-        return false;
-    }
-    const basisu::basis_compressor::error_code encodeResult = compressor.process();
-    if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC volume mip encoding failed (Basis Universal error {})."), static_cast<u32>(encodeResult));
-        return false;
-    }
-
-    const basisu::basisu_backend_output& backendOutput = compressor.get_uastc_backend_output();
-    if(!EncodeBackendDetail::ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_LDR_4x4) || backendOutput.m_slice_desc.size() != planes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC volume mip."));
-        return false;
-    }
-    if(!EncodeBackendDetail::AppendCanonicalMip(backendOutput, 0u, static_cast<u32>(planes.size()), width, height, inOutPayload))
-        return false;
-
-    inOutHasAlpha = inOutHasAlpha || compressor.get_any_source_image_has_alpha();
-    return true;
+    return EncodeBackendDetail::EncodeMip(parameters, basist::basis_tex_format::cUASTC_LDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
+        NWB_TEXT("tex_conv: Basis Universal failed to initialize a volume mip encoder."),
+        NWB_TEXT("tex_conv: UASTC volume mip encoding failed"),
+        NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC volume mip.")
+    }, &inOutHasAlpha);
 }
 
 [[nodiscard]] static Expected<TexturePayload> EncodeVolume(const Vector<Path>& inputPaths, const bool srgb, const AlphaSource& alphaSource){

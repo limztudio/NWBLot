@@ -136,7 +136,7 @@ bool BackendContext::pickPhysicalDevice(){
         lastDevice = adapterIndex;
     }
 
-    auto errorStream = VulkanDetail::MakeScratchStringStream(scratchArena);
+    auto errorStream = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
     errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
 
     struct DeviceSelection{
@@ -150,7 +150,7 @@ bool BackendContext::pickPhysicalDevice(){
         i32 secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
         i32 presentQueueFamily = s_InvalidQueueFamilyIndex;
     };
-    auto captureCurrentSelection = [this](VkPhysicalDevice device){
+    auto captureCurrentSelection = [this](VkPhysicalDevice device)noexcept{
         DeviceSelection selection;
         selection.device = device;
         selection.graphicsQueueFamily = m_graphicsQueueFamily;
@@ -163,7 +163,7 @@ bool BackendContext::pickPhysicalDevice(){
         selection.presentQueueFamily = m_presentQueueFamily;
         return selection;
     };
-    auto applySelection = [this](const DeviceSelection& selection){
+    auto applySelection = [this](const DeviceSelection& selection)noexcept{
         m_vulkanPhysicalDevice = selection.device;
         m_graphicsQueueFamily = selection.graphicsQueueFamily;
         m_secondaryGraphicsQueueFamily = selection.secondaryGraphicsQueueFamily;
@@ -195,7 +195,7 @@ bool BackendContext::pickPhysicalDevice(){
         VulkanDetail::ScratchStringSet requiredExtensions(0, Hasher<VulkanDetail::ScratchString>(), EqualTo<VulkanDetail::ScratchString>(), scratchArena);
         requiredExtensions.reserve(m_enabledExtensions.device.size());
         for(const auto& [name, _] : m_enabledExtensions.device)
-            requiredExtensions.insert(VulkanDetail::MakeScratchString(scratchArena, AStringView(name)));
+            requiredExtensions.insert(VulkanDetail::ScratchString(AStringView(name), scratchArena));
         uint32_t extCount = 0;
         res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
         if(res != VK_SUCCESS){
@@ -209,7 +209,7 @@ bool BackendContext::pickPhysicalDevice(){
             continue;
         }
         for(const auto& ext : deviceExtensions)
-            requiredExtensions.erase(VulkanDetail::MakeScratchString(scratchArena, ext.extensionName));
+            requiredExtensions.erase(VulkanDetail::ScratchString(ext.extensionName, scratchArena));
 
         bool deviceIsGood = true;
 

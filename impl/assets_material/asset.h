@@ -7,11 +7,12 @@
 
 #include "../global.h"
 
+#include <impl/assets/graphics/mesh/material_typed_constants.h>
+
 #include <core/assets/module.h>
 #include <core/assets/paths.h>
 #include <core/assets/ref.h>
 #include <core/graphics/api.h>
-#include <impl/assets/graphics/mesh/material_typed_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -332,10 +333,6 @@ struct MaterialResourceReference{
 
 class Material final : public Core::Assets::TypedAsset<Material>{
 public:
-    NWB_DEFINE_ASSET_TYPE("material")
-
-
-public:
     static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
 
     using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, s_ShaderStageCount>;
@@ -346,14 +343,18 @@ public:
 
 
 public:
-    explicit Material(Core::Assets::AssetArena& arena)
+    NWB_DEFINE_ASSET_TYPE("material")
+
+
+public:
+    explicit Material(Core::Assets::AssetArena& arena)noexcept
         : m_shaderVariant(arena)
         , m_typedLayoutBlocks(arena)
         , m_typedLayoutFields(arena)
         , m_typedBlockBytes(arena)
         , m_resourceReferences(arena)
     {}
-    Material(Core::Assets::AssetArena& arena, const Name& virtualPath)
+    Material(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<Material>(virtualPath)
         , m_shaderVariant(arena)
         , m_typedLayoutBlocks(arena)
@@ -415,10 +416,6 @@ public:
     [[nodiscard]] bool twoSided()const noexcept{ return m_twoSided; }
     // Refractive-caster flag, separate from `transparent`. Refraction values stay shader-side (NwbMeshSurface).
     [[nodiscard]] bool refractive()const noexcept{ return m_refractive; }
-
-
-private:
-    void clearStageShaders()noexcept;
 
 
 private:

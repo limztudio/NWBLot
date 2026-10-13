@@ -78,10 +78,6 @@ inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipL
     return Rect(Max<i32>(0, Min<i32>(rect.minX, width)), Max<i32>(0, Min<i32>(rect.maxX, width)), Max<i32>(0, Min<i32>(rect.minY, height)), Max<i32>(0, Min<i32>(rect.maxY, height)));
 }
 
-inline bool TextureClearBoxCoversSubresources(const TextureDesc& desc, const TextureSubresourceSet& subresources, const Box& box)noexcept{
-    return TextureClearBoxFullyCoversSubresources(desc, subresources, box);
-}
-
 inline bool TextureClearSubresourcesContainedBy(const TextureSubresourceSet& requested, const TextureSubresourceSet& container)noexcept{
     const MipLevel requestedMipEnd = requested.baseMipLevel + requested.numMipLevels;
     const MipLevel containerMipEnd = container.baseMipLevel + container.numMipLevels;

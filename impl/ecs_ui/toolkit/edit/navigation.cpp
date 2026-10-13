@@ -53,7 +53,7 @@ static RunClass::Enum Classify(const AStringView text, const usize offset)noexce
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditModel::move(const EditMove::Enum movement, const bool extend){
+bool EditModel::move(const EditMove::Enum movement, const bool extend)noexcept{
     if(movement > EditMove::DocumentEnd)
         return false;
     usize target = m_caret;
@@ -110,7 +110,7 @@ usize EditModel::nextBoundary(const usize position)const noexcept{
     return found == m_boundaries.end() ? m_text.size() : *found;
 }
 
-usize EditModel::wordBoundary(usize position, const bool forward)const{
+usize EditModel::wordBoundary(usize position, const bool forward)const noexcept{
     using namespace __hidden_ui_edit_navigation;
     if(forward){
         if(position == m_text.size())

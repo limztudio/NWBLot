@@ -5,6 +5,7 @@
 #include "crash_symbolicate_internal.h"
 
 #include <core/crash/package_names.h>
+
 #include <global/process_execution.h>
 #include <global/process_memory_map.h>
 #include <global/text_utils.h>
@@ -96,7 +97,7 @@ struct LinuxSymbolFileCache{
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line){
+[[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line)noexcept{
     const AStringView trimmed = TrimView(line);
     return trimmed.empty() || trimmed == s_LinuxUnknownSymbolText || StartsWith(trimmed, s_LinuxUnknownLocationPrefix);
 }

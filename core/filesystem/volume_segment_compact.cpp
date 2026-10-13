@@ -4,10 +4,11 @@
 
 #include "volume_file_system.h"
 #include "volume_storage_detail.h"
-#include "arena_names.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+
+#include <global/error_code.h>
 #include <global/limit.h>
 #include <global/simplemath.h>
 
@@ -31,7 +32,7 @@ NWB_FILESYSTEM_BEGIN
 static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCount){
 #if defined(NWB_PLATFORM_WINDOWS)
     if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     HANDLE file = CreateFile(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(file == INVALID_HANDLE_VALUE)
         return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
@@ -41,20 +42,23 @@ static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCoun
     const bool seekSucceeded = SetFilePointerEx(file, offset, nullptr, FILE_BEGIN) != 0;
     const bool resizeSucceeded = seekSucceeded && SetEndOfFile(file) != 0;
     const ErrorCode errorCode = resizeSucceeded ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
-    CloseHandle(file);
+    const bool closeSucceeded = CloseHandle(file) != 0;
+    const ErrorCode closeError = closeSucceeded ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
     if(errorCode)
         return MakeUnexpected(errorCode);
+    if(closeError)
+        return MakeUnexpected(closeError);
     return {};
 #else
     if(!::CanRepresentU64<off_t>(byteCount))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) != 0)
         return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
     return {};
 #endif
 }
 
-bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 sourceOffset, const u64 byteCount){
+bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 sourceOffset, const u64 byteCount, Alloc::ScratchArena& scratchArena){
     if(byteCount == 0 || destinationOffset == sourceOffset)
         return true;
     if(m_segmentSize == 0){
@@ -99,7 +103,6 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
         return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_MoveBytesScratch);
     Vector<u8, Core::Alloc::ScratchArena> moveBuffer(static_cast<usize>(moveChunkBytes), 0, scratchArena);
 
     if(destinationOffset < sourceOffset){

@@ -10,10 +10,10 @@
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/assets/graphics/csg/constants.h>
+#include <impl/ecs_csg/module.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_csg/module.h>
 
 #include <global/algorithm.h>
 

@@ -10,10 +10,10 @@
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/assets/graphics/csg/constants.h>
+#include <impl/ecs_csg/module.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_csg/module.h>
 
 #include <global/algorithm.h>
 
@@ -174,16 +174,13 @@ static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolved
     const bool receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld
 ){
-    CsgResolvedClipCutter resolvedCutter;
     auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
     if(!shapeType)
         return MakeUnexpected(Failure{});
-    resolvedCutter.shapeType = Move(*shapeType);
+    CsgResolvedClipCutter resolvedCutter{ .worldToShape = cutterWorldToShape, .workBounds = {}, .shapeType = Move(*shapeType), .cutter = &cutter };
     const auto parameterBytes = ResolveCsgCutterParameterBytes(resolvedCutter.shapeType, cutter);
     if(!parameterBytes)
         return MakeUnexpected(Failure{});
-    resolvedCutter.cutter = &cutter;
-    resolvedCutter.worldToShape = cutterWorldToShape;
 
     CsgClipWorkBounds receiverBounds;
     if(receiverBoundsCanCull){
@@ -365,10 +362,10 @@ Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawI
         receiverLocalSpace.localMaxBounds,
         receiverLocalSpace.boundsCanCull,
         receiverLocalSpace.localToWorldPtr(),
-        [](const CsgCutterComponent& cutter){
+        [](const CsgCutterComponent& cutter)noexcept{
             return __hidden_csg_clip_resolve::CsgCutterTransforms{ LoadFloat(cutter.shapeToWorld), LoadFloat(cutter.worldToShape) };
         },
-        [&](const __hidden_csg_clip_resolve::CsgResolvedClipCutter& resolvedCutter){
+        [&](const __hidden_csg_clip_resolve::CsgResolvedClipCutter& resolvedCutter)noexcept{
             if(resolvedCutter.shapeType.desc.shaderModule){
                 if(!info.evaluatorVariant)
                     info.evaluatorVariant = resolvedCutter.shapeType.desc.shaderModule;
@@ -433,7 +430,7 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
         receiverLocalSpace.localMaxBounds,
         receiverLocalSpace.boundsCanCull,
         receiverLocalSpace.localToWorldPtr(),
-        [](const CsgCutterComponent& cutter){
+        [](const CsgCutterComponent& cutter)noexcept{
             return __hidden_csg_clip_resolve::CsgCutterTransforms{ LoadFloat(cutter.shapeToWorld), LoadFloat(cutter.worldToShape) };
         },
         [&](const __hidden_csg_clip_resolve::CsgResolvedClipCutter& resolvedCutter){

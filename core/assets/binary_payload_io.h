@@ -8,6 +8,7 @@
 #include "module.h"
 
 #include <core/common/log.h>
+
 #include <global/binary.h>
 
 

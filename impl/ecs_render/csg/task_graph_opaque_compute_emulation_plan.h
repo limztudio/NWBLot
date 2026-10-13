@@ -234,30 +234,9 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
         indexedDrawItems.reserve(sourceDrawItems.indexedDrawItems.size());
         indexedDrawItems.assign(sourceDrawItems.indexedDrawItems.begin(), sourceDrawItems.indexedDrawItems.end());
-        drawItems.reserve(sourceDrawItems.computeDrawItems.size());
-        outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
-        outputLayouts.reserve(sourceDrawItems.computeDrawItems.size());
-        outputHeapSlots.reserve(sourceDrawItems.computeDrawItems.size());
-        MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
-        MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
-        for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
-            if(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None){
-                reset();
-                return false;
-            }
-            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()){
-                reset();
-                return false;
-            }
-            if(!outputs.insert(mesh.emulationVertexBuffer.get()) || !slots.insert(mesh.emulationVertexHeapHandle.slot())){
-                reset();
-                return false;
-            }
-            drawItems.push_back(drawItem);
-            outputBuffers.push_back(mesh.emulationVertexBuffer);
-            outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
-            outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
+        if(!CaptureAliasFreeGeneratedGeometryDraws(*this, sourceDrawItems, scratchArena, [](const MaterialPipelineCsgMode::Enum mode)noexcept{ return mode != MaterialPipelineCsgMode::None; })){
+            reset();
+            return false;
         }
         receiverRanges.reserve(csgFrameData.receiverRanges.size());
         receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());

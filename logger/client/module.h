@@ -40,7 +40,7 @@ protected:
 
 public:
     using BaseType::enqueue;
-    virtual LogArena& arena()override{ return BaseType::arena(); }
+    virtual LogArena& arena()noexcept override{ return BaseType::arena(); }
     virtual void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{ BaseType::enqueue(Move(str), type); }
     virtual void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{ BaseType::enqueue(str, type); }
 };
@@ -67,7 +67,7 @@ class Client final : public ClientBase<Client, s_ClientName>{
 
 
 private:
-    static bool GlobalInit();
+    static bool GlobalInit()noexcept;
 
 
 public:

@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::validControlTargets()const{
+bool InputRouter::validControlTargets()const noexcept{
     for(const auto& target : m_stagedTargets){
         if(
             (!target.control.empty() && !target.control.valid())
@@ -55,7 +55,7 @@ bool InputRouter::validControlTargets()const{
     return true;
 }
 
-const HitTarget* InputRouter::controlHost(const HitTarget& target)const{
+const HitTarget* InputRouter::controlHost(const HitTarget& target)const noexcept{
     const HitTarget* host = target.owner.valid() ? findTarget(target.owner, target.ownerDeclarationGeneration) : &target;
     if(host == nullptr || !host->enabled || !host->focusable || host->owner.valid() || !host->control.valid() || host->control != target.control || host->popup != target.popup || !allowedByPopup(*host))
         return nullptr;
@@ -65,7 +65,7 @@ const HitTarget* InputRouter::controlHost(const HitTarget& target)const{
     return host;
 }
 
-bool InputRouter::currentControlAction(const ControlAction& action)const{
+bool InputRouter::currentControlAction(const ControlAction& action)const noexcept{
     const HitTarget* host = findTarget(action.id.target, action.id.declarationGeneration);
     if(host == nullptr || !isInteractive(*host) || !host->focusable || host->owner.valid() || !action.control.valid() || host->control != action.control || host->popup != action.popup)
         return false;
@@ -87,7 +87,7 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
     ;
 }
 
-Expected<ControlAction> InputRouter::consumeControlAction(const WidgetId host, const u64 declarationGeneration, const ControlToken& token){
+Expected<ControlAction> InputRouter::consumeControlAction(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
     const HitTarget* target = findTarget(host, declarationGeneration);
     if(declarationGeneration == 0u || !token.valid() || target == nullptr || !isInteractive(*target) || target->control != token || target->owner.valid() || !target->focusable)
         return MakeUnexpected(Failure{});
@@ -102,7 +102,7 @@ Expected<ControlAction> InputRouter::consumeControlAction(const WidgetId host, c
     return MakeUnexpected(Failure{});
 }
 
-void InputRouter::fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token){
+void InputRouter::fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
     const HitTarget* accepted = findTarget(host);
     if(accepted == nullptr || (accepted->declarationGeneration == declarationGeneration && accepted->control == token))
         return;
@@ -124,7 +124,7 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
     reconcileTargets();
 }
 
-void InputRouter::reconcileControlActions(){
+void InputRouter::reconcileControlActions()noexcept{
     for(usize index = 0u; index < m_controlActions.size();){
         if(!currentControlAction(m_controlActions[index]))
             m_controlActions.erase(m_controlActions.begin() + static_cast<isize>(index));

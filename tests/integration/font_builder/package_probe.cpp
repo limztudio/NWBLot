@@ -31,7 +31,7 @@ inline constexpr int s_EntryFailure = -1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static AStringView TableTag(const u32 tag){
+[[nodiscard]] static AStringView TableTag(const u32 tag)noexcept{
     if(tag == NWB::Impl::s_FontAtlasKernTag)
         return "kern";
     if(tag == NWB::Impl::s_FontAtlasGposTag)
@@ -41,10 +41,10 @@ inline constexpr int s_EntryFailure = -1;
     return {};
 }
 
-[[nodiscard]] static bool ExportPayload(const NWB::Path& directory, const NWB::Impl::FontAtlasPayload& payload){
+[[nodiscard]] static bool ExportPayload(const NWB::Path& directory, const NWB::Impl::FontAtlasPayload& payload, NWB::Core::Alloc::ScratchArena& scratch){
     if(!EnsureDirectories(directory))
         return false;
-    const auto binary = NWB::Impl::SerializeFontAtlasPayload(payload, payload.glyphs.get_allocator().arena());
+    const auto binary = NWB::Impl::SerializeFontAtlasPayload(payload, payload.glyphs.get_allocator().arena(), scratch);
     if(!binary || !WriteBinaryFile(directory / "atlas.bin", *binary))
         return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
@@ -103,7 +103,7 @@ inline constexpr int s_EntryFailure = -1;
             auto entryResult = NWB::Impl::ParseFontAtlasCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena, scratch);
             if(!entryResult)
                 return false;
-            auto assetResult = NWB::Impl::BuildFontAtlasAsset(*entryResult, arena);
+            auto assetResult = NWB::Impl::BuildFontAtlasAsset(*entryResult, arena, scratch);
             if(!assetResult)
                 return false;
             atlas = Move(*assetResult);
@@ -112,7 +112,7 @@ inline constexpr int s_EntryFailure = -1;
         else
             return false;
     }
-    return foundFont && foundAtlas && NWB::Impl::ValidateFontAtlasSourceMatch(atlas.payload(), font) && ExportPayload(destinationPath, atlas.payload()) && WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
+    return foundFont && foundAtlas && NWB::Impl::ValidateFontAtlasSourceMatch(atlas.payload(), font) && ExportPayload(destinationPath, atlas.payload(), scratch) && WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
 }
 
 int Run(const int argc, char** argv){

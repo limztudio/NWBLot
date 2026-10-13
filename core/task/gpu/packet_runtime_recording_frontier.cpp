@@ -6,6 +6,7 @@
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection/backend.h>
+
 #include <global/termination.h>
 #include <global/simd/vector.h>
 
@@ -61,6 +62,8 @@ public:
         }
     }
 
+
+public:
     void release()noexcept{ m_active = false; }
 
 private:
@@ -243,7 +246,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             u32 effectiveFrontier = packetView.plan->recordingFrontier;
             if(effectiveFrontier == Limit<u32>::s_Max)
                 return false;
-            const auto raiseFromSourcePacket = [&](const GpuSubmissionPacketId sourcePacket){
+            const auto raiseFromSourcePacket = [&](const GpuSubmissionPacketId sourcePacket)noexcept{
                 if(!planAccess.validPacket(sourcePacket) || sourcePacket == packet || sourcePacket.index >= packet.index)
                     return false;
                 if(sourcePacket.index < rangeBegin)
@@ -295,7 +298,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     if(!serialScratch || !serialScratch->stateFanInScratchArena)
         return false;
     Alloc::ScratchArena& serialStateFanInScratchArena = *serialScratch->stateFanInScratchArena;
-    const auto completeReadyFrontierTelemetry = [&]{
+    const auto completeReadyFrontierTelemetry = [&]()noexcept{
         const f64 elapsedSeconds = DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
         f64 workerBusySeconds = 0.0;
         for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
@@ -322,7 +325,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         return true;
     }
 
-    const auto packetStateSeedsAreRecorded = [&](const GpuSubmissionPacketId packet){
+    const auto packetStateSeedsAreRecorded = [&](const GpuSubmissionPacketId packet)noexcept{
         const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
         if(!packetView.valid())
             return false;

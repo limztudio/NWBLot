@@ -43,7 +43,7 @@ bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
     return true;
 }
 
-ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const{
+ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
     return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()) };
 }
 
@@ -107,7 +107,7 @@ bool Builder::beginColumn(const AStringView stableKey, const ContainerOptions& o
     return beginContainer(stableKey, LayoutDirection::Column, options);
 }
 
-bool Builder::endContainer(){
+bool Builder::endContainer()noexcept{
     if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_stack.size() <= 1u){
         m_context.fail();
         return false;
@@ -136,7 +136,7 @@ bool Builder::checkbox(const AStringView stableKey, const StringView text, bool&
     return changed;
 }
 
-void Builder::reset(){
+void Builder::reset()noexcept{
     if(declarationBlocked()){
         m_context.fail();
         return;
@@ -253,7 +253,7 @@ const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)
     return found ? found : m_skin->findRegion(fallback);
 }
 
-void Builder::buttonMetrics(Point& size, Insets& padding)const{
+void Builder::buttonMetrics(Point& size, Insets& padding)const noexcept{
     const Name names[]{ m_style.button, m_style.buttonHover, m_style.buttonPressed, m_style.buttonDisabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_style.button);

@@ -15,6 +15,7 @@
 #include <core/graphics/shader_stage_names.h>
 #include <core/graphics/spirv_entry_point.h>
 #include <core/common/log.h>
+
 #include <global/hash_utils.h>
 #include <global/process_execution.h>
 
@@ -170,7 +171,7 @@ static Expected<Path> BuildCompilerOverlayPath(const Path& overlayRoot, const Pa
 }
 
 
-static bool IsCompilerDependency(const ShaderCook::CookVector<Path>& dependencies, const Path& absolutePath){
+static bool IsCompilerDependency(const ShaderCook::CookVector<Path>& dependencies, const Path& absolutePath)noexcept{
     for(const Path& dependency : dependencies){
         if(dependency == absolutePath)
             return true;

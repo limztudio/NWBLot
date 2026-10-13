@@ -323,8 +323,8 @@ private:
     [[nodiscard]] GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingAssignmentKey& key)noexcept;
     [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingAssignmentKey& key)const noexcept;
     void rebuildHistory(HistoryRecord& record)noexcept;
-    void promoteHistoryIndex();
-    void promoteAssignmentIndex();
+    [[nodiscard]] bool promoteHistoryIndex();
+    [[nodiscard]] bool promoteAssignmentIndex();
 
 
 private:

@@ -1,10 +1,10 @@
-//=============================================================================
-// NWB-authored shim (NOT vendored AMD source). See nwb_rgd_decode.h.
-//=============================================================================
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "nwb_rgd_decode.h"
 
 #include <cstdint>
-#include <exception>
 #include <iostream>
 #include <mutex>
 #include <sstream>
@@ -12,24 +12,34 @@
 #include <unordered_map>
 #include <vector>
 
-// RGD backend.
 #include "rgd_data_types.h"
 #include "rgd_parsing_utils.h"
 #include "rgd_serializer.h"
 #include "rgd_marker_data_serializer.h"
 #include "rgd_resource_info_serializer.h"
 
-// Dev driver: KmdEventId / VmPageFaultEvent.
 #include "dev_driver/include/rgdevents.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace nwb_rgd{
 
-namespace{
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_rgd_decode{
 
 std::mutex& RgdConsoleMutex(){
-    static std::mutex mutex;
-    return mutex;
+    static std::mutex s_Mutex;
+    return s_Mutex;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class ScopedRgdConsoleMute final{
 public:
@@ -40,7 +50,7 @@ public:
     {
     }
 
-    ~ScopedRgdConsoleMute(){
+    ~ScopedRgdConsoleMute()noexcept{
         std::cout.rdbuf(m_coutBuffer);
         std::cerr.rdbuf(m_cerrBuffer);
     }
@@ -55,37 +65,37 @@ private:
     std::streambuf* m_cerrBuffer;
 };
 
-// Mirrors the RGD CLI frontend's SerializeTextOutput, summary-only: input info, system info, the
-// "markers in progress" list, the execution-marker tree (+ legend), and — when the crash is a page fault —
-// the offending-VA resource history. The shader/ISA disassembly sections are intentionally omitted (the
-// disassembler path is not compiled into the vendored backend).
-void AssembleTextSummary(const Config& config, RgdCrashDumpContents& contents, std::string& out_text){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The upstream serializer APIs keep native C++ strings and streams at this integration boundary; decode failures retain any report sections already produced.
+std::string AssembleTextSummary(const Config& config, RgdCrashDumpContents& contents){
     std::stringstream txt;
 
-    // System info: CPU / GPU / driver / OS, plus any active driver experiments.
     {
-        std::string system_info_str;
-        RgdSerializer::ToString(config, contents.system_info, contents.driver_experiments_json, system_info_str);
-        txt << system_info_str << std::endl;
+        std::string systemInfo;
+        if(!RgdSerializer::ToString(config, contents.system_info, contents.driver_experiments_json, systemInfo))
+            txt << "ERROR: failed to serialize system information." << std::endl;
+        txt << systemInfo << std::endl;
     }
 
-    // Execution markers: the "in progress" summary first, then the full annotated tree with its legend.
-    // Both are built from the UMD crash data and the command-buffer mapping (no in-flight shader info, so
-    // the '[#] shader in flight' state never appears and is left out of the legend).
     {
-        ExecMarkerDataSerializer exec_marker_serializer(std::unordered_map<uint64_t, RgdCrashingShaderInfo>{});
+        ExecMarkerDataSerializer markerSerializer(std::unordered_map<uint64_t, RgdCrashingShaderInfo>{});
 
-        std::string exec_marker_summary;
-        exec_marker_serializer.GenerateExecutionMarkerSummaryList(config, contents.umd_crash_data, contents.cmd_buffer_mapping, exec_marker_summary);
+        std::string markerSummary;
+        if(!markerSerializer.GenerateExecutionMarkerSummaryList(config, contents.umd_crash_data, contents.cmd_buffer_mapping, markerSummary))
+            txt << "ERROR: failed to serialize the execution marker summary." << std::endl;
 
         txt << std::endl << std::endl;
         txt << "===================" << std::endl;
         txt << "MARKERS IN PROGRESS" << std::endl;
         txt << "===================" << std::endl << std::endl;
-        txt << exec_marker_summary;
+        txt << markerSummary;
 
-        std::string exec_marker_tree;
-        exec_marker_serializer.GenerateExecutionMarkerTree(config, contents.umd_crash_data, contents.cmd_buffer_mapping, exec_marker_tree);
+        std::string markerTree;
+        if(!markerSerializer.GenerateExecutionMarkerTree(config, contents.umd_crash_data, contents.cmd_buffer_mapping, markerTree))
+            txt << "ERROR: failed to serialize the execution marker tree." << std::endl;
 
         txt << std::endl << std::endl;
         txt << "=====================" << std::endl;
@@ -96,84 +106,107 @@ void AssembleTextSummary(const Config& config, RgdCrashDumpContents& contents, s
         txt << "[X] finished" << std::endl;
         txt << "[>] in progress" << std::endl;
         txt << "[ ] not started" << std::endl << std::endl;
-        txt << exec_marker_tree;
+        txt << markerTree;
     }
 
-    // Page fault summary: scan the KMD events for VmPageFault events; for each, report the offending VA and
-    // its resource history. A hang (no page-fault event) skips this section entirely.
     {
-        std::vector<size_t> page_fault_events;
+        std::vector<size_t> pageFaultEvents;
         for(size_t i = 0, count = contents.kmd_crash_data.events.size(); i < count; ++i){
-            const RgdEventOccurrence& current_event = contents.kmd_crash_data.events[i];
-            if(current_event.rgd_event != nullptr
-               && current_event.rgd_event->header.eventId == static_cast<uint8_t>(KmdEventId::RgdEventVmPageFault))
-                page_fault_events.push_back(i);
+            const RgdEventOccurrence& currentEvent = contents.kmd_crash_data.events[i];
+            if(currentEvent.rgd_event != nullptr && currentEvent.rgd_event->header.eventId == static_cast<uint8_t>(KmdEventId::RgdEventVmPageFault))
+                pageFaultEvents.push_back(i);
         }
 
-        if(!page_fault_events.empty()){
+        if(!pageFaultEvents.empty()){
             txt << std::endl << std::endl;
             txt << "==================" << std::endl;
             txt << "PAGE FAULT SUMMARY" << std::endl;
             txt << "==================" << std::endl << std::endl;
 
-            RgdResourceInfoSerializer resource_serializer;
-            resource_serializer.InitializeWithTraceFile(config.crash_dump_file);
+            RgdResourceInfoSerializer resourceSerializer;
+            const bool resourceHistoryReady = resourceSerializer.InitializeWithTraceFile(config.crash_dump_file);
+            if(!resourceHistoryReady)
+                txt << "ERROR: failed to initialize page-fault resource history." << std::endl;
 
-            for(const size_t event_index : page_fault_events){
-                const RgdEventOccurrence& page_fault_event = contents.kmd_crash_data.events[event_index];
-                const VmPageFaultEvent& vm_page_fault = static_cast<const VmPageFaultEvent&>(*page_fault_event.rgd_event);
+            for(const size_t eventIndex : pageFaultEvents){
+                const RgdEventOccurrence& pageFaultEvent = contents.kmd_crash_data.events[eventIndex];
+                const VmPageFaultEvent& pageFault = static_cast<const VmPageFaultEvent&>(*pageFaultEvent.rgd_event);
 
-                txt << "Offending VA: 0x" << std::hex << vm_page_fault.faultVmAddress << std::dec << std::endl << std::endl;
+                txt << "Offending VA: 0x" << std::hex << pageFault.faultVmAddress << std::dec << std::endl << std::endl;
 
-                std::string resource_info_string;
-                resource_serializer.GetVirtualAddressHistoryInfo(config, vm_page_fault.faultVmAddress, resource_info_string);
-                txt << resource_info_string << std::endl;
+                std::string resourceInfo;
+                if(resourceHistoryReady && !resourceSerializer.GetVirtualAddressHistoryInfo(config, pageFault.faultVmAddress, resourceInfo))
+                    txt << "ERROR: failed to serialize page-fault resource history." << std::endl;
+                txt << resourceInfo << std::endl;
             }
         }
     }
 
-    // Input info (input file, RGD version, API type) is prepended ahead of the analysis body, matching the
-    // frontend's final layout.
-    std::string input_info_str;
-    RgdSerializer::InputInfoToString(config, contents, std::vector<std::string>{}, input_info_str);
+    std::string inputInfo;
+    RgdSerializer::InputInfoToString(config, contents, std::vector<std::string>{}, inputInfo);
 
-    std::stringstream rgd_summary_txt;
-    rgd_summary_txt << input_info_str;
-    rgd_summary_txt << txt.str();
+    std::stringstream summary;
+    summary << inputInfo;
+    summary << txt.str();
 
-    out_text = rgd_summary_txt.str();
+    return summary.str();
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// RDF's C API returns explicit file/open/format status instead of using its throwing C++ file wrappers for expected input failures.
+[[nodiscard]] Expected<void, StringView> AdmitRdfInput(const std::string& filePath)noexcept{
+    rdfStream* stream = nullptr;
+    if(rdfStreamOpenFile(filePath.c_str(), &stream) != rdfResultOk)
+        return MakeUnexpected(StringView("rdf_open_failed"));
+
+    rdfChunkFile* chunks = nullptr;
+    const int formatStatus = rdfChunkFileOpenStream(stream, &chunks);
+    const int chunksCloseStatus = chunks ? rdfChunkFileClose(&chunks) : rdfResultOk;
+    const int streamCloseStatus = rdfStreamClose(&stream);
+    if(formatStatus != rdfResultOk)
+        return MakeUnexpected(StringView("parse_failed"));
+    if(chunksCloseStatus != rdfResultOk || streamCloseStatus != rdfResultOk)
+        return MakeUnexpected(StringView("rdf_close_failed"));
+    return {};
 }
 
-bool DecodeCrashDumpToText(const std::string& rgd_file_path, std::string& out_text){
-    out_text.clear();
-    try{
-        Config config;
-        config.crash_dump_file = rgd_file_path;
-        // output_file_txt / output_file_json stay empty: the report is assembled in memory. Every feature
-        // flag keeps its false default, so no shader/ISA disassembly code path is exercised.
 
-        RgdCrashDumpContents contents;
-        {
-            ScopedRgdConsoleMute muteRgdConsole;
-            if(!RgdParsingUtils::ParseCrashDump(config, contents)){
-                out_text = "parse_failed";
-                return false;
-            }
-        }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        AssembleTextSummary(config, contents, out_text);
-        return true;
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<std::string, StringView> DecodeCrashDumpToText(const std::string& filePath){
+    const auto admitted = __hidden_rgd_decode::AdmitRdfInput(filePath);
+    if(!admitted)
+        return MakeUnexpected(admitted.error());
+
+    Config config;
+    config.crash_dump_file = filePath;
+    RgdCrashDumpContents contents;
+    {
+        __hidden_rgd_decode::ScopedRgdConsoleMute muteRgdConsole;
+
+        if(!RgdParsingUtils::ParseCrashDump(config, contents))
+            return MakeUnexpected(StringView("parse_failed"));
     }
-    catch(const std::exception& e){
-        out_text = std::string("exception: ") + e.what();
-        return false;
-    }
-    catch(...){
-        out_text = "exception: unknown";
-        return false;
-    }
+
+    return __hidden_rgd_decode::AssembleTextSummary(config, contents);
 }
 
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -128,7 +128,7 @@ using namespace GpuTaskGraphCompilerDetail;
 
 
 static void AccumulateScore(const GpuQueueAssignmentScore& score, GpuQueueAssignmentScore& inOutScore)noexcept{
-    const auto add = [](const i32 lhs, const i32 rhs){
+    const auto add = [](const i32 lhs, const i32 rhs)noexcept{
         const i64 sum = static_cast<i64>(lhs) + static_cast<i64>(rhs);
         return sum > Limit<i32>::s_Max ? Limit<i32>::s_Max : static_cast<i32>(sum);
     };
@@ -196,7 +196,7 @@ namespace GpuTaskGraphCompilerDetail{
     using namespace __hidden_gpu_task_graph_compiler_queue_placement;
 
     GpuTaskQueueAssignmentDiagnostic diagnostic;
-    const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task){
+    const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task)noexcept{
         diagnostic.status = status;
         diagnostic.task = task;
         diagnostic.requiredCapabilities = graph.taskAt(task.index).commands.requiredCapabilities;

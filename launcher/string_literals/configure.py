@@ -11,7 +11,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from llvm_api import LlvmApi
+if __package__:
+    from .llvm_api import LlvmApi
+else:
+    from llvm_api import LlvmApi
 
 
 def compiler_version(compiler: Path) -> tuple[int, int, int]:

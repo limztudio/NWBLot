@@ -5,9 +5,10 @@
 #pragma once
 
 
+#include <impl/assets/graphics/csg/constants.h>
+
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection.h>
-#include <impl/assets/graphics/csg/constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

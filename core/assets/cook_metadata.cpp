@@ -12,6 +12,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+
 #include <global/assert.h>
 #include <global/auto_registration.h>
 
@@ -37,13 +38,13 @@ struct AutoMetadataParser{
 };
 
 ::AutoRegistrationQueue<AutoMetadataParser, AssetArena>& QueryAutoMetadataParserQueue(){
-    static ::AutoRegistrationQueue<AutoMetadataParser, AssetArena> queue(AssetsArenaScope::s_MetadataParserQueueArena);
-    return queue;
+    static ::AutoRegistrationQueue<AutoMetadataParser, AssetArena> s_Queue(AssetsArenaScope::s_MetadataParserQueueArena);
+    return s_Queue;
 }
 
 ::AutoRegistrationQueue<AssetBunchExpandFunction, AssetArena>& QueryAutoAssetBunchExpanderQueue(){
-    static ::AutoRegistrationQueue<AssetBunchExpandFunction, AssetArena> queue(AssetsArenaScope::s_BunchExpanderQueueArena);
-    return queue;
+    static ::AutoRegistrationQueue<AssetBunchExpandFunction, AssetArena> s_Queue(AssetsArenaScope::s_BunchExpanderQueueArena);
+    return s_Queue;
 }
 
 [[nodiscard]] static Expected<Core::Metascript::Document> ParseMetascriptDocument(CookArena& cookArena, const Path& nwbFilePath){
@@ -130,7 +131,7 @@ AssetMetadataParserAutoRegistrar::AssetMetadataParserAutoRegistrar(const AssetDo
     auto& queue = __hidden_cook_metadata::QueryAutoMetadataParserQueue();
     queue.appendUnique(
         __hidden_cook_metadata::AutoMetadataParser{ documentFunction, valueFunction },
-        [](const __hidden_cook_metadata::AutoMetadataParser& lhs, const __hidden_cook_metadata::AutoMetadataParser& rhs){
+        [](const __hidden_cook_metadata::AutoMetadataParser& lhs, const __hidden_cook_metadata::AutoMetadataParser& rhs)noexcept{
             return lhs.documentFunction == rhs.documentFunction && lhs.valueFunction == rhs.valueFunction;
         }
     );
@@ -204,8 +205,7 @@ bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCou
 }
 
 AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context){
-    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_DocumentMetadataParsersScratch);
-    Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
+    Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{context.scratchArena};
     __hidden_cook_metadata::QueryAutoMetadataParserQueue().copyTo(parsers);
 
     for(const __hidden_cook_metadata::AutoMetadataParser& parser : parsers){
@@ -222,8 +222,7 @@ AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocu
 }
 
 AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context){
-    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_ValueMetadataParsersScratch);
-    Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
+    Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{context.scratchArena};
     __hidden_cook_metadata::QueryAutoMetadataParserQueue().copyTo(parsers);
 
     for(const __hidden_cook_metadata::AutoMetadataParser& parser : parsers){

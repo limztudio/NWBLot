@@ -47,10 +47,6 @@ void PopupState::open()noexcept{
     m_open = true;
 }
 
-void PopupState::close()noexcept{
-    m_open = false;
-}
-
 void PopupState::bindParent(const PopupToken& parent)noexcept{
     if(m_parentBound && m_parent != parent && m_parentOpenGeneration == m_openGeneration)
         close();

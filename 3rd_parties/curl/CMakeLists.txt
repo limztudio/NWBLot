@@ -1,5 +1,3 @@
-include("${PROJECT_SOURCE_DIR}/configuration/ImportedLibraries.cmake")
-
 macro(nwb_curl_prefill_type_size type_name type_size)
     set(HAVE_SIZEOF_${type_name} TRUE)
     set(SIZEOF_${type_name} ${type_size})
@@ -276,36 +274,12 @@ if(WIN32)
         comdlg32
     )
 else()
-    find_package(CURL QUIET)
+    find_package(CURL REQUIRED)
+    if(NOT TARGET CURL::libcurl)
+        message(FATAL_ERROR "CURL discovery must export the required CURL::libcurl target")
+    endif()
 
     add_library(nwb_curl INTERFACE)
     add_library(nwb::curl ALIAS nwb_curl)
-
-    if(TARGET CURL::libcurl)
-        target_link_libraries(nwb_curl INTERFACE CURL::libcurl)
-    else()
-        find_path(_nwb_curl_include_dir
-            NAMES curl/curl.h
-            HINTS "${CMAKE_CURRENT_LIST_DIR}"
-        )
-        find_library(_nwb_curl_library
-            NAMES curl libcurl.so.4 libcurl
-            HINTS /usr /usr/local /
-            PATH_SUFFIXES lib Lib lib64
-        )
-
-        if(NOT _nwb_curl_include_dir OR NOT _nwb_curl_library)
-            message(FATAL_ERROR
-                "Failed to locate CURL. Install libcurl development files or provide a compatible libcurl shared library plus headers."
-            )
-        endif()
-
-        add_library(nwb_curl_raw UNKNOWN IMPORTED GLOBAL)
-        nwb_set_imported_library_locations(nwb_curl_raw DEFAULT "${_nwb_curl_library}")
-        set_target_properties(nwb_curl_raw PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${_nwb_curl_include_dir}"
-            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_nwb_curl_include_dir}"
-        )
-        target_link_libraries(nwb_curl INTERFACE nwb_curl_raw)
-    endif()
+    target_link_libraries(nwb_curl INTERFACE CURL::libcurl)
 endif()

@@ -31,7 +31,6 @@ inline constexpr Name s_BuildVolumeArena("core/filesystem/build_volume");
 inline constexpr Name s_CompactScratch("core/filesystem/compact_scratch");
 inline constexpr Name s_LoadMetadataScratch("core/filesystem/load_metadata_scratch");
 inline constexpr Name s_SaveMetadataScratch("core/filesystem/save_metadata_scratch");
-inline constexpr Name s_MoveBytesScratch("core/filesystem/move_bytes_scratch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

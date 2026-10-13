@@ -81,11 +81,13 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: provide --input or --input-list"));
         return MakeUnexpected(Failure{});
     }
-    if(!__hidden_command_line::AssignInputs(m_inputs, options.inputs)
+    if(
+        !__hidden_command_line::AssignInputs(m_inputs, options.inputs)
         || !__hidden_command_line::AssignInputs(m_assetRoots, options.assetRoots)
         || !__hidden_command_line::AssignText(m_repoRoot, options.repoRoot)
         || !__hidden_command_line::AssignText(m_outputPath, options.outputPath)
-        || !__hidden_command_line::AssignText(m_cacheDirectory, options.cacheDirectory))
+        || !__hidden_command_line::AssignText(m_cacheDirectory, options.cacheDirectory)
+    )
         return MakeUnexpected(Failure{});
     if(options.outputPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));

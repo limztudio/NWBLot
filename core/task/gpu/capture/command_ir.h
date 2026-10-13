@@ -346,9 +346,9 @@ namespace GpuCommandIrStreamValidationError{
         TruncatedRecord,
         InvalidRecordSize,
         UnsupportedOpcode,
-    InvalidRecord,
-    TrailingPayload,
-    InvalidBlobRange,
+        InvalidRecord,
+        TrailingPayload,
+        InvalidBlobRange,
     };
 };
 
@@ -411,7 +411,7 @@ class GpuCommandIrCaptureCheckpoint final{
 
 
 public:
-    GpuCommandIrCaptureCheckpoint() = default;
+    GpuCommandIrCaptureCheckpoint()noexcept = default;
 
 
 private:

@@ -5,6 +5,8 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -396,14 +398,20 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(const u64 record
         return nullptr;
     }
 
+    ScopeExit destroyArena([&]()noexcept{
+        if(arena->commandPool)
+            m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, arena->commandPool, m_context.allocationCallbacks);
+        DestroyArenaObjectNoexcept(m_context.objectArena, arena);
+    });
+
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.queueFamilyIndex = m_queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
     const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &arena->commandPool);
     if(createResult != VK_SUCCESS){
+        arena->commandPool = VK_NULL_HANDLE;
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}:{}: {}"), m_physicalQueue.index, recordingWorkerDomain, recordingWorkerIndex, ResultToString(createResult));
-        DestroyArenaObjectNoexcept(m_context.objectArena, arena);
         return nullptr;
     }
 
@@ -411,6 +419,7 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(const u64 record
     arena->next.store(m_workerCommandArenaHead.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
     m_workerCommandArenaHead.store(arena, MemoryOrder::release);
     m_explicitWorkerArenaCount.fetch_add(1u, MemoryOrder::relaxed);
+    destroyArena.release();
     return arena;
 }
 

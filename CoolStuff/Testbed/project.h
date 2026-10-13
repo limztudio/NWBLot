@@ -37,9 +37,9 @@ private:
     [[nodiscard]] bool createDefaultScene();
     void registerInputHandler();
     void unregisterInputHandler();
-    void clearInputState();
-    void setKeyState(i32 key, bool pressed);
-    [[nodiscard]] bool keyPressed(i32 key)const;
+    void clearInputState()noexcept;
+    void setKeyState(i32 key, bool pressed)noexcept;
+    [[nodiscard]] bool keyPressed(i32 key)const noexcept;
     void updateMainCamera(f32 delta);
     void destroyWorld();
 

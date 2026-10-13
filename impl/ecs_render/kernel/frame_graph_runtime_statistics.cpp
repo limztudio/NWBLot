@@ -34,6 +34,52 @@ namespace __hidden_frame_graph_runtime_statistics{
 }
 
 
+template<typename Result, typename Statistics>
+[[nodiscard]] static Result TranslateSubmissionStatistics(const Statistics& submissionStatistics)noexcept{
+    return {
+        .acceptedPacketCount = static_cast<u64>(submissionStatistics.acceptedPacketCount),
+        .acceptedTaskCount = static_cast<u64>(submissionStatistics.acceptedTaskCount),
+        .rejectedPacketCount = static_cast<u64>(submissionStatistics.rejectedPacketCount),
+        .rejectedTaskCount = static_cast<u64>(submissionStatistics.rejectedTaskCount),
+        .nativeSubmissionCount = static_cast<u64>(submissionStatistics.nativeSubmissionCount),
+        .rejectedSubmissionCount = static_cast<u64>(submissionStatistics.rejectedSubmissionCount),
+        .nativeCommandListCount = static_cast<u64>(submissionStatistics.nativeCommandListCount),
+        .plannedWaitTokenCount = static_cast<u64>(submissionStatistics.plannedWaitTokenCount),
+        .sameQueueWaitElisionCount = static_cast<u64>(submissionStatistics.sameQueueWaitElisionCount),
+        .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
+        .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
+        .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
+        .acceptedFrontierSubmissionCount = static_cast<u64>(submissionStatistics.acceptedFrontierSubmissionCount),
+        .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
+        .submissionSeconds = submissionStatistics.submissionSeconds,
+    };
+}
+
+
+template<typename Result, typename Statistics>
+[[nodiscard]] static Result TranslateRecordingStatistics(const Statistics& recordingStatistics)noexcept{
+    Result result{
+        .packetCount = static_cast<u64>(recordingStatistics.packetCount),
+        .taskCount = static_cast<u64>(recordingStatistics.taskCount),
+        .commandListCount = static_cast<u64>(recordingStatistics.commandListCount),
+        .barrierCount = static_cast<u64>(recordingStatistics.barrierCount),
+        .workerRoutedPacketCount = static_cast<u64>(recordingStatistics.workerRoutedPacketCount),
+        .parallelPacketCount = static_cast<u64>(recordingStatistics.parallelPacketCount),
+        .commandListAcquisitionSeconds = recordingStatistics.commandListAcquisitionSeconds,
+        .graphBarrierRecordingSeconds = recordingStatistics.graphBarrierRecordingSeconds,
+        .taskRecordSeconds = recordingStatistics.taskRecordSeconds,
+        .recordingSeconds = recordingStatistics.recordingSeconds,
+    };
+    if constexpr(requires{ result.recordingElapsedSeconds; }){
+        result.recordingElapsedSeconds = recordingStatistics.recordingElapsedSeconds;
+        result.readyFrontierElapsedSeconds = recordingStatistics.readyFrontierElapsedSeconds;
+        result.readyFrontierWorkerBusySeconds = recordingStatistics.readyFrontierWorkerBusySeconds;
+        result.readyFrontierWorkerCapacitySeconds = recordingStatistics.readyFrontierWorkerCapacitySeconds;
+    }
+    return result;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -100,39 +146,8 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
             .packetDependencyPlanningSeconds = compileStatistics.packetDependencyPlanningSeconds,
             .totalSeconds = compileStatistics.totalSeconds,
         },
-        .recording = {
-            .packetCount = static_cast<u64>(recordingStatistics.packetCount),
-            .taskCount = static_cast<u64>(recordingStatistics.taskCount),
-            .commandListCount = static_cast<u64>(recordingStatistics.commandListCount),
-            .barrierCount = static_cast<u64>(recordingStatistics.barrierCount),
-            .workerRoutedPacketCount = static_cast<u64>(recordingStatistics.workerRoutedPacketCount),
-            .parallelPacketCount = static_cast<u64>(recordingStatistics.parallelPacketCount),
-            .commandListAcquisitionSeconds = recordingStatistics.commandListAcquisitionSeconds,
-            .graphBarrierRecordingSeconds = recordingStatistics.graphBarrierRecordingSeconds,
-            .taskRecordSeconds = recordingStatistics.taskRecordSeconds,
-            .recordingSeconds = recordingStatistics.recordingSeconds,
-            .recordingElapsedSeconds = recordingStatistics.recordingElapsedSeconds,
-            .readyFrontierElapsedSeconds = recordingStatistics.readyFrontierElapsedSeconds,
-            .readyFrontierWorkerBusySeconds = recordingStatistics.readyFrontierWorkerBusySeconds,
-            .readyFrontierWorkerCapacitySeconds = recordingStatistics.readyFrontierWorkerCapacitySeconds,
-        },
-        .submission = {
-            .acceptedPacketCount = static_cast<u64>(submissionStatistics.acceptedPacketCount),
-            .acceptedTaskCount = static_cast<u64>(submissionStatistics.acceptedTaskCount),
-            .rejectedPacketCount = static_cast<u64>(submissionStatistics.rejectedPacketCount),
-            .rejectedTaskCount = static_cast<u64>(submissionStatistics.rejectedTaskCount),
-            .nativeSubmissionCount = static_cast<u64>(submissionStatistics.nativeSubmissionCount),
-            .rejectedSubmissionCount = static_cast<u64>(submissionStatistics.rejectedSubmissionCount),
-            .nativeCommandListCount = static_cast<u64>(submissionStatistics.nativeCommandListCount),
-            .plannedWaitTokenCount = static_cast<u64>(submissionStatistics.plannedWaitTokenCount),
-            .sameQueueWaitElisionCount = static_cast<u64>(submissionStatistics.sameQueueWaitElisionCount),
-            .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
-            .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
-            .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
-            .acceptedFrontierSubmissionCount = static_cast<u64>(submissionStatistics.acceptedFrontierSubmissionCount),
-            .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
-            .submissionSeconds = submissionStatistics.submissionSeconds,
-        },
+        .recording = __hidden_frame_graph_runtime_statistics::TranslateRecordingStatistics<Core::Telemetry::FrameGraphRecordingRuntimeStatistics>(recordingStatistics),
+        .submission = __hidden_frame_graph_runtime_statistics::TranslateSubmissionStatistics<Core::Telemetry::FrameGraphSubmissionRuntimeStatistics>(submissionStatistics),
         .deviceGeneration = compileStatistics.deviceGeneration,
         .present = true,
     };
@@ -222,35 +237,8 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             .outgoingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.outgoingRepeatedOwnershipTransferSignatureCount),
             .concurrentSharingAdviceResourceCount = static_cast<u64>(compileStatistics.concurrentSharingAdviceResourceCount),
         },
-        .recording = {
-            .packetCount = static_cast<u64>(recordingStatistics.packetCount),
-            .taskCount = static_cast<u64>(recordingStatistics.taskCount),
-            .commandListCount = static_cast<u64>(recordingStatistics.commandListCount),
-            .barrierCount = static_cast<u64>(recordingStatistics.barrierCount),
-            .workerRoutedPacketCount = static_cast<u64>(recordingStatistics.workerRoutedPacketCount),
-            .parallelPacketCount = static_cast<u64>(recordingStatistics.parallelPacketCount),
-            .commandListAcquisitionSeconds = recordingStatistics.commandListAcquisitionSeconds,
-            .graphBarrierRecordingSeconds = recordingStatistics.graphBarrierRecordingSeconds,
-            .taskRecordSeconds = recordingStatistics.taskRecordSeconds,
-            .recordingSeconds = recordingStatistics.recordingSeconds,
-        },
-        .submission = {
-            .acceptedPacketCount = static_cast<u64>(submissionStatistics.acceptedPacketCount),
-            .acceptedTaskCount = static_cast<u64>(submissionStatistics.acceptedTaskCount),
-            .rejectedPacketCount = static_cast<u64>(submissionStatistics.rejectedPacketCount),
-            .rejectedTaskCount = static_cast<u64>(submissionStatistics.rejectedTaskCount),
-            .nativeSubmissionCount = static_cast<u64>(submissionStatistics.nativeSubmissionCount),
-            .rejectedSubmissionCount = static_cast<u64>(submissionStatistics.rejectedSubmissionCount),
-            .nativeCommandListCount = static_cast<u64>(submissionStatistics.nativeCommandListCount),
-            .plannedWaitTokenCount = static_cast<u64>(submissionStatistics.plannedWaitTokenCount),
-            .sameQueueWaitElisionCount = static_cast<u64>(submissionStatistics.sameQueueWaitElisionCount),
-            .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
-            .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
-            .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
-            .acceptedFrontierSubmissionCount = static_cast<u64>(submissionStatistics.acceptedFrontierSubmissionCount),
-            .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
-            .submissionSeconds = submissionStatistics.submissionSeconds,
-        },
+        .recording = __hidden_frame_graph_runtime_statistics::TranslateRecordingStatistics<Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics>(recordingStatistics),
+        .submission = __hidden_frame_graph_runtime_statistics::TranslateSubmissionStatistics<Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics>(submissionStatistics),
     };
     if(!Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(result))
         return {};

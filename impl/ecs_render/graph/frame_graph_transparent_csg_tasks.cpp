@@ -39,6 +39,10 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     FrameGraphTransparentCsgTaskResult result{};
     using namespace RendererTaskGraphDetail;
     DeferredFrameTargets& deferredTargets = *inputs.targets;
+    const Core::GpuGraphResourceId albedo = inputs.albedo;
+    const Core::GpuGraphResourceId normal = inputs.normal;
+    const Core::GpuGraphResourceId worldPosition = inputs.worldPosition;
+    const Core::GpuGraphResourceId specularRoughness = inputs.specularRoughness;
     const Core::GpuGraphResourceId depth = inputs.depth;
     const Core::GpuGraphResourceId meshView = inputs.meshView;
     const Core::GpuGraphResourceId materialInstances = inputs.materialInstances;
@@ -83,10 +87,15 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
 
     Core::Alloc::ScratchArena avboitIntervalResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalResourceUses{ avboitIntervalResourceScratch };
-    constexpr usize s_IntervalResourceUseCapacity = 16u;
+    constexpr usize s_IntervalResourceUseCapacity = 20u;
     avboitIntervalResourceUses.reserve(s_IntervalResourceUseCapacity);
     if(avboitPrePayload.transparentCsgStreamsUploaded){
-        avboitIntervalResourceUses.push_back(ReadUse(depth));
+        // The receiver raster binds the deferred framebuffer with LOAD and disabled writes; declare every attachment so packet state seeding preserves its existing contents.
+        avboitIntervalResourceUses.push_back(ReadUse(albedo, Core::ResourceStates::RenderTarget));
+        avboitIntervalResourceUses.push_back(ReadUse(normal, Core::ResourceStates::RenderTarget));
+        avboitIntervalResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::RenderTarget));
+        avboitIntervalResourceUses.push_back(ReadUse(specularRoughness, Core::ResourceStates::RenderTarget));
+        avboitIntervalResourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthWrite));
         avboitIntervalResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         avboitIntervalResourceUses.push_back(ReadBufferUse(materialInstances, transparentCsgInstanceRange));
         avboitIntervalResourceUses.push_back(ReadBufferUse(materialTyped, transparentCsgMaterialTypedRange));
@@ -159,7 +168,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     }
     if(avboitCsgIntervalCombineGraphOwned){
         constexpr usize s_IntervalCombineResourceUseCapacity = 11u;
-    avboitIntervalCombineResourceUses.reserve(s_IntervalCombineResourceUseCapacity);
+        avboitIntervalCombineResourceUses.reserve(s_IntervalCombineResourceUseCapacity);
         avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
         avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
         avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));

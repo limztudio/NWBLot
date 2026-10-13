@@ -44,17 +44,14 @@ inline void AppendFixedBuffer(char (&dst)[N], const AStringView src)noexcept{
 
 template<usize N>
 inline void AppendUnsignedToFixedBuffer(char (&dst)[N], u64 value)noexcept{
-    char tmp[TextDetail::s_DecimalTextBufferBytes] = {};
-    usize count = 0u;
+    char text[TextDetail::s_DecimalTextBufferBytes] = {};
+    usize begin = sizeof(text);
     do{
-        tmp[count++] = static_cast<char>('0' + (value % TextDetail::s_DefaultNumericTextBase));
+        text[--begin] = static_cast<char>('0' + (value % TextDetail::s_DefaultNumericTextBase));
         value /= TextDetail::s_DefaultNumericTextBase;
-    }while(value && count < sizeof(tmp));
+    }while(value && begin != 0u);
 
-    for(usize i = 0u; i < count; ++i){
-        char ch[2] = { tmp[count - i - 1u], 0 };
-        AppendFixedBuffer(dst, ch);
-    }
+    AppendFixedBuffer(dst, AStringView(text + begin, sizeof(text) - begin));
 }
 
 

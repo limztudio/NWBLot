@@ -77,7 +77,7 @@ struct MaterialCookEntry{
         , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
 
-    void reset(){
+    void reset()noexcept{
         virtualPath.clear();
         materialInterface.clear();
         typedLayoutHash = 0u;
@@ -110,7 +110,7 @@ struct GeneratedMaterialPixelShader{
     MaterialCookString name;    // shader virtual name (identity), e.g. "generated/material_ps/<material path>"
     MaterialCookString source;  // absolute, forward-slash path of the generated .slang source in the cook cache
 
-    explicit GeneratedMaterialPixelShader(MaterialCookArena& arena)
+    explicit GeneratedMaterialPixelShader(MaterialCookArena& arena)noexcept
         : name(arena)
         , source(arena)
     {}
@@ -129,7 +129,7 @@ struct MaterialBindDependency{
     Name interfaceName = s_NameNone;
     bool dependsOnMaterialBind = false;
 
-    explicit MaterialBindDependency(MaterialCookArena& arena)
+    explicit MaterialBindDependency(MaterialCookArena& arena)noexcept
         : interfacePath(arena)
     {}
 };

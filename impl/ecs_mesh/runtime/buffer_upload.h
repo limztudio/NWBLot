@@ -7,8 +7,9 @@
 
 #include "../../global.h"
 
-#include <core/alloc/general.h>
+#include <core/alloc/scratch.h>
 #include <core/graphics/runtime/runtime.h>
+
 #include <global/overflow.h>
 
 
@@ -87,7 +88,7 @@ template<typename PayloadT, typename PayloadVector>
 }
 
 template<typename PayloadVector>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena, const Name& debugName, const PayloadVector& payload, const BufferFlags flags){
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::ScratchArena& scratchArena, const Name& debugName, const PayloadVector& payload, const BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
 
@@ -105,7 +106,8 @@ template<typename PayloadVector>
     }
 
     // Upload records before payload dies; explicitly zero the allocated tail.
-    Vector<u8, Core::Alloc::GlobalArena> paddedPayload{arena};
+    Vector<u8, Core::Alloc::ScratchArena> paddedPayload{scratchArena};
+    paddedPayload.reserve(paddedByteCount);
     paddedPayload.assign(payload.begin(), payload.end());
     paddedPayload.resize(paddedByteCount, 0u);
     auto buffer = SetupBuffer<u8>(graphics, debugName, paddedPayload, flags);

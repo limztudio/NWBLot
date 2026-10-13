@@ -35,7 +35,30 @@ void ConfigureCompressor(basisu::basis_compressor_params& parameters, basisu::jo
     parameters.m_pJob_pool = &jobPool;
 }
 
-void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb){
+[[nodiscard]] bool EncodeMip(basisu::basis_compressor_params& parameters, const basist::basis_tex_format format, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload, const MipEncoderDiagnostics& diagnostics, bool* const inOutHasAlpha){
+    basisu::basis_compressor compressor;
+    if(!compressor.init(parameters)){
+        NWB_LOGGER_ERROR(diagnostics.initializeFailure);
+        return false;
+    }
+    const basisu::basis_compressor::error_code encodeResult = compressor.process();
+    if(encodeResult != basisu::basis_compressor::cECSuccess){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} (Basis Universal error {})."), diagnostics.processFailure, static_cast<u32>(encodeResult));
+        return false;
+    }
+    const basisu::basisu_backend_output& backendOutput = compressor.get_uastc_backend_output();
+    if(!ValidateBackendOutput(backendOutput, format) || backendOutput.m_slice_desc.size() != planeCount){
+        NWB_LOGGER_ERROR(diagnostics.incompleteFailure);
+        return false;
+    }
+    if(!AppendCanonicalMip(backendOutput, 0u, planeCount, width, height, inOutPayload))
+        return false;
+    if(inOutHasAlpha)
+        *inOutHasAlpha = *inOutHasAlpha || compressor.get_any_source_image_has_alpha();
+    return true;
+}
+
+void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb)noexcept{
     outPayload.dimension = dimension;
     outPayload.width = width;
     outPayload.height = height;

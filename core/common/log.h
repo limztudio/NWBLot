@@ -7,9 +7,9 @@
 
 #include "global.h"
 
-#include <global/diagnostics.h>
-
 #include <core/alloc/general.h>
+
+#include <global/diagnostics.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -228,13 +228,13 @@ inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, 
 
 class LoggerRegistrationGuard final : NoCopy{
 public:
-    explicit LoggerRegistrationGuard(ILogger& logger)
+    explicit LoggerRegistrationGuard(ILogger& logger)noexcept
         : m_previous(LoggerDetail::g_loggerRegistration)
         , m_registration{ logger, m_previous ? m_previous->breakPolicy : LoggerBreakPolicy::BreakOnErrorAndFatal }
     {
         LoggerDetail::g_loggerRegistration = &m_registration;
     }
-    LoggerRegistrationGuard(ILogger& logger, const LoggerBreakPolicy::Enum breakPolicy)
+    LoggerRegistrationGuard(ILogger& logger, const LoggerBreakPolicy::Enum breakPolicy)noexcept
         : m_previous(LoggerDetail::g_loggerRegistration)
         , m_registration{ logger, breakPolicy }
     {

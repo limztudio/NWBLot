@@ -343,6 +343,7 @@ private:
     [[nodiscard]] Expected<VkResult> presentNativeQueue(u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo);
     [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue);
     void configureQueueSharingContext();
+    void releaseOwnedResources()noexcept;
     // Probed once at device initialization so compressed texture selection does not rely on a later optimistic format-property query.
     void probeCompressedTextureFormats();
     [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const;
@@ -361,52 +362,30 @@ private:
     )const;
     [[nodiscard]] Expected<PipelineBindingState> buildPipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
     template<typename PipelineT>
-    [[nodiscard]] bool configurePipelineBindingsOrDestroy(const BindingLayoutVector& bindingLayouts, TStringView operationName, PipelineT& pipeline, Alloc::ScratchArena& scratchArena)const{
+    [[nodiscard]] bool configurePipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, PipelineT& pipeline, Alloc::ScratchArena& scratchArena)const{
         auto bindings = buildPipelineBindings(bindingLayouts, operationName, scratchArena);
         if(bindings){
             static_cast<PipelineBindingState&>(pipeline) = Move(*bindings);
             return true;
         }
-
-        DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     template<typename PipelineT>
-    [[nodiscard]] Expected<VulkanDetail::GraphicsPipelineFixedState> buildGraphicsPipelineFixedStateOrDestroy(
-        const FramebufferInfo& fbinfo,
-        const RenderState& renderState,
-        const VulkanDetail::PipelineStencilFaceMode::Enum stencilFaceMode,
-        const VkDynamicState* dynamicStates,
-        const u32 dynamicStateCount,
-        TStringView operationName,
-        PipelineT& pipeline,
-        Alloc::ScratchArena& scratchArena
-    )const{
-        auto state = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, renderState, stencilFaceMode, dynamicStates, dynamicStateCount, operationName, scratchArena);
-        if(state)
-            return state;
-
-        DestroyArenaObject(m_context.objectArena, &pipeline);
-        return MakeUnexpected(Failure{});
-    }
-    template<typename PipelineT>
-    [[nodiscard]] bool createPipelineOrDestroy(TStringView operationName, PipelineT& pipeline, const VkComputePipelineCreateInfo& pipelineInfo)const{
+    [[nodiscard]] bool createPipeline(TStringView operationName, PipelineT& pipeline, const VkComputePipelineCreateInfo& pipelineInfo)const{
         const VkResult res = m_context.deviceDispatch.vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     template<typename PipelineT>
-    [[nodiscard]] bool createPipelineOrDestroy(TStringView operationName, PipelineT& pipeline, const VkGraphicsPipelineCreateInfo& pipelineInfo)const{
+    [[nodiscard]] bool createPipeline(TStringView operationName, PipelineT& pipeline, const VkGraphicsPipelineCreateInfo& pipelineInfo)const{
         const VkResult res = m_context.deviceDispatch.vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     void appendPipelineShaderStage(Shader& shader, VkShaderStageFlagBits stage, PipelineSpecializationInfoVector& specializationInfos, PipelineShaderStageVector& shaderStages)const;

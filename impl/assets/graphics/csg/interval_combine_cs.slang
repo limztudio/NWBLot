@@ -220,7 +220,7 @@ void nwbCsgIntervalCombineSpan(
     nwbCsgIntervalCombineAppendUnion(entries, pixel, spanDepth, spanIndex, firstInterval, lastInterval, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
 }
 
-void nwbCsgIntervalCombineWriteEntries(const uint2 pixel, const NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT], const uint removedIntervalLayerCount, const uint removedIntervalCount, const uint flags){
+void nwbCsgIntervalCombineWriteEntries(const uint2 pixel, __constref NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT], const uint removedIntervalLayerCount, const uint removedIntervalCount, const uint flags){
     const uint storedIntervalCount = min(removedIntervalCount, removedIntervalLayerCount);
     [loop] for(uint layerIndex = 0u; layerIndex < storedIntervalCount; ++layerIndex){
         const uint3 texel = uint3(pixel, layerIndex);

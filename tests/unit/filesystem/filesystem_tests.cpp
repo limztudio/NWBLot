@@ -1,6 +1,4 @@
 // limztudio@gmail.com
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -248,7 +246,7 @@ TEST(FilesystemFactory, PropagatesFactoryAndMountFailures){
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
     NWB::Core::Alloc::GlobalArena arena(s_TestArena);
     VolumeMountDesc desc(arena);
-    const FilesystemFactory emptyFactory = []([[maybe_unused]] NWB::Core::Alloc::GlobalArena& objectArena, [[maybe_unused]] const VolumeMountDesc& mount){
+    const FilesystemFactory emptyFactory = []([[maybe_unused]] NWB::Core::Alloc::GlobalArena& objectArena, [[maybe_unused]] const VolumeMountDesc& mount)noexcept{
         return UniquePtr<IFilesystem>();
     };
     EXPECT_FALSE(CreateFilesystem(arena, desc, emptyFactory));

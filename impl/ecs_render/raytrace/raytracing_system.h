@@ -21,6 +21,7 @@
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
+
 #include <global/simdmath.h>
 
 
@@ -105,7 +106,7 @@ namespace RayTracingShadowVisibilityTaskDetail{
     struct ShadowTransparentSoftTemporalMergeGraphTask;
     struct ShadowTransparentSoftFirstWaveletGraphTask;
     struct ShadowTransparentSoftFoldGraphTask;
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -243,16 +244,16 @@ public:
         bool meshSwBvhBuildsGraphOwned,
         bool preparedMeshSwBvhBuildsRecordedByGraph
     );
-    [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
-    [[nodiscard]] bool shadowVisibilityHardwareSupported()const noexcept;
+    [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept{ return m_shadowVisibilityResourcesPreflighted; }
+    [[nodiscard]] bool shadowVisibilityHardwareSupported()const noexcept{ return m_shadowVisibilityHardwareSupported; }
     [[nodiscard]] bool shadowVisibilitySoftwareResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
     // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and uses the shared IDs for every packet that manually stages it.
     [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept;
-    [[nodiscard]] const PreparedShadowTraceMaterialSampledTextureVector& preparedShadowTraceMaterialSampledTextures()const noexcept;
+    [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept{ return m_preparedShadowTraceGeometryBuffers; }
+    [[nodiscard]] const PreparedShadowTraceMaterialSampledTextureVector& preparedShadowTraceMaterialSampledTextures()const noexcept{ return m_preparedShadowTraceMaterialSampledTextures; }
     // Includes accepted but currently invisible mesh streams, which must retain their state source until their owning mesh is removed or a later preparation packet supersedes it.
-    [[nodiscard]] const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedShadowTraceGeometryBuffers()const noexcept;
+    [[nodiscard]] const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedShadowTraceGeometryBuffers()const noexcept{ return m_acceptedShadowTraceGeometryBuffers; }
     void confirmPreparedShadowTraceGeometryNormalization()noexcept;
     void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
 
@@ -276,21 +277,21 @@ public:
     [[nodiscard]] Expected<PreparedSceneBvhUploads> retainPreparedSceneBvhUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
-    [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
+    [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept{ return m_preparedSceneTlasReady; }
     // Only newly allocated backing has a descriptor-native source; graph imports observe its current accepted generation.
     [[nodiscard]] Core::ResourceStates::Mask sceneTlasBackingInitialState()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
     // Publish acceleration-structure handoffs only after the Shadow Preparation packet accepts.
     // Hardware BLAS build/refit choices retain their selected handles through recording.
     // Only Shadow Preparation acceptance publishes a frozen plan's mesh-cache progress.
-    [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
-    [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
+    [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept{ return m_preparedMeshBlasBuildsReady; }
+    [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept{ return m_preparedMeshBlasBuilds; }
     void confirmPreparedMeshBlasBuilds();
     // Software frames freeze selected build/refit work against its shared scratch generation; scene and material snapshots remain independently graph-owned.
     [[nodiscard]] const SoftwareSceneRefitHandle& preparedSceneSwBvhRefit()const noexcept{ return m_preparedSceneSwBvhRefit; }
     [[nodiscard]] bool preparedMeshSwBvhBuildPlanFrozen()const noexcept{ return m_preparedMeshSwBvhBuildPlanFrozen; }
-    [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
-    [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
+    [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept{ return m_preparedMeshSwBvhBuildsReady; }
+    [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept{ return m_preparedMeshSwBvhBuilds; }
     // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence
     [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build);
     void confirmPreparedMeshSwBvhBuilds();
@@ -609,6 +610,9 @@ private:
         const void* materialTypedData,
         usize materialTypedByteCount
     );
+    [[nodiscard]] bool shadowMaterialContextStorageReady(usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)const noexcept;
+    void capturePreparedShadowMaterialContextStorage(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
+    [[nodiscard]] bool preparedTraversalStorageMatchesCurrent()const noexcept;
     [[nodiscard]] bool capturePreparedShadowMaterialContextCacheReuse(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount);
     void clearPreparedShadowMaterialContext()noexcept;
     [[nodiscard]] bool appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector);
@@ -692,6 +696,18 @@ private:
         const SoftShadowResolveDispatch& dispatch,
         bool dispatchFirstWavelet = true,
         bool dispatchTail = true
+    );
+    void enableSoftShadowResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void dispatchPrimarySoftShadowResolve(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
+        u32 frameIndex,
+        u32 softGroupsX,
+        u32 softGroupsY,
+        bool splitOpaqueSoftResolve,
+        bool splitSoftTransparentFold,
+        bool graphOwnsOpaqueTemporalMergeEntryStates
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases.
     // The shared deferred graph supplies the first geometry-downsample entry states, the opaque geometry-to-resolve handoff, and prepared transparent trace-to-merge/first-wavelet plus temporal-merge-to-wavelet handoffs; later lifecycle transitions remain task-local.

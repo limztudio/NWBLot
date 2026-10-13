@@ -38,7 +38,7 @@ namespace EncodeBackendDetail{
     }
 }
 
-[[nodiscard]] bool ValidHdrRgb(const SIMDVectorSingle rgb){
+[[nodiscard]] bool ValidHdrRgb(const SIMDVectorSingle rgb)noexcept{
     return Vector3IsFinite(rgb) && Vector3GreaterOrEqual(rgb, VectorZero()) && Vector3LessOrEqual(rgb, VectorReplicate(s_UastcHdrMaximum));
 }
 
@@ -193,55 +193,24 @@ namespace EncodeBackendDetail{
 }
 
 [[nodiscard]] Expected<HdrImagePlanes> GenerateNextHdrVolumeMip(const HdrImagePlanes& sourcePlanes){
-    auto targets = EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes);
-    if(!targets)
-        return MakeUnexpected(Failure{});
-    auto& outPlanes = targets->planes;
-    const auto& mipDims = targets->dims;
-    const u32 sourceDepth = mipDims.sourceDepth;
-    const u32 targetWidth = mipDims.targetWidth;
-    const u32 targetHeight = mipDims.targetHeight;
-    const u32 targetDepth = mipDims.targetDepth;
-
-    for(u32 targetZ = 0u; targetZ < targetDepth; ++targetZ){
-        const auto range = EncodeBackendDetail::ComputeVolumeMipSliceRange(sourceDepth, targetDepth, targetZ);
-        if(!range)
-            return MakeUnexpected(Failure{});
-        const u32 sourceFirst = range->first;
-        const u32 sourceEnd = range->end;
-
-        HdrImagePlanes filteredPlanes;
-        filteredPlanes.resize(sourceEnd - sourceFirst);
-        for(u32 sourceZ = sourceFirst; sourceZ < sourceEnd; ++sourceZ){
-            basisu::imagef& filteredPlane = filteredPlanes[sourceZ - sourceFirst];
-            filteredPlane.resize(targetWidth, targetHeight);
-            if(!basisu::image_resample(sourcePlanes[sourceZ], filteredPlane, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate an HDR volume mip level."));
-                return MakeUnexpected(Failure{});
+    return EncodeBackendDetail::GenerateVolumeMip(sourcePlanes,
+        [](const basisu::imagef& source, basisu::imagef& target){
+            return basisu::image_resample(source, target, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount);
+        },
+        [](const HdrImagePlanes& filteredPlanes, basisu::imagef& targetPlane, const u32 x, const u32 y, const u32 filteredPlaneCount){
+            SIMDVectorSingle sum = VectorZero();
+            for(const basisu::imagef& filteredPlane : filteredPlanes){
+                const basisu::vec4F& sourceColor = filteredPlane(x, y);
+                sum = VectorAdd(sum, VectorSet(sourceColor[0u], sourceColor[1u], sourceColor[2u], sourceColor[3u]));
             }
-        }
 
-        const u32 filteredPlaneCount = static_cast<u32>(filteredPlanes.size());
-        basisu::imagef& targetPlane = outPlanes[targetZ];
-        targetPlane.resize(targetWidth, targetHeight);
-        for(u32 y = 0u; y < targetHeight; ++y){
-            for(u32 x = 0u; x < targetWidth; ++x){
-                SIMDVectorSingle sum = VectorZero();
-                for(const basisu::imagef& filteredPlane : filteredPlanes){
-                    const basisu::vec4F& sourceColor = filteredPlane(x, y);
-                    sum = VectorAdd(sum, VectorSet(sourceColor[0u], sourceColor[1u], sourceColor[2u], sourceColor[3u]));
-                }
-
-                const SIMDVectorSingle average = VectorScale(sum, 1.0f / static_cast<f32>(filteredPlaneCount));
-                basisu::vec4F& targetColor = targetPlane(x, y);
-                targetColor[0u] = VectorGetX(average);
-                targetColor[1u] = VectorGetY(average);
-                targetColor[2u] = VectorGetZ(average);
-                targetColor[3u] = VectorGetW(average);
-            }
-        }
-    }
-    return Move(targets->planes);
+            const SIMDVectorSingle average = VectorScale(sum, 1.0f / static_cast<f32>(filteredPlaneCount));
+            basisu::vec4F& targetColor = targetPlane(x, y);
+            targetColor[0u] = VectorGetX(average);
+            targetColor[1u] = VectorGetY(average);
+            targetColor[2u] = VectorGetZ(average);
+            targetColor[3u] = VectorGetW(average);
+        }, NWB_TEXT("tex_conv: failed to generate an HDR volume mip level."));
 }
 
 struct HdrAlphaMips{
@@ -350,23 +319,11 @@ struct HdrAlphaMips{
     parameters.m_source_images_hdr = planes;
     parameters.m_mip_gen = false;
 
-    basisu::basis_compressor compressor;
-    if(!compressor.init(parameters)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize an HDR mip encoder."));
-        return false;
-    }
-    const basisu::basis_compressor::error_code encodeResult = compressor.process();
-    if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC HDR mip encoding failed (Basis Universal error {})."), static_cast<u32>(encodeResult));
-        return false;
-    }
-
-    const basisu::basisu_backend_output& backendOutput = compressor.get_uastc_backend_output();
-    if(!ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_HDR_4x4) || backendOutput.m_slice_desc.size() != planes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR mip."));
-        return false;
-    }
-    return AppendCanonicalMip(backendOutput, 0u, static_cast<u32>(planes.size()), width, height, inOutPayload);
+    return EncodeBackendDetail::EncodeMip(parameters, basist::basis_tex_format::cUASTC_HDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
+        NWB_TEXT("tex_conv: Basis Universal failed to initialize an HDR mip encoder."),
+        NWB_TEXT("tex_conv: UASTC HDR mip encoding failed"),
+        NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR mip.")
+    });
 }
 
 [[nodiscard]] bool EncodeHdrAlphaMip(const ImagePlanes& planes, const TextureDimension::Enum dimension, TexturePayload& inOutPayload){
@@ -398,23 +355,11 @@ struct HdrAlphaMips{
     parameters.m_source_images = planes;
     parameters.m_mip_gen = false;
 
-    basisu::basis_compressor compressor;
-    if(!compressor.init(parameters)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize an HDR alpha mip encoder."));
-        return false;
-    }
-    const basisu::basis_compressor::error_code encodeResult = compressor.process();
-    if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC HDR alpha mip encoding failed (Basis Universal error {})."), static_cast<u32>(encodeResult));
-        return false;
-    }
-
-    const basisu::basisu_backend_output& backendOutput = compressor.get_uastc_backend_output();
-    if(!ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_LDR_4x4) || backendOutput.m_slice_desc.size() != planes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR alpha mip."));
-        return false;
-    }
-    return AppendCanonicalMip(backendOutput, 0u, static_cast<u32>(planes.size()), width, height, inOutPayload);
+    return EncodeBackendDetail::EncodeMip(parameters, basist::basis_tex_format::cUASTC_LDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
+        NWB_TEXT("tex_conv: Basis Universal failed to initialize an HDR alpha mip encoder."),
+        NWB_TEXT("tex_conv: UASTC HDR alpha mip encoding failed"),
+        NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR alpha mip.")
+    });
 }
 
 [[nodiscard]] bool ValidateHdrAlphaPayloadLayout(const TexturePayload& primaryPayload, const TexturePayload& alphaPayload){

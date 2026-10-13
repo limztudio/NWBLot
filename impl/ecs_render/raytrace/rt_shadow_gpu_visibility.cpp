@@ -4,9 +4,11 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <global/algorithm.h>
 #include <impl/ecs_render/raytrace/rt_shadow_tasks.h>
+
+#include <core/task/gpu/compiled_graph.h>
+
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,6 +19,56 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void RendererRayTracingSystem::enableSoftShadowResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
+    // Temporal merge writes history before later reads.
+    if(m_rayTracingState.m_softShadowTemporalReady){
+        commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
+    }
+}
+
+void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
+    const u32 frameIndex,
+    const u32 softGroupsX,
+    const u32 softGroupsY,
+    const bool splitOpaqueSoftResolve,
+    const bool splitSoftTransparentFold,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
+){
+    // Split resolve declares the trace fence; the direct route retains its UAV fence.
+    if(!splitOpaqueSoftResolve){
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
+    dispatchSoftShadowDenoiseAndTransparentFold(
+        commandList,
+        targets,
+        deferredLightingResources,
+        frameIndex,
+        softGroupsX,
+        softGroupsY,
+        true,
+        !splitOpaqueSoftResolve,
+        !splitSoftTransparentFold,
+        !splitSoftTransparentFold,
+        false,
+        false,
+        false,
+        graphOwnsOpaqueTemporalMergeEntryStates,
+        false,
+        !splitOpaqueSoftResolve,
+        false
+    );
+}
 
 void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.shadowVisibility)
@@ -84,7 +136,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         heap.bindCompute(commandList, *pipeline.get());
     };
 
-    const auto makePush = [&](){
+    const auto makePush = [&]()noexcept{
         SwShadowHeapPushConstants push;
         push.receiverFactor = targets.shadowReceiverFactor;
         push.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
@@ -141,16 +193,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         producedFrameIndex = frameIndex;
 
         // Resolve reads the soft trace and geometry scratch in place.
-        commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
-        commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
-        commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-        // Temporal merge writes history before later reads.
-        if(m_rayTracingState.m_softShadowTemporalReady){
-            commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
-        }
+        enableSoftShadowResolveBarriers(commandList, targets);
 
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
@@ -184,31 +227,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
         // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
         // Unsplit soft resolve phases retain their internal UAV fence.
-        if(!splitOpaqueSoftResolve){
-            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
-        }
-
-        // Shared resolve also guards against a second transparent fold.
-        dispatchSoftShadowDenoiseAndTransparentFold(
-            commandList,
-            targets,
-            deferredLightingResources,
-            frameIndex,
-            softGroupsX,
-            softGroupsY,
-            true,
-            !splitOpaqueSoftResolve,
-            !splitSoftTransparentFold,
-            !splitSoftTransparentFold,
-            false,
-            false,
-            false,
-            graphOwnsOpaqueTemporalMergeEntryStates,
-            false,
-            !splitOpaqueSoftResolve,
-            false
-        );
+        dispatchPrimarySoftShadowResolve(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, splitOpaqueSoftResolve, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates);
         if(splitSoftTransparentFold){
             // The graph-owned transparent tail records in a later callback, so preserve the normal route's one-shot traversal diagnostic before this opaque producer returns.
             reportSoftwareShadowTraversal(targets);

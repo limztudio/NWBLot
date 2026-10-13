@@ -6,9 +6,9 @@
 
 
 #include <impl/global.h>
+#include <impl/assets/graphics/bindless/binding_slots.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <impl/assets/graphics/bindless/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -83,11 +83,7 @@ bool GpuTaskScheduler::executeGraph(
     DeviceOperation deviceOperation(*this);
     if(!deviceOperation.m_admitted)
         return false;
-    if(timingRecorder){
-        const GpuNativePacketRecorder recorder(device(), *timingRecorder);
-        return submitGraph(graph, compiledGraph, recorder, recordedGraph, desc, transaction, scratchArena, outFailedPacket);
-    }
-    const GpuNativePacketRecorder recorder(device());
+    const GpuNativePacketRecorder recorder(device(), timingRecorder);
     return submitGraph(graph, compiledGraph, recorder, recordedGraph, desc, transaction, scratchArena, outFailedPacket);
 }
 
@@ -106,11 +102,7 @@ bool GpuTaskScheduler::executeAcceptedFrontierTask(
     DeviceOperation deviceOperation(*this);
     if(!deviceOperation.m_admitted)
         return false;
-    if(timingRecorder){
-        const GpuNativePacketRecorder recorder(device(), *timingRecorder);
-        return recordAndSubmitAcceptedFrontierTask(graph, compiledGraph, recorder, recordedGraph, task, transaction, scratchArena, outFailedPacket);
-    }
-    const GpuNativePacketRecorder recorder(device());
+    const GpuNativePacketRecorder recorder(device(), timingRecorder);
     return recordAndSubmitAcceptedFrontierTask(graph, compiledGraph, recorder, recordedGraph, task, transaction, scratchArena, outFailedPacket);
 }
 
@@ -131,11 +123,7 @@ bool GpuTaskScheduler::executeTask(
     DeviceOperation deviceOperation(*this);
     if(!deviceOperation.m_admitted)
         return false;
-    if(timingRecorder){
-        const GpuNativePacketRecorder recorder(device(), *timingRecorder);
-        return recordAndSubmitTask(graph, compiledGraph, recorder, recordedGraph, task, recordedCallback, transaction, scratchArena, outFailedPacket, acceptedCallback);
-    }
-    const GpuNativePacketRecorder recorder(device());
+    const GpuNativePacketRecorder recorder(device(), timingRecorder);
     return recordAndSubmitTask(graph, compiledGraph, recorder, recordedGraph, task, recordedCallback, transaction, scratchArena, outFailedPacket, acceptedCallback);
 }
 

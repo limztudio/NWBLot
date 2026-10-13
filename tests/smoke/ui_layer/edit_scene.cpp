@@ -41,10 +41,6 @@ static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 340.0f, 276.0f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -172,7 +168,7 @@ void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
 
 void UiEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const auto current = values();
-    const auto positions = BuildSmokeMarkerPositions<std::tuple_size_v<decltype(current)> + 1u, 12u, 20u>();
+    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<decltype(current)> + 1u, 12u, 20u>();
     const f32 y = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index <= current.size(); ++index){
         const u32 value = index == current.size() ? m_sequence : current[index];

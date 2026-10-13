@@ -295,61 +295,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
-    buildDeferredLightingTaskGraph(
-        frameGraphFeatures,
-        deferredTargets,
-        csgFrameState,
-        clearAvboitTargets,
-        hasTransparentRenderers,
-        hasOpaqueCsgFrameWork,
-        meshViewAspectRatio,
-        presentationFrame,
-        frameTimingTransaction,
-        asyncPrefixTiming,
-        deferredClearTiming,
-        deferredClearTimingState,
-        opaqueCsgIntervalClearTimingState,
-        opaqueRegularSharedComputeEmulationTiming,
-        opaqueCsgIntervalSampleComputeEmulationTiming,
-        shadowPrepareTimingTicket,
-        graphicsPrefixTimingTickets,
-        &asyncPrefixTimingSpansOnePacket,
-        asyncFinalTiming,
-        avboitPreTimingTicket,
-        avboitClearTimingState,
-        transparentCsgIntervalClearTimingState,
-        transparentCsgIntervalsTiming,
-        avboitOccupancyComputeEmulationTiming,
-        avboitExtinctionComputeEmulationTiming,
-        avboitAccumulationComputeEmulationTiming,
-        avboitDepthWarpTimingTicket,
-        avboitExtinctionTimingTicket,
-        avboitIntegrationTimingTicket,
-        avboitAccumulationTimingTicket,
-        shadowVisibilityTimingTicket,
-        shadowVisibilityAsyncTiming,
-        shadowVisibilityTiming,
-        opaqueSoftResolveTiming,
-        transparentSoftResolveTiming,
-        shadowVisibilityOpaqueProduced,
-        shadowVisibilityTransparentTraceProduced,
-        shadowVisibilityOpaqueFrameIndex,
-        softwareCausticsTimingTicket,
-        surfelGiTimingTicket,
-        surfelGiAsyncTiming,
-        hardwareCausticsTimingTicket,
-        causticPhotonTiming,
-        causticResolveTiming,
-        deferredLightingTimingTicket,
-        deferredCompositeTimingTicket,
-        deferredPresentTimingTicket,
-        surfelCounterReadbackCompletionToken,
-        priorLaggedLightingHistoryReadReadyToken,
-        priorLaggedLightingHistoryWriterDrainToken,
-        requestsLaggedLightingHistoryCapture
-    );
-    if(requestsLaggedLightingHistoryCapture && !m_deferredLightingTaskGraphDeclared){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
+    const auto buildDeferredGraph = [&](const bool captureLightingHistory){
         buildDeferredLightingTaskGraph(
             frameGraphFeatures,
             deferredTargets,
@@ -401,15 +347,20 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             surfelCounterReadbackCompletionToken,
             priorLaggedLightingHistoryReadReadyToken,
             priorLaggedLightingHistoryWriterDrainToken,
-            false
+            captureLightingHistory
         );
+    };
+    buildDeferredGraph(requestsLaggedLightingHistoryCapture);
+    if(requestsLaggedLightingHistoryCapture && !m_deferredLightingTaskGraphDeclared){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
+        buildDeferredGraph(false);
     }
     Core::Alloc::ScratchArena deferredGraphSchedulingScratchArena(RendererArenaScope::s_TaskGraphArena);
     const bool deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(deferredGraphSchedulingScratchArena);
     const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
     const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
-    const auto taskIsCompiled = [&](const Core::GpuTaskId task){
+    const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{
         return deferredCompiledPlan.findTask(task).valid();
     };
     ShadowPreparePacketValidator shadowPreparePacketValidator(MakeNotNull(this));
@@ -1025,7 +976,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
 
     Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[RendererFramePipelineExecuteDetail::s_DeferredTimingTicketCapacity] = {};
     usize normalTimingTicketCount = 0u;
-    const auto appendNormalTimingTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket) -> bool {
+    const auto appendNormalTimingTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept -> bool {
         if(!task.valid() || normalTimingTicketCount >= LengthOf(normalTimingTickets))
             return false;
         normalTimingTickets[normalTimingTicketCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };

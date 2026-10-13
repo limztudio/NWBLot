@@ -53,7 +53,7 @@ struct MeshCookEntry{
     Core::Assets::AssetVector<MeshletLocalVertexRef> meshletLocalVertexRefs;
     Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
 
-    explicit MeshCookEntry(Core::Assets::AssetArena& arena)
+    explicit MeshCookEntry(Core::Assets::AssetArena& arena)noexcept
         : positions(arena)
         , normals(arena)
         , tangents(arena)

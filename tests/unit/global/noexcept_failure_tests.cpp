@@ -3,6 +3,7 @@
 
 
 #include <global/binary.h>
+#include <global/fixed_vector.h>
 #include <global/hash_utils.h>
 #include <global/inplace_function.h>
 #include <global/refcount_ptr.h>
@@ -23,6 +24,29 @@ inline constexpr u32 s_PlacementFailure = 0xE201u;
 inline constexpr u32 s_ReadFailure = 0xE202u;
 inline constexpr u32 s_HashFailure = 0xE203u;
 inline constexpr u32 s_PointerFailure = 0xE204u;
+inline constexpr u32 s_ElementAssignmentFailure = 0xE205u;
+inline constexpr u32 s_ElementSwapFailure = 0xE206u;
+
+struct ThrowingFixedVectorAssignment{
+    u32 value = 0u;
+
+    ThrowingFixedVectorAssignment()noexcept = default;
+    ThrowingFixedVectorAssignment(const ThrowingFixedVectorAssignment&)noexcept = default;
+    ThrowingFixedVectorAssignment& operator=(const ThrowingFixedVectorAssignment&){
+        throw s_ElementAssignmentFailure;
+    }
+    ThrowingFixedVectorAssignment& operator=(ThrowingFixedVectorAssignment&&)noexcept = default;
+};
+
+struct ThrowingFixedVectorSwap{
+    u32 value = 0u;
+};
+
+void swap(ThrowingFixedVectorSwap& lhs, ThrowingFixedVectorSwap& rhs){
+    static_cast<void>(lhs);
+    static_cast<void>(rhs);
+    throw s_ElementSwapFailure;
+}
 
 
 struct ThrowingPlacementCallable{
@@ -127,7 +151,7 @@ TEST(NoexceptFailureTests, FancyPointerDereferenceAndRawConversionFailuresPreser
     static_assert(!noexcept(*stored));
     static_assert(!noexcept(stored = &target));
 
-    EXPECT_THROW(static_cast<void>(*stored), u32);
+    EXPECT_THROW(EXPECT_EQ(&*stored, &target), u32);
     EXPECT_THROW(stored = &target, u32);
     EXPECT_EQ(stored.get().target, &target);
 }
@@ -149,7 +173,7 @@ TEST(NoexceptFailureTests, PlacementAllocationFailurePropagatesThroughCaptureCon
     static_assert(!noexcept(Storage(callable)));
     static_assert(!noexcept(DeclVal<Storage&>() = callable));
 
-    EXPECT_THROW(static_cast<void>(Storage(callable)), u32);
+    EXPECT_THROW(EXPECT_TRUE(Storage(callable)), u32);
 
     u32 previousInvocations = 0u;
     Storage stored([&previousInvocations]()noexcept{ ++previousInvocations; });
@@ -158,13 +182,42 @@ TEST(NoexceptFailureTests, PlacementAllocationFailurePropagatesThroughCaptureCon
     EXPECT_EQ(previousInvocations, 0u);
 }
 
+TEST(NoexceptFailureTests, FixedVectorElementAssignmentFailurePropagatesWithoutPublishingFullSize){
+    using namespace __hidden_noexcept_failure_tests;
+    FixedVector<ThrowingFixedVectorAssignment, 4u> stored;
+    stored.resize(1u);
+    stored[0u].value = 17u;
+    ThrowingFixedVectorAssignment replacement;
+    replacement.value = 29u;
+    static_assert(!noexcept(stored.fill(replacement)));
+    EXPECT_THROW(stored.fill(replacement), u32);
+    EXPECT_EQ(stored.size(), 1u);
+    EXPECT_EQ(stored[0u].value, 17u);
+}
+
+TEST(NoexceptFailureTests, FixedVectorElementSwapFailurePropagatesWithoutSwappingSizes){
+    using namespace __hidden_noexcept_failure_tests;
+    FixedVector<ThrowingFixedVectorSwap, 4u> first;
+    FixedVector<ThrowingFixedVectorSwap, 4u> second;
+    first.resize(1u);
+    second.resize(2u);
+    first[0u].value = 17u;
+    second[0u].value = 29u;
+    static_assert(!noexcept(first.swap(second)));
+    EXPECT_THROW(first.swap(second), u32);
+    EXPECT_EQ(first.size(), 1u);
+    EXPECT_EQ(second.size(), 2u);
+    EXPECT_EQ(first[0u].value, 17u);
+    EXPECT_EQ(second[0u].value, 29u);
+}
+
 TEST(NoexceptFailureTests, ThrowingByteGetterPreservesReadOffset){
     using namespace __hidden_noexcept_failure_tests;
     ThrowingByteSource source;
     usize offset = 0u;
     static_assert(!noexcept(ReadPOD<u32>(source, offset)));
 
-    EXPECT_THROW(static_cast<void>(ReadPOD<u32>(source, offset)), u32);
+    EXPECT_THROW(EXPECT_TRUE(ReadPOD<u32>(source, offset)), u32);
     EXPECT_EQ(offset, 0u);
 }
 

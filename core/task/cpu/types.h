@@ -6,6 +6,7 @@
 
 
 #include <core/global.h>
+
 #include <global/cpu_topology.h>
 
 

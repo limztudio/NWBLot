@@ -365,7 +365,7 @@ def main():
     parser.add_argument("--frame-interval", type=int, default=FRAME_INTERVAL, help="Use 1 for consecutive frames with serialized readbacks, or 8 for asynchronous longer-term sampling.")
     parser.add_argument("--lagged-lighting", action="store_true")
     parser.add_argument("--overlapping", action="store_true", help="Add a static plane receiver at z+0.125 with the same cutter group.")
-    parser.add_argument("--gpu-validation", action="store_true")
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=False, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     parser.add_argument("--gpu-timing-output", type=Path)
     parser.add_argument("--timeout", type=float, default=150.0)
     parser.add_argument("--analysis-only", action="store_true")

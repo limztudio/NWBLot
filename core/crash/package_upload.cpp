@@ -132,16 +132,19 @@ static CrashStringT<ArenaT> CrashUploadUrl(ArenaT& arena, const AStringView logS
 
 template<typename ArenaT>
 static bool UploadPackage(ArenaT& arena, const CrashStringT<ArenaT>& url, const CrashBytesT<ArenaT>& archiveBytes, const AStringView crashUploadToken){
-    CURL* curl = curl_easy_init();
-    if(!curl)
-        return false;
-
-    curl_slist* headers = nullptr;
     CrashStringT<ArenaT> authorizationHeader{arena};
     if(!crashUploadToken.empty()){
         authorizationHeader.reserve(crashUploadToken.size() + s_AuthorizationBearerPrefixLength);
         authorizationHeader += s_AuthorizationBearerPrefix;
         authorizationHeader += crashUploadToken;
+    }
+
+    CURL* curl = curl_easy_init();
+    if(!curl)
+        return false;
+
+    curl_slist* headers = nullptr;
+    if(!crashUploadToken.empty()){
         headers = curl_slist_append(headers, authorizationHeader.c_str());
         if(!headers){
             curl_easy_cleanup(curl);

@@ -78,8 +78,8 @@ public:
 
 
 public:
-    bool loadBinary(const Core::Assets::AssetBytes& binary);
     [[nodiscard]] bool validatePayload()const;
+    bool loadBinary(const Core::Assets::AssetBytes& binary);
 
     void setDescription(const Core::SamplerDesc& description)noexcept{ m_description = description; }
 

@@ -51,7 +51,9 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_ComputePipelineArena);
 
-    auto* pso = NewArenaObject<ComputePipeline>(m_context.objectArena, m_context);
+    ComputePipelineHandle pso(NewArenaObject<ComputePipeline>(m_context.objectArena, m_context), ComputePipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!pso)
+        return nullptr;
     pso->m_desc = desc;
 
     auto shaderStage = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
@@ -68,17 +70,17 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     PipelineShaderStageVector shaderStages{ scratchArena };
     shaderStages.push_back(shaderStage);
 
-    if(!configurePipelineBindingsOrDestroy(desc.bindingLayouts, NWB_TEXT("compute pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("compute pipeline"), *pso, scratchArena))
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     pipelineInfo.stage = shaderStages[0];
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso);
 
-    if(!createPipelineOrDestroy(NWB_TEXT("compute pipeline"), *pso, pipelineInfo))
+    if(!createPipeline(NWB_TEXT("compute pipeline"), *pso, pipelineInfo))
         return nullptr;
 
-    return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return pso;
 }
 
 

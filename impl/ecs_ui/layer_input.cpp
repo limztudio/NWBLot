@@ -94,11 +94,12 @@ bool UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
     event.hoverCapable = true;
     if(m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene){
         event.phase = Ui::PointerPhase::Leave;
-        static_cast<void>(routePointerInput(event));
+        routePointerInput(event);
         return false;
     }
     event.phase = Ui::PointerPhase::Move;
-    const bool consumed = routePointerInput(event);
+    bool consumed = false;
+    routePointerInput(event, &consumed);
     return consumed || (m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Custom);
 }
 
@@ -129,7 +130,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
         event.intent = button == Core::MouseButton::Left ? Ui::PointerIntent::Activate : Ui::PointerIntent::ContextMenu;
         if(event.phase == Ui::PointerPhase::Press && event.intent == Ui::PointerIntent::Activate)
             event.timestampMs = Max<u64>(1u, DurationInMS<u64>(TimerNow()));
-        static_cast<void>(routePointerInput(event));
+        routePointerInput(event);
     }
     if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Middle && action == Core::InputAction::Press && m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource)){
         m_editHost.collectNative();
@@ -139,7 +140,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
     }
     if(firstPress && (owner == __hidden_layer_input::s_Scene || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))){
         event.phase = Ui::PointerPhase::Leave;
-        static_cast<void>(routePointerInput(event));
+        routePointerInput(event);
     }
     if(action == Core::InputAction::Release){
         m_pressedButtons &= ~bit;
@@ -147,7 +148,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
             m_pointerOwner = __hidden_layer_input::s_Scene;
             event.phase = Ui::PointerPhase::Move;
             event.timestampMs = 0u;
-            static_cast<void>(routePointerInput(event));
+            routePointerInput(event);
         }
     }
     return owner != __hidden_layer_input::s_Scene;
@@ -166,7 +167,8 @@ bool UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     event.scrollX = xoffset;
     event.scrollY = yoffset;
     event.hoverCapable = true;
-    const bool consumed = routePointerInput(event);
+    bool consumed = false;
+    routePointerInput(event, &consumed);
     return consumed || m_pointerOwner == __hidden_layer_input::s_Custom;
 }
 
@@ -190,7 +192,7 @@ void UiLayerSystem::pointerLeave(){
     event.phase = Ui::PointerPhase::Leave;
     event.position = m_pointer;
     event.hoverCapable = true;
-    static_cast<void>(routePointerInput(event));
+    routePointerInput(event);
 }
 
 void UiLayerSystem::pointerCaptureLost(){
@@ -201,7 +203,7 @@ void UiLayerSystem::pointerCaptureLost(){
     event.phase = Ui::PointerPhase::Cancel;
     event.position = m_pointer;
     event.hoverCapable = true;
-    static_cast<void>(routePointerInput(event));
+    routePointerInput(event);
     m_pressedButtons = 0u;
     m_pointerOwner = __hidden_layer_input::s_Scene;
 }

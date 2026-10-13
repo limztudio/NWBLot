@@ -15,6 +15,21 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_texture_clear_color{
+
+[[nodiscard]] static TStringView ColorClearSubresourceError(const TextureDesc& description, const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, const bool integerValue, const bool signedIntegerValue)noexcept{
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(subresources))
+        return NWB_TEXT("subresource range is empty or invalid");
+    if(!VulkanTextureDetail::TextureColorClearAspectIsValid(aspectMask))
+        return NWB_TEXT("texture format does not have a color aspect");
+    if(!VulkanTextureDetail::TextureColorClearValueTypeMatchesFormat(GetFormatInfo(description.format), integerValue, signedIntegerValue))
+        return NWB_TEXT("clear value type does not match the texture format");
+    return {};
+}
+
+};
+
+
 void CommandList::clearTextureFloat(Texture& texture, TextureSubresourceSet subresources, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     clearColorTexture(texture, subresources, NWB_TEXT("color value"), clearValue, false, false);
@@ -105,16 +120,9 @@ void CommandList::clearColorTexture(Texture& texture, TextureSubresourceSet subr
     const TextureDesc& desc = texture.m_creationDesc;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or invalid"));
-        return;
-    }
-    if(!VulkanTextureDetail::TextureColorClearAspectIsValid(texture.m_aspectMask)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture format does not have a color aspect"));
-        return;
-    }
-    if(!VulkanTextureDetail::TextureColorClearValueTypeMatchesFormat(GetFormatInfo(desc.format), integerValue, signedIntegerValue)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("clear value type does not match the texture format"));
+    const TStringView subresourceError = __hidden_texture_clear_color::ColorClearSubresourceError(desc, resolvedSubresources, texture.m_aspectMask, integerValue, signedIntegerValue);
+    if(!subresourceError.empty()){
+        rejectCommandRecording(s_OperationName, subresourceError);
         return;
     }
 
@@ -174,21 +182,14 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
     const TextureDesc& desc = texture.m_creationDesc;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or invalid"));
-        return;
-    }
-    if(!VulkanTextureDetail::TextureColorClearAspectIsValid(texture.m_aspectMask)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture format does not have a color aspect"));
-        return;
-    }
-    if(!VulkanTextureDetail::TextureColorClearValueTypeMatchesFormat(GetFormatInfo(desc.format), integerValue, signedIntegerValue)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("clear value type does not match the texture format"));
+    const TStringView subresourceError = __hidden_texture_clear_color::ColorClearSubresourceError(desc, resolvedSubresources, texture.m_aspectMask, integerValue, signedIntegerValue);
+    if(!subresourceError.empty()){
+        rejectCommandRecording(s_OperationName, subresourceError);
         return;
     }
 
     const bool blockCompressed = Format::IsBlockCompressedFormat(desc.format);
-    if((m_renderPassActive || desc.sampleCount != 1u) && VulkanTextureDetail::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)){
+    if((m_renderPassActive || desc.sampleCount != 1u) && VulkanTextureDetail::TextureClearBoxFullyCoversSubresources(desc, resolvedSubresources, box)){
         clearColorTexture(texture, resolvedSubresources, valueName, clearValue, integerValue, signedIntegerValue);
         return;
     }

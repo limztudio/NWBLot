@@ -26,7 +26,7 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool TryResolveMaterialBindDependencyInterface(const Path& normalizedMaterialBindIncludeRoot, const Path& dependency, CookString& outInterfacePath, ScratchArena& scratchArena){
+static bool TryResolveMaterialBindDependencyInterface(const Path& normalizedMaterialBindIncludeRoot, const Path& dependency, ScratchString& outInterfacePath, ScratchArena& scratchArena){
     outInterfacePath.clear();
     if(normalizedMaterialBindIncludeRoot.empty())
         return true;
@@ -73,7 +73,7 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(CookAren
         normalizedMaterialBindIncludeRoot = normalizedRoot->lexicallyNormal();
     }
 
-    CookString dependencyInterfacePath{arena};
+    ScratchString dependencyInterfacePath{scratchArena};
     bool dependsOnMultipleInterfaces = false;
     for(const Path& dependency : dependencies){
         if(!TryResolveMaterialBindDependencyInterface(normalizedMaterialBindIncludeRoot, dependency, dependencyInterfacePath, scratchArena))

@@ -117,7 +117,7 @@ inline void QueryPhysicalDeviceFeatureSupport(const VolkInstanceTable& instanceD
     outSupport.maintenance4.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
 
     void* featureChain = nullptr;
-    const auto appendFeature = [&featureChain](void* const feature){
+    const auto appendFeature = [&featureChain](void* const feature)noexcept{
         VkBaseOutStructure* const featureBase = reinterpret_cast<VkBaseOutStructure*>(feature);
         featureBase->pNext = reinterpret_cast<VkBaseOutStructure*>(featureChain);
         featureChain = feature;

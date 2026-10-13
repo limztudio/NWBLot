@@ -23,7 +23,7 @@ NWB_ASSET_BUILDER_BEGIN
 struct AssetBuildServices{
     Core::CpuTaskScheduler& cpuScheduler;
 
-    explicit AssetBuildServices(Core::CpuTaskScheduler& cpuScheduler)
+    explicit AssetBuildServices(Core::CpuTaskScheduler& cpuScheduler)noexcept
         : cpuScheduler(cpuScheduler)
     {}
 };
@@ -32,7 +32,7 @@ struct AssetBuildRoot{
     Core::Assets::AssetString path;
     ACompactString virtualRoot;
 
-    explicit AssetBuildRoot(Core::Assets::AssetArena& arena)
+    explicit AssetBuildRoot(Core::Assets::AssetArena& arena)noexcept
         : path(arena)
     {}
 
@@ -53,7 +53,7 @@ struct AssetBuildOptions{
     Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
     bool useExplicitInputs = false;
 
-    explicit AssetBuildOptions(Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler)
+    explicit AssetBuildOptions(Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler)noexcept
         : repoRoot(arena)
         , assetRoots(arena)
         , outputDirectory(arena)

@@ -1,6 +1,6 @@
 nwb_declare_static_library(nwb_ui_edit)
 target_sources(nwb_ui_edit PRIVATE "${CMAKE_CURRENT_LIST_DIR}/caret_clock.h" "${CMAKE_CURRENT_LIST_DIR}/caret_clock.cpp" "${CMAKE_CURRENT_LIST_DIR}/vertical_navigation.h" "${CMAKE_CURRENT_LIST_DIR}/vertical_navigation.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/navigation_commands.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_parse.h" "${CMAKE_CURRENT_LIST_DIR}/numeric_parse.cpp" "${CMAKE_CURRENT_LIST_DIR}/integer_model.h" "${CMAKE_CURRENT_LIST_DIR}/integer_model.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/navigation_commands.cpp" "${CMAKE_CURRENT_LIST_DIR}/numeric_parse.h" "${CMAKE_CURRENT_LIST_DIR}/numeric_model_operations.h" "${CMAKE_CURRENT_LIST_DIR}/numeric_parse.cpp" "${CMAKE_CURRENT_LIST_DIR}/integer_model.h" "${CMAKE_CURRENT_LIST_DIR}/integer_model.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/float_model.h" "${CMAKE_CURRENT_LIST_DIR}/float_model.cpp" "${CMAKE_CURRENT_LIST_DIR}/model.h" "${CMAKE_CURRENT_LIST_DIR}/model.cpp" "${CMAKE_CURRENT_LIST_DIR}/model_snapshot.h" "${CMAKE_CURRENT_LIST_DIR}/model_snapshot.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/surrounding.cpp" "${CMAKE_CURRENT_LIST_DIR}/actions.h" "${CMAKE_CURRENT_LIST_DIR}/commands.h" "${CMAKE_CURRENT_LIST_DIR}/commands.cpp" "${CMAKE_CURRENT_LIST_DIR}/multiline_text.h" "${CMAKE_CURRENT_LIST_DIR}/multiline_text.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/single_line_text.h" "${CMAKE_CURRENT_LIST_DIR}/single_line_text.cpp" "${CMAKE_CURRENT_LIST_DIR}/navigation.cpp" "${CMAKE_CURRENT_LIST_DIR}/history.cpp" "${CMAKE_CURRENT_LIST_DIR}/composition.cpp"

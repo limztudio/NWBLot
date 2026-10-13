@@ -1,5 +1,5 @@
 package: nlohmann_json
 version: 3.12.0
-updated_utc: 2026-07-14T16:03:35Z
+updated_utc: 2026-10-13
 source: https://github.com/nlohmann/json/releases/tag/v3.12.0
-notes: Single-header JSON from official nlohmann/json. Single shared top-level copy; consumers include <nlohmann/json.hpp>. Originally merged from nested snapshots; subsequent updates come from nlohmann/json. NWB applies a local checked snprintf-result handling patch for warning-clean builds.
+notes: Single-header JSON from official nlohmann/json. Single shared top-level copy; consumers include <nlohmann/json.hpp>. Originally merged from nested snapshots; subsequent updates come from nlohmann/json. NWB applies a local checked snprintf-result handling patch for warning-clean builds. NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::nlohmann_json as the alias for nwb_vendor_nlohmann_json with SYSTEM INTERFACE includes from package root.

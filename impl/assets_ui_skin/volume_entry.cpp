@@ -37,7 +37,7 @@ static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
         registry,
         NWB_TEXT("UI skin"),
         &ParseUiSkinDocument,
-        [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildUiSkinAsset); },
+        [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildUiSkinAsset(entry, arena); },
         false
     );
 }

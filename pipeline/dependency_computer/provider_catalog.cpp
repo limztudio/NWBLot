@@ -66,7 +66,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DependencyProviderCatalog::DependencyProviderCatalog(NWB::Core::Assets::AssetArena& arena)
+DependencyProviderCatalog::DependencyProviderCatalog(NWB::Core::Assets::AssetArena& arena)noexcept
     : m_arena(arena)
     , m_repoRoot(arena)
     , m_roots(arena)
@@ -167,8 +167,7 @@ Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const 
         return MakeUnexpected(Failure{});
     Assets::ScratchString text(scratchArena);
     Core::Metascript::Document document(m_arena);
-    if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, text, document, [&](const AStringView source){ return document.parse(source); }
-    ))
+    if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, text, document, [&](const AStringView source){ return document.parse(source); }))
         return MakeUnexpected(Failure{});
     return document;
 }

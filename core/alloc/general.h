@@ -64,12 +64,12 @@ public:
 
     template<typename T>
     inline void deallocateObject(T* const p)noexcept{
-        constexpr usize allocationSize = Alignment(alignof(T), sizeof(T));
+        constexpr usize s_AllocationSize = Alignment(alignof(T), sizeof(T));
 
         if constexpr(alignof(T) <= 1u)
-            CoreFreeSize(p, allocationSize, &m_memoryStats);
+            CoreFreeSize(p, s_AllocationSize, &m_memoryStats);
         else
-            CoreFreeSizeAligned(p, allocationSize, &m_memoryStats);
+            CoreFreeSizeAligned(p, s_AllocationSize, &m_memoryStats);
     }
 };
 

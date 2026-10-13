@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/simd/vector.h>
-
 #include "cook_metadata.h"
+
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +29,7 @@ Expected<DiscoveredNwbFile> MeshCookMetadata::BuildDiscoveredNwbFile(const Path&
 }
 
 
-bool MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount){
+bool MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept{
     if(value.isList()){
         for(const Core::Metascript::Value& child : value.asList()){
             if(!AccumulateFlattenedValueLeafCount(child, inOutCount))
@@ -46,7 +46,7 @@ bool MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript:
 }
 
 
-Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value){
+Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept{
     usize count = 0u;
     if(!AccumulateFlattenedValueLeafCount(value, count))
         return MakeUnexpected(Failure{});
@@ -79,7 +79,7 @@ const Core::Metascript::Value* MeshCookMetadata::FindRequiredMetadataListField(c
 }
 
 
-Expected<f32, MetadataF32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value){
+Expected<f32, MetadataF32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept{
     if(!value.isNumeric())
         return Unexpected<MetadataF32ValueFailure::Enum>(MetadataF32ValueFailure::NotNumeric);
 
@@ -113,7 +113,7 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(const Path& nwbFilePath,
 }
 
 
-Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataU32Value(const Core::Metascript::Value& value){
+Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept{
     if(!value.isNumeric())
         return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::NotNumeric);
 

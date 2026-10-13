@@ -132,12 +132,12 @@ class FbxSourceMeshStreams final : NoCopy{
 public:
     static void ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const bool wantsSkinning);
     static void ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning);
-    [[nodiscard]] static bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh);
+    [[nodiscard]] static bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept;
     static void DropSourceMeshTangents(SourceMeshStreams& mesh);
     [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityVector<u32>& inOutTriangleIndices);
     template<typename Value, typename Lookup>
     [[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName);
-    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs);
+    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static Expected<u32> InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const bool wantsSkinning);
 
 

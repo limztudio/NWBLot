@@ -30,7 +30,7 @@ bool UiEditBoxHost::prepareSubmit(const Ui::InputEvent& event){
     return true;
 }
 
-bool UiEditBoxHost::compositionActive(const Entry& entry)const{
+bool UiEditBoxHost::compositionActive(const Entry& entry)const noexcept{
     bool composing = entry.expected.m_expectedComposition.active;
     for(const Event& event : m_events){
         if(event.owner != entry.owner || event.focusGeneration != entry.focusGeneration)

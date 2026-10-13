@@ -311,10 +311,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SetLane(SIMDVectorSingle value, f32 co
     if constexpr(Lane == 0u)
         return _mm_move_ss(value, _mm_set_ss(component));
     else{
-        constexpr int shuffle = _MM_SHUFFLE(Lane == 3u ? 0u : 3u, Lane == 2u ? 0u : 2u, Lane == 1u ? 0u : 1u, Lane);
-        const __m128 swapped = _mm_shuffle_ps(value, value, shuffle);
+        constexpr int s_Shuffle = _MM_SHUFFLE(Lane == 3u ? 0u : 3u, Lane == 2u ? 0u : 2u, Lane == 1u ? 0u : 1u, Lane);
+        const __m128 swapped = _mm_shuffle_ps(value, value, s_Shuffle);
         const __m128 changed = _mm_move_ss(swapped, _mm_set_ss(component));
-        return _mm_shuffle_ps(changed, changed, shuffle);
+        return _mm_shuffle_ps(changed, changed, s_Shuffle);
     }
 }
 

@@ -25,7 +25,7 @@ namespace __hidden_ui_text_area_navigation{
 
 class ModelStamp final{
 public:
-    explicit ModelStamp(const EditModel& model)
+    explicit ModelStamp(const EditModel& model)noexcept
         : m_instanceGeneration(model.instanceGeneration())
         , m_revision(model.revision())
         , m_externalRevision(model.externalRevision())
@@ -71,7 +71,7 @@ private:
     return nullptr;
 }
 
-[[nodiscard]] static Expected<usize> PageTarget(const EditCaretGeometry& geometry, const usize activeCaret, const Rect& caret, const bool down, const f32 preferredX, const f32 viewportHeight){
+[[nodiscard]] static Expected<usize> PageTarget(const EditCaretGeometry& geometry, const usize activeCaret, const Rect& caret, const bool down, const f32 preferredX, const f32 viewportHeight)noexcept{
     const auto& lines = geometry.lines();
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())

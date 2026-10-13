@@ -22,7 +22,7 @@ protected:
     {
         NWB_ASSERT_MSG(static_cast<bool>(allocationLog), NWB_TEXT("ArenaBase allocationLog must be a valid name"));
     }
-    ~ArenaBase() = default;
+    ~ArenaBase()noexcept = default;
 
 
 public:
@@ -40,7 +40,7 @@ protected:
     explicit ArenaBaseT(const Name& allocationLog, const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate)
         : ArenaBase(allocationLog, reservation)
     {}
-    ~ArenaBaseT() = default;
+    ~ArenaBaseT()noexcept = default;
 
 
 public:

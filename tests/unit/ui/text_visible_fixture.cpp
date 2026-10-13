@@ -3,6 +3,7 @@
 
 
 #include "text_visible_fixture.h"
+#include "paint_assertions.h"
 
 #include <tests/common/font_fixture.h>
 
@@ -47,28 +48,11 @@ void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
         EXPECT_EQ(actual.sdfPages()[index]->binding(), expected.sdfPages()[index]->binding());
         EXPECT_EQ(actual.sdfPages()[index]->pixels(), expected.sdfPages()[index]->pixels());
     }
-    for(usize index = 0u; index < actual.vertices().size(); ++index){
-        const Vertex& a = actual.vertices()[index];
-        const Vertex& e = expected.vertices()[index];
-        EXPECT_FLOAT_EQ(a.position.x, e.position.x);
-        EXPECT_FLOAT_EQ(a.position.y, e.position.y);
-        EXPECT_FLOAT_EQ(a.texCoord.x, e.texCoord.x);
-        EXPECT_FLOAT_EQ(a.texCoord.y, e.texCoord.y);
-        EXPECT_FLOAT_EQ(a.color.r, e.color.r);
-        EXPECT_FLOAT_EQ(a.color.g, e.color.g);
-        EXPECT_FLOAT_EQ(a.color.b, e.color.b);
-        EXPECT_FLOAT_EQ(a.color.a, e.color.a);
-    }
+    UiPaintAssertions::ExpectSameVertices(actual, expected);
     for(usize index = 0u; index < actual.commands().size(); ++index){
         const DrawCommand& a = actual.commands()[index];
         const DrawCommand& e = expected.commands()[index];
-        EXPECT_EQ(a.firstIndex, e.firstIndex);
-        EXPECT_EQ(a.indexCount, e.indexCount);
-        EXPECT_EQ(a.material, e.material);
-        EXPECT_EQ(a.glyphPageIndex, e.glyphPageIndex);
-        EXPECT_EQ(a.sdfPageIndex, e.sdfPageIndex);
-        EXPECT_EQ(a.sdfChannel, e.sdfChannel);
-        EXPECT_EQ(a.layer, e.layer);
+        UiPaintAssertions::ExpectSameCommandFields(a, e);
         ExpectRectangle(a.clip, e.clip);
     }
 }

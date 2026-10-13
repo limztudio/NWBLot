@@ -172,28 +172,7 @@ protected:
         m_result = m_host.editNavigated(m_widget, model, options, {}, navigation, m_resolver, m_actions);
         if(!m_result.valid)
             return false;
-        Ui::EditBoxView view(m_arena);
-        if(!view.snapshot(model))
-            return false;
-        auto layout = m_layoutBuilder.layout({ view.displayText() });
-        if(!layout)
-            return false;
-        if(!view.adoptLayout(Move(*layout)))
-            return false;
-        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, previousScroll);
-        if(!placement)
-            return false;
-        m_placement = *placement;
-        if(!m_host.publish(m_widget, view, m_placement, options))
-            return false;
-        Ui::HitTarget target;
-        target.rectangle = bounds;
-        target.clip = { 0.0f, 0.0f, 500.0f, 200.0f };
-        target.enabled = options.enabled;
-        target.focusable = options.enabled;
-        target.pointerGesture = options.enabled;
-        target.textEditable = true;
-        if(!m_context.addTarget(m_widget, target))
+        if(!publishEdit(model, options, bounds, previousScroll))
             return false;
         const Ui::WidgetState* button = m_context.declare("other", Ui::WidgetKind::Button);
         if(!button)

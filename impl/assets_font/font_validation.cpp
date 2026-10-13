@@ -7,6 +7,8 @@
 
 #include <core/common/log.h>
 
+#include <global/algorithm.h>
+
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MODULE_H
@@ -43,6 +45,7 @@ static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
     if(signature != s_TrueTypeSignature && signature != s_CffSignature)
         return false;
 
+    u32 tags[s_FontMaxTableCount];
     bool hasHead = false;
     bool hasCmap = false;
     bool hasMaxp = false;
@@ -59,11 +62,7 @@ static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
         const usize length = tableResult->bytes.size();
         if(tag == 0x66766172u || tag == 0x43464632u) // fvar, CFF2
             return false;
-        for(u16 previous = 0u; previous < index; ++previous){
-            const auto previousTagResult = directory.tableTag(previous);
-            if(!previousTagResult || *previousTagResult == tag)
-                return false;
-        }
+        tags[index] = tag;
         switch(tag){
         case s_FontSfntHeadTag: hasHead = length >= 54u; break;
         case 0x636d6170u: hasCmap = length >= 4u; break;
@@ -75,6 +74,11 @@ static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
         case 0x43464620u: hasCff = length > 0u; break;
         default: break;
         }
+    }
+    Sort(tags, tags + directory.tableCount());
+    for(u16 index = 1u; index < directory.tableCount(); ++index){
+        if(tags[index] == tags[index - 1u])
+            return false;
     }
     return hasHead && hasCmap && hasMaxp && hasHhea && hasHmtx && (signature == s_TrueTypeSignature ? hasGlyf && hasLoca : hasCff);
 }
@@ -92,7 +96,7 @@ private:
         return arena.allocate(alignof(MaxAlign), static_cast<usize>(size));
     }
 
-    static void Release(FT_Memory memory, void* block){
+    static void Release(FT_Memory memory, void* block)noexcept{
         if(block){
             auto& arena = *static_cast<Core::Assets::AssetArena*>(memory->user);
             arena.deallocate(block, alignof(MaxAlign), 0u);
@@ -111,13 +115,13 @@ private:
 
 
 public:
-    explicit NativeFontValidator(Core::Assets::AssetArena& arena){
+    explicit NativeFontValidator(Core::Assets::AssetArena& arena)noexcept{
         m_memory.user = &arena;
         m_memory.alloc = &Allocate;
         m_memory.free = &Release;
         m_memory.realloc = &Reallocate;
     }
-    ~NativeFontValidator(){
+    ~NativeFontValidator()noexcept{
         if(m_face)
             FT_Done_Face(m_face);
         if(m_library)

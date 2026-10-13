@@ -33,7 +33,7 @@ struct FontCookEntry{
     u32 faceIndex = 0u;
 
 
-    explicit FontCookEntry(Core::Assets::AssetArena& memoryArena)
+    explicit FontCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
         : arena(memoryArena)
         , fontBytes(memoryArena)
     {}

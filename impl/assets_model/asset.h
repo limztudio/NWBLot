@@ -57,13 +57,13 @@ struct ModelSkinnedMeshObject{
 
 class Model final : public Core::Assets::TypedAsset<Model>{
 public:
-    NWB_DEFINE_ASSET_TYPE("model")
-
-
-public:
     using SkeletonObjectVector = Core::Assets::AssetVector<ModelSkeletonObject>;
     using StaticMeshObjectVector = Core::Assets::AssetVector<ModelStaticMeshObject>;
     using SkinnedMeshObjectVector = Core::Assets::AssetVector<ModelSkinnedMeshObject>;
+
+
+public:
+    NWB_DEFINE_ASSET_TYPE("model")
 
 
 public:
@@ -81,8 +81,8 @@ public:
 
 
 public:
-    bool loadBinary(const Core::Assets::AssetBytes& binary);
     [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
+    bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 public:
     void setObjects(SkeletonObjectVector&& skeletonObjects, StaticMeshObjectVector&& staticMeshObjects, SkinnedMeshObjectVector&& skinnedMeshObjects)noexcept{

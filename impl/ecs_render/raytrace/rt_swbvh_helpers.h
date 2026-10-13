@@ -136,12 +136,12 @@ inline void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache){
         it.value().seenThisFrame = false;
 }
 
-[[nodiscard]] inline bool IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle){
+[[nodiscard]] inline bool IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
     return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
 }
 
 // Recording is not allowed to register a new descriptor after the shared graph has frozen resource identities.
-[[nodiscard]] inline bool IsAccelStructHeapHandle(const Core::GpuDescriptorHandle handle){
+[[nodiscard]] inline bool IsAccelStructHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
     return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::AccelStruct);
 }
 

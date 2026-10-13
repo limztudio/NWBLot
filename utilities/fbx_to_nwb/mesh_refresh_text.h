@@ -40,7 +40,7 @@ struct SkinReference{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs);
+[[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs)noexcept;
 [[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName);
 [[nodiscard]] AString WriteSkinInfluenceList(const UtilityVector<MeshSkinInfluence>& influences);
 [[nodiscard]] bool AddReplacement(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText);

@@ -339,7 +339,7 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData)noexcept{
     frameData.setActive(false);
 }
 
-static void OnOutputGeometry(void* data, wl_output* output, i32 x, i32 y, i32 physicalWidth, i32 physicalHeight, i32 subpixel, const char* make, const char* model, i32 transform){
+static void OnOutputGeometry(void* data, wl_output* output, i32 x, i32 y, i32 physicalWidth, i32 physicalHeight, i32 subpixel, const char* make, const char* model, i32 transform)noexcept{
     static_cast<void>(data);
     static_cast<void>(output);
     static_cast<void>(x);
@@ -387,11 +387,18 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
     else if(NWB_STRCMP(interfaceName, wl_output_interface.name) == 0 && !context.output){
         const u32 bindVersion = version < s_WaylandOutputBindVersion ? version : s_WaylandOutputBindVersion;
         context.output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, bindVersion));
-        wl_output_add_listener(context.output, &s_OutputListener, &context);
+        if(!context.output || wl_output_add_listener(context.output, &s_OutputListener, &context) != 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland output listener registration failed"));
+            return;
+        }
     }
     else if(NWB_STRCMP(interfaceName, wl_seat_interface.name) == 0 && !context.seat){
         const u32 bindVersion = version < s_WaylandSeatBindVersion ? version : s_WaylandSeatBindVersion;
         context.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, bindVersion));
+        if(!context.seat){
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland seat acquisition failed"));
+            return;
+        }
         context.seatVersion = bindVersion;
         context.seatGlobalName = name;
         AttachSeatListener(context);
@@ -821,7 +828,10 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     if((capabilities & WL_SEAT_CAPABILITY_POINTER) != 0u){
         if(!context.pointer){
             context.pointer = wl_seat_get_pointer(seat);
-            wl_pointer_add_listener(context.pointer, &s_PointerListener, &context);
+            if(!context.pointer || wl_pointer_add_listener(context.pointer, &s_PointerListener, &context) != 0){
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland pointer listener registration failed"));
+                return;
+            }
         }
     }
     else{
@@ -835,7 +845,10 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     if((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) != 0u){
         if(!context.keyboard){
             context.keyboard = wl_seat_get_keyboard(seat);
-            wl_keyboard_add_listener(context.keyboard, &s_KeyboardListener, &context);
+            if(!context.keyboard || wl_keyboard_add_listener(context.keyboard, &s_KeyboardListener, &context) != 0){
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keyboard listener registration failed"));
+                return;
+            }
         }
     }
     else{
@@ -851,6 +864,14 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
         context.frame->data<Common::LinuxFrame>().setActive(false);
         context.frame->input().windowFocusUpdate(false);
     }
+}
+
+static bool FlushDisplay(wl_display& display)noexcept{
+    i32 result;
+    do{
+        result = wl_display_flush(&display);
+    }while(result < 0 && errno == EINTR);
+    return result >= 0 || errno == EAGAIN || errno == EWOULDBLOCK;
 }
 
 static bool RoundtripDisplay(wl_display* display, const TStringView operation){
@@ -874,7 +895,7 @@ static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
         }
     }
 
-    if(wl_display_flush(context.display) == -1 && errno != EAGAIN){
+    if(!FlushDisplay(*context.display)){
         wl_display_cancel_read(context.display);
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display flush failed"));
         return false;
@@ -983,7 +1004,11 @@ bool InitWaylandFrame(Frame& frame){
         CleanupWaylandFrame(frame);
         return false;
     }
-    wl_registry_add_listener(context->registry, &s_RegistryListener, context);
+    if(wl_registry_add_listener(context->registry, &s_RegistryListener, context) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry listener registration failed"));
+        CleanupWaylandFrame(frame);
+        return false;
+    }
 
     if(!RoundtripDisplay(context->display, NWB_TEXT("registry roundtrip"))){
         CleanupWaylandFrame(frame);
@@ -996,7 +1021,11 @@ bool InitWaylandFrame(Frame& frame){
         return false;
     }
 
-    xdg_wm_base_add_listener(context->wmBase, &s_WmBaseListener, context);
+    if(xdg_wm_base_add_listener(context->wmBase, &s_WmBaseListener, context) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg-shell listener registration failed"));
+        CleanupWaylandFrame(frame);
+        return false;
+    }
 
     context->surface = wl_compositor_create_surface(context->compositor);
     if(!context->surface){
@@ -1013,7 +1042,11 @@ bool InitWaylandFrame(Frame& frame){
         CleanupWaylandFrame(frame);
         return false;
     }
-    xdg_surface_add_listener(context->xdgSurface, &s_XdgSurfaceListener, context);
+    if(xdg_surface_add_listener(context->xdgSurface, &s_XdgSurfaceListener, context) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface listener registration failed"));
+        CleanupWaylandFrame(frame);
+        return false;
+    }
 
     context->toplevel = xdg_surface_get_toplevel(context->xdgSurface);
     if(!context->toplevel){
@@ -1021,7 +1054,11 @@ bool InitWaylandFrame(Frame& frame){
         CleanupWaylandFrame(frame);
         return false;
     }
-    xdg_toplevel_add_listener(context->toplevel, &s_ToplevelListener, context);
+    if(xdg_toplevel_add_listener(context->toplevel, &s_ToplevelListener, context) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel listener registration failed"));
+        CleanupWaylandFrame(frame);
+        return false;
+    }
     xdg_toplevel_set_title(context->toplevel, windowTitle.data());
     xdg_toplevel_set_app_id(context->toplevel, windowTitle.data());
     xdg_toplevel_set_min_size(context->toplevel, LogicalDimensionForPixels(frameData.width(), context->bufferScale), LogicalDimensionForPixels(frameData.height(), context->bufferScale));
@@ -1029,7 +1066,7 @@ bool InitWaylandFrame(Frame& frame){
     context->initialSizeConstrained = true;
 
     wl_surface_commit(context->surface);
-    if(wl_display_flush(context->display) == -1 && errno != EAGAIN){
+    if(!FlushDisplay(*context->display)){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial display flush failed"));
         CleanupWaylandFrame(frame);
         return false;
@@ -1080,8 +1117,10 @@ GlobalUniquePtr<ITextInputService> CreateWaylandFrameTextInput(Frame& frame){
 
 bool ShowWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
-    if(GetWaylandDisplay(frameData))
-        wl_display_flush(GetWaylandDisplay(frameData));
+    if(wl_display* const display = GetWaylandDisplay(frameData); display && !FlushDisplay(*display)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland show display flush failed"));
+        return false;
+    }
     return true;
 }
 
@@ -1122,7 +1161,10 @@ bool RunWaylandFrame(Frame& frame){
 
         if(const Optional<TStringView> title = frame.syncGraphicsWindowState(frameData.width(), frameData.height(), windowVisible, windowIsInFocus)){
             xdg_toplevel_set_title(context->toplevel, title->data());
-            wl_display_flush(context->display);
+            if(!FlushDisplay(*context->display)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland title display flush failed"));
+                return false;
+            }
         }
 
         Timer currentTime(TimerNow());

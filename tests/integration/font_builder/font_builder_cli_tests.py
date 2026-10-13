@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -302,6 +303,22 @@ class FontBuilderCli(unittest.TestCase):
                 self.invoke(self.latin, output, success=False)
                 self.assertEqual({path.name for path in output.parent.iterdir()}, {sentinel.name})
                 self.assertEqual(sentinel.read_bytes(), b"owned by another operation")
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux dangling-symlink output admission")
+    def test_dangling_output_and_work_symlinks_are_preserved_without_publication(self):
+        for extension in (".nwb", ".font", ".nwb.tmp", ".font.tmp", ".nwb.old", ".font.old"):
+            for overwrite in (False, True):
+                with self.subTest(extension=extension, overwrite=overwrite):
+                    output = self.root / f"dangling_{extension[1:]}_{int(overwrite)}" / "body.nwb"
+                    output.parent.mkdir()
+                    sentinel = output.with_suffix(extension)
+                    missing_target = Path("missing_owner_output")
+                    sentinel.symlink_to(missing_target)
+                    self.invoke(self.latin, output, *(("--overwrite",) if overwrite else ()), success=False)
+                    self.assertEqual({path.name for path in output.parent.iterdir()}, {sentinel.name})
+                    self.assertTrue(sentinel.is_symlink())
+                    self.assertEqual(sentinel.readlink(), missing_target)
+                    self.assertFalse((output.parent / missing_target).exists())
 
     def test_cook_rejects_corrupt_pixels_and_invalid_readable_mappings(self):
         output = self.root / "corrupt_pair" / "body.nwb"

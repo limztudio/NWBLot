@@ -34,7 +34,7 @@ inline constexpr AStringView s_ReportDetailPrefix = "detail=";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Decode in-package RGD captures with the vendored backend; failure never aborts ingest.
+// Expected decode failures retain the ingest report; unexpected exceptions remain terminal.
 void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     static_cast<void>(config);
 
@@ -44,21 +44,22 @@ void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirecto
 
     const AString<LogArena> capturePath = PathToString<char>(arena, rgdCapture);
 
-    AInteropString decoded;
-    if(!nwb_rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()), decoded)){
+    const auto decoded = nwb_rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()));
+    if(!decoded){
         outReport += s_GpuDetectiveSectionHeader;
         outReport += s_GpuDetectiveDecodeFailedStatus;
-        if(!decoded.empty()){
+        const StringView detail = decoded.error();
+        if(!detail.empty()){
             outReport += s_ReportDetailPrefix;
-            outReport.append(decoded.data(), decoded.size());
+            outReport.append(detail.data(), detail.size());
             outReport.push_back('\n');
         }
         return;
     }
 
     outReport += s_GpuDetectiveSectionHeader;
-    outReport.append(decoded.data(), decoded.size());
-    if(decoded.empty() || decoded.back() != '\n')
+    outReport.append(decoded->data(), decoded->size());
+    if(decoded->empty() || decoded->back() != '\n')
         outReport.push_back('\n');
 }
 

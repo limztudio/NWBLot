@@ -198,7 +198,7 @@ bool IsBetterAutomaticQueueAssignmentCandidate(const GpuQueueAssignmentScore& ca
         return true;
 
     if(compareTotalScore){
-        const auto total = [](const GpuQueueAssignmentScore& score){
+        const auto total = [](const GpuQueueAssignmentScore& score)noexcept{
             return static_cast<i64>(score.overlap) - static_cast<i64>(score.queueLoad) - static_cast<i64>(score.incomingCrossings) - static_cast<i64>(score.outgoingCrossings) - static_cast<i64>(score.ownershipTransfers);
         };
         const i64 candidateTotal = total(candidateScore);

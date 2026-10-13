@@ -90,7 +90,7 @@ template<typename TShader>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second){
+bool GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept{
     const Core::QueueSubmissionToken& a = first.backBuffer.availabilityCompletion;
     const Core::QueueSubmissionToken& b = second.backBuffer.availabilityCompletion;
     return

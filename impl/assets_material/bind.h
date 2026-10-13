@@ -14,8 +14,9 @@
 #include "asset.h"
 #include "cook_types.h"
 
-#include <core/alloc/scratch.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>
+
+#include <core/alloc/scratch.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +74,7 @@ struct MaterialBindAttribute{
     MaterialCookString name;
     MaterialCookVector<MaterialCookString> arguments;
 
-    explicit MaterialBindAttribute(MaterialCookArena& memoryArena)
+    explicit MaterialBindAttribute(MaterialCookArena& memoryArena)noexcept
         : name(memoryArena)
         , arguments(memoryArena)
     {}
@@ -84,14 +85,14 @@ struct MaterialBindField{
     MaterialCookString name;
     MaterialCookVector<MaterialBindAttribute> attributes;
 
-    explicit MaterialBindField(MaterialCookArena& memoryArena)
+    explicit MaterialBindField(MaterialCookArena& memoryArena)noexcept
         : type(memoryArena)
         , name(memoryArena)
         , attributes(memoryArena)
     {}
 
-    [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const;
-    [[nodiscard]] AStringView defaultArgument()const;
+    [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const noexcept;
+    [[nodiscard]] AStringView defaultArgument()const noexcept;
 };
 
 struct MaterialBindStruct{
@@ -99,21 +100,21 @@ struct MaterialBindStruct{
     MaterialCookVector<MaterialBindAttribute> attributes;
     MaterialCookVector<MaterialBindField> fields;
 
-    explicit MaterialBindStruct(MaterialCookArena& memoryArena)
+    explicit MaterialBindStruct(MaterialCookArena& memoryArena)noexcept
         : name(memoryArena)
         , attributes(memoryArena)
         , fields(memoryArena)
     {}
 
-    [[nodiscard]] const MaterialBindField* findField(AStringView fieldName)const;
-    [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const;
+    [[nodiscard]] const MaterialBindField* findField(AStringView fieldName)const noexcept;
+    [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const noexcept;
 };
 
 struct MaterialBindInstance{
     MaterialCookString type;
     MaterialCookString name;
 
-    explicit MaterialBindInstance(MaterialCookArena& memoryArena)
+    explicit MaterialBindInstance(MaterialCookArena& memoryArena)noexcept
         : type(memoryArena)
         , name(memoryArena)
     {}
@@ -125,22 +126,22 @@ struct MaterialBindEntry{
     MaterialCookVector<MaterialBindStruct> structs;
     MaterialCookVector<MaterialBindInstance> instances;
 
-    explicit MaterialBindEntry(MaterialCookArena& memoryArena)
+    explicit MaterialBindEntry(MaterialCookArena& memoryArena)noexcept
         : source(memoryArena)
         , virtualPath(memoryArena)
         , structs(memoryArena)
         , instances(memoryArena)
     {}
 
-    void reset(){
+    void reset()noexcept{
         source.clear();
         virtualPath.clear();
         structs.clear();
         instances.clear();
     }
 
-    [[nodiscard]] const MaterialBindStruct* findStruct(AStringView typeName)const;
-    [[nodiscard]] const MaterialBindInstance* findInstance(AStringView instanceName)const;
+    [[nodiscard]] const MaterialBindStruct* findStruct(AStringView typeName)const noexcept;
+    [[nodiscard]] const MaterialBindInstance* findInstance(AStringView instanceName)const noexcept;
 };
 
 
@@ -182,7 +183,7 @@ struct MaterialBindTypedLayout{
         , parameterLookup(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), memoryArena)
     {}
 
-    void reset();
+    void reset()noexcept;
 };
 
 struct MaterialBindTypedLayoutCache{
@@ -202,8 +203,8 @@ struct MaterialBindTypedLayoutCache{
 
 
 [[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<ACompactString> BuildMaterialBindParameterKey(AStringView instanceName, AStringView fieldName);
-[[nodiscard]] u64 ComputeMaterialBindParameterKeyHash(AStringView parameterKey);
+[[nodiscard]] Expected<ACompactString> BuildMaterialBindParameterKey(AStringView instanceName, AStringView fieldName)noexcept;
+[[nodiscard]] u64 ComputeMaterialBindParameterKeyHash(AStringView parameterKey)noexcept;
 [[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, Core::Alloc::ScratchArena& scratchArena);
 void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes);

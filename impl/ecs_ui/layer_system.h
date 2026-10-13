@@ -120,7 +120,7 @@ private:
     [[nodiscard]] bool collectRoots();
     void synchronizeInput();
     void routeInput(const Ui::InputEvent& event, bool* consumed = nullptr, bool* blockText = nullptr);
-    [[nodiscard]] bool routePointerInput(const Ui::PointerInput& input);
+    void routePointerInput(const Ui::PointerInput& input, bool* consumed = nullptr);
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
 

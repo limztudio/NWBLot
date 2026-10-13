@@ -4,9 +4,10 @@
 
 #include "command_line.h"
 
+#include <logger/client/module.h>
+
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
-#include <logger/client/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

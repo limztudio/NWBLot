@@ -5,6 +5,8 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -29,6 +31,11 @@ TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& co
     , m_context(context)
     , m_queue(queue)
 {
+    ScopeExit destroyUnpublishedPool([&]()noexcept{
+        if(m_ownsCmdPool && m_cmdPool)
+            m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
+    });
+
     if(m_ownsCmdPool){
         auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
         poolInfo.queueFamilyIndex = queueFamilyIndex;
@@ -36,8 +43,8 @@ TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& co
 
         const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
         if(createResult != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
             m_cmdPool = VK_NULL_HANDLE;
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
             return;
         }
     }
@@ -60,6 +67,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& co
         m_cmdPool = VK_NULL_HANDLE;
         m_ownsCmdPool = false;
     }
+    destroyUnpublishedPool.release();
 }
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){

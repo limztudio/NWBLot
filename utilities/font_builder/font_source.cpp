@@ -9,6 +9,7 @@
 
 #include <core/common/log.h>
 
+#include <global/diagnostics.h>
 #include <global/sha256.h>
 
 #include FT_MODULE_H
@@ -53,11 +54,21 @@ FontSource::FontSource(Core::Assets::AssetArena& arena)
     m_memory.realloc = &Reallocate;
 }
 
-FontSource::~FontSource(){
-    if(m_face && FT_Done_Face(m_face) != 0)
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to destroy FreeType face"));
-    if(m_library && FT_Done_Library(m_library) != 0)
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to destroy FreeType library"));
+FontSource::~FontSource()noexcept{
+    if(m_face){
+        const FT_Error result = FT_Done_Face(m_face);
+        if(result != 0){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: failed to destroy FreeType face, error {}", result);
+            CaptureDiagnosticEvent("font_builder_lifecycle", diagnostic.view(), __FILE__, __LINE__);
+        }
+    }
+    if(m_library){
+        const FT_Error result = FT_Done_Library(m_library);
+        if(result != 0){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: failed to destroy FreeType library, error {}", result);
+            CaptureDiagnosticEvent("font_builder_lifecycle", diagnostic.view(), __FILE__, __LINE__);
+        }
+    }
 }
 
 bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payload){

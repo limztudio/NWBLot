@@ -350,17 +350,7 @@ void RendererFramePipeline::resetGraphicsPrefixTaskState()noexcept{
     m_graphicsPrefixTask = {};
 }
 
-void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
-    m_deferredShadowVisibilityOpaqueTask = {};
-    m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
-    m_deferredShadowVisibilityOpaqueResolveTask = {};
-    m_deferredShadowVisibilityTransparentTraceTask = {};
-    m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
-    m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
-    m_deferredShadowVisibilityDiagnosticsTask = {};
-    m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
-    m_deferredShadowVisibilityAllLitClearTask = {};
-    m_deferredShadowVisibilityTask = {};
+void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
@@ -376,6 +366,20 @@ void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
     m_deferredCausticResolveFifthWaveletTask = {};
     m_deferredCausticResolveUpsampleTask = {};
     m_deferredCausticProducerDispatched = false;
+}
+
+void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
+    m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
+    m_deferredShadowVisibilityOpaqueResolveTask = {};
+    m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
+    m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
+    m_deferredShadowVisibilityDiagnosticsTask = {};
+    m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
+    m_deferredShadowVisibilityAllLitClearTask = {};
+    m_deferredShadowVisibilityTask = {};
+    resetDeferredCausticsTaskState();
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiInitializationLifecycleTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};

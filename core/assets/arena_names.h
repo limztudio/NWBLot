@@ -30,8 +30,6 @@ inline constexpr Name s_RegisterCodecsScratch("core/assets/register_auto_collect
 
 inline constexpr Name s_MetadataParserQueueArena("core/assets/asset_metadata_parser_queue");
 inline constexpr Name s_BunchExpanderQueueArena("core/assets/asset_bunch_expander_queue");
-inline constexpr Name s_DocumentMetadataParsersScratch("core/assets/document_metadata_parsers_scratch");
-inline constexpr Name s_ValueMetadataParsersScratch("core/assets/value_metadata_parsers_scratch");
 inline constexpr Name s_AssetBunchExpandersScratch("core/assets/asset_bunch_expanders_scratch");
 
 inline constexpr Name s_AutoRegistrationQueueArena("core/assets/cook_entry_auto_registration_queue");

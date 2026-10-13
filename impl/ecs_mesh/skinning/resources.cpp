@@ -7,11 +7,12 @@
 #include "resource_names.h"
 #include "skin_payload.h"
 
+#include <impl/ecs_mesh/runtime/buffer_upload.h>
+
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

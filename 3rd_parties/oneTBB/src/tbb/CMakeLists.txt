@@ -115,19 +115,11 @@ endif()
 
 # Prefer using target_link_options instead of target_link_libraries to specify link options because
 # target_link_libraries may incorrectly handle some options (on Windows, for example).
-if (COMMAND target_link_options)
-    target_link_options(tbb
-        PRIVATE
-        ${TBB_LIB_LINK_FLAGS}
-        ${TBB_COMMON_LINK_FLAGS}
-    )
-else()
-    target_link_libraries(tbb
-        PRIVATE
-        ${TBB_LIB_LINK_FLAGS}
-        ${TBB_COMMON_LINK_FLAGS}
-    )
-endif()
+target_link_options(tbb
+    PRIVATE
+    ${TBB_LIB_LINK_FLAGS}
+    ${TBB_COMMON_LINK_FLAGS}
+)
 
 target_link_libraries(tbb
     PRIVATE
@@ -168,25 +160,6 @@ endif()
 tbb_install_target(tbb)
 
 if (TBB_INSTALL)
-    if (MSVC)
-        # Create a copy of target linker file (tbb<ver>[_debug].lib) with legacy name (tbb[_debug].lib)
-        # to support previous user experience for linkage.
-        install(FILES
-                $<TARGET_LINKER_FILE:tbb>
-                DESTINATION ${CMAKE_INSTALL_LIBDIR}
-                CONFIGURATIONS RelWithDebInfo Release MinSizeRel
-                RENAME tbb.lib
-                COMPONENT devel
-        )
-
-        install(FILES
-                $<TARGET_LINKER_FILE:tbb>
-                DESTINATION ${CMAKE_INSTALL_LIBDIR}
-                CONFIGURATIONS Debug
-                RENAME tbb_debug.lib
-                COMPONENT devel
-        )
-    endif()
     if(TBB_LINUX_SEPARATE_DBG)
         install(FILES
                 $<TARGET_FILE:tbb>.dbg

@@ -1,3 +1,12 @@
+function(nwb_declare_vendor_headers target alias include_directory)
+    if(TARGET ${alias})
+        return()
+    endif()
+    add_library(${target} INTERFACE)
+    add_library(${alias} ALIAS ${target})
+    target_include_directories(${target} SYSTEM INTERFACE "${include_directory}")
+endfunction()
+
 function(nwb_disable_vendor_warnings target)
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(${target} PRIVATE /W0)
@@ -16,14 +25,7 @@ function(nwb_match_engine_runtime target)
     if(NOT TARGET ${target})
         return()
     endif()
-    if(WIN32)
-        set_property(TARGET ${target} PROPERTY
-            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:dbg>:Debug>DLL")
-    endif()
-    set_property(TARGET ${target} APPEND PROPERTY COMPILE_DEFINITIONS
-        $<$<CONFIG:dbg>:_DEBUG>
-        $<$<CONFIG:opt>:NDEBUG>
-        $<$<CONFIG:fin>:NDEBUG>)
+    nwb_apply_engine_runtime(${target})
 endfunction()
 
 add_subdirectory(CLI11)

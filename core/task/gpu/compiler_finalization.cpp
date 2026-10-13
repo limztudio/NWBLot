@@ -23,7 +23,7 @@ namespace __hidden_gpu_task_graph_finalization{
 
 
 struct TerminalPacketDependencyHasher{
-    usize operator()(const GpuPacketDependency& dependency)const{
+    usize operator()(const GpuPacketDependency& dependency)const noexcept{
         usize hash = Hasher<u64>{}(dependency.producer.generation);
         HashCombine(hash, dependency.producer.index);
         HashCombine(hash, dependency.consumer.generation);

@@ -8,6 +8,7 @@
 #include "scene_resources.h"
 
 #include <core/graphics/rhi/command.h>
+
 #include <global/simdmath.h>
 
 
@@ -30,7 +31,7 @@ public:
     void prepareScene(const RayTracingSceneContentStamp& scene)noexcept;
     void prepareLighting(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)noexcept;
     void accept()noexcept;
-    void discard()noexcept;
+    void discard()noexcept{ m_accepted = false; }
     [[nodiscard]] bool usable()const noexcept;
 
 private:

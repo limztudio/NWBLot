@@ -32,6 +32,19 @@ void GpuTaskGraph::RecordingAttemptScope::complete()noexcept{
 }
 
 
+void GpuTaskGraph::RecordingAttemptScope::activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial, const bool previousPlanWasActive)noexcept{
+    NWB_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
+    NWB_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
+    if(m_graph || preparationSerial == 0u)
+        TerminateInvariant();
+    m_graph = &graph;
+    m_compiledGraph = &compiledGraph;
+    m_recordingAttemptGeneration = recordingAttemptGeneration;
+    m_preparationSerial = preparationSerial;
+    m_previousPlanWasActive = previousPlanWasActive;
+}
+
+
 void GpuTaskGraph::RecordingAttemptScope::completeWithinLock()noexcept{
     m_graph = nullptr;
     m_compiledGraph = nullptr;
@@ -43,19 +56,6 @@ void GpuTaskGraph::RecordingAttemptScope::completeWithinLock()noexcept{
 
 bool GpuTaskGraph::RecordingAttemptScope::validPreparationWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial)const noexcept{
     return m_graph == &graph && m_compiledGraph == &compiledGraph && m_recordingAttemptGeneration == recordingAttemptGeneration && m_preparationSerial != 0u && m_preparationSerial == preparationSerial;
-}
-
-
-void GpuTaskGraph::RecordingAttemptScope::activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial, const bool previousPlanWasActive)noexcept{
-    NWB_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
-    NWB_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
-    if(m_graph || preparationSerial == 0u)
-        TerminateInvariant();
-    m_graph = &graph;
-    m_compiledGraph = &compiledGraph;
-    m_recordingAttemptGeneration = recordingAttemptGeneration;
-    m_preparationSerial = preparationSerial;
-    m_previousPlanWasActive = previousPlanWasActive;
 }
 
 
@@ -388,7 +388,7 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
     if(deviceGeneration == 0u)
         return false;
 
-    const auto validStateSource = [deviceGeneration](const CommandListResourceStateHandoff* const states){
+    const auto validStateSource = [deviceGeneration](const CommandListResourceStateHandoff* const states)noexcept{
         // Recording validates snapshot contents; valid snapshots must belong to the active native device lifetime.
         return !states || !states->valid() || states->validForDeviceGeneration(deviceGeneration);
     };

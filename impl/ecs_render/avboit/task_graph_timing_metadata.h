@@ -28,7 +28,7 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] inline Core::GpuTaskTimingMetadata AvboitComputeStageTimingMetadata(const AvboitFrameTargets& targets)noexcept{
     constexpr u32 s_ResolutionBucketPixels = 64u;
     constexpr u32 s_ResolutionHeightShiftBits = 16u;
-    const auto bucketDimension = [](const u32 dimension){
+    const auto bucketDimension = [](const u32 dimension)noexcept{
         constexpr u32 s_MaxPackedResolutionBucket = 0xffffu;
         const u32 bucket = dimension / s_ResolutionBucketPixels + (dimension % s_ResolutionBucketPixels != 0u ? 1u : 0u);
         return Min(bucket, s_MaxPackedResolutionBucket);

@@ -179,8 +179,13 @@ void Shutdown(){
     if(!state.active)
         return;
 
-    if(state.disable)
-        state.disable();
+    if(state.disable){
+        const GFSDK_Aftermath_Result result = state.disable();
+        if(!GFSDK_Aftermath_SUCCEED(result)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GFSDK_Aftermath_DisableGpuCrashDumps failed (0x{:x}); retaining the active runtime."), static_cast<u32>(result));
+            return;
+        }
+    }
     state.active = false;
     state.enable = nullptr;
     state.disable = nullptr;

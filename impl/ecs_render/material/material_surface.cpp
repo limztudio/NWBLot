@@ -8,14 +8,14 @@
 #include <impl/assets_material/asset.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
+#include <impl/assets_sampler/loader.h>
+#include <impl/assets_texture/loader.h>
 
 #include <core/assets/manager.h>
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
-#include <impl/assets_sampler/loader.h>
-#include <impl/assets_texture/loader.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

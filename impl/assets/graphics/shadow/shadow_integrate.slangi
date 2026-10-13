@@ -101,7 +101,7 @@ void nwbShadowInstanceIntegrateCrossing(inout NwbShadowInstanceOptics optics, in
 }
 
 // Pair one instance's merged boundary distances into inside intervals. Overflow or a trailing odd count beyond the first pair uses the first-to-last span; a singleton contributes no volume.
-float nwbShadowInstanceChordLength(const NwbShadowInstanceOptics optics){
+float nwbShadowInstanceChordLength(__constref NwbShadowInstanceOptics optics){
     float sortedT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
     const uint crossingCount = min(optics.crossingCount, (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER);
     for(uint j = 0u; j < crossingCount; ++j)
@@ -140,7 +140,7 @@ half nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3 
 // Finish one instance once.
 // Keep the existing endpoint reconstruction and half rounding, including sub-ULP chords.
 // Scene leaves have unique instance identities, so this fold needs neither an identity table nor a retained hit list.
-void nwbShadowAccumulateInstance(inout NwbShadowVisibilityAccumulator acc, const NwbShadowInstanceOptics optics){
+void nwbShadowAccumulateInstance(inout NwbShadowVisibilityAccumulator acc, __constref NwbShadowInstanceOptics optics){
     const float pairedChord = nwbShadowInstanceChordLength(optics);
     const float endpoint = optics.tMin + pairedChord;
     const float chordLength = max(endpoint - optics.tMin, 0.0);

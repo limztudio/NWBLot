@@ -19,16 +19,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh payload validation failure diagnostics.
-
-
 class MeshPayloadValidationDiagnostics final : NoCopy{
 public:
-    [[nodiscard]] static bool FailMeshPayloadValidation(const TStringView contextText, const TStringView meshPathText, const TStringView detailText);
-    [[nodiscard]] static bool FailMeshPayloadIndexedValidation(const TStringView contextText, const TStringView meshPathText, const TStringView itemText, const usize itemIndex, const TStringView detailText);
-    [[nodiscard]] static bool FailMeshletPayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const TStringView detailText);
-    [[nodiscard]] static bool FailMeshletAttributePayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const usize attributeIndex, const TStringView detailText);
-    [[nodiscard]] static bool FailMeshletPrimitivePayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const usize primitiveIndex, const TStringView detailText);
+    static void LogMeshPayloadValidation(const TStringView contextText, const TStringView meshPathText, const TStringView detailText);
+    static void LogMeshPayloadIndexedValidation(const TStringView contextText, const TStringView meshPathText, const TStringView itemText, const usize itemIndex, const TStringView detailText);
+    static void LogMeshletPayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const TStringView detailText);
+    static void LogMeshletAttributePayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const usize attributeIndex, const TStringView detailText);
+    static void LogMeshletPrimitivePayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const usize primitiveIndex, const TStringView detailText);
 
 
 public:

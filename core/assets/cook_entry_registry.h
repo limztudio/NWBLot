@@ -428,16 +428,6 @@ template<typename EntryT, typename AssetT, typename CodecT>
     return registry.registerType<EntryT, AssetT, CodecT>(AssetT::AssetTypeName(), assetKindText, parseDocument, parseValue, buildAsset, logBuildFailure);
 }
 
-template<typename EntryT, typename BuildFunction>
-[[nodiscard]] inline auto ForwardCookBuild(EntryT& entry, AssetArena& arena, BuildFunction buildAsset)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&> && IsNothrowDestructible_V<BuildFunction>){
-    return buildAsset(entry, arena);
-}
-
-template<typename EntryT, typename ScratchT, typename BuildFunction>
-[[nodiscard]] inline auto ForwardCookBuildWithScratch(EntryT& entry, AssetArena& arena, ScratchT& scratch, BuildFunction buildAsset)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&, ScratchT&> && IsNothrowDestructible_V<BuildFunction>){
-    return buildAsset(entry, arena, scratch);
-}
-
 [[nodiscard]] bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry);
 
 

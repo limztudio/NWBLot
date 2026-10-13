@@ -9,6 +9,7 @@
 #include "texture_resource_detail.h"
 
 #include <core/common/log.h>
+
 #include <global/containers.h>
 
 
@@ -121,7 +122,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         }
         orderedBufferStates.push_back(&state);
     }
-    Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto* lhs, const auto* rhs){
+    Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto* lhs, const auto* rhs)noexcept{
         return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
     });
     for(usize index = 1u; index < orderedBufferStates.size(); ++index){
@@ -396,14 +397,14 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         GpuPhysicalQueueId owner;
         GpuPhysicalQueueId releaseDestination;
     };
-    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key) -> QueueOwnership{
+    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key)noexcept -> QueueOwnership{
         if(key.texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT)
             return {};
 
         const auto release = m_textureOwnershipReleaseDestinations.find(key);
         return QueueOwnership{ m_creationDesc.physicalQueue, release != m_textureOwnershipReleaseDestinations.end() ? release.value() : GpuPhysicalQueueId{} };
     };
-    const auto getBufferOwnership = [&](Buffer* buffer) -> GpuPhysicalQueueId{
+    const auto getBufferOwnership = [&](Buffer* buffer)noexcept -> GpuPhysicalQueueId{
         return buffer && buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT ? m_creationDesc.physicalQueue : GpuPhysicalQueueId{};
     };
 

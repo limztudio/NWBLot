@@ -80,16 +80,16 @@ template<typename T>
 [[nodiscard]] inline constexpr bool CanRepresentU64(const u64 value)noexcept{
     static_assert(IsArithmetic_V<T>, "CanRepresentU64 requires arithmetic target type");
 
-    constexpr bool signedType = static_cast<T>(-1) < static_cast<T>(0);
-    if constexpr(signedType){
-        constexpr usize bitCount = sizeof(T) * s_BitsPerByte;
-        constexpr u64 maxValue = bitCount >= s_BitsPerU64 ? (Limit<u64>::s_Max >> 1u) : ((u64(1) << (bitCount - 1u)) - 1u);
-        return value <= maxValue;
+    constexpr bool s_SignedType = static_cast<T>(-1) < static_cast<T>(0);
+    if constexpr(s_SignedType){
+        constexpr usize s_BitCount = sizeof(T) * s_BitsPerByte;
+        constexpr u64 s_MaxValue = s_BitCount >= s_BitsPerU64 ? (Limit<u64>::s_Max >> 1u) : ((u64(1) << (s_BitCount - 1u)) - 1u);
+        return value <= s_MaxValue;
     }
     else{
-        constexpr usize bitCount = sizeof(T) * s_BitsPerByte;
-        constexpr u64 maxValue = bitCount >= s_BitsPerU64 ? Limit<u64>::s_Max : ((u64(1) << bitCount) - 1u);
-        return value <= maxValue;
+        constexpr usize s_BitCount = sizeof(T) * s_BitsPerByte;
+        constexpr u64 s_MaxValue = s_BitCount >= s_BitsPerU64 ? Limit<u64>::s_Max : ((u64(1) << s_BitCount) - 1u);
+        return value <= s_MaxValue;
     }
 }
 

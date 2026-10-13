@@ -212,7 +212,7 @@ struct RenderPassAttachmentOperations{
 }
 
 [[nodiscard]] constexpr bool IsStencilReadOnlyCompatible(const DepthStencilState& state)noexcept{
-    const auto keepsStencil = [](const DepthStencilState::StencilOpDesc& stencilState)constexpr{
+    const auto keepsStencil = [](const DepthStencilState::StencilOpDesc& stencilState)constexpr noexcept{
         return stencilState.failOp == StencilOp::Keep && stencilState.depthFailOp == StencilOp::Keep && stencilState.passOp == StencilOp::Keep;
     };
     return !state.stencilEnable || state.stencilWriteMask == 0u || (keepsStencil(state.frontFaceStencil) && keepsStencil(state.backFaceStencil));

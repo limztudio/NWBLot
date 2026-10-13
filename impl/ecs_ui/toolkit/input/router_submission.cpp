@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::currentCommandFocus(const CommandSource& source)const{
+bool InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
     const auto& owner = source.focusOwner;
     const HitTarget* focused = findTarget(owner.target, owner.declarationGeneration);
     return
@@ -23,7 +23,7 @@ bool InputRouter::currentCommandFocus(const CommandSource& source)const{
     ;
 }
 
-bool InputRouter::canSubmitCommand(const InputEvent& event)const{
+bool InputRouter::canSubmitCommand(const InputEvent& event)const noexcept{
     if(event.type != InputEventType::CommandUp || !event.edit || (event.command != InputCommand::Accept && event.command != InputCommand::Submit))
         return false;
     const CommandSource* source = findCommandSource(event.source);
@@ -40,7 +40,7 @@ void InputRouter::cancelSubmitCommands(const WidgetId id)noexcept{
     }
 }
 
-bool InputRouter::pressed(const WidgetId id)const{
+bool InputRouter::pressed(const WidgetId id)const noexcept{
     if(m_primaryDown && m_pointerSubmitArmed && m_capture == id && hitTest(m_interactionPosition) == id)
         return true;
     for(const CommandSource& source : m_commandSources){
@@ -87,7 +87,7 @@ void InputRouter::retireCommandFocus()noexcept{
     }
 }
 
-void InputRouter::reconcileCommandPresses(){
+void InputRouter::reconcileCommandPresses()noexcept{
     for(CommandSource& source : m_commandSources){
         if(!currentCommandFocus(source)){
             source.submitArmed = false;

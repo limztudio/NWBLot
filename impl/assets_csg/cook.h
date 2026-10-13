@@ -48,7 +48,7 @@ struct CsgShapeCookEntry{
     CookString evalInclude;
     CookString moduleInclude;
 
-    explicit CsgShapeCookEntry(CookArena& arena)
+    explicit CsgShapeCookEntry(CookArena& arena)noexcept
         : evalInclude(arena)
         , moduleInclude(arena)
     {}
@@ -62,7 +62,7 @@ using CsgShapeCookEntryVector = CookVector<CsgShapeCookEntry>;
 
 [[nodiscard]] Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(CookArena& cookArena, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
 
-[[nodiscard]] bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries);
+[[nodiscard]] bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries, ScratchArena& scratchArena);
 
 [[nodiscard]] Expected<Path> EmitCsgShapeModuleIncludes(const Path& cacheDirectory, AStringView configurationSafeName, const CsgShapeCookEntryVector& csgShapeEntries, ScratchArena& scratchArena);
 

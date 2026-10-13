@@ -19,8 +19,8 @@ Initializerable::Initializerable(){
 }
 
 Initializer& Initializer::Instance(){
-    static Initializer inst;
-    return inst;
+    static Initializer s_Instance;
+    return s_Instance;
 }
 
 

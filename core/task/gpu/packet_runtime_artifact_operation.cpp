@@ -8,6 +8,7 @@
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/gpu_timing.h>
+
 #include <global/termination.h>
 
 
@@ -21,6 +22,9 @@ NWB_CORE_BEGIN
 
 
 thread_local GpuRecordedGraph::ArtifactOperation* GpuRecordedGraph::ArtifactOperation::s_ActiveOperation = nullptr;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool GpuRecordedGraph::ArtifactOperation::ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept{

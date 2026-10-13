@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/unit/ui/native_input.h>
+#include "widget_fixture.h"
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
@@ -42,15 +42,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
-        Core::Assets::AssetBytes bytes(m_arena);
-        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-        ASSERT_TRUE(bytesResult);
-        bytes = Move(*bytesResult);
-        m_font.setFontBytes(Move(bytes));
-        ASSERT_TRUE(m_font.validatePayload());
-        const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
-        ASSERT_TRUE(m_text.setFonts(&source, 1u));
+        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
         configureSkin();
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);

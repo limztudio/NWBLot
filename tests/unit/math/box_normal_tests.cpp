@@ -2,12 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/floating_point_environment.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
 
 #include <gtest/gtest.h>
-
-#include <cfenv>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,10 +30,10 @@ NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL EvaluateSingleBoxNormal(SIMDVectorSi
 TEST(MathBoxNormal, FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes){
 #pragma STDC FENV_ACCESS ON
     using namespace __hidden_box_normal_tests;
-    fenv_t originalEnvironment{};
-    ASSERT_EQ(feholdexcept(&originalEnvironment), 0);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
     ScopeExit restoreEnvironment([&]()noexcept{
-        if(fesetenv(&originalEnvironment) != 0)
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
             __builtin_trap();
     });
 
@@ -45,10 +44,10 @@ TEST(MathBoxNormal, FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes){
     const SIMDVectorSingle fallback = VectorSetInt(inputBits[8], inputBits[9], inputBits[10], inputBits[11]);
     const f32 threshold = BitCast<f32>(static_cast<u32>(inputBits[12]));
     for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-        ASSERT_EQ(fesetround(roundingMode), 0);
-        ASSERT_EQ(feclearexcept(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
         const SIMDVectorSingle normal = EvaluateSingleBoxNormal(position, extents, fallback, threshold);
-        const i32 flags = fetestexcept(FE_ALL_EXCEPT);
+        const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
         EXPECT_EQ(flags & FE_OVERFLOW, 0) << roundingMode;
         EXPECT_TRUE(VectorIsFinite(normal, VectorComponentMask::s_XYZ)) << roundingMode;
         EXPECT_GT(VectorGetZ(normal), 0.99999f) << roundingMode;

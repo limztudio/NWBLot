@@ -32,7 +32,7 @@ struct FontAtlasCookEntry{
     Name virtualPath = s_NameNone;
 
 
-    explicit FontAtlasCookEntry(Core::Assets::AssetArena& memoryArena)
+    explicit FontAtlasCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
         : arena(memoryArena)
         , payload(memoryArena)
     {}
@@ -44,7 +44,7 @@ struct FontAtlasCookEntry{
 
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

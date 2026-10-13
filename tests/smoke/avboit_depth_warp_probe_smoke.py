@@ -21,7 +21,7 @@ SHUTDOWN = "AvboitDepthWarpProbe: shutdown completed=1"
 
 
 def validate_runtime_log(text):
-    validate_expected_log_text(text, ("Loader: GPU debug validation enabled", "Vulkan GPU debug: instance setup", "validation layer enabled: yes", "debug utils extension enabled: yes", "GraphicsRuntime: created device '", "Loader: project startup complete",
+    validate_expected_log_text(text, ("Loader: GPU debug validation enabled", "GraphicsRuntime: created device '", "Loader: project startup complete",
             SHUTDOWN,), STRICT_LOG_FAILURE_MESSAGES,)
     manifests = list(MANIFEST.finditer(text))
     completions = list(COMPLETION.finditer(text))

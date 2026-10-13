@@ -227,7 +227,7 @@ template<typename StoreTexelT>
     }
 
     const bool srgb = textureAsset.colorSpace() == TextureColorSpace::Srgb;
-    if(!VisitDecodedUastcTexels(mip, source->bytes.data(), srgb, [outUploadBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex){
+    if(!VisitDecodedUastcTexels(mip, source->bytes.data(), srgb, [outUploadBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         const usize destinationByteOffset = destinationTexelIndex * s_RgbaBytesPerTexel;
         outUploadBytes[destinationByteOffset + 0u] = sourceTexel.r;
         outUploadBytes[destinationByteOffset + 1u] = sourceTexel.g;
@@ -298,7 +298,7 @@ template<typename StoreTexelT>
     return true;
 }
 
-static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex, const u8 alphaUnorm8){
+static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex, const u8 alphaUnorm8)noexcept{
     const basist::half_float alphaHalf = basist::float_to_half(static_cast<f32>(alphaUnorm8) / static_cast<f32>(Limit<u8>::s_Max));
     u8* const destination = outRgba16FloatBytes + texelIndex * s_Rgba16FloatBytesPerTexel + s_Rgba16FloatAlphaByteOffset;
     NWB_MEMCPY(destination, sizeof(alphaHalf), &alphaHalf, sizeof(alphaHalf));
@@ -327,7 +327,7 @@ static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex,
         return false;
     }
 
-    if(!VisitDecodedUastcTexels(mip, alphaSource->data(), false, [outRgba16FloatBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex){
+    if(!VisitDecodedUastcTexels(mip, alphaSource->data(), false, [outRgba16FloatBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         // The companion stream is a grayscale LDR mask: (a, a, a, 255).
         StoreHdrAlpha(outRgba16FloatBytes, destinationTexelIndex, sourceTexel.r);
     })){

@@ -97,7 +97,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     }
 }
 
-bool InputRouter::moveFocus(const bool reverse){
+bool InputRouter::moveFocus(const bool reverse)noexcept{
     if(m_targets.empty())
         return false;
     usize current = m_targets.size();

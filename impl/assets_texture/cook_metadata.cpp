@@ -12,6 +12,7 @@
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+
 #include <global/filesystem.h>
 #include <global/text_utils.h>
 
@@ -70,7 +71,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
             return MakeUnexpected(Failure{});
         }
     }
-    if(!::NWB::Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, [isHdr, dimension = entry.dimension, alphaMode = entry.alphaMode](const AStringView fieldName){
+    if(!::NWB::Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, [isHdr, dimension = entry.dimension, alphaMode = entry.alphaMode](const AStringView fieldName)noexcept{
             return
                 fieldName == s_FormatField
                 || fieldName == s_DimensionField

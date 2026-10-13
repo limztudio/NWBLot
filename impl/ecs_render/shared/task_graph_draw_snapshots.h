@@ -34,6 +34,38 @@ inline void ReplaceSnapshotVector(DestinationT& destination, const SourceT& sour
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<typename Snapshot>
+inline void CaptureMaterialPassSnapshot(Snapshot& snapshot, const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
+    ReplaceSnapshotVector(snapshot.regularMeshDrawItems, drawItems.regular.meshDrawItems);
+    ReplaceSnapshotVector(snapshot.regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
+    ReplaceSnapshotVector(snapshot.regularComputeDrawItems, drawItems.regular.computeDrawItems);
+    ReplaceSnapshotVector(snapshot.csgMeshDrawItems, drawItems.csg.meshDrawItems);
+    ReplaceSnapshotVector(snapshot.csgIndexedDrawItems, drawItems.csg.indexedDrawItems);
+    ReplaceSnapshotVector(snapshot.csgComputeDrawItems, drawItems.csg.computeDrawItems);
+    ReplaceSnapshotVector(snapshot.csgReceiverRanges, csgFrameData.receiverRanges);
+    ReplaceSnapshotVector(snapshot.csgCutters, csgFrameData.cutters);
+    snapshot.csgWorkRegion = csgFrameData.workRegion;
+    snapshot.instanceCount = inInstanceCount;
+    snapshot.materialTypedByteCount = inMaterialTypedByteCount;
+}
+
+
+template<typename Snapshot>
+inline void MaterializeMaterialPassSnapshot(const Snapshot& snapshot, MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData){
+    ReplaceSnapshotVector(outDrawItems.regular.meshDrawItems, snapshot.regularMeshDrawItems);
+    ReplaceSnapshotVector(outDrawItems.regular.indexedDrawItems, snapshot.regularIndexedDrawItems);
+    ReplaceSnapshotVector(outDrawItems.regular.computeDrawItems, snapshot.regularComputeDrawItems);
+    ReplaceSnapshotVector(outDrawItems.csg.meshDrawItems, snapshot.csgMeshDrawItems);
+    ReplaceSnapshotVector(outDrawItems.csg.indexedDrawItems, snapshot.csgIndexedDrawItems);
+    ReplaceSnapshotVector(outDrawItems.csg.computeDrawItems, snapshot.csgComputeDrawItems);
+    ReplaceSnapshotVector(outCsgFrameData.receiverRanges, snapshot.csgReceiverRanges);
+    ReplaceSnapshotVector(outCsgFrameData.cutters, snapshot.csgCutters);
+    outCsgFrameData.workRegion = snapshot.csgWorkRegion;
+}
+
+
+
 struct OpaqueMaterialPassGraphSnapshot{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
@@ -70,36 +102,18 @@ struct OpaqueMaterialPassGraphSnapshot{
     {}
 
     void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
-        ReplaceSnapshotVector(regularMeshDrawItems, drawItems.regular.meshDrawItems);
-        ReplaceSnapshotVector(regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
-        ReplaceSnapshotVector(regularComputeDrawItems, drawItems.regular.computeDrawItems);
-        ReplaceSnapshotVector(csgMeshDrawItems, drawItems.csg.meshDrawItems);
-        ReplaceSnapshotVector(csgIndexedDrawItems, drawItems.csg.indexedDrawItems);
-        ReplaceSnapshotVector(csgComputeDrawItems, drawItems.csg.computeDrawItems);
+        CaptureMaterialPassSnapshot(*this, drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
         ReplaceSnapshotVector(csgReceiverSurfaceMeshDrawItems, drawItems.csgReceiverSurface.meshDrawItems);
         ReplaceSnapshotVector(csgReceiverSurfaceIndexedDrawItems, drawItems.csgReceiverSurface.indexedDrawItems);
         ReplaceSnapshotVector(csgReceiverSurfaceComputeDrawItems, drawItems.csgReceiverSurface.computeDrawItems);
-        ReplaceSnapshotVector(csgReceiverRanges, csgFrameData.receiverRanges);
-        ReplaceSnapshotVector(csgCutters, csgFrameData.cutters);
-        csgWorkRegion = csgFrameData.workRegion;
-        instanceCount = inInstanceCount;
-        materialTypedByteCount = inMaterialTypedByteCount;
         captured = true;
     }
 
     void materialize(MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        ReplaceSnapshotVector(outDrawItems.regular.meshDrawItems, regularMeshDrawItems);
-        ReplaceSnapshotVector(outDrawItems.regular.indexedDrawItems, regularIndexedDrawItems);
-        ReplaceSnapshotVector(outDrawItems.regular.computeDrawItems, regularComputeDrawItems);
-        ReplaceSnapshotVector(outDrawItems.csg.meshDrawItems, csgMeshDrawItems);
-        ReplaceSnapshotVector(outDrawItems.csg.indexedDrawItems, csgIndexedDrawItems);
-        ReplaceSnapshotVector(outDrawItems.csg.computeDrawItems, csgComputeDrawItems);
+        MaterializeMaterialPassSnapshot(*this, outDrawItems, outCsgFrameData);
         ReplaceSnapshotVector(outDrawItems.csgReceiverSurface.meshDrawItems, csgReceiverSurfaceMeshDrawItems);
         ReplaceSnapshotVector(outDrawItems.csgReceiverSurface.indexedDrawItems, csgReceiverSurfaceIndexedDrawItems);
         ReplaceSnapshotVector(outDrawItems.csgReceiverSurface.computeDrawItems, csgReceiverSurfaceComputeDrawItems);
-        ReplaceSnapshotVector(outCsgFrameData.receiverRanges, csgReceiverRanges);
-        ReplaceSnapshotVector(outCsgFrameData.cutters, csgCutters);
-        outCsgFrameData.workRegion = csgWorkRegion;
     }
 };
 
@@ -184,30 +198,12 @@ struct TransparentMaterialPassGraphSnapshot{
     {}
 
     void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
-        ReplaceSnapshotVector(regularMeshDrawItems, drawItems.regular.meshDrawItems);
-        ReplaceSnapshotVector(regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
-        ReplaceSnapshotVector(regularComputeDrawItems, drawItems.regular.computeDrawItems);
-        ReplaceSnapshotVector(csgMeshDrawItems, drawItems.csg.meshDrawItems);
-        ReplaceSnapshotVector(csgIndexedDrawItems, drawItems.csg.indexedDrawItems);
-        ReplaceSnapshotVector(csgComputeDrawItems, drawItems.csg.computeDrawItems);
-        ReplaceSnapshotVector(csgReceiverRanges, csgFrameData.receiverRanges);
-        ReplaceSnapshotVector(csgCutters, csgFrameData.cutters);
-        csgWorkRegion = csgFrameData.workRegion;
-        instanceCount = inInstanceCount;
-        materialTypedByteCount = inMaterialTypedByteCount;
+        CaptureMaterialPassSnapshot(*this, drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
         captured = true;
     }
 
     void materialize(MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        ReplaceSnapshotVector(outDrawItems.regular.meshDrawItems, regularMeshDrawItems);
-        ReplaceSnapshotVector(outDrawItems.regular.indexedDrawItems, regularIndexedDrawItems);
-        ReplaceSnapshotVector(outDrawItems.regular.computeDrawItems, regularComputeDrawItems);
-        ReplaceSnapshotVector(outDrawItems.csg.meshDrawItems, csgMeshDrawItems);
-        ReplaceSnapshotVector(outDrawItems.csg.indexedDrawItems, csgIndexedDrawItems);
-        ReplaceSnapshotVector(outDrawItems.csg.computeDrawItems, csgComputeDrawItems);
-        ReplaceSnapshotVector(outCsgFrameData.receiverRanges, csgReceiverRanges);
-        ReplaceSnapshotVector(outCsgFrameData.cutters, csgCutters);
-        outCsgFrameData.workRegion = csgWorkRegion;
+        MaterializeMaterialPassSnapshot(*this, outDrawItems, outCsgFrameData);
     }
 };
 

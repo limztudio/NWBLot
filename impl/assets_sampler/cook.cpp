@@ -15,6 +15,7 @@
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+
 #include <global/binary.h>
 
 
@@ -179,7 +180,7 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, const
 }
 
 Expected<Sampler> BuildSamplerAsset(const SamplerCookEntry& samplerEntry, Core::Assets::AssetArena& arena){
-    if(!samplerEntry.arena || !samplerEntry.virtualPath){
+    if(!samplerEntry.virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler cook: sampler entry is invalid"));
         return MakeUnexpected(Failure{});
     }

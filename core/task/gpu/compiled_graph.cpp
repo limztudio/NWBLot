@@ -163,7 +163,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
 {}
 
 
-GpuCompiledGraph::~GpuCompiledGraph(){
+GpuCompiledGraph::~GpuCompiledGraph()noexcept{
     u32 expectedPlanAccessState = 0u;
     if(!m_planAccessState.compare_exchange_strong(expectedPlanAccessState, s_PlanAccessWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire)){
         NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires all plan readers to resolve first");
@@ -178,7 +178,7 @@ GpuCompiledGraph::~GpuCompiledGraph(){
 }
 
 
-bool GpuCompiledGraph::tryReset(){
+bool GpuCompiledGraph::tryReset()noexcept{
     {
         NothrowScopedLock lock(m_attemptBindingMutex);
         if(m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting)

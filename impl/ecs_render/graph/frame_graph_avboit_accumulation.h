@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include "frame_graph_avboit_upload_result.h"
 #include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
@@ -56,22 +57,7 @@ struct FrameGraphAvboitAccumulationUploadInputs{
     bool intervalOutputsGraphOwned = false;
 };
 
-struct FrameGraphAvboitAccumulationUploadResult{
-    Core::GpuTaskId uploadTask;
-    Core::GpuGraphResourceSetId materialGeometrySet;
-    Core::GpuGraphResourceSetId materialSampledTextureSet;
-    Core::GpuTaskId reusedGeometryProducer;
-    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedComputeEmulationPlan;
-    usize sharedComputeEmulationInstanceCount = 0u;
-    usize sharedComputeEmulationMaterialTypedByteCount = 0u;
-    bool streamsUploaded = false;
-    bool csgStreamsUploaded = false;
-    bool regularComputeEmulationPlanCaptured = false;
-    bool producesReusableGeometry = false;
-    bool csgComputeEmulationPlanCaptured = false;
-    bool sharedComputeEmulationPlanCaptured = false;
-    bool declared = false;
-};
+using FrameGraphAvboitAccumulationUploadResult = FrameGraphAvboitMaterialUploadResult;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

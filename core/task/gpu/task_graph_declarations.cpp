@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GpuTaskGraphDetail{
+namespace __hidden_gpu_task_graph_declarations{
 
 inline constexpr Name s_DeclarationScratchArena("core/task/gpu/declaration_scratch");
 
@@ -44,7 +44,7 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
 
 GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     : m_arena(arena)
-    , m_declarationScratch(GpuTaskGraphDetail::s_DeclarationScratchArena)
+    , m_declarationScratch(__hidden_gpu_task_graph_declarations::s_DeclarationScratchArena)
     , m_tasks(arena)
     , m_dependencies(arena)
     , m_externalDependencies(arena)

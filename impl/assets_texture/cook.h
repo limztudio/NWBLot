@@ -42,7 +42,7 @@ struct TextureCookEntry{
     Texture::MipLevelVector mipLevels;
     Core::Assets::AssetBytes payloadBytes;
 
-    explicit TextureCookEntry(Core::Assets::AssetArena& arena)
+    explicit TextureCookEntry(Core::Assets::AssetArena& arena)noexcept
         : mipLevels(arena)
         , payloadBytes(arena)
     {}

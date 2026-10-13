@@ -27,8 +27,6 @@ namespace VulkanDetail{
 constexpr usize s_MaxGraphicsPipelineShaderStageCount = 5u;
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -68,7 +66,9 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
         return nullptr;
     }
 
-    auto* fb = NewArenaObject<Framebuffer>(m_context.objectArena, m_context);
+    FramebufferHandle fb(NewArenaObject<Framebuffer>(m_context.objectArena, m_context), FramebufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!fb)
+        return nullptr;
     fb->m_desc = desc;
     fb->m_framebufferInfo = FramebufferInfoEx(desc);
 
@@ -88,7 +88,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     if(desc.shadingRateAttachment.texture)
         fb->m_resources.emplace_back(desc.shadingRateAttachment.texture, TextureHandle::deleter_type(&m_context.objectArena));
 
-    return FramebufferHandle(fb, FramebufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return fb;
 }
 
 
@@ -151,7 +151,9 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_GraphicsPipelineArena, s_GraphicsPipelineScratchArenaBytes);
 
-    auto* pso = NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context);
+    GraphicsPipelineHandle pso(NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context), GraphicsPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!pso)
+        return nullptr;
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
@@ -161,28 +163,23 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     if(hasTessellationControlShader != hasTessellationEvaluationShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation control and evaluation shaders must both be provided"));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(usesTessellation){
         if(!hasTessellationControlShader || !hasTessellationEvaluationShader){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch topology requires tessellation shaders"));
-            DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;
         }
         if(desc.primType != PrimitiveType::PatchList){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation shaders require patch-list topology"));
-            DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;
         }
         if(desc.patchControlPoints == 0){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation patch control point count is zero"));
-            DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;
         }
         if(desc.patchControlPoints > m_context.physicalDeviceProperties.limits.maxTessellationPatchSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}"), desc.patchControlPoints, m_context.physicalDeviceProperties.limits.maxTessellationPatchSize);
-            DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;
         }
     }
@@ -205,11 +202,10 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     if(shaderStages.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
-        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    if(!configurePipelineBindingsOrDestroy(desc.bindingLayouts, NWB_TEXT("graphics pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("graphics pipeline"), *pso, scratchArena))
         return nullptr;
 
     auto vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
@@ -243,14 +239,13 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
-    const auto fixedState = buildGraphicsPipelineFixedStateOrDestroy(
+    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(
         fbinfo,
         desc.renderState,
         VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
         dynamicStates,
         static_cast<u32>(LengthOf(dynamicStates)),
         NWB_TEXT("graphics pipeline"),
-        *pso,
         scratchArena
     );
     if(!fixedState)
@@ -267,10 +262,10 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    if(!createPipelineOrDestroy(NWB_TEXT("graphics pipeline"), *pso, pipelineInfo))
+    if(!createPipeline(NWB_TEXT("graphics pipeline"), *pso, pipelineInfo))
         return nullptr;
 
-    return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return pso;
 }
 
 

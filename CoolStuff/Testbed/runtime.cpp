@@ -74,13 +74,13 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
+[[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive)noexcept{
     const SIMDVectorSingle positiveLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(positive ? 0xFFFFFFFFu : 0u));
     const SIMDVectorSingle negativeLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(negative ? 0xFFFFFFFFu : 0u));
     return VectorGetX(VectorSubtract(positiveLane, negativeLane));
 }
 
-[[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians){
+[[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians)noexcept{
     return VectorGetX(VectorClamp(VectorReplicate(pitchRadians), VectorReplicate(-pitchLimitRadians), VectorReplicate(pitchLimitRadians)));
 }
 
@@ -103,7 +103,7 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
     return ui->wantsPointer();
 }
 
-static void ResolveFlyCameraAnglesFromRotation(const SIMDVectorSingle rotation, f32& outYawRadians, f32& outPitchRadians){
+static void ResolveFlyCameraAnglesFromRotation(const SIMDVectorSingle rotation, f32& outYawRadians, f32& outPitchRadians)noexcept{
     const SIMDVectorSingle localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     const SIMDVectorSingle forwardVector = Vector3NormalizeOr(Vector3Rotate(localForward, rotation), localForward, s_CameraMoveEpsilon);
     const SIMDVectorSingle clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
@@ -126,7 +126,7 @@ static void ResolveFlyCameraInput(
     const f32 delta,
     SIMDVectorSingle& outRotation,
     SIMDVectorSingle& outPosition
-){
+)noexcept{
     if(!IsFinite(yawRadians))
         yawRadians = 0.0f;
     if(!IsFinite(pitchRadians))
@@ -134,7 +134,7 @@ static void ResolveFlyCameraInput(
 
     const f32 safeMouseDeltaX = IsFinite(mouseDeltaX) ? mouseDeltaX : 0.0f;
     const f32 safeMouseDeltaY = IsFinite(mouseDeltaY) ? mouseDeltaY : 0.0f;
-    const SIMDVectorSingle sanitizedAxes = VectorSaturate(VectorSet(IsFinite(rightAxis) ? rightAxis : 0.0f, IsFinite(forwardAxis) ? forwardAxis : 0.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle sanitizedAxes = VectorClamp(VectorSet(IsFinite(rightAxis) ? rightAxis : 0.0f, IsFinite(forwardAxis) ? forwardAxis : 0.0f, 0.0f, 0.0f), s_SIMDNegativeOne, s_SIMDOne);
     const f32 safeRightAxis = VectorGetX(sanitizedAxes);
     const f32 safeForwardAxis = VectorGetY(sanitizedAxes);
     const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
@@ -323,7 +323,7 @@ void Project::unregisterInputHandler(){
     m_inputRegistered = false;
 }
 
-void Project::clearInputState(){
+void Project::clearInputState()noexcept{
     m_keyPressed.fill(false);
     m_pendingMouseDeltaX = 0.0f;
     m_pendingMouseDeltaY = 0.0f;
@@ -333,7 +333,7 @@ void Project::clearInputState(){
     m_mousePositionValid = false;
 }
 
-void Project::setKeyState(const i32 key, const bool pressed){
+void Project::setKeyState(const i32 key, const bool pressed)noexcept{
     const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
     if(!keyIndex)
         return;
@@ -341,7 +341,7 @@ void Project::setKeyState(const i32 key, const bool pressed){
     m_keyPressed[*keyIndex] = pressed;
 }
 
-bool Project::keyPressed(const i32 key)const{
+bool Project::keyPressed(const i32 key)const noexcept{
     const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
     if(!keyIndex)
         return false;

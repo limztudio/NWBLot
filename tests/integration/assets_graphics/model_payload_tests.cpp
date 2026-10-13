@@ -6,11 +6,11 @@
 #include <impl/assets_model/binary_payload.h>
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
 
 #include <global/arena_memory.h>
 #include <global/binary.h>
 
-#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -239,15 +239,16 @@ TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloads
     constexpr u32 s_PreviousModelMagic = 0x4D444C31u;
     NWB_MEMCPY(malformed.data(), malformed.size(), &s_PreviousModelMagic, sizeof(s_PreviousModelMagic));
     EXPECT_FALSE(loaded.loadBinary(malformed));
-    EXPECT_TRUE(loaded.skeletonObjects().empty());
-    EXPECT_TRUE(loaded.staticMeshObjects().empty());
-    EXPECT_TRUE(loaded.skinnedMeshObjects().empty());
+    Core::Assets::AssetBytes retained(inputs.arena);
+    ASSERT_TRUE(codec.serialize(loaded, retained));
+    EXPECT_EQ(retained, binary);
     ASSERT_TRUE(loaded.loadBinary(binary));
 
     malformed = binary;
     malformed.pop_back();
     EXPECT_FALSE(loaded.loadBinary(malformed));
-    EXPECT_TRUE(loaded.skinnedMeshObjects().empty());
+    ASSERT_TRUE(codec.serialize(loaded, retained));
+    EXPECT_EQ(retained, binary);
     ASSERT_TRUE(loaded.loadBinary(binary));
     ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
     EXPECT_EQ(loaded.skinnedMeshObjects().front().skin.name(), inputs.skinnedMeshObjects.front().skin.name());

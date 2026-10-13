@@ -60,7 +60,7 @@ namespace __hidden_memory_report{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Telemetry::PerfMemoryPayload& payload){
+void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Telemetry::PerfMemoryPayload& payload)noexcept{
     const usize sourceIndex = static_cast<usize>(payload.snapshot.source);
     if(sourceIndex >= s_TelemetryMemorySourceCount)
         return;

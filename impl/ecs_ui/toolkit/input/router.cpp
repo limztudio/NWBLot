@@ -5,6 +5,7 @@
 #include "router.h"
 
 #include "../rect_math.h"
+
 #include <global/simplemath.h>
 #include <global/termination.h>
 
@@ -156,18 +157,18 @@ bool InputRouter::commitTargets(const HitTarget* targets, const usize count, con
     if(!validControlTargets() || !validCommandOwners())
         return false;
     for(const auto& popup : m_stagedPopups){
-        bool owner = false;
-        for(const auto& target : m_stagedTargets){
-            owner |= target.id == popup.scope.token.widget && target.declarationGeneration == popup.scope.token.declarationGeneration && target.popup == popup.scope.token && target.enabled;
-        }
-        if(!owner)
+        const auto owner = LowerBound(m_stagedLookup.begin(), m_stagedLookup.end(), popup.scope.token.widget.value, [](const TargetLookup& target, const u64 value)noexcept{ return target.value < value; });
+        if(owner == m_stagedLookup.end() || owner->value != popup.scope.token.widget.value)
+            return false;
+        const HitTarget& ownerTarget = m_stagedTargets[owner->index];
+        if(ownerTarget.declarationGeneration != popup.scope.token.declarationGeneration || ownerTarget.popup != popup.scope.token || !ownerTarget.enabled)
             return false;
         if(popup.scope.dismissFocusTraversal){
-            bool anchor = false;
-            for(const auto& target : m_stagedTargets){
-                anchor |= target.id == popup.scope.focusAnchor && target.declarationGeneration == popup.scope.focusAnchorDeclarationGeneration && target.popup == popup.scope.parent && target.focusable && target.enabled && !target.owner.valid();
-            }
-            if(!anchor)
+            const auto anchor = LowerBound(m_stagedLookup.begin(), m_stagedLookup.end(), popup.scope.focusAnchor.value, [](const TargetLookup& target, const u64 value)noexcept{ return target.value < value; });
+            if(anchor == m_stagedLookup.end() || anchor->value != popup.scope.focusAnchor.value)
+                return false;
+            const HitTarget& anchorTarget = m_stagedTargets[anchor->index];
+            if(anchorTarget.declarationGeneration != popup.scope.focusAnchorDeclarationGeneration || anchorTarget.popup != popup.scope.parent || !anchorTarget.focusable || !anchorTarget.enabled || anchorTarget.owner.valid())
                 return false;
         }
     }
@@ -233,7 +234,7 @@ void InputRouter::clearFocus()noexcept{
     m_focusControl = {};
 }
 
-void InputRouter::reset(){
+void InputRouter::reset()noexcept{
     retireQueuedReleases();
     m_events.clear();
     m_targets.clear();
@@ -247,7 +248,7 @@ void InputRouter::reset(){
     cancelInteraction();
 }
 
-bool InputRouter::consumeActivation(const WidgetId id){
+bool InputRouter::consumeActivation(const WidgetId id)noexcept{
     const HitTarget* target = findTarget(id);
     if(target == nullptr || !isInteractive(*target) || !target->activatable)
         return false;
@@ -261,12 +262,12 @@ bool InputRouter::consumeActivation(const WidgetId id){
     return false;
 }
 
-WidgetId InputRouter::hitTest(const Point& position)const{
+WidgetId InputRouter::hitTest(const Point& position)const noexcept{
     const HitTarget* target = findHitTarget(position);
     return target == nullptr ? WidgetId{} : target->id;
 }
 
-bool InputRouter::wouldConsumePointer(const Point& position)const{
+bool InputRouter::wouldConsumePointer(const Point& position)const noexcept{
     if(m_primaryDown)
         return m_pointerSequenceConsumed;
     if(m_secondaryDown)
@@ -274,7 +275,7 @@ bool InputRouter::wouldConsumePointer(const Point& position)const{
     return hasPopup() || m_capture.valid() || hitTest(position).valid();
 }
 
-const HitTarget* InputRouter::findHitTarget(const Point& position)const{
+const HitTarget* InputRouter::findHitTarget(const Point& position)const noexcept{
     if(!IsFinite(position.x) || !IsFinite(position.y))
         return nullptr;
     const HitTarget* found = nullptr;
@@ -287,7 +288,7 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const{
     return found;
 }
 
-bool InputRouter::isInteractive(const HitTarget& target)const{
+bool InputRouter::isInteractive(const HitTarget& target)const noexcept{
     const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height));
     const f32 left = VectorGetX(visibleBounds);
     const f32 top = VectorGetY(visibleBounds);
@@ -296,7 +297,7 @@ bool InputRouter::isInteractive(const HitTarget& target)const{
     return target.enabled && right > left && bottom > top && allowedByPopup(target) && (!target.owner.valid() || controlHost(target) != nullptr);
 }
 
-void InputRouter::reconcileTargets(){
+void InputRouter::reconcileTargets()noexcept{
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
     const bool focusedText = focused != nullptr && focused->textEditable && !focused->owner.valid();
     if(focused == nullptr || !isInteractive(*focused) || !focused->focusable || (!focusedText && focused->control != m_focusControl))
@@ -333,11 +334,11 @@ void InputRouter::reconcileTargets(){
     updateHover();
 }
 
-void InputRouter::updateHover(){
+void InputRouter::updateHover()noexcept{
     setHoverTarget(m_pointerKnown ? findHitTarget(m_pointer) : nullptr);
 }
 
-void InputRouter::setHoverTarget(const HitTarget* hovered){
+void InputRouter::setHoverTarget(const HitTarget* hovered)noexcept{
     const HitTarget* owner = hovered != nullptr && hovered->owner.valid() ? controlHost(*hovered) : hovered;
     HoverIdentity identity;
     if(owner != nullptr)
@@ -359,7 +360,7 @@ void InputRouter::clearHover()noexcept{
     m_hoverIdentity = {};
 }
 
-void InputRouter::cancelPointerPress(){
+void InputRouter::cancelPointerPress()noexcept{
     m_pointerSubmitArmed = false;
     m_secondaryOwner = {};
     for(usize index = 0u; index < m_pointerGestures.size(); ++index){
@@ -375,7 +376,7 @@ void InputRouter::cancelPointerPress(){
     m_captureControl = {};
 }
 
-void InputRouter::cancelInteraction(){
+void InputRouter::cancelInteraction()noexcept{
     advanceHoverActivity();
     m_actions.clear();
     m_controlActions.clear();

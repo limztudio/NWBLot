@@ -107,18 +107,19 @@ BufferHandle Device::createHandleForNativeBuffer(const ObjectType objectType, co
     bufferInfo.queueFamilyIndexCount = nativeProvenance.queueFamilyIndexCount;
     bufferInfo.pQueueFamilyIndices = nativeProvenance.queueFamilyIndices;
 
-    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, desc, bufferInfo, nativeProvenance.initialStateKnown);
+    BufferHandle buffer(NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, desc, bufferInfo, nativeProvenance.initialStateKnown), BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!buffer)
+        return nullptr;
     buffer->m_buffer = nativeBuffer;
     buffer->m_deviceAddress = deviceAddress;
     buffer->m_managed = false;
 
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: a live wrapper already exists"));
-        DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }
 
-    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return buffer;
 }
 
 

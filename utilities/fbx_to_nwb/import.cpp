@@ -51,7 +51,8 @@ Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances
     }
     if(*normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(result.mesh)){
         FbxSourceMeshStreams::DropSourceMeshTangents(result.mesh);
-        const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(result.mesh, usedDefaultUvs);
+        Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_SourceTangentRebuildScratch);
+        const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(result.mesh, usedDefaultUvs, scratchArena);
         if(!tangentReport)
             return MakeUnexpected(Failure{});
         result.tangentReport = *tangentReport;

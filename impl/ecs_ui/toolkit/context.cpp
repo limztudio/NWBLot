@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize Context::StateClaimHash::operator()(const StateClaim& claim)const{
+usize Context::StateClaimHash::operator()(const StateClaim& claim)const noexcept{
     usize hash = Hasher<u64>{}(claim.instanceGeneration);
     HashCombine(hash, static_cast<u8>(claim.kind));
     return hash;
@@ -51,7 +51,7 @@ Context::Context(Core::Alloc::GlobalArena& arena)
     m_commitPopups.reserve(s_InputMaxPopups);
 }
 
-bool Context::beginFrame(const u64 generation){
+bool Context::beginFrame(const u64 generation)noexcept{
     if(generation == 0u || generation <= m_lastFrameGeneration || m_frameGeneration != 0u || ready())
         return false;
     m_lastFrameGeneration = generation;
@@ -80,7 +80,7 @@ bool Context::beginRoot(const WidgetRoot& root){
     return true;
 }
 
-bool Context::endRoot(){
+bool Context::endRoot()noexcept{
     const bool valid = m_rootActive && m_scopes.size() == 1u && m_popupDepth == 0u && !m_currentPopup.valid();
     m_rootActive = false;
     m_scopes.clear();
@@ -103,7 +103,7 @@ bool Context::pushScope(const AStringView stableKey){
     return true;
 }
 
-bool Context::popScope(){
+bool Context::popScope()noexcept{
     if(!m_rootActive || m_scopes.size() <= 1u){
         fail();
         return false;
@@ -236,7 +236,7 @@ void Context::abandonFrame(){
     m_failed = false;
 }
 
-void Context::resetInput(){
+void Context::resetInput()noexcept{
     m_input.reset();
     m_targets.clear();
     m_popups.clear();

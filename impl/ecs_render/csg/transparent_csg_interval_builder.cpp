@@ -3,9 +3,6 @@
 
 
 #include <impl/ecs_render/csg/transparent_csg_interval_builder.h>
-
-#include <core/graphics/backend_selection/backend.h>
-
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
@@ -18,6 +15,8 @@
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
+
+#include <core/graphics/backend_selection/backend.h>
 
 #include <global/limit.h>
 
@@ -285,7 +284,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
         transparentCsgIntervalClearScheduling.forceSubmissionBoundary = false;
         transparentCsgIntervalClearScheduling.allowPacketMerge = true;
         transparentCsgIntervalClearScheduling.mergeWithPrevious = true;
-        const auto makeTransparentCsgIntervalClearTaskDesc = [&transparentCsgIntervalClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency){
+        const auto makeTransparentCsgIntervalClearTaskDesc = [&transparentCsgIntervalClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency)noexcept{
             Core::GpuTaskDesc clearDesc;
             clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(transparentCsgIntervalClearScheduling).setDependencies(&dependency, 1u);
             return clearDesc;

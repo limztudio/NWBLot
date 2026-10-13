@@ -14,6 +14,7 @@
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+
 #include <global/hash_utils.h>
 
 namespace __hidden_shader_cook_checksum{
@@ -39,21 +40,30 @@ namespace __hidden_cook_checksum{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookString = ShaderCook::CookString;
 using ScratchString = AString<Core::Alloc::ScratchArena>;
 
 struct NormalizedDependencyRootAlias{
     Path root;
-    CookString key;
+    ScratchString key;
     usize depth = 0u;
 
-    explicit NormalizedDependencyRootAlias(ShaderCook::CookArena& arena)
-        : root(arena)
-        , key(arena)
+    NormalizedDependencyRootAlias(ShaderCook::CookArena& pathArena, Core::Alloc::ScratchArena& scratchArena)
+        : root(pathArena)
+        , key(scratchArena)
     {}
 };
 
-static usize PathDepth(const Path& path){
+struct SortedDependencyItem{
+    ScratchString canonicalPath;
+    Path path;
+
+    SortedDependencyItem(ShaderCook::CookArena& pathArena, Core::Alloc::ScratchArena& scratchArena)
+        : canonicalPath(scratchArena)
+        , path(pathArena)
+    {}
+};
+
+static usize PathDepth(const Path& path)noexcept{
     usize depth = 0u;
     for(auto it = path.begin(); it != path.end(); ++it)
         ++depth;
@@ -92,6 +102,8 @@ static Path NormalizeDependencyRootAliasPath(Path path){
 
 
 Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies, const InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena){
+    using __hidden_cook_checksum::SortedDependencyItem;
+
     static constexpr u8 s_NewlineByte = '\n';
     static constexpr u8 s_ZeroByte = 0;
 
@@ -103,7 +115,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
         return MakeUnexpected(Failure{});
     }
 
-    CookVector<__hidden_cook_checksum::NormalizedDependencyRootAlias> normalizedRootAliases{m_memoryArena};
+    Vector<__hidden_cook_checksum::NormalizedDependencyRootAlias, Core::Alloc::ScratchArena> normalizedRootAliases{scratchArena};
     normalizedRootAliases.reserve(dependencyRootAliases.size());
     for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
         if(rootAlias.root.empty() || rootAlias.key.empty()){
@@ -111,7 +123,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
             return MakeUnexpected(Failure{});
         }
 
-        __hidden_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena};
+        __hidden_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena, scratchArena};
         const auto rootPath = AbsolutePath(rootAlias.root);
         if(!rootPath){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), StringConvert(rootPath.error().message()));
@@ -129,10 +141,10 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
         normalizedRootAliases.push_back(Move(normalizedAlias));
     }
 
-    CookVector<SortedDependencyItem> sortedDependencies{m_memoryArena};
+    Vector<SortedDependencyItem, Core::Alloc::ScratchArena> sortedDependencies{scratchArena};
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
-        SortedDependencyItem item(m_memoryArena);
+        SortedDependencyItem item(m_memoryArena, scratchArena);
         auto normalizedDependencyResult = AbsolutePath(dependency);
         if(!normalizedDependencyResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), StringConvert(normalizedDependencyResult.error().message()));
@@ -164,7 +176,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
         sortedDependencies.push_back(Move(item));
     }
 
-    Sort(sortedDependencies.begin(), sortedDependencies.end(), [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs){ return lhs.canonicalPath < rhs.canonicalPath; });
+    Sort(sortedDependencies.begin(), sortedDependencies.end(), [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs)noexcept(noexcept(lhs.canonicalPath < rhs.canonicalPath)){ return lhs.canonicalPath < rhs.canonicalPath; });
 
     Vector<u8, Core::Alloc::ScratchArena> dependencyBytes{scratchArena};
     for(const SortedDependencyItem& item : sortedDependencies){
@@ -200,7 +212,7 @@ u64 ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVie
 
     u64 checksum = s_Fnv64OffsetBasis;
 
-    const auto appendChecksumLine = [&checksum, &newlineByte](const AStringView text){
+    const auto appendChecksumLine = [&checksum, &newlineByte](const AStringView text)noexcept{
         checksum = UpdateFnv64TextExact(checksum, text);
         checksum = UpdateFnv64(checksum, &newlineByte, 1);
     };

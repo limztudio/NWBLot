@@ -10,7 +10,7 @@ import time
 from guarded_native import GuardedNativeInput
 from progress_probe import center, observe_progress, snapshot_from_logs, value_bits
 from window_smoke import parse_args
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
@@ -162,17 +162,7 @@ def run(args):
 
 
 def main(argv):
-    if not any(argument == "--timeout" or argument.startswith("--timeout=") for argument in argv):
-        argv = [*argv, "--timeout", "180"]
-    args = parse_args(argv)
-    try:
-        return run(args)
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", flush=True)
-        return SKIP_EXIT_CODE
-    except (SmokeFailure, OSError, ValueError, TimeoutError) as error:
-        print(f"FAIL: {error}", flush=True)
-        return 1
+    return run_smoke_main(argv, parse_args, run, default_timeout=180)
 
 
 if __name__ == "__main__":

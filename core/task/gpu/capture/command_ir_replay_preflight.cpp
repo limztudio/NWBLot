@@ -164,7 +164,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!source || !destination)
         return GpuCommandIrReplayError::MissingBackendResource;
 
-    const auto declaresRange = [&](const GpuGraphResourceId resource, const BufferDesc& description, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access, const u64 offset){
+    const auto declaresRange = [&](const GpuGraphResourceId resource, const BufferDesc& description, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access, const u64 offset)noexcept{
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             if(use.resource == resource && use.requiredState == state && use.access == access && BufferRangeContains(description, use.range.bufferRange, offset, record.dataSizeBytes))
@@ -249,21 +249,35 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     return GpuCommandIrReplayError::None;
 }
 
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureClearRecord(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept{
+struct TextureClearDestination{
+    Texture* texture;
+    const GpuTaskResourceUse* use;
+};
+
+[[nodiscard]] static Expected<TextureClearDestination, GpuCommandIrReplayError::Enum> ResolveTextureClearDestination(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task)noexcept{
     if(!graph.validResource(record.destination))
-        return GpuCommandIrReplayError::InvalidResource;
+        return MakeUnexpected(GpuCommandIrReplayError::InvalidResource);
 
     const GpuTaskGraphResourceView destinationView = graph.resourceAt(record.destination.index);
     if(destinationView.type != GpuGraphResourceType::Texture)
-        return GpuCommandIrReplayError::ResourceTypeMismatch;
+        return MakeUnexpected(GpuCommandIrReplayError::ResourceTypeMismatch);
 
     Texture* const destination = graph.textureForResource(record.destination);
     if(!destination)
-        return GpuCommandIrReplayError::MissingBackendResource;
+        return MakeUnexpected(GpuCommandIrReplayError::MissingBackendResource);
 
     const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
     if(!destinationUse)
-        return GpuCommandIrReplayError::ResourceUseMismatch;
+        return MakeUnexpected(GpuCommandIrReplayError::ResourceUseMismatch);
+    return TextureClearDestination{ .texture = destination, .use = destinationUse, };
+}
+
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureClearRecord(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept{
+    const auto resolvedDestination = ResolveTextureClearDestination(record, graph, task);
+    if(!resolvedDestination)
+        return resolvedDestination.error();
+    Texture* const destination = resolvedDestination->texture;
+    const GpuTaskResourceUse* const destinationUse = resolvedDestination->use;
 
     const TextureDesc& description = destination->getCreationDescription();
     const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(record.clearTextureValueType);
@@ -281,20 +295,11 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureRectUIntClearRecord(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept{
-    if(!graph.validResource(record.destination))
-        return GpuCommandIrReplayError::InvalidResource;
-
-    const GpuTaskGraphResourceView destinationView = graph.resourceAt(record.destination.index);
-    if(destinationView.type != GpuGraphResourceType::Texture)
-        return GpuCommandIrReplayError::ResourceTypeMismatch;
-
-    Texture* const destination = graph.textureForResource(record.destination);
-    if(!destination)
-        return GpuCommandIrReplayError::MissingBackendResource;
-
-    const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
-    if(!destinationUse)
-        return GpuCommandIrReplayError::ResourceUseMismatch;
+    const auto resolvedDestination = ResolveTextureClearDestination(record, graph, task);
+    if(!resolvedDestination)
+        return resolvedDestination.error();
+    Texture* const destination = resolvedDestination->texture;
+    const GpuTaskResourceUse* const destinationUse = resolvedDestination->use;
 
     const TextureDesc& description = destination->getCreationDescription();
     Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});

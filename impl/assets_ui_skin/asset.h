@@ -133,11 +133,11 @@ public:
 
 
 public:
-    explicit UiSkin(Core::Assets::AssetArena& arena)
+    explicit UiSkin(Core::Assets::AssetArena& arena)noexcept
         : m_regions(arena)
         , m_regionIndex(arena)
     {}
-    UiSkin(Core::Assets::AssetArena& arena, const Name& virtualPath)
+    UiSkin(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<UiSkin>(virtualPath)
         , m_regions(arena)
         , m_regionIndex(arena)

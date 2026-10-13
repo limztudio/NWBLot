@@ -243,6 +243,7 @@ void AppendSubmissionRuntimeStatisticsJson(AString<TelemetryArena>& out, const S
         statistics.mergedTimelineWaitCount,
         statistics.acceptedFrontierSubmissionCount
     );
+    StringAppendFormat(out, ", \"inheritedTimelineWaitElisionCount\": {}", statistics.inheritedTimelineWaitElisionCount);
     StringAppendFormat(out, ", \"recoverySubmissionCount\": {}", statistics.recoverySubmissionCount);
     StringAppendFormat(out, ", \"submissionSeconds\": {:.9}}}", statistics.submissionSeconds);
 }
@@ -337,6 +338,7 @@ void AppendFrameGraphPacketSubmissionStatisticsJson(AString<TelemetryArena>& out
         statistics.timelineWaitCount,
         statistics.mergedTimelineWaitCount
     );
+    StringAppendFormat(out, ", \"inheritedTimelineWaitElisionCount\": {}", statistics.inheritedTimelineWaitElisionCount);
     StringAppendFormat(
         out,
         ", \"joinsAcceptedQueueFrontier\": {}, \"recoverySubmission\": {}, \"submissionSeconds\": {:.9}}}",

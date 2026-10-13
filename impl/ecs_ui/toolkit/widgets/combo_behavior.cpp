@@ -45,7 +45,7 @@ namespace __hidden_ui_combo_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration){
+bool ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
     if(!owner.valid() || declarationGeneration == 0u)
         return false;
     if(state.m_owner.valid() && (state.m_owner != owner || state.m_ownerDeclaration != declarationGeneration))
@@ -80,13 +80,13 @@ bool ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
     return true;
 }
 
-void ComboBehavior::Open(ComboState& state){
+void ComboBehavior::Open(ComboState& state)noexcept{
     state.m_list.select(state.m_selectedKey);
     state.m_popup.close();
     state.m_popup.open();
 }
 
-void ComboBehavior::Close(ComboState& state){
+void ComboBehavior::Close(ComboState& state)noexcept{
     state.m_list.select(state.m_selectedKey);
     state.m_popup.close();
 }

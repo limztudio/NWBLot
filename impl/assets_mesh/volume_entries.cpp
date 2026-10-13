@@ -59,14 +59,14 @@ static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
         MeshBinaryPayload::s_MeshAssetKindLabel,
         &ParseMeshDocument,
         &ParseMeshValue,
-        [](MeshCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildMeshAsset); }
+        [](MeshCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildMeshAsset(entry, arena); }
     )
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
             registry,
             SkinBinaryPayload::s_SkinAssetKindLabel,
             &ParseSkinDocument,
             &ParseSkinValue,
-            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildSkinAsset); }
+            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildSkinAsset(entry, arena); }
         );
 }
 

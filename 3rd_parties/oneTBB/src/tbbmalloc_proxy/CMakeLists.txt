@@ -37,12 +37,6 @@ target_include_directories(tbbmalloc_proxy
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-if (NOT APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    # gcc 5.0 and later have -Wno-sized-deallocation options
-    set(TBB_WARNING_SUPPRESS ${TBB_WARNING_SUPPRESS}
-                             $<$<NOT:$<VERSION_LESS:${CMAKE_CXX_COMPILER_VERSION},5.0>>:-Wno-sized-deallocation>)
-endif()
-
 target_compile_options(tbbmalloc_proxy
     PRIVATE
     ${TBB_CXX_STD_FLAG} # TODO: consider making it PUBLIC.
@@ -68,19 +62,11 @@ endif()
 
 # Prefer using target_link_options instead of target_link_libraries to specify link options because
 # target_link_libraries may incorrectly handle some options (on Windows, for example).
-if (COMMAND target_link_options)
-    target_link_options(tbbmalloc_proxy
-        PRIVATE
-        ${TBB_LIB_LINK_FLAGS}
-        ${TBB_COMMON_LINK_FLAGS}
-    )
-else()
-    target_link_libraries(tbbmalloc_proxy
-        PRIVATE
-        ${TBB_LIB_LINK_FLAGS}
-        ${TBB_COMMON_LINK_FLAGS}
-    )
-endif()
+target_link_options(tbbmalloc_proxy
+    PRIVATE
+    ${TBB_LIB_LINK_FLAGS}
+    ${TBB_COMMON_LINK_FLAGS}
+)
 
 target_link_libraries(tbbmalloc_proxy
     PRIVATE

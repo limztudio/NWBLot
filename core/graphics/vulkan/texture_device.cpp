@@ -8,6 +8,7 @@
 #include "native_sharing_validation.h"
 
 #include <core/graphics/rhi/queue_sharing.h>
+
 #include <global/simd/vector_arithmetic.h>
 
 
@@ -51,7 +52,9 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     imageInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
     imageInfo.pQueueFamilyIndices = sharingInfo.data();
 
-    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, d, imageInfo, false);
+    TextureHandle texture(NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, d, imageInfo, false), TextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!texture)
+        return nullptr;
     texture->m_formatLayout = metadata->formatLayout;
     texture->m_aspectMask = metadata->aspectMask;
 
@@ -63,17 +66,15 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
     if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: native image identity is already registered"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: A newly created texture duplicated a live native image identity"));
-        DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
 
-    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return texture;
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(Texture& texture){
@@ -236,7 +237,9 @@ TextureHandle Device::createHandleForNativeTexture(const ObjectType objectType, 
         return nullptr;
     }
 
-    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, desc, imageInfo, nativeProvenance.initialStateKnown);
+    TextureHandle texture(NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, desc, imageInfo, nativeProvenance.initialStateKnown), TextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!texture)
+        return nullptr;
     texture->m_formatLayout = metadata->formatLayout;
     texture->m_aspectMask = metadata->aspectMask;
     texture->m_image = nativeImage;
@@ -244,11 +247,10 @@ TextureHandle Device::createHandleForNativeTexture(const ObjectType objectType, 
 
     if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: a live wrapper already exists"));
-        DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
 
-    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return texture;
 }
 
 
@@ -268,7 +270,9 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     const f32 lowerBounded = requested >= 1.0f ? requested : 1.0f;
     normalizedDesc.maxAnisotropy = lowerBounded > maximum ? maximum : lowerBounded;
 
-    auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);
+    SamplerHandle sampler(NewArenaObject<Sampler>(m_context.objectArena, m_context), SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    if(!sampler)
+        return nullptr;
     sampler->m_desc = normalizedDesc;
 
     const VkSamplerCreateInfo samplerInfo = VulkanDetail::BuildSamplerCreateInfo(normalizedDesc);
@@ -277,11 +281,10 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create sampler"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, sampler);
         return nullptr;
     }
 
-    return SamplerHandle(sampler, SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+    return sampler;
 }
 
 

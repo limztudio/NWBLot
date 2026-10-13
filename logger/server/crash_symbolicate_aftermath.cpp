@@ -7,12 +7,15 @@
 #include <core/crash/package_names.h>
 
 #if defined(NWB_WITH_AFTERMATH)
-#include <GFSDK_Aftermath_GpuCrashDump.h>
-#include <GFSDK_Aftermath_GpuCrashDumpDecoding.h>
-
 #include <core/common/aftermath_runtime.h>
 
+#include <global/diagnostics.h>
+#include <global/limit.h>
+#include <global/scope_exit.h>
 #include <global/shared_library.h>
+
+#include <GFSDK_Aftermath_GpuCrashDump.h>
+#include <GFSDK_Aftermath_GpuCrashDumpDecoding.h>
 #endif
 
 
@@ -43,7 +46,7 @@ inline constexpr AStringView s_AftermathGetJsonFailedReport = "status=decode_fai
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Decode available dumps through the optional Aftermath runtime; failure never aborts ingest.
+// Expected SDK failures retain the ingest report; unexpected exceptions remain terminal.
 #if defined(NWB_WITH_AFTERMATH)
 
 
@@ -96,7 +99,7 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
 
     const Path dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
     if(!PathIsRegularFile(dumpPath))
-        return; // no Aftermath crash dump in this package: nothing to decode (silent skip).
+        return;
 
 #if !defined(NWB_WITH_AFTERMATH)
     static_cast<void>(arena);
@@ -115,39 +118,50 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
         return;
     }
 
-    GFSDK_Aftermath_GpuCrashDump_Decoder decoder = nullptr;
-    if(!GFSDK_Aftermath_SUCCEED(decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<uint32_t>(dumpBytes.size()), &decoder)) || !decoder){
+    if(dumpBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
         outReport += s_AftermathSectionHeader;
         outReport += s_AftermathCreateDecoderFailedReport;
         return;
     }
 
-    uint32_t jsonSize = 0u;
-    const GFSDK_Aftermath_Result generateResult = decoderLib.generateJson(
-        decoder,
-        static_cast<uint32_t>(GFSDK_Aftermath_GpuCrashDumpDecoderFlags_ALL_INFO),
-        static_cast<uint32_t>(GFSDK_Aftermath_GpuCrashDumpFormatterFlags_UTF8_OUTPUT),
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        &jsonSize
-    );
-    if(!GFSDK_Aftermath_SUCCEED(generateResult) || jsonSize == 0u){
-        decoderLib.destroyDecoder(decoder);
-        outReport += s_AftermathSectionHeader;
-        outReport += s_AftermathGenerateJsonFailedReport;
-        return;
-    }
-
     Vector<char, LogArena> json(arena);
-    json.resize(jsonSize, '\0');
-    const GFSDK_Aftermath_Result getResult = decoderLib.getJson(decoder, jsonSize, json.data());
-    decoderLib.destroyDecoder(decoder);
-    if(!GFSDK_Aftermath_SUCCEED(getResult)){
-        outReport += s_AftermathSectionHeader;
-        outReport += s_AftermathGetJsonFailedReport;
-        return;
+    u32 jsonSize = 0u;
+    {
+        GFSDK_Aftermath_GpuCrashDump_Decoder decoder = nullptr;
+        if(!GFSDK_Aftermath_SUCCEED(decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<u32>(dumpBytes.size()), &decoder)) || !decoder){
+            outReport += s_AftermathSectionHeader;
+            outReport += s_AftermathCreateDecoderFailedReport;
+            return;
+        }
+
+        ScopeExit cleanupDecoder([&]()noexcept{
+            if(!GFSDK_Aftermath_SUCCEED(decoderLib.destroyDecoder(decoder)))
+                CaptureDiagnosticEvent("logger_server_aftermath", "Failed to destroy Aftermath crash dump decoder", __FILE__, __LINE__);
+            decoder = nullptr;
+        });
+
+        const GFSDK_Aftermath_Result generateResult = decoderLib.generateJson(
+            decoder,
+            static_cast<u32>(GFSDK_Aftermath_GpuCrashDumpDecoderFlags_ALL_INFO),
+            static_cast<u32>(GFSDK_Aftermath_GpuCrashDumpFormatterFlags_UTF8_OUTPUT),
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            &jsonSize
+        );
+        if(!GFSDK_Aftermath_SUCCEED(generateResult) || jsonSize == 0u){
+            outReport += s_AftermathSectionHeader;
+            outReport += s_AftermathGenerateJsonFailedReport;
+            return;
+        }
+
+        json.resize(jsonSize, '\0');
+        if(!GFSDK_Aftermath_SUCCEED(decoderLib.getJson(decoder, jsonSize, json.data()))){
+            outReport += s_AftermathSectionHeader;
+            outReport += s_AftermathGetJsonFailedReport;
+            return;
+        }
     }
 
     // jsonSize includes the terminator; omit it and cap shader/warp text to the report budget.

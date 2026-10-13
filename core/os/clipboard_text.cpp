@@ -18,13 +18,7 @@ NWB_CORE_BEGIN
 ClipboardStatus::Enum ValidateClipboardUtf8Text(const AStringView text)noexcept{
     if(text.size() > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
-    usize offset = 0u;
-    while(offset < text.size()){
-        const auto codePoint = Utf8TextDetail::DecodeCodePoint(text, offset);
-        if(!codePoint)
-            return ClipboardStatus::InvalidText;
-    }
-    return ClipboardStatus::Success;
+    return Utf8TextDetail::IsValidText(text) ? ClipboardStatus::Success : ClipboardStatus::InvalidText;
 }
 
 ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Alloc::GlobalArena>& output){

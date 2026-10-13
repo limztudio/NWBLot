@@ -12,12 +12,11 @@
 
 
 #include "cook_entry_registry.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "expanded_metadata.h"
 #include "metadata_extension.h"
 
 #include <core/assets/paths.h>
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

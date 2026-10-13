@@ -23,7 +23,7 @@ namespace __hidden_vulkan_descriptor_buffer_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool HasExactLayoutAtSet(const PipelineBindingState& pipelineBindings, const BindingLayout* const expectedLayout, const u32 expectedSetIndex, const u32 expectedCount){
+[[nodiscard]] bool HasExactLayoutAtSet(const PipelineBindingState& pipelineBindings, const BindingLayout* const expectedLayout, const u32 expectedSetIndex, const u32 expectedCount)noexcept{
     if(!expectedLayout)
         return expectedCount == 0u;
 
@@ -45,7 +45,7 @@ namespace __hidden_vulkan_descriptor_buffer_commands{
     const BindingLayout* const accelStructLayout,
     const GpuDescriptorHeapAbi& abi,
     const bool bindAccelStruct
-){
+)noexcept{
     return HasExactLayoutAtSet(pipelineBindings, resourceLayout, abi.resourceSetIndex, 1u)
         && HasExactLayoutAtSet(pipelineBindings, samplerLayout, abi.samplerSetIndex, 1u)
         && HasExactLayoutAtSet(pipelineBindings, accelStructLayout, abi.accelStructSetIndex, bindAccelStruct ? 1u : 0u)

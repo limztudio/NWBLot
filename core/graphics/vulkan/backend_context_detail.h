@@ -67,14 +67,6 @@ static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
     return static_cast<GpuQueueCapability::Mask>(capabilities);
 }
 
-inline ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena& arena){
-    return ScratchStringStream(std::ios_base::out, arena);
-}
-
-inline ScratchString MakeScratchString(Alloc::ScratchArena& arena, const AStringView text){
-    return ScratchString(text, arena);
-}
-
 template<typename Set>
 static Vector<const char*, Alloc::ScratchArena> StringSetToVector(const Set& set, Alloc::ScratchArena& arena){
     Vector<const char*, Alloc::ScratchArena> ret(arena);
@@ -194,12 +186,12 @@ inline bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported)noexce
     return requested != VK_TRUE || supported == VK_TRUE;
 }
 
-inline StringView BoolToString(bool value)noexcept{
+[[nodiscard]] inline constexpr StringView BoolToYesNoText(const bool value)noexcept{
     return value ? StringView("yes") : StringView("no");
 }
 
 inline ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 version){
-    auto ss = MakeScratchStringStream(arena);
+    auto ss = ScratchStringStream(s_FileOpenWrite, arena);
     ss << VK_API_VERSION_MAJOR(version) << "." << VK_API_VERSION_MINOR(version) << "." << VK_API_VERSION_PATCH(version);
     if(VK_API_VERSION_VARIANT(version) != 0)
         ss << " variant " << VK_API_VERSION_VARIANT(version);

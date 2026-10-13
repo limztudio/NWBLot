@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+
 #include <global/termination.h>
 
 
@@ -48,7 +49,7 @@ bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisit
     if(!producerQueue || producerQueue->m_physicalQueue.deviceGeneration != prerequisite.deviceGeneration || producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
         return false;
 
-    const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value) -> bool {
+    const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value)noexcept -> bool {
         return semaphore == producerQueue->m_trackingSemaphore && value >= prerequisite.value;
     };
     for(usize waitIndex = 0u; waitIndex < localWaitCount; ++waitIndex){

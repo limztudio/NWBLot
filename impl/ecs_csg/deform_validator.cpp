@@ -37,14 +37,6 @@ bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex)noexcept{
     return CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color));
 }
 
-SIMDVectorSingle CsgDeformValidator::SaturateVec(const SIMDVectorSingle value)noexcept{
-    return VectorSaturate(value);
-}
-
-SIMDVectorSingle CsgDeformValidator::AbsDivideVec(const SIMDVectorSingle numerator, const SIMDVectorSingle denominator)noexcept{
-    return VectorAbs(VectorDivide(numerator, denominator));
-}
-
 f32 CsgDeformValidator::ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept{
     return options.distanceEpsilon > s_MinEpsilon ? options.distanceEpsilon : s_MinEpsilon;
 }

@@ -24,6 +24,30 @@ NWB_BEGIN
 
 namespace Tests::Smoke{
 
+template<typename Source>
+[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const bool reverse){
+    u64 index = 0u;
+    if(start >= source.rowCount())
+        return MakeUnexpected(Failure{});
+    if(source.enabled(start)){
+        index = start;
+        return index;
+    }
+    if(reverse){
+        if(start == 0u)
+            return MakeUnexpected(Failure{});
+        index = start - 1u;
+    }
+    else{
+        if(start + 1u >= source.rowCount())
+            return MakeUnexpected(Failure{});
+        index = start + 1u;
+    }
+    return source.enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
+}
+
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,7 +122,6 @@ inline void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, cons
         , selection.x, selection.y, selection.width, selection.height, placement.scroll
     );
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

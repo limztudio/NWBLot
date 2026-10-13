@@ -2,9 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/standalone_runtime.h>
-#include <global/unique_ptr.h>
 #include "frame.h"
+
+#include <core/alloc/standalone_runtime.h>
+
+#include <global/unique_ptr.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,13 +87,13 @@ inline constexpr Name s_MessageArenaName("logger/server/frame/messages");
 
 // Keep the store inside Frame so it tears down before the allocator runtime; late prints are safe no-ops.
 struct MessageStore{
+    LogArena arena;
+    MessageDeque messages;
+
     MessageStore()
         : arena(s_MessageArenaName)
         , messages(arena)
     {}
-
-    LogArena arena;
-    MessageDeque messages;
 };
 
 static Frame* s_Frame = nullptr;

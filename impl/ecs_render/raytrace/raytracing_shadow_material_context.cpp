@@ -18,6 +18,41 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::shadowMaterialContextStorageReady(const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)const noexcept{
+    const auto& state = m_rayTracingState;
+    return
+        state.m_shadowInstanceMaterialBuffer
+        && state.m_shadowInstanceBuffer
+        && state.m_shadowMaterialTypedBuffer
+        && state.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
+        && state.m_shadowInstanceCapacity >= instanceCount
+        && state.m_shadowMaterialTypedCapacity >= materialTypedByteCount
+        && state.m_shadowInstanceMaterialHeapHandle.valid()
+        && state.m_shadowInstanceMaterialHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && state.m_shadowInstanceHeapHandle.valid()
+        && state.m_shadowInstanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && state.m_shadowMaterialTypedHeapHandle.valid()
+        && state.m_shadowMaterialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+    ;
+}
+
+void RendererRayTracingSystem::capturePreparedShadowMaterialContextStorage(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
+    const auto& state = m_rayTracingState;
+    m_preparedShadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
+    m_preparedShadowInstanceBuffer = state.m_shadowInstanceBuffer;
+    m_preparedShadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer;
+    m_preparedShadowInstanceMaterialHeapHandle = state.m_shadowInstanceMaterialHeapHandle;
+    m_preparedShadowInstanceHeapHandle = state.m_shadowInstanceHeapHandle;
+    m_preparedShadowMaterialTypedHeapHandle = state.m_shadowMaterialTypedHeapHandle;
+    m_preparedShadowInstanceMaterialCount = instanceMaterialCount;
+    m_preparedShadowInstanceCount = instanceCount;
+    m_preparedShadowMaterialTypedUploadBytes = materialTypedByteCount;
+    m_preparedShadowInstanceMaterialCapacity = state.m_shadowInstanceMaterialCapacity;
+    m_preparedShadowInstanceCapacity = state.m_shadowInstanceCapacity;
+    m_preparedShadowMaterialTypedCapacity = state.m_shadowMaterialTypedCapacity;
+    m_preparedShadowMaterialContextHash = hash;
+}
+
 void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
     m_preparedShadowInstanceMaterialBytes.clear();
     m_preparedShadowInstanceBytes.clear();
@@ -55,21 +90,7 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     const void* const materialTypedData,
     const usize materialTypedByteCount
 ){
-    const auto& state = m_rayTracingState;
-    const bool validStorage =
-        state.m_shadowInstanceMaterialBuffer
-        && state.m_shadowInstanceBuffer
-        && state.m_shadowMaterialTypedBuffer
-        && state.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
-        && state.m_shadowInstanceCapacity >= instanceCount
-        && state.m_shadowMaterialTypedCapacity >= materialTypedByteCount
-        && state.m_shadowInstanceMaterialHeapHandle.valid()
-        && state.m_shadowInstanceMaterialHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_shadowInstanceHeapHandle.valid()
-        && state.m_shadowInstanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_shadowMaterialTypedHeapHandle.valid()
-        && state.m_shadowMaterialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-    ;
+    const bool validStorage = shadowMaterialContextStorageReady(instanceMaterialCount, instanceCount, materialTypedByteCount);
     if(
         route == PreparedShadowMaterialContextRoute::None
         || !instanceMaterialData
@@ -91,19 +112,7 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     NWB_MEMCPY(m_preparedShadowInstanceMaterialBytes.data(), m_preparedShadowInstanceMaterialBytes.size(), instanceMaterialData, instanceMaterialByteCount);
     NWB_MEMCPY(m_preparedShadowInstanceBytes.data(), m_preparedShadowInstanceBytes.size(), instanceData, instanceByteCount);
     NWB_MEMCPY(m_preparedShadowMaterialTypedBytes.data(), m_preparedShadowMaterialTypedBytes.size(), materialTypedData, materialTypedByteCount);
-    m_preparedShadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
-    m_preparedShadowInstanceBuffer = state.m_shadowInstanceBuffer;
-    m_preparedShadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer;
-    m_preparedShadowInstanceMaterialHeapHandle = state.m_shadowInstanceMaterialHeapHandle;
-    m_preparedShadowInstanceHeapHandle = state.m_shadowInstanceHeapHandle;
-    m_preparedShadowMaterialTypedHeapHandle = state.m_shadowMaterialTypedHeapHandle;
-    m_preparedShadowInstanceMaterialCount = instanceMaterialCount;
-    m_preparedShadowInstanceCount = instanceCount;
-    m_preparedShadowMaterialTypedUploadBytes = materialTypedByteCount;
-    m_preparedShadowInstanceMaterialCapacity = state.m_shadowInstanceMaterialCapacity;
-    m_preparedShadowInstanceCapacity = state.m_shadowInstanceCapacity;
-    m_preparedShadowMaterialTypedCapacity = state.m_shadowMaterialTypedCapacity;
-    m_preparedShadowMaterialContextHash = hash;
+    capturePreparedShadowMaterialContextStorage(hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
     m_preparedShadowMaterialContextRoute = route;
     m_preparedShadowMaterialContextStatic = staticScene;
     m_preparedShadowMaterialContextReady = true;
@@ -117,36 +126,11 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(co
         return false;
 
     const auto& state = m_rayTracingState;
-    const bool validStorage =
-        state.m_shadowInstanceMaterialBuffer
-        && state.m_shadowInstanceBuffer
-        && state.m_shadowMaterialTypedBuffer
-        && state.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
-        && state.m_shadowInstanceCapacity >= instanceCount
-        && state.m_shadowMaterialTypedCapacity >= materialTypedByteCount
-        && state.m_shadowInstanceMaterialHeapHandle.valid()
-        && state.m_shadowInstanceMaterialHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_shadowInstanceHeapHandle.valid()
-        && state.m_shadowInstanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_shadowMaterialTypedHeapHandle.valid()
-        && state.m_shadowMaterialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-    ;
+    const bool validStorage = shadowMaterialContextStorageReady(instanceMaterialCount, instanceCount, materialTypedByteCount);
     if(!state.m_swShadowMaterialContextHashValid || state.m_swShadowMaterialContextHash != hash || !validStorage)
         return false;
 
-    m_preparedShadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
-    m_preparedShadowInstanceBuffer = state.m_shadowInstanceBuffer;
-    m_preparedShadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer;
-    m_preparedShadowInstanceMaterialHeapHandle = state.m_shadowInstanceMaterialHeapHandle;
-    m_preparedShadowInstanceHeapHandle = state.m_shadowInstanceHeapHandle;
-    m_preparedShadowMaterialTypedHeapHandle = state.m_shadowMaterialTypedHeapHandle;
-    m_preparedShadowInstanceMaterialCount = instanceMaterialCount;
-    m_preparedShadowInstanceCount = instanceCount;
-    m_preparedShadowMaterialTypedUploadBytes = materialTypedByteCount;
-    m_preparedShadowInstanceMaterialCapacity = state.m_shadowInstanceMaterialCapacity;
-    m_preparedShadowInstanceCapacity = state.m_shadowInstanceCapacity;
-    m_preparedShadowMaterialTypedCapacity = state.m_shadowMaterialTypedCapacity;
-    m_preparedShadowMaterialContextHash = hash;
+    capturePreparedShadowMaterialContextStorage(hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
     m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::Software;
     m_preparedShadowMaterialContextStatic = true;
     m_preparedShadowMaterialContextReady = true;

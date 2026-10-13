@@ -44,8 +44,13 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
     }
 
     outCenter = Vector3Transform(boxCenter, matrix);
-    outExtents = VectorMultiply(boxExtents, VectorAbs(decomposition->scale));
-    outOrientation = QuaternionNormalize(QuaternionMultiply(boxOrientation, decomposition->rotation));
+    outOrientation = QuaternionNormalize(QuaternionMultiply(decomposition->rotation, boxOrientation));
+    // Project the transformed source axes into the output frame before bounding nonuniform scale or reflection.
+    const SIMDVectorSingle projectedAxis0 = Vector3InverseRotate(Vector3TransformNormal(Vector3Rotate(s_SIMDIdentityR0, boxOrientation), matrix), outOrientation);
+    const SIMDVectorSingle projectedAxis1 = Vector3InverseRotate(Vector3TransformNormal(Vector3Rotate(s_SIMDIdentityR1, boxOrientation), matrix), outOrientation);
+    const SIMDVectorSingle projectedAxis2 = Vector3InverseRotate(Vector3TransformNormal(Vector3Rotate(s_SIMDIdentityR2, boxOrientation), matrix), outOrientation);
+    const SIMDVectorSingle yzExtents = VectorAdd(VectorMultiply(VectorAbs(projectedAxis1), VectorSplatY(boxExtents)), VectorMultiply(VectorAbs(projectedAxis2), VectorSplatZ(boxExtents)));
+    outExtents = VectorAdd(VectorMultiply(VectorAbs(projectedAxis0), VectorSplatX(boxExtents)), yzExtents);
 }
 
 inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
@@ -53,7 +58,7 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
 )noexcept{
     outCenter = VectorAdd(Vector3Rotate(VectorScale(boxCenter, scale), rotation), translation);
     outExtents = VectorScale(boxExtents, Abs(scale));
-    outOrientation = QuaternionNormalize(QuaternionMultiply(boxOrientation, rotation));
+    outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, boxOrientation));
 }
 
 inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
@@ -76,8 +81,13 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     }
 
     outCenter = VectorDouble3Transform(boxCenter, matrix);
-    outExtents = VectorDoubleMultiply(boxExtents, VectorDoubleAbs(decomposition->scale));
-    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(boxOrientation, decomposition->rotation));
+    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(decomposition->rotation, boxOrientation));
+    // Project the transformed source axes into the output frame before bounding nonuniform scale or reflection.
+    const SIMDVectorDouble projectedAxis0 = VectorDouble3InverseRotate(VectorDouble3TransformNormal(VectorDouble3Rotate(s_DoubleSIMDIdentityR0, boxOrientation), matrix), outOrientation);
+    const SIMDVectorDouble projectedAxis1 = VectorDouble3InverseRotate(VectorDouble3TransformNormal(VectorDouble3Rotate(s_DoubleSIMDIdentityR1, boxOrientation), matrix), outOrientation);
+    const SIMDVectorDouble projectedAxis2 = VectorDouble3InverseRotate(VectorDouble3TransformNormal(VectorDouble3Rotate(s_DoubleSIMDIdentityR2, boxOrientation), matrix), outOrientation);
+    const SIMDVectorDouble yzExtents = VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleAbs(projectedAxis1), VectorDoubleSplatY(boxExtents)), VectorDoubleMultiply(VectorDoubleAbs(projectedAxis2), VectorDoubleSplatZ(boxExtents)));
+    outExtents = VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleAbs(projectedAxis0), VectorDoubleSplatX(boxExtents)), yzExtents);
 }
 
 inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
@@ -85,7 +95,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
 )noexcept{
     outCenter = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(boxCenter, scale), rotation), translation);
     outExtents = VectorDoubleScale(boxExtents, Abs(scale));
-    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(boxOrientation, rotation));
+    outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(rotation, boxOrientation));
 }
 
 

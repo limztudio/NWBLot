@@ -3,12 +3,10 @@
 
 
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
-
 #include <impl/ecs_render/raytrace/raytracing_system.h>
+#include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 
 #include <core/graphics/gpu_timing.h>
-
-#include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

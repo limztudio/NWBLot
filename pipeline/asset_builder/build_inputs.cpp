@@ -51,13 +51,12 @@ struct PathSelectionIndex{
             }
             else m_entries.push_back({ AStringView(files[i].normalizedPathText), i });
         }
-        Sort(m_entries.begin(), m_entries.end(), [](const IndexedPath& lhs, const IndexedPath& rhs){ return lhs.text < rhs.text; });
+        Sort(m_entries.begin(), m_entries.end(), [](const IndexedPath& lhs, const IndexedPath& rhs)noexcept{ return lhs.text < rhs.text; });
     }
 };
 
-[[nodiscard]] static bool SelectPathRange(const PathSelectionIndex& index, const AStringView path, const bool prefix, Vector<u8, Assets::ScratchArena>& selected){
-    auto entry = LowerBound(index.m_entries.begin(), index.m_entries.end(), path, [](const IndexedPath& candidate, const AStringView value){ return candidate.text < value; }
-    );
+[[nodiscard]] static bool SelectPathRange(const PathSelectionIndex& index, const AStringView path, const bool prefix, Vector<u8, Assets::ScratchArena>& selected)noexcept{
+    auto entry = LowerBound(index.m_entries.begin(), index.m_entries.end(), path, [](const IndexedPath& candidate, const AStringView value)noexcept{ return candidate.text < value; });
     bool matched = false;
     for(; entry != index.m_entries.end(); ++entry){
         if(prefix ? !entry->text.starts_with(path) : entry->text != path)

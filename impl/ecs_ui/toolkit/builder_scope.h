@@ -236,7 +236,7 @@ public:
 
 
 private:
-    void reset();
+    void reset()noexcept;
 
 
 private:

@@ -40,7 +40,7 @@ struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBuf
     using Copy = CopyBufferCopy;
 
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy){ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
+        return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy)noexcept{ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
                 return captureContext.commandIrCapture->captureCopyBuffer(captureContext.task, captureContext.packet, captureContext.queue, copy.sourceResource, copy.sourceOffsetBytes, copy.destinationResource, copy.destinationOffsetBytes, copy.dataSizeBytes);
             },
@@ -97,7 +97,7 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         resourceUses.push_back(GpuTaskResourceUse{ .resource = resource, .range = GpuTaskResourceRange{ .bufferRange = range }, .requiredState = state, .access = access, });
         return true;
     };
-    const auto validCopyRange = [](const BufferDesc& bufferDesc, const u64 offsetBytes, const u64 dataSizeBytes){
+    const auto validCopyRange = [](const BufferDesc& bufferDesc, const u64 offsetBytes, const u64 dataSizeBytes)noexcept{
         return dataSizeBytes != 0u && offsetBytes <= bufferDesc.byteSize && dataSizeBytes <= bufferDesc.byteSize - offsetBytes;
     };
 

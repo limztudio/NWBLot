@@ -8,9 +8,42 @@
 #include "basic_string.h"
 #include "expected.h"
 #include "limit.h"
+#include "numeric_text.h"
 
-#include <cctype>
-#include <charconv>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename CharT>
+[[nodiscard]] inline bool IsAsciiSpace(const CharT ch)noexcept(IsArithmetic_V<CharT>){
+    return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n') || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v');
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TextDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_Utf8BomByteCount = 3u;
+inline constexpr u8 s_Utf8BomByte0 = 0xEFu;
+inline constexpr u8 s_Utf8BomByte1 = 0xBBu;
+inline constexpr u8 s_Utf8BomByte2 = 0xBFu;
+inline constexpr i32 s_Utf8TwoByteLength = 2;
+inline constexpr i32 s_Utf8ThreeByteLength = 3;
+inline constexpr i32 s_Utf8FourByteLength = 4;
+inline constexpr u32 s_AsciiControlMaxExclusive = 32u;
+inline constexpr u32 s_AsciiDelete = 127u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,14 +110,6 @@ template<typename CharT, typename ArenaT, usize N>
     return StartsWith<CharT>(BasicStringView<CharT>{text}, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
 
-template<typename CharT>
-[[nodiscard]] inline constexpr bool IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file)noexcept(IsArithmetic_V<CharT>){
-    if(root == file)
-        return true;
-    return !root.empty() && file.size() > root.size() && StartsWith(file, root) && (root.back() == static_cast<CharT>('/') || file[root.size()] == static_cast<CharT>('/'));
-}
-
-
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> Trim(ArenaT& arena, const BasicStringView<CharT> text){
     return BasicString<CharT, ArenaT>(TrimView(text), arena);
@@ -118,23 +143,6 @@ template<typename StringT>
     return text;
 }
 
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> JoinUrlWithEndpoint(ArenaT& arena, const BasicStringView<CharT> baseUrl, const BasicStringView<CharT> endpoint){
-    BasicString<CharT, ArenaT> output(BasicStringView<CharT>(baseUrl.data(), baseUrl.size()), arena);
-    if(output.empty() || endpoint.empty())
-        return output;
-
-    const bool baseHasSlash = output.back() == static_cast<CharT>('/');
-    const bool endpointHasSlash = endpoint.front() == static_cast<CharT>('/');
-    if(baseHasSlash && endpointHasSlash)
-        output.pop_back();
-    else if(!baseHasSlash && !endpointHasSlash)
-        output += static_cast<CharT>('/');
-
-    output.append(endpoint.data(), endpoint.size());
-    return output;
-}
 
 template<typename CharT>
 [[nodiscard]] inline bool HasCrlfLineEndings(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
@@ -321,168 +329,9 @@ struct DecodedUtf8CodePoint{
 }
 
 
-inline std::ios_base& StreamHex(std::ios_base& stream){ return std::hex(stream); }
-inline std::ios_base& StreamDec(std::ios_base& stream){ return std::dec(stream); }
-
-
-template<typename StringT>
-inline void AppendJsonEscapedText(StringT& out, const AStringView text){
-    for(const char ch : text){
-        switch(ch){
-        case '"':
-            out += "\\\"";
-            break;
-        case '\\':
-            out += "\\\\";
-            break;
-        case '\b':
-            out += "\\b";
-            break;
-        case '\f':
-            out += "\\f";
-            break;
-        case '\n':
-            out += "\\n";
-            break;
-        case '\r':
-            out += "\\r";
-            break;
-        case '\t':
-            out += "\\t";
-            break;
-        default:
-            if(static_cast<unsigned char>(ch) < TextDetail::s_JsonControlMaxExclusive)
-                out += '?';
-            else
-                out += ch;
-            break;
-        }
-    }
-}
-
-template<typename StringT>
-inline void AppendJsonQuotedText(StringT& out, const AStringView text){
-    out += '"';
-    AppendJsonEscapedText(out, text);
-    out += '"';
-}
-
-template<typename StringT>
-[[nodiscard]] inline StringT MakeJsonEscapedText(const AStringView text){
-    StringT out;
-    out.reserve(text.size());
-    AppendJsonEscapedText(out, text);
-    return out;
-}
-
-template<typename StringT>
-inline void AppendCsvCell(StringT& out, const AStringView text){
-    bool quote = false;
-    for(const char ch : text){
-        if(ch == ',' || ch == '"' || ch == '\n' || ch == '\r'){
-            quote = true;
-            break;
-        }
-    }
-
-    if(!quote){
-        out.append(text.data(), text.size());
-        return;
-    }
-
-    out += '"';
-    for(const char ch : text){
-        if(ch == '"')
-            out += "\"\"";
-        else
-            out += ch;
-    }
-    out += '"';
-}
-
-template<typename StringT>
-inline void AppendDotQuotedText(StringT& out, const AStringView text){
-    out += '"';
-    for(const char ch : text){
-        if(ch == '\n'){
-            out += "\\n";
-            continue;
-        }
-        if(ch == '"' || ch == '\\')
-            out += '\\';
-        out += ch;
-    }
-    out += '"';
-}
-
-
 template<typename CharT, typename Traits, typename AllocatorT>
 [[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, std::basic_string<CharT, Traits, AllocatorT>& outLine){
     return static_cast<bool>(std::getline(stream, outLine));
-}
-
-
-template<usize N>
-[[nodiscard]] inline AStringView FormatDecimal(const usize value, char (&buffer)[N]){
-    const auto formatResult = std::to_chars(buffer, buffer + N, value);
-    if(formatResult.ec != std::errc())
-        return AStringView();
-
-    return AStringView(buffer, static_cast<usize>(formatResult.ptr - buffer));
-}
-
-
-inline constexpr int s_DecimalParseBase = 10;
-
-
-namespace TextParseDetail{
-
-
-template<typename NumberT>
-[[nodiscard]] inline Expected<NumberT> ParseNumber(const AStringView text)noexcept{
-    if(text.empty())
-        return MakeUnexpected(Failure{});
-
-    NumberT value = NumberT(0);
-    const char* const begin = text.data();
-    const char* const end = begin + text.size();
-    const auto parsed = [&]()noexcept{
-        if constexpr(IsIntegral_V<NumberT>)
-            return std::from_chars(begin, end, value, s_DecimalParseBase);
-        else
-            return std::from_chars(begin, end, value);
-    }();
-    if(parsed.ec != std::errc() || parsed.ptr != end)
-        return MakeUnexpected(Failure{});
-    return value;
-}
-
-
-};
-
-
-[[nodiscard]] inline Expected<i64> ParseI64FromChars(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<i64>(text);
-}
-
-[[nodiscard]] inline Expected<u64> ParseU64FromChars(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<u64>(text);
-}
-
-[[nodiscard]] inline Expected<f64> ParseF64FromChars(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<f64>(text);
-}
-
-[[nodiscard]] inline Expected<f32> ParseF32FromChars(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<f32>(text);
-}
-
-[[nodiscard]] inline Expected<u64> ParseU64(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<u64>(text);
-}
-
-[[nodiscard]] inline Expected<i64> ParseI64(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<i64>(text);
 }
 
 
@@ -555,56 +404,6 @@ template<typename CharT>
     if(!value)
         return MakeUnexpected(value.error());
     return ParseU64(*value);
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline i32 Stoi(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoi(str, pos, base); }
-template<typename ArenaT>
-[[nodiscard]] inline i64 Stoll(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoll(str, pos, base); }
-template<typename ArenaT>
-[[nodiscard]] inline u64 Stoull(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoull(str, pos, base); }
-template<typename ArenaT>
-[[nodiscard]] inline f32 Stof(const AString<ArenaT>& str, usize* pos = nullptr){ return std::stof(str, pos); }
-template<typename ArenaT>
-[[nodiscard]] inline f64 Stod(const AString<ArenaT>& str, usize* pos = nullptr){ return std::stod(str, pos); }
-
-
-template<typename CharT = char, typename ArenaT, typename PathT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> PathToString(ArenaT& arena, const PathT& path){
-    if constexpr(SameAs<CharT, typename PathT::value_type>){
-        const auto native = path.native();
-        return BasicString<CharT, ArenaT>(native.data(), native.size(), arena);
-    }
-    else{
-        BasicString<CharT, ArenaT> output{arena};
-        auto out = std::back_inserter(output);
-        BasicStringDetail::WriteConvertedText<CharT>(out, path.native());
-        return output;
-    }
-}
-
-template<typename CharT = char, typename ArenaT, typename PathT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> PathToGenericString(ArenaT& arena, const PathT& path){
-    BasicString<CharT, ArenaT> output = PathToString<CharT>(arena, path);
-    for(CharT& ch : output){
-        if(ch == static_cast<CharT>('\\'))
-            ch = static_cast<CharT>('/');
-    }
-    return output;
-}
-
-template<typename StringT, typename PathT>
-[[nodiscard]] inline StringT PathToGenericString(const PathT& path){
-    using CharT = typename StringT::value_type;
-
-    StringT output;
-    auto out = std::back_inserter(output);
-    BasicStringDetail::WriteConvertedText<CharT>(out, path.native());
-    for(CharT& ch : output){
-        if(ch == static_cast<CharT>('\\'))
-            ch = static_cast<CharT>('/');
-    }
-    return output;
 }
 
 

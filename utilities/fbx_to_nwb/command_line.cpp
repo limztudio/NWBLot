@@ -4,9 +4,12 @@
 
 #include "module.h"
 
-#include <CLI.hpp>
-#include <global/terminal_entry.h>
 #include <core/common/log.h>
+
+#include <global/command_line.h>
+#include <global/terminal_entry.h>
+
+#include <CLI.hpp>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

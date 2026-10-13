@@ -6,7 +6,6 @@
 
 
 #include "compile.h"
-#include "expected.h"
 #include "text_utils.h"
 #include "type.h"
 #include "type_borrow.h"
@@ -20,12 +19,6 @@ inline constexpr u64 s_Fnv64Prime = 1099511628211ull;
 inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
 inline constexpr usize s_HashCombineLeftShift = 6u;
 inline constexpr usize s_HashCombineRightShift = 2u;
-inline constexpr usize s_HexDecimalDigitCount = 10u;
-inline constexpr usize s_HexPrefixLength = 2u;
-inline constexpr usize s_HexU32DigitCount = 8u;
-inline constexpr usize s_HexU64DigitCount = 16u;
-inline constexpr u32 s_HexNibbleBits = 4u;
-inline constexpr u64 s_HexNibbleMask = 0xFu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -123,155 +116,6 @@ template<typename StringT>
 [[nodiscard]] inline u64 ComputeFnv64Text(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return ComputeFnv64Text(BasicStringView<CharT>(text.data(), text.size()));
-}
-
-
-template<typename CharT>
-[[nodiscard]] inline Expected<u8> ParseHexDigit(const CharT ch)noexcept(IsArithmetic_V<CharT>){
-    if(ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')){
-        return static_cast<u8>(ch - static_cast<CharT>('0'));
-    }
-    if(ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')){
-        return static_cast<u8>(ch - static_cast<CharT>('a') + s_HexDecimalDigitCount);
-    }
-    if(ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')){
-        return static_cast<u8>(ch - static_cast<CharT>('A') + s_HexDecimalDigitCount);
-    }
-    return MakeUnexpected(Failure{});
-}
-
-
-template<typename CharT>
-[[nodiscard]] inline Expected<u64> ParseHexU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    if(text.size() != s_HexU64DigitCount)
-        return MakeUnexpected(Failure{});
-
-    u64 value = 0u;
-    for(const CharT ch : text){
-        const auto nibble = ParseHexDigit(ch);
-        if(!nibble)
-            return MakeUnexpected(Failure{});
-
-        value = (value << s_HexNibbleBits) | static_cast<u64>(*nibble);
-    }
-
-    return value;
-}
-
-
-template<typename CharT>
-[[nodiscard]] inline Expected<u64> ParseVariableHexU64(BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    u64 value = 0u;
-    if(text.size() >= s_HexPrefixLength && text[0u] == static_cast<CharT>('0') && (text[1u] == static_cast<CharT>('x') || text[1u] == static_cast<CharT>('X')))
-        text.remove_prefix(s_HexPrefixLength);
-    if(text.empty() || text.size() > s_HexU64DigitCount)
-        return MakeUnexpected(Failure{});
-
-    for(const CharT ch : text){
-        const auto nibble = ParseHexDigit(ch);
-        if(!nibble)
-            return MakeUnexpected(Failure{});
-
-        value = (value << s_HexNibbleBits) | static_cast<u64>(*nibble);
-    }
-    return value;
-}
-
-
-namespace HashUtilsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT>
-[[nodiscard]] inline constexpr CharT HexDigit(const usize nibble)noexcept(IsArithmetic_V<CharT>){
-    return static_cast<CharT>(nibble < s_HexDecimalDigitCount ? static_cast<usize>('0') + nibble : static_cast<usize>('a') + (nibble - s_HexDecimalDigitCount));
-}
-
-template<typename StringT>
-inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& outText){
-    if(outText.size() > outText.max_size() || outText.max_size() - outText.size() < nibbleCount)
-        return;
-
-    using CharT = typename StringT::value_type;
-    for(u32 nibbleIndex = 0u; nibbleIndex < nibbleCount; ++nibbleIndex){
-        const u32 shift = (nibbleCount - 1u - nibbleIndex) * s_HexNibbleBits;
-        const usize nibble = static_cast<usize>((value >> shift) & s_HexNibbleMask);
-        outText.push_back(HexDigit<CharT>(nibble));
-    }
-}
-
-template<typename StringT>
-inline void AppendHexU32Impl(const u32 value, StringT& outText){
-    AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText);
-}
-
-template<typename StringT>
-inline void AppendHexU64Impl(const u64 value, StringT& outText){
-    AppendFixedHexImpl(value, s_HexU64DigitCount, outText);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT, typename ArenaT>
-inline void AppendHexU32(const u32 value, BasicString<CharT, ArenaT>& outText){
-    HashUtilsDetail::AppendHexU32Impl(value, outText);
-}
-template<typename StringT>
-    requires requires(StringT& text){
-        typename StringT::value_type;
-        text.size();
-        text.max_size();
-        text.push_back(typename StringT::value_type{});
-    }
-inline void AppendHexU32(const u32 value, StringT& outText){
-    HashUtilsDetail::AppendHexU32Impl(value, outText);
-}
-
-template<typename StringT>
-    requires requires(StringT& text){
-        typename StringT::value_type;
-        text += typename StringT::value_type{};
-    }
-inline void AppendHexU32UnsignedLiteral(const u32 value, StringT& outText){
-    using CharT = typename StringT::value_type;
-    outText += static_cast<CharT>('0');
-    outText += static_cast<CharT>('x');
-    AppendHexU32(value, outText);
-    outText += static_cast<CharT>('u');
-}
-
-template<typename CharT, typename ArenaT>
-inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText){
-    HashUtilsDetail::AppendHexU64Impl(value, outText);
-}
-template<typename StringT>
-    requires requires(StringT& text){
-        typename StringT::value_type;
-        text.size();
-        text.max_size();
-        text.push_back(typename StringT::value_type{});
-    }
-inline void AppendHexU64(const u64 value, StringT& outText){
-    HashUtilsDetail::AppendHexU64Impl(value, outText);
-}
-
-
-template<typename ArenaT>
-[[nodiscard]] inline AString<ArenaT> FormatHex64A(ArenaT& arena, const u64 value){
-    AString<ArenaT> result{arena};
-    result.reserve(s_HexU64DigitCount);
-    AppendHexU64(value, result);
-    return result;
 }
 
 

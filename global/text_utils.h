@@ -7,50 +7,15 @@
 
 #include "basic_string.h"
 #include "expected.h"
-#include "limit.h"
-
-#include <cctype>
-#include <charconv>
+#include "text_trim_parse.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename CharT>
-[[nodiscard]] inline bool IsAsciiSpace(const CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n') || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v');
-}
-
-template<typename CharT>
 [[nodiscard]] inline BasicStringView<CharT> SafeStringView(const CharT* const text)noexcept{
     return text ? BasicStringView<CharT>(text) : BasicStringView<CharT>();
-}
-
-[[nodiscard]] inline constexpr StringView BoolToYesNoText(const bool value)noexcept{
-    return value ? StringView("yes") : StringView("no");
-}
-
-[[nodiscard]] inline constexpr StringView BoolToAvailabilityText(const bool value)noexcept{
-    return value ? StringView("available") : StringView("unavailable");
-}
-
-template<typename CharT>
-[[nodiscard]] inline bool IsConfirmYesText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text == BasicStringView<CharT>("y") || text == BasicStringView<CharT>("yes") || text == BasicStringView<CharT>("true") || text == BasicStringView<CharT>("1");
-}
-
-template<typename CharT>
-[[nodiscard]] inline bool IsConfirmNoText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text == BasicStringView<CharT>("n") || text == BasicStringView<CharT>("no") || text == BasicStringView<CharT>("false") || text == BasicStringView<CharT>("0");
-}
-
-template<typename CharT>
-[[nodiscard]] inline Expected<bool> ParseConfirmText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    if(IsConfirmYesText(text))
-        return true;
-    if(IsConfirmNoText(text))
-        return false;
-    return MakeUnexpected(Failure{});
 }
 
 template<typename CharT>
@@ -62,101 +27,6 @@ template<typename CharT>
 [[nodiscard]] inline BasicStringView<CharT> TruncateView(const CharT* const text, const usize maxChars)noexcept{
     return text ? TruncateView(BasicStringView<CharT>(text), maxChars) : BasicStringView<CharT>();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TextDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr usize s_Utf8BomByteCount = 3u;
-inline constexpr u8 s_Utf8BomByte0 = 0xEFu;
-inline constexpr u8 s_Utf8BomByte1 = 0xBBu;
-inline constexpr u8 s_Utf8BomByte2 = 0xBFu;
-inline constexpr i32 s_Utf8TwoByteLength = 2;
-inline constexpr i32 s_Utf8ThreeByteLength = 3;
-inline constexpr i32 s_Utf8FourByteLength = 4;
-inline constexpr u32 s_AsciiControlMaxExclusive = 32u;
-inline constexpr u32 s_AsciiDelete = 127u;
-inline constexpr u8 s_JsonControlMaxExclusive = 0x20u;
-inline constexpr usize s_DecimalTextBufferBytes = 32u;
-inline constexpr i32 s_DefaultNumericTextBase = 10;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include "text_trim_parse.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TextUtilsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT, typename PathT>
-struct PathToStringArg{
-    const PathT& path;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT = char, typename PathT>
-[[nodiscard]] inline TextUtilsDetail::PathToStringArg<CharT, PathT> PathToString(const PathT& path)noexcept{
-    return TextUtilsDetail::PathToStringArg<CharT, PathT>{ path };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace std{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename RequestedCharT, typename PathT, typename FormatCharT>
-struct formatter<TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>, FormatCharT>{
-    constexpr auto parse(basic_format_parse_context<FormatCharT>& ctx)noexcept{
-        return ctx.begin();
-    }
-
-    template<typename FormatContext>
-    auto format(const TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>& arg, FormatContext& ctx)const{
-        auto out = ctx.out();
-        BasicStringDetail::WriteConvertedText<FormatCharT>(out, arg.path.native());
-        return out;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,11 +52,6 @@ template<typename StringT>
 [[nodiscard]] inline StringT ToAsciiLowerCopy(StringT text){
     ToAsciiLowerInPlace(text);
     return text;
-}
-
-template<typename StringT>
-[[nodiscard]] inline StringT NormalizeOptionText(StringT text){
-    return ToAsciiLowerCopy(TrimCopy(text));
 }
 
 template<typename StringT>
@@ -280,82 +145,6 @@ template<typename CharT, usize N>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace TextUtilsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT>
-inline constexpr bool IsSafeCacheNameChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z')) || (ch >= CharT('0') && ch <= CharT('9'));
-    const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
-    return alphaNum || safePunctuation;
-}
-
-template<bool Canonical, typename StringT>
-inline void SanitizeSafeCacheName(StringT& text){
-    using CharT = typename StringT::value_type;
-    for(CharT& ch : text){
-        if constexpr(Canonical)
-            ch = Canonicalize(ch);
-
-        if(!IsSafeCacheNameChar(ch))
-            ch = CharT('_');
-    }
-}
-
-template<typename CharT, typename ArenaT, bool Canonical>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheNameImpl(ArenaT& arena, const BasicStringView<CharT> text){
-    if(text.empty())
-        return BasicString<CharT, ArenaT>(arena);
-
-    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
-    SanitizeSafeCacheName<Canonical>(output);
-    return output;
-}
-
-template<bool Canonical, typename StringT>
-[[nodiscard]] inline StringT BuildSafeCacheNameCopy(const StringT& text){
-    if(text.empty())
-        return StringT(text.get_allocator());
-
-    StringT output(text.data(), text.size(), text.get_allocator());
-    SanitizeSafeCacheName<Canonical>(output);
-    return output;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
-    return TextUtilsDetail::BuildSafeCacheNameImpl<CharT, ArenaT, false>(arena, text);
-}
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(const BasicString<CharT, ArenaT>& text){
-    return TextUtilsDetail::BuildSafeCacheNameCopy<false>(text);
-}
-template<typename StringT>
-    requires requires(const StringT& text){
-        typename StringT::value_type;
-        text.empty();
-        text.data();
-        text.size();
-        text.get_allocator();
-    }
-[[nodiscard]] inline StringT BuildSafeCacheName(const StringT& text){
-    return TextUtilsDetail::BuildSafeCacheNameCopy<false>(text);
-}
-
-
 template<typename DstCharT, typename SrcCharT>
 inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const BasicStringView<SrcCharT> src)noexcept(IsArithmetic_V<DstCharT> && IsArithmetic_V<SrcCharT>){
     if(dstSize == 0)
@@ -394,27 +183,6 @@ template<typename CharT, typename ArenaT>
     return output;
 }
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
-    return TextUtilsDetail::BuildSafeCacheNameImpl<CharT, ArenaT, true>(arena, text);
-}
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(const BasicString<CharT, ArenaT>& text){
-    return TextUtilsDetail::BuildSafeCacheNameCopy<true>(text);
-}
-template<typename StringT>
-    requires requires(const StringT& text){
-        typename StringT::value_type;
-        text.empty();
-        text.data();
-        text.size();
-        text.get_allocator();
-    }
-[[nodiscard]] inline StringT BuildCanonicalSafeCacheName(const StringT& text){
-    return TextUtilsDetail::BuildSafeCacheNameCopy<true>(text);
-}
-
-
 template<typename CharT>
 [[nodiscard]] inline bool HasEmbeddedNull(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
@@ -433,10 +201,6 @@ template<typename CharT>
     return false;
 }
 
-template<typename CharT>
-[[nodiscard]] inline bool IsSingleLinePathText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return !text.empty() && !HasEmbeddedNull(text) && !HasLineBreak(text);
-}
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return HasEmbeddedNull(BasicStringView<CharT>(text));
@@ -475,17 +239,6 @@ template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
             return values[i];
     }
     return MakeUnexpected(Failure{});
-}
-
-template<typename StringT, typename EnumT, typename TextFunction>
-[[nodiscard]] inline StringT BuildEnumOptionTexts(TextFunction textFunction, const EnumT* values, const usize valueCount){
-    StringT text;
-    for(usize i = 0u; i < valueCount; ++i){
-        if(i > 0u)
-            text += (i + 1u == valueCount) ? ", or " : ", ";
-        text += textFunction(values[i]);
-    }
-    return text;
 }
 
 

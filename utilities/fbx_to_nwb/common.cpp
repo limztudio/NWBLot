@@ -4,6 +4,8 @@
 
 #include "module.h"
 
+#include <global/command_line.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,7 +54,9 @@ AString OutputAssetTypeOptionsText(){
 }
 
 AString OutputAssetTypeErrorText(){
-    return MakeOptionsErrorText<AString>("Asset type must be ", OutputAssetTypeOptionsText());
+    AString message("Asset type must be ");
+    message += OutputAssetTypeOptionsText();
+    return message;
 }
 
 static Expected<OutputAssetType::Enum> ParseNormalizedAssetTypeText(const AStringView value){
@@ -86,7 +90,9 @@ AString NormalModeOptionsText(){
 }
 
 AString NormalModeErrorText(){
-    return MakeOptionsErrorText<AString>("normal mode must be ", NormalModeOptionsText());
+    AString message("normal mode must be ");
+    message += NormalModeOptionsText();
+    return message;
 }
 
 static Expected<NormalMode::Enum> ParseNormalizedNormalModeText(const AStringView value){

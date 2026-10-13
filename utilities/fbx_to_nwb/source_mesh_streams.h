@@ -8,8 +8,9 @@
 #include "module.h"
 
 #include <core/common/log.h>
-#include <global/mesh/tangent_frame_rebuild.h>
-#include <global/mesh/triangle_area.h>
+#include <core/mesh/tangent_frame_rebuild.h>
+
+#include <global/simd/collision_triangle.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 
 #include "basic_string.h"
 #include "expected.h"
-#include "hash_utils.h"
+#include "numeric_text.h"
 #include "text_utils.h"
 #include "type.h"
 

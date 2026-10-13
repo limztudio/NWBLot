@@ -5,6 +5,7 @@
 #include "package_internal.h"
 
 #include <global/diagnostics.h>
+#include <global/json_text.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <dbghelp.h>

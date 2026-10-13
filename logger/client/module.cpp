@@ -27,7 +27,19 @@ static constexpr long s_RequestTimeoutMs = 2000L;
 static constexpr u32 s_RetrySleepMs = 100u;
 
 [[nodiscard]] static AString<LogArena> UrlWithEndpoint(LogArena& arena, const AStringView baseUrl, const AStringView endpoint){
-    return JoinUrlWithEndpoint<char>(arena, baseUrl, endpoint);
+    AString<LogArena> output(AStringView(baseUrl.data(), baseUrl.size()), arena);
+    if(output.empty() || endpoint.empty())
+        return output;
+
+    const bool baseHasSlash = output.back() == static_cast<char>('/');
+    const bool endpointHasSlash = endpoint.front() == static_cast<char>('/');
+    if(baseHasSlash && endpointHasSlash)
+        output.pop_back();
+    else if(!baseHasSlash && !endpointHasSlash)
+        output += static_cast<char>('/');
+
+    output.append(endpoint.data(), endpoint.size());
+    return output;
 }
 
 

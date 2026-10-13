@@ -26,7 +26,7 @@
 #include <core/assets/auto_registration.h>
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/factory.h>
-#include <global/filesystem/volume_naming.h>
+#include <core/filesystem/volume_naming.h>
 
 #include "project_entry.h"
 #include "profile_names.h"
@@ -142,7 +142,7 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
     const auto currentDirectory = GetCurrentPath(arena);
     if(currentDirectory){
         const Path currentResDirectory = *currentDirectory / s_ResourceDirectoryName;
-        if(::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName))
+        if(NWB::Core::Filesystem::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName))
             return currentResDirectory;
     }
 
@@ -151,7 +151,7 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
         return Path(arena, s_ResourceDirectoryName);
 
     const Path executableResDirectory = *executableDirectory / s_ResourceDirectoryName;
-    if(::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName))
+    if(NWB::Core::Filesystem::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName))
         return executableResDirectory;
 
     const Path parentDirectory = executableDirectory->parentPath();
@@ -159,7 +159,7 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
         return Path(arena, s_ResourceDirectoryName);
 
     const Path parentResDirectory = parentDirectory / s_ResourceDirectoryName;
-    if(::VolumeSegmentExists(parentResDirectory, s_GraphicsVolumeName))
+    if(NWB::Core::Filesystem::VolumeSegmentExists(parentResDirectory, s_GraphicsVolumeName))
         return parentResDirectory;
 
     return Path(arena, s_ResourceDirectoryName);

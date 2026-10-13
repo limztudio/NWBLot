@@ -8,16 +8,18 @@
 
 #include <global/simd/type.h>
 #include <global/simd/vector.h>
-#include <global/mesh/tangent_frame_rebuild.h>
 #include <global/simdmath.h>
 
 #include <core/alloc/scratch.h>
+#include <core/mesh/tangent_frame_rebuild.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_tangent_frame_tests{
+
+using namespace NWB::Core::Mesh;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,14 +77,14 @@ Vector<TangentFrameRebuildVertex> TangentFrameFixture::MakeFlatQuadVertices(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Global, DegenerateUvsUseStableTangentFallback){
+TEST(Mesh, DegenerateUvsUseStableTangentFallback){
     Vector<TangentFrameRebuildVertex> vertices = TangentFrameFixture::MakeFlatQuadVertices();
     const Vector<u32> indices = NWB::Tests::MakeQuadTriangleIndices();
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     for(TangentFrameRebuildVertex& vertex : vertices)
         vertex.uv0 = Float2U(0.0f, 0.0f);
 
-    const auto result = ::RebuildTangentFrames(scratchArena, vertices, indices);
+    const auto result = RebuildTangentFrames(scratchArena, vertices, indices);
     ASSERT_TRUE(result);
     EXPECT_EQ(result->rebuiltVertexCount, vertices.size());
     EXPECT_EQ(result->degenerateUvTriangleCount, s_ExpectedDualCount);
@@ -95,7 +97,7 @@ TEST(Global, DegenerateUvsUseStableTangentFallback){
     }
 }
 
-TEST(Global, RejectsDegenerateTangentFrameTriangle){
+TEST(Mesh, RejectsDegenerateTangentFrameTriangle){
     Vector<TangentFrameRebuildVertex> vertices;
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
@@ -103,7 +105,7 @@ TEST(Global, RejectsDegenerateTangentFrameTriangle){
     const Vector<u32> indices = NWB::Tests::MakeTriangleIndices();
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
 
-    EXPECT_FALSE(::RebuildTangentFrames(scratchArena, vertices, indices));
+    EXPECT_FALSE(RebuildTangentFrames(scratchArena, vertices, indices));
 }
 
 

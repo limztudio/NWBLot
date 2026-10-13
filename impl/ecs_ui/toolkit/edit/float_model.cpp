@@ -5,7 +5,7 @@
 #include "float_model.h"
 
 #include <global/bit.h>
-#include <global/text_numeric_format.h>
+#include <global/numeric_text.h>
 #include <global/termination.h>
 
 

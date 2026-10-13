@@ -24,6 +24,7 @@
 #include "fixed_buffer.h"
 #include "inplace_function.h"
 #include "text_utils.h"
+#include "numeric_text.h"
 #include "command_line.h"
 #include "environment.h"
 #include "process.h"

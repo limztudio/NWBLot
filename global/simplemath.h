@@ -6,9 +6,6 @@
 
 
 #include "compile.h"
-#include "expected.h"
-#include "limit.h"
-#include "overflow.h"
 #include "type.h"
 
 #include <algorithm>
@@ -65,28 +62,6 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool IsPowerOfTwo(const T value)noexcept(IsArithmetic_V<T>){
-    return value > static_cast<T>(0) && (value & (value - static_cast<T>(1))) == static_cast<T>(0);
-}
-
-template<typename T>
-[[nodiscard]] constexpr bool IsSupportedAlignmentValue(const T align)noexcept(IsArithmetic_V<T>){
-    return align <= static_cast<T>(1) || (align & (align - static_cast<T>(1))) == static_cast<T>(0);
-}
-
-template<typename T>
-[[nodiscard]] constexpr Expected<T> AlignUpPowerOfTwoChecked(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
-    if(alignment == 0)
-        return value;
-
-    const T mask = alignment - static_cast<T>(1);
-    if(value > Limit<T>::s_Max - mask)
-        return MakeUnexpected(Failure{});
-
-    return (value + mask) & ~mask;
-}
-
-template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T Saturate(const T value)noexcept(IsArithmetic_V<T>){
     if(value < static_cast<T>(0))
         return static_cast<T>(0);
@@ -94,11 +69,6 @@ template<typename T>
         return static_cast<T>(1);
     return value;
 }
-
-template<typename T>
-[[nodiscard]] constexpr NWB_INLINE T FloorLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
-template<typename T>
-[[nodiscard]] constexpr NWB_INLINE T CeilLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
 
 template<typename T>
 [[nodiscard]] NWB_INLINE T Floor(const T value)noexcept(IsArithmetic_V<T>){
@@ -254,14 +224,6 @@ template<typename T>
 [[nodiscard]] NWB_INLINE bool SignBit(const T value)noexcept(IsArithmetic_V<T>){
     using std::signbit;
     return signbit(value);
-}
-
-template<typename T>
-[[nodiscard]] constexpr Expected<T> AddNoOverflow(const T lhs, const T rhs)noexcept(IsArithmetic_V<T>){
-    if(AddOverflows<T>(lhs, rhs))
-        return MakeUnexpected(Failure{});
-
-    return static_cast<T>(lhs + rhs);
 }
 
 

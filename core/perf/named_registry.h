@@ -5,20 +5,22 @@
 #pragma once
 
 
-#include "limit.h"
-#include "name.h"
+#include "global.h"
+
+#include <global/limit.h>
+#include <global/name.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<
-    typename ScopeId,
-    typename ScopeVector,
-    typename ScopeMap,
-    typename CreateScope,
-    typename ConfigureScope
->
+NWB_PERF_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ScopeId, typename ScopeVector, typename ScopeMap, typename CreateScope, typename ConfigureScope>
 [[nodiscard]] ScopeId RegisterNamedScope(ScopeVector& scopes, ScopeMap& scopeMap, const u32 generation, const Name& scopeName, CreateScope&& createScope, ConfigureScope&& configureScope){
     if(!scopeName)
         return {};
@@ -51,12 +53,12 @@ template<
 // Generation-stamped scope lookup shared by memory and timing recorders.
 
 
-template<
-    typename ScopeId, typename ScopeVector > [[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope) -> decltype(scopes[scope.index].get()){
+template<typename ScopeId, typename ScopeVector>
+[[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope) -> decltype(scopes[scope.index].get()){
     if(!scope.valid() || scope.index >= scopes.size())
         return nullptr;
 
-    auto record = scopes[scope.index].get();
+    auto* record = scopes[scope.index].get();
     if(!record || record->generation != scope.generation)
         return nullptr;
 
@@ -68,7 +70,7 @@ template<typename ScopeId, typename ScopeVector>
     if(index >= scopes.size())
         return {};
 
-    auto record = scopes[index].get();
+    auto* record = scopes[index].get();
     if(!record)
         return {};
 
@@ -85,6 +87,12 @@ template<typename ScopeVector>
 
     return scopes[index]->name;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PERF_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

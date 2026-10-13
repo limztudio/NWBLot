@@ -36,6 +36,14 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] constexpr Expected<T> AddNoOverflow(const T lhs, const T rhs)noexcept(IsArithmetic_V<T>){
+    if(AddOverflows<T>(lhs, rhs))
+        return MakeUnexpected(Failure{});
+
+    return static_cast<T>(lhs + rhs);
+}
+
+template<typename T>
 [[nodiscard]] constexpr bool SubtractOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
     if constexpr(IsSigned_V<T>){
         if(rhs > T(0))

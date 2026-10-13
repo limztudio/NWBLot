@@ -6,7 +6,7 @@
 
 
 #include "basic_string.h"
-#include "text_utils.h"
+#include "numeric_text.h"
 #include "type.h"
 
 

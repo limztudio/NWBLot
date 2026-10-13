@@ -8,6 +8,7 @@
 #include "array.h"
 #include "expected.h"
 #include "hash_utils.h"
+#include "numeric_text.h"
 #include <functional>
 #include <type_traits>
 

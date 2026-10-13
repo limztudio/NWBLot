@@ -9,7 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
-#include <global/filesystem/volume_naming.h>
+#include <core/filesystem/volume_naming.h>
 #include <global/limit.h>
 
 
@@ -180,7 +180,7 @@ static Expected<Vector<Path, Core::Alloc::ScratchArena>> MoveExistingVolumeSegme
     };
 
     for(usize segmentIndex = 0u;; ++segmentIndex){
-        const Path currentPath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
+        const Path currentPath = MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
         const auto exists = FileExists(currentPath);
         if(!exists){
             const ErrorCode& errorCode = exists.error();
@@ -247,8 +247,8 @@ static Expected<void, VolumePromotionFailure> MoveStagedVolumeSegments(const Pat
     }
 
     for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
-        const Path sourcePath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
-        const Path destinationPath = ::MakeVolumeSegmentPath(toDirectory, volumeName, segmentIndex);
+        const Path sourcePath = MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
+        const Path destinationPath = MakeVolumeSegmentPath(toDirectory, volumeName, segmentIndex);
         if(const auto operation = RenamePath(sourcePath, destinationPath); !operation){
             const ErrorCode errorCode = operation.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to promote staged segment '{}' to '{}': {}"), PathToString<tchar>(sourcePath), PathToString<tchar>(destinationPath), StringConvert(errorCode.message()));
@@ -264,7 +264,7 @@ static Expected<void, VolumePromotionFailure> MoveStagedVolumeSegments(const Pat
 static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
 
     for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
-        const Path segmentPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
+        const Path segmentPath = MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
         if(const auto operation = RemoveFile(segmentPath); !operation || !*operation){
             const ErrorCode errorCode = operation ? ErrorCode{} : operation.error();
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}"), PathToString<tchar>(segmentPath), StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present")));
@@ -318,7 +318,7 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
     }
 
     for(usize segmentIndex = 0u;; ++segmentIndex){
-        const Path hashedPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
+        const Path hashedPath = MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
 
         const auto exists = FileExists(hashedPath);
         if(!exists){
@@ -359,7 +359,7 @@ bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& ou
 }
 
 bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
-    if(!::ValidVolumeName(volumeName)){
+    if(!ValidVolumeName(volumeName)){
         FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, "invalid volume name");
         return false;
     }

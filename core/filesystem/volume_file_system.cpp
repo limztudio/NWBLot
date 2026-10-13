@@ -8,7 +8,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
-#include <global/filesystem/volume_naming.h>
+#include <core/filesystem/volume_naming.h>
 #include <global/limit.h>
 #include <global/simplemath.h>
 
@@ -42,7 +42,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         return false;
     unmountLocked();
 
-    if(!::ValidVolumeName(desc.volumeName.view())){
+    if(!ValidVolumeName(desc.volumeName.view())){
         FilesystemVolumeDetail::LogFailure(desc.volumeName.view(), FilesystemVolumeDetail::s_VolumeOpMount, "invalid volume name");
         return false;
     }
@@ -591,7 +591,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
     m_segmentPaths.clear();
 
     for(usize segmentIndex = 0u;; ++segmentIndex){
-        const Path hashedSegmentPath = ::MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
+        const Path hashedSegmentPath = MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
 
         const auto exists = FileExists(hashedSegmentPath);
         if(!exists){
@@ -653,7 +653,7 @@ void VolumeFileSystem::unmountLocked(){
 }
 
 Path VolumeFileSystem::segmentPath(const usize segmentIndex)const{
-    return ::MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
+    return MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
 }
 
 

@@ -100,7 +100,7 @@ bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& m
 
 
 Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs){
-    using RebuildVertex = ::TangentFrameRebuildVertex;
+    using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     SourceTangentReport outTangentReport;
     NWB_ASSERT(!mesh.vertexRefs.empty());
@@ -149,7 +149,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
     }
 
     Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_SourceTangentRebuildScratch);
-    const auto rebuildResult = ::RebuildTangentFrames(scratchArena, rebuildVertices, rebuildIndices);
+    const auto rebuildResult = Core::Mesh::RebuildTangentFrames(scratchArena, rebuildVertices, rebuildIndices);
     if(!rebuildResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
         return MakeUnexpected(Failure{});

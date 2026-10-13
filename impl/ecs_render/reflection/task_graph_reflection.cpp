@@ -17,7 +17,7 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/capture/command_ir.h>
 
-#include <global/text_numeric_format.h>
+#include <global/numeric_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

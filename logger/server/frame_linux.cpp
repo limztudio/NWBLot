@@ -5,7 +5,7 @@
 #include <core/alloc/standalone_runtime.h>
 #include "frame.h"
 
-#include <global/signal_utils.h>
+#include <global/process.h>
 #include <global/thread.h>
 
 

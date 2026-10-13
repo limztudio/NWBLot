@@ -5,11 +5,19 @@
 #pragma once
 
 
-#include "../compact_string.h"
-#include "../hash_utils.h"
-#include "../text_utils.h"
-#include "operations.h"
-#include "path.h"
+#include "global.h"
+
+#include <global/compact_string.h>
+#include <global/hash_utils.h>
+#include <global/numeric_text.h>
+#include <global/filesystem/operations.h>
+#include <global/filesystem/path.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FILESYSTEM_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,12 +58,12 @@
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Path<ArenaT> MakeVolumeSegmentPath(const Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex){
+[[nodiscard]] inline ::Path<ArenaT> MakeVolumeSegmentPath(const ::Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex){
     return directory / MakeVolumeSegmentFileName(volumeName, segmentIndex).view();
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool VolumeSegmentExists(const Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex = 0u){
+[[nodiscard]] inline bool VolumeSegmentExists(const ::Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex = 0u){
     if(directory.empty())
         return false;
 
@@ -63,10 +71,16 @@ template<typename ArenaT>
     if(!isDirectory || !*isDirectory)
         return false;
 
-    const Path<ArenaT> segmentPath = MakeVolumeSegmentPath(directory, volumeName, segmentIndex);
+    const ::Path<ArenaT> segmentPath = MakeVolumeSegmentPath(directory, volumeName, segmentIndex);
     const auto exists = FileExists(segmentPath);
     return exists && *exists;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FILESYSTEM_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -15,6 +15,7 @@
 
 #include <cerrno>
 #include <climits>
+#include <cstdlib>
 #include <ctime>
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -46,6 +47,30 @@ namespace ProcessExecutionFailure{
         Unsupported,
     };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+[[nodiscard]] inline int RunSystemCommand(ArenaT& arena, const AStringView command){
+    if(command.find(char{}) != AStringView::npos)
+        return -1;
+    const AString<ArenaT> nativeCommand(command, arena);
+    return std::system(nativeCommand.c_str());
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline int RunSystemCommand(const AString<ArenaT>& command){
+#if defined(NWB_PLATFORM_WINDOWS)
+    AString<ArenaT> systemCommand("\"", command.get_allocator());
+    systemCommand += command;
+    systemCommand += '"';
+    return std::system(systemCommand.c_str());
+#else
+    return std::system(command.c_str());
+#endif
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

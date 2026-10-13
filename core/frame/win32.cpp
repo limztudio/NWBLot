@@ -17,7 +17,7 @@
 
 #include <windows.h>
 #include <global/compile.h>
-#include <global/win32_message_loop.h>
+#include <global/timer.h>
 
 #include "input_helpers.h"
 
@@ -30,6 +30,102 @@
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_win32_message_loop{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Win32MessagePumpResult{
+    enum Enum : u8{
+        Continue,
+        SkipUpdate,
+        Quit
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename OnDestroyFunc, typename SetActiveFunc>
+[[nodiscard]] static bool HandleWin32FrameLifecycleMessage(HWND hwnd, UINT message, WPARAM wParam, OnDestroyFunc&& onDestroy, SetActiveFunc&& setActive, LRESULT& outResult){
+    switch(message){
+    case WM_DESTROY:
+        onDestroy();
+        PostQuitMessage(0);
+        outResult = 0;
+        return true;
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        outResult = 0;
+        return true;
+    case WM_ACTIVATE:
+        setActive(LOWORD(wParam) != WA_INACTIVE);
+        outResult = 0;
+        return true;
+    default:
+        return false;
+    }
+}
+
+
+template<typename IsActiveFunc>
+[[nodiscard]] static Win32MessagePumpResult::Enum PumpWin32FrameMessages(IsActiveFunc&& isActive){
+    MSG message = {};
+
+    if(isActive()){
+        while(PeekMessage(&message, nullptr, 0, 0, PM_REMOVE)){
+            if(message.message == WM_QUIT)
+                return Win32MessagePumpResult::Quit;
+
+            TranslateMessage(&message);
+            DispatchMessage(&message);
+        }
+        return Win32MessagePumpResult::Continue;
+    }
+
+    if(GetMessage(&message, nullptr, 0, 0) <= 0)
+        return Win32MessagePumpResult::Quit;
+
+    TranslateMessage(&message);
+    DispatchMessage(&message);
+    return Win32MessagePumpResult::SkipUpdate;
+}
+
+template<typename IsActiveFunc, typename BeforeUpdateFunc, typename UpdateFunc>
+[[nodiscard]] static bool RunWin32TimedFrameLoop(IsActiveFunc&& isActive, BeforeUpdateFunc&& beforeUpdate, UpdateFunc&& update){
+    Timer lateTime(TimerNow());
+
+    for(;;){
+        switch(PumpWin32FrameMessages(isActive)){
+        case Win32MessagePumpResult::Quit:
+            return true;
+        case Win32MessagePumpResult::SkipUpdate:
+            continue;
+        case Win32MessagePumpResult::Continue:
+            break;
+        }
+
+        beforeUpdate();
+
+        const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
+        if(!update(timeDifference))
+            break;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -296,7 +392,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         LRESULT lifecycleResult = 0;
         if(
-            ::HandleWin32FrameLifecycleMessage(
+            __hidden_win32_message_loop::HandleWin32FrameLifecycleMessage(
                 hwnd, uMsg, wParam, []()noexcept{},
                 [&](const bool isActive){
                     frame->data<Common::WinFrame>().setActive(isActive);
@@ -559,7 +655,7 @@ bool Frame::mainLoop(){
         return true;
 
     bool gracefulQuit = false;
-    const bool loopResult = ::RunWin32TimedFrameLoop([&](){ return data<Common::WinFrame>().isActive(); },
+    const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop([&](){ return data<Common::WinFrame>().isActive(); },
         [&](){
             RECT rect = {};
             const bool hasRect = GetClientRect(data<Common::WinFrame>().hwnd(), &rect) != FALSE;

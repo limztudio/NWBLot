@@ -4,9 +4,11 @@
 
 #include "module.h"
 #include "asset_writer_skeleton.h"
-#include <global/text_write.h>
+#include "text_write.h"
 
 #include <core/common/log.h>
+
+#include <global/json_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

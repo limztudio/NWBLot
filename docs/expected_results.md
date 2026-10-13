@@ -13,7 +13,7 @@ The result's boolean conversion answers whether the operation succeeded. Check i
 For example, this parser admits a positive count without an output parameter:
 
 ```cpp
-#include <global/text_utils.h>
+#include <global/numeric_text.h>
 
 Expected<u64> ParsePositiveCount(const AStringView text)noexcept{
     const auto count = ParseU64(text);

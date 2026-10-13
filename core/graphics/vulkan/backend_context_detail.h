@@ -195,7 +195,7 @@ inline bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported)noexce
 }
 
 inline StringView BoolToString(bool value)noexcept{
-    return BoolToYesNoText(value);
+    return value ? StringView("yes") : StringView("no");
 }
 
 inline ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 version){

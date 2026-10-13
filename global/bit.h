@@ -15,6 +15,16 @@
 
 
 template<typename T>
+[[nodiscard]] constexpr bool IsPowerOfTwo(const T value)noexcept(IsArithmetic_V<T>){
+    return value > static_cast<T>(0) && (value & (value - static_cast<T>(1))) == static_cast<T>(0);
+}
+
+template<typename T>
+[[nodiscard]] constexpr NWB_INLINE T FloorLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
+template<typename T>
+[[nodiscard]] constexpr NWB_INLINE T CeilLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
+
+template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T BitMask(const u32 bitIndex)noexcept(IsArithmetic_V<T>){
     return static_cast<T>(1) << bitIndex;
 }

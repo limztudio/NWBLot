@@ -18,6 +18,18 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_device_diagnostics{
+
+[[nodiscard]] static constexpr StringView BoolToAvailabilityText(const bool value)noexcept{
+    return value ? StringView("available") : StringView("unavailable");
+}
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void Device::captureDeviceLoss(const AStringView context){
     // Device-loss state must not depend on optional crash diagnostics.
     markDeviceLost();
@@ -224,10 +236,10 @@ void Device::captureDeviceLoss(const AStringView context){
                 , static_cast<u32>(m_context.physicalDeviceProperties.vendorID)
                 , static_cast<u32>(m_context.physicalDeviceProperties.deviceID)
                 , static_cast<u32>(m_context.physicalDeviceProperties.driverVersion)
-                , BoolToAvailabilityText(hasCheckpoints)
-                , BoolToAvailabilityText(hasBufferMarker)
-                , BoolToAvailabilityText(hasDeviceFault)
-                , BoolToAvailabilityText(Aftermath::IsActive())
+                , __hidden_device_diagnostics::BoolToAvailabilityText(hasCheckpoints)
+                , __hidden_device_diagnostics::BoolToAvailabilityText(hasBufferMarker)
+                , __hidden_device_diagnostics::BoolToAvailabilityText(hasDeviceFault)
+                , __hidden_device_diagnostics::BoolToAvailabilityText(Aftermath::IsActive())
             ));
     }
 

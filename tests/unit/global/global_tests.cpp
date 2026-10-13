@@ -19,13 +19,12 @@
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
-#include <global/filesystem/volume_naming.h>
 #include <global/fixed_buffer.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
 #include <global/simd/type.h>
 #include <global/simd/vector.h>
-#include <global/mesh/triangle_area.h>
+#include <global/simd/collision_triangle.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/process_memory_map.h>
@@ -956,12 +955,6 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 #endif
-
-TEST(Global, VolumeNamesRejectEmptySeparatorsAndWhitespace){
-    EXPECT_FALSE(ValidVolumeName(""));
-    EXPECT_FALSE(ValidVolumeName("graphics/cache"));
-    EXPECT_FALSE(ValidVolumeName("graphics cache"));
-}
 
 TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
     Vector<u8> stringTable;

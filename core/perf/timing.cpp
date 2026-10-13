@@ -3,7 +3,7 @@
 
 
 #include "timing.h"
-#include <global/named_registry.h>
+#include "named_registry.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +75,7 @@ void TimingRecorder::clear()noexcept{
 }
 
 TimingScopeId TimingRecorder::registerScope(const Name& scopeName){
-    return ::RegisterNamedScope<TimingScopeId>(m_scopes, m_scopeMap, m_generation, scopeName, [&](const Name& name){ return MakeGlobalUnique<ScopeRecord>(m_arena, name); },
+    return RegisterNamedScope<TimingScopeId>(m_scopes, m_scopeMap, m_generation, scopeName, [&](const Name& name){ return MakeGlobalUnique<ScopeRecord>(m_arena, name); },
         [&](ScopeRecord& scope, const TimingScopeId& scopeId){
             scope.generation = scopeId.generation;
             scope.accumulator.setEnabled(m_enabled);
@@ -124,11 +124,11 @@ const TimingStats& TimingRecorder::stats(const TimingScopeId scope)const noexcep
 }
 
 TimingScopeId TimingRecorder::scopeAt(const usize index)const noexcept{
-    return ::ScopeAt<TimingScopeId>(m_scopes, index);
+    return ScopeAt<TimingScopeId>(m_scopes, index);
 }
 
 Name TimingRecorder::scopeNameAt(const usize index)const noexcept{
-    return ::ScopeNameAt(m_scopes, index);
+    return ScopeNameAt(m_scopes, index);
 }
 
 const TimingStats& TimingRecorder::statsAt(const usize index)const noexcept{
@@ -155,7 +155,7 @@ void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, cons
 }
 
 TimingRecorder::ScopeRecord* TimingRecorder::findScope(const TimingScopeId scope)const noexcept{
-    return ::FindNamedScope<TimingScopeId>(m_scopes, scope);
+    return FindNamedScope<TimingScopeId>(m_scopes, scope);
 }
 
 

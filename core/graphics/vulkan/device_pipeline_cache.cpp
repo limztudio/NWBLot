@@ -8,7 +8,7 @@
 
 #include <core/filesystem/factory.h>
 #include <core/filesystem/volume_staging.h>
-#include <global/filesystem/volume_naming.h>
+#include <core/filesystem/volume_naming.h>
 #include <core/common/log.h>
 
 
@@ -156,7 +156,7 @@ Expected<GraphicsBytes> Device::loadPipelineCacheData(){
     GraphicsBytes data{m_context.objectArena};
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty())
         return MakeUnexpected(Failure{});
-    if(!m_filesystemFactory && !::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
+    if(!m_filesystemFactory && !Core::Filesystem::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
         return MakeUnexpected(Failure{});
 
     auto volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(m_pipelineCacheDirectory, m_pipelineCacheVolumeName, false, Filesystem::VolumeUsage::RuntimeReadOnly, m_filesystemFactory);

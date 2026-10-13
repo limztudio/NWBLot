@@ -80,6 +80,23 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
 }
 
 template<typename T>
+[[nodiscard]] constexpr bool IsSupportedAlignmentValue(const T align)noexcept(IsArithmetic_V<T>){
+    return align <= static_cast<T>(1) || (align & (align - static_cast<T>(1))) == static_cast<T>(0);
+}
+
+template<typename T>
+[[nodiscard]] constexpr Expected<T> AlignUpPowerOfTwoChecked(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
+    if(alignment == 0)
+        return value;
+
+    const T mask = alignment - static_cast<T>(1);
+    if(value > Limit<T>::s_Max - mask)
+        return MakeUnexpected(Failure{});
+
+    return (value + mask) & ~mask;
+}
+
+template<typename T>
 constexpr T AlignUp(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
     if(alignment == 0)
         return value;

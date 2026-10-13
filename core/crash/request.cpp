@@ -5,6 +5,7 @@
 #include "internal.h"
 
 #include <global/diagnostics.h>
+#include <global/thread.h>
 
 NWB_CRASH_BEGIN
 

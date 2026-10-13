@@ -9,7 +9,7 @@ LIT_UTF_8 = "utf-8"
 
 
 def volume_segment_filename(volume_name, segment_index):
-    """Match global/filesystem/volume_naming.h: UTF-8 FNV-1a of the canonical name_index.vol."""
+    """Match core/filesystem/volume_naming.h: UTF-8 FNV-1a of the canonical name_index.vol."""
     value = 14695981039346656037
     for byte in f"{volume_name}_{segment_index}.vol".encode(LIT_UTF_8):
         value = ((value ^ byte) * 1099511628211) & 0xffffffffffffffff

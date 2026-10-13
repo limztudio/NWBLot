@@ -8,6 +8,7 @@
 
 #include <global/diagnostics.h>
 #include <global/hash_utils.h>
+#include <global/json_text.h>
 #include <global/type_properties.h>
 
 

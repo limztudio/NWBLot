@@ -7,6 +7,7 @@
 #include <core/common/log.h>
 
 #include <global/blocking_io.h>
+#include <global/json_text.h>
 #include <global/scope_exit.h>
 
 #if !defined(NWB_PLATFORM_WINDOWS)

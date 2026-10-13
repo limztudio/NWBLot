@@ -143,13 +143,13 @@ text-input and clipboard/selection services. Keyed lists and compound controls u
 
 `Builder::beginWindow(key, title, WindowState&, WindowOptions)` opens one scoped window and returns whether its content is visible. Call `endWindow()` even when the window is collapsed; a failed begin marks the context failed. Do not nest windows/panels or retain a builder's open scope beyond the owning callback. `WindowState` is host-owned and must remain alive through that matching end. Frozen snapshots never reference it.
 
-`WindowOptions` supplies the initial bounds, minimum size, optional first-use content sizing, layout direction, and independent movement/resize/collapse capabilities. Initialize only once, then keep the same model to preserve placement and collapse state across ordinary frames. Placement is constrained so the window's title stays reachable after viewport changes; cross-run persistence belongs to the application. The migrated Testbed window retains its original initial position and content, while its UI is prepared and composed through the custom GPU layer.
+`WindowOptions` supplies the initial bounds, minimum size, optional first-use content sizing, layout direction, and independent movement/resize/collapse capabilities. Initialize only once, then keep the same model to preserve placement and collapse state across ordinary frames. Placement is constrained so the window's title stays reachable after viewport changes; cross-run persistence belongs to the application. The Testbed window is prepared and composed through the custom GPU layer.
 
 The window domain separates behavior (`window_behavior.cpp`), metrics/geometry (`window_layout.cpp`), declarations (`builder_window.cpp`), and paint/chrome targets (`window_paint.cpp`). Title and resize gestures carry the exact committed reference geometry, so a pending candidate cannot shift the gesture's baseline. Coalesced updates retain a complete press/move/release sequence until the next declaration; each update is consumed once. Pointer loss cancels an active gesture, while an ordinary release keeps completed movement.
 
 `separator(key, SeparatorOptions)` participates in layout and draws a named skin part. It supports horizontal/vertical directions, fixed/content/stretch length and skin-derived or explicit logical thickness. Required parts come from the selected atlas (`window.normal`, `window.title`, `window.collapse`, and separator names); missing required parts reject the candidate. An optional `window.resize` sprite can replace the default grip, which uses the selected atlas's white sprite. `windowMetrics()` is available only inside an open window for callers needing the actual chrome geometry.
 
-ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists, combo boxes, tooltips, context menus and numeric editors are implemented in the increments below; multiline text areas and their two-axis scrollbar are implemented below.
+Font shaping/rasterization belongs to the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME are borrowed OS services. The following sections describe compound controls and the shared input, model and geometry contracts they consume.
 
 ## Popups and modals
 
@@ -180,7 +180,7 @@ The accepted top popup traps Tab/Shift+Tab within eligible children and owns poi
 
 `PaintBuilder::beginOverlay(layer)` and `endOverlay()` support up to 16 balanced nested low-level overlay scopes. Base commands use layer zero; a positive overlay layer uses the viewport clip and restores the exact prior clip and layer when ended. Freezing orders command ranges by layer while preserving painter order within a layer and existing vertex/index/image ownership. Popup layers therefore render above later ordinary host roots. All layers still rasterize into the same independent GPU UI texture; popup layering adds no per-popup GPU target or task.
 
-Fixed-height virtualized lists and selectable rows now use these popup/input contracts. Combo boxes now compose these contracts below. Tooltips, context menus and nested popup layouts use these same contracts. Native Windows captures and Linux target syntax checks have different qualification scope: syntax checks with Linux headers do not establish native Linux linking or compositor execution, and synthetic text events do not establish live IME behavior.
+Fixed-height virtualized lists, selectable rows, combo boxes, tooltips, context menus and nested popup layouts share these popup/input contracts. Native Windows captures and Linux target syntax checks have different qualification scope: syntax checks with Linux headers do not establish native Linux linking or compositor execution, and synthetic text events do not establish live IME behavior.
 
 ## Single-line edit boxes
 

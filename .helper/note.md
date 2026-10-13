@@ -126,6 +126,8 @@
 
 102. Retired paths must leave no orphaned helpers, declarations, constants, test support, or build registrations. Trace direct callers, templates/macros, generated shader consumers, and current authored APIs before deletion; preserve deliberate generic contracts even when repository use is sparse. Runtime result enums without serialized consumers need no reserved compatibility entries for removed experiments. Trace Python reexports and module-attribute consumers before removing imports, migrate callers to the owning module, and verify entry-module importability with normal search paths. Follow `.helper/standard.md` section 21.
 
+103. First-party READMEs and all wiki pages explain current design and operation, following `.helper/standard.md` section 22. Keep ownership, contracts, data flow, usage, current performance tradeoffs and measurement procedures; move substantive dated benchmark results, before/after tables and run-specific qualification history into separate named reports under `docs/` or `tests/`. Rewrite current explanations instead of appending optimization progress, and leave incidental change narration in Git history.
+
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.

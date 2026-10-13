@@ -108,7 +108,7 @@ Building `testbed` also cooks its required assets into the matching runtime `res
 
 Shader metadata declares its physical type, such as `compute_shader asset;` or `pixel_shader asset;`, alongside its Slang source. Runtime code uses concrete shader references and typed loaders; the shared `IShader` interface retains entry-point text and bytecode. See [the shader asset guide](impl/assets_shader/README.md) for all stage types, authored fields, and archive roles.
 
-GPU payload packing preserves live numerical values and uses actual compiled sizes and shared CPU/shader contracts. See [GPU payload packing](docs/gpu_payload_packing.md) for the current compact layouts, recooking requirements, and runtime/performance qualification.
+GPU payload packing preserves live numerical values and uses actual compiled sizes and shared CPU/shader contracts. See [GPU payload packing](docs/gpu_payload_packing.md) for the current compact layouts, recooking requirements, and verification procedures.
 
 String pooling applies to C/C++ literals on every target through Clang's normal literal pooling; clang-cl also receives `/GF`. `NWB_OBFUSCATE_STRING_LITERALS=ON` is the default. The compiler pipeline pools and encodes eligible literals that survive optimization, then one decoder per executable or shared library restores their bytes before application static initialization. `constexpr StringView` declarations retain compile-time evaluation and direct pointer/length access, with no per-access decode checks or string allocations.
 
@@ -141,5 +141,3 @@ Third-party packages are vendored as flat top-level directories under `3rd_parti
 ## Documentation
 
 Start with the [NWBLot Wiki](https://github.com/limztudio/NWBLot/wiki), then use [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture), [Asset Flow](https://github.com/limztudio/NWBLot/wiki/Asset-Flow), [Runtime and ECS](https://github.com/limztudio/NWBLot/wiki/Runtime-and-ECS), and [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-Verification) for the corresponding subsystem.
-
-The [project optimization audit](docs/project_optimization_audit.md) records CPU and scratch-memory measurements, rejected candidates, and runtime qualification for retained changes.

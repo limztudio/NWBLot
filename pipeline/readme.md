@@ -80,9 +80,8 @@ python -m launcher run nwb_asset_gatherer --config dbg --working-directory . -- 
 python -m launcher run nwb_asset_gatherer --config dbg --working-directory . -- --input-list built/assets.list --output-directory runtime/res
 ```
 
-`pipeline/launch.py` replaces the removed `resource_cooker` executable. The root
-launcher discovers it as the `pipeline` command, using the same convention as the
-repository's other runnable directories. It discovers `.nwb` files, configures and
+`pipeline/launch.py` is discovered by the root launcher as the `pipeline` command,
+using the same convention as the repository's other runnable directories. It discovers `.nwb` files, configures and
 builds `nwb_pipeline`, calls `dependency_computer`, passes that result to
 `asset_builder`, then passes the builder manifest to `asset_gatherer`. Discovery
 errors and failed stages stop the pipeline and preserve the published volume.
@@ -131,14 +130,12 @@ Link `nwb_pipeline_asset_builder` to call it. The gather entry point is
 Each tool owns its orchestration API and implementation. Shared artifact, cache,
 manifest, and volume-writing support remains in `core/assets/volume`; asset codecs,
 metadata parsers, and build registrations remain in their owning asset modules.
-The retired cooker interface, registry, combined volume cooker, and executable
-are removed.
 
 Library callers gathering independently built graphics assets leave
 `NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` at the auto-collected default
 (`NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge()`, declared in
 `core/assets/gather_merge_registry.h`). The graphics asset implementation self-registers its merge hook, so the
-gather tool no longer names an `impl/` symbol directly.
+gather tool consumes the registered contract without naming an `impl/` symbol directly.
 The generic gather API also accepts a project callback for other metadata merge
 contracts. A callback receives the duplicate virtual identity, an existing payload
 to update, and the incoming payload bytes. Returning `false` rejects the conflict

@@ -26,7 +26,7 @@ layout's bytes, glyph IDs, metrics, or retained CPU versions.
 `ShapeRequest` supplies UTF-8 text, logical font size, horizontal direction, an ISO 15924
 script tag, and an ASCII language tag. Defaults are 16 logical units, left-to-right,
 `Latn`, and `en`. Korean runs should explicitly select `Hang` and `ko`. Requests describe
-one explicit script/direction policy; this increment does not discover mixed paragraph
+one explicit script/direction policy; the service does not discover mixed paragraph
 scripts or implement Unicode paragraph bidi. LF and CRLF produce explicit lines.
 Tabs, bare CR, other control characters, and Unicode line/paragraph separators return
 `UnsupportedControl`. Text must be valid scalar UTF-8 without embedded NUL.
@@ -106,11 +106,10 @@ SDF is selected when physical font size is within 0.75..1.5 times its bake ppem.
 shipped 32-ppem atlases therefore serve 24..48 physical pixels per em. Outside the
 interval, native coverage uses the already selected shaping face. Zoom and DPI can
 change the image source without changing logical layout. Below the interval, native
-coverage also preserves the antialiased bottom row of small descenders. Recorded atlas
-qualification compared Latin A/o/e/g/q and Korean Hangul against supersampled native
-coverage across zoom and DPI. Its former quality unit target was retired; current
-smoke captures exercise the shipped fonts, and other fonts require their own visual qualification.
+coverage also preserves the antialiased bottom row of small descenders.
 Scalar SDF does not guarantee arbitrary magnification or recover details missing from its bake.
+Use representative glyph captures across zoom and DPI when selecting another font's
+bake settings or SDF scale interval.
 
 Layouts retain their exact source font and baked image versions. Paint snapshots pin
 immutable compact SDF pages after source asset release or font replacement. Warm SDF painting
@@ -138,10 +137,10 @@ atlas entries. The exact prepared bitmap rectangles then exclude hidden images b
 one combined coverage/SDF page admission and ordered quad emission. Empty clips and
 zero alpha prepare no glyphs or image bindings after normal parameter validation.
 
-This removes hidden-document atlas exhaustion without changing resource limits. A
-conservative candidate can still warm the coverage cache even when its final bitmap
-is outside the clip. Cache limits apply cumulatively to glyphs encountered by visible
-views; eviction, cache tuning and performance measurement remain later work.
+Hidden document glyphs consume atlas entries only when their conservative bounds intersect
+the clip. A conservative candidate can still warm the coverage cache even when its final
+bitmap is outside the clip. Cache limits apply cumulatively to glyphs encountered by
+visible views; the cache does not evict entries within an atlas identity.
 
 ## Native coverage fallback
 

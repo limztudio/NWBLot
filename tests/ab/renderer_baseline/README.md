@@ -92,10 +92,9 @@ test-only `NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME` control, suspends further
 then allows a fixed 0.75-second present settle while the native event loop remains alive before it captures the
 pinned temporal phase. `transparent-avboit` and `skinned-csg` also set the test-only
 `NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=1/60`, so a fixed 96-frame capture advances time-scaled animation by the
-same amount on every run. The caustic profile uses the same control with a fixed 360-frame warm-up, replacing its
-old wall-clock-only temporal settle. Surfel GI also uses the fixed 360-frame/`1/60` boundary. Other profiles retain
-their documented fixed settle duration until they receive an equally explicit temporal capture point. The soft-shadow
-profile now uses the same 360-frame/`1/60` test-only boundary for its temporal shadow history, as does the skinned
+same amount on every run. The caustic profile uses the same control with a fixed 360-frame warm-up. Surfel GI also
+uses the fixed 360-frame/`1/60` boundary. Other profiles use their documented fixed settle duration. The soft-shadow
+profile uses the same 360-frame/`1/60` test-only boundary for its temporal shadow history, as does the skinned
 stress profile at M4's established 96-frame/`1/60` capture point. The stress control is separate from its existing
 M4 async-lighting capture contract.
 

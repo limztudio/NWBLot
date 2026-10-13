@@ -14,7 +14,7 @@ Each axis has a `LayoutSize` policy:
 - `Content` uses the measured border size. Its finite, nonnegative `value` is ignored.
 - `Stretch` requires a positive finite weight. In a row's horizontal axis or a column's vertical axis, it divides the space remaining after fixed/content children and gaps by weight. The remaining space clamps to zero; intrinsic size does not prevent shrinking. In the cross axis and in overlays, it fills the available content extent.
 
-The root follows its size policies against the viewport; a root with two stretch axes fills it. Row children share the top edge, column children share the left edge, and overlay children share the content origin. There is no alignment, wrapping, scrolling, or flex minimum/maximum policy in this increment.
+The root follows its size policies against the viewport; a root with two stretch axes fills it. Row children share the top edge, column children share the left edge, and overlay children share the content origin. The layout policy does not provide alignment, wrapping, scrolling, or flex minimum/maximum sizing.
 
 Each `LayoutBox` publishes its border `rectangle`, padded `content`, paint `clip`, visible `hit` rectangle, and natural/resolved `measuredSize`. Ancestor clipping always includes the viewport. By default descendants are clipped to a container's padded content. Setting `clipChildren=false` lets descendants overflow that container while retaining the outer ancestor clip. Fixed/content children keep their requested sizes and overflow is clipped; padding that consumes an entire axis produces zero content on the border edge.
 

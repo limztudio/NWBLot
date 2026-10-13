@@ -11,7 +11,7 @@ The `.font` is a FON2 prepared source containing the exact original SFNT, a comp
 
 Each stored channel is an independent scalar signed-distance page, including alpha when present. Both atlases use the pinned FreeType 2.14.3 bitmap-SDF renderer, 32 bake pixels per em, spread 8, one guard texel, and linear UNORM bytes without mips. The Latin atlas uses six logical pages, and the Korean atlas uses thirteen. All glyph IDs, including nondrawable spaces and shaped forms, have records. The `kern`, `GPOS`, and `GDEF` tables present in each source are retained exactly. HarfBuzz shapes from `.font`; atlas table bytes are not applied to positions a second time.
 
-Compared with the former fixed RGBA8 squares, cropping guarded bounds and dropping unused trailing channels reduces the combined texture payload from 72 MiB to 56.3515625 MiB, saving 15.6484375 MiB (21.733941%). The regenerated glyph metrics, every guarded SDF region, all retained image components, source hashes, and positioning tables match the originals exactly. These are image-byte totals; device allocation size can also include driver tiling and alignment.
+Each image group is cropped to the occupied bounds across its used channels, including every glyph's exterior guard, and omits unused trailing channels. Cropping rebases glyph rectangles without resampling SDF pixels or changing shaping data. The group dimensions and channel counts determine the texture payload; device allocation size can also include driver tiling and alignment.
 
 The original `.ttf` and `.otf` files are not retained beside the pairs. Their exact SFNT bytes remain in `.font`, so font rendering and repeat atlas generation require no external download. The pinned source revisions are:
 
